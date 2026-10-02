@@ -91,6 +91,7 @@ type TraitsPersistence =
     };
 
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
+const CODEX_STANDARD_SERVICE_TIER = "default";
 
 function DefaultBadge() {
   return (
@@ -165,8 +166,6 @@ function getSelectedTraits(
   const contextWindowDescriptor =
     selectDescriptors.find((descriptor) => descriptor.id === "contextWindow") ?? null;
   const agentDescriptor = selectDescriptors.find((descriptor) => descriptor.id === "agent") ?? null;
-  const fastModeDescriptor =
-    booleanDescriptors.find((descriptor) => descriptor.id === "fastMode") ?? null;
   const thinkingDescriptor =
     booleanDescriptors.find((descriptor) => descriptor.id === "thinking") ?? null;
 
@@ -199,7 +198,6 @@ function getSelectedTraits(
     primarySelectDescriptor,
     contextWindowDescriptor,
     agentDescriptor,
-    fastModeDescriptor,
     thinkingDescriptor,
     effort,
     thinkingEnabled,
@@ -210,6 +208,60 @@ function getSelectedTraits(
     selectedAgentLabel,
     modelIsUnavailable,
   };
+}
+
+export type SpeedToggle = {
+  descriptorId: string;
+  level: "off" | "fast" | "ultrafast";
+  onValue: string | boolean;
+  offValue: string | boolean;
+  coversDescriptor: boolean;
+};
+
+const SPEED_TOGGLE_TOOLTIPS: Readonly<Record<SpeedToggle["level"], string>> = {
+  off: "Fast mode off",
+  fast: "Fast mode on",
+  ultrafast: "Ultrafast mode on",
+};
+
+export function getSpeedToggle(
+  provider: ProviderDriverKind,
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+): SpeedToggle | null {
+  for (const descriptor of descriptors) {
+    if (descriptor.type === "boolean" && descriptor.id === "fastMode") {
+      return {
+        descriptorId: descriptor.id,
+        level: descriptor.currentValue === true ? "fast" : "off",
+        onValue: true,
+        offValue: false,
+        coversDescriptor: true,
+      };
+    }
+    if (provider !== "codex" || descriptor.type !== "select" || descriptor.id !== "serviceTier") {
+      continue;
+    }
+    const fastTier = descriptor.options.find(({ label }) => label === "Fast");
+    const ultrafastTier = descriptor.options.find(({ label }) => label === "Ultrafast");
+    const onTier = fastTier ?? ultrafastTier;
+    if (!onTier) {
+      continue;
+    }
+    const currentValue = getProviderOptionCurrentValue(descriptor);
+    let level: SpeedToggle["level"] = "off";
+    if (fastTier && currentValue === fastTier.id) level = "fast";
+    if (ultrafastTier && currentValue === ultrafastTier.id) level = "ultrafast";
+    return {
+      descriptorId: descriptor.id,
+      level,
+      onValue: onTier.id,
+      offValue: CODEX_STANDARD_SERVICE_TIER,
+      coversDescriptor: descriptor.options.every(
+        ({ id }) => id === CODEX_STANDARD_SERVICE_TIER || id === onTier.id,
+      ),
+    };
+  }
+  return null;
 }
 
 function getTraitsSectionVisibility(input: {
@@ -231,27 +283,24 @@ function getTraitsSectionVisibility(input: {
     input.planModeEnabled,
   );
 
-  const showEffort = selected.primarySelectDescriptor !== null;
-  const showThinking = selected.thinkingDescriptor !== null;
-  const showFastMode = selected.fastModeDescriptor !== null;
-  const showContextWindow = selected.contextWindowDescriptor !== null;
-  const showAgent = selected.agentDescriptor !== null;
+  const speedToggle = selected.modelIsUnavailable
+    ? null
+    : getSpeedToggle(input.provider, selected.descriptors);
+  const toggleOnlyDescriptorId = speedToggle?.coversDescriptor ? speedToggle.descriptorId : null;
   const hasMenuControls =
-    showEffort ||
-    showThinking ||
-    showContextWindow ||
-    showAgent ||
+    selected.descriptors.some(
+      (descriptor) =>
+        descriptor.id !== toggleOnlyDescriptorId &&
+        (descriptor.type === "select" || descriptor.id === "thinking"),
+    ) ||
     (selected.modelIsUnavailable && selected.descriptors.length > 0);
 
   return {
     ...selected,
-    showEffort,
-    showThinking,
-    showFastMode,
-    showContextWindow,
-    showAgent,
+    speedToggle,
+    toggleOnlyDescriptorId,
     hasMenuControls,
-    hasAnyControls: hasMenuControls || showFastMode,
+    hasAnyControls: hasMenuControls || speedToggle !== null,
   };
 }
 
@@ -318,9 +367,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   modelOptions,
   allowPromptInjectedEffort = true,
   planModeEnabled,
-  omitFastMode = false,
+  omitToggleOnlyOptions = false,
   ...persistence
-}: TraitsMenuContentProps & TraitsPersistence & { omitFastMode?: boolean }) {
+}: TraitsMenuContentProps & TraitsPersistence & { omitToggleOnlyOptions?: boolean }) {
   const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
   const {
     descriptors,
@@ -329,6 +378,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     primarySelectDescriptor,
     ultrathinkPromptControlled,
     ultrathinkInBodyText,
+    toggleOnlyDescriptorId,
     hasAnyControls,
     modelIsUnavailable,
   } = getTraitsSectionVisibility({
@@ -340,9 +390,13 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     allowPromptInjectedEffort,
     planModeEnabled,
   });
-  const menuBooleanDescriptors = omitFastMode
-    ? booleanDescriptors.filter((descriptor) => descriptor.id !== "fastMode")
-    : booleanDescriptors;
+  const omittedDescriptorId = omitToggleOnlyOptions ? toggleOnlyDescriptorId : null;
+  const menuSelectDescriptors = selectDescriptors.filter(
+    (descriptor) => descriptor.id !== omittedDescriptorId,
+  );
+  const menuBooleanDescriptors = booleanDescriptors.filter(
+    (descriptor) => descriptor.id !== omittedDescriptorId,
+  );
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
@@ -396,7 +450,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
   return (
     <>
-      {selectDescriptors.map((descriptor, index) => {
+      {menuSelectDescriptors.map((descriptor, index) => {
         const selectedValue =
           ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
             ? "ultrathink"
@@ -459,7 +513,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
         return (
           <div key={descriptor.id}>
-            {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
+            {index > 0 || menuSelectDescriptors.length > 0 ? <MenuDivider /> : null}
             <MenuGroup>
               <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
                 {descriptor.label}
@@ -489,44 +543,25 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 });
 
 /**
- * Codex Fast uses one bolt; Ultrafast uses two. Boolean fast mode has its own
- * toggle beside the trigger. Keep a text label when speed is the only trait so
- * the trigger remains readable.
+ * Speed lives on the bolt toggle beside the trigger, so it stays out of the
+ * label unless it is the only trait or a non-speed tier such as Flex.
  */
-export function buildTraitsTriggerDisplay(input: {
-  provider: ProviderDriverKind;
+export function buildTraitsTriggerLabel(input: {
   descriptors: ReadonlyArray<ProviderOptionDescriptor>;
+  speedToggle: SpeedToggle | null;
   primarySelectDescriptorId: string | null;
   ultrathinkPromptControlled: boolean;
-}): { label: string; speedIcon: "fast" | "ultrafast" | null } {
-  let fastModeFallbackLabel: string | null = null;
-  let speedIcon: "fast" | "ultrafast" | null = null;
+}): string {
+  let speedFallbackLabel: string | null = null;
   const labels: Array<string> = [];
   for (const descriptor of input.descriptors) {
-    if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      continue;
-    }
-    if (
-      input.provider === "codex" &&
-      descriptor.id === "serviceTier" &&
-      descriptor.type === "select"
-    ) {
+    if (input.speedToggle && descriptor.id === input.speedToggle.descriptorId) {
       const currentValue = getProviderOptionCurrentValue(descriptor);
-      const fastTier = descriptor.options.find(({ label }) => label === "Fast");
-      const ultrafastTier = descriptor.options.find(({ label }) => label === "Ultrafast");
-      if (
-        ((fastTier || ultrafastTier) && currentValue === "default") ||
-        (fastTier && currentValue === fastTier.id) ||
-        (ultrafastTier && currentValue === ultrafastTier.id)
-      ) {
-        speedIcon =
-          ultrafastTier && currentValue === ultrafastTier.id
-            ? "ultrafast"
-            : fastTier && currentValue === fastTier.id
-              ? "fast"
-              : null;
-        fastModeFallbackLabel =
-          descriptor.options.find(({ id }) => id === currentValue)?.label ?? "Normal";
+      if (input.speedToggle.level !== "off" || currentValue === input.speedToggle.offValue) {
+        if (descriptor.type === "select") {
+          speedFallbackLabel =
+            descriptor.options.find(({ id }) => id === currentValue)?.label ?? null;
+        }
         continue;
       }
     }
@@ -541,13 +576,13 @@ export function buildTraitsTriggerDisplay(input: {
     }
   }
 
-  // Only fall back to text when fast mode is genuinely the sole trait. Keying
-  // off an empty label list alone would also catch descriptors that resolved to
-  // no label at all, printing a bogus "Normal" for a model without fast mode.
-  if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel, speedIcon: null };
+  // Only fall back to text when speed is genuinely the sole trait. Keying off an
+  // empty label list alone would also catch descriptors that resolved to no
+  // label at all.
+  if (labels.length === 0 && speedFallbackLabel !== null) {
+    return speedFallbackLabel;
   }
-  return { label: labels.join(" · "), speedIcon };
+  return labels.join(" · ");
 }
 
 export const TraitsPicker = memo(function TraitsPicker({
@@ -576,9 +611,8 @@ export const TraitsPicker = memo(function TraitsPicker({
   const {
     descriptors,
     primarySelectDescriptor,
-    fastModeDescriptor,
+    speedToggle,
     ultrathinkPromptControlled,
-    modelIsUnavailable,
     hasMenuControls,
     hasAnyControls,
   } = getTraitsSectionVisibility({
@@ -594,26 +628,29 @@ export const TraitsPicker = memo(function TraitsPicker({
     return null;
   }
 
-  const fastModeToggleDescriptor = modelIsUnavailable ? null : fastModeDescriptor;
-  const fastModeOn = fastModeToggleDescriptor?.currentValue === true;
-  const fastModeOnColor =
+  const speedOn = speedToggle !== null && speedToggle.level !== "off";
+  const speedOnColor =
     size === "xs"
       ? "text-current"
       : provider === "claudeAgent"
         ? "text-[#d97757]"
         : "text-foreground";
-  const fastModeToggle = fastModeToggleDescriptor ? (
+  const speedToggleControl = speedToggle ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <ComposerControl
             size={size}
-            aria-pressed={fastModeOn}
-            aria-label={fastModeToggleDescriptor.label}
+            aria-pressed={speedOn}
+            aria-label="Fast mode"
             onClick={() =>
               updateModelOptions(
                 buildProviderOptionSelectionsFromDescriptors(
-                  replaceDescriptorCurrentValue(descriptors, "fastMode", !fastModeOn),
+                  replaceDescriptorCurrentValue(
+                    descriptors,
+                    speedToggle.descriptorId,
+                    speedOn ? speedToggle.offValue : speedToggle.onValue,
+                  ),
                 ),
               )
             }
@@ -621,42 +658,25 @@ export const TraitsPicker = memo(function TraitsPicker({
         }
       >
         <ComposerControlIcon
-          icon={ZapIcon}
+          icon={speedToggle.level === "ultrafast" ? UltrafastIcon : ZapIcon}
           size={size}
-          className={fastModeOn ? cn("fill-current opacity-80", fastModeOnColor) : undefined}
+          className={speedOn ? cn("fill-current opacity-80", speedOnColor) : undefined}
         />
       </TooltipTrigger>
-      <TooltipPopup side="top">
-        {fastModeToggleDescriptor.label} {fastModeOn ? "on" : "off"}
-      </TooltipPopup>
+      <TooltipPopup side="top">{SPEED_TOGGLE_TOOLTIPS[speedToggle.level]}</TooltipPopup>
     </Tooltip>
   ) : null;
 
   if (!hasMenuControls) {
-    return fastModeToggle;
+    return speedToggleControl;
   }
 
-  const { label: triggerLabel, speedIcon } = buildTraitsTriggerDisplay({
-    provider,
+  const triggerLabel = buildTraitsTriggerLabel({
     descriptors,
+    speedToggle,
     primarySelectDescriptorId: primarySelectDescriptor?.id ?? null,
     ultrathinkPromptControlled,
   });
-  const speedLabel = speedIcon === "ultrafast" ? "Ultrafast mode on" : "Fast mode on";
-  const accessibleLabel = speedIcon ? `${triggerLabel}, ${speedLabel}` : triggerLabel;
-  const fastModeIcon = speedIcon ? (
-    <>
-      <ComposerControlIcon
-        icon={speedIcon === "ultrafast" ? UltrafastIcon : ZapIcon}
-        size={size}
-        className={cn(
-          "fill-current opacity-80",
-          size === "xs" ? "text-current" : "text-foreground",
-        )}
-      />
-      <span className="sr-only">{speedLabel}</span>
-    </>
-  ) : null;
 
   const isCodexStyle = provider === "codex";
 
@@ -674,7 +694,7 @@ export const TraitsPicker = memo(function TraitsPicker({
               <MenuTrigger
                 render={
                   <ComposerControl
-                    aria-label={accessibleLabel}
+                    aria-label={triggerLabel}
                     data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
                     size={size}
                     className={cn(
@@ -697,14 +717,12 @@ export const TraitsPicker = memo(function TraitsPicker({
                   size === "xs" ? "gap-1" : "gap-1.5",
                 )}
               >
-                {fastModeIcon ?? (
-                  <span
-                    data-composer-control-compact-icon
-                    className="pointer-events-none invisible absolute"
-                  >
-                    <ComposerControlIcon icon={BrainIcon} size={size} />
-                  </span>
-                )}
+                <span
+                  data-composer-control-compact-icon
+                  className="pointer-events-none invisible absolute"
+                >
+                  <ComposerControlIcon icon={BrainIcon} size={size} />
+                </span>
                 <span data-composer-control-label className="min-w-0 truncate">
                   {triggerLabel}
                 </span>
@@ -712,20 +730,18 @@ export const TraitsPicker = memo(function TraitsPicker({
               </span>
             ) : (
               <>
-                {fastModeIcon ?? (
-                  <span
-                    data-composer-control-compact-icon
-                    className="pointer-events-none invisible absolute"
-                  >
-                    <ComposerControlIcon icon={BrainIcon} size={size} />
-                  </span>
-                )}
+                <span
+                  data-composer-control-compact-icon
+                  className="pointer-events-none invisible absolute"
+                >
+                  <ComposerControlIcon icon={BrainIcon} size={size} />
+                </span>
                 <span data-composer-control-label>{triggerLabel}</span>
                 <ComposerControlChevron size={size} />
               </>
             )}
           </TooltipTrigger>
-          <TooltipPopup side="top">{accessibleLabel}</TooltipPopup>
+          <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
         </Tooltip>
         <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
           <TraitsMenuContent
@@ -738,12 +754,12 @@ export const TraitsPicker = memo(function TraitsPicker({
             modelOptions={modelOptions}
             allowPromptInjectedEffort={allowPromptInjectedEffort}
             planModeEnabled={planModeEnabled}
-            omitFastMode
+            omitToggleOnlyOptions
             {...persistence}
           />
         </MenuPopup>
       </Menu>
-      {fastModeToggle}
+      {speedToggleControl}
     </>
   );
 });

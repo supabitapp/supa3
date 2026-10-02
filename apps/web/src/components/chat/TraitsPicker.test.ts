@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { ProviderDriverKind, type ProviderOptionDescriptor } from "@t3tools/contracts";
-import { buildTraitsTriggerDisplay, buildUnavailableModelOptionDescriptors } from "./TraitsPicker";
+import {
+  buildTraitsTriggerLabel,
+  buildUnavailableModelOptionDescriptors,
+  getSpeedToggle,
+} from "./TraitsPicker";
 
 function selectDescriptor(
   id: string,
@@ -52,62 +56,86 @@ const CONTEXT_WINDOW = selectDescriptor(
 
 const CODEX = ProviderDriverKind.make("codex");
 
-function display(descriptors: ReadonlyArray<ProviderOptionDescriptor>) {
-  return buildTraitsTriggerDisplay({
-    provider: CODEX,
+function label(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+  ultrathinkPromptControlled = false,
+) {
+  return buildTraitsTriggerLabel({
     descriptors,
+    speedToggle: getSpeedToggle(CODEX, descriptors),
     primarySelectDescriptorId: "reasoningEffort",
-    ultrathinkPromptControlled: false,
+    ultrathinkPromptControlled,
   });
 }
 
-describe("buildTraitsTriggerDisplay", () => {
-  it("leaves boolean fast mode to its own toggle", () => {
-    for (const fastMode of [false, true]) {
-      expect(display([EFFORT, fastModeDescriptor(fastMode), CONTEXT_WINDOW])).toEqual({
-        label: "High · 1M",
-        speedIcon: null,
-      });
-    }
-    expect(display([fastModeDescriptor(true)])).toEqual({ label: "", speedIcon: null });
+describe("getSpeedToggle", () => {
+  it("toggles boolean fast mode on and off", () => {
+    expect(getSpeedToggle(CODEX, [EFFORT, fastModeDescriptor(false)])).toEqual({
+      descriptorId: "fastMode",
+      level: "off",
+      onValue: true,
+      offValue: false,
+      coversDescriptor: true,
+    });
+    expect(getSpeedToggle(CODEX, [fastModeDescriptor(true)])?.level).toBe("fast");
   });
 
-  it("treats Codex standard and fast service tiers as fast mode states", () => {
-    expect(display([EFFORT, serviceTierDescriptor("default")])).toEqual({
-      label: "High",
-      speedIcon: null,
+  it("toggles Codex between Standard and Fast and reports Ultrafast", () => {
+    expect(getSpeedToggle(CODEX, [EFFORT, serviceTierDescriptor("default")])).toEqual({
+      descriptorId: "serviceTier",
+      level: "off",
+      onValue: "priority",
+      offValue: "default",
+      coversDescriptor: false,
     });
-    expect(display([EFFORT, serviceTierDescriptor("priority")])).toEqual({
-      label: "High",
-      speedIcon: "fast",
-    });
+    expect(getSpeedToggle(CODEX, [serviceTierDescriptor("priority")])?.level).toBe("fast");
+    expect(getSpeedToggle(CODEX, [serviceTierDescriptor("ultrafast")])?.level).toBe("ultrafast");
+    expect(getSpeedToggle(CODEX, [serviceTierDescriptor("flex")])?.level).toBe("off");
   });
 
-  it("uses a distinct double bolt for Codex Ultrafast", () => {
-    expect(display([EFFORT, serviceTierDescriptor("ultrafast")])).toEqual({
-      label: "High",
-      speedIcon: "ultrafast",
-    });
+  it("covers the Codex tier when Standard and Fast are its only options", () => {
+    const descriptor = serviceTierDescriptor("default");
+    const standardAndFast = {
+      ...descriptor,
+      options: descriptor.options.filter(({ id }) => id === "default" || id === "priority"),
+    };
+    expect(getSpeedToggle(CODEX, [standardAndFast])?.coversDescriptor).toBe(true);
   });
 
-  it("uses Ultrafast without requiring a Fast tier", () => {
-    const descriptor = serviceTierDescriptor("ultrafast");
+  it("turns on Ultrafast when the model has no Fast tier", () => {
+    const descriptor = serviceTierDescriptor("default");
+    const withoutFast = {
+      ...descriptor,
+      options: descriptor.options.filter(({ id }) => id !== "priority"),
+    };
+    expect(getSpeedToggle(CODEX, [withoutFast])?.onValue).toBe("ultrafast");
+  });
+
+  it("has no toggle for service tiers without a speed tier", () => {
+    const descriptor = serviceTierDescriptor("default");
+    const standardAndFlex = {
+      ...descriptor,
+      options: descriptor.options.filter(({ id }) => id === "default" || id === "flex"),
+    };
+    expect(getSpeedToggle(CODEX, [EFFORT, standardAndFlex])).toBeNull();
     expect(
-      display([
-        EFFORT,
-        { ...descriptor, options: descriptor.options.filter(({ id }) => id !== "priority") },
-      ]),
-    ).toEqual({
-      label: "High",
-      speedIcon: "ultrafast",
-    });
+      getSpeedToggle(ProviderDriverKind.make("opencode"), [serviceTierDescriptor("priority")]),
+    ).toBeNull();
+  });
+});
+
+describe("buildTraitsTriggerLabel", () => {
+  it("leaves speed to the toggle", () => {
+    for (const fastMode of [false, true]) {
+      expect(label([EFFORT, fastModeDescriptor(fastMode), CONTEXT_WINDOW])).toBe("High · 1M");
+    }
+    for (const tier of ["default", "priority", "ultrafast"] as const) {
+      expect(label([EFFORT, serviceTierDescriptor(tier)])).toBe("High");
+    }
   });
 
   it("keeps other Codex service tiers in the label", () => {
-    expect(display([EFFORT, serviceTierDescriptor("flex")])).toEqual({
-      label: "High · Flex",
-      speedIcon: null,
-    });
+    expect(label([EFFORT, serviceTierDescriptor("flex")])).toBe("High · Flex");
   });
 
   it("keeps Standard as text for models without speed tiers", () => {
@@ -116,32 +144,14 @@ describe("buildTraitsTriggerDisplay", () => {
       ...descriptor,
       options: descriptor.options.filter(({ id }) => id === "default" || id === "flex"),
     };
-    expect(display([EFFORT, nonSpeedDescriptor])).toEqual({
-      label: "High · Standard",
-      speedIcon: null,
-    });
-    expect(display([nonSpeedDescriptor])).toEqual({
-      label: "Standard",
-      speedIcon: null,
-    });
+    expect(label([EFFORT, nonSpeedDescriptor])).toBe("High · Standard");
+    expect(label([nonSpeedDescriptor])).toBe("Standard");
   });
 
   it("keeps the Codex service tier readable when it is the only trait", () => {
-    expect(display([serviceTierDescriptor("default")])).toEqual({
-      label: "Standard",
-      speedIcon: null,
-    });
-    expect(display([serviceTierDescriptor("priority")])).toEqual({
-      label: "Fast",
-      speedIcon: null,
-    });
-  });
-
-  it("keeps Ultrafast readable when it is the only trait", () => {
-    expect(display([serviceTierDescriptor("ultrafast")])).toEqual({
-      label: "Ultrafast",
-      speedIcon: null,
-    });
+    expect(label([serviceTierDescriptor("default")])).toBe("Standard");
+    expect(label([serviceTierDescriptor("priority")])).toBe("Fast");
+    expect(label([serviceTierDescriptor("ultrafast")])).toBe("Ultrafast");
   });
 
   it("keeps non-fastMode booleans as text labels", () => {
@@ -151,16 +161,10 @@ describe("buildTraitsTriggerDisplay", () => {
       type: "boolean",
       currentValue: true,
     };
-    expect(display([EFFORT, thinking])).toEqual({
-      label: "High · Thinking On",
-      speedIcon: null,
-    });
+    expect(label([EFFORT, thinking])).toBe("High · Thinking On");
   });
 
-  it("stays blank when descriptors resolve to no label and there is no fast mode", () => {
-    // A select with neither a currentValue nor an isDefault option yields no
-    // label. Without a fastMode descriptor present that must stay blank rather
-    // than falling through to a bogus "Normal".
+  it("stays blank when descriptors resolve to no label and there is no speed tier", () => {
     const unresolved: Extract<ProviderOptionDescriptor, { type: "select" }> = {
       id: "effort",
       label: "effort",
@@ -170,18 +174,12 @@ describe("buildTraitsTriggerDisplay", () => {
         { id: "high", label: "High" },
       ],
     };
-    expect(display([unresolved])).toEqual({ label: "", speedIcon: null });
+    expect(label([unresolved])).toBe("");
+    expect(label([fastModeDescriptor(true)])).toBe("");
   });
 
-  it("still renders the prompt-controlled ultrathink label alongside the bolt", () => {
-    expect(
-      buildTraitsTriggerDisplay({
-        provider: CODEX,
-        descriptors: [EFFORT, serviceTierDescriptor("priority")],
-        primarySelectDescriptorId: "reasoningEffort",
-        ultrathinkPromptControlled: true,
-      }),
-    ).toEqual({ label: "Ultrathink", speedIcon: "fast" });
+  it("still renders the prompt-controlled ultrathink label", () => {
+    expect(label([EFFORT, serviceTierDescriptor("priority")], true)).toBe("Ultrathink");
   });
 });
 
