@@ -1,3 +1,4 @@
+import { validateCanvas, type RenderBudget } from "../budget.ts";
 import { parseXYChart } from "../xychart/parser.ts";
 import type { XYChart } from "../xychart/types.ts";
 import type { AsciiConfig, AsciiTheme, ColorMode, CharRole, Canvas, RoleCanvas } from "./types.ts";
@@ -66,17 +67,19 @@ export function renderXYChartAscii(
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith("%%"));
   const chart = parseXYChart(lines);
+  config.budget?.check();
   const ch = config.useAscii ? ASC : UNI;
   if (chart.horizontal) {
-    return renderHorizontal(chart, ch, colorMode, theme);
+    return renderHorizontal(chart, ch, colorMode, theme, config.budget);
   }
-  return renderVertical(chart, ch, colorMode, theme);
+  return renderVertical(chart, ch, colorMode, theme, config.budget);
 }
 function renderVertical(
   chart: XYChart,
   ch: typeof UNI | typeof ASC,
   colorMode: ColorMode,
   theme: AsciiTheme,
+  budget?: RenderBudget,
 ): string {
   const dataCount = getDataCount(chart);
   if (dataCount === 0) return "";
@@ -99,13 +102,13 @@ function renderVertical(
   const xLabelRow = xAxisRow + 1;
   const xTitleRow = hasXTitle ? xLabelRow + 1 : -1;
   const totalH = xLabelRow + 1 + (hasXTitle ? 1 : 0) + (hasLegend && !hasTitle ? 0 : 0);
-  const canvas = createCanvas(totalW, totalH);
-  const roles = createRoleCanvas(totalW, totalH);
-  const hexColors = createHexCanvas(totalW, totalH);
+  const canvas = createCanvas(totalW, totalH, budget);
+  const roles = createRoleCanvas(totalW, totalH, budget);
+  const hexColors = createHexCanvas(totalW, totalH, budget);
   const seriesColors = getSeriesColors(chart.series.length, theme);
   const valueToRow = (v: number): number => {
     const t = (v - yRange.min) / (yRange.max - yRange.min || 1);
-    return Math.round(t * (plotH - 1));
+    return Math.round(Math.max(0, Math.min(1, t)) * (plotH - 1));
   };
   const bandCenter = (i: number): number => plotLeft + Math.floor(bandW * (i + 0.5));
   if (hasTitle && titleRow >= 0) {
@@ -226,6 +229,7 @@ function renderHorizontal(
   ch: typeof UNI | typeof ASC,
   colorMode: ColorMode,
   theme: AsciiTheme,
+  budget?: RenderBudget,
 ): string {
   const dataCount = getDataCount(chart);
   if (dataCount === 0) return "";
@@ -244,13 +248,13 @@ function renderHorizontal(
   const totalW = plotLeft + plotW + 2;
   const totalH = plotTop + plotH + 2 + (hasYTitle ? 1 : 0);
   const xAxisRow = plotTop + plotH;
-  const canvas = createCanvas(totalW, totalH);
-  const roles = createRoleCanvas(totalW, totalH);
-  const hexColors = createHexCanvas(totalW, totalH);
+  const canvas = createCanvas(totalW, totalH, budget);
+  const roles = createRoleCanvas(totalW, totalH, budget);
+  const hexColors = createHexCanvas(totalW, totalH, budget);
   const seriesColors = getSeriesColors(chart.series.length, theme);
   const valueToCol = (v: number): number => {
     const t = (v - yRange.min) / (yRange.max - yRange.min || 1);
-    return plotLeft + Math.round(t * (plotW - 1));
+    return plotLeft + Math.round(Math.max(0, Math.min(1, t)) * (plotW - 1));
   };
   const bandMid = (i: number): number => plotTop + Math.floor(bandH * (i + 0.5));
   if (hasTitle) {
@@ -544,15 +548,21 @@ function drawLegend(
     col += item.label.length;
   }
 }
-function createCanvas(width: number, height: number): Canvas {
+function createCanvas(width: number, height: number, budget?: RenderBudget): Canvas {
+  validateCanvas(width, height);
+  budget?.allocate(width, height);
   return Array.from({ length: width }, () => Array.from({ length: height }, () => " "));
 }
-function createRoleCanvas(width: number, height: number): RoleCanvas {
+function createRoleCanvas(width: number, height: number, budget?: RenderBudget): RoleCanvas {
+  validateCanvas(width, height);
+  budget?.allocate(width, height);
   return Array.from({ length: width }, () =>
     Array.from<CharRole | null>({ length: height }).fill(null),
   );
 }
-function createHexCanvas(width: number, height: number): HexCanvas {
+function createHexCanvas(width: number, height: number, budget?: RenderBudget): HexCanvas {
+  validateCanvas(width, height);
+  budget?.allocate(width, height);
   return Array.from({ length: width }, () =>
     Array.from<string | null>({ length: height }).fill(null),
   );
@@ -699,10 +709,16 @@ function niceTickValues(min: number, max: number): number[] {
   else if (residual <= 3) niceInterval = 2 * magnitude;
   else if (residual <= 7) niceInterval = 5 * magnitude;
   else niceInterval = 10 * magnitude;
+  if (!Number.isFinite(niceInterval) || niceInterval <= 0) {
+    throw new RangeError("XY chart tick interval is outside the supported range");
+  }
   const start = Math.ceil(min / niceInterval) * niceInterval;
   const ticks: number[] = [];
-  for (let v = start; v <= max + niceInterval * 0.001; v += niceInterval) {
-    ticks.push(Math.round(v * 1e10) / 1e10);
+  for (let index = 0; index < 32; index++) {
+    const value = start + index * niceInterval;
+    if (value > max + niceInterval * 0.001) break;
+    const rounded = Math.round(value * 1e10) / 1e10;
+    ticks.push(Number.isFinite(rounded) ? rounded : value);
   }
   return ticks;
 }

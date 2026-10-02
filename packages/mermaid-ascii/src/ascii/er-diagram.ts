@@ -1,3 +1,5 @@
+import { checkLimit } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseErDiagram } from "../er/parser.ts";
 import type { ErDiagram, ErEntity, ErAttribute, Cardinality } from "../er/types.ts";
 import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
@@ -105,6 +107,9 @@ export function renderErAscii(
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseErDiagram(lines);
+  checkLimit(diagram.entities.length, limits.nodes, "entities");
+  checkLimit(diagram.relationships.length, limits.edges, "relationships");
+  config.budget?.check();
   if (diagram.entities.length === 0) return "";
   const useAscii = config.useAscii;
   const hGap = 6;
@@ -169,8 +174,8 @@ export function renderErAscii(
   }
   totalW += 4;
   totalH += 2;
-  const canvas = mkCanvas(totalW - 1, totalH - 1);
-  const rc = mkRoleCanvas(totalW - 1, totalH - 1);
+  const canvas = mkCanvas(totalW - 1, totalH - 1, config.budget);
+  const rc = mkRoleCanvas(totalW - 1, totalH - 1, config.budget);
   function setC(x: number, y: number, ch: string, role: CharRole): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
@@ -178,7 +183,7 @@ export function renderErAscii(
     }
   }
   for (const p of placed.values()) {
-    const boxCanvas = drawMultiBox(p.sections, useAscii);
+    const boxCanvas = drawMultiBox(p.sections, useAscii, 1, config.budget);
     for (let bx = 0; bx < boxCanvas.length; bx++) {
       for (let by = 0; by < boxCanvas[0]!.length; by++) {
         const ch = boxCanvas[bx]![by]!;
@@ -197,6 +202,7 @@ export function renderErAscii(
   const dashH = useAscii ? "." : "╌";
   const dashV = useAscii ? ":" : "┊";
   for (const rel of diagram.relationships) {
+    config.budget?.check();
     const e1 = placed.get(rel.entity1);
     const e2 = placed.get(rel.entity2);
     if (!e1 || !e2) continue;

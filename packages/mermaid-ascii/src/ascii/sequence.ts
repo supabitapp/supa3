@@ -1,3 +1,5 @@
+import { checkLimit } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseSequenceDiagram } from "../sequence/parser.ts";
 import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
 import {
@@ -20,6 +22,10 @@ export function renderSequenceAscii(
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseSequenceDiagram(lines);
+  checkLimit(diagram.actors.length, limits.nodes, "actors");
+  checkLimit(diagram.messages.length, limits.edges, "messages");
+  checkLimit(diagram.blocks.length + diagram.notes.length, limits.groups, "groups");
+  config.budget?.check();
   if (diagram.actors.length === 0) return "";
   const useAscii = config.useAscii;
   const H = useAscii ? "-" : "─";
@@ -75,6 +81,7 @@ export function renderSequenceAscii(
   }> = [];
   let curY = actorBoxH;
   for (let m = 0; m < diagram.messages.length; m++) {
+    config.budget?.check();
     for (let b = 0; b < diagram.blocks.length; b++) {
       if (diagram.blocks[b]!.startIndex === m) {
         curY += 2;
@@ -144,6 +151,7 @@ export function renderSequenceAscii(
   const lastHalf = halfBox[halfBox.length - 1] ?? 0;
   let totalW = lastLL + lastHalf + 2;
   for (let m = 0; m < diagram.messages.length; m++) {
+    config.budget?.check();
     const msg = diagram.messages[m]!;
     if (msg.from === msg.to) {
       const fi = actorIdx.get(msg.from)!;
@@ -154,8 +162,8 @@ export function renderSequenceAscii(
   for (const np of notePositions) {
     totalW = Math.max(totalW, np.x + np.width + 1);
   }
-  const canvas = mkCanvas(totalW, totalH - 1);
-  const rc = mkRoleCanvas(totalW, totalH - 1);
+  const canvas = mkCanvas(totalW, totalH - 1, config.budget);
+  const rc = mkRoleCanvas(totalW, totalH - 1, config.budget);
   function setC(x: number, y: number, ch: string, role: CharRole): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
@@ -202,6 +210,7 @@ export function renderSequenceAscii(
     }
   }
   for (let m = 0; m < diagram.messages.length; m++) {
+    config.budget?.check();
     const msg = diagram.messages[m]!;
     const fi = actorIdx.get(msg.from)!;
     const ti = actorIdx.get(msg.to)!;

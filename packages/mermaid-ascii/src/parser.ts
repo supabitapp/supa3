@@ -1,3 +1,5 @@
+import { checkLimit, validateSource } from "./budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "./limits.ts";
 import type {
   MermaidGraph,
   MermaidNode,
@@ -8,6 +10,7 @@ import type {
 } from "./types.ts";
 import { normalizeBrTags } from "./multiline-utils.ts";
 export function parseMermaid(text: string): MermaidGraph {
+  validateSource(text);
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -40,6 +43,7 @@ function parseFlowchart(lines: string[]): MermaidGraph {
     linkStyles: new Map(),
   };
   const subgraphStack: MermaidSubgraph[] = [];
+  let groupCount = 0;
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!;
     const classDefMatch = line.match(/^classDef\s+(\w+)\s+(.+)$/);
@@ -103,6 +107,8 @@ function parseFlowchart(lines: string[]): MermaidGraph {
         id = rest.replace(/\s+/g, "_").replace(/[^\w]/g, "");
       }
       const sg: MermaidSubgraph = { id, label, nodeIds: [], children: [] };
+      checkLimit(++groupCount, limits.groups, "groups");
+      checkLimit(subgraphStack.length + 1, limits.nesting, "nesting");
       subgraphStack.push(sg);
       continue;
     }
@@ -133,6 +139,7 @@ function parseStateDiagram(lines: string[]): MermaidGraph {
     linkStyles: new Map(),
   };
   const compositeStack: MermaidSubgraph[] = [];
+  let groupCount = 0;
   const compositeStateIds = new Set<string>();
   let startCount = 0;
   let endCount = 0;
@@ -169,6 +176,8 @@ function parseStateDiagram(lines: string[]): MermaidGraph {
       const label = compositeMatch[1] ?? compositeMatch[2]!;
       const id = compositeMatch[2]!;
       const sg: MermaidSubgraph = { id, label, nodeIds: [], children: [] };
+      checkLimit(++groupCount, limits.groups, "groups");
+      checkLimit(compositeStack.length + 1, limits.nesting, "nesting");
       compositeStack.push(sg);
       compositeStateIds.add(id);
       graph.nodes.delete(id);
@@ -214,6 +223,7 @@ function parseStateDiagram(lines: string[]): MermaidGraph {
       } else if (!compositeStateIds.has(targetId)) {
         ensureStateNode(graph, compositeStack, targetId);
       }
+      checkLimit(graph.edges.length + 1, limits.edges, "edges");
       graph.edges.push({
         source: sourceId,
         target: targetId,
@@ -241,6 +251,7 @@ function registerStateNode(
 ): void {
   const isNew = !graph.nodes.has(node.id);
   if (isNew) {
+    checkLimit(graph.nodes.size + 1, limits.nodes, "nodes");
     graph.nodes.set(node.id, node);
   }
   if (compositeStack.length > 0) {
@@ -335,6 +346,7 @@ function parseEdgeLine(line: string, graph: MermaidGraph, subgraphStack: Mermaid
     remaining = nextGroup.remaining.trim();
     for (const sourceId of prevGroupIds) {
       for (const targetId of nextGroup.ids) {
+        checkLimit(graph.edges.length + 1, limits.edges, "edges");
         graph.edges.push({
           source: sourceId,
           target: targetId,
@@ -416,6 +428,7 @@ function registerNode(
 ): void {
   const isNew = !graph.nodes.has(node.id);
   if (isNew) {
+    checkLimit(graph.nodes.size + 1, limits.nodes, "nodes");
     graph.nodes.set(node.id, node);
   }
   trackInSubgraph(subgraphStack, node.id);

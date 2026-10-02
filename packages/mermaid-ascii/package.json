@@ -6,6 +6,10 @@
     ".": {
       "types": "./src/ascii/index.ts",
       "import": "./src/ascii/index.ts"
+    },
+    "./limits": {
+      "types": "./src/limits.ts",
+      "import": "./src/limits.ts"
     }
   },
   "scripts": {

@@ -151,10 +151,10 @@ export function determinePath(graph: AsciiGraph, edge: AsciiEdge): void {
     determineStartAndEndDir(edge, effectiveDir);
   const prefFrom = gridCoordDirection(edge.from.gridCoord!, preferredDir);
   const prefTo = gridCoordDirection(edge.to.gridCoord!, preferredOppositeDir);
-  let preferredPath = getPath(graph.grid, prefFrom, prefTo);
+  let preferredPath = getPath(graph.grid, prefFrom, prefTo, graph.config.budget);
   const altFrom = gridCoordDirection(edge.from.gridCoord!, alternativeDir);
   const altTo = gridCoordDirection(edge.to.gridCoord!, alternativeOppositeDir);
-  let alternativePath = getPath(graph.grid, altFrom, altTo);
+  let alternativePath = getPath(graph.grid, altFrom, altTo, graph.config.budget);
   if (preferredPath !== null && alternativePath !== null) {
     preferredPath = mergePath(preferredPath);
     alternativePath = mergePath(alternativePath);

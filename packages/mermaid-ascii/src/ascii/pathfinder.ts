@@ -1,5 +1,7 @@
 import type { GridCoord, AsciiNode } from "./types.ts";
 import { gridKey, gridCoordEquals } from "./types.ts";
+import { checkLimit, RenderBudget } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 interface PQItem {
   coord: GridCoord;
   priority: number;
@@ -77,27 +79,51 @@ export function getPath(
   grid: Map<string, AsciiNode>,
   from: GridCoord,
   to: GridCoord,
+  budget = new RenderBudget(),
 ): GridCoord[] | null {
+  budget.check();
+  let maxX = 0;
+  let maxY = 0;
+  for (const coordinate of [from, to]) {
+    checkLimit(coordinate.x, limits.canvasDimension, "path coordinate");
+    checkLimit(coordinate.y, limits.canvasDimension, "path coordinate");
+    maxX = Math.max(maxX, coordinate.x);
+    maxY = Math.max(maxY, coordinate.y);
+  }
+  for (const key of grid.keys()) {
+    const [x, y] = key.split(",").map(Number);
+    checkLimit(x!, limits.canvasDimension, "grid coordinate");
+    checkLimit(y!, limits.canvasDimension, "grid coordinate");
+    maxX = Math.max(maxX, x!);
+    maxY = Math.max(maxY, y!);
+  }
+  maxX += 2;
+  maxY += 2;
   const pq = new MinHeap();
   pq.push({ coord: from, priority: 0 });
   const costSoFar = new Map<string, number>();
   costSoFar.set(gridKey(from), 0);
   const cameFrom = new Map<string, GridCoord | null>();
   cameFrom.set(gridKey(from), null);
+  let visits = 0;
   while (pq.length > 0) {
+    checkLimit(++visits, limits.pathVisits, "path search");
+    budget.visitPath();
     const current = pq.pop()!.coord;
     if (gridCoordEquals(current, to)) {
       const path: GridCoord[] = [];
       let c: GridCoord | null = current;
       while (c !== null) {
-        path.unshift(c);
+        path.push(c);
         c = cameFrom.get(gridKey(c)) ?? null;
       }
+      path.reverse();
       return path;
     }
     const currentCost = costSoFar.get(gridKey(current))!;
     for (const dir of MOVE_DIRS) {
       const next: GridCoord = { x: current.x + dir.x, y: current.y + dir.y };
+      if (next.x > maxX || next.y > maxY) continue;
       if (!isFreeInGrid(grid, next) && !gridCoordEquals(next, to)) {
         continue;
       }

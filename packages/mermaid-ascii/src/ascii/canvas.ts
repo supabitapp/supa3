@@ -1,7 +1,11 @@
+import { validateCanvas, type RenderBudget } from "../budget.ts";
 import type { Canvas, DrawingCoord, RoleCanvas, CharRole, AsciiTheme, ColorMode } from "./types.ts";
 import { colorizeLine, DEFAULT_ASCII_THEME } from "./ansi.ts";
-export function mkCanvas(x: number, y: number): Canvas {
+export function mkCanvas(x: number, y: number, budget?: RenderBudget): Canvas {
+  validateCanvas(x + 1, y + 1);
+  budget?.allocate(x + 1, y + 1);
   const canvas: Canvas = [];
+  canvas.budget = budget;
   for (let i = 0; i <= x; i++) {
     const col: string[] = [];
     for (let j = 0; j <= y; j++) {
@@ -13,10 +17,13 @@ export function mkCanvas(x: number, y: number): Canvas {
 }
 export function copyCanvas(source: Canvas): Canvas {
   const [maxX, maxY] = getCanvasSize(source);
-  return mkCanvas(maxX, maxY);
+  return mkCanvas(maxX, maxY, source.budget);
 }
-export function mkRoleCanvas(x: number, y: number): RoleCanvas {
+export function mkRoleCanvas(x: number, y: number, budget?: RenderBudget): RoleCanvas {
+  validateCanvas(x + 1, y + 1);
+  budget?.allocate(x + 1, y + 1);
   const roleCanvas: RoleCanvas = [];
+  roleCanvas.budget = budget;
   for (let i = 0; i <= x; i++) {
     const col: (CharRole | null)[] = [];
     for (let j = 0; j <= y; j++) {
@@ -29,7 +36,7 @@ export function mkRoleCanvas(x: number, y: number): RoleCanvas {
 export function copyRoleCanvas(source: RoleCanvas): RoleCanvas {
   const maxX = source.length - 1;
   const maxY = (source[0]?.length ?? 1) - 1;
-  return mkRoleCanvas(maxX, maxY);
+  return mkRoleCanvas(maxX, maxY, source.budget);
 }
 export function increaseRoleCanvasSize(
   roleCanvas: RoleCanvas,
@@ -40,7 +47,8 @@ export function increaseRoleCanvasSize(
   const currY = (roleCanvas[0]?.length ?? 1) - 1;
   const targetX = Math.max(newX, currX);
   const targetY = Math.max(newY, currY);
-  const grown = mkRoleCanvas(targetX, targetY);
+  if (targetX === currX && targetY === currY) return roleCanvas;
+  const grown = mkRoleCanvas(targetX, targetY, roleCanvas.budget);
   for (let x = 0; x < grown.length; x++) {
     for (let y = 0; y < grown[0]!.length; y++) {
       if (x < roleCanvas.length && y < roleCanvas[0]!.length) {
@@ -71,7 +79,7 @@ export function mergeRoleCanvases(
     maxX = Math.max(maxX, oX + offset.x);
     maxY = Math.max(maxY, oY + offset.y);
   }
-  const merged = mkRoleCanvas(maxX, maxY);
+  const merged = mkRoleCanvas(maxX, maxY, base.budget);
   for (let x = 0; x <= maxX; x++) {
     for (let y = 0; y <= maxY; y++) {
       if (x < base.length && y < base[0]!.length) {
@@ -80,6 +88,7 @@ export function mergeRoleCanvases(
     }
   }
   for (const overlay of overlays) {
+    base.budget?.check();
     for (let x = 0; x < overlay.length; x++) {
       for (let y = 0; y < overlay[0]!.length; y++) {
         const role = overlay[x]?.[y];
@@ -100,7 +109,8 @@ export function increaseSize(canvas: Canvas, newX: number, newY: number): Canvas
   const [currX, currY] = getCanvasSize(canvas);
   const targetX = Math.max(newX, currX);
   const targetY = Math.max(newY, currY);
-  const grown = mkCanvas(targetX, targetY);
+  if (targetX === currX && targetY === currY) return canvas;
+  const grown = mkCanvas(targetX, targetY, canvas.budget);
   for (let x = 0; x < grown.length; x++) {
     for (let y = 0; y < grown[0]!.length; y++) {
       if (x < canvas.length && y < canvas[0]!.length) {
@@ -162,7 +172,7 @@ export function mergeCanvases(
     maxX = Math.max(maxX, oX + offset.x);
     maxY = Math.max(maxY, oY + offset.y);
   }
-  const merged = mkCanvas(maxX, maxY);
+  const merged = mkCanvas(maxX, maxY, base.budget);
   for (let x = 0; x <= maxX; x++) {
     for (let y = 0; y <= maxY; y++) {
       if (x < base.length && y < base[0]!.length) {
@@ -171,6 +181,7 @@ export function mergeCanvases(
     }
   }
   for (const overlay of overlays) {
+    base.budget?.check();
     for (let x = 0; x < overlay.length; x++) {
       for (let y = 0; y < overlay[0]!.length; y++) {
         const c = overlay[x]![y]!;
@@ -197,6 +208,8 @@ export interface CanvasToStringOptions {
 }
 export function canvasToString(canvas: Canvas, options?: CanvasToStringOptions): string {
   const [maxX, maxY] = getCanvasSize(canvas);
+  validateCanvas(maxX + 1, maxY + 1);
+  canvas.budget?.check();
   const lines: string[] = [];
   const roleCanvas = options?.roleCanvas;
   const colorMode = options?.colorMode ?? "none";

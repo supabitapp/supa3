@@ -1,3 +1,5 @@
+import { checkLimit } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseClassDiagram } from "../class/parser.ts";
 import type { ClassNode, ClassMember, RelationshipType } from "../class/types.ts";
 import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
@@ -93,6 +95,9 @@ export function renderClassAscii(
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseClassDiagram(lines);
+  checkLimit(diagram.classes.length, limits.nodes, "classes");
+  checkLimit(diagram.relationships.length, limits.edges, "relationships");
+  config.budget?.check();
   if (diagram.classes.length === 0) return "";
   const useAscii = config.useAscii;
   const hGap = 4;
@@ -119,6 +124,7 @@ export function renderClassAscii(
   const parents = new Map<string, Set<string>>();
   const children = new Map<string, Set<string>>();
   for (const rel of diagram.relationships) {
+    config.budget?.check();
     const isHierarchical = rel.type === "inheritance" || rel.type === "realization";
     const parentId = isHierarchical && rel.markerAt === "to" ? rel.to : rel.from;
     const childId = isHierarchical && rel.markerAt === "to" ? rel.from : rel.to;
@@ -134,6 +140,7 @@ export function renderClassAscii(
   const levelCap = diagram.classes.length - 1;
   let qi = 0;
   while (qi < queue.length) {
+    config.budget?.check();
     const id = queue[qi++]!;
     const childSet = children.get(id);
     if (!childSet) continue;
@@ -186,8 +193,8 @@ export function renderClassAscii(
   }
   totalW += 4;
   totalH += 2;
-  const canvas = mkCanvas(totalW - 1, totalH - 1);
-  const rc = mkRoleCanvas(totalW - 1, totalH - 1);
+  const canvas = mkCanvas(totalW - 1, totalH - 1, config.budget);
+  const rc = mkRoleCanvas(totalW - 1, totalH - 1, config.budget);
   function setC(x: number, y: number, ch: string, role: CharRole): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
@@ -195,7 +202,7 @@ export function renderClassAscii(
     }
   }
   for (const p of placed.values()) {
-    const boxCanvas = drawMultiBox(p.sections, useAscii);
+    const boxCanvas = drawMultiBox(p.sections, useAscii, 1, config.budget);
     for (let bx = 0; bx < boxCanvas.length; bx++) {
       for (let by = 0; by < boxCanvas[0]!.length; by++) {
         const ch = boxCanvas[bx]![by]!;
@@ -275,6 +282,7 @@ export function renderClassAscii(
   const dashH = useAscii ? "." : "╌";
   const dashV = useAscii ? ":" : "┊";
   for (const rel of diagram.relationships) {
+    config.budget?.check();
     const fromP = placed.get(rel.from);
     const toP = placed.get(rel.to);
     if (!fromP || !toP) continue;

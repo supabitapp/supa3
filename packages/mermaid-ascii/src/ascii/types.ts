@@ -1,3 +1,4 @@
+import type { RenderBudget } from "../budget.ts";
 import type { NodeShape } from "../types.ts";
 export type { NodeShape };
 export type AsciiNodeShape = NodeShape;
@@ -33,7 +34,7 @@ export const ALL_DIRECTIONS: readonly Direction[] = [
   LowerLeft,
   Middle,
 ];
-export type Canvas = string[][];
+export type Canvas = string[][] & { budget?: RenderBudget | undefined };
 export interface AsciiNode {
   name: string;
   displayLabel: string;
@@ -77,6 +78,7 @@ export interface AsciiSubgraph {
   direction?: "LR" | "TD" | undefined;
 }
 export interface AsciiConfig {
+  budget?: RenderBudget | undefined;
   useAscii: boolean;
   paddingX: number;
   paddingY: number;
@@ -111,7 +113,7 @@ export function gridKey(c: GridCoord): string {
 }
 export const EMPTY_STYLE: AsciiStyleClass = { name: "", styles: {} };
 export type CharRole = "text" | "border" | "line" | "arrow" | "corner" | "junction";
-export type RoleCanvas = (CharRole | null)[][];
+export type RoleCanvas = (CharRole | null)[][] & { budget?: RenderBudget | undefined };
 export interface AsciiTheme {
   fg: string;
   border: string;

@@ -1,3 +1,4 @@
+import type { RenderBudget } from "../budget.ts";
 import type {
   Canvas,
   DrawingCoord,
@@ -45,7 +46,7 @@ function drawBoxWithGridDimensions(node: AsciiNode, graph: AsciiGraph): Canvas {
   }
   const from: DrawingCoord = { x: 0, y: 0 };
   const to: DrawingCoord = { x: w, y: h };
-  const box = mkCanvas(Math.max(from.x, to.x), Math.max(from.y, to.y));
+  const box = mkCanvas(Math.max(from.x, to.x), Math.max(from.y, to.y), graph.config.budget);
   const corners = getCorners(node.shape, useAscii);
   const isDoubleBox = node.shape === "state-end";
   const hChar = useAscii ? (isDoubleBox ? "=" : "-") : isDoubleBox ? "═" : "─";
@@ -85,7 +86,12 @@ function drawBoxWithGridDimensions(node: AsciiNode, graph: AsciiGraph): Canvas {
 export function drawBox(node: AsciiNode, graph: AsciiGraph): Canvas {
   return drawNode(node, graph);
 }
-export function drawMultiBox(sections: string[][], useAscii: boolean, padding: number = 1): Canvas {
+export function drawMultiBox(
+  sections: string[][],
+  useAscii: boolean,
+  padding: number = 1,
+  budget?: RenderBudget,
+): Canvas {
   let maxTextWidth = 0;
   for (const section of sections) {
     for (const line of section) {
@@ -108,7 +114,7 @@ export function drawMultiBox(sections: string[][], useAscii: boolean, padding: n
   const br = useAscii ? "+" : "┘";
   const divL = useAscii ? "+" : "├";
   const divR = useAscii ? "+" : "┤";
-  const canvas = mkCanvas(boxWidth - 1, boxHeight - 1);
+  const canvas = mkCanvas(boxWidth - 1, boxHeight - 1, budget);
   canvas[0]![0] = tl;
   for (let x = 1; x < boxWidth - 1; x++) canvas[x]![0] = hLine;
   canvas[boxWidth - 1]![0] = tr;
@@ -760,10 +766,10 @@ function drawJunctionCharacter(graph: AsciiGraph, bundle: EdgeBundle): Canvas {
 export function drawSubgraphBox(sg: AsciiSubgraph, graph: AsciiGraph): Canvas {
   const width = sg.maxX - sg.minX;
   const height = sg.maxY - sg.minY;
-  if (width <= 0 || height <= 0) return mkCanvas(0, 0);
+  if (width <= 0 || height <= 0) return mkCanvas(0, 0, graph.config.budget);
   const from: DrawingCoord = { x: 0, y: 0 };
   const to: DrawingCoord = { x: width, y: height };
-  const canvas = mkCanvas(width, height);
+  const canvas = mkCanvas(width, height, graph.config.budget);
   if (!graph.config.useAscii) {
     for (let x = from.x + 1; x < to.x; x++) canvas[x]![from.y] = "─";
     for (let x = from.x + 1; x < to.x; x++) canvas[x]![to.y] = "─";
@@ -785,11 +791,14 @@ export function drawSubgraphBox(sg: AsciiSubgraph, graph: AsciiGraph): Canvas {
   }
   return canvas;
 }
-export function drawSubgraphLabel(sg: AsciiSubgraph): [Canvas, DrawingCoord] {
+export function drawSubgraphLabel(
+  sg: AsciiSubgraph,
+  budget?: RenderBudget,
+): [Canvas, DrawingCoord] {
   const width = sg.maxX - sg.minX;
   const height = sg.maxY - sg.minY;
-  if (width <= 0 || height <= 0) return [mkCanvas(0, 0), { x: 0, y: 0 }];
-  const canvas = mkCanvas(width, height);
+  if (width <= 0 || height <= 0) return [mkCanvas(0, 0, budget), { x: 0, y: 0 }];
+  const canvas = mkCanvas(width, height, budget);
   const lines = splitLines(sg.name);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -838,6 +847,7 @@ function fillRolesFromCanvases(
   role: CharRole,
 ): void {
   for (const canvas of canvases) {
+    roleCanvas.budget?.check();
     fillRolesFromCanvas(roleCanvas, canvas, offset, role);
   }
 }
@@ -882,6 +892,7 @@ export function drawGraph(graph: AsciiGraph): Canvas {
   const junctionCanvases: Canvas[] = [];
   const processedBundles = new Set<EdgeBundle>();
   for (const edge of graph.edges) {
+    graph.config.budget?.check();
     if (edge.bundle && edge.pathToJunction) {
       const bundle = edge.bundle;
       const [pathC, boxStartC, , , cornersC, labelC] = drawBundledEdgeSegment(graph, edge, bundle);
@@ -934,7 +945,7 @@ export function drawGraph(graph: AsciiGraph): Canvas {
   fillRolesFromCanvases(graph.roleCanvas, labelCanvases, zero, "text");
   for (const sg of graph.subgraphs) {
     if (sg.nodes.length === 0) continue;
-    const [labelCanvas, offset] = drawSubgraphLabel(sg);
+    const [labelCanvas, offset] = drawSubgraphLabel(sg, graph.config.budget);
     graph.canvas = mergeCanvases(graph.canvas, offset, useAscii, labelCanvas);
     fillRolesFromCanvas(graph.roleCanvas, labelCanvas, offset, "text");
   }

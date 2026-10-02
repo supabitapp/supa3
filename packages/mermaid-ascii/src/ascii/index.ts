@@ -1,3 +1,5 @@
+import { RenderBudget, checkLimit, validateSource } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseMermaid } from "../parser.ts";
 import { convertToAsciiGraph } from "./converter.ts";
 import { createMapping } from "./grid.ts";
@@ -24,13 +26,26 @@ function detectDiagramType(text: string): "flowchart" | "sequence" | "class" | "
   return "flowchart";
 }
 export function renderMermaidAscii(text: string, options: AsciiRenderOptions = {}): string {
+  validateSource(text);
+  if (options.useAscii !== undefined && typeof options.useAscii !== "boolean") {
+    throw new TypeError("Mermaid useAscii must be a boolean");
+  }
+  for (const value of [options.paddingX, options.paddingY, options.boxBorderPadding]) {
+    if (value !== undefined) checkLimit(value, limits.padding, "padding");
+  }
   const config: AsciiConfig = {
+    budget: new RenderBudget(),
     useAscii: options.useAscii ?? false,
     paddingX: options.paddingX ?? 5,
     paddingY: options.paddingY ?? 5,
     boxBorderPadding: options.boxBorderPadding ?? 1,
     graphDirection: "TD",
   };
+  const output = renderDiagram(text, config);
+  config.budget?.check();
+  return output;
+}
+function renderDiagram(text: string, config: AsciiConfig): string {
   const colorMode: ColorMode = "none";
   const theme: AsciiTheme = DEFAULT_ASCII_THEME;
   const diagramType = detectDiagramType(text);

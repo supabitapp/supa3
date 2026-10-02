@@ -1,3 +1,5 @@
+import { checkLimit } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import type {
   GridCoord,
   DrawingCoord,
@@ -38,6 +40,8 @@ export function reserveSpotInGrid(
   requested: GridCoord,
   effectiveDir?: "LR" | "TD",
 ): GridCoord {
+  checkLimit(requested.x, limits.canvasDimension, "grid coordinate");
+  checkLimit(requested.y, limits.canvasDimension, "grid coordinate");
   const dir = effectiveDir ?? getEffectiveDirection(graph, node);
   if (graph.grid.has(gridKey(requested))) {
     if (dir === "LR") {
@@ -249,6 +253,7 @@ export function offsetDrawingForSubgraphs(graph: AsciiGraph): void {
   }
 }
 export function createMapping(graph: AsciiGraph): void {
+  graph.config.budget?.check();
   const dir = graph.config.graphDirection;
   const highestPositionPerLevel: number[] = Array.from({ length: 100 }, () => 0);
   const nodesFound = new Set<string>();
@@ -352,6 +357,7 @@ export function createMapping(graph: AsciiGraph): void {
   graph.bundles = analyzeEdgeBundles(graph);
   processBundles(graph);
   for (const edge of graph.edges) {
+    graph.config.budget?.check();
     if (edge.bundle && edge.path.length > 0) {
       increaseGridSizeForPath(graph, edge.path);
       determineLabelLine(graph, edge);

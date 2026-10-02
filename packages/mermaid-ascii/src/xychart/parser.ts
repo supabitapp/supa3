@@ -1,3 +1,5 @@
+import { checkLimit } from "../budget.ts";
+import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import type { XYChart, XYAxis, XYChartSeries } from "./types.ts";
 export function parseXYChart(lines: string[]): XYChart {
   const xAxis: XYAxis = {};
@@ -22,7 +24,7 @@ export function parseXYChart(lines: string[]): XYChart {
       continue;
     }
     const xRangeMatch = line.match(
-      /^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/,
+      /^x-axis\s+(?:"([^"]*)"\s+)?([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s*-->\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s*$/i,
     );
     if (xRangeMatch) {
       if (xRangeMatch[1]) xAxis.title = xRangeMatch[1];
@@ -30,7 +32,7 @@ export function parseXYChart(lines: string[]): XYChart {
       continue;
     }
     const yRangeMatch = line.match(
-      /^y-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/,
+      /^y-axis\s+(?:"([^"]*)"\s+)?([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s*-->\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s*$/i,
     );
     if (yRangeMatch) {
       if (yRangeMatch[1]) yAxis.title = yRangeMatch[1];
@@ -42,16 +44,28 @@ export function parseXYChart(lines: string[]): XYChart {
       yAxis.title = yTitleOnly[1];
       continue;
     }
-    const barMatch = line.match(/^bar\s+\[([^\]]+)\]/);
+    const barMatch = line.match(/^bar\s+\[([^\]]+)\]\s*$/);
     if (barMatch) {
       series.push({ type: "bar", data: parseNumericArray(barMatch[1]!) });
       continue;
     }
-    const lineMatch = line.match(/^line\s+\[([^\]]+)\]/);
+    const lineMatch = line.match(/^line\s+\[([^\]]+)\]\s*$/);
     if (lineMatch) {
       series.push({ type: "line", data: parseNumericArray(lineMatch[1]!) });
       continue;
     }
+    throw new Error(`Invalid XY chart statement: ${line}`);
+  }
+  checkLimit(series.length, limits.groups, "chart series");
+  checkLimit(
+    series.reduce((total, item) => total + item.data.length, 0),
+    limits.edges,
+    "chart values",
+  );
+  const dataCount = xAxis.categories?.length ?? series[0]?.data.length ?? 0;
+  checkLimit(dataCount, limits.nodes, "chart categories");
+  if (series.some((item) => item.data.length !== dataCount)) {
+    throw new Error("XY chart series must match the category count");
   }
   if (!yAxis.range && series.length > 0) {
     const allValues = series.flatMap((s) => s.data);
@@ -66,8 +80,27 @@ export function parseXYChart(lines: string[]): XYChart {
   if (!yAxis.range) {
     yAxis.range = { min: 0, max: 100 };
   }
+  for (const axis of [xAxis, yAxis]) {
+    if (
+      axis.range &&
+      (!Number.isFinite(axis.range.min) ||
+        !Number.isFinite(axis.range.max) ||
+        !Number.isFinite(axis.range.max - axis.range.min) ||
+        axis.range.max <= axis.range.min)
+    ) {
+      throw new RangeError("XY chart axis must have a finite increasing range");
+    }
+  }
   return { title, horizontal, xAxis, yAxis, series };
 }
 function parseNumericArray(str: string): number[] {
-  return str.split(",").map((s) => parseFloat(s.trim()));
+  const tokens = str.split(",");
+  const numbers = tokens.map((token) => Number(token.trim()));
+  if (
+    tokens.some((token) => token.trim() === "") ||
+    numbers.some((number) => !Number.isFinite(number))
+  ) {
+    throw new RangeError("XY chart values must be finite numbers");
+  }
+  return numbers;
 }
