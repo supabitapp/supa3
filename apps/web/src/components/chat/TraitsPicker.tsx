@@ -236,6 +236,12 @@ function getTraitsSectionVisibility(input: {
   const showFastMode = selected.fastModeDescriptor !== null;
   const showContextWindow = selected.contextWindowDescriptor !== null;
   const showAgent = selected.agentDescriptor !== null;
+  const hasMenuControls =
+    showEffort ||
+    showThinking ||
+    showContextWindow ||
+    showAgent ||
+    (selected.modelIsUnavailable && selected.descriptors.length > 0);
 
   return {
     ...selected,
@@ -244,13 +250,8 @@ function getTraitsSectionVisibility(input: {
     showFastMode,
     showContextWindow,
     showAgent,
-    hasAnyControls:
-      showEffort ||
-      showThinking ||
-      showFastMode ||
-      showContextWindow ||
-      showAgent ||
-      (selected.modelIsUnavailable && selected.descriptors.length > 0),
+    hasMenuControls,
+    hasAnyControls: hasMenuControls || showFastMode,
   };
 }
 
@@ -280,20 +281,14 @@ export interface TraitsMenuContentProps {
   isComposerOwned?: boolean;
 }
 
-export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
-  provider,
-  instanceId,
-  models,
-  model,
-  prompt,
-  onPromptChange,
-  modelOptions,
-  allowPromptInjectedEffort = true,
-  planModeEnabled,
-  ...persistence
-}: TraitsMenuContentProps & TraitsPersistence) {
+function useUpdateModelOptions(
+  provider: ProviderDriverKind,
+  instanceId: ProviderInstanceId | undefined,
+  model: string | null | undefined,
+  persistence: TraitsPersistence,
+) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
-  const updateModelOptions = useCallback(
+  return useCallback(
     (nextOptions: ProviderOptions | undefined) => {
       if ("onModelOptionsChange" in persistence) {
         persistence.onModelOptionsChange(nextOptions);
@@ -311,6 +306,22 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     },
     [instanceId, model, persistence, provider, setProviderModelOptions],
   );
+}
+
+export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
+  provider,
+  instanceId,
+  models,
+  model,
+  prompt,
+  onPromptChange,
+  modelOptions,
+  allowPromptInjectedEffort = true,
+  planModeEnabled,
+  omitFastMode = false,
+  ...persistence
+}: TraitsMenuContentProps & TraitsPersistence & { omitFastMode?: boolean }) {
+  const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
   const {
     descriptors,
     selectDescriptors,
@@ -329,6 +340,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     allowPromptInjectedEffort,
     planModeEnabled,
   });
+  const menuBooleanDescriptors = omitFastMode
+    ? booleanDescriptors.filter((descriptor) => descriptor.id !== "fastMode")
+    : booleanDescriptors;
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
@@ -440,7 +454,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           </div>
         );
       })}
-      {booleanDescriptors.map((descriptor, index) => {
+      {menuBooleanDescriptors.map((descriptor, index) => {
         const selectedValue = descriptor.currentValue === true ? "on" : "off";
 
         return (
@@ -475,8 +489,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 });
 
 /**
- * Fast mode uses one bolt; Codex Ultrafast uses two. Keep a text label when
- * speed is the only trait so the trigger remains readable.
+ * Codex Fast uses one bolt; Ultrafast uses two. Boolean fast mode has its own
+ * toggle beside the trigger. Keep a text label when speed is the only trait so
+ * the trigger remains readable.
  */
 export function buildTraitsTriggerDisplay(input: {
   provider: ProviderDriverKind;
@@ -489,8 +504,6 @@ export function buildTraitsTriggerDisplay(input: {
   const labels: Array<string> = [];
   for (const descriptor of input.descriptors) {
     if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      speedIcon = descriptor.currentValue === true ? "fast" : null;
-      fastModeFallbackLabel = speedIcon ? "Fast" : "Normal";
       continue;
     }
     if (
@@ -559,28 +572,68 @@ export const TraitsPicker = memo(function TraitsPicker({
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
-  const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
-    getTraitsSectionVisibility({
-      provider,
-      models,
-      model,
-      prompt,
-      modelOptions,
-      allowPromptInjectedEffort,
-      planModeEnabled,
-    });
-  if (
-    !shouldRenderTraitsControls({
-      provider,
-      models,
-      model,
-      prompt,
-      modelOptions,
-      allowPromptInjectedEffort,
-      planModeEnabled,
-    })
-  ) {
+  const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
+  const {
+    descriptors,
+    primarySelectDescriptor,
+    fastModeDescriptor,
+    ultrathinkPromptControlled,
+    modelIsUnavailable,
+    hasMenuControls,
+    hasAnyControls,
+  } = getTraitsSectionVisibility({
+    provider,
+    models,
+    model,
+    prompt,
+    modelOptions,
+    allowPromptInjectedEffort,
+    planModeEnabled,
+  });
+  if (!hasAnyControls) {
     return null;
+  }
+
+  const fastModeToggleDescriptor = modelIsUnavailable ? null : fastModeDescriptor;
+  const fastModeOn = fastModeToggleDescriptor?.currentValue === true;
+  const fastModeOnColor =
+    size === "xs"
+      ? "text-current"
+      : provider === "claudeAgent"
+        ? "text-[#d97757]"
+        : "text-foreground";
+  const fastModeToggle = fastModeToggleDescriptor ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComposerControl
+            size={size}
+            aria-pressed={fastModeOn}
+            aria-label={fastModeToggleDescriptor.label}
+            onClick={() =>
+              updateModelOptions(
+                buildProviderOptionSelectionsFromDescriptors(
+                  replaceDescriptorCurrentValue(descriptors, "fastMode", !fastModeOn),
+                ),
+              )
+            }
+          />
+        }
+      >
+        <ComposerControlIcon
+          icon={ZapIcon}
+          size={size}
+          className={fastModeOn ? cn("fill-current opacity-80", fastModeOnColor) : undefined}
+        />
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        {fastModeToggleDescriptor.label} {fastModeOn ? "on" : "off"}
+      </TooltipPopup>
+    </Tooltip>
+  ) : null;
+
+  if (!hasMenuControls) {
+    return fastModeToggle;
   }
 
   const { label: triggerLabel, speedIcon } = buildTraitsTriggerDisplay({
@@ -598,11 +651,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         size={size}
         className={cn(
           "fill-current opacity-80",
-          size === "xs"
-            ? "text-current"
-            : provider === "claudeAgent"
-              ? "text-[#d97757]"
-              : "text-foreground",
+          size === "xs" ? "text-current" : "text-foreground",
         )}
       />
       <span className="sr-only">{speedLabel}</span>
@@ -612,85 +661,89 @@ export const TraitsPicker = memo(function TraitsPicker({
   const isCodexStyle = provider === "codex";
 
   return (
-    <Menu
-      open={isMenuOpen}
-      onOpenChange={(open) => {
-        setIsMenuOpen(open);
-      }}
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <ComposerControl
-                  aria-label={accessibleLabel}
-                  data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
-                  size={size}
-                  className={cn(
-                    isCodexStyle
-                      ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
-                      : "shrink-0 whitespace-nowrap",
-                    triggerClassName,
-                  )}
-                />
-              }
-            />
-          }
-        >
-          {isCodexStyle ? (
-            // The label truncates itself; clipping the wrapper too would cut off
-            // the chevron, whose negative end margin overhangs the wrapper edge.
-            <span
-              className={cn(
-                "flex min-w-0 w-full items-center",
-                size === "xs" ? "gap-1" : "gap-1.5",
-              )}
-            >
-              {fastModeIcon ?? (
-                <span
-                  data-composer-control-compact-icon
-                  className="pointer-events-none invisible absolute"
-                >
-                  <ComposerControlIcon icon={BrainIcon} size={size} />
+    <>
+      <Menu
+        open={isMenuOpen}
+        onOpenChange={(open) => {
+          setIsMenuOpen(open);
+        }}
+      >
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <MenuTrigger
+                render={
+                  <ComposerControl
+                    aria-label={accessibleLabel}
+                    data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
+                    size={size}
+                    className={cn(
+                      isCodexStyle
+                        ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
+                        : "shrink-0 whitespace-nowrap",
+                      triggerClassName,
+                    )}
+                  />
+                }
+              />
+            }
+          >
+            {isCodexStyle ? (
+              // The label truncates itself; clipping the wrapper too would cut off
+              // the chevron, whose negative end margin overhangs the wrapper edge.
+              <span
+                className={cn(
+                  "flex min-w-0 w-full items-center",
+                  size === "xs" ? "gap-1" : "gap-1.5",
+                )}
+              >
+                {fastModeIcon ?? (
+                  <span
+                    data-composer-control-compact-icon
+                    className="pointer-events-none invisible absolute"
+                  >
+                    <ComposerControlIcon icon={BrainIcon} size={size} />
+                  </span>
+                )}
+                <span data-composer-control-label className="min-w-0 truncate">
+                  {triggerLabel}
                 </span>
-              )}
-              <span data-composer-control-label className="min-w-0 truncate">
-                {triggerLabel}
+                <ComposerControlChevron size={size} />
               </span>
-              <ComposerControlChevron size={size} />
-            </span>
-          ) : (
-            <>
-              {fastModeIcon ?? (
-                <span
-                  data-composer-control-compact-icon
-                  className="pointer-events-none invisible absolute"
-                >
-                  <ComposerControlIcon icon={BrainIcon} size={size} />
-                </span>
-              )}
-              <span data-composer-control-label>{triggerLabel}</span>
-              <ComposerControlChevron size={size} />
-            </>
-          )}
-        </TooltipTrigger>
-        <TooltipPopup side="top">{accessibleLabel}</TooltipPopup>
-      </Tooltip>
-      <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
-        <TraitsMenuContent
-          provider={provider}
-          {...(instanceId ? { instanceId } : {})}
-          models={models}
-          model={model}
-          prompt={prompt}
-          onPromptChange={onPromptChange}
-          modelOptions={modelOptions}
-          allowPromptInjectedEffort={allowPromptInjectedEffort}
-          planModeEnabled={planModeEnabled}
-          {...persistence}
-        />
-      </MenuPopup>
-    </Menu>
+            ) : (
+              <>
+                {fastModeIcon ?? (
+                  <span
+                    data-composer-control-compact-icon
+                    className="pointer-events-none invisible absolute"
+                  >
+                    <ComposerControlIcon icon={BrainIcon} size={size} />
+                  </span>
+                )}
+                <span data-composer-control-label>{triggerLabel}</span>
+                <ComposerControlChevron size={size} />
+              </>
+            )}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{accessibleLabel}</TooltipPopup>
+        </Tooltip>
+        <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
+          <TraitsMenuContent
+            provider={provider}
+            {...(instanceId ? { instanceId } : {})}
+            models={models}
+            model={model}
+            prompt={prompt}
+            onPromptChange={onPromptChange}
+            modelOptions={modelOptions}
+            allowPromptInjectedEffort={allowPromptInjectedEffort}
+            planModeEnabled={planModeEnabled}
+            omitFastMode
+            {...persistence}
+          />
+        </MenuPopup>
+      </Menu>
+      {fastModeToggle}
+    </>
   );
 });

@@ -62,18 +62,14 @@ function display(descriptors: ReadonlyArray<ProviderOptionDescriptor>) {
 }
 
 describe("buildTraitsTriggerDisplay", () => {
-  it("omits fast mode from the label entirely when it is off", () => {
-    expect(display([EFFORT, fastModeDescriptor(false), CONTEXT_WINDOW])).toEqual({
-      label: "High · 1M",
-      speedIcon: null,
-    });
-  });
-
-  it("shows the bolt instead of a text label when fast mode is on", () => {
-    expect(display([EFFORT, fastModeDescriptor(true), CONTEXT_WINDOW])).toEqual({
-      label: "High · 1M",
-      speedIcon: "fast",
-    });
+  it("leaves boolean fast mode to its own toggle", () => {
+    for (const fastMode of [false, true]) {
+      expect(display([EFFORT, fastModeDescriptor(fastMode), CONTEXT_WINDOW])).toEqual({
+        label: "High · 1M",
+        speedIcon: null,
+      });
+    }
+    expect(display([fastModeDescriptor(true)])).toEqual({ label: "", speedIcon: null });
   });
 
   it("treats Codex standard and fast service tiers as fast mode states", () => {
@@ -161,17 +157,6 @@ describe("buildTraitsTriggerDisplay", () => {
     });
   });
 
-  it("falls back to a text label when fast mode is the only trait", () => {
-    expect(display([fastModeDescriptor(true)])).toEqual({
-      label: "Fast",
-      speedIcon: null,
-    });
-    expect(display([fastModeDescriptor(false)])).toEqual({
-      label: "Normal",
-      speedIcon: null,
-    });
-  });
-
   it("stays blank when descriptors resolve to no label and there is no fast mode", () => {
     // A select with neither a currentValue nor an isDefault option yields no
     // label. Without a fastMode descriptor present that must stay blank rather
@@ -192,7 +177,7 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(
       buildTraitsTriggerDisplay({
         provider: CODEX,
-        descriptors: [EFFORT, fastModeDescriptor(true)],
+        descriptors: [EFFORT, serviceTierDescriptor("priority")],
         primarySelectDescriptorId: "reasoningEffort",
         ultrathinkPromptControlled: true,
       }),
