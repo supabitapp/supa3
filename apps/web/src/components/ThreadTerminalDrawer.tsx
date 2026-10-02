@@ -1685,6 +1685,16 @@ export default function ThreadTerminalDrawer({
                           return (
                             <div
                               key={terminalId}
+                              onMouseDown={(event) => {
+                                if (event.button !== 1) return;
+                                event.preventDefault();
+                              }}
+                              onAuxClick={(event) => {
+                                if (event.button !== 1) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                confirmCloseTerminal(terminalId);
+                              }}
                               className={cn(
                                 "group/tab flex h-6 w-full items-center gap-0.5 rounded-md pr-2 pl-1.5 text-xs",
                                 isActive

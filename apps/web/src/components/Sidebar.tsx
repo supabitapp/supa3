@@ -812,6 +812,18 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         )}
         onClick={handleActivate}
         onKeyDown={handleKeyDown}
+        onMouseDown={(event) => {
+          if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
+            return;
+          }
+          event.preventDefault();
+        }}
+        onAuxClick={(event) => {
+          if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
+            return;
+          }
+          handleDiscard(event);
+        }}
       >
         <span className="sr-only">{preview}</span>
         <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
