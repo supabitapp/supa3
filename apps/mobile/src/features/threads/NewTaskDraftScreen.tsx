@@ -62,6 +62,8 @@ import {
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { ProviderIcon } from "../../components/ProviderIcon";
+import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
+import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { hasProviderUsageLimits, isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
@@ -434,6 +436,14 @@ export function NewTaskDraftScreen(props: {
   const isImportingContext = flow.draftKey ? contextImports[flow.draftKey] === true : false;
   const isComposerInteractionLocked =
     isIncomingShareTransferPending || flow.submitting || isImportingContext;
+  const providerOptionDescriptors = useMemo(
+    () =>
+      resolveProviderOptionDescriptors({
+        capabilities: flow.selectedModelOption?.capabilities,
+        selections: flow.selectedModel?.options,
+      }),
+    [flow.selectedModel?.options, flow.selectedModelOption?.capabilities],
+  );
   // Also guard while a submit is in flight: an Android back press or iOS
   // Cancel would otherwise abandon the screen while the task still starts.
   // T3 owns /usage-limits only where Limits has data for the selected provider.
@@ -1727,6 +1737,12 @@ export function NewTaskDraftScreen(props: {
                         onPress={settingsSheetPresentation.open}
                       />
                     </View>
+                    <ComposerSpeedToggle
+                      provider={flow.selectedModelOption?.providerDriver}
+                      descriptors={providerOptionDescriptors}
+                      disabled={isComposerInteractionLocked}
+                      onChange={flow.setSelectedModelOptions}
+                    />
                     {flow.planModeEnabled ? (
                       <ComposerInlineControl
                         accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}

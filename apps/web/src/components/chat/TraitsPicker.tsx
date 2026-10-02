@@ -15,6 +15,12 @@ import {
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@t3tools/shared/model";
+import {
+  getSpeedToggle,
+  getSpeedToggleNextValue,
+  SPEED_TOGGLE_LABELS,
+  type SpeedToggle,
+} from "@t3tools/client-runtime/provider-speed-toggle";
 import { memo, useCallback } from "react";
 import { BrainIcon, ZapIcon } from "lucide-react";
 import { UltrafastIcon } from "../Icons";
@@ -91,7 +97,6 @@ type TraitsPersistence =
     };
 
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
-const CODEX_STANDARD_SERVICE_TIER = "default";
 
 function DefaultBadge() {
   return (
@@ -208,60 +213,6 @@ function getSelectedTraits(
     selectedAgentLabel,
     modelIsUnavailable,
   };
-}
-
-export type SpeedToggle = {
-  descriptorId: string;
-  level: "off" | "fast" | "ultrafast";
-  onValue: string | boolean;
-  offValue: string | boolean;
-  coversDescriptor: boolean;
-};
-
-const SPEED_TOGGLE_TOOLTIPS: Readonly<Record<SpeedToggle["level"], string>> = {
-  off: "Fast mode off",
-  fast: "Fast mode on",
-  ultrafast: "Ultrafast mode on",
-};
-
-export function getSpeedToggle(
-  provider: ProviderDriverKind,
-  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
-): SpeedToggle | null {
-  for (const descriptor of descriptors) {
-    if (descriptor.type === "boolean" && descriptor.id === "fastMode") {
-      return {
-        descriptorId: descriptor.id,
-        level: descriptor.currentValue === true ? "fast" : "off",
-        onValue: true,
-        offValue: false,
-        coversDescriptor: true,
-      };
-    }
-    if (provider !== "codex" || descriptor.type !== "select" || descriptor.id !== "serviceTier") {
-      continue;
-    }
-    const fastTier = descriptor.options.find(({ label }) => label === "Fast");
-    const ultrafastTier = descriptor.options.find(({ label }) => label === "Ultrafast");
-    const onTier = fastTier ?? ultrafastTier;
-    if (!onTier) {
-      continue;
-    }
-    const currentValue = getProviderOptionCurrentValue(descriptor);
-    let level: SpeedToggle["level"] = "off";
-    if (fastTier && currentValue === fastTier.id) level = "fast";
-    if (ultrafastTier && currentValue === ultrafastTier.id) level = "ultrafast";
-    return {
-      descriptorId: descriptor.id,
-      level,
-      onValue: onTier.id,
-      offValue: CODEX_STANDARD_SERVICE_TIER,
-      coversDescriptor: descriptor.options.every(
-        ({ id }) => id === CODEX_STANDARD_SERVICE_TIER || id === onTier.id,
-      ),
-    };
-  }
-  return null;
 }
 
 function getTraitsSectionVisibility(input: {
@@ -629,12 +580,6 @@ export const TraitsPicker = memo(function TraitsPicker({
   }
 
   const speedOn = speedToggle !== null && speedToggle.level !== "off";
-  const speedOnColor =
-    size === "xs"
-      ? "text-current"
-      : provider === "claudeAgent"
-        ? "text-[#d97757]"
-        : "text-foreground";
   const speedToggleControl = speedToggle ? (
     <Tooltip>
       <TooltipTrigger
@@ -649,7 +594,7 @@ export const TraitsPicker = memo(function TraitsPicker({
                   replaceDescriptorCurrentValue(
                     descriptors,
                     speedToggle.descriptorId,
-                    speedOn ? speedToggle.offValue : speedToggle.onValue,
+                    getSpeedToggleNextValue(speedToggle),
                   ),
                 ),
               )
@@ -660,10 +605,10 @@ export const TraitsPicker = memo(function TraitsPicker({
         <ComposerControlIcon
           icon={speedToggle.level === "ultrafast" ? UltrafastIcon : ZapIcon}
           size={size}
-          className={speedOn ? cn("fill-current opacity-80", speedOnColor) : undefined}
+          className={speedOn ? "fill-current text-fast-mode" : undefined}
         />
       </TooltipTrigger>
-      <TooltipPopup side="top">{SPEED_TOGGLE_TOOLTIPS[speedToggle.level]}</TooltipPopup>
+      <TooltipPopup side="top">{SPEED_TOGGLE_LABELS[speedToggle.level]}</TooltipPopup>
     </Tooltip>
   ) : null;
 

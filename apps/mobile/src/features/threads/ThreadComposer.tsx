@@ -90,6 +90,7 @@ import {
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
+import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
@@ -966,16 +967,28 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                       onPickMedia={props.onPickDraftMedia}
                       onPickFiles={props.onPickDraftFiles}
                     />
-                    <View className="min-w-0 shrink">
-                      <ComposerInlineControl
-                        accessibilityLabel="Model and reasoning settings"
-                        emphasized
-                        renderIcon={(size) => (
-                          <ProviderIcon provider={currentModelOption?.providerDriver} size={size} />
-                        )}
-                        label={currentModelOption?.label ?? currentModelSelection.model}
-                        maxWidth="100%"
-                        onPress={openSettings}
+                    <View className="min-w-0 shrink flex-row items-center">
+                      <View className="min-w-0 shrink">
+                        <ComposerInlineControl
+                          accessibilityLabel="Model and reasoning settings"
+                          emphasized
+                          renderIcon={(size) => (
+                            <ProviderIcon
+                              provider={currentModelOption?.providerDriver}
+                              size={size}
+                            />
+                          )}
+                          label={currentModelOption?.label ?? currentModelSelection.model}
+                          maxWidth="100%"
+                          onPress={openSettings}
+                        />
+                      </View>
+                      <ComposerSpeedToggle
+                        provider={currentModelOption?.providerDriver}
+                        descriptors={providerOptionDescriptors}
+                        onChange={(options) =>
+                          props.onUpdateModelSelection({ ...currentModelSelection, options })
+                        }
                       />
                     </View>
                   </View>
