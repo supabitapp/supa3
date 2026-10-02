@@ -1278,6 +1278,36 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     },
     [onThreadClick, threadRef],
   );
+  const handleMiddleMouseDown = useCallback(
+    (event: ReactMouseEvent) => {
+      if (
+        event.button !== 1 ||
+        !props.settlementSupported ||
+        variantAction !== "settle" ||
+        (event.target as HTMLElement).closest("button, a, input")
+      ) {
+        return;
+      }
+      event.preventDefault();
+    },
+    [props.settlementSupported, variantAction],
+  );
+  const handleAuxClick = useCallback(
+    (event: ReactMouseEvent) => {
+      if (
+        event.button !== 1 ||
+        !props.settlementSupported ||
+        variantAction !== "settle" ||
+        (event.target as HTMLElement).closest("button, a, input")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onSettle(threadRef);
+    },
+    [onSettle, props.settlementSupported, threadRef, variantAction],
+  );
   const handleAcknowledgeWokeClick = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
@@ -1662,6 +1692,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(rowSurfaceClassName, "flex h-9 items-center gap-2.5 px-2.5")}
                 onClick={handleClick}
+                onMouseDown={handleMiddleMouseDown}
+                onAuxClick={handleAuxClick}
                 onDoubleClick={handleDoubleClick}
                 onKeyDown={handleKeyDown}
                 onContextMenu={handleContextMenu}
@@ -1818,6 +1850,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}
+              onMouseDown={handleMiddleMouseDown}
+              onAuxClick={handleAuxClick}
               onDoubleClick={handleDoubleClick}
               onKeyDown={handleKeyDown}
               onContextMenu={handleContextMenu}
