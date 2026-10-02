@@ -114,7 +114,7 @@ function takeSnapshot(animate) {
   });
 }
 
-export default class T3SnapShotExtension extends Extension {
+export default class Supa3SnapShotExtension extends Extension {
   enable() {
     this._feedback = new CaptureFeedback();
     this._sessionChanged = Main.sessionMode.connect("updated", () => this._feedback.dispose());

@@ -16,7 +16,7 @@ export { isKdeCaptureSession } from "./linuxCaptureSession.ts";
 
 export const KDE_CAPTURE_EXECUTABLE = "t3-kde-snap-shot";
 const DESKTOP_FILE = "com.supaterm.supa3.KdeCapture.desktop";
-const MARKER = "X-T3Code-Capture-Helper=true";
+const MARKER = "X-Supa3-Capture-Helper=true";
 const decodeCapabilities = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ feedbackAvailable: Schema.optional(Schema.Boolean) })),
 );
