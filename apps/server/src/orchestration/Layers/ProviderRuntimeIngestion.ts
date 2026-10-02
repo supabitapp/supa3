@@ -120,7 +120,6 @@ const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 // message several times a second while still showing the first paragraph
 // as soon as it is done.
 const MIN_ASSISTANT_DELIVERY_INTERVAL_MS = 400;
-const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -1831,9 +1830,6 @@ const make = Effect.gen(function* () {
           : false;
 
       const shouldApplyThreadLifecycle = (() => {
-        if (!STRICT_PROVIDER_LIFECYCLE_GUARD) {
-          return true;
-        }
         switch (event.type) {
           case "session.exited":
             return true;
@@ -2432,9 +2428,8 @@ const make = Effect.gen(function* () {
       if (event.type === "runtime.error") {
         const runtimeErrorMessage = event.payload.message;
 
-        const shouldApplyRuntimeError = !STRICT_PROVIDER_LIFECYCLE_GUARD
-          ? true
-          : activeTurnId === null || eventTurnId === undefined || sameId(activeTurnId, eventTurnId);
+        const shouldApplyRuntimeError =
+          activeTurnId === null || eventTurnId === undefined || sameId(activeTurnId, eventTurnId);
 
         if (shouldApplyRuntimeError) {
           yield* orchestrationEngine.dispatch({
