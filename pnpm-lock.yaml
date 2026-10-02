@@ -107,6 +107,8 @@ patchedDependencies:
   expo-glass-effect@58.0.3: f750041c45ab838a3530451dc7b50d6640a79141037a1b0499c5e3412a860c57
   expo-sharing@58.0.13: fe40d857765bcd6a77aac1fed275e5b8f9415c29b972decdce05fb96de5665e6
   expo-widgets@58.0.11: 94de7964c5a67ab40e6b79d9bdf4b7bfc50ae97b70722ee8e5a35105ca83386b
+  metro-runtime@0.87.1: 4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98
+  metro@0.87.1: 15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3
   node-pty@1.2.0-beta.15: f2fe901c61cde17986240002d05c172d5d0272d83ffaab8d0ebeb922763be414
   react-native-gesture-handler@3.2.1: d518a937e3cb2df5e7d67f1ab6b265c74a8639e4572d1b032b7b747e9b1c01a9
   react-native-keyboard-controller@1.22.4: a438114039aed2e280a81d95c25723132ad071e4768fe492bd92aa628ad74597
@@ -301,6 +303,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../../packages/mermaid-ascii
       '@t3tools/mobile-markdown-text':
         specifier: file:./modules/t3-markdown-text
         version: file:apps/mobile/modules/t3-markdown-text(afae94297d61d3a65abc2214f9b05422)
@@ -483,7 +488,7 @@ importers:
         version: 3.6.0
       uniwind:
         specifier: 1.11.0
-        version: 1.11.0(patch_hash=a91f3953483cfd434436de6358ff5b63c49974ef148fad91246c26ba95332625)(@expo/metro-config@58.0.6(patch_hash=90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760)(bufferutil@4.1.0)(expo@58.0.2)(typescript@7.0.2)(utf-8-validate@6.0.6))(metro-cache@0.87.1)(metro-transform-worker@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(metro@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)(tailwindcss@4.3.3)
+        version: 1.11.0(patch_hash=a91f3953483cfd434436de6358ff5b63c49974ef148fad91246c26ba95332625)(@expo/metro-config@58.0.6(patch_hash=90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760)(bufferutil@4.1.0)(expo@58.0.2)(typescript@7.0.2)(utf-8-validate@6.0.6))(metro-cache@0.87.1)(metro-transform-worker@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(metro@0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)(tailwindcss@4.3.3)
     devDependencies:
       '@effect/vitest':
         specifier: 4.0.0-rc.115
@@ -497,9 +502,15 @@ importers:
       '@types/react-dom':
         specifier: ~19.2.3
         version: 19.2.3(@types/react@19.3.0)
+      '@types/react-test-renderer':
+        specifier: 19.1.0
+        version: 19.1.0
       babel-preset-expo:
         specifier: ~58.0.8
         version: 58.0.8(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo-widgets@58.0.11)(expo@58.0.2)(react-refresh@0.14.2)
+      react-test-renderer:
+        specifier: 19.2.6
+        version: 19.2.6(react@19.3.0)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -642,6 +653,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../../packages/mermaid-ascii
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -879,6 +893,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../mermaid-ascii
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2213,7 +2230,7 @@ packages:
     peerDependencies:
       effect: 4.0.0-rc.115
       react: '>=19.0.0 <20.0.0'
-      scheduler: '>=0.25.0 <0.28.0'
+      scheduler: 0.27.0
 
   '@effect/openapi-generator@4.0.0-rc.115':
     resolution: {integrity: sha512-/AkcQ4GdoTTa7CwkybSnKc0U0FhOCA+TAV6E93Ozz4XshgKCC2F75Zik+3EOlTfbENmvAsYNEIVrPfqupoO+ng==}
@@ -13061,7 +13078,7 @@ snapshots:
 
   '@expo/metro@58.0.0-rc.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
-      metro: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      metro: 0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-babel-transformer: 0.87.1
       metro-cache: 0.87.1
       metro-cache-key: 0.87.1
@@ -13070,7 +13087,7 @@ snapshots:
       metro-file-map: 0.87.1
       metro-minify-terser: 0.87.1
       metro-resolver: 0.87.1
-      metro-runtime: 0.87.1
+      metro-runtime: 0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98)
       metro-source-map: 0.87.1
       metro-symbolicate: 0.87.1
       metro-transform-plugins: 0.87.1
@@ -14280,7 +14297,7 @@ snapshots:
       commander: 12.1.0
       debug: 4.4.3
       invariant: 2.2.4
-      metro: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      metro: 0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       semver: 7.8.5
     optionalDependencies:
       '@react-native/metro-config': 0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -14334,7 +14351,7 @@ snapshots:
       '@react-native/js-polyfills': 0.88.0-rc.3
       '@react-native/metro-babel-transformer': 0.88.0-rc.3(@babel/core@7.29.7)
       metro-config: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      metro-runtime: 0.87.1
+      metro-runtime: 0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98)
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
@@ -18595,10 +18612,10 @@ snapshots:
       connect: 3.7.0
       flow-enums-runtime: 0.0.6
       jest-validate: 29.7.0
-      metro: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      metro: 0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-cache: 0.87.1
       metro-core: 0.87.1
-      metro-runtime: 0.87.1
+      metro-runtime: 0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -18632,7 +18649,7 @@ snapshots:
     dependencies:
       flow-enums-runtime: 0.0.6
 
-  metro-runtime@0.87.1:
+  metro-runtime@0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98):
     dependencies:
       '@babel/runtime': 7.29.7
       flow-enums-runtime: 0.0.6
@@ -18680,7 +18697,7 @@ snapshots:
       '@babel/parser': 7.29.8
       '@babel/types': 7.29.8
       flow-enums-runtime: 0.0.6
-      metro: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      metro: 0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-babel-transformer: 0.87.1
       metro-cache: 0.87.1
       metro-cache-key: 0.87.1
@@ -18693,7 +18710,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  metro@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6):
+  metro@0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.7
@@ -18720,7 +18737,7 @@ snapshots:
       metro-core: 0.87.1
       metro-file-map: 0.87.1
       metro-resolver: 0.87.1
-      metro-runtime: 0.87.1
+      metro-runtime: 0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98)
       metro-source-map: 0.87.1
       metro-symbolicate: 0.87.1
       metro-transform-plugins: 0.87.1
@@ -19968,7 +19985,7 @@ snapshots:
       hermes-compiler: 260318099.0.4
       invariant: 2.2.4
       memoize-one: 5.2.1
-      metro-runtime: 0.87.1
+      metro-runtime: 0.87.1(patch_hash=4a386cd6f62275a31620c3b0cb489d818359125e5c94f6144933de2dea7e4d98)
       metro-source-map: 0.87.1
       nullthrows: 1.1.1
       pretty-format: 29.7.0
@@ -19999,6 +20016,12 @@ snapshots:
   react-test-renderer@19.2.6(react@19.2.6):
     dependencies:
       react: 19.2.6
+      react-is: 19.2.7
+      scheduler: 0.27.0
+
+  react-test-renderer@19.2.6(react@19.3.0):
+    dependencies:
+      react: 19.3.0
       react-is: 19.2.7
       scheduler: 0.27.0
 
@@ -20961,13 +20984,13 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  uniwind@1.11.0(patch_hash=a91f3953483cfd434436de6358ff5b63c49974ef148fad91246c26ba95332625)(@expo/metro-config@58.0.6(patch_hash=90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760)(bufferutil@4.1.0)(expo@58.0.2)(typescript@7.0.2)(utf-8-validate@6.0.6))(metro-cache@0.87.1)(metro-transform-worker@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(metro@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)(tailwindcss@4.3.3):
+  uniwind@1.11.0(patch_hash=a91f3953483cfd434436de6358ff5b63c49974ef148fad91246c26ba95332625)(@expo/metro-config@58.0.6(patch_hash=90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760)(bufferutil@4.1.0)(expo@58.0.2)(typescript@7.0.2)(utf-8-validate@6.0.6))(metro-cache@0.87.1)(metro-transform-worker@0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(metro@0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)(tailwindcss@4.3.3):
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       culori: 4.0.2
       lightningcss: 1.33.0
-      metro: 0.87.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      metro: 0.87.1(patch_hash=15eec39e654a1ba09b4d6e582cda194f1331621f0f2b7e55db9a3a0364a9ebc3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-cache: 0.87.1
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)

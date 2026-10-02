@@ -2,11 +2,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { getDefaultConfig } = require("expo/metro-config");
+const { getBundleModeMetroConfig } = require("react-native-worklets/bundleMode");
 const { withUniwindConfig } = require("uniwind/metro");
 const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
+const defaultResolveRequest = config.resolver.resolveRequest;
 const workspaceRoot = path.resolve(__dirname, "../..");
 const generatedLicenseModuleRoot = path.join(__dirname, ".generated", "third-party-licenses");
 const licenseGeneratorSource = path.join(
@@ -36,6 +38,12 @@ const resolveShikiDependencyRoot = (packageName) => {
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
   ...config.resolver,
+  resolveRequest: (context, moduleName, platform) =>
+    (defaultResolveRequest ?? context.resolveRequest)(
+      moduleName.startsWith("@t3tools/") ? { ...context, isESMImport: true } : context,
+      moduleName,
+      platform,
+    ),
   blockList: [
     ...(Array.isArray(config.resolver?.blockList)
       ? config.resolver.blockList
@@ -121,9 +129,11 @@ async function prepareDeviceStream() {
 }
 
 module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareDeviceStream()]).then(() =>
-  withUniwindConfig(config, {
-    cssEntryFile: "./global.css",
-    extraThemes,
-    polyfills: { rem: 14 },
-  }),
+  getBundleModeMetroConfig(
+    withUniwindConfig(config, {
+      cssEntryFile: "./global.css",
+      extraThemes,
+      polyfills: { rem: 14 },
+    }),
+  ),
 );

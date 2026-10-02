@@ -1,0 +1,124 @@
+import { CheckIcon, CopyIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { Button } from "../components/ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import { renderMermaidDiagram } from "./mermaidRenderer";
+
+export function MermaidBlock({
+  source,
+  complete,
+  title,
+}: {
+  source: string;
+  complete: boolean;
+  title: string | null;
+}) {
+  const container = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
+  const [rendered, setRendered] = useState<{ source: string; output: string | null } | null>(null);
+  const [showSource, setShowSource] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const output = complete && rendered?.source === source ? rendered.output : null;
+  const showingDiagram = output !== null && !showSource;
+  const content = showingDiagram ? output : source;
+  const copied = copiedText === content;
+  const copyLabel = copied ? "Copied" : showingDiagram ? "Copy diagram" : "Copy source";
+
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      setVisible(entries.some((entry) => entry.isIntersecting));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!complete || !visible) return;
+    let current = true;
+    void renderMermaidDiagram(source).then((result) => {
+      if (current) setRendered({ source, output: result });
+    });
+    return () => {
+      current = false;
+    };
+  }, [complete, source, visible]);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  async function copyContent() {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedText(content);
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => {
+        setCopiedText(null);
+        copyTimer.current = null;
+      }, 1200);
+    } catch (cause) {
+      console.error("Failed to copy diagram content", cause);
+    }
+  }
+
+  return (
+    <div
+      ref={container}
+      className="chat-markdown-codeblock my-[0.65rem] overflow-hidden rounded-lg border border-border/70 bg-secondary leading-snug dark:border-transparent dark:bg-input/32"
+      data-language="mermaid"
+      data-wrap="false"
+    >
+      <div className="chat-markdown-codeblock-header flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none">
+        <span className="min-w-0 truncate font-mono text-2xs">{title ?? "mermaid"}</span>
+        <span className="flex items-center gap-0.5" role="toolbar" aria-label="Diagram actions">
+          {output !== null ? (
+            <>
+              <Button
+                size="xs"
+                variant={showingDiagram ? "secondary" : "ghost-muted"}
+                aria-pressed={showingDiagram}
+                onClick={() => setShowSource(false)}
+              >
+                Diagram
+              </Button>
+              <Button
+                size="xs"
+                variant={showSource ? "secondary" : "ghost-muted"}
+                aria-pressed={showSource}
+                onClick={() => setShowSource(true)}
+              >
+                Source
+              </Button>
+            </>
+          ) : null}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost-muted"
+                  size="icon-xs"
+                  aria-label={copyLabel}
+                  onClick={copyContent}
+                />
+              }
+            >
+              {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+            </TooltipTrigger>
+            <TooltipPopup side="top">{copyLabel}</TooltipPopup>
+          </Tooltip>
+        </span>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]">
+        <code>{content}</code>
+      </pre>
+    </div>
+  );
+}

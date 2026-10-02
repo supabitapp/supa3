@@ -5,10 +5,14 @@ import {
 import { useMemo } from "react";
 
 import { highlightCodeSnippet } from "../features/review/shikiReviewHighlighter";
+import { renderMermaidDiagram } from "../lib/mermaidRenderer.native";
 import { themeColorWithAlpha } from "../lib/mobileTheme";
 import { useUniwindTheme } from "../lib/useUniwindTheme";
 
-type MobileSelectableMarkdownTextProps = Omit<SelectableMarkdownTextProps, "highlightCode">;
+type MobileSelectableMarkdownTextProps = Omit<
+  SelectableMarkdownTextProps,
+  "highlightCode" | "renderDiagram"
+>;
 
 export type {
   MarkdownImageRequest,
@@ -35,6 +39,7 @@ export function SelectableMarkdownText(props: MobileSelectableMarkdownTextProps)
       {...props}
       textStyle={textStyle}
       highlightCode={highlightCodeSnippet}
+      renderDiagram={renderMermaidDiagram}
     />
   );
 }

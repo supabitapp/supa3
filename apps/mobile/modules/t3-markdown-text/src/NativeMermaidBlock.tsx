@@ -1,0 +1,118 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+
+import { CopyTextButton } from "./CopyTextButton";
+import { MarkdownTextPrimitive } from "./MarkdownTextPrimitive";
+import type {
+  MarkdownDiagramRenderer,
+  NativeMarkdownTextStyle,
+} from "./SelectableMarkdownText.types";
+
+export const MarkdownDiagramRendererContext = createContext<MarkdownDiagramRenderer | null>(null);
+
+export function NativeMermaidBlock({
+  source,
+  textStyle,
+  compact,
+}: {
+  readonly source: string;
+  readonly textStyle: NativeMarkdownTextStyle;
+  readonly compact?: boolean;
+}) {
+  const renderDiagram = useContext(MarkdownDiagramRendererContext);
+  const [result, setResult] = useState<{ source: string; text: string | null } | null>(null);
+  const [sourceSelected, setSourceSelected] = useState(false);
+  const diagram = renderDiagram && result?.source === source ? result.text : null;
+  const showDiagram = diagram !== null && !sourceSelected;
+  const content = showDiagram ? diagram : source;
+  const fontSize = Math.max(10, Math.round(textStyle.fontSize * 0.8));
+  const failed = renderDiagram !== null && result?.source === source && result.text === null;
+
+  useEffect(() => {
+    if (!renderDiagram) return;
+    let active = true;
+    void renderDiagram(source).then(
+      (text) => {
+        if (active) setResult({ source, text });
+      },
+      () => {
+        if (active) setResult({ source, text: null });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [renderDiagram, source]);
+
+  return (
+    <View
+      style={{
+        backgroundColor: textStyle.codeBlockBackgroundColor,
+        borderColor: textStyle.dividerColor,
+        borderRadius: 10,
+        borderWidth: 1,
+        marginVertical: compact ? 7 : 0,
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          minHeight: 42,
+          borderBottomColor: textStyle.dividerColor,
+          borderBottomWidth: 1,
+          paddingLeft: 14,
+          paddingRight: 6,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <Text style={{ flex: 1, color: textStyle.mutedColor, fontSize }}>
+          {failed ? "Mermaid · diagram unavailable" : "Mermaid"}
+        </Text>
+        {diagram !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={showDiagram ? "Show Mermaid source" : "Show diagram"}
+            onPress={() => setSourceSelected((selected) => !selected)}
+            style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.52 : 1 })}
+          >
+            <Text style={{ color: textStyle.linkColor, fontSize }}>
+              {showDiagram ? "Source" : "Diagram"}
+            </Text>
+          </Pressable>
+        ) : null}
+        <CopyTextButton
+          accessibilityLabel={showDiagram ? "Copy diagram" : "Copy Mermaid source"}
+          text={content}
+          tintColor={textStyle.mutedColor}
+          copiedTintColor={textStyle.linkColor}
+          backgroundColor={textStyle.codeBackgroundColor}
+          borderColor={textStyle.dividerColor}
+          buttonSize={34}
+          iconSize={14}
+        />
+      </View>
+      <ScrollView
+        horizontal
+        bounces={false}
+        nestedScrollEnabled={Platform.OS === "android"}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 12 }}
+      >
+        <MarkdownTextPrimitive
+          selectable
+          selectionColor={textStyle.selectionColor}
+          selectionHandleColor={textStyle.selectionHandleColor}
+          style={{
+            color: textStyle.codeColor,
+            fontFamily: Platform.OS === "ios" ? "ui-monospace" : "monospace",
+            fontSize,
+            lineHeight: fontSize + 6,
+          }}
+        >
+          {content}
+        </MarkdownTextPrimitive>
+      </ScrollView>
+    </View>
+  );
+}
