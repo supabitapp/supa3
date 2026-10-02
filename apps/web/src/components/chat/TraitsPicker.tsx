@@ -586,6 +586,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         render={
           <ComposerControl
             size={size}
+            activeBackground={false}
             aria-pressed={speedOn}
             aria-label="Fast mode"
             onClick={() =>
