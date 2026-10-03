@@ -1,5 +1,5 @@
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/index.js b/lib/commonjs/components/KeyboardChatScrollView/index.js
-index 5617394..4f2222a 100644
+index 5617394..7025ad5 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/index.js
 +++ b/lib/commonjs/components/KeyboardChatScrollView/index.js
 @@ -27,9 +27,12 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
@@ -15,7 +15,7 @@ index 5617394..4f2222a 100644
    onEndVisible,
    ...rest
  }, ref) => {
-@@ -51,13 +54,17 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
+@@ -51,13 +54,25 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
      freeze: freezeSV,
      offset,
      blankSpace,
@@ -24,6 +24,14 @@ index 5617394..4f2222a 100644
 +    adjustedInsetCompensation,
 +    adjustedStartInsetCompensation
    });
++  (0, _reactNativeReanimated.useAnimatedReaction)(() => contentOffsetY?.value, (current, previous) => {
++    if (current === undefined || previous === null || current === previous) {
++      return;
++    }
++    requestAnimationFrame(() => {
++      (0, _reactNativeReanimated.scrollTo)(scrollViewRef, 0, current, false);
++    });
++  }, [contentOffsetY, scrollViewRef]);
    (0, _useExtraContentPadding.useExtraContentPadding)({
      scrollViewRef,
      extraContentPadding,
@@ -34,13 +42,10 @@ index 5617394..4f2222a 100644
      scroll,
      layout,
      size,
-@@ -88,10 +95,26 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
+@@ -88,10 +103,23 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
    // a bug for you, please open an issue.
    const totalPadding = (0, _reactNativeReanimated.useDerivedValue)(() => Math.min(layout.value.height, Math.max(blankSpace.value, padding.value + extraContentPadding.value)));
  
-+  // iOS applies the destination contentInset and contentOffset together at
-+  // keyboard-animation start. Keep that native target behavior, but report
-+  // the presentation height so virtualized-list layout follows the keyboard.
 +  const reportedPadding = (0, _reactNativeReanimated.useDerivedValue)(() => _reactNative.Platform.OS === "ios" ? Math.min(layout.value.height, Math.max(blankSpace.value, currentHeight.value + extraContentPadding.value)) : totalPadding.value);
 +
 +  // Mirror the effective bottom padding (keyboard + composer + blank floor)
@@ -62,6 +67,14 @@ index 5617394..4f2222a 100644
    const onLayout = (0, _react.useCallback)(e => {
      onLayoutInternal(e);
      onLayoutProp === null || onLayoutProp === void 0 || onLayoutProp(e);
+@@ -116,7 +144,6 @@ const KeyboardChatScrollView = /*#__PURE__*/(0, _react.forwardRef)(({
+   }, rest, {
+     applyWorkaroundForContentInsetHitTestBug: applyWorkaroundForContentInsetHitTestBug,
+     bottomPadding: totalPadding,
+-    contentOffsetY: contentOffsetY,
+     inverted: inverted,
+     scrollIndicatorPadding: indicatorPadding,
+     ScrollViewComponent: ScrollViewComponent,
 diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/helpers.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/helpers.js
 index 4d33b3f..6a787d3 100644
 --- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/helpers.js
@@ -244,7 +257,7 @@ index 54a1c57..00c2941 100644
  //# sourceMappingURL=index.js.map
 \ No newline at end of file
 diff --git a/lib/module/components/KeyboardChatScrollView/index.js b/lib/module/components/KeyboardChatScrollView/index.js
-index d085394..a57c2f9 100644
+index d085394..10dbbe0 100644
 --- a/lib/module/components/KeyboardChatScrollView/index.js
 +++ b/lib/module/components/KeyboardChatScrollView/index.js
 @@ -1,7 +1,7 @@
@@ -253,7 +266,7 @@ index d085394..a57c2f9 100644
 -import { StyleSheet } from "react-native";
 -import { makeMutable, useAnimatedRef, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
 +import { Platform, StyleSheet } from "react-native";
-+import { makeMutable, runOnJS, useAnimatedReaction, useAnimatedRef, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
++import { makeMutable, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
  import Reanimated from "react-native-reanimated";
  import useCombinedRef from "../hooks/useCombinedRef";
  import ScrollViewWithBottomPadding from "../ScrollViewWithBottomPadding";
@@ -270,7 +283,7 @@ index d085394..a57c2f9 100644
    onEndVisible,
    ...rest
  }, ref) => {
-@@ -44,13 +47,17 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
+@@ -44,13 +47,25 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
      freeze: freezeSV,
      offset,
      blankSpace,
@@ -279,6 +292,14 @@ index d085394..a57c2f9 100644
 +    adjustedInsetCompensation,
 +    adjustedStartInsetCompensation
    });
++  useAnimatedReaction(() => contentOffsetY?.value, (current, previous) => {
++    if (current === undefined || previous === null || current === previous) {
++      return;
++    }
++    requestAnimationFrame(() => {
++      scrollTo(scrollViewRef, 0, current, false);
++    });
++  }, [contentOffsetY, scrollViewRef]);
    useExtraContentPadding({
      scrollViewRef,
      extraContentPadding,
@@ -289,13 +310,10 @@ index d085394..a57c2f9 100644
      scroll,
      layout,
      size,
-@@ -81,10 +88,26 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
+@@ -81,10 +96,23 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
    // a bug for you, please open an issue.
    const totalPadding = useDerivedValue(() => Math.min(layout.value.height, Math.max(blankSpace.value, padding.value + extraContentPadding.value)));
  
-+  // iOS applies the destination contentInset and contentOffset together at
-+  // keyboard-animation start. Keep that native target behavior, but report
-+  // the presentation height so virtualized-list layout follows the keyboard.
 +  const reportedPadding = useDerivedValue(() => Platform.OS === "ios" ? Math.min(layout.value.height, Math.max(blankSpace.value, currentHeight.value + extraContentPadding.value)) : totalPadding.value);
 +
 +  // Mirror the effective bottom padding (keyboard + composer + blank floor)
@@ -317,6 +335,14 @@ index d085394..a57c2f9 100644
    const onLayout = useCallback(e => {
      onLayoutInternal(e);
      onLayoutProp === null || onLayoutProp === void 0 || onLayoutProp(e);
+@@ -109,7 +137,6 @@ const KeyboardChatScrollView = /*#__PURE__*/forwardRef(({
+   }, rest, {
+     applyWorkaroundForContentInsetHitTestBug: applyWorkaroundForContentInsetHitTestBug,
+     bottomPadding: totalPadding,
+-    contentOffsetY: contentOffsetY,
+     inverted: inverted,
+     scrollIndicatorPadding: indicatorPadding,
+     ScrollViewComponent: ScrollViewComponent,
 diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/helpers.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/helpers.js
 index 295e221..2f7b87e 100644
 --- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/helpers.js
@@ -554,21 +580,22 @@ index ec73f70..45b3874 100644
      scroll: SharedValue<number>;
      /** Visible viewport dimensions. */
 diff --git a/src/components/KeyboardChatScrollView/index.tsx b/src/components/KeyboardChatScrollView/index.tsx
-index 554b38c..725d546 100644
+index 554b38c..5e74a75 100644
 --- a/src/components/KeyboardChatScrollView/index.tsx
 +++ b/src/components/KeyboardChatScrollView/index.tsx
-@@ -1,7 +1,9 @@
+@@ -1,7 +1,10 @@
  import React, { forwardRef, useCallback, useMemo } from "react";
 -import { StyleSheet } from "react-native";
 +import { Platform, StyleSheet } from "react-native";
  import {
    makeMutable,
 +  runOnJS,
++  scrollTo,
 +  useAnimatedReaction,
    useAnimatedRef,
    useAnimatedStyle,
    useDerivedValue,
-@@ -39,9 +41,12 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
+@@ -39,9 +42,12 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
        offset = 0,
        extraContentPadding = ZERO_CONTENT_PADDING,
        blankSpace = ZERO_BLANK_SPACE,
@@ -581,7 +608,7 @@ index 554b38c..725d546 100644
        onEndVisible,
        ...rest
      },
-@@ -68,6 +73,8 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
+@@ -68,13 +74,30 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
        offset,
        blankSpace,
        extraContentPadding,
@@ -589,8 +616,21 @@ index 554b38c..725d546 100644
 +      adjustedStartInsetCompensation,
      });
  
++    useAnimatedReaction(
++      () => contentOffsetY?.value,
++      (current, previous) => {
++        if (current === undefined || previous === null || current === previous) {
++          return;
++        }
++        requestAnimationFrame(() => {
++          scrollTo(scrollViewRef, 0, current, false);
++        });
++      },
++      [contentOffsetY, scrollViewRef],
++    );
++
      useExtraContentPadding({
-@@ -75,6 +82,8 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
+       scrollViewRef,
        extraContentPadding,
        keyboardPadding: padding,
        blankSpace,
@@ -599,7 +639,7 @@ index 554b38c..725d546 100644
        scroll,
        layout,
        size,
-@@ -112,13 +121,40 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
+@@ -112,13 +135,37 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
        ),
      );
  
@@ -608,9 +648,6 @@ index 554b38c..725d546 100644
 -    // scrollIndicatorInsets adjustment at the application layer.
 -    const indicatorPadding = useDerivedValue(
 -      () => padding.value + extraContentPadding.value,
-+    // iOS applies the destination contentInset and contentOffset together at
-+    // keyboard-animation start. Keep that native target behavior, but report
-+    // the presentation height so virtualized-list layout follows the keyboard.
 +    const reportedPadding = useDerivedValue(() =>
 +      Platform.OS === "ios"
 +        ? Math.min(
@@ -645,6 +682,14 @@ index 554b38c..725d546 100644
      const onLayout = useCallback(
        (e: LayoutChangeEvent) => {
          onLayoutInternal(e);
+@@ -159,7 +206,6 @@ const KeyboardChatScrollView: React.ForwardRefExoticComponent<
+             applyWorkaroundForContentInsetHitTestBug
+           }
+           bottomPadding={totalPadding}
+-          contentOffsetY={contentOffsetY}
+           inverted={inverted}
+           scrollIndicatorPadding={indicatorPadding}
+           ScrollViewComponent={ScrollViewComponent}
 diff --git a/src/components/KeyboardChatScrollView/types.ts b/src/components/KeyboardChatScrollView/types.ts
 index b7c98c8..e1012a8 100644
 --- a/src/components/KeyboardChatScrollView/types.ts
