@@ -56,9 +56,9 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
  * hierarchy rather than card fills.
  */
 
-// Status hues follow the system-wide convention set by sidebar v1 and the
-// Live Activity/widgets (amber approval, indigo input, sky working) so a
-// thread reads the same color everywhere it surfaces.
+// Status hues follow the system-wide convention set by sidebar v1 (amber
+// approval, indigo input, sky working) so a thread reads the same color
+// everywhere it surfaces.
 const STATUS_LABEL_BY_STATUS: Partial<
   Record<ThreadListV2Status, { label: string; className: string }>
 > = {

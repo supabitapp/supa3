@@ -6,7 +6,6 @@
 // rest of it being loadable.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
@@ -17,7 +16,7 @@ import type {
   ServiceLauncherParentMessage,
   ServiceState,
   ServiceUpdateRecord,
-} from "./cloud/serviceProtocol.ts";
+} from "./service/serviceProtocol.ts";
 import {
   compareExactServiceVersions,
   decodeServiceLauncherChildMessage,
@@ -27,8 +26,7 @@ import {
   SERVICE_LAUNCHER_PROTOCOL,
   SERVICE_STATE_FILE,
   SERVICE_RESTART_PENDING_FILE,
-  SERVICE_STOP_MARKER_FILE,
-} from "./cloud/serviceProtocol.ts";
+} from "./service/serviceProtocol.ts";
 
 const HANDOFF_DELAY_MS = 2_000;
 const PREPARED_TIMEOUT_MS = 120_000;
@@ -272,8 +270,6 @@ async function terminateChild(
   }
 }
 
-const stopMarkerPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_STOP_MARKER_FILE);
 const restartPendingPath = (baseDir: string) =>
   NodePath.join(baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
 
@@ -329,17 +325,6 @@ export class Launcher {
   }
 
   async stop(signal: NodeJS.Signals): Promise<void> {
-    // This must happen synchronously at signal receipt. A queued update
-    // transition may already be terminating the active child, and that child
-    // needs to see the marker in its shutdown finalizer. KillMode=mixed also
-    // ensures systemd signals the launcher before the rest of the cgroup, and
-    // launchd signals only the job's main process (this launcher), so the
-    // marker lands before the child sees any signal on both platforms.
-    try {
-      NodeFS.writeFileSync(stopMarkerPath(this.#baseDir), "", { mode: 0o600 });
-    } catch {
-      // Err toward keeping the tunnel; the next link or unlink reconciles it.
-    }
     if (this.#stopRequested || this.#stopping) {
       await this.#completion.promise.catch(() => undefined);
       return;
@@ -348,8 +333,7 @@ export class Launcher {
     this.#clearTimer();
     this.#enqueue(async () => {
       // Let an update transition already in progress start its replacement
-      // before this queued stop tears it down. That replacement owns the
-      // pre-activation tunnel cleanup path and observes the marker above.
+      // before this queued stop tears it down.
       this.#stopping = true;
       const child = this.#child?.process;
       this.#child = null;
@@ -366,14 +350,11 @@ export class Launcher {
   }
 
   async #recover(): Promise<void> {
-    // A fresh launcher means servers are running again: any stop marker from
-    // a previous explicit stop is stale and must not make a future update
-    // handoff release its tunnel. A restart deferred by `supa3 update` is done
-    // no matter who restarted the service, but only once this launcher is
-    // the version the marker waits for: a launcher that came up between the
-    // CLI writing the marker and writing the new state still runs the old
-    // version, and the marker has to outlive it.
-    await NodeFSP.rm(stopMarkerPath(this.#baseDir), { force: true }).catch(() => undefined);
+    // A restart deferred by `supa3 update` is done no matter who restarted the
+    // service, but only once this launcher is the version the marker waits
+    // for: a launcher that came up between the CLI writing the marker and
+    // writing the new state still runs the old version, and the marker has
+    // to outlive it.
     const restartPending = restartPendingPath(this.#baseDir);
     const awaitedVersion = await NodeFSP.readFile(restartPending, "utf8").catch(() => undefined);
     if (awaitedVersion?.trim() === this.#state.activeVersion) {

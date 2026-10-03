@@ -5,7 +5,6 @@ import * as Schema from "effect/Schema";
 import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
-  RelayConnectionTarget,
   SshConnectionTarget,
   type ConnectionTarget,
 } from "./model.ts";
@@ -41,7 +40,7 @@ export interface ConnectionCatalogEntry {
   readonly profile: Option.Option<ConnectionProfile>;
   /** False when the user switched the environment off: saved, but never connects. */
   readonly enabled: boolean;
-  /** Discovery rejection stays visible while the saved connection is switched off. */
+  /** Protocol rejection stays visible while the saved connection is switched off. */
   readonly unsupportedReason?: string;
 }
 
@@ -59,13 +58,6 @@ export class PrimaryConnectionRegistration extends Schema.TaggedClass<PrimaryCon
   "PrimaryConnectionRegistration",
   {
     target: PrimaryConnectionTarget,
-  },
-) {}
-
-export class RelayConnectionRegistration extends Schema.TaggedClass<RelayConnectionRegistration>()(
-  "RelayConnectionRegistration",
-  {
-    target: RelayConnectionTarget,
   },
 ) {}
 
@@ -87,7 +79,6 @@ export class SshConnectionRegistration extends Schema.TaggedClass<SshConnectionR
 ) {}
 
 export const ConnectionRegistration = Schema.Union([
-  RelayConnectionRegistration,
   BearerConnectionRegistration,
   SshConnectionRegistration,
 ]);
@@ -113,7 +104,6 @@ export function connectionRegistrationCatalogEntry(
 ): ConnectionCatalogEntry {
   switch (registration._tag) {
     case "PrimaryConnectionRegistration":
-    case "RelayConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.none(),

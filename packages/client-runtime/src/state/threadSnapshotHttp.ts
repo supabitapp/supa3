@@ -6,10 +6,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { HttpClient } from "effect/unstable/http";
 
-import { RemoteEnvironmentAuthorization } from "../authorization/service.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
-import { ManagedRelayDpopSigner } from "../relay/managedRelay.ts";
 import type { RemoteEnvironmentRequestError } from "../rpc/http.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "./environmentHttpAuth.ts";
 
@@ -41,8 +39,6 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
 )(function* (input: {
   readonly prepared: PreparedConnection;
   readonly threadId: ThreadId;
-  readonly signer: Option.Option<ManagedRelayDpopSigner["Service"]>;
-  readonly remoteAuthorization?: Option.Option<RemoteEnvironmentAuthorization["Service"]>;
   readonly timeoutMs?: number;
   readonly window?: ThreadSnapshotWindow;
   readonly reasoningMessages?: boolean;
@@ -50,7 +46,6 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
   return yield* executeAuthenticatedEnvironmentHttpRequest({
     ...input,
     group: "orchestration",
-    method: "GET",
     url: (httpBaseUrl) =>
       environmentEndpointUrl(httpBaseUrl, `/api/orchestration/threads/${input.threadId}`),
     timeoutMs: input.timeoutMs ?? DEFAULT_THREAD_SNAPSHOT_TIMEOUT_MS,
@@ -74,8 +69,8 @@ export type FetchEnvironmentThreadSnapshotError = RemoteEnvironmentRequestError;
 /**
  * Loads a thread's detail snapshot over HTTP, returning `Option.none()` when it
  * cannot be loaded (so the caller falls back to the socket-embedded snapshot).
- * Decouples the thread state machine from the underlying HTTP + DPoP details and
- * keeps them out of test contexts.
+ * Decouples the thread state machine from the underlying HTTP details and keeps
+ * them out of test contexts.
  */
 export class ThreadSnapshotLoader extends Context.Service<
   ThreadSnapshotLoader,
@@ -97,11 +92,6 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
   ThreadSnapshotLoader,
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
-    // Resolve the DPoP signer optionally: it is only needed for relay/DPoP
-    // connections, so the loader must not hard-require it (bearer/primary
-    // connections work without one).
-    const signer = yield* Effect.serviceOption(ManagedRelayDpopSigner);
-    const remoteAuthorization = yield* Effect.serviceOption(RemoteEnvironmentAuthorization);
     return ThreadSnapshotLoader.of({
       load: (
         prepared: PreparedConnection,
@@ -112,8 +102,6 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
         fetchEnvironmentThreadSnapshot({
           prepared,
           threadId,
-          signer,
-          remoteAuthorization,
           ...(reasoningMessages === true ? { reasoningMessages: true } : {}),
           ...(window !== undefined ? { window } : {}),
         }).pipe(

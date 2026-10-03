@@ -44,7 +44,6 @@ describe("workspace connection status", () => {
           environmentId: "environment-1" as never,
           environmentLabel: "Julius’s Mac mini",
           displayUrl: "",
-          isRelayManaged: false,
           isEnabled: true,
           connectionState: "reconnecting",
           connectionError: null,

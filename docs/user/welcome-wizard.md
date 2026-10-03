@@ -10,19 +10,15 @@ server or the desktop app, that computer is already connected and selected.
 It is identified by its name, which may differ from the device running your
 browser.
 
-You can add more computers before continuing:
+You can add more computers before continuing. **Add a computer** connects
+directly to a server on your network or tailnet.
+[Install the CLI](./install.md#command-line), start the server with `supa3 serve`,
+then run `supa3 pair --tailscale` and paste the pairing link. You can also run
+`supa3 serve --host <address>` and use `supa3 pair` when the server is already
+reachable on your network.
 
-- **T3 Connect** connects computers that are signed in to your account.
-  [Install the CLI](./install.md#command-line) and run `supa3 connect` on each
-  computer you want to add, then start T3 Code or run `supa3 serve` so the
-  computer stays available.
-- **Add a computer** connects directly to a server on your network or tailnet.
-  Start the server with `supa3 serve`, then run `supa3 pair --tailscale` and paste
-  the pairing link. You can also run `supa3 serve --host <address>` and use
-  `supa3 pair` when the server is already reachable on your network.
-
-Saved computers and computers discovered through T3 Connect are selected by
-default. Uncheck any you do not want to set up; this does not disconnect them.
+Saved computers are selected by default. Uncheck any you do not want to set up;
+this does not disconnect them.
 Continue when your selected computers are connected. Setup checks
 agents across the selected computers, then offers project import grouped by computer.
 

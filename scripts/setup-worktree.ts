@@ -3,14 +3,12 @@
  * Worktree setup, run by the t3.json "Setup Worktree" action as
  * `node scripts/setup-worktree.ts`. Plain Node keeps one command working in
  * every shell T3 Code spawns (zsh, bash, fish, PowerShell): it installs
- * dependencies, links the main checkout's gitignored env files into this
+ * dependencies, links the main checkout's gitignored `.env` into this
  * worktree, then warms the web dependency cache.
  */
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-
-const ENV_FILES = [".env", NodePath.join("infra", "relay", ".env")];
 
 const projectRoot = process.env.T3CODE_PROJECT_ROOT;
 if (!projectRoot) {
@@ -26,15 +24,15 @@ const install = NodeChildProcess.spawnSync("vp i", {
 });
 if (install.status !== 0) process.exit(install.status ?? 1);
 
-// In the main checkout itself, relinking would replace the real env files.
-if (NodeFS.realpathSync(projectRoot) !== NodeFS.realpathSync(worktree)) {
-  for (const file of ENV_FILES) {
-    const source = NodePath.join(projectRoot, file);
-    if (!NodeFS.existsSync(source)) continue;
-    const target = NodePath.join(worktree, file);
-    NodeFS.rmSync(target, { force: true });
-    NodeFS.symlinkSync(source, target);
-  }
+// In the main checkout itself, relinking would replace the real env file.
+const envSource = NodePath.join(projectRoot, ".env");
+if (
+  NodeFS.realpathSync(projectRoot) !== NodeFS.realpathSync(worktree) &&
+  NodeFS.existsSync(envSource)
+) {
+  const envTarget = NodePath.join(worktree, ".env");
+  NodeFS.rmSync(envTarget, { force: true });
+  NodeFS.symlinkSync(envSource, envTarget);
 }
 
 const warm = NodeChildProcess.spawnSync(

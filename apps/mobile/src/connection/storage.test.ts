@@ -48,6 +48,44 @@ describe("mobile connection catalog storage", () => {
     }),
   );
 
+  it.effect("keeps saved connections when the catalog still lists a retired relay target", () =>
+    Effect.gen(function* () {
+      const memory = makeStorage({
+        [CONNECTION_CATALOG_KEY]: JSON.stringify({
+          schemaVersion: 1,
+          targets: [
+            { _tag: "RelayConnectionTarget", environmentId: "relay-environment", label: "Relay" },
+            {
+              _tag: "BearerConnectionTarget",
+              environmentId: "bearer-environment",
+              label: "Desktop",
+              connectionId: "bearer:bearer-environment",
+            },
+          ],
+          profiles: [],
+          credentials: [
+            {
+              connectionId: "bearer:bearer-environment",
+              credential: { _tag: "BearerConnectionCredential", token: "bearer-token" },
+            },
+          ],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      });
+      const catalog = yield* make().pipe(
+        Effect.provideService(MobileSecureStorage, memory.storage),
+      );
+
+      const document = yield* catalog.read;
+      expect(document.targets.map((target) => target.environmentId)).toEqual([
+        "bearer-environment",
+      ]);
+      expect(document.credentials).toHaveLength(1);
+      expect(memory.deleted).toEqual([]);
+    }),
+  );
+
   it.effect("replaces and removes a corrupt legacy catalog", () =>
     Effect.gen(function* () {
       const memory = makeStorage({

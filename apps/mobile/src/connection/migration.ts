@@ -2,8 +2,6 @@ import {
   BearerConnectionCredential,
   BearerConnectionProfile,
   BearerConnectionRegistration,
-  RelayConnectionRegistration,
-  RelayConnectionTarget,
   BearerConnectionTarget,
 } from "@t3tools/client-runtime/connection";
 import {
@@ -24,7 +22,6 @@ const LegacySavedRemoteConnection = Schema.Struct({
   wsBaseUrl: Schema.String,
   bearerToken: Schema.NullOr(Schema.String),
   authenticationMethod: Schema.optionalKey(Schema.Literals(["bearer", "dpop"])),
-  dpopAccessToken: Schema.optionalKey(Schema.String),
   relayManaged: Schema.optionalKey(Schema.Literal(true)),
 });
 
@@ -48,19 +45,11 @@ function migrateConnection(
   document: ConnectionCatalogDocument,
   connection: typeof LegacySavedRemoteConnection.Type,
 ): ConnectionCatalogDocument {
-  if (isRelayManaged(connection)) {
-    return registerConnectionInCatalog(
-      document,
-      new RelayConnectionRegistration({
-        target: new RelayConnectionTarget({
-          environmentId: connection.environmentId,
-          label: connection.environmentLabel,
-        }),
-      }),
-    );
-  }
-
-  if (connection.bearerToken === null || connection.bearerToken.trim() === "") {
+  if (
+    isRelayManaged(connection) ||
+    connection.bearerToken === null ||
+    connection.bearerToken.trim() === ""
+  ) {
     return document;
   }
 

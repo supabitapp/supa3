@@ -16,9 +16,8 @@ This app has three variants:
 
 Run commands from `apps/mobile`.
 
-T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
-repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
-[`../../.env.example`](../../.env.example).
+Build configuration belongs in the repository-root `.env` or `.env.local`, not an
+`apps/mobile/.env` file.
 
 ## Development
 
@@ -67,8 +66,8 @@ project. pnpm gives each patch hash a new package path; Pods can otherwise keep 
 previous directory.
 
 If your Xcode account only has a Personal Team, use a bundle identifier you control and opt into the
-reduced-capability local build. Personal Team builds omit the widget and share extensions, push
-entitlement, and native Sign in with Apple entitlement; builds without this opt-in are unchanged.
+reduced-capability local build. Personal Team builds omit the widget and share extensions; builds
+without this opt-in are unchanged.
 
 ```bash
 T3CODE_IOS_PERSONAL_TEAM=1 \
@@ -125,9 +124,8 @@ Preview and production variants use Expo fingerprinting so OTA updates only reac
 
 The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
 
-For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
-`T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
-as EAS environment variables. Expo config maps the canonical values into the mobile build.
+Set `T3CODE_MOBILE_UPDATES_ENABLED=0` before prebuild and bundling a private binary to disable the
+repository's configured Expo OTA update source.
 
 Create a PR preview dev-client build manually:
 

@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { AuthAccessWriteScope } from "@t3tools/contracts";
 
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { isElectron } from "~/env";
 import { isLocalEnvironmentDisabled } from "~/localEnvironment";
 import { desktopWslStateAtom } from "~/state/desktopWslState";
@@ -33,8 +32,6 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
   return useMemo(
     () =>
       filterAvailableSettingsSearchItems({
-        localEnvironmentDisabled,
-        hasCloudPublicConfig: hasCloudPublicConfig(),
         hasEnvironment: environments.some((environment) => environment.serverConfig !== null),
         hasProviderSettingsEnvironment: environments.some((environment) =>
           isProviderSettingsEnvironmentAvailable({
@@ -60,13 +57,6 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
         hasThreadAutoSettlement:
           getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0,
       }),
-    [
-      canManageLocalBackend,
-      desktopWsl.data,
-      desktopWsl.error,
-      environments,
-      localEnvironmentDisabled,
-      scopeSearch.machine,
-    ],
+    [canManageLocalBackend, desktopWsl.data, desktopWsl.error, environments, scopeSearch.machine],
   );
 }

@@ -17,8 +17,7 @@ import { describe, expect, it } from "vite-plus/test";
  *
  * 2. Cross-layer edges are ceilinged, not yet banned. `state`, `lib`,
  *    `native`, and `components` still reach upward into `features` at known
- *    sites (the app composition root `lib/runtime.ts` legitimately wires
- *    feature layers). Ceilings count unique `from -> to` module pairs across
+ *    sites. Ceilings count unique `from -> to` module pairs across
  *    all platforms, including dynamic imports, and may only shrink: when you
  *    remove one of these imports, lower the constant in the same PR.
  *
@@ -263,10 +262,9 @@ describe("mobile dependency graph", () => {
       // terminal launch context, and the pending message feed.
       // (legacy-plan-mode was pure model logic and moved into state/.)
       ["state", "features", 6, "state must not add imports from features"],
-      // lib -> features: lib/runtime.ts is the app composition root and
-      // legitimately wires cloud/observability features; the appearance
-      // helpers and terminal preferences still need untangling.
-      ["lib", "features", 7, "lib must not add imports from features"],
+      // lib -> features: the appearance helpers and terminal preferences
+      // still need untangling.
+      ["lib", "features", 3, "lib must not add imports from features"],
       // components -> features: mostly the appearance preferences provider
       // and the layout toolbar bridges.
       ["components", "features", 33, "components must not add imports from features"],

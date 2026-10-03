@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as Queue from "effect/Queue";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as ServerConfig from "../config.ts";
 import * as AuthPairingLinks from "../persistence/AuthPairingLinks.ts";
@@ -80,7 +81,6 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
-        "relay:read",
       ]);
       expect(first.subject).toBe("one-time-token");
       expect(first.label).toBe("Julius iPhone");
@@ -115,27 +115,28 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
     }).pipe(Effect.provide(makePairingGrantStoreLayer())),
   );
 
-  it.effect("requires the bound proof key thumbprint when present", () =>
+  it.effect("refuses legacy pairing links bound to a proof key", () =>
     Effect.gen(function* () {
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
-      const token = yield* bootstrapCredentials.issueOneTimeToken({
-        proofKeyThumbprint: "client-proof-key-thumbprint",
-      });
+      const sql = yield* SqlClient.SqlClient;
+      const token = yield* bootstrapCredentials.issueOneTimeToken();
+      yield* sql`
+        UPDATE auth_pairing_links
+        SET proof_key_thumbprint = ${"legacy-proof-key-thumbprint"}
+        WHERE id = ${token.id}
+      `;
 
-      const missing = yield* Effect.flip(bootstrapCredentials.consume(token.credential));
-      const wrong = yield* Effect.flip(
-        bootstrapCredentials.consume(token.credential, {
-          proofKeyThumbprint: "other-proof-key-thumbprint",
-        }),
-      );
-      const consumed = yield* bootstrapCredentials.consume(token.credential, {
-        proofKeyThumbprint: "client-proof-key-thumbprint",
-      });
+      const error = yield* Effect.flip(bootstrapCredentials.consume(token.credential));
 
-      expect(missing.message).toContain("proof key mismatch");
-      expect(wrong.message).toContain("proof key mismatch");
-      expect(consumed.proofKeyThumbprint).toBe("client-proof-key-thumbprint");
-    }).pipe(Effect.provide(makePairingGrantStoreLayer())),
+      expect(error._tag).toBe("UnavailableBootstrapCredentialError");
+    }).pipe(
+      Effect.provide(
+        PairingGrantStore.layer.pipe(
+          Layer.provideMerge(SqlitePersistenceMemory),
+          Layer.provide(makeServerConfigLayer()),
+        ),
+      ),
+    ),
   );
 
   it.effect("seeds the desktop bootstrap credential as a reusable grant", () =>
@@ -151,10 +152,8 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
-        "relay:read",
         "access:read",
         "access:write",
-        "relay:write",
       ]);
       expect(first.subject).toBe("desktop-bootstrap");
       expect(second.method).toBe("desktop-bootstrap");

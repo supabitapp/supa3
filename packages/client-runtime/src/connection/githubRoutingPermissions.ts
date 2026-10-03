@@ -22,8 +22,6 @@ export type StoredGitHubRoutingPermission = typeof StoredGitHubRoutingPermission
 /** Trust belongs to the saved endpoint, never to an environment id advertised by a server alone. */
 export function gitHubRoutingConnectionKey(entry: ConnectionCatalogEntry): string | null {
   const target = entry.target;
-  if (target._tag === "RelayConnectionTarget")
-    return JSON.stringify([target._tag, target.environmentId]);
   const profile = Option.getOrNull(entry.profile);
   if (target._tag === "SshConnectionTarget") {
     if (profile?._tag !== "SshConnectionProfile") return null;

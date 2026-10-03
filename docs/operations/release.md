@@ -24,7 +24,6 @@ This document covers the unified release workflow for stable and nightly desktop
   - Pushing a `vX.Y.Z` tag by hand still works and builds exactly the tagged commit. Use it when
     the commit to ship is not the latest nightly, such as a cherry-picked fix on a release branch.
 - Runs lint, typecheck, and tests alongside artifact builds. Publishing waits for every check.
-- Reads the shared production T3 Connect relay URL and Clerk client configuration before packaging clients.
 - Builds the platform-independent JS (server bundle, web client, Electron main) once in the `build_bundle` job and hands it to every platform job as the `js-bundle` artifact; the platform jobs only package it, so no runner rebuilds it.
 - Builds six desktop artifacts in parallel for both channels, each as its own job (`desktop_<platform>_<arch>`, one call of `release-desktop.yml`) on hardware of its own architecture, gated only on the bundle. The Windows jobs embed the same-arch Linux CLI archive as the WSL runtime and wait for that artifact partway through, not for the whole Linux job:
   - macOS `arm64` DMG
@@ -54,8 +53,8 @@ This document covers the unified release workflow for stable and nightly desktop
 
 ## Pull request macOS previews
 
-Labeling a PR `preview:mac` publishes a signed, notarized Apple Silicon DMG with T3 Connect enabled
-to the rolling `desktop-preview` prerelease, and works for fork PRs. The label is a one-shot request
+Labeling a PR `preview:mac` publishes a signed, notarized Apple Silicon DMG to the rolling
+`desktop-preview` prerelease, and works for fork PRs. The label is a one-shot request
 for the commit it is applied to: the trusted workflow removes it once the build is in hand, and later
 pushes do not build until a maintainer applies it again. Every signed preview is therefore a
 per-commit maintainer decision, which matters because the result carries the Developer ID signature.
@@ -69,9 +68,8 @@ split so the Developer ID certificate never shares a job with PR code:
   bot, a collaborator, or listed in `.github/VOUCHED.td` (read from the default branch, so a PR cannot vouch
   for itself). It then packages and signs the bundle through `release-desktop.yml` checked out at
   `main`, so packaging, native helpers, and the Electron/desktop dependencies come from `main`, not
-  the PR. Only the version and the public T3 Connect identifiers in `.env.example` are read from the
-  PR commit, as data, so the signed app's passkey entitlement matches the bundle. A PR that changes
-  packaging must use the `channel=preview` release train above instead.
+  the PR. Only the version is read from the PR commit, as data. A PR that changes packaging must use
+  the `channel=preview` release train above instead.
 
 Before handing the bundle to the signing runner, the trusted workflow validates its ZIP entries
 and accepts only regular files under `server/dist` and `desktop/dist-electron`, plus the directory
@@ -92,122 +90,6 @@ credentials documented below:
 The finalize job uses them to commit and push aligned package versions to `main` as the Release App.
 GitHub Release publication uses the repository-scoped workflow token so it has a rate-limit quota
 independent from the shared Release App installation.
-
-## T3 Connect relay deployment
-
-The relay is a shared control plane versioned separately from client releases. Stable and nightly
-client builds must point at the same relay so users see the same linked environments when switching
-release channels.
-
-`.github/workflows/deploy-relay.yml` deploys Alchemy stage `prod` on every push to `main`. The
-release workflow reads the relay URL and Clerk client configuration from the existing `production`
-GitHub Actions environment before building desktop, CLI, or hosted web artifacts.
-
-Required repository variables shared by relay deployments:
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `PLANETSCALE_ORGANIZATION`
-- `AXIOM_ORG_ID`
-
-Required repository secrets shared by relay deployments:
-
-- `CLOUDFLARE_API_TOKEN`
-- `PLANETSCALE_API_TOKEN_ID`
-- `PLANETSCALE_API_TOKEN`
-- `AXIOM_TOKEN`
-
-Required `production` environment variables:
-
-- `RELAY_API_ZONE_NAME`
-- `RELAY_TUNNEL_ZONE_NAME`
-- `CLERK_PUBLISHABLE_KEY`
-- `CLERK_JWT_AUDIENCE`
-- `CLERK_JWT_TEMPLATE`
-- `CLERK_CLI_OAUTH_CLIENT_ID`
-- `APNS_ENVIRONMENT`
-- `APNS_TEAM_ID`
-- `APNS_KEY_ID`
-- `APNS_BUNDLE_ID`
-
-Optional `production` environment variables:
-
-- `RELAY_DOMAIN` when overriding the derived `relay.<RELAY_API_ZONE_NAME>` domain
-- `RELAY_TUNNEL_CLEANUP_MODE` with `off`, `dry-run`, or `enabled`. Missing and blank values use
-  `off`.
-
-Required `production` environment secrets:
-
-- `CLERK_SECRET_KEY`
-- `APNS_PRIVATE_KEY`
-
-The relay Worker reads these variables and secrets when it is deployed. Alchemy does not redeploy the
-Worker when only one of these values changes ([alchemy-run/alchemy#1831](https://github.com/alchemy-run/alchemy/issues/1831)),
-so a push to `main` without relay code changes leaves the old value in place. After changing one, run
-the **Deploy T3 Connect relay** workflow manually from `main` with **force** checked.
-
-The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
-are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
-so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The `prod` stage owns the retained PlanetScale
-database. Local personal stages provision isolated branches from it and are never deployed by CI.
-Production adopts the configured relay API and tunnel DNS zones as retained Cloudflare resources.
-Personal stages reference the production-owned zones.
-
-Developers deploy personal stages locally rather than through pull-request automation:
-
-```sh
-vp run --filter t3code-relay deploy -- --stage "$USER" --env-file .env.local
-```
-
-### Managed tunnel cleanup rollout
-
-Keep `RELAY_TUNNEL_CLEANUP_MODE=off` for the first production deploy. That deploy applies the
-nullable allocation migration and adds the recovery endpoints. Web and mobile clients need no
-coordinated release. CLI and desktop server builds must reach users before cleanup is enabled,
-because those builds register recovery and replace a deleted tunnel after wake.
-
-1. Deploy the relay and migration with cleanup `off`.
-2. Release the server build and confirm current hosts register recovery. Older hosts stay marked
-   legacy and are never candidates.
-3. Set `dry-run`, run a forced relay deploy, and read the sweep counters (`scanned`, `wouldDelete`,
-   `skippedLegacy`, `skippedOrphan`, `failed`, `truncated`) across several sweeps. Each sweep records
-   them, and the active `mode`, as `relay.managed_endpoint_reaper.*` attributes on its
-   `relay.managed_endpoint_reaper.sweep` span in Axiom.
-4. Run the disposable-host canary below.
-5. Set `enabled` only after the canary recovers without a server restart.
-
-The job runs every five minutes with a five-minute grace period for tunnels that lost their
-connector, so a candidate is usually removed five to ten minutes after it goes down. Tunnels that
-never connected wait an hour. One sweep attempts at most 100 deletions, so a backlog takes longer.
-Changing `RELAY_TUNNEL_CLEANUP_MODE`, including turning cleanup off during an incident, needs a forced
-relay deploy. Confirm the new `mode` on the next sweep span.
-
-To roll back, set cleanup to `off` and run a forced relay deploy before downgrading any host. Keep the
-recovery endpoints deployed while current server builds are in use. The nullable columns can stay.
-
-### Disposable-host canary
-
-This test has not been run against a real Cloudflare account. Run it against a disposable relay
-stage, test Cloudflare account, disposable host, and disposable T3 home. Keep production cleanup at
-`off` or `dry-run` until it passes. Do not stop a daily-use T3 server.
-
-1. Deploy the disposable stage with cleanup `dry-run`. Link a first disposable environment through
-   web or mobile settings and confirm its tunnel is healthy and recovery is registered.
-2. Stop that host and restart the same T3 home on a different local port. Confirm the public
-   hostname reaches the new port and sends nothing to the old one.
-3. Link a second disposable environment with a server build that predates recovery registration.
-   Capture its managed `cloudflared` child PID, confirm it belongs to that host, and pause only that
-   child with `kill -STOP <legacy-pid>`. Wait until Cloudflare reports it down for over five minutes.
-4. Capture the first environment's `cloudflared` child PID from its server logs, confirm ownership,
-   and pause it with `kill -STOP <first-pid>`. Wait until Cloudflare reports it down for over five
-   minutes.
-5. Confirm dry-run counts the first tunnel in `wouldDelete` and the second in `skippedLegacy`.
-6. Set cleanup `enabled` on the disposable stage and deploy it with `--force`. Confirm in the test
-   Cloudflare account that the first tunnel is deleted and the legacy tunnel still exists.
-7. Resume the first child with `kill -CONT <first-pid>`. Confirm the running server detects the
-   repeated rejection, requests recovery, and becomes reachable at the same hostname without a
-   restart.
-8. Resume the legacy child with `kill -CONT <legacy-pid>` and confirm its tunnel reconnects.
-9. Repeat with a physical sleep and wake cycle on a disposable laptop before broad rollout.
 
 ## Marketing site deployment
 
@@ -446,44 +328,26 @@ Required secrets used by the workflow:
 - `APPLE_API_KEY`
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
-- `MACOS_PROVISIONING_PROFILE` (base64-encoded provisioning profile with Associated Domains)
-
-Required repository variables:
-
-- `APPLE_TEAM_ID`
-
-Optional repository variables:
-
-- `CLERK_PASSKEY_RP_DOMAINS`: comma-separated RP-domain override. By default, the build derives the
-  domain from the production Clerk publishable key.
 
 Checklist:
 
 1. Apple Developer account access:
    - Team has rights to create Developer ID certificates.
-2. Create an explicit App ID for `com.supaterm.supa3` and enable Associated Domains.
-3. Create a `Developer ID Application` certificate and a compatible provisioning profile for that
-   App ID with Associated Domains enabled.
-4. Export the certificate + private key as `.p12` from Keychain.
-5. Base64-encode the `.p12` and store as `CSC_LINK`.
-6. Base64-encode the provisioning profile and store it as `MACOS_PROVISIONING_PROFILE`.
-7. Store the `.p12` export password as `CSC_KEY_PASSWORD`, and set `APPLE_TEAM_ID` to the
-   10-character Apple Developer Team ID.
-8. In App Store Connect, create an API key (Team key).
-9. Add API key values:
+2. Create a `Developer ID Application` certificate.
+3. Export the certificate + private key as `.p12` from Keychain.
+4. Base64-encode the `.p12` and store as `CSC_LINK`.
+5. Store the `.p12` export password as `CSC_KEY_PASSWORD`.
+6. In App Store Connect, create an API key (Team key).
+7. Add API key values:
    - `APPLE_API_KEY`: contents of the downloaded `.p8`
    - `APPLE_API_KEY_ID`: Key ID
    - `APPLE_API_ISSUER`: Issuer ID
-10. Complete the Clerk Native API and AASA setup in [T3 Connect setup](./connect-setup.md#desktop-passkeys).
-11. Re-run a tag release and confirm macOS artifacts are signed/notarized and contain the expected
-    `com.apple.developer.associated-domains` entitlement.
+8. Re-run a tag release and confirm macOS artifacts are signed/notarized.
 
 Notes:
 
 - `APPLE_API_KEY` is stored as raw key text in secrets.
 - The workflow writes it to a temporary `AuthKey_<id>.p8` file at runtime.
-- The workflow decodes `MACOS_PROVISIONING_PROFILE`, validates it with `security cms`, and passes it
-  to the desktop packager.
 
 ## 3) Azure Trusted Signing setup (Windows)
 
@@ -530,9 +394,7 @@ Checklist:
 ## 5) Troubleshooting
 
 - macOS build unsigned when expected signed:
-  - Check all Apple secrets plus `APPLE_TEAM_ID` are populated and non-empty.
-  - Confirm the provisioning profile belongs to `APPLE_TEAM_ID.com.supaterm.supa3` and includes
-    Associated Domains.
+  - Check all Apple secrets are populated and non-empty.
 - Windows build unsigned when expected signed:
   - Check all Azure ATS and auth secrets are populated and non-empty.
 - Build fails with signing error:

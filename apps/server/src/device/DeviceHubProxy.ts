@@ -6,7 +6,7 @@
  * only way to a device stream is through this route, which requires an
  * environment session with read scope (operate scope for input and tuning). Reusing the T3
  * origin is also what makes remote connections work unchanged — Tailscale and
- * T3 Connect already carry `/api/*` and WebSocket upgrades for the app itself.
+ * LAN connections already carry `/api/*` and WebSocket upgrades for the app itself.
  *
  * Only the routes the Device panel needs are forwarded. Anything under the
  * hub's dashboard, exec, or WebRTC surface is rejected here.
@@ -72,7 +72,6 @@ const DROPPED_REQUEST_HEADERS = new Set([
   "sec-websocket-protocol",
   "cookie",
   "authorization",
-  "dpop",
   "content-length",
   "accept-encoding",
 ]);
@@ -84,7 +83,7 @@ const isWebSocketUpgrade = (request: HttpServerRequest.HttpServerRequest) =>
  * `<img>` and WebSocket cannot set headers, so every proxied request
  * authenticates the way the `/ws` upgrade does: a cookie for browser
  * sessions, or a short-lived `wsTicket` minted over authenticated HTTP for
- * bearer and DPoP clients. The upgrade authenticator already implements that
+ * bearer clients. The upgrade authenticator already implements that
  * fallback order, so it is used for plain requests as well.
  */
 const authenticate = (requiredScope: AuthEnvironmentScope) =>
@@ -97,7 +96,6 @@ const authenticate = (requiredScope: AuthEnvironmentScope) =>
           if (EnvironmentAuth.isServerAuthCredentialError(error)) {
             return yield* failEnvironmentAuthInvalid(
               EnvironmentAuth.serverAuthCredentialReason(error),
-              EnvironmentAuth.serverAuthDpopFailureReason(error),
             );
           }
           return yield* failEnvironmentInternal("internal_error", error);

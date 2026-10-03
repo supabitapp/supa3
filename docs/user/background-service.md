@@ -53,9 +53,6 @@ service is still installed and will start at the next login.
 
 Windows background services are not supported.
 
-T3 Connect can offer service installation during setup, but the two are managed
-separately. Signing out of T3 Connect does not stop or uninstall the service.
-
 ## Troubleshooting
 
 Start with `supa3 service status` on the host. It prints the log path and, on Linux,
@@ -76,9 +73,8 @@ ssh -t your-server 'sudo loginctl enable-linger "$(id -un)"'
 ```
 
 Then retry service setup as your normal user. Run only the `loginctl` command
-with sudo; running T3 Code as root creates a separate installation and Connect
-identity. Without administrator access, run `supa3 serve` in a terminal and keep
-that session open.
+with sudo; running T3 Code as root creates a separate installation. Without
+administrator access, run `supa3 serve` in a terminal and keep that session open.
 
 | Status problem                          | Next step                                                                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -92,6 +88,3 @@ longer starts at login. If agent work cannot access Desktop, Documents, or
 Downloads, it may need Full Disk Access for the `supa3` executable listed in
 `ProgramArguments` in
 `~/Library/LaunchAgents/com.supaterm.supa3.service.plist`.
-
-For failures after signing in to T3 Connect, see
-[connection troubleshooting](./remote-access.md#t3-connect-troubleshooting).

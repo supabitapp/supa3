@@ -3,9 +3,9 @@
  *
  * The panel reaches simulator streams through `/api/device-hub/*` on the
  * environment origin. `<img>`, `EventSource`, and `WebSocket` cannot set
- * bearer or DPoP headers, so bearer and DPoP connections mint a
- * short-lived WebSocket ticket and pass it as `wsTicket`, the same way the
- * app's own `/ws` upgrade authenticates. Cookie sessions send the cookie.
+ * bearer headers, so bearer connections mint a short-lived WebSocket ticket
+ * and pass it as `wsTicket`, the same way the app's own `/ws` upgrade
+ * authenticates. Cookie sessions send the cookie.
  *
  * A ticket lives five minutes server-side and is bound to the session, not
  * to one request, so one ticket covers everything a panel opens at once.
@@ -14,10 +14,8 @@
 import * as Effect from "effect/Effect";
 import type { HttpClient } from "effect/unstable/http";
 
-import { RemoteEnvironmentAuthorization } from "../authorization/service.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
-import { ManagedRelayDpopSigner } from "../relay/managedRelay.ts";
 import type { RemoteEnvironmentRequestError } from "../rpc/http.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "./environmentHttpAuth.ts";
 import type { DeviceHubAccess } from "../device/hubAccess.ts";
@@ -36,14 +34,9 @@ export const resolveDeviceHubAccess = Effect.fn("clientRuntime.state.resolveDevi
     if (input.prepared.httpAuthorization === null) {
       return { httpBase, wsBase, query: {}, credentials: true };
     }
-    const signer = yield* Effect.serviceOption(ManagedRelayDpopSigner);
-    const remoteAuthorization = yield* Effect.serviceOption(RemoteEnvironmentAuthorization);
     const ticket = yield* executeAuthenticatedEnvironmentHttpRequest({
       prepared: input.prepared,
-      signer,
-      remoteAuthorization,
       group: "auth",
-      method: "POST",
       url: (httpBaseUrl) => environmentEndpointUrl(httpBaseUrl, "/api/auth/websocket-ticket"),
       timeoutMs: TICKET_TIMEOUT_MS,
       request: ({ client, headers }) => client.webSocketTicket({ headers }),

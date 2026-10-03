@@ -52,7 +52,6 @@ export function createRemoteEnvironmentProjectionAtoms(input: {
             : displayUrl.replace(/^http:/, "ws:")
           : new URL(socketUrl).origin;
       const authorization = prepared?.httpAuthorization ?? null;
-      const relayManaged = presentation.entry.target._tag === "RelayConnectionTarget";
 
       previousEntry = presentation.entry;
       previousPrepared = prepared;
@@ -63,16 +62,7 @@ export function createRemoteEnvironmentProjectionAtoms(input: {
         displayUrl,
         httpBaseUrl,
         wsBaseUrl,
-        bearerToken: authorization?._tag === "Bearer" ? authorization.token : null,
-        ...(relayManaged
-          ? {
-              authenticationMethod: "dpop" as const,
-              relayManaged: true as const,
-              ...(authorization?._tag === "Dpop"
-                ? { dpopAccessToken: authorization.accessToken }
-                : {}),
-            }
-          : { authenticationMethod: "bearer" as const }),
+        bearerToken: authorization?.token ?? null,
       };
       return previous;
     }).pipe(Atom.withLabel(`mobile:saved-connection:${environmentId}`));

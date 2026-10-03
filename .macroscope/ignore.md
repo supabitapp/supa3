@@ -251,7 +251,7 @@ ENV/**
 **/e2e/**
 
 # ---- t3code ----
-# Vendored read-only reference checkouts of upstream Effect and Alchemy
+# Vendored read-only reference checkouts of upstream Effect
 # (see scripts/lib/reference-repos.ts). Nothing imports from them; findings
 # there belong upstream.
 .repos/**

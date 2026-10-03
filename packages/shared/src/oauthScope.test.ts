@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
-import {
-  encodeOAuthScope,
-  OAuthScopeEncodingError,
-  parseAllowedOAuthScope,
-  parseOAuthScope,
-} from "./oauthScope.ts";
+import { encodeOAuthScope, OAuthScopeEncodingError, parseOAuthScope } from "./oauthScope.ts";
 
 const isOAuthScopeEncodingError = Schema.is(OAuthScopeEncodingError);
 
@@ -23,22 +18,10 @@ describe("OAuth scopes", () => {
     expect(parseOAuthScope("orchestration:read  access:write")).toBeNull();
   });
 
-  it("encodes and restricts requested scopes to the allowed capability set", () => {
+  it("encodes requested scopes as a space-delimited set", () => {
     expect(encodeOAuthScope(["orchestration:read", "access:write"])).toBe(
       "orchestration:read access:write",
     );
-    expect(
-      parseAllowedOAuthScope({
-        value: "orchestration:read access:write",
-        allowedScopes: new Set(["orchestration:read", "access:write"] as const),
-      }),
-    ).toEqual(["orchestration:read", "access:write"]);
-    expect(
-      parseAllowedOAuthScope({
-        value: "orchestration:read relay:write",
-        allowedScopes: new Set(["orchestration:read", "access:write"] as const),
-      }),
-    ).toBeNull();
   });
 
   it("reports invalid encoding input structurally", () => {

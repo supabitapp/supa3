@@ -162,13 +162,6 @@
       }
     },
     {
-      "name": "glob-to-regexp",
-      "generatedNotice": {
-        "licenseId": "BSD-2-Clause",
-        "copyrights": ["Copyright (c) 2013, Nick Fitzgerald"]
-      }
-    },
-    {
       "name": "kubernetes-types",
       "generatedNotice": {
         "licenseId": "Apache-2.0"
@@ -435,14 +428,6 @@
       "generatedNotice": {
         "licenseId": "MIT",
         "copyrights": ["Copyright (c) 2018 Evert Pot"]
-      }
-    },
-    {
-      "name": "badgin",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) Julian Hundeloh and Tinycon contributors"],
-        "preamble": ["badgin is a refactored fork of Tinycon."]
       }
     },
     {

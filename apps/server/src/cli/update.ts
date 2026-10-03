@@ -31,14 +31,14 @@ import {
 } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
-import * as BootService from "../cloud/bootService.ts";
+import * as BootService from "../service/bootService.ts";
 import {
   ensurePinnedRuntimeInstalled,
   pinnedRuntimeCommand,
   PinnedRuntimeInstallError,
   pinnedRuntimePaths,
-} from "../cloud/pinnedRuntime.ts";
-import { compareExactServiceVersions, isExactServiceVersion } from "../cloud/serviceProtocol.ts";
+} from "../service/pinnedRuntime.ts";
+import { compareExactServiceVersions, isExactServiceVersion } from "../service/serviceProtocol.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
