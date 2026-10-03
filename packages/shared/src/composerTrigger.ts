@@ -2,7 +2,6 @@ export type ComposerTriggerKind =
   | "path"
   | "pull-request"
   | "slash-command"
-  | "slash-model"
   | "skill"
   | "slash-skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
@@ -46,71 +45,51 @@ function isWhitespace(char: string): boolean {
   return char === " " || char === "\n" || char === "\t" || char === "\r";
 }
 
+function tokenStartForCursor(text: string, cursor: number): number {
+  let index = cursor - 1;
+  while (index >= 0 && !isWhitespace(text[index] ?? "")) {
+    index -= 1;
+  }
+  return index + 1;
+}
+
+function tokenEndForCursor(text: string, cursor: number): number {
+  let index = cursor;
+  while (index < text.length && !isWhitespace(text[index] ?? "")) {
+    index += 1;
+  }
+  return index;
+}
+
 /**
- * Detect an active trigger (@path, $skill, /command at prompt start, /skill
- * elsewhere) at the cursor position.
- *
- * Accepts an optional `isWhitespaceChar` override so callers with inline
- * placeholder characters (e.g. terminal context chips on web) can treat
- * those as token boundaries.
+ * Detect an active trigger (@path, #pull-request, $skill, /command at prompt
+ * start, /skill elsewhere) at the cursor position.
  */
-export function detectComposerTrigger(
-  text: string,
-  cursorInput: number,
-  isWhitespaceChar?: (char: string) => boolean,
-): ComposerTrigger | null {
+export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
   const promptPrefix = text.slice(0, cursor);
   const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
-  const commandPrefix = promptPrefix.slice(commandStart);
-
-  if (commandPrefix.startsWith("/") && !commandPrefix.includes("\n")) {
-    const commandMatch = /^\/(\S*)$/.exec(commandPrefix);
-    if (commandMatch) {
-      const commandQuery = commandMatch[1] ?? "";
-      if (commandQuery.toLowerCase() === "model") {
-        return {
-          kind: "slash-model",
-          query: "",
-          rangeStart: commandStart,
-          rangeEnd: cursor,
-        };
-      }
-      return {
-        kind: "slash-command",
-        query: commandQuery,
-        rangeStart: commandStart,
-        rangeEnd: cursor,
-      };
-    }
-
-    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(commandPrefix);
-    if (modelMatch) {
-      return {
-        kind: "slash-model",
-        query: (modelMatch[1] ?? "").trim(),
-        rangeStart: commandStart,
-        rangeEnd: cursor,
-      };
-    }
+  const commandMatch = /^\/(\S*)$/.exec(promptPrefix.slice(commandStart));
+  if (commandMatch) {
+    return {
+      kind: "slash-command",
+      query: commandMatch[1] ?? "",
+      rangeStart: commandStart,
+      rangeEnd: cursor,
+    };
   }
 
-  const wsCheck = isWhitespaceChar ?? isWhitespace;
-  let tokenIdx = cursor - 1;
-  while (tokenIdx >= 0 && !wsCheck(text[tokenIdx] ?? "")) {
-    tokenIdx -= 1;
-  }
-  const tokenStart = tokenIdx + 1;
-
+  const tokenStart = tokenStartForCursor(text, cursor);
   const token = text.slice(tokenStart, cursor);
   const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
-  if (pullRequestMatch)
+  if (pullRequestMatch) {
     return {
       kind: "pull-request",
       query: pullRequestMatch[1] ?? "",
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
+  }
   const skillPrefix = /^\p{Sc}/u.exec(token);
   if (skillPrefix) {
     return {
@@ -120,11 +99,10 @@ export function detectComposerTrigger(
       rangeEnd: cursor,
     };
   }
-  let tokenEnd = cursor;
-  while (tokenEnd < text.length && !wsCheck(text[tokenEnd] ?? "")) {
-    tokenEnd += 1;
-  }
-  if (token.startsWith("/") && !text.slice(tokenStart + 1, tokenEnd).includes("/")) {
+  if (
+    token.startsWith("/") &&
+    !text.slice(tokenStart + 1, tokenEndForCursor(text, cursor)).includes("/")
+  ) {
     return {
       kind: "slash-skill",
       query: token.slice(1),

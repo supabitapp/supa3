@@ -181,9 +181,10 @@ matching skills too. Enter still sends the message until you pick a suggestion
 with the arrow keys or a click, so paths like `/tmp` stay as typed. On mobile,
 both are also available before starting a thread on **New task**.
 
-The slash menu also includes skills unless you turn off **Settings → General →
-Show skills in slash menu**, which also stops `/` from adding skills later in a
-message. Only skills enabled for the provider are listed.
+The slash menu also includes skills unless you turn off **Show skills in slash
+menu**, which also stops `/` from suggesting skills later in a message. It is in
+**Settings → General** on web and desktop, and **Settings → Thread behavior** on
+mobile. Only skills enabled for the provider are listed.
 
 After you add or change skills, plugins, or MCP servers, use **Restart agent
 session** in the command palette on web and desktop. The conversation continues,

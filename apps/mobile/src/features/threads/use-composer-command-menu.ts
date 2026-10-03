@@ -39,9 +39,12 @@ import {
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
@@ -297,6 +300,10 @@ export function useComposerCommandMenu({
     selectedProviderInstanceId,
   ]);
 
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const showSkillsInSlashMenu =
+    !AsyncResult.isSuccess(preferencesResult) ||
+    preferencesResult.value.showSkillsInSlashMenu !== false;
   const trigger = useMemo(() => {
     if (!enabled || selection.start !== selection.end) {
       return null;
@@ -338,7 +345,7 @@ export function useComposerCommandMenu({
 
     if (trigger.kind === "slash-command") {
       const q = trigger.query.toLowerCase();
-      const visibleSkills = getProviderSkillsForSlashMenu(skills, true);
+      const visibleSkills = getProviderSkillsForSlashMenu(skills, showSkillsInSlashMenu);
       const commandItems = buildComposerSlashCommandItems({
         query: q,
         hasThread,
@@ -369,6 +376,9 @@ export function useComposerCommandMenu({
       return [...commandItems, ...skillItems];
     }
 
+    if (trigger.kind === "slash-skill" && !showSkillsInSlashMenu) {
+      return [];
+    }
     if (trigger.kind === "skill" || trigger.kind === "slash-skill") {
       const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
@@ -489,6 +499,7 @@ export function useComposerCommandMenu({
     pullRequestSearch.entries,
     projectCwd,
     selectedProviderStatus,
+    showSkillsInSlashMenu,
     skills,
     trigger,
     offersUsageLimits,
