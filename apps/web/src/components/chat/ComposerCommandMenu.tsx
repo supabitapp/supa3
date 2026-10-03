@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { memo, useLayoutEffect, useRef } from "react";
 
-import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
+import type { ComposerSlashCommand, ComposerTriggerKind } from "@t3tools/shared/composerTrigger";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";

@@ -14,6 +14,9 @@ vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
 vi.mock("../../state/server", () => ({
   serverEnvironment: { refreshProviders: Symbol("refreshProviders") },
 }));
+vi.mock("../../state/preferences", () => ({
+  mobilePreferencesAtom: Symbol("mobilePreferences"),
+}));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: () => vi.fn(),
 }));

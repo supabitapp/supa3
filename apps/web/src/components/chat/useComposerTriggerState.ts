@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import type { ComposerTrigger } from "../../composer-logic";
+import type { ComposerTrigger } from "@t3tools/shared/composerTrigger";
 
 /** Keep a dismissed suggestion closed until the caret leaves its token. */
 export function useComposerTriggerState(initialTrigger: () => ComposerTrigger | null) {
