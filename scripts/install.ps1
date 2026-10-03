@@ -99,21 +99,7 @@ function Fetch([string] $uri, [string] $destination, [switch] $progress) {
   }
 }
 if ($interactive) {
-  # Block characters are constructed so this file also loads correctly in PowerShell 5.1.
-  $mark = @(
-    "########## ######## ",
-    "    ###       _##^  ",
-    "    ###       ####_ ",
-    "    ###    _     ###",
-    "    ###    #######^ "
-  )
-  [Console]::Error.WriteLine()
-  for ($i = 0; $i -lt $mark.Length; $i++) {
-    $row = $mark[$i].Replace('#', [char]0x2588).Replace('^', [char]0x2580).Replace('_', [char]0x2584)
-    $label = if ($i -eq 1) { "     ${bold}T3 Code$reset" } elseif ($i -eq 2) { "     ${muted}CLI installer$reset" } else { "" }
-    [Console]::Error.WriteLine("  $bold$row$reset$label")
-  }
-  [Console]::Error.WriteLine()
+  [Console]::Error.WriteLine("`n  ${bold}supa3$reset`n  ${muted}CLI installer$reset`n")
 }
 Step "Finding your release..."
 
@@ -165,7 +151,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
   New-Item -ItemType Directory -Path $staging | Out-Null
   try {
     if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-    [Console]::Error.WriteLine("  ${muted}Installing$reset T3 Code $bold$version$reset`n")
+    [Console]::Error.WriteLine("  ${muted}Installing$reset supa3 $bold$version$reset`n")
     Step "Downloading..."
     try {
       Fetch "$baseUrl/v$version/SHA256SUMS" (Join-Path $staging "SHA256SUMS")
@@ -186,7 +172,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $staging $archive)).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail "checksum mismatch for $archive" }
 
-    Step "Extracting T3 Code..."
+    Step "Extracting supa3..."
     # The archive module reads the global preference, not the caller's local scope.
     $savedProgress = $global:ProgressPreference
     try {

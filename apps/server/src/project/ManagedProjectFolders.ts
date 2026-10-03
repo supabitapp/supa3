@@ -202,7 +202,7 @@ function namedProjectReadme(name: string): string {
     "",
     `# ${name}`,
     "",
-    "Created in [T3 Code](https://t3.codes).",
+    "Created in [supa3](https://github.com/supabitapp/supa3).",
     "",
   ].join("\n");
 }

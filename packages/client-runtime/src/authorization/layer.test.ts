@@ -55,7 +55,7 @@ function makeHarness(responses: ReadonlyArray<Response>) {
           ClientCapabilities.ClientPresentation,
           ClientCapabilities.ClientPresentation.of({
             metadata: {
-              label: "T3 Code Test",
+              label: "supa3 Test",
               deviceType: "mobile",
               os: "test",
             },

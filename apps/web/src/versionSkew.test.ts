@@ -1,6 +1,7 @@
 import { EnvironmentId } from "@t3tools/contracts";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import serverPackage from "../../server/package.json" with { type: "json" };
 
 // Pinned so the direction cases below read as fixed versions instead of
 // arithmetic on whatever version this checkout happens to be at.
@@ -15,6 +16,7 @@ import {
   dismissVersionMismatch,
   isServerUpdateFailureDismissed,
   isVersionMismatchDismissed,
+  manualServerUpdateCommand,
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
@@ -23,11 +25,20 @@ import {
 } from "./versionSkew";
 
 const MISMATCH_HINT =
-  "Version mismatch. Try syncing the client and server to the same T3 Code version.";
+  "Version mismatch. Try syncing the client and server to the same supa3 version.";
 
 describe("versionSkew", () => {
   beforeEach(() => {
     branding.APP_VERSION = "0.0.34";
+  });
+
+  it("keeps manual relaunch commands aligned with the distributed package", () => {
+    for (const version of ["0.0.34", "0.0.34-nightly.20261003"]) {
+      expect(manualServerUpdateCommand(version).split(" ")).toEqual([
+        "npx",
+        `${serverPackage.name}@${version}`,
+      ]);
+    }
   });
 
   it("dismisses only the current failed attempt without clearing its retry state", () => {

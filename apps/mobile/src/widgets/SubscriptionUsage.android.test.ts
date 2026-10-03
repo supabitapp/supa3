@@ -68,7 +68,7 @@ describe("SubscriptionUsage Android layout", () => {
       ...snapshot,
       providers: [{ ...provider, expiresAt: now - 1 }],
     });
-    expect(tree).toContain("Open T3 to refresh");
+    expect(tree).toContain("Open supa3 to refresh");
     expect(tree).not.toContain("LinearProgressIndicator");
     expect(tree).not.toContain("more in T3");
   });
@@ -81,7 +81,7 @@ describe("SubscriptionUsage Android layout", () => {
   it("keeps quotas without an expiry deadline visible", () => {
     const tree = render({ ...snapshot, providers: [{ ...provider, expiresAt: 0 }] });
     expect(tree).toContain("5 hours · 60% left");
-    expect(tree).not.toContain("Open T3 to refresh");
+    expect(tree).not.toContain("Open supa3 to refresh");
   });
 
   it("invites connecting when nothing has been checked", () => {

@@ -228,8 +228,8 @@ describe("supa3 pair", () => {
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );
-      assert.include(rendered, "No running T3 Code server found.");
-      assert.include(rendered, "npx t3 serve");
+      assert.include(rendered, "No running supa3 server found.");
+      assert.include(rendered, "supa3 serve");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -258,7 +258,7 @@ describe("supa3 pair", () => {
         const rendered = String(
           typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
         );
-        assert.include(rendered, "No running T3 Code server found.");
+        assert.include(rendered, "No running supa3 server found.");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -284,7 +284,7 @@ describe("supa3 pair", () => {
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );
-      assert.include(rendered, "No running T3 Code server found.");
+      assert.include(rendered, "No running supa3 server found.");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

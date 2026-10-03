@@ -74,7 +74,7 @@ function tool(
   return { displayName, labels, icon, summaryAction };
 }
 
-const T3_MCP_SERVER_ALIASES = new Set(["t3-code", "t3_code", "t3code"]);
+const T3_MCP_SERVER_ALIASES = new Set(["supa3", "t3-code", "t3_code", "t3code"]);
 
 // Cards, activity rows, summaries, and provider identity recovery share this inventory.
 const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
@@ -116,14 +116,14 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Delete", "Deleting", "Requested deletion of", "a scheduled task"],
     "schedule-delete",
   ),
-  create_threads: tool(["Create", "Creating", "Created", "T3 threads"], "thread-create"),
-  t3_thread_start: tool(["Start", "Starting", "Started", "a T3 thread"], "thread-create"),
-  t3_thread_list: tool(["List", "Listing", "Listed", "T3 threads"], "thread-list"),
-  t3_thread_read: tool(["Read", "Reading", "Read", "a T3 thread"], "thread-read"),
-  t3_thread_send: tool(["Send", "Sending", "Sent", "to a T3 thread"], "thread-send"),
-  t3_thread_wait: tool(["Wait", "Waiting", "Waited", "for a T3 thread"], "thread-wait"),
+  create_threads: tool(["Create", "Creating", "Created", "supa3 threads"], "thread-create"),
+  t3_thread_start: tool(["Start", "Starting", "Started", "a supa3 thread"], "thread-create"),
+  t3_thread_list: tool(["List", "Listing", "Listed", "supa3 threads"], "thread-list"),
+  t3_thread_read: tool(["Read", "Reading", "Read", "a supa3 thread"], "thread-read"),
+  t3_thread_send: tool(["Send", "Sending", "Sent", "to a supa3 thread"], "thread-send"),
+  t3_thread_wait: tool(["Wait", "Waiting", "Waited", "for a supa3 thread"], "thread-wait"),
   t3_thread_interrupt: tool(
-    ["Interrupt", "Interrupting", "Requested an interrupt of", "a T3 thread"],
+    ["Interrupt", "Interrupting", "Requested an interrupt of", "a supa3 thread"],
     "thread-interrupt",
   ),
   t3_worktree_handoff: tool(
@@ -244,7 +244,10 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_thread_search: tool(["Search", "Searching", "Searched", "thread content"], "thread-search"),
   t3_thread_transfers: tool(["Read", "Reading", "Read", "thread transfers"], "thread-transfers"),
   t3_thread_organize: tool(["Organize", "Organizing", "Organized", "a thread"], "thread-organize"),
-  t3_thread_update: tool(["Update", "Updating", "Updated", "T3 thread metadata"], "thread-update"),
+  t3_thread_update: tool(
+    ["Update", "Updating", "Updated", "supa3 thread metadata"],
+    "thread-update",
+  ),
   t3_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
   t3_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
   t3_preview_close: tool(["Close", "Closing", "Closed", "a preview tab"], "browser", "browser"),
@@ -303,14 +306,15 @@ function resolveT3McpToolName(value: string): string | null {
       : null;
   }
 
-  const namespaceMatch = /^(?<server>t3-code|t3_code|t3code)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(
-    label,
-  );
+  const namespaceMatch =
+    /^(?<server>supa3|t3-code|t3_code|t3code)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
   if (namespaceMatch?.groups) {
     return namespaceMatch.groups.tool ?? null;
   }
 
-  const prefixed = /^(?:mcp[-_]{1,2})?t3[-_ ]?code(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label);
+  const prefixed = /^(?:mcp[-_]{1,2})?(?:supa3|t3[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(
+    label,
+  );
   const candidate = prefixed?.groups?.tool ?? label;
   return Object.hasOwn(T3_MCP_TOOLS, candidate) ? candidate : null;
 }

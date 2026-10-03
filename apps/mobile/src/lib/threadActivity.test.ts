@@ -1317,7 +1317,7 @@ describe("buildThreadFeed", () => {
     expect(activity?.workEntry.viewedImagePath).toBe("/workspace/reference.png");
   });
 
-  it("pretty prints T3 MCP dynamic tool activities and attaches the product logo", () => {
+  it("pretty prints supa3 MCP dynamic tool activities and attaches the product logo", () => {
     const toolItem: OrchestrationV2TurnItem = {
       ...base("item-t3-tool", "2026-06-20T00:00:04.000Z", 3),
       type: "dynamic_tool",
@@ -1329,9 +1329,9 @@ describe("buildThreadFeed", () => {
     const feed = buildThreadFeed([projected(toolItem, 0)]);
     const activity = feed[0]?.type === "activity-group" ? feed[0].activities[0] : null;
 
-    expect(activity?.summary).toBe("Read a T3 thread");
+    expect(activity?.summary).toBe("Read a supa3 thread");
     expect(activity?.logo).toBe("t3-code");
-    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a T3 thread");
+    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a supa3 thread");
   });
 
   it("uses the CUA action title in the mobile feed", () => {
@@ -1346,7 +1346,7 @@ describe("buildThreadFeed", () => {
     expect(activity?.summary).toBe("Inspect Saga music screen");
   });
 
-  it("uses canonical T3 orchestration summaries in compact work groups", () => {
+  it("uses canonical supa3 orchestration summaries in compact work groups", () => {
     const rows = [
       projected(command("2026-06-20T00:00:01.000Z"), 0),
       ...["mcp__t3-code__t3_thread_send", "t3_code.t3_thread_send", "t3_thread_send"].map(

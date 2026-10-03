@@ -76,7 +76,8 @@ const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 /** The rules T3 gives every session it runs, with only this thread's own T3 MCP server allowed. */
 const mcpRules = [
   { action: "t3-code-*", resource: "*", effect: "deny" },
-  { action: "t3-code-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
+  { action: "supa3-*", resource: "*", effect: "deny" },
+  { action: "supa3-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
 const t3Rules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
 const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
@@ -1527,7 +1528,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("gives a resumed session T3's rules when it was made with others", () =>
+  it.effect("gives a resumed session supa3's rules when it was made with others", () =>
     Effect.gen(function* () {
       const runtime = yield* openCode2ReplayRuntimeWithInstructions([
         ...opening,
@@ -1649,7 +1650,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the requests a session still waits on when a restarted T3 loads it", () =>
+  it.effect("stops the requests a session still waits on when a restarted supa3 loads it", () =>
     Effect.gen(function* () {
       // T3 restarted while the server kept waiting on an ask T3 no longer shows.
       const runtime = yield* openCode2ReplayRuntimeWithInstructions(
@@ -1728,7 +1729,7 @@ describe("OpenCode2 adapter", () => {
       assert.equal(ended?.status, "failed");
       assert.equal(
         ended?.status === "failed" ? ended.failure.message : undefined,
-        "OpenCode is waiting on a request T3 Code couldn't answer.",
+        "OpenCode is waiting on a request supa3 couldn't answer.",
       );
     }).pipe(Effect.scoped),
   );
@@ -1768,7 +1769,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("declines a form T3 cannot show with the reason, instead of leaving it open", () =>
+  it.effect("declines a form supa3 cannot show with the reason, instead of leaving it open", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -1959,7 +1960,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the subagent whose form T3 cannot show or decline", () =>
+  it.effect("stops the subagent whose form supa3 cannot show or decline", () =>
     Effect.gen(function* () {
       const linkForm = {
         id: "frm_0eb79ab35001fkvFECSh3wYNVD",
@@ -2659,7 +2660,7 @@ describe("OpenCode2 adapter", () => {
   );
 
   it.effect(
-    "registers T3's MCP server for the thread alone and removes it when the thread unloads",
+    "registers supa3's MCP server for the thread alone and removes it when the thread unloads",
     () =>
       Effect.gen(function* () {
         McpProviderSession.setMcpProviderSession({
@@ -2674,7 +2675,7 @@ describe("OpenCode2 adapter", () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId)),
         );
-        const server = "t3-code-thread_opencode2-adapter";
+        const server = "supa3-thread_opencode2-adapter";
         const { runtime, thread } = yield* resumed([
           // Registered for the session's directory under the thread's own name;
           // the session's rules allow only this name's tools (see `t3Rules`).
@@ -3593,7 +3594,8 @@ describe("OpenCode2 adapter", () => {
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
             { action: "t3-code-*", resource: "*", effect: "deny" },
-            { action: "t3-code-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
+            { action: "supa3-*", resource: "*", effect: "deny" },
+            { action: "supa3-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
           ],
         }),
         reply("session.update", null),

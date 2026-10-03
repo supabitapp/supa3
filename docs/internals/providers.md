@@ -12,22 +12,22 @@ session or catalog state.
 ## Process and account isolation
 
 The `opencode` driver probes the installed version and runs the 1.x or 2.x runtime. OpenCode's MCP
-registrations are directory-scoped, while T3's MCP connection is thread-scoped, so threads in one
+registrations are directory-scoped, while supa3's MCP connection is thread-scoped, so threads in one
 directory must not share one T3 MCP entry.
 
-- **1.x** uses one T3-managed chat server per thread, so threads cannot replace each other's
+- **1.x** uses one supa3-managed chat server per thread, so threads cannot replace each other's
   connection. Catalog and text-generation work can share the
   [instance-owned helper](../../apps/server/src/provider/OpenCodeServerOwner.ts), which closes
   after an idle period. See the [1.x adapter](../../apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts).
 - **2.x** serves every directory from one
   [server per instance](../../apps/server/src/provider/opencode2/OpenCode2Server.ts). Each thread
-  registers its own `t3-code-<thread>` MCP entry, and session permission rules deny every other
+  registers its own `supa3-<thread>` MCP entry, and session permission rules deny every other
   thread's entry. See the [2.x adapter](../../apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.ts).
 
 External OpenCode servers remain externally owned and can require an external restart to pick up
 configuration changes. OpenCode stores "always" approval grants for the whole project. Automatic
 full-access replies use `once` so they cannot widen a supervised thread's permissions on a shared
-server. On 2.x, a session-wide approval also replies `once` and becomes T3's own rule on that session.
+server. On 2.x, a session-wide approval also replies `once` and becomes supa3's own rule on that session.
 
 Pi runs the user's own `pi` install in RPC mode and owns native extension, package, and project
 trust discovery. T3 injects only its namespaced MCP bridge, so a Pi session behaves as it does in

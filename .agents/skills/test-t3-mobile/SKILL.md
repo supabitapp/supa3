@@ -1,18 +1,18 @@
 ---
 name: test-t3-mobile
-description: Test T3 Code's native iOS and Android app through its Device panel and returned AgentDevice command. Use for mobile verification, native-client builds, Metro launch, and mobile pairing against isolated development state.
+description: Test supa3's native iOS and Android app through its Device panel and returned AgentDevice command. Use for mobile verification, native-client builds, Metro launch, and mobile pairing against isolated development state.
 ---
 
-# Test T3 Mobile
+# Test supa3 Mobile
 
 ## Open the device
 
 Call `device_list`, then `device_open` with the selected host and device IDs.
-T3 boots the device and shows its live stream in the Device panel. Follow its
+supa3 boots the device and shows its live stream in the Device panel. Follow its
 returned `quickStart`, using the exact `agentDevice.command` and all `targetArgs`
 on every operation. Use `device_screenshot` to inspect the screen.
 
-If T3 device tools or the selected device are unavailable, report the blocker
+If supa3 device tools or the selected device are unavailable, report the blocker
 and stop verification. Do not install or switch to another automation system.
 
 ## Use an isolated backend

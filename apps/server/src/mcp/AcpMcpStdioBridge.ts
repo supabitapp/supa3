@@ -161,7 +161,7 @@ export function callAcpMcpTool(
         if (!response.ok) {
           yield* discardResponseBody(response);
           return yield* Effect.fail(
-            new AcpMcpBridgeError(`T3 Code MCP endpoint responded with HTTP ${response.status}.`),
+            new AcpMcpBridgeError(`supa3 MCP endpoint responded with HTTP ${response.status}.`),
           );
         }
         const payloads = yield* Stream.runCollect(responsePayloads(response));
@@ -179,13 +179,13 @@ export function callAcpMcpTool(
       params: {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "t3-code-acp-cli", version: "0.0.0" },
+        clientInfo: { name: "supa3-acp-cli", version: "0.0.0" },
       },
     });
     const initializeResponse = initialized.find((entry) => asEnvelope(entry)?.id === initializeId);
     if (initializeResponse === undefined || asEnvelope(initializeResponse)?.error !== undefined) {
       return yield* Effect.fail(
-        new AcpMcpBridgeError("T3 Code MCP endpoint rejected initialization."),
+        new AcpMcpBridgeError("supa3 MCP endpoint rejected initialization."),
       );
     }
     yield* send({ jsonrpc: "2.0", method: "notifications/initialized" });
@@ -202,7 +202,7 @@ export function callAcpMcpTool(
     if (envelope === null || envelope.error !== undefined) {
       return yield* Effect.fail(
         new AcpMcpBridgeError(
-          `T3 Code MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
+          `supa3 MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
         ),
       );
     }
@@ -266,7 +266,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           if (envelope.id !== undefined) {
             yield* respondWithError(
               envelope.id,
-              `T3 Code MCP endpoint responded with HTTP ${response.status}.`,
+              `supa3 MCP endpoint responded with HTTP ${response.status}.`,
             );
           }
           return yield* discardResponseBody(response);
@@ -278,7 +278,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           const error = Cause.squash(cause);
           return respondWithError(
             envelope.id,
-            `T3 Code MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
+            `supa3 MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
           );
         }),
       );

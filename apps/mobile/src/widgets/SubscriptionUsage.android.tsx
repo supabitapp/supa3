@@ -29,8 +29,8 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
   });
   const muted = colors.onSurfaceVariant;
   const providers = props.providers ?? [
-    { name: "Codex", detail: "Open T3 to connect", windows: [], expiresAt: 0, totalWindows: 0 },
-    { name: "Claude", detail: "Open T3 to connect", windows: [], expiresAt: 0, totalWindows: 0 },
+    { name: "Codex", detail: "Open supa3 to connect", windows: [], expiresAt: 0, totalWindows: 0 },
+    { name: "Claude", detail: "Open supa3 to connect", windows: [], expiresAt: 0, totalWindows: 0 },
   ];
   return (
     // The card is one Button so a tap reaches the app's interaction listener,
@@ -60,7 +60,7 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
               </Text>
               {shown.length === 0 ? (
                 <Text color={muted} maxLines={1} style={{ fontSize: 11 }}>
-                  {stale ? "Open T3 to refresh" : provider.detail}
+                  {stale ? "Open supa3 to refresh" : provider.detail}
                 </Text>
               ) : null}
               {shown.map((window) => {

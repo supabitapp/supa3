@@ -693,7 +693,7 @@ function acpMcpContext(threadId: ThreadId | null, self: SelfInvocation): AcpMcpC
   return {
     servers: [
       {
-        name: "t3-code",
+        name: "supa3",
         command: self.command,
         args: [...selfInvocationArgs(self, ["acp-mcp-bridge"])],
         env: [
@@ -703,7 +703,7 @@ function acpMcpContext(threadId: ThreadId | null, self: SelfInvocation): AcpMcpC
         ],
       },
     ],
-    acpServers: [{ type: "acp", name: "t3-code", serverId: "t3-code" }],
+    acpServers: [{ type: "acp", name: "supa3", serverId: "supa3" }],
     endpoint: session.endpoint,
     authorization: session.authorizationHeader,
     processEnvironment: {
@@ -2031,7 +2031,7 @@ export function makeAcpAdapterV2(
               elicitation: { form: {}, ...(flavor.onUrlElicitation ? { url: {} } : {}) },
               ...(flavor.clientCapabilitiesMeta ? { _meta: flavor.clientCapabilitiesMeta } : {}),
             },
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: "supa3", version: "0.0.0" },
             onTermination,
             onOutgoingResponseFailure: (requestId, error) =>
               Ref.modify(nativeResponseAcknowledgements, (current) => {
@@ -5377,8 +5377,8 @@ export function makeAcpAdapterV2(
               Effect.fail(
                 EffectAcpErrors.AcpRequestError.internalError(
                   disposition === "ask"
-                    ? `The active T3 runtime policy requires approval for ${operation}. Request permission with session/request_permission before retrying.`
-                    : `The active T3 runtime policy does not allow ${operation}.`,
+                    ? `The active supa3 runtime policy requires approval for ${operation}. Request permission with session/request_permission before retrying.`
+                    : `The active supa3 runtime policy does not allow ${operation}.`,
                 ),
               ),
             ),
