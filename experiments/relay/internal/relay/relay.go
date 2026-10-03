@@ -35,6 +35,7 @@ type Relay struct {
 
 	mu           sync.Mutex
 	hosts        map[string]*host
+	controlSocks int
 	totalClients int
 	generation   uint64
 }
@@ -204,12 +205,29 @@ func (r *Relay) handleControl(w http.ResponseWriter, req *http.Request) {
 		r.reject(w, http.StatusBadRequest, "publicKey must be canonical unpadded base64url of a 32-byte key")
 		return
 	}
+	r.mu.Lock()
+	if r.controlSocks >= r.cfg.MaxHosts {
+		r.mu.Unlock()
+		r.reject(w, http.StatusServiceUnavailable, "relay host limit reached")
+		return
+	}
+	r.controlSocks++
+	r.mu.Unlock()
+	r.Metrics.ControlSockets.Add(1)
+	release := func() {
+		r.mu.Lock()
+		r.controlSocks--
+		r.mu.Unlock()
+		r.Metrics.ControlSockets.Add(-1)
+	}
 	conn, err := r.upgrader.Upgrade(w, req, nil)
 	if err != nil {
+		release()
 		r.Metrics.RejectedConnections.Add(1)
 		return
 	}
 	sock := newSocket(conn, r.cfg, controlMessageLimit)
+	sock.onClose = release
 	endpointID := EndpointID(pub)
 	nonce, _ := randomToken(32)
 	if err := sock.write(websocket.TextMessage, encode(controlMessage{Type: "challenge", Nonce: nonce})); err != nil {
@@ -275,9 +293,11 @@ func (r *Relay) handleControl(w http.ResponseWriter, req *http.Request) {
 
 func (r *Relay) rejectControl(sock *socket, reason string) {
 	r.Metrics.RejectedConnections.Add(1)
-	go sock.close(websocket.ClosePolicyViolation, reason)
-	sock.conn.ReadMessage()
-	sock.markReadDone()
+	go func() {
+		sock.conn.ReadMessage()
+		sock.markReadDone()
+	}()
+	sock.close(websocket.ClosePolicyViolation, reason)
 }
 
 func (r *Relay) hostWriter(h *host) {

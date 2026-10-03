@@ -4,6 +4,7 @@ import "sync/atomic"
 
 type Metrics struct {
 	ActiveHosts         atomic.Int64
+	ControlSockets      atomic.Int64
 	ActivePairs         atomic.Int64
 	PendingPairs        atomic.Int64
 	ForwardedMessages   atomic.Int64
@@ -13,6 +14,7 @@ type Metrics struct {
 
 type MetricsSnapshot struct {
 	ActiveHosts         int64 `json:"activeHosts"`
+	ControlSockets      int64 `json:"controlSockets"`
 	ActivePairs         int64 `json:"activePairs"`
 	PendingPairs        int64 `json:"pendingPairs"`
 	ForwardedMessages   int64 `json:"forwardedMessages"`
@@ -24,6 +26,7 @@ type MetricsSnapshot struct {
 func (m *Metrics) snapshot(draining bool) MetricsSnapshot {
 	return MetricsSnapshot{
 		ActiveHosts:         m.ActiveHosts.Load(),
+		ControlSockets:      m.ControlSockets.Load(),
 		ActivePairs:         m.ActivePairs.Load(),
 		PendingPairs:        m.PendingPairs.Load(),
 		ForwardedMessages:   m.ForwardedMessages.Load(),

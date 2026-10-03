@@ -18,6 +18,7 @@ type socket struct {
 	readDone     chan struct{}
 	readOnce     sync.Once
 	closing      atomic.Bool
+	onClose      func()
 }
 
 const controlMessageLimit = 4096
@@ -71,6 +72,9 @@ func (s *socket) markReadDone() {
 func (s *socket) close(code int, reason string) {
 	s.once.Do(func() {
 		s.closing.Store(true)
+		if s.onClose != nil {
+			s.onClose()
+		}
 		frame := websocket.FormatCloseMessage(code, truncateReason(reason))
 		if err := s.conn.WriteControl(websocket.CloseMessage, frame, time.Now().Add(s.writeTimeout)); err == nil {
 			select {
@@ -85,6 +89,9 @@ func (s *socket) close(code int, reason string) {
 func (s *socket) closeNow() {
 	s.once.Do(func() {
 		s.closing.Store(true)
+		if s.onClose != nil {
+			s.onClose()
+		}
 		s.conn.Close()
 	})
 }

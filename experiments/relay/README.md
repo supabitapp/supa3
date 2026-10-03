@@ -102,7 +102,7 @@ pairs remain or after 5 seconds, closing leftovers with `1001`.
 
 ### Metrics
 
-`/metrics` returns `activeHosts`, `activePairs`, `pendingPairs`,
+`/metrics` returns `activeHosts`, `controlSockets`, `activePairs`, `pendingPairs`,
 `forwardedMessages`, `forwardedBytes`, `rejectedConnections`, and `draining`.
 Payloads, tokens, nonces, signatures, and keys are never exposed or logged.
 
@@ -115,6 +115,7 @@ Payloads, tokens, nonces, signatures, and keys are never exposed or logged.
 | `RELAY_MAX_QUEUE_BYTES` | `4194304` | Bytes queued per data direction, including pre-pairing buffered messages. Must be at least the message limit. |
 | `RELAY_MAX_QUEUE_MESSAGES` | `256` | Messages queued per data direction. |
 | `RELAY_MAX_CLIENTS` | `1024` | Global pending plus active pairs. |
+| `RELAY_MAX_HOSTS` | `1024` | Concurrent control sockets, counted from upgrade until close, so unauthenticated sockets waiting on the challenge count too. Over the cap `/v1/control` answers `503` before upgrade. |
 | `RELAY_MAX_CLIENTS_PER_HOST` | `128` | Pending plus active pairs per host. |
 | `RELAY_MAX_PENDING_PER_HOST` | `32` | Unaccepted pairs per host. Must not exceed the per-host client limit. |
 | `RELAY_AUTH_TIMEOUT_MS` | `5000` | Time a host has to answer the challenge. |

@@ -174,3 +174,37 @@ func TestLegitimateReconnect(t *testing.T) {
 	}
 	expectMessage(t, client2, websocket.BinaryMessage, []byte{1, 2, 3})
 }
+
+func TestControlSocketCap(t *testing.T) {
+	r := startRelay(t, func(c *relay.Config) { c.MaxHosts = 2 })
+	h := mustRegister(t, r, endpoint.NewIdentity())
+	unauthenticated, _, err := endpoint.OpenControl(ctx(t), r.WS, endpoint.NewIdentity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	third := endpoint.NewIdentity()
+	if _, status := dialStatus(t, endpoint.ControlURL(r.WS, third.PublicKeyParam())); status != http.StatusServiceUnavailable {
+		t.Fatalf("over cap: status %d, want 503", status)
+	}
+	if m := metrics(t, r); m.ControlSockets != 2 || m.ActiveHosts != 1 || m.RejectedConnections != 1 {
+		t.Fatalf("metrics %+v", m)
+	}
+	endpoint.CloseWith(unauthenticated, websocket.CloseNormalClosure, "")
+	expectClose(t, unauthenticated, websocket.ClosePolicyViolation)
+	h3 := mustRegister(t, r, third)
+	if err := h.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if m := metrics(t, r); m.ControlSockets != 1 || m.ActiveHosts != 1 {
+		t.Fatalf("metrics after release %+v", m)
+	}
+	h4 := mustRegister(t, r, endpoint.NewIdentity())
+	if _, status := dialStatus(t, endpoint.ControlURL(r.WS, endpoint.NewIdentity().PublicKeyParam())); status != http.StatusServiceUnavailable {
+		t.Fatalf("over cap again: status %d, want 503", status)
+	}
+	h3.Close()
+	h4.Close()
+	if m := metrics(t, r); m.ControlSockets != 0 {
+		t.Fatalf("metrics after all closed %+v", m)
+	}
+}

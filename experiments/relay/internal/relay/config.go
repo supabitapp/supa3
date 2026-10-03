@@ -13,6 +13,7 @@ type Config struct {
 	MaxQueueBytes     int64
 	MaxQueueMessages  int
 	MaxClients        int
+	MaxHosts          int
 	MaxClientsPerHost int
 	MaxPendingPerHost int
 	AuthTimeout       time.Duration
@@ -32,6 +33,7 @@ func DefaultConfig() Config {
 		MaxQueueBytes:     4 << 20,
 		MaxQueueMessages:  256,
 		MaxClients:        1024,
+		MaxHosts:          1024,
 		MaxClientsPerHost: 128,
 		MaxPendingPerHost: 32,
 		AuthTimeout:       5 * time.Second,
@@ -83,6 +85,7 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (Config, error) {
 	intv("RELAY_MAX_QUEUE_BYTES", 1, &cfg.MaxQueueBytes)
 	intv32("RELAY_MAX_QUEUE_MESSAGES", 1, &cfg.MaxQueueMessages)
 	intv32("RELAY_MAX_CLIENTS", 1, &cfg.MaxClients)
+	intv32("RELAY_MAX_HOSTS", 1, &cfg.MaxHosts)
 	intv32("RELAY_MAX_CLIENTS_PER_HOST", 1, &cfg.MaxClientsPerHost)
 	intv32("RELAY_MAX_PENDING_PER_HOST", 1, &cfg.MaxPendingPerHost)
 	dur("RELAY_AUTH_TIMEOUT_MS", &cfg.AuthTimeout)
