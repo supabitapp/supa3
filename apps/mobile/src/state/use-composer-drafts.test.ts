@@ -1642,6 +1642,7 @@ describe("mobile composer drafts", () => {
     });
     expect(decoded).toEqual({
       drafts: { "environment-1:thread-1": DRAFT },
+      modelOptionMemory: {},
       stickyModelSelection: null,
     });
   });

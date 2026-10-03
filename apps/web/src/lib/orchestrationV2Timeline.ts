@@ -3,7 +3,7 @@ export function removeAndRenumberTimelineItem<
   Row extends { readonly position: number; readonly sourceItemId: Id },
 >(rows: ReadonlyArray<Row>, sourceItemId: Id): Array<Row> {
   return rows
-    .filter((row) => row.sourceItemId !== sourceItemId)
+    .flatMap((row) => (row.sourceItemId === sourceItemId ? [] : [row]))
     .map((row, position) => ({ ...row, position }));
 }
 

@@ -116,9 +116,7 @@ function repeatLabel(weekdays: ReadonlyArray<number>): string {
   if (days.size === 7) return "Every day";
   if (days.size === 5 && [1, 2, 3, 4, 5].every((day) => days.has(day))) return "Weekdays";
   return (
-    DAYS.filter((day) => days.has(day.index))
-      .map((day) => day.label)
-      .join(", ") || "Choose days"
+    DAYS.flatMap((day) => (days.has(day.index) ? [day.label] : [])).join(", ") || "Choose days"
   );
 }
 

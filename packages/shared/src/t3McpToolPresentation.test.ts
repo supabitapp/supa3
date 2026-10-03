@@ -3,10 +3,17 @@ import { describe, expect, it } from "vite-plus/test";
 import { T3_MCP_TOOL_NAMES, resolveT3McpToolPresentation } from "./t3McpToolPresentation.ts";
 
 describe("resolveT3McpToolPresentation", () => {
-  it("recognizes every T3 tool across provider prefixes and completion suffixes", () => {
+  it("recognizes current and legacy tools across provider prefixes and completion suffixes", () => {
     for (const tool of T3_MCP_TOOL_NAMES) {
       const presentation = resolveT3McpToolPresentation(tool);
       for (const prefix of [
+        "mcp__supa3__",
+        "supa3.",
+        "supa3/",
+        "supa3:",
+        "mcp_supa3_",
+        "supa3 ",
+        "supa3 · ",
         "mcp__t3-code__",
         "mcp__t3_code__",
         "mcp__t3code__",
@@ -26,21 +33,21 @@ describe("resolveT3McpToolPresentation", () => {
   });
   it("pretty prints Claude and Cursor T3 MCP tool names", () => {
     expect(resolveT3McpToolPresentation("mcp__t3-code__t3_thread_read")).toEqual({
-      displayName: "Read a T3 thread",
+      displayName: "Read a supa3 thread",
       logo: "t3-code",
     });
   });
 
   it("pretty prints Codex T3 MCP tool names", () => {
     expect(resolveT3McpToolPresentation("t3-code.create_threads")).toEqual({
-      displayName: "Create T3 threads",
+      displayName: "Create supa3 threads",
       logo: "t3-code",
     });
   });
 
   it("pretty prints thread metadata updates", () => {
     expect(resolveT3McpToolPresentation("mcp__t3-code__t3_thread_update")).toEqual({
-      displayName: "Update T3 thread metadata",
+      displayName: "Update supa3 thread metadata",
       logo: "t3-code",
     });
   });
@@ -76,11 +83,16 @@ describe("resolveT3McpToolPresentation", () => {
 
   it("matches the separator variants ACP registry agents emit", () => {
     for (const name of [
+      "mcp_supa3_delegate_task",
+      "supa3:delegate_task",
+      "supa3/delegate_task",
+      "supa3 delegate_task",
+      "supa3__delegate_task",
       "mcp_t3-code_delegate_task",
       "t3_code:delegate_task",
       "t3code/delegate_task",
       "t3-code delegate_task",
-      "T3 Code delegate_task",
+      "supa3 delegate_task",
       "t3-code__delegate_task",
     ]) {
       expect(resolveT3McpToolPresentation(name)?.displayName).toBe("Delegate a child task");

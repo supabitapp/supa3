@@ -19,7 +19,7 @@ import {
   allEnvironmentProjectSnapshotsReadyAtom,
   allEnvironmentShellsBootstrappedAtom,
 } from "./shell";
-import { environmentThreadDetails, environmentThreadShells } from "./threads";
+import { environmentThreadDetails, environmentThreadShells, sidebarThreadShells } from "./threads";
 import { waitForAtomValue } from "./waitForAtomValue";
 
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
@@ -86,6 +86,10 @@ export function useThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
   return useAtomValue(environmentThreadShells.threadShellsAtom);
 }
 
+export function useSidebarThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
+  return useAtomValue(sidebarThreadShells.threadShellsAtom);
+}
+
 export function useAllEnvironmentShellsBootstrapped(): boolean {
   return useAtomValue(allEnvironmentShellsBootstrappedAtom);
 }
@@ -98,6 +102,12 @@ export function useThreadShellsForProjectRefs(
   refs: ReadonlyArray<ScopedProjectRef>,
 ): ReadonlyArray<EnvironmentThreadShell> {
   return useAtomValue(environmentThreadShells.threadShellsForProjectRefsAtom(refs));
+}
+
+export function useSidebarThreadShellsForProjectRefs(
+  refs: ReadonlyArray<ScopedProjectRef>,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return useAtomValue(sidebarThreadShells.threadShellsForProjectRefsAtom(refs));
 }
 
 export function useProject(ref: ScopedProjectRef | null): EnvironmentProject | null {
@@ -192,6 +202,27 @@ export function waitForThreadShell(ref: ScopedThreadRef, timeoutMs = 5_000): Pro
     predicate: (thread) => thread !== null,
     timeoutMs,
   });
+}
+
+const sidebarThreadNavigationStateAtom = Atom.family((ref: ScopedThreadRef) =>
+  Atom.make((get) => {
+    if (get(environmentThreadShells.threadShellAtom(ref)) !== null) return "ready";
+    return get(sidebarThreadShells.threadShellAtom(ref)) !== null ? "pending" : "missing";
+  }),
+);
+
+export async function waitForSidebarThreadShell(
+  ref: ScopedThreadRef,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const atom = sidebarThreadNavigationStateAtom(ref);
+  const resolved = await waitForAtomValue({
+    registry: appAtomRegistry,
+    atom,
+    predicate: (state) => state !== "pending",
+    signal,
+  });
+  return resolved && appAtomRegistry.get(atom) === "ready";
 }
 
 export function readEnvironmentSupportsTitleRegeneration(environmentId: EnvironmentId): boolean {

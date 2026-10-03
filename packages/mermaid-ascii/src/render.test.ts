@@ -19,30 +19,24 @@ const fixtures = import.meta.glob<string>("./testdata/{ascii,unicode}/*.txt", {
   eager: true,
 });
 
-for (const mode of ["ascii", "unicode"] as const) {
-  describe(`${mode} reference output`, () => {
-    const cases = Object.entries(fixtures).filter(([file]) =>
-      file.startsWith(`./testdata/${mode}/`),
-    );
-    for (const [file, content] of cases) {
-      it(file, () => {
-        const separator = content.indexOf("\n---\n");
-        expect(separator).toBeGreaterThan(0);
-        const padding: { paddingX?: number; paddingY?: number } = {};
-        const source = content
-          .slice(0, separator)
-          .replace(/^padding([xy])\s*=\s*(\d+)\s*$/gim, (_, axis: string, value: string) => {
-            padding[axis.toLowerCase() === "x" ? "paddingX" : "paddingY"] = Number(value);
-            return "";
-          });
-        const expected = content.slice(separator + 5);
-        expect(
-          normalize(renderMermaidAscii(source, { useAscii: mode === "ascii", ...padding })),
-        ).toBe(normalize(expected));
+describe.each([["ascii"], ["unicode"]] as const)("%s reference output", (mode) => {
+  const cases = Object.entries(fixtures).filter(([file]) => file.startsWith(`./testdata/${mode}/`));
+  it.each(cases)("%s", (file, content) => {
+    const separator = content.indexOf("\n---\n");
+    expect(separator).toBeGreaterThan(0);
+    const padding: { paddingX?: number; paddingY?: number } = {};
+    const source = content
+      .slice(0, separator)
+      .replace(/^padding([xy])\s*=\s*(\d+)\s*$/gim, (_, axis: string, value: string) => {
+        padding[axis.toLowerCase() === "x" ? "paddingX" : "paddingY"] = Number(value);
+        return "";
       });
-    }
+    const expected = content.slice(separator + 5);
+    expect(normalize(renderMermaidAscii(source, { useAscii: mode === "ascii", ...padding }))).toBe(
+      normalize(expected),
+    );
   });
-}
+});
 
 describe.each(["TD", "LR"] as const)("deep %s layout", (graphDirection) => {
   it.each([25, 26, 100])("renders a %i-node chain with finite coordinates", (nodeCount) => {

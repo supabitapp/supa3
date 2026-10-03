@@ -218,5 +218,5 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
     }
   }
   yield* Console.log("");
-  yield* Console.log("supa3 is uninstalled. Thanks for trying T3 Code.");
+  yield* Console.log("supa3 is uninstalled. Thanks for trying supa3.");
 });

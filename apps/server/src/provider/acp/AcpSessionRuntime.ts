@@ -864,9 +864,9 @@ export function capturePosixOwnershipLedger(input: {
   }
   const children = new Map<number, Array<AcpPosixProcessIdentity>>();
   const retainedByPid = new Map(
-    [...input.ledger.values()]
-      .filter((owned) => samePosixProcessIdentity(owned, byPid.get(owned.pid)))
-      .map((owned) => [owned.pid, owned]),
+    [...input.ledger.values()].flatMap((owned) =>
+      samePosixProcessIdentity(owned, byPid.get(owned.pid)) ? [[owned.pid, owned] as const] : [],
+    ),
   );
   for (const process of table) {
     const siblings = children.get(process.ppid) ?? [];
@@ -939,7 +939,7 @@ export function terminatePosixOwnedProcessTree(input: {
     discover(table);
     const byPid = new Map(table.map((entry) => [entry.pid, entry]));
     const current = input.controller.identity(process.pid);
-    if (current === undefined) throw fail("Cannot identify the current T3 process group");
+    if (current === undefined) throw fail("Cannot identify the current supa3 process group");
     const ledgerByPid = new Map(
       [...ledger.values()].map((process) => [process.pid, process] as const),
     );
@@ -949,9 +949,9 @@ export function terminatePosixOwnedProcessTree(input: {
         samePosixProcessIdentity(candidate, byPid.get(candidate.pid)),
     );
     const retainedByPid = new Map(
-      [...ledger.values()]
-        .filter((owned) => samePosixProcessIdentity(owned, byPid.get(owned.pid)))
-        .map((owned) => [owned.pid, owned]),
+      [...ledger.values()].flatMap((owned) =>
+        samePosixProcessIdentity(owned, byPid.get(owned.pid)) ? [[owned.pid, owned] as const] : [],
+      ),
     );
     const signalled = new Set<number>();
     while (pending.length > 0) {
