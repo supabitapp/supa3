@@ -135,7 +135,7 @@ describe("ComposerPrimaryActions", () => {
   });
 
   it("shows the send shortcuts for a new thread", () => {
-    const markup = renderSendButton(null, { isDraftThread: true });
+    const markup = renderSendButton(null, { isDraftThread: true, modifierLabel: "⌘" });
 
     expect(markup).toContain("Send in background");
     expect(markup).toContain("Shift + Enter");
