@@ -2,12 +2,12 @@
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-`.devcontainer/` gives you a ready-to-code Linux environment matching CI: Ubuntu 24.04, Node 24, pnpm, Rust stable, the global `vp` CLI, and the GitHub CLI. Open the repo in VS Code and "Reopen in Container", or create a GitHub Codespace. Dependency install (`vp i`), the Electron exec-bit repair, and the Vite dep-cache warmup all run automatically before you attach.
+`.devcontainer/` gives you a ready-to-code Linux environment matching CI: Ubuntu 24.04, the Mise-managed Node, pnpm, and `vp` toolchain, Rust stable, and the GitHub CLI. Open the repo in VS Code and "Reopen in Container", or create a GitHub Codespace. Mise installation, dependency install, the Electron exec-bit repair, and the Vite dep-cache warmup all run automatically before you attach.
 
 ## What works in the container
 
-- The full dev stack: `vp run dev`, then open the pairing URL it prints through the forwarded web port (5733). The bare origin is useless without the pairing token. In VS Code the forwarded port is a true localhost, so the printed URL works as-is; in browser Codespaces the forwarded origin differs, and if the server rejects it, pass the forwarded origin via `T3CODE_DEV_ALLOWED_ORIGINS`.
-- Everything the Linux CI jobs run: focused `vp test run <files>`, `vp lint <files>`, package typechecks, `vp run build:desktop`, and the resource-monitor cargo build and tests. (`vpr` is not on PATH here; the curl installer only shims `vp`. Use `vp run <script>` or `node_modules/.bin/vpr` after install.)
+- The full dev stack: `mise exec -- vp run dev`, then open the pairing URL it prints through the forwarded web port (5733). The bare origin is useless without the pairing token. In VS Code the forwarded port is a true localhost, so the printed URL works as-is; in browser Codespaces the forwarded origin differs, and if the server rejects it, pass the forwarded origin via `T3CODE_DEV_ALLOWED_ORIGINS`.
+- Everything the Linux CI jobs run: focused `mise exec -- vp test run <files>`, `mise exec -- vp lint <files>`, package typechecks, `mise exec -- vp run build:desktop`, and the resource-monitor cargo build and tests. Use `mise exec -- vpr` for the Vite+ package runner.
 
 ## State and safety
 
@@ -15,7 +15,7 @@
 
 ## Caching
 
-Two named volumes keep rebuilds fast and installs off the slow macOS/Windows bind mount: the pnpm store (shared across checkouts, mounted where `vp i` keeps it) and root `node_modules` (per-container, which covers the whole `.pnpm` virtual store since workspace packages just symlink into it). Deleting a container and recreating it reuses both, so a rebuild's `vp i` is seconds, not minutes. The host sees an empty `node_modules`; run host-side tooling inside the container.
+Two named volumes keep rebuilds fast and installs off the slow macOS/Windows bind mount: the pnpm store (shared across checkouts, mounted where pnpm keeps it) and root `node_modules` (per-container, which covers the whole `.pnpm` virtual store since workspace packages just symlink into it). Deleting a container and recreating it reuses both, so a rebuild's `vp i` is seconds, not minutes. The host sees an empty `node_modules`; run host-side tooling inside the container.
 
 ## Out of scope
 

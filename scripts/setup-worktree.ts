@@ -16,10 +16,18 @@ if (!projectRoot) {
 }
 const worktree = NodePath.dirname(import.meta.dirname);
 
-// `shell` resolves `vp` through PATH, including Windows command shims.
-const install = NodeChildProcess.spawnSync("vp i", {
+const miseInstall = NodeChildProcess.spawnSync(
+  "mise",
+  ["install", "--locked", "node", "pnpm", "npm:vite-plus"],
+  {
+    cwd: worktree,
+    stdio: "inherit",
+  },
+);
+if (miseInstall.status !== 0) process.exit(miseInstall.status ?? 1);
+
+const install = NodeChildProcess.spawnSync("mise", ["exec", "--", "vp", "i"], {
   cwd: worktree,
-  shell: true,
   stdio: "inherit",
 });
 if (install.status !== 0) process.exit(install.status ?? 1);
@@ -36,8 +44,8 @@ if (
 }
 
 const warm = NodeChildProcess.spawnSync(
-  process.execPath,
-  [NodePath.join(worktree, "apps", "web", "scripts", "warm-dep-cache.ts")],
+  "mise",
+  ["exec", "--", "node", NodePath.join(worktree, "apps", "web", "scripts", "warm-dep-cache.ts")],
   { cwd: worktree, stdio: "inherit" },
 );
 process.exit(warm.status ?? 1);

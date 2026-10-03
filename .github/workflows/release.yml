@@ -128,15 +128,14 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
         env:
           pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
-
       - id: release_meta
         name: Resolve release version
         shell: bash
@@ -246,13 +245,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
@@ -280,13 +278,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
@@ -320,13 +317,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       # No Electron setup here: `t3` (apps/server) has no Electron dependency
       # and none of its tests touch the runtime. Only the non-server `test`
       # job, which covers @t3tools/desktop, needs the download.
@@ -351,13 +347,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: false
-
+          install_args: --locked node pnpm npm:vite-plus
       # pnpm checks the lockfile and policy before reusing this result. A missing
       # artifact leaves the cache empty, so installation runs the checks again.
       - name: Download dependency verification
@@ -562,16 +555,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=t3...
-              - --filter=@t3tools/scripts...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=t3... --filter=@t3tools/scripts...
       - name: Download all CLI archives
         uses: actions/download-artifact@v8
         with:
@@ -623,15 +612,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/scripts...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@t3tools/scripts...
       - name: Download all desktop artifacts
         uses: actions/download-artifact@v8
         with:
@@ -820,16 +806,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/scripts...
-              - --filter=@t3tools/web...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@t3tools/scripts... --filter=@t3tools/web...
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
@@ -895,13 +877,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
-
+          install_args: --locked node pnpm npm:vite-plus
       - name: Alias channel
         shell: bash
         run: |
@@ -967,15 +946,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/marketing...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@t3tools/marketing...
       - id: deploy
         name: Build staged deployment
         shell: bash
@@ -1030,13 +1006,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
-
+          install_args: --locked node pnpm npm:vite-plus
       - name: Promote marketing site
         shell: bash
         run: |
@@ -1090,16 +1063,12 @@ jobs:
           echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/scripts...
-              - --filter=@t3tools/oxlint-plugin-t3code...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@t3tools/scripts... --filter=@t3tools/oxlint-plugin-t3code...
       - id: update_versions
         name: Update version strings
         env:
@@ -1154,15 +1123,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/scripts...
-
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@t3tools/scripts...
       - name: Announce prerelease on Discord
         if: needs.preflight.outputs.is_prerelease == 'true'
         continue-on-error: true

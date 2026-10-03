@@ -133,6 +133,7 @@ export default defineConfig({
       "node_modules",
       "pnpm-lock.yaml",
       "*.tsbuildinfo",
+      ".mise/locks/**",
       "**/routeTree.gen.ts",
       "apps/mobile/android/**",
       "apps/mobile/ios/**",

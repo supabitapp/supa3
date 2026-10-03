@@ -110,13 +110,10 @@ jobs:
       # took 183-233s on arm64 and 116-172s on x64, while a plain install took
       # 142-210s and 84-160s. The arm64 entries also filled 4 GB of the
       # repository's 10 GB Actions cache.
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: ${{ inputs.platform != 'win' }}
-          run-install: false
-
+          install_args: --locked node pnpm npm:vite-plus
       # pnpm checks the lockfile and policy before reusing this result. A missing
       # artifact leaves the cache empty, so installation runs the checks again.
       - name: Download dependency verification

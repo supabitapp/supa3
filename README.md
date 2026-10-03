@@ -103,29 +103,30 @@ Building from source? Start at [docs/internals/overview.md](./docs/internals/ove
 
 ## If you REALLY want to contribute still.... read this first
 
-### Install `vp`
+### Install the development toolchain
 
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
+T3 Code uses Mise to install the pinned Node.js, pnpm, and Vite+ toolchain.
 
 #### macOS / Linux
 
 ```bash
-curl -fsSL https://vite.plus | bash
+curl https://mise.run | sh
 ```
 
 #### Windows
 
 ```bash
-irm https://vite.plus/ps1 | iex
+winget install jdx.mise
 ```
 
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
-### Install dependencies
+From the repository root, install the locked tools and dependencies:
 
 ```bash
-vp i
+mise install --locked node pnpm npm:vite-plus
+mise exec -- vp i
 ```
+
+Configure Mise shell activation if you want to run `vp` without the `mise exec --` prefix.
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR.
 

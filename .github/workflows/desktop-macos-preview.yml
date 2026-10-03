@@ -49,13 +49,10 @@ jobs:
           git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach FETCH_HEAD
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: false
-
+          install_args: --locked node pnpm npm:vite-plus
       - name: Install bundle dependencies
         run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
 

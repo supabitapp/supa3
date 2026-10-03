@@ -2,13 +2,16 @@
 
 ## First checkout
 
-Install `vp` using the [root README](../../README.md#install-vp). The checkout requires Node 24;
-Bun is optional. From the repository root:
+Install Mise using the [root README](../../README.md#install-the-development-toolchain). From the
+repository root:
 
 ```sh
-vp i
-vp run dev
+mise install --locked node pnpm npm:vite-plus
+mise exec -- vp i
+mise exec -- vp run dev
 ```
+
+Configure Mise shell activation if you want to run `vp` directly.
 
 Open the pairing URL printed by the dev runner. The bare origin does not authenticate
 a new browser.

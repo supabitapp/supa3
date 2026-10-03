@@ -41,12 +41,13 @@ Node.js for `npx`).
 ### Intel Macs
 
 There is no `supa3` executable for Intel Macs (the desktop app is available). To
-run a server there, build it from source with Node.js 24 and `vp`
-([Install vp](https://github.com/pingdotgg/t3code#install-vp)):
+run a server there, build it from source with the Mise-managed toolchain:
+
+Install Mise using the [development toolchain instructions](../../README.md#install-the-development-toolchain) first.
 
 ```bash
 git clone https://github.com/pingdotgg/t3code
-cd t3code && vp i && vp run build:desktop
+cd t3code && mise install --locked node pnpm npm:vite-plus && mise exec -- vp i && mise exec -- vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 

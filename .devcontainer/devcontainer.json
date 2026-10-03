@@ -1,6 +1,3 @@
-// Dev container for T3 Code. Mirrors CI (ubuntu-24.04, Node 24, Rust stable)
-// and the canonical setup in docs/operations/development.md: global `vp`, `vp i`.
-// Contributor doc: docs/internals/devcontainer.md
 {
   "name": "T3 Code",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
@@ -25,8 +22,11 @@
     // the worktree default. An explicit --home-dir still wins.
     "SUPA3_HOME": "${containerWorkspaceFolder}/.t3"
   },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/share/mise/shims:${containerEnv:PATH}"
+  },
   "mounts": [
-    // vp keeps the pnpm content-addressable store and metadata cache under
+    // pnpm keeps the content-addressable store and metadata cache under
     // ~/.cache/pnpm (verified: the v11 store dir lives there); mounting a
     // volume there lets installs survive container rebuilds.
     "source=supa3-pnpm-store,target=/home/vscode/.cache/pnpm,type=volume",

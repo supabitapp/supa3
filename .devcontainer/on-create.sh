@@ -1,28 +1,20 @@
 #!/usr/bin/env bash
-# One-time container setup, baked into prebuilds. Content-dependent work
-# (dependency install, Chromium) lives in update-content.sh.
 set -euo pipefail
 
-# The Vite+ CLI is the repo task runner (vp i, vp run dev, vp test run).
-# Download to a file first: a curl failure inside $( ) would yield an empty
-# script and a false success. VP_NODE_MANAGER=no skips the installer's node
-# shims; Node comes from the devcontainer feature. The VP_*_DIR group (set
-# together, absolute) pins the install location instead of the installer's
-# XDG platform defaults, which moved the binary from ~/.vite-plus/bin to
-# ~/.local/share/vite-plus/bin between releases and would break the check
-# below either way.
-export VP_BIN_DIR="$HOME/.local/share/vite-plus/bin"
-export VP_DATA_DIR="$HOME/.local/share/vite-plus"
-export VP_CACHE_DIR="$HOME/.cache/vite-plus"
-installer=$(mktemp)
-curl -fsSL https://vite.plus -o "$installer"
-VP_NODE_MANAGER=no bash "$installer"
-rm -f "$installer"
+if ! command -v mise >/dev/null 2>&1; then
+  curl -fsSL https://mise.run | sh
+fi
 
-# Non-login lifecycle shells never source the profile the installer edits,
-# so expose vp on the default PATH. test -x keeps a bad install loud.
-test -x "$VP_BIN_DIR/vp"
-sudo ln -sf "$VP_BIN_DIR/vp" /usr/local/bin/vp
+export PATH="$HOME/.local/bin:$PATH"
+sudo ln -sf "$(command -v mise)" /usr/local/bin/mise
+mise install --locked node pnpm npm:vite-plus
+mise reshim
+mise exec -- vp install
+
+activation='eval "$(mise activate bash)"'
+if ! grep -Fqx "$activation" "$HOME/.bashrc" 2>/dev/null; then
+  printf '%s\n' "$activation" >> "$HOME/.bashrc"
+fi
 
 # First-run terminal notice, rendered by the devcontainers base image.
 sudo mkdir -p /usr/local/etc/vscode-dev-containers

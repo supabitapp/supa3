@@ -44,24 +44,14 @@ jobs:
           # `git clone --depth 1 file://<workspace>`, which fails (exit 128)
           # when the partial clone can't serve the unfetched blobs.
 
-      - name: Setup Vite+
+      - name: Setup Mise
         if: steps.expo-token.outputs.present == 'true'
-        uses: voidzero-dev/setup-vp@v1
+        uses: jdx/mise-action@v4
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@t3tools/mobile...
-
-      - name: Expose pnpm
+          install_args: --locked node pnpm npm:vite-plus
+      - name: Install workspace dependencies
         if: steps.expo-token.outputs.present == 'true'
-        run: |
-          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
-          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
-          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
-          "$vp_pnpm_bin/pnpm" --version
-
+        run: mise exec -- vp install --filter=@t3tools/mobile...
       - name: Setup EAS
         if: steps.expo-token.outputs.present == 'true'
         uses: expo/expo-github-action@v8
