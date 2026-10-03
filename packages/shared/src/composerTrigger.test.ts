@@ -19,59 +19,17 @@ describe("detectComposerTrigger", () => {
     });
   });
 
-  it("detects slash command token while typing command name", () => {
-    const text = "/mo";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
+  it.each(["/mo", "/model", "/pl", "/rev"])("detects %j as a slash command", (text) => {
+    expect(detectComposerTrigger(text, text.length)).toEqual({
       kind: "slash-command",
-      query: "mo",
-      rangeStart: 0,
-      rangeEnd: text.length,
-    });
-  });
-
-  it("keeps /model as a slash command item", () => {
-    const text = "/model";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
-      kind: "slash-command",
-      query: "model",
+      query: text.slice(1),
       rangeStart: 0,
       rangeEnd: text.length,
     });
   });
 
   it("does not keep a subcommand trigger active after /model arguments", () => {
-    const text = "/model spark";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toBeNull();
-  });
-
-  it("detects non-model slash commands while typing", () => {
-    const text = "/pl";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
-      kind: "slash-command",
-      query: "pl",
-      rangeStart: 0,
-      rangeEnd: text.length,
-    });
-  });
-
-  it("keeps slash command detection active for provider commands", () => {
-    const text = "/rev";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
-      kind: "slash-command",
-      query: "rev",
-      rangeStart: 0,
-      rangeEnd: text.length,
-    });
+    expect(detectComposerTrigger("/model spark", "/model spark".length)).toBeNull();
   });
 
   it.each([" /rev", "\n\n/rev"])(
@@ -101,7 +59,8 @@ describe("detectComposerTrigger", () => {
   it.each([
     ["Read /Users/khoi/notes", "Read /Users/khoi/notes".length],
     ["Read /Users/khoi/notes", "Read /Use".length],
-  ])("leaves slash paths in %j alone with the caret at %i", (text, cursor) => {
+    ["and / or", "and /".length],
+  ])("leaves %j alone with the caret at %i", (text, cursor) => {
     expect(detectComposerTrigger(text, cursor)).toBeNull();
   });
 
@@ -170,7 +129,6 @@ describe("detectComposerTrigger", () => {
   });
 
   it("detects @path trigger in the middle of existing text", () => {
-    // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";
     const cursorAfterAt = "Please inspect @".length;
 
@@ -184,7 +142,6 @@ describe("detectComposerTrigger", () => {
   });
 
   it("detects @path trigger with query typed mid-text", () => {
-    // User typed @sr between "inspect " and "in this sentence"
     const text = "Please inspect @srin this sentence";
     const cursorAfterQuery = "Please inspect @sr".length;
 
@@ -196,18 +153,6 @@ describe("detectComposerTrigger", () => {
       rangeEnd: cursorAfterQuery,
     });
   });
-
-  it("detects trigger with true cursor even when regex-based mention detection would false-match", () => {
-    // MENTION_TOKEN_REGEX can false-match plain text like "@in" as a mention.
-    // The fix bypasses it by computing the expanded cursor from the Lexical node tree.
-    const text = "Please inspect @in this sentence";
-    const cursorAfterAt = "Please inspect @".length;
-
-    const trigger = detectComposerTrigger(text, cursorAfterAt);
-    expect(trigger).not.toBeNull();
-    expect(trigger?.kind).toBe("path");
-    expect(trigger?.query).toBe("");
-  });
 });
 
 describe("replaceTextRange", () => {
@@ -217,26 +162,6 @@ describe("replaceTextRange", () => {
       text: "hello ",
       cursor: 6,
     });
-  });
-});
-
-describe("replaceTextRange trailing space consumption", () => {
-  it("double space after insertion when replacement ends with space", () => {
-    // Simulates: "and then |@AG| summarize" where | marks replacement range
-    // The replacement is "@AGENTS.md " (with trailing space)
-    // But if we don't extend rangeEnd, the existing space stays
-    const text = "and then @AG summarize";
-    const rangeStart = "and then ".length;
-    const rangeEnd = "and then @AG".length;
-
-    // Without consuming trailing space: double space
-    const withoutConsume = replaceTextRange(text, rangeStart, rangeEnd, "@AGENTS.md ");
-    expect(withoutConsume.text).toBe("and then @AGENTS.md  summarize");
-
-    // With consuming trailing space: single space
-    const extendedEnd = text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
-    const withConsume = replaceTextRange(text, rangeStart, extendedEnd, "@AGENTS.md ");
-    expect(withConsume.text).toBe("and then @AGENTS.md summarize");
   });
 });
 

@@ -40,16 +40,15 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
-import { mobilePreferencesAtom } from "../../state/preferences";
+import { showSkillsInSlashMenuAtom } from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
-import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { matchesCommandMenuSkillQuery } from "./composerCommandMenuSkillSearch";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 
@@ -300,10 +299,7 @@ export function useComposerCommandMenu({
     selectedProviderInstanceId,
   ]);
 
-  const preferencesResult = useAtomValue(mobilePreferencesAtom);
-  const showSkillsInSlashMenu =
-    !AsyncResult.isSuccess(preferencesResult) ||
-    preferencesResult.value.showSkillsInSlashMenu !== false;
+  const showSkillsInSlashMenu = useAtomValue(showSkillsInSlashMenuAtom);
   const trigger = useMemo(() => {
     if (!enabled || selection.start !== selection.end) {
       return null;
@@ -364,7 +360,7 @@ export function useComposerCommandMenu({
       });
 
       const skillItems = visibleSkills
-        .filter((skill) => matchesSlashSkillQuery(skill, q))
+        .filter((skill) => matchesCommandMenuSkillQuery(skill, q))
         .map((skill) => ({
           id: `skill:${skill.name}`,
           type: "skill" as const,
@@ -376,10 +372,10 @@ export function useComposerCommandMenu({
       return [...commandItems, ...skillItems];
     }
 
-    if (trigger.kind === "slash-skill" && !showSkillsInSlashMenu) {
-      return [];
-    }
-    if (trigger.kind === "skill" || trigger.kind === "slash-skill") {
+    if (
+      trigger.kind === "skill" ||
+      (trigger.kind === "slash-skill" && showSkillsInSlashMenu)
+    ) {
       const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,

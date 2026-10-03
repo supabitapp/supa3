@@ -151,7 +151,7 @@ const CommandRow = memo(function CommandRow(props: {
   readonly item: ComposerCommandItem;
   readonly onPress: () => void;
   readonly isLast: boolean;
-  readonly isSlashSkill: boolean;
+  readonly isCommandMenuSkill: boolean;
 }) {
   const iconName = itemIcon(props.item);
 
@@ -173,7 +173,7 @@ const CommandRow = memo(function CommandRow(props: {
         />
       ) : null}
       <Text className="shrink-0 text-base font-t3-medium text-foreground" numberOfLines={1}>
-        {props.isSlashSkill && props.item.type === "skill" ? (
+        {props.isCommandMenuSkill && props.item.type === "skill" ? (
           <>
             <Text className="text-foreground-muted">skill:</Text>
             {props.item.skill.name}
@@ -217,7 +217,7 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
               item={item}
               onPress={() => props.onSelect(item)}
               isLast={index === props.items.length - 1}
-              isSlashSkill={props.triggerKind === "slash-command" && item.type === "skill"}
+              isCommandMenuSkill={props.triggerKind === "slash-command" && item.type === "skill"}
             />
           ))}
         </ScrollView>

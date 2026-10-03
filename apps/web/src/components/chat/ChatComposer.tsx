@@ -2658,10 +2658,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         query,
       );
     }
-    if (composerTrigger.kind === "slash-skill" && !settings.showSkillsInSlashMenu) {
-      return [];
-    }
-    if (composerTrigger.kind === "skill" || composerTrigger.kind === "slash-skill") {
+    if (
+      composerTrigger.kind === "skill" ||
+      (composerTrigger.kind === "slash-skill" && settings.showSkillsInSlashMenu)
+    ) {
       return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
         id: `skill:${selectedProvider}:${skill.name}`,
         type: "skill" as const,
@@ -3374,27 +3374,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       setComposerHighlightedSearchKey(null);
       return;
     }
-    const nextActiveItemId = resolveComposerMenuActiveItemId({
-      items: composerMenuItems,
-      highlightedItemId: composerHighlightedItemId,
-      currentSearchKey: composerMenuSearchKey,
-      highlightedSearchKey: composerHighlightedSearchKey,
-      defaultToFirst: !isSlashSkillTrigger,
-    });
+    const nextActiveItemId = activeComposerMenuItem?.id ?? null;
     setComposerHighlightedItemId((existing) =>
       existing === nextActiveItemId ? existing : nextActiveItemId,
     );
     setComposerHighlightedSearchKey((existing) =>
       existing === composerMenuSearchKey ? existing : composerMenuSearchKey,
     );
-  }, [
-    composerHighlightedItemId,
-    composerHighlightedSearchKey,
-    composerMenuItems,
-    composerMenuOpen,
-    composerMenuSearchKey,
-    isSlashSkillTrigger,
-  ]);
+  }, [activeComposerMenuItem, composerMenuOpen, composerMenuSearchKey]);
 
   const lastSyncedPendingInputRef = useRef<{
     requestId: string | null;
@@ -4043,10 +4030,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const onComposerMenuItemHighlighted = useCallback(
     (itemId: string | null) => {
+      if (isSlashSkillTrigger) return;
       setComposerHighlightedItemId(itemId);
       setComposerHighlightedSearchKey(composerMenuSearchKey);
     },
-    [composerMenuSearchKey],
+    [composerMenuSearchKey, isSlashSkillTrigger],
   );
 
   const nudgeComposerMenuHighlight = useCallback(
@@ -4357,8 +4345,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return true;
     }
     const { trigger } = resolveActiveComposerTrigger();
-    const isSlashSkill = trigger?.kind === "slash-skill";
-    const menuIsActive = composerMenuOpenRef.current || (trigger !== null && !isSlashSkill);
+    const menuIsActive =
+      composerMenuOpenRef.current || (trigger !== null && trigger.kind !== "slash-skill");
     if (key === "Escape") {
       if (!menuIsActive || event.isComposing || event.keyCode === 229) return false;
       dismissComposerTrigger(trigger);
@@ -4367,8 +4355,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (menuIsActive && (submissionIntent === null || submissionIntent === "foreground")) {
       const currentItems = composerMenuItemsRef.current;
-      const selectedItem =
-        activeComposerMenuItemRef.current ?? (isSlashSkill ? undefined : currentItems[0]);
+      const selectedItem = activeComposerMenuItemRef.current;
       if (key === "ArrowDown" && currentItems.length > 0) {
         nudgeComposerMenuHighlight("ArrowDown");
         return true;

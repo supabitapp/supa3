@@ -15,7 +15,7 @@ vi.mock("../../state/server", () => ({
   serverEnvironment: { refreshProviders: Symbol("refreshProviders") },
 }));
 vi.mock("../../state/preferences", () => ({
-  mobilePreferencesAtom: Symbol("mobilePreferences"),
+  showSkillsInSlashMenuAtom: Symbol("showSkillsInSlashMenu"),
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: () => vi.fn(),

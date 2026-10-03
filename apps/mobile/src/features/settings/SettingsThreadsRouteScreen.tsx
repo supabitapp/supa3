@@ -9,7 +9,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { supportsSharedSettingsSync } from "@t3tools/client-runtime/state/shared-settings";
 import { AppText as Text } from "../../components/AppText";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import {
+  mobilePreferencesAtom,
+  showSkillsInSlashMenuAtom,
+  updateMobilePreferencesAtom,
+} from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
@@ -242,16 +246,14 @@ function AutoSettleSettingsRows() {
 
 function ComposerSettingsSection() {
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const preferences = useAtomValue(mobilePreferencesAtom);
-  const showSkillsInSlashMenu =
-    !AsyncResult.isSuccess(preferences) || preferences.value.showSkillsInSlashMenu !== false;
+  const showSkillsInSlashMenu = useAtomValue(showSkillsInSlashMenuAtom);
 
   return (
     <SettingsSection title="Composer">
       <SettingsSwitchRow
         icon="terminal"
         label="Show skills in slash menu"
-        subtitle="Skills always appear when you type $."
+        subtitle="Show skills when you type /. Skills always appear when you type $."
         value={showSkillsInSlashMenu}
         onValueChange={(value) => savePreferences({ showSkillsInSlashMenu: value })}
       />

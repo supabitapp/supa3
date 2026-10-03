@@ -67,20 +67,29 @@ function tokenEndForCursor(text: string, cursor: number): number {
  */
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
-  const promptPrefix = text.slice(0, cursor);
-  const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
-  const commandMatch = /^\/(\S*)$/.exec(promptPrefix.slice(commandStart));
-  if (commandMatch) {
-    return {
-      kind: "slash-command",
-      query: commandMatch[1] ?? "",
-      rangeStart: commandStart,
-      rangeEnd: cursor,
-    };
-  }
-
   const tokenStart = tokenStartForCursor(text, cursor);
   const token = text.slice(tokenStart, cursor);
+  if (token.startsWith("/")) {
+    if ([...text.slice(0, tokenStart)].every(isWhitespace)) {
+      return {
+        kind: "slash-command",
+        query: token.slice(1),
+        rangeStart: tokenStart,
+        rangeEnd: cursor,
+      };
+    }
+    const word = text.slice(tokenStart, tokenEndForCursor(text, cursor));
+    if (token.length > 1 && !word.slice(1).includes("/")) {
+      return {
+        kind: "slash-skill",
+        query: token.slice(1),
+        rangeStart: tokenStart,
+        rangeEnd: cursor,
+      };
+    }
+    return null;
+  }
+
   const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
   if (pullRequestMatch) {
     return {
@@ -95,17 +104,6 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
     return {
       kind: "skill",
       query: token.slice(skillPrefix[0].length),
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  }
-  if (
-    token.startsWith("/") &&
-    !text.slice(tokenStart + 1, tokenEndForCursor(text, cursor)).includes("/")
-  ) {
-    return {
-      kind: "slash-skill",
-      query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
