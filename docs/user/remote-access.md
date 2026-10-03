@@ -17,6 +17,9 @@ and both devices need an internet connection. Paired clients reconnect after
 an interruption without a new pairing link. Requests interrupted in flight can
 fail; check their result before retrying an action.
 
+File transfers must finish within one minute. On slow connections, use smaller
+files. Interrupted transfers start again from the beginning when retried.
+
 Turn **Public relay** off to disconnect relay clients. Turn it back on to let
 previously paired devices reconnect, or revoke a device under **Authorized
 clients** to remove its access permanently.
