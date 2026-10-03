@@ -443,7 +443,10 @@ const recordScenario = Effect.fn("recordGrokScenario")(function* (fixtureName: s
   };
 
   const tee = makeWireTee();
-  const settings = { ...DEFAULT_GROK_SETTINGS, binaryPath: process.env.SUPACODE_GROK_BIN ?? "grok" };
+  const settings = {
+    ...DEFAULT_GROK_SETTINGS,
+    binaryPath: process.env.SUPACODE_GROK_BIN ?? "grok",
+  };
   const registryLayer = ProviderAdapterRegistry.makeLayerEffect(
     Effect.gen(function* () {
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -569,7 +572,7 @@ const recordScenario = Effect.fn("recordGrokScenario")(function* (fixtureName: s
       generatedBy: "live-grok-recorder",
       grokVersion: initializeMeta.agentVersion ?? "unknown",
       normalization:
-        "Session ids are fixed UUIDs, the workspace is <workspace>, HOME is /home/grok-replay and the recording user is grok-replay. supacode-owned prompt text, MCP servers and initialize params other than clientCapabilities and _meta are <any>. Personal skills, machine identity, account settings and announcement broadcasts are removed, as are responses to Grok-internal request ids that Supacode's protocol drops. Timestamps are kept as recorded.",
+        "Session ids are fixed UUIDs, the workspace is <workspace>, HOME is /home/grok-replay and the recording user is grok-replay. Supacode-owned prompt text, MCP servers and initialize params other than clientCapabilities and _meta are <any>. Personal skills, machine identity, account settings and announcement broadcasts are removed, as are responses to Grok-internal request ids that Supacode's protocol drops. Timestamps are kept as recorded.",
       droppedFrames,
     },
     entries: [

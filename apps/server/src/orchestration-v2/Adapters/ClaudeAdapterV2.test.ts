@@ -467,7 +467,7 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
 
 describe("ClaudeAdapterV2 MCP query overrides", () => {
   const SUPACODE_MCP_SERVERS = {
-    Supacode: {
+    supacode: {
       type: "http",
       url: "http://127.0.0.1:43123/mcp",
       headers: {
@@ -560,7 +560,9 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
         ],
         mcpServers: SUPACODE_MCP_SERVERS,
       });
-      assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_WILDCARD));
+      assert.isFalse(
+        overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_WILDCARD),
+      );
     });
   });
 
@@ -685,7 +687,7 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
       assert.deepEqual(overrides, {
         allowedTools: ["Read", "mcp__supacode__*"],
         mcpServers: {
-          Supacode: {
+          supacode: {
             type: "http",
             url: "http://127.0.0.1:43123/mcp",
             headers: {

@@ -146,7 +146,9 @@ export const repointLauncher = Effect.fn("cli.update.repoint_launcher")(function
       .pipe(
         Effect.mapError(
           () =>
-            new CliUpdateError({ reason: `Could not rewrite the Supacode launcher at ${shimPath}.` }),
+            new CliUpdateError({
+              reason: `Could not rewrite the Supacode launcher at ${shimPath}.`,
+            }),
         ),
       );
     return Option.some(shimPath);
@@ -438,8 +440,8 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   if (executableCurrent && serviceCurrent) {
     yield* Console.log(
       serviceVersion !== undefined
-        ? `supacode and its background service are already on ${targetVersion} (${targetChannel}).`
-        : `supacode is already on ${targetVersion} (${targetChannel}).`,
+        ? `Supacode and its background service are already on ${targetVersion} (${targetChannel}).`
+        : `Supacode is already on ${targetVersion} (${targetChannel}).`,
     );
     return;
   }
@@ -462,8 +464,8 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
       : executableCurrent
         ? `Updating the background service ${serviceVersion ?? "(unknown version)"} -> ${targetVersion} (${targetChannel}).`
         : alreadyOnDisk
-          ? "Switching supacode"
-          : "Updating supacode",
+          ? "Switching Supacode"
+          : "Updating Supacode",
     executableCurrent
       ? ""
       : `${currentVersion} → ${targetVersion}${targetChannel === "stable" ? "" : ` (${targetChannel})`}`,
@@ -510,14 +512,14 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
         .pipe(
           Effect.mapError(
             (cause) =>
-              new PinnedRuntimeInstallError({ step: "verifying the downloaded supacode", cause }),
+              new PinnedRuntimeInstallError({ step: "verifying the downloaded Supacode", cause }),
           ),
           Effect.flatMap((result) =>
             result.code === 0 && /\bv(\S+)\s*$/.exec(result.stdout)?.[1] === targetVersion
               ? Effect.void
               : Effect.fail(
                   new PinnedRuntimeInstallError({
-                    step: "verifying the downloaded supacode",
+                    step: "verifying the downloaded Supacode",
                     exitCode: Number(result.code),
                   }),
                 ),

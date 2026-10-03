@@ -66,7 +66,7 @@ export function formatServiceStatus(
   cliVersion: string,
 ): string {
   if (!status.supported) {
-    return "supacode service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
+    return "Supacode service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
   }
   if (!status.installed) {
     return "supacode service\n  Status: not installed\n  Next: Run `supacode service install`.";
@@ -81,7 +81,7 @@ export function formatServiceStatus(
     compareExactServiceVersions(status.installedVersion, cliVersion) > 0
   ) {
     return [
-      "supacode service",
+      "Supacode service",
       `  Status: installed · supacode@${installedVersion} (newer than this supacode@${cliVersion} CLI)`,
       `  Unit: ${status.unitPath}`,
       `  Logs: ${status.logPath}`,
@@ -90,7 +90,7 @@ export function formatServiceStatus(
     ].join("\n");
   }
   return [
-    "supacode service",
+    "Supacode service",
     `  Status: ${status.current ? `installed · supacode@${installedVersion}` : "needs an update or repair"}`,
     `  Unit: ${status.unitPath}`,
     `  Logs: ${status.logPath}`,
@@ -125,7 +125,7 @@ const serviceInstallCommand = Command.make("install", serviceReconcileFlags).pip
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
           yield* Console.log(
-            `supacode service is already installed with supacode@${packageJson.version}.`,
+            `Supacode service is already installed with supacode@${packageJson.version}.`,
           );
           return;
         }
@@ -151,7 +151,7 @@ const serviceUpdateCommand = Command.make("update", serviceReconcileFlags).pipe(
         );
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
-          yield* Console.log(`supacode service is already using supacode@${packageJson.version}.`);
+          yield* Console.log(`Supacode service is already using supacode@${packageJson.version}.`);
           return;
         }
         yield* Console.log(
@@ -176,7 +176,7 @@ const serviceRestartCommand = Command.make("restart", projectLocationFlags).pipe
         yield* Console.log(
           restarted
             ? `Restarted the Supacode service${status.installedVersion === undefined ? "" : ` on supacode@${status.installedVersion}`}.`
-            : "supacode service is not installed.",
+            : "Supacode service is not installed.",
         );
       }),
     ),
@@ -192,7 +192,7 @@ const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).
         const service = yield* BootService.BootService;
         const removed = yield* service.uninstall;
         yield* Console.log(
-          removed ? "Removed the Supacode service." : "supacode service is not installed.",
+          removed ? "Removed the Supacode service." : "Supacode service is not installed.",
         );
       }),
     ),

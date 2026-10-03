@@ -18,7 +18,7 @@ describe("buildCodexDeveloperInstructions", () => {
       buildCodexDeveloperInstructions("default"),
       /^<collaboration_mode># Collaboration Mode: Default/,
     );
-    NodeAssert.match(instructions, /supacode/);
+    NodeAssert.match(instructions, /Supacode/);
     NodeAssert.match(instructions, /Codex harness/);
     NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
   });
@@ -70,13 +70,13 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 });
 
-describe("supacode browser developer instructions", () => {
+describe("Supacode browser developer instructions", () => {
   const runtime = { model: "gpt-5.3-codex", reasoningEffort: "high" };
 
   it("prefers the product-native preview tools in both collaboration modes", () => {
     {
       const instructions = toolInstructions(runtime, true);
-      NodeAssert.match(instructions, /supacode/);
+      NodeAssert.match(instructions, /Supacode/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
@@ -88,7 +88,7 @@ describe("supacode browser developer instructions", () => {
       const instructions = toolInstructions(runtime, false);
       NodeAssert.doesNotMatch(instructions, /preview_status/);
       NodeAssert.doesNotMatch(instructions, /preview_open/);
-      NodeAssert.doesNotMatch(instructions, /supacode collaborative browser/);
+      NodeAssert.doesNotMatch(instructions, /Supacode collaborative browser/);
       // Steering away from other browser automation must go with the tools;
       // keeping it would leave the model talked out of its only option.
       NodeAssert.doesNotMatch(instructions, /Do not switch to global browser skills/);

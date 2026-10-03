@@ -77,7 +77,6 @@ const labelled = (entry: ProviderReplayEntry, label: string): ProviderReplayEntr
  */
 const mcpRules = (name: string) => [
   { action: "supacode-*", resource: "*", effect: "deny" },
-  { action: "supacode-*", resource: "*", effect: "deny" },
   { action: `supacode-thread_${name}_*`, resource: "*", effect: "allow" },
 ];
 const FULL_ACCESS = [{ action: "*", resource: "*", effect: "allow" }];

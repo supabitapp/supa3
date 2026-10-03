@@ -98,7 +98,7 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
   // The user manager has no reliable network-online target; server networking retries itself.
   return [
     "[Unit]",
-    "Description=supacode server",
+    "Description=Supacode server",
     "StartLimitIntervalSec=300",
     "StartLimitBurst=5",
     "",
@@ -782,7 +782,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             Effect.mapError(
               (cause) =>
                 new PinnedRuntimeInstallError({
-                  step: "verifying the pinned supacode runtime",
+                  step: "verifying the pinned Supacode runtime",
                   cause,
                 }),
             ),
@@ -792,7 +792,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
                 ? Effect.void
                 : Effect.fail(
                     new PinnedRuntimeInstallError({
-                      step: "verifying the pinned supacode runtime",
+                      step: "verifying the pinned Supacode runtime",
                       exitCode: Number(result.code),
                       stdoutLength: result.stdout.length,
                       stderrLength: result.stderr.length,

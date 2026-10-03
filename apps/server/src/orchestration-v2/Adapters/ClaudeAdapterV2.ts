@@ -927,7 +927,7 @@ export const CLAUDE_READ_ONLY_SUPACODE_MCP_ALLOWED_TOOLS: ReadonlyArray<string> 
 export const CLAUDE_SUPACODE_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
 
 // The SDK's `allowedTools` only pre-approves tool calls; availability is the
-// separate `tools` option. Attaching the supacode MCP server therefore always
+// separate `tools` option. Attaching the Supacode MCP server therefore always
 // pre-approves its tools (headless modes like `dontAsk` deny anything that is
 // not pre-approved), but read-only sandboxes pre-approve only the annotated
 // read-only orchestrator tools so a read-only session cannot silently spawn
@@ -950,7 +950,7 @@ export function claudeMcpQueryOverrides(input: {
   return {
     allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
     mcpServers: {
-      Supacode: {
+      supacode: {
         type: "http",
         url: session.endpoint,
         headers: {
@@ -1332,7 +1332,9 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
 // Stable per run attempt, so a replayed prompt offer matches its recording.
 // Claude echoes it back as user_message_uuid on the turn that answers it.
 export function claudePromptUuid(attemptId: string): NonNullable<SDKUserMessage["uuid"]> {
-  const hex = NodeCrypto.createHash("sha256").update(`supacode-claude-prompt:${attemptId}`).digest("hex");
+  const hex = NodeCrypto.createHash("sha256")
+    .update(`supacode-claude-prompt:${attemptId}`)
+    .digest("hex");
   const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }

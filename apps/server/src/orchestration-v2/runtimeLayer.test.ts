@@ -1672,7 +1672,10 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.instanceOf(staleWorkspaceUpdate, Orchestrator.OrchestratorDispatchError);
       const projectionAfterStaleWorkspaceUpdate = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projectionAfterStaleWorkspaceUpdate.thread.branch, "feature/v2");
-      assert.equal(projectionAfterStaleWorkspaceUpdate.thread.worktreePath, "/tmp/supacode-v2-worktree");
+      assert.equal(
+        projectionAfterStaleWorkspaceUpdate.thread.worktreePath,
+        "/tmp/supacode-v2-worktree",
+      );
       const pullRequestSnapshot = yield* orchestrator.getShellSnapshot();
       const pullRequest = {
         projectId,
@@ -2021,7 +2024,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
           commandId: CommandId.make(`branch-pr-link-${index}`),
           threadId,
           host: "GitHub.com",
-          repository: "Pingdotgg/Supacode",
+          repository: "SupabitApp/Supacode",
           number,
           url: `https://github.com/supabitapp/supacode/pull/${number}`,
           source: "manual",
@@ -2076,7 +2079,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         branch: null,
         worktreePath: null,
       });
-      const key = { host: "GitHub.com", repository: "Pingdotgg/Supacode" };
+      const key = { host: "GitHub.com", repository: "SupabitApp/Supacode" };
       for (const number of [1, 2]) {
         yield* orchestrator.dispatch({
           type: "thread.pull-request.link",

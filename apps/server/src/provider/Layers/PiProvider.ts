@@ -314,7 +314,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
         version: null,
         status: "error",
         auth: { status: "unknown" },
-        message: `supacode could not determine the Pi version. Pi ${MINIMUM_PI_VERSION} or newer is required.`,
+        message: `Supacode could not determine the Pi version. Pi ${MINIMUM_PI_VERSION} or newer is required.`,
       },
     });
   }

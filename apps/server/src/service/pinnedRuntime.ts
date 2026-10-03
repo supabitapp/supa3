@@ -21,7 +21,7 @@ import {
 import * as ProcessRunner from "../processRunner.ts";
 
 /**
- * A pinned runtime is an exact supacode release archive unpacked into
+ * A pinned runtime is an exact Supacode release archive unpacked into
  * <baseDir>/runtime/versions/<version>: the self-contained executable, the
  * web client, and the native packages beside it. The boot service points its
  * unit or launch agent at the executable, and server self-update installs the
@@ -104,7 +104,7 @@ export type PinnedRuntimeProgress =
   | { readonly stage: "verify" | "extract" | "validate" | "cached" };
 
 /**
- * Installs the supacode release archive for `version` into the pinned runtime
+ * Installs the Supacode release archive for `version` into the pinned runtime
  * directory unless a complete install is already there, and returns its
  * paths. The sentinel is written only after extraction and validation
  * succeed; checking the entry file alone is not enough, since tar writes the

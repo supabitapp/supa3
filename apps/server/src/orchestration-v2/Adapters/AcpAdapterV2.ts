@@ -659,7 +659,7 @@ function negotiatedCapabilities(
     },
     tools: {
       ...base.tools,
-      // The stdio bridge (`supacode acp-mcp-bridge`) makes the supacode MCP toolkit
+      // The stdio bridge (`supacode acp-mcp-bridge`) makes the Supacode MCP toolkit
       // available regardless of the agent's optional http/sse MCP support.
       supportsMcpTools: true,
     },
@@ -1617,7 +1617,9 @@ export function makeAcpAdapterV2(
           yield* Ref.make<AcpSessionRuntime.AcpSessionRuntimeStartResult | null>(null);
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
-        const promptInstructionStates = yield* Ref.make(new Map<string, SupacodeAcpInstructionState>());
+        const promptInstructionStates = yield* Ref.make(
+          new Map<string, SupacodeAcpInstructionState>(),
+        );
         const runtimeRestartRequired = yield* Ref.make(false);
         const runtimeTeardownState = yield* Ref.make<AcpRuntimeTeardownState>({ _tag: "Idle" });
         const runtimeCallbackGeneration = yield* Ref.make(0);

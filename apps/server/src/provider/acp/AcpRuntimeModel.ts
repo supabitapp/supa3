@@ -1082,14 +1082,14 @@ function acpMcpFallbackInput(value: string | undefined): Record<string, unknown>
 /**
  * Agents flatten injected MCP tools into model-facing function names with no
  * shared convention (survey of the 2026-08 registry builds): Kilo and
- * opencode use `supacode_<tool>`, claude-acp and qwen `mcp__supacode__<tool>`,
- * Amp `mcp__supacode__<tool>` (hyphens mangled), droid `supacode___<tool>`,
- * Copilot `supacode-<tool>`, cline appends `: <args json>`. Supacode always injects
- * its server as "supacode", and matches are additionally gated on the known
- * Supacode tool inventory, so the separator match can stay loose.
+ * opencode use `supacode_<tool>`, claude-acp, qwen, and Amp
+ * `mcp__supacode__<tool>`, droid `supacode___<tool>`, Copilot `supacode-<tool>`,
+ * cline appends `: <args json>`. Supacode always injects its server as
+ * "supacode", and matches are additionally gated on the known Supacode tool
+ * inventory, so the separator match can stay loose.
  */
 const SUPACODE_MCP_TITLE_CALL =
-  /^(?:mcp[-_]{1,2})?(?:supacode|supacode[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
+  /^(?:mcp[-_]{1,2})?supacode[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
 
 /**
  * Gemini CLI titles injected MCP calls "<tool> (<server> MCP Server)" and
@@ -1097,7 +1097,7 @@ const SUPACODE_MCP_TITLE_CALL =
  * tool-first as "<tool>_supacode".
  */
 const SUPACODE_MCP_TITLE_SUFFIX_CALL =
-  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \((?:supacode|supacode[-_ ]?code) MCP Server\)(?::|$)|[-_.](?:supacode|supacode[-_ ]?code)$)/i;
+  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \(supacode MCP Server\)(?::|$)|[-_.]supacode$)/i;
 
 /**
  * glm-acp-agent and Kimi CLI register injected MCP tools under their bare
@@ -1147,7 +1147,7 @@ export function extractMcpToolCallIdentity(
   // its toolName identifies the call even under future prefix formats.
   const metaServerId = typeof meta?.serverId === "string" ? meta.serverId.trim() : "";
   const metaToolName = typeof meta?.toolName === "string" ? meta.toolName.trim() : "";
-  if (/^(?:supacode|supacode[-_ ]?code)$/i.test(metaServerId) && metaToolName.length > 0) {
+  if (/^supacode$/i.test(metaServerId) && metaToolName.length > 0) {
     for (const knownTool of SUPACODE_MCP_TOOL_NAMES) {
       const boundary = metaToolName.length - knownTool.length - 1;
       if (
@@ -1165,8 +1165,8 @@ export function extractMcpToolCallIdentity(
   const gooseExtension =
     typeof gooseToolCall?.extensionName === "string" ? gooseToolCall.extensionName.trim() : "";
   const assertsForeignOrigin =
-    (metaServerId.length > 0 && !/^(?:supacode|supacode[-_ ]?code)$/i.test(metaServerId)) ||
-    (gooseExtension.length > 0 && !/^(?:supacode|supacode[-_ ]?code)$/i.test(gooseExtension));
+    (metaServerId.length > 0 && !/^supacode$/i.test(metaServerId)) ||
+    (gooseExtension.length > 0 && !/^supacode$/i.test(gooseExtension));
   if (assertsForeignOrigin) {
     return undefined;
   }
@@ -1178,12 +1178,14 @@ export function extractMcpToolCallIdentity(
   ].filter((value): value is string => typeof value === "string");
   for (const candidate of candidates) {
     const trimmed = candidate.trim();
-    const match =
-      SUPACODE_MCP_TITLE_CALL.exec(trimmed) ??
-      SUPACODE_MCP_TITLE_SUFFIX_CALL.exec(trimmed) ??
-      SUPACODE_MCP_BARE_TITLE_CALL.exec(trimmed);
-    const candidateTool = match?.groups?.tool;
-    if (candidateTool !== undefined && SUPACODE_MCP_TOOL_NAMES.has(candidateTool)) {
+    const candidateTool = [
+      SUPACODE_MCP_TITLE_CALL,
+      SUPACODE_MCP_TITLE_SUFFIX_CALL,
+      SUPACODE_MCP_BARE_TITLE_CALL,
+    ]
+      .map((pattern) => pattern.exec(trimmed)?.groups?.tool)
+      .find((tool) => tool !== undefined && SUPACODE_MCP_TOOL_NAMES.has(tool));
+    if (candidateTool !== undefined) {
       return { server: "supacode", tool: candidateTool };
     }
   }

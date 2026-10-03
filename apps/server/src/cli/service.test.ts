@@ -27,7 +27,7 @@ it("reports the installed service version and host paths", () => {
   assert.equal(
     formatServiceStatus(status, "0.0.29"),
     [
-      "supacode service",
+      "Supacode service",
       "  Status: installed · supacode@0.0.29",
       "  Unit: /home/me/.config/systemd/user/supacode.service",
       "  Logs: /home/me/.supacode/userdata/logs/boot-service.log",

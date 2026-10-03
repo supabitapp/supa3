@@ -113,11 +113,13 @@ it.layer(NodeServices.layer)("service state persistence", (it) => {
     }),
   );
 
-  it.effect("a fresh launcher clears a restart deferred by Supacode update", () =>
+  it.effect("a fresh launcher clears a restart deferred by `supacode update`", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-service-launcher-restart-" });
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: "supacode-service-launcher-restart-",
+      });
       const statePath = path.join(root, "runtime", "service-state.json");
       const restartPending = path.join(root, "runtime", SERVICE_RESTART_PENDING_FILE);
       yield* writeFakeRuntime(
@@ -242,7 +244,9 @@ if (context.update?.status === "pending") {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-service-launcher-rollback-" });
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: "supacode-service-launcher-rollback-",
+      });
       const statePath = path.join(root, "runtime", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });

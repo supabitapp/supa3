@@ -876,9 +876,9 @@ describe("AcpAdapterV2", () => {
       assert.isTrue(command.prompt.startsWith("/compact"));
       assert.notInclude(command.prompt, "<supacode_instructions>");
       const firstDefault = yield* runTurn(1, defaultPolicy, "First default request.");
-      assert.include(firstDefault.prompt, "supacode interaction mode: Default");
-      assert.include(firstDefault.prompt, "supacode collaborative browser");
-      assert.include(firstDefault.prompt, "supacode orchestration");
+      assert.include(firstDefault.prompt, "Supacode interaction mode: Default");
+      assert.include(firstDefault.prompt, "Supacode collaborative browser");
+      assert.include(firstDefault.prompt, "Supacode orchestration");
       assert.notInclude(
         firstDefault.methods,
         "session/set_config_option",
@@ -891,14 +891,14 @@ describe("AcpAdapterV2", () => {
 
       const planPolicy = policy("plan");
       const firstPlan = yield* runTurn(3, planPolicy, "Plan this change.");
-      assert.include(firstPlan.prompt, "supacode interaction mode: Plan");
+      assert.include(firstPlan.prompt, "Supacode interaction mode: Plan");
       assert.include(firstPlan.methods, "session/set_config_option");
       assert.include(
         (yield* runTurn(4, planPolicy, "Continue planning.")).prompt,
         "Continue planning.",
       );
       const restoredBuild = yield* runTurn(5, defaultPolicy, "Implement the change.");
-      assert.include(restoredBuild.prompt, "supacode interaction mode: Default");
+      assert.include(restoredBuild.prompt, "Supacode interaction mode: Default");
       assert.include(
         restoredBuild.methods,
         "session/set_config_option",
@@ -2550,8 +2550,9 @@ describe("AcpAdapterV2", () => {
           ? replacementMcpServer.env
           : undefined;
       assert.equal(
-        replacementMcpEnvironment?.find((variable) => variable.name === "SUPACODE_ACP_MCP_AUTHORIZATION")
-          ?.value,
+        replacementMcpEnvironment?.find(
+          (variable) => variable.name === "SUPACODE_ACP_MCP_AUTHORIZATION",
+        )?.value,
         "Bearer rollback-target-token",
       );
       const snapshotAfterRollback = yield* runtime.readThreadSnapshot({
@@ -3235,7 +3236,9 @@ describe("AcpAdapterV2", () => {
             childProcessSpawner,
             mockAgentPath,
             environment: (runtimeOrdinal) =>
-              runtimeOrdinal === 1 ? { SUPACODE_ACP_EMIT_EMPTY_SUCCESSFUL_BASH_THEN_HANG: "1" } : {},
+              runtimeOrdinal === 1
+                ? { SUPACODE_ACP_EMIT_EMPTY_SUCCESSFUL_BASH_THEN_HANG: "1" }
+                : {},
             ownDetachedProcessGroup: true,
             protocolEvents,
           }),

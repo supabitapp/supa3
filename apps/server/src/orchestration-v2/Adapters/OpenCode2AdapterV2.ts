@@ -461,7 +461,6 @@ const mcpRules = (threadId: string | null): ReadonlyArray<Rule> =>
     ? []
     : [
         { action: "supacode-*", resource: "*", effect: "deny" },
-        { action: "supacode-*", resource: "*", effect: "deny" },
         { action: `${supacodeMcpServerName(threadId)}_*`, resource: "*", effect: "allow" },
       ];
 
@@ -651,7 +650,7 @@ const RECONCILE_TIMEOUT = "15 seconds";
 const RECONNECT_WAIT = "30 seconds";
 /** A background subagent's result when its end was lost with the event stream. */
 const LOST_BACKGROUND =
-  "supacode lost its connection to OpenCode while this subagent ran, so its result is not shown.";
+  "Supacode lost its connection to OpenCode while this subagent ran, so its result is not shown.";
 /** How long a turn waits on the directory's commands or skills before sending the text as is. */
 const INVENTORY_TIMEOUT = "5 seconds";
 const ACTIVE_CHECK_TIMEOUT = "5 seconds";
@@ -2758,7 +2757,8 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               ? {
                   status: "failed",
                   failure: makeProviderFailure({
-                    message: "OpenCode ended the turn with an error while Supacode was reconnecting.",
+                    message:
+                      "OpenCode ended the turn with an error while Supacode was reconnecting.",
                     class: "provider_error",
                   }),
                 }

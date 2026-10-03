@@ -56,7 +56,7 @@ describe("ThreadPullRequestServiceV2 project guard", () => {
               },
               provider: "github" as const,
               displayName: "supabitapp/supacode",
-              owner: "pingdotgg",
+              owner: "supabitapp",
               name: "supacode",
             });
           },
@@ -64,7 +64,9 @@ describe("ThreadPullRequestServiceV2 project guard", () => {
       );
       expect(resolvedRoot).toBe("/workspace/project");
       expect(result.repository).toBe("supabitapp/supacode");
-      expect(result.project.repositoryIdentity?.canonicalKey).toBe("github.com/supabitapp/supacode");
+      expect(result.project.repositoryIdentity?.canonicalKey).toBe(
+        "github.com/supabitapp/supacode",
+      );
     }),
   );
 

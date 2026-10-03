@@ -218,5 +218,5 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
     }
   }
   yield* Console.log("");
-  yield* Console.log("supacode is uninstalled. Thanks for trying Supacode.");
+  yield* Console.log("Supacode is uninstalled. Thanks for trying Supacode.");
 });

@@ -7,10 +7,13 @@ import {
   supacodeOrchestrationSystemPrompt,
 } from "./SupacodeOrchestrationInstructions.ts";
 
-describe("supacode orchestration provider instructions", () => {
+describe("Supacode orchestration provider instructions", () => {
   it("distinguishes delegated subagents from ordinary top-level threads", () => {
     assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "Use `delegate_task`");
-    assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level Supacode conversations");
+    assert.include(
+      SUPACODE_ORCHESTRATION_INSTRUCTIONS,
+      "ordinary top-level Supacode conversations",
+    );
     assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
     assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
   });
@@ -52,9 +55,9 @@ describe("supacode orchestration provider instructions", () => {
       state: { interactionMode: "default", hasSupacodeMcp: true },
     });
 
-    assert.include(injected, "supacode interaction mode: Default");
-    assert.include(injected, "supacode collaborative browser");
-    assert.include(injected, "supacode orchestration");
+    assert.include(injected, "Supacode interaction mode: Default");
+    assert.include(injected, "Supacode collaborative browser");
+    assert.include(injected, "Supacode orchestration");
     assert.include(injected, "<user_request>\nInspect the repository.\n</user_request>");
   });
 
@@ -63,7 +66,11 @@ describe("supacode orchestration provider instructions", () => {
     const defaultState = { interactionMode: "default", hasSupacodeMcp: true } as const;
 
     assert.equal(
-      supacodeAcpPromptWithInstructions({ prompt, state: defaultState, previousState: defaultState }),
+      supacodeAcpPromptWithInstructions({
+        prompt,
+        state: defaultState,
+        previousState: defaultState,
+      }),
       prompt,
     );
     assert.include(
@@ -72,14 +79,14 @@ describe("supacode orchestration provider instructions", () => {
         state: { ...defaultState, interactionMode: "plan" },
         previousState: defaultState,
       }),
-      "supacode interaction mode: Plan",
+      "Supacode interaction mode: Plan",
     );
     const withoutMcp = supacodeAcpPromptWithInstructions({
       prompt,
       state: { interactionMode: "default", hasSupacodeMcp: false },
     });
-    assert.include(withoutMcp, "supacode interaction mode: Default");
-    assert.notInclude(withoutMcp, "supacode collaborative browser");
-    assert.notInclude(withoutMcp, "supacode orchestration");
+    assert.include(withoutMcp, "Supacode interaction mode: Default");
+    assert.notInclude(withoutMcp, "Supacode collaborative browser");
+    assert.notInclude(withoutMcp, "Supacode orchestration");
   });
 });

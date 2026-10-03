@@ -5,7 +5,7 @@
  * `--extension`. It is written to a cache path at session open so packaged
  * AppImage builds do not need a sibling .ts file next to the bundled server.
  *
- * Do not import supacode modules from the string body. The Pi process resolves
+ * Do not import Supacode modules from the string body. The Pi process resolves
  * `@earendil-works/pi-coding-agent` and `typebox` from the user's pi install.
  */
 import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/SupacodeOrchestrationInstructions.ts";
@@ -242,7 +242,7 @@ export default async function supacodeMcpExtension(pi: ExtensionAPI) {
       toolInputSummary(event.input),
     );
     if (!approved) {
-      return { block: true, reason: \`\${event.toolName} was declined in supacode.\` };
+      return { block: true, reason: \`\${event.toolName} was declined in Supacode.\` };
     }
   });
 

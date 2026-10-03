@@ -464,33 +464,35 @@ describe("CodexAdapterV2 runtime policy", () => {
     }),
   );
 
-  it.effect("adds default-mode developer instructions when the Supacode MCP server is attached", () =>
-    Effect.gen(function* () {
-      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
-        nativeThreadId: "native-orchestration-instructions",
-        codexInput: [{ type: "text", text: "delegate this task" }],
-        runtimePolicy: {
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: null,
-        },
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5.4",
-        },
-        hasSupacodeMcp: true,
-      });
+  it.effect(
+    "adds default-mode developer instructions when the Supacode MCP server is attached",
+    () =>
+      Effect.gen(function* () {
+        const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+          nativeThreadId: "native-orchestration-instructions",
+          codexInput: [{ type: "text", text: "delegate this task" }],
+          runtimePolicy: {
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            cwd: null,
+          },
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.4",
+          },
+          hasSupacodeMcp: true,
+        });
 
-      assert.equal(params.collaborationMode?.mode, "default");
-      assert.include(
-        params.additionalContext?.supacode_orchestration?.value ?? "",
-        "Use `delegate_task`",
-      );
-      assert.include(
-        params.additionalContext?.supacode_orchestration?.value ?? "",
-        "structured object, never as JSON text",
-      );
-    }),
+        assert.equal(params.collaborationMode?.mode, "default");
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "Use `delegate_task`",
+        );
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "structured object, never as JSON text",
+        );
+      }),
   );
 
   it.effect("omits default-mode collaboration settings without the Supacode MCP server", () =>
@@ -643,7 +645,7 @@ describe("CodexAdapterV2 process spawning", () => {
           config: {
             "tools.update_plan.enabled": true,
             mcp_servers: {
-              Supacode: {
+              supacode: {
                 url: "http://127.0.0.1:43123/mcp",
                 http_headers: {
                   Authorization: "Bearer secret-codex-token",
@@ -2390,7 +2392,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           modelSelection: CODEX_TEST_MODEL_SELECTION,
           hasSupacodeMcp: true,
         });
-        assert.include(params.additionalContext?.supacode_orchestration?.value ?? "", "delegate_task");
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "delegate_task",
+        );
         const entries = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "work" });
         const transcript = makeCodexReplayTranscript({
           scenario: "restore-context",

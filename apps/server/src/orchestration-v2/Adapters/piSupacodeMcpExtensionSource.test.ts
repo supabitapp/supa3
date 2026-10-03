@@ -18,7 +18,7 @@ async function loadRequestHook(): Promise<RequestHook> {
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\nsupacodeMcpExtension(pi)`, {
     process: { env: {} },
     pi: { on: (name: string, handler: RequestHook) => handlers.set(name, handler) },
   });

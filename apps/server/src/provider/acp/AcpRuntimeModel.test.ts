@@ -1483,10 +1483,8 @@ describe("extractMcpToolCallIdentity", () => {
       "delegate_task_supacode",
       "supacode/delegate_task",
       "mcp__supacode__delegate_task",
-      "mcp__supacode__delegate_task",
       "supacode_delegate_task",
       "delegate_task (supacode MCP Server)",
-      "delegate_task_supacode",
       'delegate_task: {"mode":"async"}',
     ]) {
       const toolCall = toolCallFromUpdate({
@@ -1499,6 +1497,27 @@ describe("extractMcpToolCallIdentity", () => {
       expect(extractMcpToolCallIdentity(toolCall), title).toEqual({
         server: "supacode",
         tool: "delegate_task",
+      });
+    }
+  });
+
+  it("recovers Supacode tools whose names start with the server name", () => {
+    for (const title of [
+      "supacode_thread_send",
+      'supacode_thread_send: {"threadId":"thread-1"}',
+      "supacode_supacode_thread_send",
+      "mcp__supacode__supacode_thread_send",
+    ]) {
+      const toolCall = toolCallFromUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "prefixed-1",
+        kind: "other",
+        title,
+        status: "pending",
+      });
+      expect(extractMcpToolCallIdentity(toolCall), title).toEqual({
+        server: "supacode",
+        tool: "supacode_thread_send",
       });
     }
   });
@@ -1535,7 +1554,11 @@ describe("extractMcpToolCallIdentity", () => {
       kind: "other",
       title: "unrelated display title",
       status: "pending",
-      _meta: { toolName: "mcp::supacode::supacode_thread_send", serverId: "supacode", provenance: "mcp" },
+      _meta: {
+        toolName: "mcp::supacode::supacode_thread_send",
+        serverId: "supacode",
+        provenance: "mcp",
+      },
     });
 
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({

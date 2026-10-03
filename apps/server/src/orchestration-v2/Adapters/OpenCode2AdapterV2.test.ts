@@ -76,7 +76,6 @@ const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 /** The rules Supacode gives every session it runs, with only this thread's own Supacode MCP server allowed. */
 const mcpRules = [
   { action: "supacode-*", resource: "*", effect: "deny" },
-  { action: "supacode-*", resource: "*", effect: "deny" },
   { action: "supacode-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
 const supacodeRules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
@@ -1769,42 +1768,44 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("declines a form Supacode cannot show with the reason, instead of leaving it open", () =>
-    Effect.gen(function* () {
-      const { runtime, thread } = yield* resumed([
-        out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-        promptAccepted,
-        event("form.created", {
-          form: {
-            id: "frm_0eb79ab35001fkvFECSh3wYNVD",
+  it.effect(
+    "declines a form Supacode cannot show with the reason, instead of leaving it open",
+    () =>
+      Effect.gen(function* () {
+        const { runtime, thread } = yield* resumed([
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("form.created", {
+            form: {
+              id: "frm_0eb79ab35001fkvFECSh3wYNVD",
+              sessionID: SESSION,
+              title: "MCP authorization",
+              metadata: { kind: "mcp" },
+              fields: [
+                {
+                  key: "authorization",
+                  type: "external",
+                  url: "https://example.com/authorize",
+                  title: "Authorize",
+                },
+              ],
+            },
+          }),
+          out("session.form.cancel", {
             sessionID: SESSION,
-            title: "MCP authorization",
-            metadata: { kind: "mcp" },
-            fields: [
-              {
-                key: "authorization",
-                type: "external",
-                url: "https://example.com/authorize",
-                title: "Authorize",
-              },
-            ],
-          },
-        }),
-        out("session.form.cancel", {
-          sessionID: SESSION,
-          formID: "frm_0eb79ab35001fkvFECSh3wYNVD",
-        }),
-        reply("session.form.cancel", null),
-      ]);
-      const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
-      yield* runtime.startTurn(turnInput(thread));
-      const ended = yield* Fiber.join(terminal);
-      assert.equal(ended?.status, "failed");
-      assert.include(
-        ended?.status === "failed" ? ended.failure.message : "",
-        "asked for a link to open",
-      );
-    }).pipe(Effect.scoped),
+            formID: "frm_0eb79ab35001fkvFECSh3wYNVD",
+          }),
+          reply("session.form.cancel", null),
+        ]);
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn(turnInput(thread));
+        const ended = yield* Fiber.join(terminal);
+        assert.equal(ended?.status, "failed");
+        assert.include(
+          ended?.status === "failed" ? ended.failure.message : "",
+          "asked for a link to open",
+        );
+      }).pipe(Effect.scoped),
   );
 
   it.effect("asks a subagent's permission request on the parent thread's turn", () =>
@@ -3053,7 +3054,11 @@ describe("OpenCode2 adapter", () => {
         ...promptInto(SESSION, "msg_recorded_turn_a"),
         ...steerInto(SESSION, "msg_recorded_steer_a"),
         // The other session gets its own instructions entry before its first prompt.
-        out("session.instructions.entry.put", { sessionID: OTHER, key: "supacode", value: "<any>" }),
+        out("session.instructions.entry.put", {
+          sessionID: OTHER,
+          key: "supacode",
+          value: "<any>",
+        }),
         reply("session.instructions.entry.put", null),
         ...promptInto(OTHER, "msg_recorded_turn_b"),
         ...steerInto(OTHER, "msg_recorded_steer_b"),
@@ -3593,7 +3598,6 @@ describe("OpenCode2 adapter", () => {
           sessionID: FORK,
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
-            { action: "supacode-*", resource: "*", effect: "deny" },
             { action: "supacode-*", resource: "*", effect: "deny" },
             { action: "supacode-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
           ],

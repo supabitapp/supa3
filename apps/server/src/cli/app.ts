@@ -73,7 +73,7 @@ export class DesktopAppRequestFailedError extends Schema.TaggedError<DesktopAppR
   },
 ) {
   override get message(): string {
-    return `supacode could not open ${this.workspaceRoot} (${this.code}).`;
+    return `Supacode could not open ${this.workspaceRoot} (${this.code}).`;
   }
 }
 
@@ -178,7 +178,10 @@ function sendDesktopAppActivationRequest(input: {
 }
 
 const appEnvironment = Config.all({
-  supacodeHome: Config.String("SUPACODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  supacodeHome: Config.String("SUPACODE_HOME").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
   sshConnection: Config.String("SSH_CONNECTION").pipe(Config.option),
   sshTty: Config.String("SSH_TTY").pipe(Config.option),
 });

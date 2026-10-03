@@ -181,7 +181,7 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
   return {
     connect: (request) =>
       Effect.gen(function* () {
-        if (request.serverId !== "supacode" && request.serverId !== "supacode") {
+        if (request.serverId !== "supacode") {
           return yield* Effect.fail(
             new AcpMcpOverAcpError(`Unknown ACP MCP server "${request.serverId}".`),
           );

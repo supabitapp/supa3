@@ -55,8 +55,8 @@ function makeProject(
     },
     provider: "github",
     displayName: "supabitapp/supacode",
-    owner: "Supacode",
-    name: "Supacode",
+    owner: "supabitapp",
+    name: "supacode",
   },
 ): OrchestrationProjectShell {
   return {
@@ -226,14 +226,14 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("link_pull_request", {
-        repository: "Supacode/Other",
+        repository: "SupabitApp/Other",
         number: 7,
       });
       expect(result).toEqual({
         host: "github.com",
-        repository: "supacode/other",
+        repository: "supabitapp/other",
         number: 7,
-        url: "https://github.com/supacode/other/pull/7",
+        url: "https://github.com/supabitapp/other/pull/7",
         alreadyLinked: false,
       });
     }),
