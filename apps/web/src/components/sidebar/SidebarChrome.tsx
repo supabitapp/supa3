@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
+import { SupaWordmark } from "../SupaWordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -84,9 +85,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
-      <span className="truncate text-sm font-medium tracking-tight [text-box:trim-both_cap_alphabetic]">
-        Supa3
-      </span>
+      <SupaWordmark aria-label="Supa3" className="h-3.5 w-auto shrink-0" role="img" />
     </Link>
   );
 }
