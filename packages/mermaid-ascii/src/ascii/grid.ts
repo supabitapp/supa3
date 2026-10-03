@@ -9,11 +9,12 @@ import type {
   AsciiSubgraph,
 } from "./types.ts";
 import { gridKey } from "./types.ts";
-import { setCanvasSizeToGrid, setRoleCanvasSizeToGrid } from "./canvas.ts";
+import { setCanvasSizeToGrid } from "./canvas.ts";
 import { determinePath, determineLabelLine } from "./edge-routing.ts";
 import { analyzeEdgeBundles, processBundles } from "./edge-bundling.ts";
 import { drawBox } from "./draw.ts";
 import { getShapeDimensions } from "./shapes/index.ts";
+import { lineCount, maxLineWidth } from "./multiline-utils.ts";
 export function gridToDrawingCoord(graph: AsciiGraph, c: GridCoord, dir?: Direction): DrawingCoord {
   const target: GridCoord = dir ? { x: c.x + dir.x, y: c.y + dir.y } : c;
   let x = 0;
@@ -190,10 +191,10 @@ function calculateSubgraphBoundingBox(sg: AsciiSubgraph): void {
     maxY = Math.max(maxY, nodeMaxY);
   }
   const subgraphPadding = 2;
-  const subgraphLabelSpace = 2;
+  const subgraphLabelSpace = Math.max(2, lineCount(sg.name));
   sg.minX = minX - subgraphPadding;
   sg.minY = minY - subgraphPadding - subgraphLabelSpace;
-  sg.maxX = maxX + subgraphPadding;
+  sg.maxX = Math.max(maxX + subgraphPadding, sg.minX + maxLineWidth(sg.name) + 1);
   sg.maxY = maxY + subgraphPadding;
 }
 function ensureSubgraphSpacing(graph: AsciiGraph): void {
@@ -372,7 +373,6 @@ export function createMapping(graph: AsciiGraph): void {
     node.drawing = drawBox(node, graph);
   }
   setCanvasSizeToGrid(graph.canvas, graph.columnWidth, graph.rowHeight);
-  setRoleCanvasSizeToGrid(graph.roleCanvas, graph.columnWidth, graph.rowHeight);
   calculateSubgraphBoundingBoxes(graph);
   offsetDrawingForSubgraphs(graph);
 }

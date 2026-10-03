@@ -41,6 +41,7 @@ let renderer: ReactTestRenderer | undefined;
 beforeEach(() => {
   TestIntersectionObserver.instances = [];
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("window", {});
   vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
   vi.mocked(renderMermaidDiagram).mockReset();
 });
@@ -125,6 +126,36 @@ describe("MermaidBlock", () => {
     });
     expect(displayedText()).toBe("unsupported");
     expect(renderMermaidDiagram).toHaveBeenCalledTimes(1);
+  });
+
+  it("copies diagrams on remote HTTP pages without the Clipboard API", async () => {
+    const textarea = {
+      value: "",
+      style: {},
+      setAttribute: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      remove: vi.fn(),
+    };
+    const execCommand = vi.fn(() => true);
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("document", {
+      body: { appendChild: vi.fn() },
+      createElement: () => textarea,
+      execCommand,
+    });
+    vi.mocked(renderMermaidDiagram).mockResolvedValue("diagram");
+    await mount("graph TD\n A");
+    await act(async () => TestIntersectionObserver.instances[0]!.visible(true));
+    await act(async () =>
+      button("Copy diagram").onClick?.({} as React.MouseEvent<HTMLButtonElement>),
+    );
+    expect(execCommand).toHaveBeenCalledWith("copy");
+    expect(textarea.value).toBe("diagram");
+    expect(button("Copied")).toBeDefined();
   });
 
   it("ignores a result for an outdated source", async () => {

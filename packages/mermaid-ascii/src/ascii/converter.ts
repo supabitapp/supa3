@@ -3,7 +3,7 @@ import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import type { MermaidGraph, MermaidSubgraph } from "../types.ts";
 import type { AsciiGraph, AsciiNode, AsciiEdge, AsciiSubgraph, AsciiConfig } from "./types.ts";
 import { EMPTY_STYLE } from "./types.ts";
-import { mkCanvas, mkRoleCanvas } from "./canvas.ts";
+import { mkCanvas } from "./canvas.ts";
 export function convertToAsciiGraph(parsed: MermaidGraph, config: AsciiConfig): AsciiGraph {
   checkLimit(parsed.nodes.size, limits.nodes, "nodes");
   checkLimit(parsed.edges.length, limits.edges, "edges");
@@ -62,7 +62,6 @@ export function convertToAsciiGraph(parsed: MermaidGraph, config: AsciiConfig): 
     nodes,
     edges,
     canvas: mkCanvas(0, 0, budget),
-    roleCanvas: mkRoleCanvas(0, 0, budget),
     grid: new Map(),
     columnWidth: new Map(),
     rowHeight: new Map(),

@@ -22,7 +22,44 @@ export function parseMermaid(text: string): MermaidGraph {
   if (/^stateDiagram(-v2)?\s*$/i.test(header)) {
     return parseStateDiagram(lines);
   }
-  return parseFlowchart(lines);
+  return parseFlowchart(lines.flatMap(splitFlowchartStatements));
+}
+function splitFlowchartStatements(line: string): string[] {
+  const statements: string[] = [];
+  const brackets: string[] = [];
+  let quoted = false;
+  let start = 0;
+  for (let index = 0; index < line.length; index++) {
+    const character = line[index]!;
+    if (character === '"') {
+      quoted = !quoted;
+    } else if (!quoted) {
+      const arrow =
+        brackets.length === 0
+          ? (line.slice(index).match(ARROW_REGEX) ?? line.slice(index).match(TEXT_ARROW_REGEX))
+          : null;
+      if (arrow) {
+        index += arrow[0].length - 1;
+      } else if (character === "[" || character === "(" || character === "{") {
+        brackets.push(character === "[" ? "]" : character === "(" ? ")" : "}");
+      } else if (brackets.length === 0 && character === ">" && /\w/.test(line[index - 1] ?? "")) {
+        brackets.push("]");
+      } else if (character === brackets.at(-1)) {
+        brackets.pop();
+      } else if (brackets.length === 0) {
+        if (character === "%" && line[index + 1] === "%") {
+          statements.push(line.slice(start, index).trim());
+          return statements.filter(Boolean);
+        }
+        if (character === ";") {
+          statements.push(line.slice(start, index).trim());
+          start = index + 1;
+        }
+      }
+    }
+  }
+  statements.push(line.slice(start).trim());
+  return statements.filter(Boolean);
 }
 function parseFlowchart(lines: string[]): MermaidGraph {
   const headerMatch = lines[0]!.match(/^(?:graph|flowchart)\s+(TD|TB|LR|BT|RL)\s*$/i);
@@ -252,8 +289,8 @@ function registerStateNode(
   const isNew = !graph.nodes.has(node.id);
   if (isNew) {
     checkLimit(graph.nodes.size + 1, limits.nodes, "nodes");
-    graph.nodes.set(node.id, node);
   }
+  graph.nodes.set(node.id, node);
   if (compositeStack.length > 0) {
     const current = compositeStack[compositeStack.length - 1]!;
     if (!current.nodeIds.includes(node.id)) {
@@ -312,7 +349,7 @@ const CLASS_SHORTHAND_REGEX = /^:::([\w][\w-]*)/;
 function parseEdgeLine(line: string, graph: MermaidGraph, subgraphStack: MermaidSubgraph[]): void {
   let remaining = line.trim();
   const firstGroup = consumeNodeGroup(remaining, graph, subgraphStack);
-  if (!firstGroup || firstGroup.ids.length === 0) return;
+  if (!firstGroup) throw new Error(`Unsupported flowchart statement: ${line}`);
   remaining = firstGroup.remaining.trim();
   let prevGroupIds = firstGroup.ids;
   while (remaining.length > 0) {
@@ -331,7 +368,7 @@ function parseEdgeLine(line: string, graph: MermaidGraph, subgraphStack: Mermaid
       hasArrowEnd = arrowOp.endsWith(">");
     } else {
       const textMatch = remaining.match(TEXT_ARROW_REGEX);
-      if (!textMatch) break;
+      if (!textMatch) throw new Error(`Unsupported flowchart syntax: ${remaining}`);
       hasArrowStart = Boolean(textMatch[1]);
       const rawLabel = textMatch[3]!.trim();
       edgeLabel = rawLabel ? normalizeBrTags(rawLabel) : undefined;
@@ -342,7 +379,7 @@ function parseEdgeLine(line: string, graph: MermaidGraph, subgraphStack: Mermaid
       hasArrowEnd = closeOp.endsWith(">");
     }
     const nextGroup = consumeNodeGroup(remaining, graph, subgraphStack);
-    if (!nextGroup || nextGroup.ids.length === 0) break;
+    if (!nextGroup) throw new Error(`Missing flowchart edge target: ${line}`);
     remaining = nextGroup.remaining.trim();
     for (const sourceId of prevGroupIds) {
       for (const targetId of nextGroup.ids) {
@@ -376,7 +413,7 @@ function consumeNodeGroup(
   while (remaining.startsWith("&")) {
     remaining = remaining.slice(1).trim();
     const next = consumeNode(remaining, graph, subgraphStack);
-    if (!next) break;
+    if (!next) throw new Error(`Missing flowchart node after &: ${text}`);
     ids.push(next.id);
     remaining = next.remaining.trim();
   }
@@ -429,8 +466,8 @@ function registerNode(
   const isNew = !graph.nodes.has(node.id);
   if (isNew) {
     checkLimit(graph.nodes.size + 1, limits.nodes, "nodes");
-    graph.nodes.set(node.id, node);
   }
+  graph.nodes.set(node.id, node);
   trackInSubgraph(subgraphStack, node.id);
 }
 function trackInSubgraph(subgraphStack: MermaidSubgraph[], nodeId: string): void {

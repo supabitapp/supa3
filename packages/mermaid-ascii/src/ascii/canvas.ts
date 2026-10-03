@@ -1,6 +1,5 @@
 import { validateCanvas, type RenderBudget } from "../budget.ts";
-import type { Canvas, DrawingCoord, RoleCanvas, CharRole, AsciiTheme, ColorMode } from "./types.ts";
-import { colorizeLine, DEFAULT_ASCII_THEME } from "./ansi.ts";
+import type { Canvas, DrawingCoord } from "./types.ts";
 export function mkCanvas(x: number, y: number, budget?: RenderBudget): Canvas {
   validateCanvas(x + 1, y + 1);
   budget?.allocate(x + 1, y + 1);
@@ -18,89 +17,6 @@ export function mkCanvas(x: number, y: number, budget?: RenderBudget): Canvas {
 export function copyCanvas(source: Canvas): Canvas {
   const [maxX, maxY] = getCanvasSize(source);
   return mkCanvas(maxX, maxY, source.budget);
-}
-export function mkRoleCanvas(x: number, y: number, budget?: RenderBudget): RoleCanvas {
-  validateCanvas(x + 1, y + 1);
-  budget?.allocate(x + 1, y + 1);
-  const roleCanvas: RoleCanvas = [];
-  roleCanvas.budget = budget;
-  for (let i = 0; i <= x; i++) {
-    const col: (CharRole | null)[] = [];
-    for (let j = 0; j <= y; j++) {
-      col.push(null);
-    }
-    roleCanvas.push(col);
-  }
-  return roleCanvas;
-}
-export function copyRoleCanvas(source: RoleCanvas): RoleCanvas {
-  const maxX = source.length - 1;
-  const maxY = (source[0]?.length ?? 1) - 1;
-  return mkRoleCanvas(maxX, maxY, source.budget);
-}
-export function increaseRoleCanvasSize(
-  roleCanvas: RoleCanvas,
-  newX: number,
-  newY: number,
-): RoleCanvas {
-  const currX = roleCanvas.length - 1;
-  const currY = (roleCanvas[0]?.length ?? 1) - 1;
-  const targetX = Math.max(newX, currX);
-  const targetY = Math.max(newY, currY);
-  if (targetX === currX && targetY === currY) return roleCanvas;
-  const grown = mkRoleCanvas(targetX, targetY, roleCanvas.budget);
-  for (let x = 0; x < grown.length; x++) {
-    for (let y = 0; y < grown[0]!.length; y++) {
-      if (x < roleCanvas.length && y < roleCanvas[0]!.length) {
-        grown[x]![y] = roleCanvas[x]![y]!;
-      }
-    }
-  }
-  roleCanvas.length = 0;
-  roleCanvas.push(...grown);
-  return roleCanvas;
-}
-export function setRole(roleCanvas: RoleCanvas, x: number, y: number, role: CharRole): void {
-  if (x >= roleCanvas.length || y >= (roleCanvas[0]?.length ?? 0)) {
-    increaseRoleCanvasSize(roleCanvas, x, y);
-  }
-  roleCanvas[x]![y] = role;
-}
-export function mergeRoleCanvases(
-  base: RoleCanvas,
-  offset: DrawingCoord,
-  ...overlays: RoleCanvas[]
-): RoleCanvas {
-  let maxX = base.length - 1;
-  let maxY = (base[0]?.length ?? 1) - 1;
-  for (const overlay of overlays) {
-    const oX = overlay.length - 1;
-    const oY = (overlay[0]?.length ?? 1) - 1;
-    maxX = Math.max(maxX, oX + offset.x);
-    maxY = Math.max(maxY, oY + offset.y);
-  }
-  const merged = mkRoleCanvas(maxX, maxY, base.budget);
-  for (let x = 0; x <= maxX; x++) {
-    for (let y = 0; y <= maxY; y++) {
-      if (x < base.length && y < base[0]!.length) {
-        merged[x]![y] = base[x]![y]!;
-      }
-    }
-  }
-  for (const overlay of overlays) {
-    base.budget?.check();
-    for (let x = 0; x < overlay.length; x++) {
-      for (let y = 0; y < overlay[0]!.length; y++) {
-        const role = overlay[x]?.[y];
-        if (role !== null && role !== undefined) {
-          const mx = x + offset.x;
-          const my = y + offset.y;
-          merged[mx]![my] = role;
-        }
-      }
-    }
-  }
-  return merged;
 }
 export function getCanvasSize(canvas: Canvas): [number, number] {
   return [canvas.length - 1, (canvas[0]?.length ?? 1) - 1];
@@ -201,35 +117,15 @@ export function mergeCanvases(
   }
   return merged;
 }
-export interface CanvasToStringOptions {
-  roleCanvas?: RoleCanvas;
-  colorMode?: ColorMode | undefined;
-  theme?: AsciiTheme | undefined;
-}
-export function canvasToString(canvas: Canvas, options?: CanvasToStringOptions): string {
+export function canvasToString(canvas: Canvas): string {
   const [maxX, maxY] = getCanvasSize(canvas);
   validateCanvas(maxX + 1, maxY + 1);
   canvas.budget?.check();
   const lines: string[] = [];
-  const roleCanvas = options?.roleCanvas;
-  const colorMode = options?.colorMode ?? "none";
-  const theme = options?.theme ?? DEFAULT_ASCII_THEME;
   for (let y = 0; y <= maxY; y++) {
-    if (colorMode === "none" || !roleCanvas) {
-      let line = "";
-      for (let x = 0; x <= maxX; x++) {
-        line += canvas[x]![y]!;
-      }
-      lines.push(line);
-    } else {
-      const chars: string[] = [];
-      const roles: (CharRole | null)[] = [];
-      for (let x = 0; x <= maxX; x++) {
-        chars.push(canvas[x]![y]!);
-        roles.push(roleCanvas[x]?.[y] ?? null);
-      }
-      lines.push(colorizeLine(chars, roles, theme, colorMode));
-    }
+    let line = "";
+    for (let x = 0; x <= maxX; x++) line += canvas[x]![y]!;
+    lines.push(line);
   }
   return lines.join("\n");
 }
@@ -251,6 +147,14 @@ const VERTICAL_FLIP_MAP: Record<string, string> = {
   "╵": "╷",
   "╷": "╵",
 };
+export function flipTextVertically(text: string): string {
+  const lines = text.split("\n");
+  const flipped: string[] = [];
+  for (let index = lines.length - 1; index >= 0; index--) {
+    flipped.push(Array.from(lines[index]!, (char) => VERTICAL_FLIP_MAP[char] ?? char).join(""));
+  }
+  return flipped.join("\n");
+}
 export function flipCanvasVertically(canvas: Canvas): Canvas {
   for (const col of canvas) {
     col.reverse();
@@ -262,12 +166,6 @@ export function flipCanvasVertically(canvas: Canvas): Canvas {
     }
   }
   return canvas;
-}
-export function flipRoleCanvasVertically(roleCanvas: RoleCanvas): RoleCanvas {
-  for (const col of roleCanvas) {
-    col.reverse();
-  }
-  return roleCanvas;
 }
 export function drawText(
   canvas: Canvas,
@@ -294,15 +192,4 @@ export function setCanvasSizeToGrid(
   for (const w of columnWidth.values()) maxX += w;
   for (const h of rowHeight.values()) maxY += h;
   increaseSize(canvas, maxX - 1, maxY - 1);
-}
-export function setRoleCanvasSizeToGrid(
-  roleCanvas: RoleCanvas,
-  columnWidth: Map<number, number>,
-  rowHeight: Map<number, number>,
-): void {
-  let maxX = 0;
-  let maxY = 0;
-  for (const w of columnWidth.values()) maxX += w;
-  for (const h of rowHeight.values()) maxY += h;
-  increaseRoleCanvasSize(roleCanvas, maxX - 1, maxY - 1);
 }

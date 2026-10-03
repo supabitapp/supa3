@@ -2,21 +2,10 @@ import { checkLimit } from "../budget.ts";
 import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseClassDiagram } from "../class/parser.ts";
 import type { ClassNode, ClassMember, RelationshipType } from "../class/types.ts";
-import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
-import {
-  mkCanvas,
-  mkRoleCanvas,
-  canvasToString,
-  increaseSize,
-  increaseRoleCanvasSize,
-  setRole,
-} from "./canvas.ts";
+import type { AsciiConfig } from "./types.ts";
+import { mkCanvas, canvasToString, increaseSize } from "./canvas.ts";
 import { drawMultiBox } from "./draw.ts";
 import { splitLines } from "./multiline-utils.ts";
-function classifyBoxChar(ch: string): CharRole {
-  if (/^[┌┐└┘├┤┬┴┼│─╭╮╰╯+\-|]$/.test(ch)) return "border";
-  return "text";
-}
 function formatMember(m: ClassMember): string {
   const vis = m.visibility || "";
   const type = m.type ? `: ${m.type}` : "";
@@ -84,12 +73,7 @@ interface PlacedClass {
   width: number;
   height: number;
 }
-export function renderClassAscii(
-  text: string,
-  config: AsciiConfig,
-  colorMode?: ColorMode,
-  theme?: AsciiTheme,
-): string {
+export function renderClassAscii(text: string, config: AsciiConfig): string {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -194,11 +178,9 @@ export function renderClassAscii(
   totalW += 4;
   totalH += 2;
   const canvas = mkCanvas(totalW - 1, totalH - 1, config.budget);
-  const rc = mkRoleCanvas(totalW - 1, totalH - 1, config.budget);
-  function setC(x: number, y: number, ch: string, role: CharRole): void {
+  function setC(x: number, y: number, ch: string): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
-      setRole(rc, x, y, role);
     }
   }
   for (const p of placed.values()) {
@@ -210,25 +192,15 @@ export function renderClassAscii(
           const cx = p.x + bx;
           const cy = p.y + by;
           if (cx < totalW && cy < totalH) {
-            setC(cx, cy, ch, classifyBoxChar(ch));
+            setC(cx, cy, ch);
           }
         }
       }
     }
   }
-  const boxOccupancy: {
-    x1: number;
-    x2: number;
-    y1: number;
-    y2: number;
-  }[] = [];
+  const boxOccupancy: { x1: number; x2: number; y1: number; y2: number }[] = [];
   for (const p of placed.values()) {
-    boxOccupancy.push({
-      x1: p.x,
-      x2: p.x + p.width - 1,
-      y1: p.y,
-      y2: p.y + p.height - 1,
-    });
+    boxOccupancy.push({ x1: p.x, x2: p.x + p.width - 1, y1: p.y, y2: p.y + p.height - 1 });
   }
   function isInsideBox(x: number, y: number, excludeIds?: Set<string>): boolean {
     for (const [id, p] of placed.entries()) {
@@ -306,68 +278,68 @@ export function renderClassAscii(
         const lx1 = Math.min(fromCX, routeX);
         const rx1 = Math.max(fromCX, routeX);
         for (let x = lx1; x <= rx1; x++) {
-          setC(x, exitY, lineH, "line");
+          setC(x, exitY, lineH);
         }
         if (!useAscii && exitY < (canvas[0]?.length ?? 0)) {
           if (fromCX < routeX) {
-            setC(fromCX, exitY, "└", "corner");
-            setC(routeX, exitY, "┐", "corner");
+            setC(fromCX, exitY, "└");
+            setC(routeX, exitY, "┐");
           } else {
-            setC(fromCX, exitY, "┘", "corner");
-            setC(routeX, exitY, "┌", "corner");
+            setC(fromCX, exitY, "┘");
+            setC(routeX, exitY, "┌");
           }
         }
         for (let y = exitY + 1; y <= entryY; y++) {
-          setC(routeX, y, lineV, "line");
+          setC(routeX, y, lineV);
         }
         if (routeX !== toCX) {
           const lx2 = Math.min(routeX, toCX);
           const rx2 = Math.max(routeX, toCX);
           for (let x = lx2; x <= rx2; x++) {
-            setC(x, entryY, lineH, "line");
+            setC(x, entryY, lineH);
           }
           if (!useAscii && entryY < (canvas[0]?.length ?? 0)) {
             if (routeX < toCX) {
-              setC(routeX, entryY, "└", "corner");
-              setC(toCX, entryY, "┐", "corner");
+              setC(routeX, entryY, "└");
+              setC(toCX, entryY, "┐");
             } else {
-              setC(routeX, entryY, "┘", "corner");
-              setC(toCX, entryY, "┌", "corner");
+              setC(routeX, entryY, "┘");
+              setC(toCX, entryY, "┌");
             }
           }
         }
         if (marker.markerAt === "to") {
           const markerChar = getMarkerShape(marker.type, useAscii, "down");
-          setC(toCX, entryY, markerChar, "arrow");
+          setC(toCX, entryY, markerChar);
         }
         if (marker.markerAt === "from") {
           const markerChar = getMarkerShape(marker.type, useAscii, "down");
-          setC(fromCX, fromBY + 1, markerChar, "arrow");
+          setC(fromCX, fromBY + 1, markerChar);
         }
       } else {
         const midY = fromBY + Math.floor((toTY - fromBY) / 2);
         for (let y = fromBY + 1; y <= midY; y++) {
-          setC(fromCX, y, lineV, "line");
+          setC(fromCX, y, lineV);
         }
         if (fromCX !== toCX && midY < (canvas[0]?.length ?? 0)) {
           const lx = Math.min(fromCX, toCX);
           const rx = Math.max(fromCX, toCX);
           for (let x = lx; x <= rx; x++) {
-            setC(x, midY, lineH, "line");
+            setC(x, midY, lineH);
           }
           if (!useAscii) {
-            setC(fromCX, midY, fromCX < toCX ? "└" : "┘", "corner");
-            setC(toCX, midY, fromCX < toCX ? "┐" : "┌", "corner");
+            setC(fromCX, midY, fromCX < toCX ? "└" : "┘");
+            setC(toCX, midY, fromCX < toCX ? "┐" : "┌");
           }
         }
         for (let y = midY + 1; y < toTY; y++) {
-          setC(toCX, y, lineV, "line");
+          setC(toCX, y, lineV);
         }
         if (marker.markerAt === "to") {
-          setC(toCX, toTY - 1, getMarkerShape(marker.type, useAscii, "down"), "arrow");
+          setC(toCX, toTY - 1, getMarkerShape(marker.type, useAscii, "down"));
         }
         if (marker.markerAt === "from") {
-          setC(fromCX, fromBY + 1, getMarkerShape(marker.type, useAscii, "down"), "arrow");
+          setC(fromCX, fromBY + 1, getMarkerShape(marker.type, useAscii, "down"));
         }
       }
     } else if (toP.y + toP.height - 1 < fromP.y) {
@@ -375,27 +347,27 @@ export function renderClassAscii(
       const toBY = toP.y + toP.height - 1;
       const midY = toBY + Math.floor((fromTY - toBY) / 2);
       for (let y = fromTY - 1; y >= midY; y--) {
-        setC(fromCX, y, lineV, "line");
+        setC(fromCX, y, lineV);
       }
       if (fromCX !== toCX) {
         const lx = Math.min(fromCX, toCX);
         const rx = Math.max(fromCX, toCX);
         for (let x = lx; x <= rx; x++) {
-          setC(x, midY, lineH, "line");
+          setC(x, midY, lineH);
         }
         if (!useAscii && midY >= 0 && midY < totalH) {
-          setC(fromCX, midY, fromCX < toCX ? "┌" : "┐", "corner");
-          setC(toCX, midY, fromCX < toCX ? "┘" : "└", "corner");
+          setC(fromCX, midY, fromCX < toCX ? "┌" : "┐");
+          setC(toCX, midY, fromCX < toCX ? "┘" : "└");
         }
       }
       for (let y = midY - 1; y > toBY; y--) {
-        setC(toCX, y, lineV, "line");
+        setC(toCX, y, lineV);
       }
       if (marker.markerAt === "from") {
         const markerChar = getMarkerShape(marker.type, useAscii, "up");
         const my = fromTY - 1;
         for (let i = 0; i < markerChar.length; i++) {
-          setC(fromCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!, "arrow");
+          setC(fromCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!);
         }
       }
       if (marker.markerAt === "to") {
@@ -404,36 +376,35 @@ export function renderClassAscii(
         const markerChar = getMarkerShape(marker.type, useAscii, markerDir);
         const my = toBY + 1;
         for (let i = 0; i < markerChar.length; i++) {
-          setC(toCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!, "arrow");
+          setC(toCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!);
         }
       }
     } else {
       const detourY = Math.max(fromBY, toP.y + toP.height - 1) + 2;
       increaseSize(canvas, totalW, detourY + 1);
-      increaseRoleCanvasSize(rc, totalW, detourY + 1);
       for (let y = fromBY + 1; y <= detourY; y++) {
-        setC(fromCX, y, lineV, "line");
+        setC(fromCX, y, lineV);
       }
       const lx = Math.min(fromCX, toCX);
       const rx = Math.max(fromCX, toCX);
       for (let x = lx; x <= rx; x++) {
-        setC(x, detourY, lineH, "line");
+        setC(x, detourY, lineH);
       }
       for (let y = detourY - 1; y >= toP.y + toP.height; y--) {
-        setC(toCX, y, lineV, "line");
+        setC(toCX, y, lineV);
       }
       if (marker.markerAt === "from") {
         const markerChar = getMarkerShape(marker.type, useAscii, "down");
         const my = fromBY + 1;
         for (let i = 0; i < markerChar.length; i++) {
-          setC(fromCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!, "arrow");
+          setC(fromCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!);
         }
       }
       if (marker.markerAt === "to") {
         const markerChar = getMarkerShape(marker.type, useAscii, "up");
         const my = toP.y + toP.height;
         for (let i = 0; i < markerChar.length; i++) {
-          setC(toCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!, "arrow");
+          setC(toCX - Math.floor(markerChar.length / 2) + i, my, markerChar[i]!);
         }
       }
     }
@@ -496,16 +467,15 @@ export function renderClassAscii(
         const labelEnd = labelStart + paddedLine.length;
         if (labelEnd > 0 && y >= 0) {
           increaseSize(canvas, Math.max(labelEnd, 1), Math.max(y + 1, 1));
-          increaseRoleCanvasSize(rc, Math.max(labelEnd, 1), Math.max(y + 1, 1));
         }
         for (let i = 0; i < paddedLine.length; i++) {
           const lx = labelStart + i;
           if (lx >= 0 && y >= 0) {
-            setC(lx, y, paddedLine[i]!, "text");
+            setC(lx, y, paddedLine[i]!);
           }
         }
       }
     }
   }
-  return canvasToString(canvas, { roleCanvas: rc, colorMode, theme });
+  return canvasToString(canvas);
 }

@@ -6,7 +6,10 @@ import { MERMAID_ASCII_LIMITS as limits } from "../../../packages/mermaid-ascii/
 
 const supported = [
   "flowchart LR\nA --> B",
+  'flowchart LR; A --> B; B["Worker; queue"] --> C',
+  "flowchart BT\nA[Save<br/>Verify] --> B[Done]",
   "sequenceDiagram\nAlice->>Bob: Hello\nBob-->>Alice: Hi",
+  "sequenceDiagram\nNote over Alice,Bob: Ready\nAlice->>Bob: Hello",
   "stateDiagram-v2\n[*] --> Idle\nIdle --> Running\nRunning --> [*]",
   "classDiagram\nAnimal <|-- Dog\nAnimal : +name string",
   "erDiagram\nUSER ||--o{ ORDER : places",
@@ -14,6 +17,7 @@ const supported = [
 ];
 const rejected = [
   'pie\n"One" : 1',
+  'flowchart LR\nA@{ shape: rect, label: "Server" } --> B',
   `graph TD\n${"x".repeat(limits.sourceChars)}`,
   `graph TD\n${"\n".repeat(limits.sourceLines)}`,
   `graph TD\nA[${"x".repeat(limits.lineChars)}]`,

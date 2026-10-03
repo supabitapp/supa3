@@ -23,11 +23,10 @@ import {
   Middle,
   drawingCoordEquals,
 } from "./types.ts";
-import { mkCanvas, copyCanvas, mergeCanvases, drawText, setRole } from "./canvas.ts";
-import type { RoleCanvas, CharRole } from "./types.ts";
+import { mkCanvas, copyCanvas, mergeCanvases, drawText } from "./canvas.ts";
 import { determineDirection, dirEquals } from "./edge-routing.ts";
 import { gridToDrawingCoord, lineToDrawing } from "./grid.ts";
-import { splitLines } from "./multiline-utils.ts";
+import { maxLineWidth, splitLines } from "./multiline-utils.ts";
 import { getCorners } from "./shapes/corners.ts";
 import { getShapeAttachmentPoint } from "./shapes/index.ts";
 export function drawNode(node: AsciiNode, graph: AsciiGraph): Canvas {
@@ -146,18 +145,9 @@ export function drawMultiBox(
   return canvas;
 }
 const LINE_CHARS = {
-  solid: {
-    h: { unicode: "─", ascii: "-" },
-    v: { unicode: "│", ascii: "|" },
-  },
-  dotted: {
-    h: { unicode: "┄", ascii: "." },
-    v: { unicode: "┆", ascii: ":" },
-  },
-  thick: {
-    h: { unicode: "━", ascii: "=" },
-    v: { unicode: "┃", ascii: "‖" },
-  },
+  solid: { h: { unicode: "─", ascii: "-" }, v: { unicode: "│", ascii: "|" } },
+  dotted: { h: { unicode: "┄", ascii: "." }, v: { unicode: "┆", ascii: ":" } },
+  thick: { h: { unicode: "━", ascii: "=" }, v: { unicode: "┃", ascii: "‖" } },
 } as const;
 export function drawLine(
   canvas: Canvas,
@@ -797,18 +787,18 @@ export function drawSubgraphLabel(
 ): [Canvas, DrawingCoord] {
   const width = sg.maxX - sg.minX;
   const height = sg.maxY - sg.minY;
-  if (width <= 0 || height <= 0) return [mkCanvas(0, 0, budget), { x: 0, y: 0 }];
-  const canvas = mkCanvas(width, height, budget);
   const lines = splitLines(sg.name);
+  if (maxLineWidth(sg.name) >= width || lines.length >= height) {
+    throw new RangeError("Subgraph label does not fit inside its bounds");
+  }
+  const canvas = mkCanvas(width, height, budget);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const labelY = 1 + i;
     let labelX = Math.floor(width / 2) - Math.floor(line.length / 2);
     if (labelX < 1) labelX = 1;
     for (let j = 0; j < line.length; j++) {
-      if (labelX + j < width && labelY < height) {
-        canvas[labelX + j]![labelY] = line[j]!;
-      }
+      canvas[labelX + j]![labelY] = line[j]!;
     }
   }
   return [canvas, { x: sg.minX, y: sg.minY }];
@@ -821,51 +811,6 @@ function sortSubgraphsByDepth(subgraphs: AsciiSubgraph[]): AsciiSubgraph[] {
   sorted.sort((a, b) => getDepth(a) - getDepth(b));
   return sorted;
 }
-function fillRolesFromCanvas(
-  roleCanvas: RoleCanvas,
-  canvas: Canvas,
-  offset: DrawingCoord,
-  role: CharRole,
-): void {
-  for (let x = 0; x < canvas.length; x++) {
-    for (let y = 0; y < (canvas[0]?.length ?? 0); y++) {
-      const char = canvas[x]?.[y];
-      if (char && char !== " ") {
-        const rx = x + offset.x;
-        const ry = y + offset.y;
-        if (rx >= 0 && ry >= 0) {
-          setRole(roleCanvas, rx, ry, role);
-        }
-      }
-    }
-  }
-}
-function fillRolesFromCanvases(
-  roleCanvas: RoleCanvas,
-  canvases: Canvas[],
-  offset: DrawingCoord,
-  role: CharRole,
-): void {
-  for (const canvas of canvases) {
-    roleCanvas.budget?.check();
-    fillRolesFromCanvas(roleCanvas, canvas, offset, role);
-  }
-}
-function fillRolesForNodeBox(roleCanvas: RoleCanvas, canvas: Canvas, offset: DrawingCoord): void {
-  const isBorderChar = (c: string) => /^[┌┐└┘├┤┬┴┼│─╭╮╰╯+\-|.':]$/.test(c);
-  for (let x = 0; x < canvas.length; x++) {
-    for (let y = 0; y < (canvas[0]?.length ?? 0); y++) {
-      const char = canvas[x]?.[y];
-      if (char && char !== " ") {
-        const rx = x + offset.x;
-        const ry = y + offset.y;
-        if (rx >= 0 && ry >= 0) {
-          setRole(roleCanvas, rx, ry, isBorderChar(char) ? "border" : "text");
-        }
-      }
-    }
-  }
-}
 export function drawGraph(graph: AsciiGraph): Canvas {
   const useAscii = graph.config.useAscii;
   const zero: DrawingCoord = { x: 0, y: 0 };
@@ -874,12 +819,10 @@ export function drawGraph(graph: AsciiGraph): Canvas {
     const sgCanvas = drawSubgraphBox(sg, graph);
     const offset: DrawingCoord = { x: sg.minX, y: sg.minY };
     graph.canvas = mergeCanvases(graph.canvas, offset, useAscii, sgCanvas);
-    fillRolesFromCanvas(graph.roleCanvas, sgCanvas, offset, "border");
   }
   for (const node of graph.nodes) {
     if (!node.drawn && node.drawingCoord && node.drawing) {
       graph.canvas = mergeCanvases(graph.canvas, node.drawingCoord, useAscii, node.drawing);
-      fillRolesForNodeBox(graph.roleCanvas, node.drawing, node.drawingCoord);
       node.drawn = true;
     }
   }
@@ -930,24 +873,16 @@ export function drawGraph(graph: AsciiGraph): Canvas {
     }
   }
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...lineCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, lineCanvases, zero, "line");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...cornerCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, cornerCanvases, zero, "corner");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...junctionCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, junctionCanvases, zero, "junction");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...arrowHeadEndCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, arrowHeadEndCanvases, zero, "arrow");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...boxStartCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, boxStartCanvases, zero, "junction");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...arrowHeadStartCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, arrowHeadStartCanvases, zero, "arrow");
   graph.canvas = mergeCanvases(graph.canvas, zero, useAscii, ...labelCanvases);
-  fillRolesFromCanvases(graph.roleCanvas, labelCanvases, zero, "text");
   for (const sg of graph.subgraphs) {
     if (sg.nodes.length === 0) continue;
     const [labelCanvas, offset] = drawSubgraphLabel(sg, graph.config.budget);
     graph.canvas = mergeCanvases(graph.canvas, offset, useAscii, labelCanvas);
-    fillRolesFromCanvas(graph.roleCanvas, labelCanvas, offset, "text");
   }
   return graph.canvas;
 }

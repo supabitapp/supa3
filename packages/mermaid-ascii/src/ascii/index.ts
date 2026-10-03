@@ -4,13 +4,12 @@ import { parseMermaid } from "../parser.ts";
 import { convertToAsciiGraph } from "./converter.ts";
 import { createMapping } from "./grid.ts";
 import { drawGraph } from "./draw.ts";
-import { canvasToString, flipCanvasVertically, flipRoleCanvasVertically } from "./canvas.ts";
+import { canvasToString, flipCanvasVertically, flipTextVertically } from "./canvas.ts";
 import { renderSequenceAscii } from "./sequence.ts";
 import { renderClassAscii } from "./class-diagram.ts";
 import { renderErAscii } from "./er-diagram.ts";
 import { renderXYChartAscii } from "./xychart.ts";
-import { DEFAULT_ASCII_THEME } from "./ansi.ts";
-import type { AsciiConfig, AsciiTheme, ColorMode } from "./types.ts";
+import type { AsciiConfig } from "./types.ts";
 export interface AsciiRenderOptions {
   useAscii?: boolean;
   paddingX?: number;
@@ -46,18 +45,16 @@ export function renderMermaidAscii(text: string, options: AsciiRenderOptions = {
   return output;
 }
 function renderDiagram(text: string, config: AsciiConfig): string {
-  const colorMode: ColorMode = "none";
-  const theme: AsciiTheme = DEFAULT_ASCII_THEME;
   const diagramType = detectDiagramType(text);
   switch (diagramType) {
     case "xychart":
-      return renderXYChartAscii(text, config, colorMode, theme);
+      return renderXYChartAscii(text, config);
     case "sequence":
-      return renderSequenceAscii(text, config, colorMode, theme);
+      return renderSequenceAscii(text, config);
     case "class":
-      return renderClassAscii(text, config, colorMode, theme);
+      return renderClassAscii(text, config);
     case "er":
-      return renderErAscii(text, config, colorMode, theme);
+      return renderErAscii(text, config);
     case "flowchart":
     default: {
       const parsed = parseMermaid(text);
@@ -67,17 +64,17 @@ function renderDiagram(text: string, config: AsciiConfig): string {
         config.graphDirection = "TD";
       }
       const graph = convertToAsciiGraph(parsed, config);
+      if (parsed.direction === "BT") {
+        for (const node of graph.nodes) node.displayLabel = flipTextVertically(node.displayLabel);
+        for (const edge of graph.edges) edge.text = flipTextVertically(edge.text);
+        for (const subgraph of graph.subgraphs) subgraph.name = flipTextVertically(subgraph.name);
+      }
       createMapping(graph);
       drawGraph(graph);
       if (parsed.direction === "BT") {
         flipCanvasVertically(graph.canvas);
-        flipRoleCanvasVertically(graph.roleCanvas);
       }
-      return canvasToString(graph.canvas, {
-        roleCanvas: graph.roleCanvas,
-        colorMode,
-        theme,
-      });
+      return canvasToString(graph.canvas);
     }
   }
 }

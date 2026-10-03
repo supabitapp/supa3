@@ -45,30 +45,21 @@ export function createBrowserDiagramRenderer() {
           }
         };
         const handleMessage = (event: MessageEvent<unknown>) => {
-          if (
-            typeof event.data === "object" &&
-            event.data !== null &&
-            "ready" in event.data &&
-            event.data.ready === true &&
-            !sent
-          ) {
+          const data = event.data;
+          if (typeof data !== "object" || data === null) {
+            finish(null, true);
+            return;
+          }
+          if (!sent) {
+            if (!("ready" in data) || data.ready !== true) {
+              finish(null, true);
+              return;
+            }
             ready = true;
             send();
-          } else if (
-            sent &&
-            typeof event.data === "object" &&
-            event.data !== null &&
-            "output" in event.data &&
-            typeof event.data.output === "string"
-          ) {
-            finish(event.data.output);
-          } else if (
-            sent &&
-            typeof event.data === "object" &&
-            event.data !== null &&
-            "error" in event.data &&
-            event.data.error === true
-          ) {
+          } else if ("output" in data && typeof data.output === "string") {
+            finish(data.output);
+          } else if ("error" in data && data.error === true) {
             finish(null);
           } else {
             finish(null, true);

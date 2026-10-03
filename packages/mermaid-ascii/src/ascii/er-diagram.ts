@@ -2,21 +2,10 @@ import { checkLimit } from "../budget.ts";
 import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseErDiagram } from "../er/parser.ts";
 import type { ErDiagram, ErEntity, ErAttribute, Cardinality } from "../er/types.ts";
-import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
-import {
-  mkCanvas,
-  mkRoleCanvas,
-  canvasToString,
-  increaseSize,
-  increaseRoleCanvasSize,
-  setRole,
-} from "./canvas.ts";
+import type { AsciiConfig } from "./types.ts";
+import { mkCanvas, canvasToString, increaseSize } from "./canvas.ts";
 import { drawMultiBox } from "./draw.ts";
 import { splitLines } from "./multiline-utils.ts";
-function classifyBoxChar(ch: string): CharRole {
-  if (/^[┌┐└┘├┤┬┴┼│─╭╮╰╯+\-|]$/.test(ch)) return "border";
-  return "text";
-}
 function formatAttribute(attr: ErAttribute): string {
   const keyStr = attr.keys.length > 0 ? attr.keys.join(",") + " " : "   ";
   return `${keyStr}${attr.type} ${attr.name}`;
@@ -96,12 +85,7 @@ function findConnectedComponents(diagram: ErDiagram): Set<string>[] {
   }
   return components;
 }
-export function renderErAscii(
-  text: string,
-  config: AsciiConfig,
-  colorMode?: ColorMode,
-  theme?: AsciiTheme,
-): string {
+export function renderErAscii(text: string, config: AsciiConfig): string {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -175,11 +159,9 @@ export function renderErAscii(
   totalW += 4;
   totalH += 2;
   const canvas = mkCanvas(totalW - 1, totalH - 1, config.budget);
-  const rc = mkRoleCanvas(totalW - 1, totalH - 1, config.budget);
-  function setC(x: number, y: number, ch: string, role: CharRole): void {
+  function setC(x: number, y: number, ch: string): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
-      setRole(rc, x, y, role);
     }
   }
   for (const p of placed.values()) {
@@ -191,7 +173,7 @@ export function renderErAscii(
           const cx = p.x + bx;
           const cy = p.y + by;
           if (cx < totalW && cy < totalH) {
-            setC(cx, cy, ch, classifyBoxChar(ch));
+            setC(cx, cy, ch);
           }
         }
       }
@@ -221,15 +203,15 @@ export function renderErAscii(
       const endX = right.x - 1;
       const lineY = left.y + Math.floor(left.height / 2);
       for (let x = startX; x <= endX; x++) {
-        setC(x, lineY, lineH, "line");
+        setC(x, lineY, lineH);
       }
       const leftChars = getCrowsFootChars(leftCard, useAscii, false);
       for (let i = 0; i < leftChars.length; i++) {
-        setC(startX + i, lineY, leftChars[i]!, "arrow");
+        setC(startX + i, lineY, leftChars[i]!);
       }
       const rightChars = getCrowsFootChars(rightCard, useAscii, true);
       for (let i = 0; i < rightChars.length; i++) {
-        setC(endX - rightChars.length + 1 + i, lineY, rightChars[i]!, "arrow");
+        setC(endX - rightChars.length + 1 + i, lineY, rightChars[i]!);
       }
       if (rel.label) {
         const lines = splitLines(rel.label);
@@ -239,15 +221,10 @@ export function renderErAscii(
           const labelStart = Math.max(startX, gapMid - Math.floor(line.length / 2));
           const labelY = lineY + 1 + lineIdx;
           increaseSize(canvas, Math.max(labelStart + line.length, 1), Math.max(labelY + 1, 1));
-          increaseRoleCanvasSize(
-            rc,
-            Math.max(labelStart + line.length, 1),
-            Math.max(labelY + 1, 1),
-          );
           for (let i = 0; i < line.length; i++) {
             const lx = labelStart + i;
             if (lx >= startX && lx <= endX) {
-              setC(lx, labelY, line[i]!, "text");
+              setC(lx, labelY, line[i]!);
             }
           }
         }
@@ -260,7 +237,7 @@ export function renderErAscii(
       const endY = lower.y - 1;
       const lineX = upper.x + Math.floor(upper.width / 2);
       for (let y = startY; y <= endY; y++) {
-        setC(lineX, y, lineV, "line");
+        setC(lineX, y, lineV);
       }
       const lowerCX = lower.x + Math.floor(lower.width / 2);
       if (lineX !== lowerCX) {
@@ -268,20 +245,20 @@ export function renderErAscii(
         const lx = Math.min(lineX, lowerCX);
         const rx = Math.max(lineX, lowerCX);
         for (let x = lx; x <= rx; x++) {
-          setC(x, midY, lineH, "line");
+          setC(x, midY, lineH);
         }
         for (let y = midY + 1; y <= endY; y++) {
-          setC(lowerCX, y, lineV, "line");
+          setC(lowerCX, y, lineV);
         }
       }
       const upperChars = getCrowsFootChars(upperCard, useAscii, false);
       for (let i = 0; i < upperChars.length; i++) {
-        setC(lineX - Math.floor(upperChars.length / 2) + i, startY, upperChars[i]!, "arrow");
+        setC(lineX - Math.floor(upperChars.length / 2) + i, startY, upperChars[i]!);
       }
       const targetX = lineX !== lowerCX ? lowerCX : lineX;
       const lowerChars = getCrowsFootChars(lowerCard, useAscii, true);
       for (let i = 0; i < lowerChars.length; i++) {
-        setC(targetX - Math.floor(lowerChars.length / 2) + i, endY, lowerChars[i]!, "arrow");
+        setC(targetX - Math.floor(lowerChars.length / 2) + i, endY, lowerChars[i]!);
       }
       if (rel.label) {
         const lines = splitLines(rel.label);
@@ -296,8 +273,7 @@ export function renderErAscii(
               const lx = labelX + i;
               if (lx >= 0) {
                 increaseSize(canvas, lx + 1, y + 1);
-                increaseRoleCanvasSize(rc, lx + 1, y + 1);
-                setC(lx, y, line[i]!, "text");
+                setC(lx, y, line[i]!);
               }
             }
           }
@@ -305,5 +281,5 @@ export function renderErAscii(
       }
     }
   }
-  return canvasToString(canvas, { roleCanvas: rc, colorMode, theme });
+  return canvasToString(canvas);
 }

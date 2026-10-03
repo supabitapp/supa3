@@ -1,22 +1,10 @@
 import { checkLimit } from "../budget.ts";
 import { MERMAID_ASCII_LIMITS as limits } from "../limits.ts";
 import { parseSequenceDiagram } from "../sequence/parser.ts";
-import type { AsciiConfig, CharRole, AsciiTheme, ColorMode } from "./types.ts";
-import {
-  mkCanvas,
-  mkRoleCanvas,
-  canvasToString,
-  increaseSize,
-  increaseRoleCanvasSize,
-  setRole,
-} from "./canvas.ts";
+import type { AsciiConfig } from "./types.ts";
+import { mkCanvas, canvasToString, increaseSize } from "./canvas.ts";
 import { splitLines, maxLineWidth, lineCount } from "./multiline-utils.ts";
-export function renderSequenceAscii(
-  text: string,
-  config: AsciiConfig,
-  colorMode?: ColorMode,
-  theme?: AsciiTheme,
-): string {
+export function renderSequenceAscii(text: string, config: AsciiConfig): string {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -80,6 +68,33 @@ export function renderSequenceAscii(
     lines: string[];
   }> = [];
   let curY = actorBoxH;
+  function placeNotes(afterIndex: number) {
+    for (const note of diagram.notes) {
+      if (note.afterIndex !== afterIndex) continue;
+      curY += 1;
+      const nLines = splitLines(note.text);
+      const nWidth = Math.max(...nLines.map((l) => l.length)) + 4;
+      const nHeight = nLines.length + 2;
+      const aIdx = actorIdx.get(note.actorIds[0]!) ?? 0;
+      let nx: number;
+      if (note.position === "left") {
+        nx = llX[aIdx]! - nWidth - 1;
+      } else if (note.position === "right") {
+        nx = llX[aIdx]! + 2;
+      } else {
+        if (note.actorIds.length >= 2) {
+          const aIdx2 = actorIdx.get(note.actorIds[1]!) ?? aIdx;
+          nx = Math.floor((llX[aIdx]! + llX[aIdx2]!) / 2) - Math.floor(nWidth / 2);
+        } else {
+          nx = llX[aIdx]! - Math.floor(nWidth / 2);
+        }
+      }
+      nx = Math.max(0, nx);
+      notePositions.push({ x: nx, y: curY, width: nWidth, height: nHeight, lines: nLines });
+      curY += nHeight;
+    }
+  }
+  placeNotes(-1);
   for (let m = 0; m < diagram.messages.length; m++) {
     config.budget?.check();
     for (let b = 0; b < diagram.blocks.length; b++) {
@@ -110,32 +125,7 @@ export function renderSequenceAscii(
       msgArrowY[m] = curY + msgLineCount;
       curY += msgLineCount + 1;
     }
-    for (let n = 0; n < diagram.notes.length; n++) {
-      if (diagram.notes[n]!.afterIndex === m) {
-        curY += 1;
-        const note = diagram.notes[n]!;
-        const nLines = splitLines(note.text);
-        const nWidth = Math.max(...nLines.map((l) => l.length)) + 4;
-        const nHeight = nLines.length + 2;
-        const aIdx = actorIdx.get(note.actorIds[0]!) ?? 0;
-        let nx: number;
-        if (note.position === "left") {
-          nx = llX[aIdx]! - nWidth - 1;
-        } else if (note.position === "right") {
-          nx = llX[aIdx]! + 2;
-        } else {
-          if (note.actorIds.length >= 2) {
-            const aIdx2 = actorIdx.get(note.actorIds[1]!) ?? aIdx;
-            nx = Math.floor((llX[aIdx]! + llX[aIdx2]!) / 2) - Math.floor(nWidth / 2);
-          } else {
-            nx = llX[aIdx]! - Math.floor(nWidth / 2);
-          }
-        }
-        nx = Math.max(0, nx);
-        notePositions.push({ x: nx, y: curY, width: nWidth, height: nHeight, lines: nLines });
-        curY += nHeight;
-      }
-    }
+    placeNotes(m);
     for (let b = 0; b < diagram.blocks.length; b++) {
       if (diagram.blocks[b]!.endIndex === m) {
         curY += 1;
@@ -163,11 +153,9 @@ export function renderSequenceAscii(
     totalW = Math.max(totalW, np.x + np.width + 1);
   }
   const canvas = mkCanvas(totalW, totalH - 1, config.budget);
-  const rc = mkRoleCanvas(totalW, totalH - 1, config.budget);
-  function setC(x: number, y: number, ch: string, role: CharRole): void {
+  function setC(x: number, y: number, ch: string): void {
     if (x >= 0 && x < canvas.length && y >= 0 && y < (canvas[0]?.length ?? 0)) {
       canvas[x]![y] = ch;
-      setRole(rc, x, y, role);
     }
   }
   function drawActorBox(cx: number, topY: number, label: string): void {
@@ -176,28 +164,28 @@ export function renderSequenceAscii(
     const w = maxW + 2 * boxPad + 2;
     const h = lines.length + 2;
     const left = cx - Math.floor(w / 2);
-    setC(left, topY, TL, "border");
-    for (let x = 1; x < w - 1; x++) setC(left + x, topY, H, "border");
-    setC(left + w - 1, topY, TR, "border");
+    setC(left, topY, TL);
+    for (let x = 1; x < w - 1; x++) setC(left + x, topY, H);
+    setC(left + w - 1, topY, TR);
     for (let i = 0; i < lines.length; i++) {
       const row = topY + 1 + i;
-      setC(left, row, V, "border");
-      setC(left + w - 1, row, V, "border");
+      setC(left, row, V);
+      setC(left + w - 1, row, V);
       const line = lines[i]!;
       const ls = left + 1 + boxPad + Math.floor((maxW - line.length) / 2);
       for (let j = 0; j < line.length; j++) {
-        setC(ls + j, row, line[j]!, "text");
+        setC(ls + j, row, line[j]!);
       }
     }
     const bottomY = topY + h - 1;
-    setC(left, bottomY, BL, "border");
-    for (let x = 1; x < w - 1; x++) setC(left + x, bottomY, H, "border");
-    setC(left + w - 1, bottomY, BR, "border");
+    setC(left, bottomY, BL);
+    for (let x = 1; x < w - 1; x++) setC(left + x, bottomY, H);
+    setC(left + w - 1, bottomY, BR);
   }
   for (let i = 0; i < diagram.actors.length; i++) {
     const x = llX[i]!;
     for (let y = actorBoxH; y <= footerY; y++) {
-      setC(x, y, V, "line");
+      setC(x, y, V);
     }
   }
   for (let i = 0; i < diagram.actors.length; i++) {
@@ -205,8 +193,8 @@ export function renderSequenceAscii(
     drawActorBox(llX[i]!, 0, actor.label);
     drawActorBox(llX[i]!, footerY, actor.label);
     if (!useAscii) {
-      setC(llX[i]!, actorBoxH - 1, JT, "junction");
-      setC(llX[i]!, footerY, JB, "junction");
+      setC(llX[i]!, actorBoxH - 1, JT);
+      setC(llX[i]!, footerY, JB);
     }
   }
   for (let m = 0; m < diagram.messages.length; m++) {
@@ -223,18 +211,18 @@ export function renderSequenceAscii(
     if (isSelf) {
       const y0 = msgArrowY[m]!;
       const loopW = Math.max(4, 4);
-      setC(fromX, y0, JL, "junction");
-      for (let x = fromX + 1; x < fromX + loopW; x++) setC(x, y0, lineChar, "line");
-      setC(fromX + loopW, y0, useAscii ? "+" : "┐", "corner");
-      setC(fromX + loopW, y0 + 1, V, "line");
+      setC(fromX, y0, JL);
+      for (let x = fromX + 1; x < fromX + loopW; x++) setC(x, y0, lineChar);
+      setC(fromX + loopW, y0, useAscii ? "+" : "┐");
+      setC(fromX + loopW, y0 + 1, V);
       const labelX = fromX + loopW + 2;
       for (let i = 0; i < msg.label.length; i++) {
-        if (labelX + i < totalW) setC(labelX + i, y0 + 1, msg.label[i]!, "text");
+        if (labelX + i < totalW) setC(labelX + i, y0 + 1, msg.label[i]!);
       }
       const arrowChar = isFilled ? (useAscii ? "<" : "◀") : useAscii ? "<" : "◁";
-      setC(fromX, y0 + 2, arrowChar, "arrow");
-      for (let x = fromX + 1; x < fromX + loopW; x++) setC(x, y0 + 2, lineChar, "line");
-      setC(fromX + loopW, y0 + 2, useAscii ? "+" : "┘", "corner");
+      setC(fromX, y0 + 2, arrowChar);
+      for (let x = fromX + 1; x < fromX + loopW; x++) setC(x, y0 + 2, lineChar);
+      setC(fromX + loopW, y0 + 2, useAscii ? "+" : "┘");
     } else {
       const labelY = msgLabelY[m]!;
       const arrowY = msgArrowY[m]!;
@@ -247,17 +235,17 @@ export function renderSequenceAscii(
         const y = labelY + lineIdx;
         for (let i = 0; i < line.length; i++) {
           const lx = labelStart + i;
-          if (lx >= 0 && lx < totalW) setC(lx, y, line[i]!, "text");
+          if (lx >= 0 && lx < totalW) setC(lx, y, line[i]!);
         }
       }
       if (leftToRight) {
-        for (let x = fromX + 1; x < toX; x++) setC(x, arrowY, lineChar, "line");
+        for (let x = fromX + 1; x < toX; x++) setC(x, arrowY, lineChar);
         const ah = isFilled ? (useAscii ? ">" : "▶") : useAscii ? ">" : "▷";
-        setC(toX, arrowY, ah, "arrow");
+        setC(toX, arrowY, ah);
       } else {
-        for (let x = toX + 1; x < fromX; x++) setC(x, arrowY, lineChar, "line");
+        for (let x = toX + 1; x < fromX; x++) setC(x, arrowY, lineChar);
         const ah = isFilled ? (useAscii ? "<" : "◀") : useAscii ? "<" : "◁";
-        setC(toX, arrowY, ah, "arrow");
+        setC(toX, arrowY, ah);
       }
     }
   }
@@ -278,60 +266,59 @@ export function renderSequenceAscii(
     }
     const bLeft = Math.max(0, minLX - 4);
     const bRight = Math.min(totalW - 1, maxLX + 4);
-    setC(bLeft, topY, TL, "border");
-    for (let x = bLeft + 1; x < bRight; x++) setC(x, topY, H, "border");
-    setC(bRight, topY, TR, "border");
+    setC(bLeft, topY, TL);
+    for (let x = bLeft + 1; x < bRight; x++) setC(x, topY, H);
+    setC(bRight, topY, TR);
     const hdrLabel = block.label ? `${block.type} [${block.label}]` : block.type;
     const hdrLines = splitLines(hdrLabel);
     for (let lineIdx = 0; lineIdx < hdrLines.length && topY + lineIdx < botY; lineIdx++) {
       const line = hdrLines[lineIdx]!;
       for (let i = 0; i < line.length && bLeft + 1 + i < bRight; i++) {
-        setC(bLeft + 1 + i, topY + lineIdx, line[i]!, "text");
+        setC(bLeft + 1 + i, topY + lineIdx, line[i]!);
       }
     }
-    setC(bLeft, botY, BL, "border");
-    for (let x = bLeft + 1; x < bRight; x++) setC(x, botY, H, "border");
-    setC(bRight, botY, BR, "border");
+    setC(bLeft, botY, BL);
+    for (let x = bLeft + 1; x < bRight; x++) setC(x, botY, H);
+    setC(bRight, botY, BR);
     for (let y = topY + 1; y < botY; y++) {
-      setC(bLeft, y, V, "border");
-      setC(bRight, y, V, "border");
+      setC(bLeft, y, V);
+      setC(bRight, y, V);
     }
     for (let d = 0; d < block.dividers.length; d++) {
       const dY = divYMap.get(`${b}:${d}`);
       if (dY === undefined) continue;
       const dashChar = isDashedH();
-      setC(bLeft, dY, JL, "junction");
-      for (let x = bLeft + 1; x < bRight; x++) setC(x, dY, dashChar, "line");
-      setC(bRight, dY, JR, "junction");
+      setC(bLeft, dY, JL);
+      for (let x = bLeft + 1; x < bRight; x++) setC(x, dY, dashChar);
+      setC(bRight, dY, JR);
       const dLabel = block.dividers[d]!.label;
       if (dLabel) {
         const dStr = `[${dLabel}]`;
         for (let i = 0; i < dStr.length && bLeft + 1 + i < bRight; i++) {
-          setC(bLeft + 1 + i, dY, dStr[i]!, "text");
+          setC(bLeft + 1 + i, dY, dStr[i]!);
         }
       }
     }
   }
   for (const np of notePositions) {
     increaseSize(canvas, np.x + np.width, np.y + np.height);
-    increaseRoleCanvasSize(rc, np.x + np.width, np.y + np.height);
-    setC(np.x, np.y, TL, "border");
-    for (let x = 1; x < np.width - 1; x++) setC(np.x + x, np.y, H, "border");
-    setC(np.x + np.width - 1, np.y, TR, "border");
+    setC(np.x, np.y, TL);
+    for (let x = 1; x < np.width - 1; x++) setC(np.x + x, np.y, H);
+    setC(np.x + np.width - 1, np.y, TR);
     for (let l = 0; l < np.lines.length; l++) {
       const ly = np.y + 1 + l;
-      setC(np.x, ly, V, "border");
-      setC(np.x + np.width - 1, ly, V, "border");
+      setC(np.x, ly, V);
+      setC(np.x + np.width - 1, ly, V);
       for (let i = 0; i < np.lines[l]!.length; i++) {
-        setC(np.x + 2 + i, ly, np.lines[l]![i]!, "text");
+        setC(np.x + 2 + i, ly, np.lines[l]![i]!);
       }
     }
     const by = np.y + np.height - 1;
-    setC(np.x, by, BL, "border");
-    for (let x = 1; x < np.width - 1; x++) setC(np.x + x, by, H, "border");
-    setC(np.x + np.width - 1, by, BR, "border");
+    setC(np.x, by, BL);
+    for (let x = 1; x < np.width - 1; x++) setC(np.x + x, by, H);
+    setC(np.x + np.width - 1, by, BR);
   }
-  return canvasToString(canvas, { roleCanvas: rc, colorMode, theme });
+  return canvasToString(canvas);
   function isDashedH(): string {
     return useAscii ? "-" : "╌";
   }

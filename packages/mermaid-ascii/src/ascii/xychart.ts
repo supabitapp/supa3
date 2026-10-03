@@ -1,9 +1,7 @@
 import { validateCanvas, type RenderBudget } from "../budget.ts";
 import { parseXYChart } from "../xychart/parser.ts";
 import type { XYChart } from "../xychart/types.ts";
-import type { AsciiConfig, AsciiTheme, ColorMode, CharRole, Canvas, RoleCanvas } from "./types.ts";
-import { colorizeText } from "./ansi.ts";
-import { getSeriesColor, CHART_ACCENT_FALLBACK } from "../xychart/colors.ts";
+import type { AsciiConfig, Canvas } from "./types.ts";
 const PLOT_WIDTH = 60;
 const PLOT_HEIGHT = 20;
 const UNI = {
@@ -32,36 +30,7 @@ const ASC = {
   cornerBL: "+",
   cornerBR: "+",
 } as const;
-type HexCanvas = (string | null)[][];
-function getSeriesColors(total: number, theme: AsciiTheme): string[] {
-  const accent = theme.accent ?? CHART_ACCENT_FALLBACK;
-  if (total <= 1) return [accent];
-  return Array.from({ length: total }, (_, i) => getSeriesColor(i, accent, theme.bg));
-}
-function roleToHex(role: CharRole, theme: AsciiTheme): string {
-  switch (role) {
-    case "text":
-      return theme.fg;
-    case "border":
-      return theme.border;
-    case "line":
-      return theme.line;
-    case "arrow":
-      return theme.arrow;
-    case "corner":
-      return theme.corner ?? theme.line;
-    case "junction":
-      return theme.junction ?? theme.border;
-    default:
-      return theme.fg;
-  }
-}
-export function renderXYChartAscii(
-  text: string,
-  config: AsciiConfig,
-  colorMode: ColorMode,
-  theme: AsciiTheme,
-): string {
+export function renderXYChartAscii(text: string, config: AsciiConfig): string {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -70,15 +39,13 @@ export function renderXYChartAscii(
   config.budget?.check();
   const ch = config.useAscii ? ASC : UNI;
   if (chart.horizontal) {
-    return renderHorizontal(chart, ch, colorMode, theme, config.budget);
+    return renderHorizontal(chart, ch, config.budget);
   }
-  return renderVertical(chart, ch, colorMode, theme, config.budget);
+  return renderVertical(chart, ch, config.budget);
 }
 function renderVertical(
   chart: XYChart,
   ch: typeof UNI | typeof ASC,
-  colorMode: ColorMode,
-  theme: AsciiTheme,
   budget?: RenderBudget,
 ): string {
   const dataCount = getDataCount(chart);
@@ -103,55 +70,45 @@ function renderVertical(
   const xTitleRow = hasXTitle ? xLabelRow + 1 : -1;
   const totalH = xLabelRow + 1 + (hasXTitle ? 1 : 0) + (hasLegend && !hasTitle ? 0 : 0);
   const canvas = createCanvas(totalW, totalH, budget);
-  const roles = createRoleCanvas(totalW, totalH, budget);
-  const hexColors = createHexCanvas(totalW, totalH, budget);
-  const seriesColors = getSeriesColors(chart.series.length, theme);
   const valueToRow = (v: number): number => {
     const t = (v - yRange.min) / (yRange.max - yRange.min || 1);
     return Math.round(Math.max(0, Math.min(1, t)) * (plotH - 1));
   };
   const bandCenter = (i: number): number => plotLeft + Math.floor(bandW * (i + 0.5));
   if (hasTitle && titleRow >= 0) {
-    writeText(
-      canvas,
-      roles,
-      titleRow,
-      Math.floor(totalW / 2 - chart.title!.length / 2),
-      chart.title!,
-      "text",
-    );
+    writeText(canvas, titleRow, Math.floor(totalW / 2 - chart.title!.length / 2), chart.title!);
   }
   if (hasLegend) {
     const legendRow = hasTitle ? 1 : 0;
-    drawLegend(canvas, roles, hexColors, chart, legendRow, totalW, ch, seriesColors);
+    drawLegend(canvas, chart, legendRow, totalW, ch);
   }
   for (let row = 0; row < plotH; row++) {
     const displayRow = plotTop + (plotH - 1 - row);
-    set(canvas, roles, displayRow, plotLeft - 1, ch.vLine, "border");
+    set(canvas, displayRow, plotLeft - 1, ch.vLine);
   }
-  set(canvas, roles, xAxisRow, plotLeft - 1, ch.origin, "border");
+  set(canvas, xAxisRow, plotLeft - 1, ch.origin);
   for (const tick of yTicks) {
     const row = valueToRow(tick);
     if (row < 0 || row >= plotH) continue;
     const displayRow = plotTop + (plotH - 1 - row);
     const label = formatTickValue(tick);
-    set(canvas, roles, displayRow, plotLeft - 1, row === 0 ? ch.origin : ch.yTick, "border");
+    set(canvas, displayRow, plotLeft - 1, row === 0 ? ch.origin : ch.yTick);
     const labelStart = yGutter - label.length;
-    writeText(canvas, roles, displayRow, Math.max(0, labelStart), label, "text");
+    writeText(canvas, displayRow, Math.max(0, labelStart), label);
   }
   for (let c = plotLeft; c < plotLeft + bandW * dataCount; c++) {
-    set(canvas, roles, xAxisRow, c, ch.hLine, "border");
+    set(canvas, xAxisRow, c, ch.hLine);
   }
   for (let i = 0; i < dataCount; i++) {
     const cx = bandCenter(i);
-    set(canvas, roles, xAxisRow, cx, ch.xTick, "border");
+    set(canvas, xAxisRow, cx, ch.xTick);
     const label = catLabels[i]!;
     const labelStart = cx - Math.floor(label.length / 2);
-    writeText(canvas, roles, xLabelRow, Math.max(0, labelStart), label, "text");
+    writeText(canvas, xLabelRow, Math.max(0, labelStart), label);
   }
   if (hasXTitle && xTitleRow >= 0) {
     const title = chart.xAxis.title!;
-    writeText(canvas, roles, xTitleRow, Math.floor(totalW / 2 - title.length / 2), title, "text");
+    writeText(canvas, xTitleRow, Math.floor(totalW / 2 - title.length / 2), title);
   }
   for (const tick of yTicks) {
     const row = valueToRow(tick);
@@ -159,17 +116,13 @@ function renderVertical(
     const displayRow = plotTop + (plotH - 1 - row);
     for (let c = plotLeft; c < plotLeft + bandW * dataCount; c++) {
       if (get(canvas, displayRow, c) === " ") {
-        set(canvas, roles, displayRow, c, ch.grid, "line");
+        set(canvas, displayRow, c, ch.grid);
       }
     }
   }
-  const barEntries: {
-    data: number[];
-    globalIdx: number;
-  }[] = [];
+  const barEntries: { data: number[] }[] = [];
   for (let si = 0; si < chart.series.length; si++) {
-    if (chart.series[si]!.type === "bar")
-      barEntries.push({ data: chart.series[si]!.data, globalIdx: si });
+    if (chart.series[si]!.type === "bar") barEntries.push({ data: chart.series[si]!.data });
   }
   if (barEntries.length > 0) {
     const barCount = barEntries.length;
@@ -179,7 +132,6 @@ function renderVertical(
     const baseRow = valueToRow(Math.max(0, yRange.min));
     for (let bIdx = 0; bIdx < barEntries.length; bIdx++) {
       const entry = barEntries[bIdx]!;
-      const hexColor = seriesColors[entry.globalIdx]!;
       for (let i = 0; i < entry.data.length; i++) {
         const cx = bandCenter(i);
         const groupLeft = cx - Math.floor(groupW / 2);
@@ -190,26 +142,20 @@ function renderVertical(
         for (let row = fromRow; row <= toRow; row++) {
           const displayRow = plotTop + (plotH - 1 - row);
           for (let c = bx; c < bx + singleBarW; c++) {
-            set(canvas, roles, displayRow, c, ch.bar, "arrow", hexColors, hexColor);
+            set(canvas, displayRow, c, ch.bar);
           }
         }
       }
     }
   }
-  const lineEntries: {
-    data: number[];
-    globalIdx: number;
-  }[] = [];
+  const lineEntries: { data: number[] }[] = [];
   for (let si = 0; si < chart.series.length; si++) {
-    if (chart.series[si]!.type === "line")
-      lineEntries.push({ data: chart.series[si]!.data, globalIdx: si });
+    if (chart.series[si]!.type === "line") lineEntries.push({ data: chart.series[si]!.data });
   }
   for (const entry of lineEntries) {
     if (entry.data.length === 0) continue;
-    const hexColor = seriesColors[entry.globalIdx]!;
     drawStaircaseLine(
       canvas,
-      roles,
       entry.data,
       bandCenter,
       valueToRow,
@@ -218,17 +164,13 @@ function renderVertical(
       plotLeft,
       bandW * dataCount,
       ch,
-      hexColors,
-      hexColor,
     );
   }
-  return canvasToString(canvas, roles, hexColors, colorMode, theme);
+  return canvasToString(canvas);
 }
 function renderHorizontal(
   chart: XYChart,
   ch: typeof UNI | typeof ASC,
-  colorMode: ColorMode,
-  theme: AsciiTheme,
   budget?: RenderBudget,
 ): string {
   const dataCount = getDataCount(chart);
@@ -249,68 +191,54 @@ function renderHorizontal(
   const totalH = plotTop + plotH + 2 + (hasYTitle ? 1 : 0);
   const xAxisRow = plotTop + plotH;
   const canvas = createCanvas(totalW, totalH, budget);
-  const roles = createRoleCanvas(totalW, totalH, budget);
-  const hexColors = createHexCanvas(totalW, totalH, budget);
-  const seriesColors = getSeriesColors(chart.series.length, theme);
   const valueToCol = (v: number): number => {
     const t = (v - yRange.min) / (yRange.max - yRange.min || 1);
     return plotLeft + Math.round(Math.max(0, Math.min(1, t)) * (plotW - 1));
   };
   const bandMid = (i: number): number => plotTop + Math.floor(bandH * (i + 0.5));
   if (hasTitle) {
-    writeText(
-      canvas,
-      roles,
-      0,
-      Math.floor(totalW / 2 - chart.title!.length / 2),
-      chart.title!,
-      "text",
-    );
+    writeText(canvas, 0, Math.floor(totalW / 2 - chart.title!.length / 2), chart.title!);
   }
   if (hasLegend) {
     const legendRow = hasTitle ? 1 : 0;
-    drawLegend(canvas, roles, hexColors, chart, legendRow, totalW, ch, seriesColors);
+    drawLegend(canvas, chart, legendRow, totalW, ch);
   }
   for (let r = plotTop; r < plotTop + plotH; r++) {
-    set(canvas, roles, r, plotLeft - 1, ch.vLine, "border");
+    set(canvas, r, plotLeft - 1, ch.vLine);
   }
-  set(canvas, roles, xAxisRow, plotLeft - 1, ch.origin, "border");
+  set(canvas, xAxisRow, plotLeft - 1, ch.origin);
   for (let i = 0; i < dataCount; i++) {
     const my = bandMid(i);
     const label = catLabels[i]!;
     const labelStart = catGutter - label.length;
-    writeText(canvas, roles, my, Math.max(0, labelStart), label, "text");
+    writeText(canvas, my, Math.max(0, labelStart), label);
   }
   for (let c = plotLeft; c < plotLeft + plotW; c++) {
-    set(canvas, roles, xAxisRow, c, ch.hLine, "border");
+    set(canvas, xAxisRow, c, ch.hLine);
   }
   for (const tick of valueTicks) {
     const cx = valueToCol(tick);
     if (cx < plotLeft || cx >= plotLeft + plotW) continue;
-    set(canvas, roles, xAxisRow, cx, ch.xTick, "border");
+    set(canvas, xAxisRow, cx, ch.xTick);
     const label = formatTickValue(tick);
-    writeText(canvas, roles, xAxisRow + 1, cx - Math.floor(label.length / 2), label, "text");
+    writeText(canvas, xAxisRow + 1, cx - Math.floor(label.length / 2), label);
   }
   if (hasYTitle) {
     const title = chart.yAxis.title!;
-    writeText(canvas, roles, totalH - 1, Math.floor(totalW / 2 - title.length / 2), title, "text");
+    writeText(canvas, totalH - 1, Math.floor(totalW / 2 - title.length / 2), title);
   }
   for (const tick of valueTicks) {
     const cx = valueToCol(tick);
     if (cx < plotLeft || cx >= plotLeft + plotW) continue;
     for (let r = plotTop; r < plotTop + plotH; r++) {
       if (get(canvas, r, cx) === " ") {
-        set(canvas, roles, r, cx, ch.grid, "line");
+        set(canvas, r, cx, ch.grid);
       }
     }
   }
-  const barEntries: {
-    data: number[];
-    globalIdx: number;
-  }[] = [];
+  const barEntries: { data: number[] }[] = [];
   for (let si = 0; si < chart.series.length; si++) {
-    if (chart.series[si]!.type === "bar")
-      barEntries.push({ data: chart.series[si]!.data, globalIdx: si });
+    if (chart.series[si]!.type === "bar") barEntries.push({ data: chart.series[si]!.data });
   }
   if (barEntries.length > 0) {
     const barCount = barEntries.length;
@@ -319,7 +247,6 @@ function renderHorizontal(
     const baseCol = valueToCol(Math.max(0, yRange.min));
     for (let bIdx = 0; bIdx < barEntries.length; bIdx++) {
       const entry = barEntries[bIdx]!;
-      const hexColor = seriesColors[entry.globalIdx]!;
       for (let i = 0; i < entry.data.length; i++) {
         const my = bandMid(i);
         const groupTop = my - Math.floor(groupH / 2);
@@ -329,26 +256,20 @@ function renderHorizontal(
         const toCol = Math.max(baseCol, valCol);
         for (let r = by; r < by + singleBarH; r++) {
           for (let c = fromCol; c <= toCol; c++) {
-            set(canvas, roles, r, c, ch.bar, "arrow", hexColors, hexColor);
+            set(canvas, r, c, ch.bar);
           }
         }
       }
     }
   }
-  const lineEntries: {
-    data: number[];
-    globalIdx: number;
-  }[] = [];
+  const lineEntries: { data: number[] }[] = [];
   for (let si = 0; si < chart.series.length; si++) {
-    if (chart.series[si]!.type === "line")
-      lineEntries.push({ data: chart.series[si]!.data, globalIdx: si });
+    if (chart.series[si]!.type === "line") lineEntries.push({ data: chart.series[si]!.data });
   }
   for (const entry of lineEntries) {
     if (entry.data.length === 0) continue;
-    const hexColor = seriesColors[entry.globalIdx]!;
     drawHorizontalStaircaseLine(
       canvas,
-      roles,
       entry.data,
       bandMid,
       valueToCol,
@@ -357,15 +278,12 @@ function renderHorizontal(
       plotLeft,
       plotW,
       ch,
-      hexColors,
-      hexColor,
     );
   }
-  return canvasToString(canvas, roles, hexColors, colorMode, theme);
+  return canvasToString(canvas);
 }
 function drawStaircaseLine(
   canvas: Canvas,
-  roles: RoleCanvas,
   data: number[],
   bandCenter: (i: number) => number,
   valueToRow: (v: number) => number,
@@ -374,18 +292,13 @@ function drawStaircaseLine(
   plotLeft: number,
   plotTotalW: number,
   ch: typeof UNI | typeof ASC,
-  hexCanvas?: HexCanvas,
-  hexColor?: string | null,
 ): void {
   if (data.length === 0) return;
-  const points = data.map((v, i) => ({
-    col: bandCenter(i),
-    row: valueToRow(v),
-  }));
+  const points = data.map((v, i) => ({ col: bandCenter(i), row: valueToRow(v) }));
   const drawAt = (col: number, row: number, char: string) => {
     const displayRow = plotTop + (plotH - 1 - row);
     if (displayRow >= 0 && col >= plotLeft && col < plotLeft + plotTotalW) {
-      set(canvas, roles, displayRow, col, char, "arrow", hexCanvas, hexColor);
+      set(canvas, displayRow, col, char);
     }
   };
   if (points.length === 1) {
@@ -443,7 +356,6 @@ function drawStaircaseLine(
 }
 function drawHorizontalStaircaseLine(
   canvas: Canvas,
-  roles: RoleCanvas,
   data: number[],
   bandMid: (i: number) => number,
   valueToCol: (v: number) => number,
@@ -452,17 +364,12 @@ function drawHorizontalStaircaseLine(
   plotLeft: number,
   plotW: number,
   ch: typeof UNI | typeof ASC,
-  hexCanvas?: HexCanvas,
-  hexColor?: string | null,
 ): void {
   if (data.length === 0) return;
-  const points = data.map((v, i) => ({
-    row: bandMid(i),
-    col: valueToCol(v),
-  }));
+  const points = data.map((v, i) => ({ row: bandMid(i), col: valueToCol(v) }));
   const drawAt = (row: number, col: number, char: string) => {
     if (row >= plotTop && row < plotTop + plotH && col >= plotLeft && col < plotLeft + plotW) {
-      set(canvas, roles, row, col, char, "arrow", hexCanvas, hexColor);
+      set(canvas, row, col, char);
     }
   };
   if (points.length === 1) {
@@ -505,29 +412,22 @@ function drawHorizontalStaircaseLine(
 }
 function drawLegend(
   canvas: Canvas,
-  roles: RoleCanvas,
-  hexCanvas: HexCanvas,
   chart: XYChart,
   row: number,
   totalW: number,
   ch: typeof UNI | typeof ASC,
-  seriesColors: string[],
 ): void {
-  type LegendItem = {
-    symbol: string;
-    label: string;
-    globalIdx: number;
-  };
+  type LegendItem = { symbol: string; label: string };
   const items: LegendItem[] = [];
   let barIdx = 0,
     lineIdx = 0;
   for (let si = 0; si < chart.series.length; si++) {
     const s = chart.series[si]!;
     if (s.type === "bar") {
-      items.push({ symbol: ch.bar, label: `Bar ${barIdx + 1}`, globalIdx: si });
+      items.push({ symbol: ch.bar, label: `Bar ${barIdx + 1}` });
       barIdx++;
     } else {
-      items.push({ symbol: ch.hLine, label: `Line ${lineIdx + 1}`, globalIdx: si });
+      items.push({ symbol: ch.hLine, label: `Line ${lineIdx + 1}` });
       lineIdx++;
     }
   }
@@ -541,10 +441,10 @@ function drawLegend(
   for (let i = 0; i < items.length; i++) {
     if (i > 0) col += 2;
     const item = items[i]!;
-    set(canvas, roles, row, col, item.symbol, "arrow", hexCanvas, seriesColors[item.globalIdx]);
+    set(canvas, row, col, item.symbol);
     col += 1;
     col += 1;
-    writeText(canvas, roles, row, col, item.label, "text");
+    writeText(canvas, row, col, item.label);
     col += item.label.length;
   }
 }
@@ -553,34 +453,9 @@ function createCanvas(width: number, height: number, budget?: RenderBudget): Can
   budget?.allocate(width, height);
   return Array.from({ length: width }, () => Array.from({ length: height }, () => " "));
 }
-function createRoleCanvas(width: number, height: number, budget?: RenderBudget): RoleCanvas {
-  validateCanvas(width, height);
-  budget?.allocate(width, height);
-  return Array.from({ length: width }, () =>
-    Array.from<CharRole | null>({ length: height }).fill(null),
-  );
-}
-function createHexCanvas(width: number, height: number, budget?: RenderBudget): HexCanvas {
-  validateCanvas(width, height);
-  budget?.allocate(width, height);
-  return Array.from({ length: width }, () =>
-    Array.from<string | null>({ length: height }).fill(null),
-  );
-}
-function set(
-  canvas: Canvas,
-  roles: RoleCanvas,
-  row: number,
-  col: number,
-  char: string,
-  role: CharRole,
-  hexCanvas?: HexCanvas,
-  hex?: string | null,
-): void {
+function set(canvas: Canvas, row: number, col: number, char: string): void {
   if (col >= 0 && col < canvas.length && row >= 0 && row < canvas[0]!.length) {
     canvas[col]![row] = char;
-    roles[col]![row] = role;
-    if (hexCanvas && hex) hexCanvas[col]![row] = hex;
   }
 }
 function get(canvas: Canvas, row: number, col: number): string {
@@ -589,98 +464,21 @@ function get(canvas: Canvas, row: number, col: number): string {
   }
   return " ";
 }
-function writeText(
-  canvas: Canvas,
-  roles: RoleCanvas,
-  row: number,
-  startCol: number,
-  text: string,
-  role: CharRole,
-): void {
+function writeText(canvas: Canvas, row: number, startCol: number, text: string): void {
   for (let i = 0; i < text.length; i++) {
-    set(canvas, roles, row, startCol + i, text[i]!, role);
+    set(canvas, row, startCol + i, text[i]!);
   }
 }
-function canvasToString(
-  canvas: Canvas,
-  roles: RoleCanvas,
-  hexCanvas: HexCanvas,
-  colorMode: ColorMode,
-  theme: AsciiTheme,
-): string {
+function canvasToString(canvas: Canvas): string {
   if (canvas.length === 0) return "";
-  const height = canvas[0]!.length;
-  const width = canvas.length;
   const lines: string[] = [];
-  for (let row = 0; row < height; row++) {
-    const chars: string[] = [];
-    const rowRoles: (CharRole | null)[] = [];
-    const rowHex: (string | null)[] = [];
-    for (let col = 0; col < width; col++) {
-      chars.push(canvas[col]![row]!);
-      rowRoles.push(roles[col]![row]!);
-      rowHex.push(hexCanvas[col]![row]!);
-    }
-    let end = chars.length - 1;
-    while (end >= 0 && chars[end] === " ") end--;
-    if (end < 0) {
-      lines.push("");
-    } else {
-      lines.push(
-        colorizeRow(
-          chars.slice(0, end + 1),
-          rowRoles.slice(0, end + 1),
-          rowHex.slice(0, end + 1),
-          theme,
-          colorMode,
-        ),
-      );
-    }
+  for (let row = 0; row < canvas[0]!.length; row++) {
+    let line = "";
+    for (let col = 0; col < canvas.length; col++) line += canvas[col]![row]!;
+    lines.push(line.replace(/ +$/, ""));
   }
-  while (lines.length > 0 && lines[lines.length - 1] === "") {
-    lines.pop();
-  }
+  while (lines.at(-1) === "") lines.pop();
   return lines.join("\n");
-}
-function colorizeRow(
-  chars: string[],
-  roles: (CharRole | null)[],
-  hexOverrides: (string | null)[],
-  theme: AsciiTheme,
-  mode: ColorMode,
-): string {
-  if (mode === "none") return chars.join("");
-  let result = "";
-  let currentColor: string | null = null;
-  let buffer = "";
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i]!;
-    if (char === " ") {
-      if (buffer.length > 0) {
-        result += currentColor ? colorizeText(buffer, currentColor, mode) : buffer;
-        buffer = "";
-        currentColor = null;
-      }
-      result += " ";
-      continue;
-    }
-    const hexOvr = hexOverrides[i] ?? null;
-    const roleVal = roles[i] ?? null;
-    const color = hexOvr ?? (roleVal ? roleToHex(roleVal, theme) : null);
-    if (color === currentColor) {
-      buffer += char;
-    } else {
-      if (buffer.length > 0) {
-        result += currentColor ? colorizeText(buffer, currentColor, mode) : buffer;
-      }
-      buffer = char;
-      currentColor = color;
-    }
-  }
-  if (buffer.length > 0) {
-    result += currentColor ? colorizeText(buffer, currentColor, mode) : buffer;
-  }
-  return result;
 }
 function getDataCount(chart: XYChart): number {
   if (chart.xAxis.categories) return chart.xAxis.categories.length;

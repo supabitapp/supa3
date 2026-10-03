@@ -89,7 +89,6 @@ export interface AsciiGraph {
   nodes: AsciiNode[];
   edges: AsciiEdge[];
   canvas: Canvas;
-  roleCanvas: RoleCanvas;
   grid: Map<string, AsciiNode>;
   columnWidth: Map<number, number>;
   rowHeight: Map<number, number>;
@@ -112,19 +111,6 @@ export function gridKey(c: GridCoord): string {
   return `${c.x},${c.y}`;
 }
 export const EMPTY_STYLE: AsciiStyleClass = { name: "", styles: {} };
-export type CharRole = "text" | "border" | "line" | "arrow" | "corner" | "junction";
-export type RoleCanvas = (CharRole | null)[][] & { budget?: RenderBudget | undefined };
-export interface AsciiTheme {
-  fg: string;
-  border: string;
-  line: string;
-  arrow: string;
-  accent?: string;
-  bg?: string;
-  corner?: string;
-  junction?: string;
-}
-export type ColorMode = "none" | "ansi16" | "ansi256" | "truecolor" | "html";
 export interface EdgeBundle {
   type: "fan-in" | "fan-out";
   edges: AsciiEdge[];

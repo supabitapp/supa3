@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { renderMermaidDiagram } from "./mermaidRenderer";
 
 export function MermaidBlock({
@@ -19,11 +20,15 @@ export function MermaidBlock({
   const [rendered, setRendered] = useState<{ source: string; output: string | null } | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copyToClipboard, isCopied } = useCopyToClipboard<string>({
+    timeout: 1200,
+    target: "diagram content",
+    onCopy: setCopiedText,
+  });
   const output = complete && rendered?.source === source ? rendered.output : null;
   const showingDiagram = output !== null && !showSource;
   const content = showingDiagram ? output : source;
-  const copied = copiedText === content;
+  const copied = isCopied && copiedText === content;
   const copyLabel = copied ? "Copied" : showingDiagram ? "Copy diagram" : "Copy source";
 
   useEffect(() => {
@@ -47,27 +52,6 @@ export function MermaidBlock({
       current = false;
     };
   }, [complete, source, visible]);
-
-  useEffect(
-    () => () => {
-      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
-    },
-    [],
-  );
-
-  async function copyContent() {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopiedText(content);
-      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => {
-        setCopiedText(null);
-        copyTimer.current = null;
-      }, 1200);
-    } catch (cause) {
-      console.error("Failed to copy diagram content", cause);
-    }
-  }
 
   return (
     <div
@@ -106,7 +90,7 @@ export function MermaidBlock({
                   variant="ghost-muted"
                   size="icon-xs"
                   aria-label={copyLabel}
-                  onClick={copyContent}
+                  onClick={() => copyToClipboard(content, content)}
                 />
               }
             >
