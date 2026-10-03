@@ -3,7 +3,7 @@ import type { VcsListRefsInput, VcsListRefsResult } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 
-import { resolveDefaultWorktreeBaseBranch } from "../features/threads/projectThreadCreationValidation";
+import { resolveDefaultWorktreeBaseBranch } from "../lib/worktree-base-branch";
 import { appAtomRegistry } from "./atom-registry";
 import {
   confirmThreadOutboxMessageQueued,

@@ -110,10 +110,8 @@ import {
   resolveNewTaskLocalWorkspaceSelection,
 } from "./new-task-context-presentation";
 import { resolveEnvironmentProjectMatch } from "./new-task-project-selection";
-import {
-  resolveDefaultWorktreeBaseBranch,
-  resolveProjectThreadCreationBranch,
-} from "./projectThreadCreationValidation";
+import { resolveDefaultWorktreeBaseBranch } from "../../lib/worktree-base-branch";
+import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
 
 type WorkspaceMode = "local" | "worktree";
 
