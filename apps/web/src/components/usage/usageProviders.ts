@@ -55,9 +55,7 @@ export function providersWithUsage(
   }[],
 ): readonly UsageProviderKind[] {
   const active = new Set(
-    totals
-      .filter((entry) => entry.totalTokens > 0 || entry.costUsd > 0)
-      .map((entry) => entry.provider),
+    totals.flatMap((entry) => (entry.totalTokens > 0 || entry.costUsd > 0 ? [entry.provider] : [])),
   );
   return PROVIDER_ORDER.filter((provider) => active.has(provider));
 }

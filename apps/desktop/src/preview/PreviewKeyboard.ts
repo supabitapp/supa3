@@ -215,9 +215,7 @@ export function makePreviewAutomationNativeKeySequence(
       [4, "meta"],
       [8, "shift"],
     ] as const
-  )
-    .filter(([mask]) => keyDown.modifiers & mask)
-    .map(([, modifier]) => modifier);
+  ).flatMap(([mask, modifier]) => (keyDown.modifiers & mask ? [modifier] : []));
   const shared = {
     keyCode: keyDown.key.startsWith("Arrow") ? keyDown.key.slice(5) : keyDown.key,
     modifiers,

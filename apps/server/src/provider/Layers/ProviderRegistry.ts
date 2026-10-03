@@ -682,9 +682,7 @@ export const ProviderRegistryLive = Layer.effect(
         }
 
         const rebuiltInstanceIds = new Set(
-          newlyAdded
-            .map(([instanceId]) => instanceId)
-            .filter((instanceId) => previousSubs.has(instanceId)),
+          newlyAdded.flatMap(([instanceId]) => (previousSubs.has(instanceId) ? [instanceId] : [])),
         );
         if (rebuiltInstanceIds.size > 0) {
           const [previousProviders, providers] = yield* Ref.modify(

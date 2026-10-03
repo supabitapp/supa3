@@ -24,9 +24,9 @@ export function relayManagedEnvironmentIds(
   }>,
 ): ReadonlySet<EnvironmentId> {
   return new Set(
-    environments
-      .filter((environment) => environment.isRelayManaged)
-      .map((environment) => environment.environmentId),
+    environments.flatMap((environment) =>
+      environment.isRelayManaged ? [environment.environmentId] : [],
+    ),
   );
 }
 

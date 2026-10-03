@@ -80,17 +80,18 @@ export function environmentThemeDefinition(theme: EnvironmentTheme): ThemeDefini
 export function publishedThemeDefinitions(
   themes: ReadonlyArray<EnvironmentTheme>,
 ): ReadonlyArray<ThemeDefinition> {
-  return themes
-    .filter((theme) => {
-      if (isReservedThemeId(theme.id)) return false;
-      if (theme.canvas !== undefined && theme.accent !== undefined) return true;
-      const otherAppearance = theme.appearance === "dark" ? "light" : "dark";
-      return [theme.colors, theme.variants?.[otherAppearance]].some(
-        (colors) =>
-          colors !== undefined && Object.keys(lenientThemeColorOverrides(colors)).length > 0,
-      );
-    })
-    .map(environmentThemeDefinition);
+  return themes.flatMap((theme) => {
+    if (isReservedThemeId(theme.id)) return [];
+    if (theme.canvas !== undefined && theme.accent !== undefined) {
+      return [environmentThemeDefinition(theme)];
+    }
+    const otherAppearance = theme.appearance === "dark" ? "light" : "dark";
+    const hasColors = [theme.colors, theme.variants?.[otherAppearance]].some(
+      (colors) =>
+        colors !== undefined && Object.keys(lenientThemeColorOverrides(colors)).length > 0,
+    );
+    return hasColors ? [environmentThemeDefinition(theme)] : [];
+  });
 }
 
 /** The published themes as library entries; empty while none are published. */

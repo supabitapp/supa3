@@ -1,6 +1,11 @@
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
+import type { OxlintConfig } from "oxlint";
 import * as NodeURL from "node:url";
+import antiSlop from "ultracite/oxlint/anti-slop";
+import core from "ultracite/oxlint/core";
+import react from "ultracite/oxlint/react";
+import vitest from "ultracite/oxlint/vitest";
 
 /** Import restrictions every file keeps, including the one module exempt from the glyph rule. */
 const RESTRICTED_IMPORT_PATHS = [
@@ -52,6 +57,42 @@ const RESTRICTED_PULL_REQUEST_GLYPH_IMPORTS = {
   message:
     "Pick a glyph by meaning from PullRequestGlyph in apps/web/src/components/pullRequest/pullRequestIcons.tsx so every surface draws the same pull request the same way.",
 };
+
+const ultraciteCore: OxlintConfig = {
+  ...core,
+  rules: Object.fromEntries(
+    Object.entries(core.rules ?? {}).map(([name, setting]) => [
+      name,
+      Array.isArray(setting) ? ["warn", ...setting.slice(1)] : "warn",
+    ]),
+  ),
+};
+
+const ultraciteReact: OxlintConfig = {
+  ...react,
+  rules: Object.fromEntries(
+    Object.entries(react.rules ?? {}).map(([name, setting]) => [
+      name,
+      Array.isArray(setting) ? ["warn", ...setting.slice(1)] : "warn",
+    ]),
+  ),
+};
+
+const ultraciteVitest: OxlintConfig =
+  vitest.overrides === undefined
+    ? vitest
+    : {
+        ...vitest,
+        overrides: vitest.overrides.map((override) => ({
+          ...override,
+          rules: Object.fromEntries(
+            Object.entries(override.rules ?? {}).map(([name, setting]) => [
+              name,
+              Array.isArray(setting) ? ["warn", ...setting.slice(1)] : "warn",
+            ]),
+          ),
+        })),
+      };
 
 export default defineConfig({
   resolve: {
@@ -109,6 +150,7 @@ export default defineConfig({
     ],
   },
   lint: {
+    extends: [ultraciteCore, ultraciteReact, antiSlop, ultraciteVitest],
     ignorePatterns: [
       ".repos",
       ".repos/**",
@@ -121,9 +163,16 @@ export default defineConfig({
       "apps/mobile/android/**",
       "apps/mobile/ios/**",
       "apps/mobile/uniwind-types.d.ts",
+      "oxlint-plugin-t3code/**",
     ],
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
-    jsPlugins: ["./oxlint-plugin-t3code/index.ts", "@shadcn/lint"],
+    jsPlugins: [
+      "./oxlint-plugin-t3code/index.ts",
+      "./oxlint-plugin-t3code/array-guardrails.ts",
+      "./oxlint-plugin-t3code/anti-slop-effect.ts",
+      "./oxlint-plugin-t3code/test-waits.ts",
+      "@shadcn/lint",
+    ],
     settings: {
       shadcn: { ui: "~/components/ui" },
     },
@@ -133,6 +182,29 @@ export default defineConfig({
       perf: "warn",
     },
     rules: {
+      "anti-slop/no-chained-type-assertions": "warn",
+      "anti-slop/no-conditional-empty-object-spread": "warn",
+      "anti-slop/no-known-value-widening": "warn",
+      "anti-slop/no-module-mocking": "warn",
+      "anti-slop/no-object-parameters": "warn",
+      "anti-slop/no-reflect-apply": "warn",
+      "anti-slop/no-reflect-get": "warn",
+      "anti-slop/no-runtime-typeof": ["warn", { allowInTypeGuards: true }],
+      "anti-slop/no-shape-in-symbol-names": "off",
+      "anti-slop/no-unknown-parameters": "warn",
+      "anti-slop/no-unknown-returns": "warn",
+      "anti-slop/no-unknown-type-aliases": "warn",
+      "anti-slop/no-unsafe-dictionary-type": "warn",
+      "anti-slop/no-widen-then-assert": "warn",
+      "anti-slop/require-safety-comment-for-type-assertion": "off",
+      "array-guardrails/no-array-filter-map": "error",
+      "array-guardrails/no-reduce-accumulator-copy": "error",
+      "oxc/no-accumulating-spread": "error",
+      "anti-slop-effect/no-manual-effect-error-tag": "warn",
+      "anti-slop-effect/no-manual-tag-comparison": "warn",
+      "anti-slop-effect/no-manual-tagged-construction": "warn",
+      "anti-slop-effect/no-service-constructor-imports": "warn",
+      "anti-slop-effect/prefer-effect-match": "warn",
       "unicorn/no-array-sort": "off",
       "unicorn/consistent-function-scoping": "off",
       "oxc/no-map-spread": "off",
@@ -169,6 +241,32 @@ export default defineConfig({
       "t3code/namespace-node-imports": "error",
     },
     overrides: [
+      {
+        files: ["vite.config.ts"],
+        rules: {
+          "eslint/sort-keys": "off",
+          "unicorn/relative-url-style": "off",
+        },
+      },
+      {
+        files: [
+          "**/*.{test,spec,test-d,spec-d}.{ts,tsx,js,jsx}",
+          "**/__tests__/**/*.{ts,tsx,js,jsx}",
+        ],
+        rules: {
+          "array-guardrails/no-array-filter-map": "warn",
+          "oxc/no-accumulating-spread": "warn",
+          "test-waits/no-long-waits": "warn",
+          "vitest/no-conditional-expect": "error",
+          "vitest/no-conditional-tests": "error",
+          "vitest/no-disabled-tests": "error",
+          "vitest/no-duplicate-hooks": "error",
+          "vitest/no-focused-tests": "error",
+          "vitest/no-identical-title": "error",
+          "vitest/no-standalone-expect": "error",
+          "vitest/no-test-return-statement": "error",
+        },
+      },
       {
         // The one place that reads the host platform to seed the injected references.
         files: ["packages/shared/src/hostProcess.ts"],

@@ -183,9 +183,11 @@ export const resolveOpenInOptions = (
     },
   ];
   const availableEditorSet = new Set(availableEditors);
-  return baseOptions
-    .filter((option) => availableEditorSet.has(option.value))
-    .map((option) => ({ ...option, label: editorLabelForPlatform(option.value, platform) }));
+  return baseOptions.flatMap((option) =>
+    availableEditorSet.has(option.value)
+      ? [{ ...option, label: editorLabelForPlatform(option.value, platform) }]
+      : [],
+  );
 };
 
 function getOpenInIconClass(kind: OpenInOption["kind"]) {

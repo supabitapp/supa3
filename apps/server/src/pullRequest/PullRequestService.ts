@@ -433,7 +433,7 @@ function listCursorAt(
 ): string {
   const seenAt = [
     ...(previous?.updatedBefore === boundary ? previous.seenAt : []),
-    ...fetched.filter((item) => item.updatedAt === boundary).map((item) => item.number),
+    ...fetched.flatMap((item) => (item.updatedAt === boundary ? [item.number] : [])),
   ];
   return `${boundary}|${(previous?.delivered ?? 0) + deliveredCount}|${seenAt.join(",")}`;
 }

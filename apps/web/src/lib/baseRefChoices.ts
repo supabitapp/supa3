@@ -34,14 +34,11 @@ export function buildBaseRefChoices(
     };
   });
 
-  const remoteOnlyChoices = remoteRefs
-    .filter((remote) => unusedRemoteRefs.has(remote))
-    .map((remote) => ({
-      id: `remote:${remote.name}`,
-      label: remote.name,
-      local: null,
-      remote,
-    }));
+  const remoteOnlyChoices = remoteRefs.flatMap((remote) =>
+    unusedRemoteRefs.has(remote)
+      ? [{ id: `remote:${remote.name}`, label: remote.name, local: null, remote }]
+      : [],
+  );
 
   return [...pairedChoices, ...remoteOnlyChoices];
 }

@@ -26,7 +26,7 @@ export const retainSettingsScope: SearchMiddleware<SettingsScopeSearch> = ({ sea
   const result = next(search);
   if (TARGET_INPUT_KEYS.some((key) => Object.hasOwn(result, key))) return result;
   const previousScope = Object.fromEntries(
-    SCOPE_KEYS.filter((key) => search[key] !== undefined).map((key) => [key, search[key]]),
+    SCOPE_KEYS.flatMap((key) => (search[key] !== undefined ? [[key, search[key]]] : [])),
   );
   return { ...previousScope, ...result };
 };

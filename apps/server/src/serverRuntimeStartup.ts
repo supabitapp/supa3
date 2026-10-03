@@ -841,9 +841,11 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   const git = yield* GitVcsDriver.GitVcsDriver;
   const workspaceRoots = [
     ...new Set(
-      projects
-        .filter((project) => resolveProjectSettings(settings, project.id).settings.defaultAutoPull)
-        .map((project) => project.workspaceRoot),
+      projects.flatMap((project) =>
+        resolveProjectSettings(settings, project.id).settings.defaultAutoPull
+          ? [project.workspaceRoot]
+          : [],
+      ),
     ),
   ];
 

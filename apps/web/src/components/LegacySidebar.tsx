@@ -2695,10 +2695,8 @@ function LocalSecondaryStatus() {
           <TriangleAlertIcon />
           <AlertTitle>Couldn't connect {failed.map((entry) => entry.label).join(", ")}</AlertTitle>
           <AlertDescription>
-            {failed
-              .map((entry) => entry.error)
-              .filter(Boolean)
-              .join("; ") || "The backend didn't respond."}
+            {failed.flatMap((entry) => (entry.error ? [entry.error] : [])).join("; ") ||
+              "The backend didn't respond."}
           </AlertDescription>
         </Alert>
       ) : null}

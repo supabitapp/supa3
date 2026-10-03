@@ -150,14 +150,18 @@ function withWorkflowApprovals(
     const id = check.url.match(/\/actions\/runs\/(\d+)(?:\/|$)/)?.[1];
     if (id !== undefined) representedRunIds.add(Number(id));
   }
-  const approvalChecks = runs
-    .filter((run) => !representedRunIds.has(run.id))
-    .map((run): PullRequestCheck => ({
-      name: run.name,
-      status: "action-required",
-      description: "A maintainer must approve this workflow before it can run.",
-      url: run.url,
-    }));
+  const approvalChecks = runs.flatMap((run): ReadonlyArray<PullRequestCheck> =>
+    representedRunIds.has(run.id)
+      ? []
+      : [
+          {
+            name: run.name,
+            status: "action-required",
+            description: "A maintainer must approve this workflow before it can run.",
+            url: run.url,
+          },
+        ],
+  );
   return [
     ...checks,
     ...approvalChecks,

@@ -54,7 +54,9 @@
     "@shadcn/lint": "0.1.5",
     "@types/node": "catalog:",
     "knip": "6.34.0",
+    "oxlint": "1.85.0",
     "typescript": "catalog:",
+    "ultracite": "7.11.0",
     "vite-plus": "catalog:"
   },
   "engines": {

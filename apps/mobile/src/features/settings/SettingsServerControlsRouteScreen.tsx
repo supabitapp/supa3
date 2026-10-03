@@ -258,8 +258,8 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       ) : null
                     }
                   >
-                    {WORKSPACE_CHOICES.filter(
-                      (choice) => choice.mode !== null || !projectSelected,
+                    {WORKSPACE_CHOICES.flatMap((choice) =>
+                      choice.mode !== null || !projectSelected ? [choice] : [],
                     ).map((choice, index) => (
                       <ChoiceRow
                         key={choice.mode ?? "inherit"}
@@ -283,8 +283,8 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       ) : null
                     }
                   >
-                    {SUBMODULE_CHOICES.filter(
-                      (choice) => choice.mode !== null || !projectSelected,
+                    {SUBMODULE_CHOICES.flatMap((choice) =>
+                      choice.mode !== null || !projectSelected ? [choice] : [],
                     ).map((choice, index) => (
                       <ChoiceRow
                         key={choice.mode ?? "inherit"}

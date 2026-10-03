@@ -384,12 +384,14 @@ export function upgradeLegacyContextMessage(text: string): UpgradedLegacyContext
     break;
   }
 
-  const terminals = terminalEntries
-    .map((entry, index) => terminalRecord(entry, index + 1))
-    .filter((record) => record !== null);
-  const elements = elementEntries
-    .map((entry, index) => elementRecord(entry, index + 1))
-    .filter((record) => record !== null);
+  const terminals = terminalEntries.flatMap((entry, index) => {
+    const record = terminalRecord(entry, index + 1);
+    return record === null ? [] : [record];
+  });
+  const elements = elementEntries.flatMap((entry, index) => {
+    const record = elementRecord(entry, index + 1);
+    return record === null ? [] : [record];
+  });
   const previews: PreviewAnnotationContextRecord[] = [];
   for (const [index, previewBody] of previewBodies.entries()) {
     const record = previewRecord(previewBody, index + 1);

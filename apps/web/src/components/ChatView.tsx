@@ -7297,9 +7297,12 @@ export default function ChatView(props: ChatViewProps) {
   const restoreQueuedMessagesToComposer = (messages: ReadonlyArray<QueuedComposerMessage>) => {
     const [firstMessage] = messages;
     if (!firstMessage) return;
-    const prompts = [promptRef.current, ...messages.map((message) => message.prompt)]
-      .map((prompt) => prompt.trim())
-      .filter((prompt) => prompt.length > 0);
+    const prompts = [promptRef.current, ...messages.map((message) => message.prompt)].flatMap(
+      (prompt) => {
+        const trimmed = prompt.trim();
+        return trimmed.length > 0 ? [trimmed] : [];
+      },
+    );
     const nextPrompt = prompts.join("\n\n");
     promptRef.current = nextPrompt;
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);

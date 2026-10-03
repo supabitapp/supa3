@@ -370,11 +370,9 @@ export class MacDesktopBuildPrerequisitesMissingError extends Schema.TaggedError
   },
 ) {
   override get message(): string {
-    const details = MAC_DESKTOP_BUILD_PREREQUISITES.filter((requirement) =>
-      this.missing.includes(requirement.id),
-    )
-      .map((requirement) => `  - ${requirement.description}`)
-      .join("\n");
+    const details = MAC_DESKTOP_BUILD_PREREQUISITES.flatMap((requirement) =>
+      this.missing.includes(requirement.id) ? [`  - ${requirement.description}`] : [],
+    ).join("\n");
     return [
       "macOS desktop build prerequisites are missing:",
       details,
@@ -407,11 +405,9 @@ export class WindowsDesktopBuildPrerequisitesMissingError extends Schema.TaggedE
   },
 ) {
   override get message(): string {
-    const details = WINDOWS_DESKTOP_BUILD_PREREQUISITES.filter((requirement) =>
-      this.missing.includes(requirement.id),
-    )
-      .map((requirement) => `  - ${requirement.description}`)
-      .join("\n");
+    const details = WINDOWS_DESKTOP_BUILD_PREREQUISITES.flatMap((requirement) =>
+      this.missing.includes(requirement.id) ? [`  - ${requirement.description}`] : [],
+    ).join("\n");
     return [
       "Windows desktop build prerequisites are missing:",
       details,
@@ -1747,9 +1743,9 @@ export const preflightLinuxDesktopBuild = Effect.fn("preflightLinuxDesktopBuild"
     },
     { concurrency: "unbounded" },
   );
-  const missing = LINUX_DESKTOP_BUILD_PREREQUISITES.filter(
-    (requirement) => !checks[requirement.id],
-  ).map((requirement) => requirement.id);
+  const missing = LINUX_DESKTOP_BUILD_PREREQUISITES.flatMap((requirement) =>
+    checks[requirement.id] ? [] : [requirement.id],
+  );
 
   if (missing.length > 0) {
     return yield* new LinuxDesktopBuildPrerequisitesMissingError({ missing, rustTarget });
@@ -1787,9 +1783,9 @@ export const preflightMacDesktopBuild = Effect.fn("preflightMacDesktopBuild")(fu
     },
     { concurrency: "unbounded" },
   );
-  const missing = MAC_DESKTOP_BUILD_PREREQUISITES.filter(
-    (requirement) => !checks[requirement.id],
-  ).map((requirement) => requirement.id);
+  const missing = MAC_DESKTOP_BUILD_PREREQUISITES.flatMap((requirement) =>
+    checks[requirement.id] ? [] : [requirement.id],
+  );
   if (missing.length > 0) {
     return yield* new MacDesktopBuildPrerequisitesMissingError({ missing, rustTargets });
   }
@@ -1848,9 +1844,9 @@ export const preflightWindowsDesktopBuild = Effect.fn("preflightWindowsDesktopBu
       },
       { concurrency: "unbounded" },
     );
-    const missing = WINDOWS_DESKTOP_BUILD_PREREQUISITES.filter(
-      (requirement) => !checks[requirement.id],
-    ).map((requirement) => requirement.id);
+    const missing = WINDOWS_DESKTOP_BUILD_PREREQUISITES.flatMap((requirement) =>
+      checks[requirement.id] ? [] : [requirement.id],
+    );
     if (missing.length > 0) {
       return yield* new WindowsDesktopBuildPrerequisitesMissingError({ missing, rustTarget });
     }
@@ -2485,9 +2481,9 @@ function validateBundledClientAssets(clientDir: string) {
     const path = yield* Path.Path;
     const indexPath = path.join(clientDir, "index.html");
     const indexHtml = yield* fs.readFileString(indexPath);
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
+    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    );
     const missing: string[] = [];
 
     for (const ref of refs) {

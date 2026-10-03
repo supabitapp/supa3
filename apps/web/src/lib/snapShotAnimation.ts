@@ -94,9 +94,7 @@ export function pendingSnapShotAnimationIdsForTarget(
   target: SnapShotTarget,
 ): ReadonlyArray<string> {
   const key = targetKey(target);
-  return pending
-    .filter((capture) => targetKey(capture.target) === key)
-    .map((capture) => capture.id);
+  return pending.flatMap((capture) => (targetKey(capture.target) === key ? [capture.id] : []));
 }
 
 export function setSnapShotAnimationDestination(

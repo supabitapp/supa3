@@ -210,11 +210,12 @@ export const resolvePreviousReleaseTag = (
       }
 
       const candidates = tags
-        .map((tag) => ({ tag, parsed: parseStableTag(tag) }))
-        .filter(
-          (entry): entry is { tag: string; parsed: StableVersion } => entry.parsed !== undefined,
-        )
-        .filter((entry) => compareStableVersions(entry.parsed, current) < 0)
+        .flatMap((tag) => {
+          const parsed = parseStableTag(tag);
+          return parsed !== undefined && compareStableVersions(parsed, current) < 0
+            ? [{ tag, parsed }]
+            : [];
+        })
         .toSorted((left, right) => compareStableVersions(right.parsed, left.parsed));
 
       return candidates[0]?.tag;
@@ -226,11 +227,12 @@ export const resolvePreviousReleaseTag = (
     }
 
     const candidates = tags
-      .map((tag) => ({ tag, parsed: parseNightlyTag(tag, channel) }))
-      .filter(
-        (entry): entry is { tag: string; parsed: NightlyVersion } => entry.parsed !== undefined,
-      )
-      .filter((entry) => compareNightlyVersions(entry.parsed, current) < 0)
+      .flatMap((tag) => {
+        const parsed = parseNightlyTag(tag, channel);
+        return parsed !== undefined && compareNightlyVersions(parsed, current) < 0
+          ? [{ tag, parsed }]
+          : [];
+      })
       .toSorted((left, right) => compareNightlyVersions(right.parsed, left.parsed));
 
     return candidates[0]?.tag;

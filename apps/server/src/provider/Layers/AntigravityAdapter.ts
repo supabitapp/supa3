@@ -1280,9 +1280,9 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
     stopAll,
     listSessions: () =>
       Effect.sync(() =>
-        [...sessions.values()]
-          .filter((context) => !context.stopped)
-          .map((context) => ({ ...context.session })),
+        [...sessions.values()].flatMap((context) =>
+          context.stopped ? [] : [{ ...context.session }],
+        ),
       ),
     hasSession: (threadId) =>
       Effect.sync(() => sessions.has(threadId) && !sessions.get(threadId)?.stopped),

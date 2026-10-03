@@ -1036,17 +1036,17 @@ export function ThemeEditorPanel({
 
   const renderColorFields = () => {
     const query = roleQuery.trim().toLowerCase();
-    const groups = THEME_EDITOR_ROLE_GROUPS.map((group) => ({
-      ...group,
-      families: group.families.filter(
+    const groups = THEME_EDITOR_ROLE_GROUPS.flatMap((group) => {
+      const families = group.families.filter(
         (family) =>
           !query ||
           [family.label, ...family.roles.map((role) => getThemeRoleLabel(role))]
             .join(" ")
             .toLowerCase()
             .includes(query),
-      ),
-    })).filter((group) => group.families.length > 0);
+      );
+      return families.length > 0 ? [{ ...group, families }] : [];
+    });
     return isAdvanced ? (
       <div className="space-y-5">
         {groups.map((group) => (
