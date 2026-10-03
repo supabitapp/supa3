@@ -169,10 +169,15 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
   // payload it just persisted is then overwritten with the winning payload
   // inside this mutation, so a crash before the winner's own serialized write
   // cannot leave stale state on disk.
-  const update = (message: QueuedThreadMessage, expectedRevision?: number): Promise<boolean> =>
+  const update = (
+    message: QueuedThreadMessage,
+    expectedRevision?: number,
+    canUpdate?: () => boolean,
+  ): Promise<boolean> =>
     serialize(async () => {
       const staleOrMissing = (): boolean =>
         !currentMessages().some((candidate) => candidate.messageId === message.messageId) ||
+        canUpdate?.() === false ||
         (expectedRevision !== undefined &&
           (revisions.get(message.messageId) ?? 0) !== expectedRevision);
       if (staleOrMissing()) {
@@ -196,9 +201,14 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
         if (winner !== undefined) {
           try {
             await options.storage.write(winner);
-          } catch {
-            // The winner's own serialized write follows this mutation and
-            // owns the failure handling for its payload.
+          } catch (cause) {
+            throw new ThreadOutboxManagerError({
+              operation: "update",
+              environmentId: message.environmentId,
+              threadId: message.threadId,
+              messageId: message.messageId,
+              cause,
+            });
           }
         }
         return false;
