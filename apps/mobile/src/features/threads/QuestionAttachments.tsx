@@ -6,6 +6,7 @@ import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS, type UserInputQuestion } from "@sup
 import { useAtomValue } from "@effect/atom-react";
 import { Alert, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { ComposerAttachmentButton } from "../../components/ComposerAttachmentButton";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
 import { pickComposerFiles, pickComposerMedia } from "../../lib/composerImages";
@@ -162,28 +163,32 @@ export function QuestionAttachments(props: {
           onPickFiles={() => pick("files")}
         />
       ) : null}
-      <ComposerAttachmentStrip
-        environmentId={environmentId}
-        attachments={attachments}
-        onRemove={(id) => {
-          if (!props.disabled) removeComposerDraftAttachment(key, id);
-        }}
-        onPressPreview={setPreviewFile}
-        onPressVideo={(attachment, sourceIdentifier) =>
-          setPreviewVideo({ type: "local", attachment, sourceIdentifier })
-        }
-        onPressDocument={(attachment) =>
-          navigation.navigate("ThreadAttachment", {
-            environmentId: String(environmentId),
-            threadId: String(threadId),
-            attachmentId: attachment.id,
-            name: attachment.name,
-            mimeType: attachment.mimeType,
-            sizeBytes: String(attachment.sizeBytes),
-            draftKey: key,
-          })
-        }
-      />
+      {attachments.length > 0 ? (
+        <Animated.View entering={FadeIn.duration(140)} exiting={FadeOut.duration(120)}>
+          <ComposerAttachmentStrip
+            environmentId={environmentId}
+            attachments={attachments}
+            onRemove={(id) => {
+              if (!props.disabled) removeComposerDraftAttachment(key, id);
+            }}
+            onPressPreview={setPreviewFile}
+            onPressVideo={(attachment, sourceIdentifier) =>
+              setPreviewVideo({ type: "local", attachment, sourceIdentifier })
+            }
+            onPressDocument={(attachment) =>
+              navigation.navigate("ThreadAttachment", {
+                environmentId: String(environmentId),
+                threadId: String(threadId),
+                attachmentId: attachment.id,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                sizeBytes: String(attachment.sizeBytes),
+                draftKey: key,
+              })
+            }
+          />
+        </Animated.View>
+      ) : null}
       <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
       <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
       <TextInputWrapper onPaste={paste}>
