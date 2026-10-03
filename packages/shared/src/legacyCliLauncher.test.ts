@@ -21,7 +21,7 @@ it.skipIf(hostPlatform === "win32")(
     const entry = NodePath.join(root, "node_modules/supacode/dist/bin.mjs");
     const executable = NodePath.join(
       root,
-      `node_modules/@supacode/supacode-${hostPlatform}-${hostArch}/supacode`,
+      `node_modules/@supabitapp/supacode-${hostPlatform}-${hostArch}/supacode`,
     );
     await NodeFSP.mkdir(NodePath.dirname(entry), { recursive: true });
     await NodeFSP.mkdir(NodePath.dirname(executable), { recursive: true });

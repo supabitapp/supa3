@@ -41,11 +41,11 @@ This document covers the unified release workflow for stable and nightly desktop
   - The executable is built with a Node that supports `--build-sea` (`VP_NODE_VERSION=26.8.2`, kept in step with `SEA_NODE_VERSION` in `apps/server/vite.config.ts`), while the repo stays on `engines.node`.
   - macOS archives are signed with the Developer ID certificate and notarized when the Apple secrets are present (ad hoc otherwise, which still runs from `curl`/`tar` installs). Windows executables use the same Azure Trusted Signing setup as the installer. Every native addon in the macOS archive is signed too, since the hardened runtime refuses unsigned libraries.
   - Each archive is extracted and executed on its build runner (`scripts/smoke-cli-archive.ts`) before it is uploaded.
-- Publishes the CLI to npm with OIDC trusted publishing from the same workflow file, as the same bytes the GitHub Release carries: `scripts/build-npm-platform-packages.ts` unpacks the five CLI archives into `@supacode/supacode-<platform>-<arch>` packages (each with `os`/`cpu` set so npm installs only the matching one) and generates the `supacode` launcher, whose `bin/supacode.js` lists them as `optionalDependencies` and execs the installed executable. `npx supacode` therefore needs Node only to run the launcher, never to run the server. `node apps/server/scripts/cli.ts publish` publishes the platform packages first and the launcher last, after a `--dry-run` pass over all of them so an auth or scope error fails before anything is live.
+- Publishes the CLI to npm with OIDC trusted publishing from the same workflow file, as the same bytes the GitHub Release carries: `scripts/build-npm-platform-packages.ts` unpacks the five CLI archives into `@supabitapp/supacode-<platform>-<arch>` packages (each with `os`/`cpu` set so npm installs only the matching one) and generates the `supacode` launcher, whose `bin/supacode.js` lists them as `optionalDependencies` and execs the installed executable. `npx supacode` therefore needs Node only to run the launcher, never to run the server. `node apps/server/scripts/cli.ts publish` publishes the platform packages first and the launcher last, after a `--dry-run` pass over all of them so an auth or scope error fails before anything is live.
   - stable releases publish npm dist-tag `latest`
   - nightly releases publish npm dist-tag `nightly`
   - preview releases publish npm dist-tag `preview`, which nothing resolves unless asked for by name
-  - one-time setup: the `@supacode` npm scope (org) must exist, and `supacode` and each `@supacode/supacode-<platform>-<arch>` package needs a trusted publisher registered for this workflow file (see below).
+  - one-time setup: the `supabitapp` npm account must own the `@supabitapp` scope, and `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package needs a trusted publisher registered for this workflow file (see below).
 - Builds the hosted web app on Vercel while the desktop jobs run, and makes it live only after a release is published:
   - stable releases are aliased to the `latest` hosted app channel
   - nightly releases are aliased to the `nightly` hosted app channel
@@ -174,7 +174,7 @@ One-time Vercel dashboard setup:
   - `make_latest` is always `false`
 - Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
 - Publishes Electron auto-update metadata to the dedicated `nightly` updater channel, so desktop users can opt into that track independently from stable.
-- Publishes the CLI npm packages (`supacode` and `@supacode/supacode-<platform>-<arch>`) to the `nightly` npm dist-tag using the same nightly version.
+- Publishes the CLI npm packages (`supacode` and `@supabitapp/supacode-<platform>-<arch>`) to the `nightly` npm dist-tag using the same nightly version.
 - Does not commit version bumps back to `main`.
 
 ## Server self-update release invariant
@@ -276,18 +276,17 @@ blockmaps, with a 60 MB maximum for a representative sidecar-to-sidecar update.
 
 The workflow runs `node scripts/build-npm-platform-packages.ts` on the downloaded CLI archives, then
 `node apps/server/scripts/cli.ts publish --packages-dir npm-packages`, which runs `npm publish` on
-each `@supacode/supacode-<platform>-<arch>.tgz` and finally on `supacode.tgz`, the launcher. The script publishes
+each `@supabitapp/supacode-<platform>-<arch>.tgz` and finally on `supacode.tgz`, the launcher. The script publishes
 tarballs it built itself rather than directories: `npm publish <dir>` strips `node_modules/` from the
-tarball no matter what `files` says, and the executable loads its native addons from there. Seven
-packages are published per release: `supacode`, `@supacode/supacode-darwin-arm64`, `@supacode/supacode-darwin-x64`,
-`@supacode/supacode-linux-arm64`, `@supacode/supacode-linux-x64`, `@supacode/supacode-win32-arm64`,
-`@supacode/supacode-win32-x64`.
+tarball no matter what `files` says, and the executable loads its native addons from there. Six
+packages are published per release: `supacode`, `@supabitapp/supacode-darwin-arm64`,
+`@supabitapp/supacode-linux-arm64`, `@supabitapp/supacode-linux-x64`, `@supabitapp/supacode-win32-arm64`,
+`@supabitapp/supacode-win32-x64`.
 
 Checklist:
 
-1. Confirm the npm org owns package `supacode` and the `@supacode` scope exists on npm (create the org if
-   it does not).
-2. For `supacode` and each `@supacode/supacode-<platform>-<arch>` package, configure a Trusted Publisher in the
+1. Confirm the `supabitapp` npm account owns package `supacode` and the `@supabitapp` scope.
+2. For `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package, configure a Trusted Publisher in the
    npm package settings (a package that has never been published needs a first publish or a
    placeholder before the setting exists; the `--dry-run` step in `publish_cli` reports which
    names are still rejected):

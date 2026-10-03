@@ -117,17 +117,17 @@ it.layer(NodeServices.layer)("build-npm-platform-packages", (it) => {
       // Platform packages in CLI_ARCHIVE_PLATFORM_KEYS order, launcher last.
       assert.deepStrictEqual(
         outputs.map((output) => output.name),
-        ["@supacode/supacode-darwin-arm64", "@supacode/supacode-linux-x64", "supacode"],
+        ["@supabitapp/supacode-darwin-arm64", "@supabitapp/supacode-linux-x64", "supacode"],
       );
       for (const output of outputs) {
         assert.isTrue(yield* fs.exists(output.tarball), output.tarball);
       }
 
-      const linuxDir = path.join(fixture.outputDir, "@supacode/supacode-linux-x64");
+      const linuxDir = path.join(fixture.outputDir, "@supabitapp/supacode-linux-x64");
       const linuxManifest = yield* decodeManifest(
         yield* fs.readFileString(path.join(linuxDir, "package.json")),
       );
-      assert.equal(linuxManifest.name, "@supacode/supacode-linux-x64");
+      assert.equal(linuxManifest.name, "@supabitapp/supacode-linux-x64");
       assert.equal(linuxManifest.version, VERSION);
       assert.deepStrictEqual(linuxManifest.os, ["linux"]);
       assert.deepStrictEqual(linuxManifest.cpu, ["x64"]);
@@ -152,14 +152,14 @@ it.layer(NodeServices.layer)("build-npm-platform-packages", (it) => {
       // A root README, or npm would display a bundled dependency's.
       assert.include(
         yield* fs.readFileString(path.join(linuxDir, "README.md")),
-        "# @supacode/supacode-linux-x64",
+        "# @supabitapp/supacode-linux-x64",
       );
       assert.isTrue(yield* fs.exists(path.join(linuxDir, "node_modules/node-pty")));
       assert.equal(Number((yield* fs.stat(path.join(linuxDir, "supacode"))).mode) & 0o111, 0o111);
 
       const darwinManifest = yield* decodeManifest(
         yield* fs.readFileString(
-          path.join(fixture.outputDir, "@supacode/supacode-darwin-arm64/package.json"),
+          path.join(fixture.outputDir, "@supabitapp/supacode-darwin-arm64/package.json"),
         ),
       );
       assert.deepStrictEqual(darwinManifest.os, ["darwin"]);
@@ -174,22 +174,22 @@ it.layer(NodeServices.layer)("build-npm-platform-packages", (it) => {
       assert.deepStrictEqual(launcherManifest.bin, { supacode: "./bin/supacode.js" });
       assert.deepStrictEqual(launcherManifest.files, ["bin", "dist"]);
       assert.deepStrictEqual(launcherManifest.optionalDependencies, {
-        "@supacode/supacode-darwin-arm64": VERSION,
-        "@supacode/supacode-linux-x64": VERSION,
+        "@supabitapp/supacode-darwin-arm64": VERSION,
+        "@supabitapp/supacode-linux-x64": VERSION,
       });
       assert.isUndefined(launcherManifest.engines);
       assert.isTrue(yield* fs.exists(path.join(launcherDir, "bin/supacode.js")));
 
       // The scratch dirs must not be left behind next to the packages.
       const outputEntries = yield* fs.readDirectory(fixture.outputDir);
-      assert.deepStrictEqual(outputEntries.sort(), ["@supacode", "supacode", "supacode.tgz"]);
+      assert.deepStrictEqual(outputEntries.sort(), ["@supabitapp", "supacode", "supacode.tgz"]);
 
       // The tarball is what gets published: it must carry node_modules (which
       // `npm publish <dir>` would strip) under npm's `package/` root, with the
       // executable bit intact.
       const listing = yield* run(
         "tar",
-        ["-tzvf", path.join(fixture.outputDir, "@supacode/supacode-linux-x64.tgz")],
+        ["-tzvf", path.join(fixture.outputDir, "@supabitapp/supacode-linux-x64.tgz")],
         { cwd: fixture.outputDir },
       );
       assert.equal(listing.exitCode, 0, listing.stderr);
