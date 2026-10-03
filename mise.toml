@@ -11,4 +11,12 @@ shellcheck = "0.11.0"
 HK_CONFIG_DIR = "{{config_root}}/.hk-config"
 
 [tasks."hooks:install"]
-run = "vp hooks disable && hk install --force-local --mise"
+run = """
+vp config --no-hooks --no-agent
+if [ -n "${CI:-}" ] || { [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]; }; then
+  exit 0
+fi
+vp hooks disable
+hk install --force-local --mise
+"""
+run_windows = "vp config --no-hooks --no-agent && if defined CI (exit /b 0) else (vp hooks disable && hk install --force-local --mise)"
