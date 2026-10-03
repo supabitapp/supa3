@@ -39,14 +39,16 @@ import {
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
+import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
+import { showSkillsInSlashMenuAtom } from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
-import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { matchesCommandMenuSkillQuery } from "./composerCommandMenuSkillSearch";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 
@@ -56,7 +58,6 @@ function composerSelectionAtEnd(draftMessage: string): ComposerEditorSelection {
 
 export function buildComposerSlashCommandItems(input: {
   readonly query: string;
-  readonly atMessageStart: boolean;
   readonly hasThread: boolean;
   readonly hasCompactableConversation?: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
@@ -97,9 +98,6 @@ export function buildComposerSlashCommandItems(input: {
     (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
   );
 
-  // Providers expand commands only at the start of a message. T3 commands
-  // change local state and do not have this restriction.
-  if (!input.atMessageStart) return items;
   for (const command of input.selectedProviderStatus?.slashCommands ?? []) {
     if (!command.name.toLowerCase().includes(query)) continue;
     if (command.name === "compact" && !input.hasCompactableConversation) continue;
@@ -301,6 +299,7 @@ export function useComposerCommandMenu({
     selectedProviderInstanceId,
   ]);
 
+  const showSkillsInSlashMenu = useAtomValue(showSkillsInSlashMenuAtom);
   const trigger = useMemo(() => {
     if (!enabled || selection.start !== selection.end) {
       return null;
@@ -342,10 +341,9 @@ export function useComposerCommandMenu({
 
     if (trigger.kind === "slash-command") {
       const q = trigger.query.toLowerCase();
-      const visibleSkills = getProviderSkillsForSlashMenu(skills, true);
+      const visibleSkills = getProviderSkillsForSlashMenu(skills, showSkillsInSlashMenu);
       const commandItems = buildComposerSlashCommandItems({
         query: q,
-        atMessageStart: trigger.rangeStart === 0,
         hasThread,
         hasCompactableConversation,
         offersUsageLimits,
@@ -362,7 +360,7 @@ export function useComposerCommandMenu({
       });
 
       const skillItems = visibleSkills
-        .filter((skill) => matchesSlashSkillQuery(skill, q))
+        .filter((skill) => matchesCommandMenuSkillQuery(skill, q))
         .map((skill) => ({
           id: `skill:${skill.name}`,
           type: "skill" as const,
@@ -374,7 +372,7 @@ export function useComposerCommandMenu({
       return [...commandItems, ...skillItems];
     }
 
-    if (trigger.kind === "skill") {
+    if (trigger.kind === "skill" || (trigger.kind === "slash-skill" && showSkillsInSlashMenu)) {
       const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,
@@ -494,6 +492,7 @@ export function useComposerCommandMenu({
     pullRequestSearch.entries,
     projectCwd,
     selectedProviderStatus,
+    showSkillsInSlashMenu,
     skills,
     trigger,
     offersUsageLimits,

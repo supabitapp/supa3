@@ -3,6 +3,7 @@ export function resolveComposerMenuActiveItemId(input: {
   highlightedItemId: string | null;
   currentSearchKey: string | null;
   highlightedSearchKey: string | null;
+  defaultToFirst: boolean;
 }): string | null {
   if (input.items.length === 0) {
     return null;
@@ -16,5 +17,5 @@ export function resolveComposerMenuActiveItemId(input: {
     return input.highlightedItemId;
   }
 
-  return input.items[0]?.id ?? null;
+  return input.defaultToFirst ? (input.items[0]?.id ?? null) : null;
 }

@@ -180,19 +180,20 @@ composer when it is empty, and is discarded otherwise.
 
 ## Commands and skills
 
-Type `/` for commands or `$` to add a skill from the selected environment and
-provider. On mobile, both are also available before starting a thread on
-**New task**.
+Type `/` at the start of a message for commands, or `$` anywhere to add a skill
+from the selected environment and provider. Later in the message, `/` followed
+by a letter suggests matching skills too. Enter still sends the message unless
+you arrow to a suggestion first, so paths like `/tmp` stay as typed. On mobile,
+both are also available before starting a thread on **New task**.
 
-The slash menu also includes skills unless you turn off **Settings → General →
-Show skills in slash menu**. Only skills enabled for the provider are listed.
+The slash menu also includes skills unless you turn off **Show skills in slash
+menu**, which also stops `/` from suggesting skills later in a message. It is in
+**Settings → General** on web and desktop, and **Settings → Thread behavior** on
+mobile. Only skills enabled for the provider are listed.
 
 After you add or change skills, plugins, or MCP servers, use **Restart agent
 session** in the command palette on web and desktop. The conversation continues,
 and your next message starts the agent again with the new setup.
-
-Provider commands must start the message to run. supa3 commands such as
-`/model` and `/plan`, and skill mentions, work on any line.
 
 Send `/compact` in an existing conversation to reduce context usage when the
 provider supports it. Web and desktop also offer compaction from the context meter.
