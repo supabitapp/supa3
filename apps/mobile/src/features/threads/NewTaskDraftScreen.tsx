@@ -23,7 +23,7 @@ import {
   KeyboardStickyView,
   useKeyboardState,
 } from "react-native-keyboard-controller";
-import Animated from "react-native-reanimated";
+import Animated, { FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useFontFamily } from "../../lib/useFontFamily";
@@ -1638,7 +1638,7 @@ export function NewTaskDraftScreen(props: {
         }}
       >
         {stripAttachments.length > 0 ? (
-          <View className="px-[14px] pb-2.5">
+          <Animated.View className="px-[14px] pb-2.5" exiting={FadeOut.duration(120)}>
             <ComposerAttachmentStrip
               environmentId={selectedProject.environmentId}
               attachments={stripAttachments}
@@ -1667,7 +1667,7 @@ export function NewTaskDraftScreen(props: {
                       })
               }
             />
-          </View>
+          </Animated.View>
         ) : null}
 
         <View className="px-[14px]">{promptEditor}</View>

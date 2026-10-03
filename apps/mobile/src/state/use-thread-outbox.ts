@@ -36,12 +36,13 @@ export const dispatchingQueuedMessageIdAtom = Atom.make<MessageId | null>(null).
   Atom.withLabel("mobile:thread-outbox:dispatching-message-id"),
 );
 
-export function holdEditingQueuedMessage(messageId: MessageId): void {
+export function holdEditingQueuedMessage(messageId: MessageId): boolean {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
   if (current[messageId]) {
-    return;
+    return false;
   }
   appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: true });
+  return true;
 }
 
 export function releaseEditingQueuedMessage(messageId: MessageId): void {
