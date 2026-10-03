@@ -234,18 +234,18 @@ function piSupacodeMcpExtensionDestPath(cacheDir: string): string {
   return `${cacheDir.replace(/\\/g, "/")}/${PI_SUPACODE_MCP_EXTENSION_FILENAME}`;
 }
 
-export const materializePiSupacodeMcpExtension = Effect.fn("materializePiSupacodeMcpExtension")(function* (
-  cacheDir: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  yield* fs.makeDirectory(cacheDir, { recursive: true });
-  const dest = piSupacodeMcpExtensionDestPath(cacheDir);
-  const existing = yield* fs.readFileString(dest).pipe(Effect.orElseSucceed(() => ""));
-  if (existing !== PI_SUPACODE_MCP_EXTENSION_SOURCE) {
-    yield* fs.writeFileString(dest, PI_SUPACODE_MCP_EXTENSION_SOURCE);
-  }
-  return dest;
-});
+export const materializePiSupacodeMcpExtension = Effect.fn("materializePiSupacodeMcpExtension")(
+  function* (cacheDir: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(cacheDir, { recursive: true });
+    const dest = piSupacodeMcpExtensionDestPath(cacheDir);
+    const existing = yield* fs.readFileString(dest).pipe(Effect.orElseSucceed(() => ""));
+    if (existing !== PI_SUPACODE_MCP_EXTENSION_SOURCE) {
+      yield* fs.writeFileString(dest, PI_SUPACODE_MCP_EXTENSION_SOURCE);
+    }
+    return dest;
+  },
+);
 
 export function buildPiRpcLaunch(input: {
   readonly launchArgs: ReadonlyArray<string>;
@@ -261,7 +261,8 @@ export function buildPiRpcLaunch(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly hasSupacodeMcp: boolean;
 } {
-  const hasSupacodeExtension = input.disableExtensions !== true && input.extensionPath !== undefined;
+  const hasSupacodeExtension =
+    input.disableExtensions !== true && input.extensionPath !== undefined;
   const hasSupacodeMcp = hasSupacodeExtension && input.mcpSession !== undefined;
   const extensionSafeArgs =
     input.disableExtensions === true

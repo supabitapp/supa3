@@ -9,7 +9,10 @@ it("formats package runner commands from their cache entry paths", () => {
       "C:\\Users\\theo\\AppData\\Local\\npm-cache\\_npx\\abc\\node_modules\\supacode\\dist\\bin.mjs",
       "npx supacode serve",
     ],
-    ["/home/theo/.cache/pnpm/dlx/abc/node_modules/supacode/dist/bin.mjs", "pnpm dlx supacode serve"],
+    [
+      "/home/theo/.cache/pnpm/dlx/abc/node_modules/supacode/dist/bin.mjs",
+      "pnpm dlx supacode serve",
+    ],
     [
       "/home/theo/.local/share/pnpm/.pnpm/dlx/abc/node_modules/supacode/dist/bin.mjs",
       "pnpm dlx supacode serve",

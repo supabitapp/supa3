@@ -164,92 +164,91 @@ const waitForIdle = Effect.fn("AcpRegistryOrchestratorV2Live.waitForIdle")(funct
   return yield* Effect.die(new Error(`Timed out waiting for ACP Registry thread ${threadId}.`));
 });
 
-describe.runIf(runAntigravityFixture || process.env.SUPACODE_ACP_REGISTRY_LIVE_ORCHESTRATOR === "1")(
-  "ACP Registry V2 live orchestrator",
-  () => {
-    it.live(
-      `runs and resumes ${runAntigravityFixture ? "Google Antigravity" : "a real registry agent"} through the production V2 harness`,
-      () =>
-        Effect.gen(function* () {
-          const orchestrator = yield* Orchestrator.OrchestratorV2;
-          const projectId = ProjectId.make("project:acp-registry-live");
-          const threadId = ThreadId.make("thread:acp-registry-live");
-          const marker = "ACP_REGISTRY_LIVE_7H3Q";
+describe.runIf(
+  runAntigravityFixture || process.env.SUPACODE_ACP_REGISTRY_LIVE_ORCHESTRATOR === "1",
+)("ACP Registry V2 live orchestrator", () => {
+  it.live(
+    `runs and resumes ${runAntigravityFixture ? "Google Antigravity" : "a real registry agent"} through the production V2 harness`,
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const projectId = ProjectId.make("project:acp-registry-live");
+        const threadId = ThreadId.make("thread:acp-registry-live");
+        const marker = "ACP_REGISTRY_LIVE_7H3Q";
 
-          yield* orchestrator.dispatch({
-            type: "thread.create",
-            createdBy: "user",
-            creationSource: "web",
-            commandId: CommandId.make("command:acp-registry-live:create"),
-            threadId,
-            projectId,
-            title: `ACP Registry live: ${liveAgentId}`,
-            modelSelection: liveModelSelection,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            branch: null,
-            worktreePath: null,
-          });
-          yield* Console.log(
-            `ACP Registry thread created for '${liveAgentId}'; dispatching first prompt.`,
-          );
-          yield* orchestrator.dispatch({
-            type: "message.dispatch",
-            createdBy: "user",
-            creationSource: "web",
-            commandId: CommandId.make("command:acp-registry-live:first"),
-            threadId,
-            messageId: MessageId.make("message:acp-registry-live:first"),
-            text: `Remember this opaque marker. Respond with exactly: ${marker}`,
-            attachments: [],
-            modelSelection: liveModelSelection,
-            dispatchMode: { type: "start_immediately" },
-          });
-          const firstProjection = yield* waitForIdle(threadId, 1);
-          const firstAssistant = firstProjection.messages.findLast(
-            (message) => message.role === "assistant",
-          )?.text;
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("command:acp-registry-live:create"),
+          threadId,
+          projectId,
+          title: `ACP Registry live: ${liveAgentId}`,
+          modelSelection: liveModelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* Console.log(
+          `ACP Registry thread created for '${liveAgentId}'; dispatching first prompt.`,
+        );
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("command:acp-registry-live:first"),
+          threadId,
+          messageId: MessageId.make("message:acp-registry-live:first"),
+          text: `Remember this opaque marker. Respond with exactly: ${marker}`,
+          attachments: [],
+          modelSelection: liveModelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const firstProjection = yield* waitForIdle(threadId, 1);
+        const firstAssistant = firstProjection.messages.findLast(
+          (message) => message.role === "assistant",
+        )?.text;
 
-          assert.deepEqual(
-            firstProjection.runs.map((run) => [run.providerInstanceId, run.status]),
-            [[liveInstanceId, "completed"]],
-          );
-          assert.include(firstAssistant ?? "", marker);
+        assert.deepEqual(
+          firstProjection.runs.map((run) => [run.providerInstanceId, run.status]),
+          [[liveInstanceId, "completed"]],
+        );
+        assert.include(firstAssistant ?? "", marker);
 
-          yield* Console.log("First ACP turn completed; dispatching continuation prompt.");
-          yield* orchestrator.dispatch({
-            type: "message.dispatch",
-            createdBy: "user",
-            creationSource: "web",
-            commandId: CommandId.make("command:acp-registry-live:second"),
-            threadId,
-            messageId: MessageId.make("message:acp-registry-live:second"),
-            text: "Return the opaque marker from the previous turn. Respond with only the marker.",
-            attachments: [],
-            modelSelection: liveModelSelection,
-            dispatchMode: { type: "start_immediately" },
-          });
-          const finalProjection = yield* waitForIdle(threadId, 2);
-          const finalAssistant = finalProjection.messages.findLast(
-            (message) => message.role === "assistant",
-          )?.text;
+        yield* Console.log("First ACP turn completed; dispatching continuation prompt.");
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("command:acp-registry-live:second"),
+          threadId,
+          messageId: MessageId.make("message:acp-registry-live:second"),
+          text: "Return the opaque marker from the previous turn. Respond with only the marker.",
+          attachments: [],
+          modelSelection: liveModelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const finalProjection = yield* waitForIdle(threadId, 2);
+        const finalAssistant = finalProjection.messages.findLast(
+          (message) => message.role === "assistant",
+        )?.text;
 
-          assert.deepEqual(
-            finalProjection.runs.map((run) => [run.providerInstanceId, run.status]),
-            [
-              [liveInstanceId, "completed"],
-              [liveInstanceId, "completed"],
-            ],
-          );
-          assert.include(finalAssistant ?? "", marker);
-          assert.deepEqual(finalProjection.providerSessions.length, 2);
-          assert.isAtLeast(finalProjection.providerThreads.length, 1);
-          assert.deepEqual(
-            finalProjection.providerTurns.map((turn) => turn.status),
-            ["completed", "completed"],
-          );
-        }).pipe(Effect.provide(liveLayer), Effect.scoped),
-      480_000,
-    );
-  },
-);
+        assert.deepEqual(
+          finalProjection.runs.map((run) => [run.providerInstanceId, run.status]),
+          [
+            [liveInstanceId, "completed"],
+            [liveInstanceId, "completed"],
+          ],
+        );
+        assert.include(finalAssistant ?? "", marker);
+        assert.deepEqual(finalProjection.providerSessions.length, 2);
+        assert.isAtLeast(finalProjection.providerThreads.length, 1);
+        assert.deepEqual(
+          finalProjection.providerTurns.map((turn) => turn.status),
+          ["completed", "completed"],
+        );
+      }).pipe(Effect.provide(liveLayer), Effect.scoped),
+    480_000,
+  );
+});

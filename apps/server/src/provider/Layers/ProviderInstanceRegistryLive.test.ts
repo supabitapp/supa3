@@ -407,7 +407,11 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
             driver: ProviderDriverKind.make("codex"),
             enabled: true,
             environment: [
-              { name: "SUPACODEX_COLLAB_SCRIPT", value: fixtures.codexScriptPath, sensitive: false },
+              {
+                name: "SUPACODEX_COLLAB_SCRIPT",
+                value: fixtures.codexScriptPath,
+                sensitive: false,
+              },
             ],
             config: makeCodexConfig({ enabled: true, binaryPath: fixtures.codexBinaryPath }),
           },
@@ -520,7 +524,13 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
             environment: [
               { name: "SUPACODE_CLAUDE_RESET_MARKER", value: marker, sensitive: false },
               ...(claim.usageFailsAfterClaim
-                ? [{ name: "SUPACODE_CLAUDE_USAGE_FAILS_AFTER_CLAIM", value: "1", sensitive: false }]
+                ? [
+                    {
+                      name: "SUPACODE_CLAUDE_USAGE_FAILS_AFTER_CLAIM",
+                      value: "1",
+                      sensitive: false,
+                    },
+                  ]
                 : []),
             ],
             config: makeClaudeConfig({

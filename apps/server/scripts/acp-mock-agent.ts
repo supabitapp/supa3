@@ -40,18 +40,22 @@ const emitUrlElicitation = process.env.SUPACODE_ACP_EMIT_URL_ELICITATION === "1"
 const emitXAiAskUserQuestion = process.env.SUPACODE_ACP_EMIT_XAI_ASK_USER_QUESTION === "1";
 const emitXAiExitPlanMode = process.env.SUPACODE_ACP_EMIT_XAI_EXIT_PLAN_MODE === "1";
 const emitXAiPlanMdWrite = process.env.SUPACODE_ACP_EMIT_XAI_PLAN_MD_WRITE === "1";
-const emitXAiPromptCompleteThenHang = process.env.SUPACODE_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG === "1";
+const emitXAiPromptCompleteThenHang =
+  process.env.SUPACODE_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG === "1";
 const emitXAiRateLimitThenHang = process.env.SUPACODE_ACP_EMIT_XAI_RATE_LIMIT_THEN_HANG === "1";
 const emitXAiAskUserQuestionThenHang =
   process.env.SUPACODE_ACP_EMIT_XAI_ASK_USER_QUESTION_THEN_HANG === "1";
 const emitContentThenHang = process.env.SUPACODE_ACP_EMIT_CONTENT_THEN_HANG === "1";
 const emitPlanThenHang = process.env.SUPACODE_ACP_EMIT_PLAN_THEN_HANG === "1";
 const emitActiveToolThenHang = process.env.SUPACODE_ACP_EMIT_ACTIVE_TOOL_THEN_HANG === "1";
-const emitGrokMonitorPostTurnPoll = process.env.SUPACODE_ACP_EMIT_GROK_MONITOR_POST_TURN_POLL === "1";
-const emitGrokBackgroundTaskStarted = process.env.SUPACODE_ACP_EMIT_GROK_BACKGROUND_TASK_STARTED === "1";
+const emitGrokMonitorPostTurnPoll =
+  process.env.SUPACODE_ACP_EMIT_GROK_MONITOR_POST_TURN_POLL === "1";
+const emitGrokBackgroundTaskStarted =
+  process.env.SUPACODE_ACP_EMIT_GROK_BACKGROUND_TASK_STARTED === "1";
 const emitForeignSessionUpdates = process.env.SUPACODE_ACP_EMIT_FOREIGN_SESSION_UPDATES === "1";
 const waitForResumeRelease = process.env.SUPACODE_ACP_WAIT_FOR_RESUME_RELEASE === "1";
-const completeFirstPromptOnCancel = process.env.SUPACODE_ACP_COMPLETE_FIRST_PROMPT_ON_CANCEL === "1";
+const completeFirstPromptOnCancel =
+  process.env.SUPACODE_ACP_COMPLETE_FIRST_PROMPT_ON_CANCEL === "1";
 const floodStderr = process.env.SUPACODE_ACP_FLOOD_STDERR === "1";
 const hangPromptForever = process.env.SUPACODE_ACP_HANG_PROMPT_FOREVER === "1";
 // Sends fs/write_text_file for this path, then fs/read_text_file, at the start of
@@ -65,7 +69,8 @@ const hangFirstPromptForever = process.env.SUPACODE_ACP_HANG_FIRST_PROMPT_FOREVE
 const emitLateUpdateAfterCancel = process.env.SUPACODE_ACP_EMIT_LATE_UPDATE_AFTER_CANCEL === "1";
 const emitTaskBackgroundedAfterCancel =
   process.env.SUPACODE_ACP_EMIT_TASK_BACKGROUNDED_AFTER_CANCEL === "1";
-const residualCallbackResponseLogPath = process.env.SUPACODE_ACP_RESIDUAL_CALLBACK_RESPONSE_LOG_PATH;
+const residualCallbackResponseLogPath =
+  process.env.SUPACODE_ACP_RESIDUAL_CALLBACK_RESPONSE_LOG_PATH;
 const residualCallbackTriggerPath = process.env.SUPACODE_ACP_RESIDUAL_CALLBACK_TRIGGER_PATH;
 const exitAfterResidualCallbacks = process.env.SUPACODE_ACP_EXIT_AFTER_RESIDUAL_CALLBACKS === "1";
 const emitRunningCommandThenHang = process.env.SUPACODE_ACP_EMIT_RUNNING_COMMAND_THEN_HANG === "1";
@@ -77,8 +82,10 @@ const emitEmptySuccessfulBashThenHang =
 const exitOnCancel = process.env.SUPACODE_ACP_EXIT_ON_CANCEL === "1";
 const runningCommandIgnoresTerm = process.env.SUPACODE_ACP_RUNNING_COMMAND_IGNORE_TERM === "1";
 const runningCommandPidPath = process.env.SUPACODE_ACP_RUNNING_COMMAND_PID_PATH;
-const runningCommandSeparateSession = process.env.SUPACODE_ACP_RUNNING_COMMAND_SEPARATE_SESSION === "1";
-const exitAfterRunningCommandLaunch = process.env.SUPACODE_ACP_EXIT_AFTER_RUNNING_COMMAND_LAUNCH === "1";
+const runningCommandSeparateSession =
+  process.env.SUPACODE_ACP_RUNNING_COMMAND_SEPARATE_SESSION === "1";
+const exitAfterRunningCommandLaunch =
+  process.env.SUPACODE_ACP_EXIT_AFTER_RUNNING_COMMAND_LAUNCH === "1";
 const omitXAiPromptCompleteStopReason =
   process.env.SUPACODE_ACP_OMIT_XAI_PROMPT_COMPLETE_STOP_REASON === "1";
 const failLoadSession = process.env.SUPACODE_ACP_FAIL_LOAD_SESSION === "1";
@@ -86,7 +93,8 @@ const failLoadSessionAfterConfigReplay =
   process.env.SUPACODE_ACP_FAIL_LOAD_SESSION_AFTER_CONFIG_REPLAY === "1";
 const emitLoadReplay = process.env.SUPACODE_ACP_EMIT_LOAD_REPLAY === "1";
 const hangLoadSessionAfterReplay = process.env.SUPACODE_ACP_HANG_LOAD_SESSION_AFTER_REPLAY === "1";
-const delayLoadSessionAfterReplay = process.env.SUPACODE_ACP_DELAY_LOAD_SESSION_AFTER_REPLAY === "1";
+const delayLoadSessionAfterReplay =
+  process.env.SUPACODE_ACP_DELAY_LOAD_SESSION_AFTER_REPLAY === "1";
 const loadSessionDelayMs = Number(process.env.SUPACODE_ACP_LOAD_SESSION_DELAY_MS ?? "5000");
 const emitStaleXAiPromptCompleteBeforeSecondHang =
   process.env.SUPACODE_ACP_EMIT_STALE_XAI_PROMPT_COMPLETE_BEFORE_SECOND_HANG === "1";

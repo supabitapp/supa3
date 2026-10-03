@@ -372,7 +372,8 @@ function selectedQueryMode(defaultMode: ClaudeRecordingQueryMode): ClaudeRecordi
   );
 }
 
-const scenario = readArgValue("--scenario") ?? process.env.SUPACODE_CLAUDE_REPLAY_SCENARIO ?? "simple";
+const scenario =
+  readArgValue("--scenario") ?? process.env.SUPACODE_CLAUDE_REPLAY_SCENARIO ?? "simple";
 const recording = CLAUDE_RECORDINGS[scenario as keyof typeof CLAUDE_RECORDINGS];
 const encodeUnknownJsonString = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 

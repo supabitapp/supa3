@@ -63,7 +63,8 @@ export function resolveProviderCompatibility(
   supacodeVersion = packageJson.version,
 ): ServerProviderCompatibilityAdvisory | undefined {
   const policy = policies?.find(
-    (entry) => entry.driver === driver && satisfiesSemverRange(supacodeVersion, entry.supacodeRange),
+    (entry) =>
+      entry.driver === driver && satisfiesSemverRange(supacodeVersion, entry.supacodeRange),
   );
   if (!policy) return undefined;
   const unprefixed = version?.replace(/^v/, "");

@@ -391,7 +391,9 @@ it.layer(NodeServices.layer)("project lookup with unavailable workspaces", (it) 
       const fs = yield* FileSystem.FileSystem;
       const { baseDir, workspaceRoot, project } = yield* makeProjectLookupFixture();
       yield* fs.rename(workspaceRoot, `${workspaceRoot}-removed`);
-      const replacementDir = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-v2-project-empty-" });
+      const replacementDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "supacode-v2-project-empty-",
+      });
       const error = yield* runCli([
         "project",
         "remove",

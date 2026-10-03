@@ -92,7 +92,9 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
       const batches: Array<ReadonlyArray<{ readonly uuid: string }>> = [];
       const runtimeLayer = AnalyticsService.layer.pipe(
         Layer.provideMerge(
-          ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "supacode-telemetry-retry-" }),
+          ServerConfig.ServerConfig.layerTest(process.cwd(), {
+            prefix: "supacode-telemetry-retry-",
+          }),
         ),
         Layer.provide(
           ConfigProvider.layer(

@@ -35,7 +35,9 @@ const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Se
         ...overrides,
       } satisfies ServerConfig.ServerConfig["Service"];
     }),
-  ).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "supacode-auth-session-test-" })));
+  ).pipe(
+    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "supacode-auth-session-test-" })),
+  );
 
 const makeServerEnvironmentLayer = (environmentId: EnvironmentId) =>
   Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
@@ -131,7 +133,10 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
           ),
         );
 
-      const original = yield* cookieName("/srv/supacode-one", EnvironmentId.make("environment-one"));
+      const original = yield* cookieName(
+        "/srv/supacode-one",
+        EnvironmentId.make("environment-one"),
+      );
       const moved = yield* cookieName("/srv/supacode-moved", EnvironmentId.make("environment-one"));
       const other = yield* cookieName("/srv/supacode-one", EnvironmentId.make("environment-two"));
 

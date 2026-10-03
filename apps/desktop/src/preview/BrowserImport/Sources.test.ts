@@ -131,7 +131,9 @@ describe("Helium on Linux", () => {
     run(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
-        const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-helium-linux-" });
+        const home = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "supacode-helium-linux-",
+        });
         const context = yield* sourcePathContext.pipe(
           Effect.provideService(HostProcessEnvironment, { HOME: home }),
           Effect.provideService(HostProcessPlatform, "linux"),
@@ -722,7 +724,9 @@ describe("Firefox Snap profiles", () => {
     run(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
-        const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-firefox-snap-" });
+        const home = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "supacode-firefox-snap-",
+        });
         const context = yield* sourcePathContext.pipe(
           Effect.provideService(HostProcessEnvironment, { HOME: home }),
           Effect.provideService(HostProcessPlatform, "linux"),

@@ -104,7 +104,9 @@ const withScratch = <A, E>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
-    const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-managed-folders-" });
+    const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: "supacode-managed-folders-",
+    });
     return yield* body({ baseDir }).pipe(Effect.provide(makeLayer(baseDir, options)));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
@@ -132,7 +134,9 @@ it.effect("offers nothing when the data dir sits inside a Git checkout", () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const checkout = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-scratch-repo-" });
+    const checkout = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: "supacode-scratch-repo-",
+    });
     yield* git(checkout, ["init", "--quiet"]);
     const baseDir = path.join(checkout, ".supacode");
     yield* fileSystem.makeDirectory(baseDir);

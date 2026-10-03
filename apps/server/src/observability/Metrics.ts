@@ -33,10 +33,13 @@ export const orchestrationEffectClaimsTotal = Metric.counter(
   },
 );
 
-export const orchestrationEffectQueueWait = Metric.timer("supacode_orchestration_effect_queue_wait", {
-  description:
-    "Time from an orchestration effect's temporal availability until claim, including same-thread blocking.",
-});
+export const orchestrationEffectQueueWait = Metric.timer(
+  "supacode_orchestration_effect_queue_wait",
+  {
+    description:
+      "Time from an orchestration effect's temporal availability until claim, including same-thread blocking.",
+  },
+);
 
 const providerSessionsTotal = Metric.counter("supacode_provider_sessions_total", {
   description: "Total provider session lifecycle operations.",

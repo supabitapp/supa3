@@ -2000,7 +2000,8 @@ export const make = (
           meta !== null &&
           typeof meta === "object" &&
           !Array.isArray(meta) &&
-          (meta as { readonly supacodeSessionLoadReady?: unknown }).supacodeSessionLoadReady === "replay_idle";
+          (meta as { readonly supacodeSessionLoadReady?: unknown }).supacodeSessionLoadReady ===
+            "replay_idle";
         const extractedModelConfigId = extractModelConfigId(sessionSetupResult);
         const nextModelConfigId =
           extractedModelConfigId ?? (syntheticReplayIdle ? current.modelConfigId : undefined);

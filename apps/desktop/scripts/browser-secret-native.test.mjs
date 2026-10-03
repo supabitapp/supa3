@@ -55,7 +55,12 @@ describe.skipIf(hostPlatform !== "linux")("bundled libsecret helper", () => {
     });
 
   it("builds an executable for the requested architecture into a staged resource directory", () => {
-    const output = NodePath.join(directory, "resources", "browser-secret", "supacode-browser-secret");
+    const output = NodePath.join(
+      directory,
+      "resources",
+      "browser-secret",
+      "supacode-browser-secret",
+    );
     NodeChildProcess.execFileSync(process.execPath, [
       NodeURL.fileURLToPath(new URL("./build-browser-secret.mjs", import.meta.url)),
       "--arch",

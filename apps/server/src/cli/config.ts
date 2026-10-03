@@ -94,7 +94,9 @@ export const traceMaxFilesConfig = Config.Int("SUPACODE_TRACE_MAX_FILES").pipe(
 const EnvServerConfig = Config.all({
   logLevel: Config.LogLevel("SUPACODE_LOG_LEVEL").pipe(Config.withDefault("Info")),
   traceMinLevel: Config.LogLevel("SUPACODE_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
-  traceTimingEnabled: Config.Boolean("SUPACODE_TRACE_TIMING_ENABLED").pipe(Config.withDefault(true)),
+  traceTimingEnabled: Config.Boolean("SUPACODE_TRACE_TIMING_ENABLED").pipe(
+    Config.withDefault(true),
+  ),
   traceFile: traceFileConfig,
   traceMaxBytes: Config.Int("SUPACODE_TRACE_MAX_BYTES").pipe(Config.withDefault(10 * 1024 * 1024)),
   traceMaxFiles: traceMaxFilesConfig,
@@ -127,7 +129,10 @@ const EnvServerConfig = Config.all({
   ),
   port: Config.Port("SUPACODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
   host: Config.String("SUPACODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  supacodeHome: Config.String("SUPACODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  supacodeHome: Config.String("SUPACODE_HOME").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
   devUrl: Config.URL("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devAllowedOrigins: Config.String("SUPACODE_DEV_ALLOWED_ORIGINS").pipe(
     Config.withDefault(""),

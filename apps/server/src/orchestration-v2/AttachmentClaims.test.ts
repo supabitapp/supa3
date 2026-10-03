@@ -24,7 +24,9 @@ import {
 } from "./AttachmentClaims.ts";
 
 const testLayer = Layer.mergeAll(NodeServices.layer).pipe(
-  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "supacode-attachment-claims-" })),
+  Layer.provideMerge(
+    ServerConfig.layerTest(process.cwd(), { prefix: "supacode-attachment-claims-" }),
+  ),
   Layer.provideMerge(NodeServices.layer),
 );
 

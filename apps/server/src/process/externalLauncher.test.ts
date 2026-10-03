@@ -673,7 +673,9 @@ it.effect.skipIf(windowsHost)(
       // opens the parent directory instead of misparsing a /select argument.
       assert.ok(spawned);
       assert.equal(spawned.command, "explorer.exe");
-      assert.deepEqual(spawned.args, ['\\\\wsl.localhost\\Ubuntu-24.04\\home\\supacode\\work "quoted"']);
+      assert.deepEqual(spawned.args, [
+        '\\\\wsl.localhost\\Ubuntu-24.04\\home\\supacode\\work "quoted"',
+      ]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

@@ -129,7 +129,9 @@ const PlatformTestLayer = Layer.merge(
     resolveLink: () => Effect.die("unused title link"),
   }),
 );
-const serverConfigLayer = ServerConfig.layerTest(`${ROOT}/work`, { prefix: "supacode-opencode2-live-" });
+const serverConfigLayer = ServerConfig.layerTest(`${ROOT}/work`, {
+  prefix: "supacode-opencode2-live-",
+});
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProcess.layer),
   Layer.provide(serverConfigLayer),
@@ -339,7 +341,10 @@ describe.runIf(binaryPath !== undefined && ROOT !== "")("OpenCode 2 live orchest
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        yield* fs.writeFileString(path.join(ROOT, "work", "hello.txt"), "hello from supacode live\n");
+        yield* fs.writeFileString(
+          path.join(ROOT, "work", "hello.txt"),
+          "hello from supacode live\n",
+        );
         yield* EffectWorker.runDaemonWithOptions({ concurrency: 2 }).pipe(Effect.forkScoped);
 
         // A status check starts a fresh server, which lists no models for its

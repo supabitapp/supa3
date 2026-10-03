@@ -370,7 +370,9 @@ export async function runAcpMcpCliFastPath(
   const endpoint = process.env.SUPACODE_ACP_MCP_ENDPOINT;
   const authorization = process.env.SUPACODE_ACP_MCP_AUTHORIZATION;
   if (endpoint === undefined || authorization === undefined) {
-    process.stderr.write(`${command} requires SUPACODE_ACP_MCP_ENDPOINT and SUPACODE_ACP_MCP_AUTHORIZATION.\n`);
+    process.stderr.write(
+      `${command} requires SUPACODE_ACP_MCP_ENDPOINT and SUPACODE_ACP_MCP_AUTHORIZATION.\n`,
+    );
     process.exitCode = 2;
     return;
   }

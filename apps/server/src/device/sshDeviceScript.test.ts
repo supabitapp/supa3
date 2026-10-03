@@ -52,7 +52,9 @@ describe("remote helper lifecycle", () => {
     Effect.gen(function* () {
       if ((yield* HostProcessPlatform) === "win32") return;
       yield* Effect.promise(async () => {
-        const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "supacode-remote-script-"));
+        const home = await NodeFSP.mkdtemp(
+          NodePath.join(NodeOS.tmpdir(), "supacode-remote-script-"),
+        );
         const bin = NodePath.join(home, "bin");
         await NodeFSP.mkdir(bin);
         await NodeFSP.writeFile(NodePath.join(bin, "adb"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });

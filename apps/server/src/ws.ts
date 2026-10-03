@@ -1452,7 +1452,8 @@ const makeWsRpcLayer = (
             if (importedThread !== null) {
               return yield* new AcpRegistryOperationError({
                 reason: "session_delete_failed",
-                message: "Delete the imported Supacode thread before deleting its native ACP session.",
+                message:
+                  "Delete the imported Supacode thread before deleting its native ACP session.",
               });
             }
             yield* manager.deleteSession({

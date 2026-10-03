@@ -49,7 +49,9 @@ it("reads the served Supacode home back out of a rendered unit or plist", () => 
   });
 
   expect(
-    BootService.bootServiceBaseDirOf(BootService.renderBootServiceUnit(plan("/home/theo/.supacode"))),
+    BootService.bootServiceBaseDirOf(
+      BootService.renderBootServiceUnit(plan("/home/theo/.supacode")),
+    ),
   ).toBe("/home/theo/.supacode");
   // Spaces and specifiers are quoted and escaped on the way in.
   expect(
@@ -449,7 +451,10 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           ),
         ).toEqual(
           platform === "linux"
-            ? ["systemctl --user stop supacode.service", "systemctl --user restart supacode.service"]
+            ? [
+                "systemctl --user stop supacode.service",
+                "systemctl --user restart supacode.service",
+              ]
             : [
                 "launchctl bootout --wait gui/501/com.supaterm.supacode.service",
                 `launchctl bootstrap gui/501 ${plan.unitPath}`,
@@ -716,9 +721,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect(commands.some((command) => command.startsWith("systemctl "))).toBe(false);
       // A bootout can block up to the plist's 90s ExitTimeOut; the runner's
       // 60s default would cancel it and let bootstrap race a loaded job.
-      expect(timeouts.get("launchctl bootout --wait gui/501/com.supaterm.supacode.service")).toEqual(
-        Duration.seconds(120),
-      );
+      expect(
+        timeouts.get("launchctl bootout --wait gui/501/com.supaterm.supacode.service"),
+      ).toEqual(Duration.seconds(120));
     }),
   );
 

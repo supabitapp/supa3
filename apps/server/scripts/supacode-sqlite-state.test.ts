@@ -81,7 +81,9 @@ it.layer(NodeServices.layer)("supacode-sqlite-state", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-sqlite-state-exec-" });
+        const baseDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "supacode-sqlite-state-exec-",
+        });
         yield* createFixtureDatabase(baseDir);
 
         const mutation = yield* runSqliteState({

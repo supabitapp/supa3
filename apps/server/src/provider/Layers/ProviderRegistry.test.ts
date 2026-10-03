@@ -2897,7 +2897,10 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
               ]);
               assert.strictEqual(cursorProvider?.enabled, false);
               assert.strictEqual(cursorProvider?.status, "disabled");
-              assert.strictEqual(cursorProvider?.message, "Cursor is disabled in Supacode settings.");
+              assert.strictEqual(
+                cursorProvider?.message,
+                "Cursor is disabled in Supacode settings.",
+              );
               assert.strictEqual(cursorSpawned, false);
             }).pipe(Effect.provide(runtimeServices));
           }),

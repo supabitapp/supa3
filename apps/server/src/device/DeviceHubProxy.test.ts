@@ -88,7 +88,9 @@ describe("device hub proxy", () => {
     async (path) => {
       const { handler, requests } = fixture([AuthOrchestrationReadScope]);
       const response = await handler(
-        new Request(`http://supacode.test/api/device-hub${path}`, { headers: { upgrade: "websocket" } }),
+        new Request(`http://supacode.test/api/device-hub${path}`, {
+          headers: { upgrade: "websocket" },
+        }),
       );
       expect(response.status).toBe(403);
       expect(requests).toEqual([]);
@@ -106,7 +108,8 @@ describe("device hub proxy", () => {
   });
 
   it("reads Android fold state but requires operate scope to change it", async () => {
-    const path = "http://supacode.test/api/device-hub/vendor/serve-emu/api/fold?device=emulator-5554";
+    const path =
+      "http://supacode.test/api/device-hub/vendor/serve-emu/api/fold?device=emulator-5554";
     const reader = fixture([AuthOrchestrationReadScope]);
     const read = await reader.handler(new Request(path));
     expect(read.status).toBe(200);
@@ -136,7 +139,9 @@ describe("device hub proxy", () => {
     expect(
       (
         await handler(
-          new Request("http://supacode.test/api/device-hub/vendor/serve-sim/exec", { method: "POST" }),
+          new Request("http://supacode.test/api/device-hub/vendor/serve-sim/exec", {
+            method: "POST",
+          }),
         )
       ).status,
     ).toBe(404);

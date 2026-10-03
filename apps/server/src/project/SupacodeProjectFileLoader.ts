@@ -64,44 +64,44 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  const load: SupacodeProjectFileLoader["Service"]["load"] = Effect.fn("SupacodeProjectFileLoader.load")(
-    function* (workspaceRoot) {
-      const filePath = path.join(workspaceRoot, SUPACODE_PROJECT_FILE_NAME);
-      const raw = yield* fileSystem.readFileString(filePath).pipe(
-        Effect.asSome,
-        Effect.catchTags({
-          PlatformError: (error) =>
-            error.reason._tag === "NotFound"
-              ? Effect.succeed(Option.none<string>())
-              : logSupacodeProjectFileLoadError(
-                  new SupacodeProjectFileLoadError({
-                    operation: "read",
-                    workspaceRoot,
-                    filePath,
-                    cause: error,
-                  }),
-                ).pipe(Effect.as(Option.none<string>())),
-        }),
-      );
-      if (Option.isNone(raw)) {
-        return Option.none<SupacodeProjectFile>();
-      }
-      return yield* decodeSupacodeProjectFileJson(raw.value).pipe(
-        Effect.asSome,
-        Effect.catchTags({
-          SchemaError: (error) =>
-            logSupacodeProjectFileLoadError(
-              new SupacodeProjectFileLoadError({
-                operation: "decode",
-                workspaceRoot,
-                filePath,
-                cause: error,
-              }),
-            ).pipe(Effect.as(Option.none<SupacodeProjectFile>())),
-        }),
-      );
-    },
-  );
+  const load: SupacodeProjectFileLoader["Service"]["load"] = Effect.fn(
+    "SupacodeProjectFileLoader.load",
+  )(function* (workspaceRoot) {
+    const filePath = path.join(workspaceRoot, SUPACODE_PROJECT_FILE_NAME);
+    const raw = yield* fileSystem.readFileString(filePath).pipe(
+      Effect.asSome,
+      Effect.catchTags({
+        PlatformError: (error) =>
+          error.reason._tag === "NotFound"
+            ? Effect.succeed(Option.none<string>())
+            : logSupacodeProjectFileLoadError(
+                new SupacodeProjectFileLoadError({
+                  operation: "read",
+                  workspaceRoot,
+                  filePath,
+                  cause: error,
+                }),
+              ).pipe(Effect.as(Option.none<string>())),
+      }),
+    );
+    if (Option.isNone(raw)) {
+      return Option.none<SupacodeProjectFile>();
+    }
+    return yield* decodeSupacodeProjectFileJson(raw.value).pipe(
+      Effect.asSome,
+      Effect.catchTags({
+        SchemaError: (error) =>
+          logSupacodeProjectFileLoadError(
+            new SupacodeProjectFileLoadError({
+              operation: "decode",
+              workspaceRoot,
+              filePath,
+              cause: error,
+            }),
+          ).pipe(Effect.as(Option.none<SupacodeProjectFile>())),
+      }),
+    );
+  });
 
   return SupacodeProjectFileLoader.of({ load });
 });
