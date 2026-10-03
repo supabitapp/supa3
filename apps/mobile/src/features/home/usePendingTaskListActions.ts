@@ -3,10 +3,15 @@ import { useCallback } from "react";
 import { Alert } from "react-native";
 
 import { withThreadDismissal } from "./thread-dismissal";
+import { appAtomRegistry } from "../../state/atom-registry";
 import { removeThreadOutboxMessage } from "../../state/thread-outbox-removal";
 import { clearComposerDraftContent } from "../../state/use-composer-drafts";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
-import { releaseEditingQueuedMessage } from "../../state/use-thread-outbox";
+import {
+  dispatchingQueuedMessageIdAtom,
+  holdEditingQueuedMessage,
+  releaseEditingQueuedMessage,
+} from "../../state/use-thread-outbox";
 
 export function usePendingTaskListActions(): {
   readonly openPendingTask: (pendingTask: PendingNewTask) => void;
@@ -63,15 +68,28 @@ export function usePendingTaskListActions(): {
           text: "Delete",
           style: "destructive",
           onPress: () => {
+            const messageId = pendingTask.message.messageId;
+            if (!holdEditingQueuedMessage(messageId)) {
+              Alert.alert(
+                "Pending task is open",
+                "Close the pending task editor before deleting it.",
+              );
+              return;
+            }
             void withThreadDismissal(
               pendingTask.key,
               async () => {
-                const removed = await removeThreadOutboxMessage(pendingTask.message);
-                if (removed) releaseEditingQueuedMessage(pendingTask.message.messageId);
+                const removed = await removeThreadOutboxMessage(
+                  pendingTask.message,
+                  undefined,
+                  () => appAtomRegistry.get(dispatchingQueuedMessageIdAtom) !== messageId,
+                );
+                releaseEditingQueuedMessage(messageId);
                 return removed;
               },
               (result) => result,
             ).catch((error) => {
+              releaseEditingQueuedMessage(messageId);
               Alert.alert(
                 "Could not delete pending task",
                 error instanceof Error ? error.message : "The pending task could not be removed.",

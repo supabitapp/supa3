@@ -105,43 +105,48 @@ export function SettingsClientStorageRouteScreen() {
                 Inspecting cached data…
               </Text>
             </View>
-          ) : environmentSummaries.length > 0 ? (
-            environmentSummaries.map((environment, index) => (
-              <Animated.View
-                key={environment.environmentId}
-                entering={FadeIn.duration(140)}
-                exiting={FadeOut.duration(120)}
-                layout={LinearTransition.duration(180)}
-              >
-                <CacheEnvironmentRow
-                  environment={environment}
-                  environmentLabel={
-                    savedConnectionsById[environment.environmentId]?.environmentLabel ??
-                    environment.environmentId
-                  }
-                  machine={resolveEnvironmentMachineKind(
-                    serverConfigs.get(environment.environmentId) ?? null,
-                  )}
-                  disabled={isClearing}
-                  first={index === 0}
-                  onClear={() => confirmClearEnvironment(environment)}
-                />
-              </Animated.View>
-            ))
           ) : (
-            <View className="items-center gap-2 px-6 py-8">
-              <SymbolView
-                name="checkmark.circle"
-                size={28}
-                tintColorClassName="accent-icon"
-                type="monochrome"
-                weight="regular"
-              />
-              <Text className="text-center text-base text-foreground">No cached data</Text>
-              <Text className="text-center text-sm text-foreground-muted">
-                Offline cache records will appear here after environments are used.
-              </Text>
-            </View>
+            <>
+              <View>
+                {environmentSummaries.map((environment, index) => (
+                  <Animated.View
+                    key={environment.environmentId}
+                    entering={FadeIn.duration(140)}
+                    exiting={FadeOut.duration(120)}
+                    layout={LinearTransition.duration(180)}
+                  >
+                    <CacheEnvironmentRow
+                      environment={environment}
+                      environmentLabel={
+                        savedConnectionsById[environment.environmentId]?.environmentLabel ??
+                        environment.environmentId
+                      }
+                      machine={resolveEnvironmentMachineKind(
+                        serverConfigs.get(environment.environmentId) ?? null,
+                      )}
+                      disabled={isClearing}
+                      first={index === 0}
+                      onClear={() => confirmClearEnvironment(environment)}
+                    />
+                  </Animated.View>
+                ))}
+              </View>
+              {environmentSummaries.length === 0 ? (
+                <View className="items-center gap-2 px-6 py-8">
+                  <SymbolView
+                    name="checkmark.circle"
+                    size={28}
+                    tintColorClassName="accent-icon"
+                    type="monochrome"
+                    weight="regular"
+                  />
+                  <Text className="text-center text-base text-foreground">No cached data</Text>
+                  <Text className="text-center text-sm text-foreground-muted">
+                    Offline cache records will appear here after environments are used.
+                  </Text>
+                </View>
+              ) : null}
+            </>
           )}
         </SettingsSection>
 

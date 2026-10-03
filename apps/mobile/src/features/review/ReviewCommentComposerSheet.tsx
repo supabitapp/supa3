@@ -4,6 +4,7 @@ import type { EnvironmentId, ThreadId } from "@supacode/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { KeyboardAvoidingView, KeyboardStickyView } from "react-native-keyboard-controller";
+import Animated, { FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 
@@ -267,7 +268,7 @@ export function ReviewCommentComposerSheet(props: ReviewCommentComposerSheetProp
                     </TextInputWrapper>
                   </View>
                   {attachments.length > 0 ? (
-                    <View className="px-4 pb-3 pt-2">
+                    <Animated.View className="px-4 pb-3 pt-2" exiting={FadeOut.duration(120)}>
                       <ComposerAttachmentStrip
                         attachments={attachments}
                         imageBorderRadius={16}
@@ -280,7 +281,7 @@ export function ReviewCommentComposerSheet(props: ReviewCommentComposerSheetProp
                           );
                         }}
                       />
-                    </View>
+                    </Animated.View>
                   ) : null}
                 </View>
               </View>
