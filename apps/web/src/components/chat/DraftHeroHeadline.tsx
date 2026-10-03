@@ -237,11 +237,11 @@ export function DraftHeroHeadline({
             <MenuTrigger
               render={<InlineButton tone="picker" />}
               data-draft-project-trigger=""
-              className="pointer-events-auto max-w-64 align-baseline"
+              className="pointer-events-auto max-w-full align-baseline whitespace-normal break-words"
             />
           }
         >
-          <span className="min-w-0 truncate">
+          <span className="min-w-0 whitespace-normal break-words">
             {isScratchDraft ? "No project" : (activeProjectDisplayName ?? "Choose a project")}
           </span>
         </TooltipTrigger>
