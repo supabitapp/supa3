@@ -1,0 +1,9 @@
+/_build/
+/deps/
+/.mix/
+/.hex/
+/.elixir_ls/
+/clients/node_modules/
+/tmp/
+erl_crash.dump
+*.beam
