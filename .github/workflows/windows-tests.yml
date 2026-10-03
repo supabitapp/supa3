@@ -37,15 +37,8 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      # setup-vp's own cache restores a Linux-shaped store on Windows, which is
-      # slower than no cache (see #7975). Cache pnpm's Windows store directly.
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
       - name: Resolve package cache path
         id: package_cache_path
         shell: pwsh

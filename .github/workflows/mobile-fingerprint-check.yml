@@ -57,23 +57,15 @@ jobs:
             echo "No native fingerprint inputs changed; clearing any stale native change label." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Setup Vite+
+      - name: Setup Mise
         if: steps.changes.outputs.relevant == 'true'
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/mobile...
-
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        if: steps.changes.outputs.relevant == 'true'
+        run: mise exec -- vp install --filter=@supacode/mobile...
       - name: Expose pnpm
         if: steps.changes.outputs.relevant == 'true'
-        run: |
-          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
-          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
-          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
-          "$vp_pnpm_bin/pnpm" --version
+        run: mise exec -- pnpm --version
 
       - name: Fingerprint merge result
         if: steps.changes.outputs.relevant == 'true'

@@ -5,14 +5,29 @@ clients for controlling them locally or remotely.
 
 ## Development
 
-The checkout requires Node.js 24 and Vite+ (`vp`). Install `vp` using the
-[Vite+ installation guide](https://viteplus.dev/guide/).
+The checkout requires Node.js 24 and Mise-managed project tools.
 
-From the repository root:
+### Install the development toolchain
+
+Install Mise using the instructions below, then run these commands from the repository root:
+
+#### macOS / Linux
 
 ```bash
-vp i
-vp run dev
+curl https://mise.run | sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+#### Windows
+
+```powershell
+winget install jdx.mise
+```
+
+```bash
+mise install --locked
+mise exec -- vp i
+mise exec -- vp run dev
 ```
 
 Open the pairing URL printed by the dev runner. See the

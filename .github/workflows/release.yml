@@ -128,12 +128,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
         env:
           pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
 
@@ -246,13 +244,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       - name: Ensure Electron runtime is installed
         run: vp run --filter @supacode/desktop ensure:electron
 
@@ -280,13 +275,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       - name: Ensure Electron runtime is installed
         run: vp run --filter @supacode/desktop ensure:electron
 
@@ -320,16 +312,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
-      # No Electron setup here: `supacode` (apps/server) has no Electron dependency
-      # and none of its tests touch the runtime. Only the non-server `test`
-      # job, which covers @supacode/desktop, needs the download.
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
       - name: Test
         run: vp run --filter supacode test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
@@ -351,15 +337,8 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: false
-
-      # pnpm checks the lockfile and policy before reusing this result. A missing
-      # artifact leaves the cache empty, so installation runs the checks again.
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
       - name: Download dependency verification
         continue-on-error: true
         uses: actions/download-artifact@v8
@@ -562,16 +541,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=supacode...
-              - --filter=@supacode/scripts...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=supacode... --filter=@supacode/scripts...
       - name: Download all CLI archives
         uses: actions/download-artifact@v8
         with:
@@ -623,15 +596,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/scripts...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@supacode/scripts...
       - name: Download all desktop artifacts
         uses: actions/download-artifact@v8
         with:
@@ -820,16 +788,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/scripts...
-              - --filter=@supacode/web...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@supacode/scripts... --filter=@supacode/web...
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
@@ -895,13 +857,8 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
       - name: Alias channel
         shell: bash
         run: |
@@ -967,15 +924,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/marketing...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@supacode/marketing...
       - id: deploy
         name: Build staged deployment
         shell: bash
@@ -1030,13 +982,8 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
       - name: Promote marketing site
         shell: bash
         run: |
@@ -1090,16 +1037,10 @@ jobs:
           echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/scripts...
-              - --filter=@supacode/oxlint-plugin-supacode...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@supacode/scripts... --filter=@supacode/oxlint-plugin-supacode...
       - id: update_versions
         name: Update version strings
         env:
@@ -1154,15 +1095,10 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=@supacode/scripts...
-
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install --filter=@supacode/scripts...
       - name: Announce prerelease on Discord
         if: needs.preflight.outputs.is_prerelease == 'true'
         continue-on-error: true

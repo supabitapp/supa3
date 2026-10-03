@@ -10,17 +10,32 @@ launch Supacode and configure providers afterwards.
 
 ## From source
 
-Use Node.js 24 and Vite+ (`vp`). Get the source from
-[supabitapp/supacode-next](https://github.com/supabitapp/supacode-next), then run these commands
-from the repository root:
+Use Node.js 24 and the Mise-managed project tools. Get the source from
+[supabitapp/supacode-next](https://github.com/supabitapp/supacode-next), install Mise using the
+[development toolchain instructions](../../README.md#install-the-development-toolchain),
+and run these commands from the repository root:
 
 ```bash
-vp i
-vp run dev
+export PATH="$HOME/.local/bin:$PATH"
+mise install --locked
+mise exec -- vp i
+mise exec -- vp run dev
 ```
 
 Open the pairing URL printed by the dev runner to connect the web app.
 See [development](../operations/development.md) for desktop and mobile builds.
+
+### Intel Macs
+
+The pre-commit hook tool is not available for Intel macOS. Install the project tools and run the
+server without installing hooks:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+mise install --locked
+mise exec -- vp i
+mise exec -- vp run dev
+```
 
 ## Command line
 

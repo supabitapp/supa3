@@ -1,5 +1,5 @@
 // Dev container for Supacode. Mirrors CI (ubuntu-24.04, Node 24, Rust stable)
-// and the canonical setup in docs/operations/development.md: global `vp`, `vp i`.
+// and the canonical setup in docs/operations/development.md: Mise, `vp i`.
 // Contributor doc: docs/internals/devcontainer.md
 {
   "name": "Supacode",
@@ -24,6 +24,9 @@
     // Keep all runtime state inside the (gitignored) workspace .supacode, matching
     // the worktree default. An explicit --home-dir still wins.
     "SUPACODE_HOME": "${containerWorkspaceFolder}/.supacode"
+  },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/share/mise/shims:${containerEnv:PATH}"
   },
   "mounts": [
     // vp keeps the pnpm content-addressable store and metadata cache under
