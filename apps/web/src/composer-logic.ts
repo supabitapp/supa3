@@ -11,7 +11,12 @@ import {
 
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
 
-export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
+export type ComposerTriggerKind =
+  | "path"
+  | "pull-request"
+  | "slash-command"
+  | "skill"
+  | "slash-skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
@@ -87,6 +92,14 @@ function tokenStartForCursor(text: string, cursor: number): number {
     index -= 1;
   }
   return index + 1;
+}
+
+function tokenEndForCursor(text: string, cursor: number): number {
+  let index = cursor;
+  while (index < text.length && !isWhitespace(text[index] ?? "")) {
+    index += 1;
+  }
+  return index;
 }
 
 export function expandCollapsedComposerCursor(text: string, cursorInput: number): number {
@@ -243,20 +256,16 @@ export function isCollapsedCursorAdjacentToInlineToken(
 
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
-  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
-  const linePrefix = text.slice(lineStart, cursor);
-
-  if (linePrefix.startsWith("/")) {
-    const commandMatch = /^\/(\S*)$/.exec(linePrefix);
-    if (commandMatch) {
-      const commandQuery = commandMatch[1] ?? "";
-      return {
-        kind: "slash-command",
-        query: commandQuery,
-        rangeStart: lineStart,
-        rangeEnd: cursor,
-      };
-    }
+  const promptPrefix = text.slice(0, cursor);
+  const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
+  const commandMatch = /^\/(\S*)$/.exec(promptPrefix.slice(commandStart));
+  if (commandMatch) {
+    return {
+      kind: "slash-command",
+      query: commandMatch[1] ?? "",
+      rangeStart: commandStart,
+      rangeEnd: cursor,
+    };
   }
 
   const tokenStart = tokenStartForCursor(text, cursor);
@@ -275,6 +284,17 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
     return {
       kind: "skill",
       query: token.slice(skillPrefix[0].length),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
+  if (
+    token.startsWith("/") &&
+    !text.slice(tokenStart + 1, tokenEndForCursor(text, cursor)).includes("/")
+  ) {
+    return {
+      kind: "slash-skill",
+      query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };

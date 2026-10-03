@@ -12,6 +12,7 @@ describe("resolveComposerMenuActiveItemId", () => {
         highlightedItemId: null,
         currentSearchKey: "skill:u",
         highlightedSearchKey: null,
+        defaultToFirst: true,
       }),
     ).toBe("top");
   });
@@ -23,6 +24,7 @@ describe("resolveComposerMenuActiveItemId", () => {
         highlightedItemId: "second",
         currentSearchKey: "skill:u",
         highlightedSearchKey: "skill:u",
+        defaultToFirst: true,
       }),
     ).toBe("second");
   });
@@ -34,6 +36,7 @@ describe("resolveComposerMenuActiveItemId", () => {
         highlightedItemId: "second",
         currentSearchKey: "skill:ui",
         highlightedSearchKey: "skill:u",
+        defaultToFirst: true,
       }),
     ).toBe("top");
   });
@@ -45,8 +48,22 @@ describe("resolveComposerMenuActiveItemId", () => {
         highlightedItemId: "missing",
         currentSearchKey: "skill:ui",
         highlightedSearchKey: "skill:ui",
+        defaultToFirst: true,
       }),
     ).toBe("top");
+  });
+
+  it("waits for an explicit pick when the menu has no default", () => {
+    const search = {
+      items,
+      currentSearchKey: "slash-skill:u",
+      highlightedSearchKey: "slash-skill:u",
+      defaultToFirst: false,
+    };
+    expect(resolveComposerMenuActiveItemId({ ...search, highlightedItemId: null })).toBeNull();
+    expect(resolveComposerMenuActiveItemId({ ...search, highlightedItemId: "second" })).toBe(
+      "second",
+    );
   });
 
   it("clears the active result while async results are empty and resolves against restored results", () => {
@@ -54,6 +71,7 @@ describe("resolveComposerMenuActiveItemId", () => {
       highlightedItemId: "second",
       currentSearchKey: "path:src",
       highlightedSearchKey: "path:src",
+      defaultToFirst: true,
     };
     const cleared = resolveComposerMenuActiveItemId({ ...search, items: [] });
     expect(cleared).toBeNull();

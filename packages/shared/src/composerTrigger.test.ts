@@ -15,6 +15,34 @@ describe("detectComposerTrigger", () => {
       });
     },
   );
+
+  it.each(["/rev", " /rev", "\n/rev"])("treats %j as a command at the prompt start", (text) => {
+    expect(detectComposerTrigger(text, text.length)).toEqual({
+      kind: "slash-command",
+      query: "rev",
+      rangeStart: text.length - 4,
+      rangeEnd: text.length,
+    });
+  });
+
+  it.each(["Use /rev", "/plan then /rev", "Intro\n/rev"])(
+    "treats a later slash as a skill search in %j",
+    (text) => {
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "slash-skill",
+        query: "rev",
+        rangeStart: text.length - 4,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
+  it.each([
+    ["Read /Users/khoi/notes", "Read /Users/khoi/notes".length],
+    ["Read /Users/khoi/notes", "Read /Use".length],
+  ])("leaves slash paths in %j alone with the caret at %i", (text, cursor) => {
+    expect(detectComposerTrigger(text, cursor)).toBeNull();
+  });
 });
 
 describe("serializeComposerFileLink", () => {

@@ -56,7 +56,6 @@ function composerSelectionAtEnd(draftMessage: string): ComposerEditorSelection {
 
 export function buildComposerSlashCommandItems(input: {
   readonly query: string;
-  readonly atMessageStart: boolean;
   readonly hasThread: boolean;
   readonly hasCompactableConversation?: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
@@ -97,9 +96,6 @@ export function buildComposerSlashCommandItems(input: {
     (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
   );
 
-  // Providers expand commands only at the start of a message. T3 commands
-  // change local state and do not have this restriction.
-  if (!input.atMessageStart) return items;
   for (const command of input.selectedProviderStatus?.slashCommands ?? []) {
     if (!command.name.toLowerCase().includes(query)) continue;
     if (command.name === "compact" && !input.hasCompactableConversation) continue;
@@ -345,7 +341,6 @@ export function useComposerCommandMenu({
       const visibleSkills = getProviderSkillsForSlashMenu(skills, true);
       const commandItems = buildComposerSlashCommandItems({
         query: q,
-        atMessageStart: trigger.rangeStart === 0,
         hasThread,
         hasCompactableConversation,
         offersUsageLimits,
@@ -374,7 +369,7 @@ export function useComposerCommandMenu({
       return [...commandItems, ...skillItems];
     }
 
-    if (trigger.kind === "skill") {
+    if (trigger.kind === "skill" || trigger.kind === "slash-skill") {
       const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,

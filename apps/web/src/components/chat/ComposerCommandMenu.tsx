@@ -145,7 +145,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                     : "Searching workspace files..."
                 : (props.emptyStateText ??
                   (props.triggerKind === "skill"
-                    ? "No skills found. Try / to browse provider commands."
+                    ? "No skills found."
                     : props.triggerKind === "path"
                       ? "No matching files or folders."
                       : "No matching command."))}
@@ -224,7 +224,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         {skillSourceKind ? (
           <SkillSourceBadge
             kind={skillSourceKind}
-            showSkillSuffix={props.triggerKind === "skill"}
+            showSkillSuffix={props.triggerKind === "skill" || props.triggerKind === "slash-skill"}
           />
         ) : null}
       </span>
@@ -242,6 +242,7 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   "pull-request": "Pull requests",
   "slash-command": "Commands",
   skill: "Skills",
+  "slash-skill": "Skills",
 };
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
