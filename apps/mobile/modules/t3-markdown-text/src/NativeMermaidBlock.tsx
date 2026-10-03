@@ -94,6 +94,7 @@ export function NativeMermaidBlock({
         />
       </View>
       <ScrollView
+        key={showDiagram ? "diagram" : "source"}
         horizontal
         bounces={false}
         nestedScrollEnabled={Platform.OS === "android"}

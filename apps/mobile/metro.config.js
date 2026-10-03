@@ -2,13 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { getDefaultConfig } = require("expo/metro-config");
-const { getBundleModeMetroConfig } = require("react-native-worklets/bundleMode");
 const { withUniwindConfig } = require("uniwind/metro");
 const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
-const defaultResolveRequest = config.resolver.resolveRequest;
 const workspaceRoot = path.resolve(__dirname, "../..");
 const generatedLicenseModuleRoot = path.join(__dirname, ".generated", "third-party-licenses");
 const licenseGeneratorSource = path.join(
@@ -20,6 +18,7 @@ const licenseGeneratorSource = path.join(
 const escapedWorkspaceRoot = workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const mobileShikiRoot = path.dirname(require.resolve("shiki/package.json", { paths: [__dirname] }));
 const generatedDeviceStreamRoot = path.join(__dirname, ".generated", "device-stream");
+const generatedMermaidWorkletRoot = path.join(__dirname, ".generated", "mermaid-worklet");
 const resolveShikiDependencyRoot = (packageName) => {
   const entryPath = require.resolve(packageName, { paths: [mobileShikiRoot] });
   let currentDir = path.dirname(entryPath);
@@ -38,12 +37,6 @@ const resolveShikiDependencyRoot = (packageName) => {
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
   ...config.resolver,
-  resolveRequest: (context, moduleName, platform) =>
-    (defaultResolveRequest ?? context.resolveRequest)(
-      moduleName.startsWith("@t3tools/") ? { ...context, isESMImport: true } : context,
-      moduleName,
-      platform,
-    ),
   blockList: [
     ...(Array.isArray(config.resolver?.blockList)
       ? config.resolver.blockList
@@ -56,6 +49,7 @@ config.resolver = {
     ...config.resolver?.extraNodeModules,
     "@t3tools/mobile-third-party-licenses": generatedLicenseModuleRoot,
     "@t3tools/mobile-device-stream": generatedDeviceStreamRoot,
+    "@t3tools/mobile-mermaid-worklet": generatedMermaidWorkletRoot,
     shiki: mobileShikiRoot,
     "@shikijs/core": resolveShikiDependencyRoot("@shikijs/core"),
     "@shikijs/engine-javascript": resolveShikiDependencyRoot("@shikijs/engine-javascript"),
@@ -128,12 +122,36 @@ async function prepareDeviceStream() {
   }
 }
 
-module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareDeviceStream()]).then(() =>
-  getBundleModeMetroConfig(
-    withUniwindConfig(config, {
-      cssEntryFile: "./global.css",
-      extraThemes,
-      polyfills: { rem: 14 },
-    }),
-  ),
+async function prepareMermaidWorklet() {
+  const { generateMermaidWorklet } = await import(
+    pathToFileURL(path.join(__dirname, "scripts", "generate-mermaid-worklet.mts")).href
+  );
+  await generateMermaidWorklet();
+  if (process.env.NODE_ENV !== "production") {
+    let rebuild = Promise.resolve();
+    fs.watch(
+      path.join(workspaceRoot, "packages/mermaid-ascii/src"),
+      { persistent: false, recursive: true },
+      (_event, filename) => {
+        if (filename && !String(filename).endsWith(".ts")) return;
+        rebuild = rebuild
+          .then(() => generateMermaidWorklet())
+          .catch((error) => {
+            console.error("Could not rebuild the Mermaid worklet:", error);
+          });
+      },
+    );
+  }
+}
+
+module.exports = Promise.all([
+  generateMobileThirdPartyLicenses(),
+  prepareDeviceStream(),
+  prepareMermaidWorklet(),
+]).then(() =>
+  withUniwindConfig(config, {
+    cssEntryFile: "./global.css",
+    extraThemes,
+    polyfills: { rem: 14 },
+  }),
 );
