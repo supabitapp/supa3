@@ -28,7 +28,7 @@ const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
 export const makeCli = () =>
   Command.make("supa3", { ...sharedServerCommandFlags }).pipe(
-    Command.withDescription("Run the T3 Code server."),
+    Command.withDescription("Run the supa3 server."),
     Command.withHandler((flags) => runServerCommand(flags)),
     Command.withSubcommands([
       acpMcpBridgeCommand,

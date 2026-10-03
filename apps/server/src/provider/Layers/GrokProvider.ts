@@ -87,7 +87,7 @@ export function buildInitialGrokProviderSnapshot(
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Grok is disabled in T3 Code settings.",
+          message: "Grok is disabled in supa3 settings.",
         },
       });
     }
@@ -361,7 +361,7 @@ const discoverGrokMetadataViaAcpInitialize = (
       environment,
       childProcessSpawner,
       cwd: process.cwd(),
-      clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
+      clientInfo: { name: "supa3-provider-probe", version: "0.0.0" },
     });
     const initialized = yield* acp.initialize();
     return {
@@ -393,7 +393,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Grok is disabled in T3 Code settings.",
+        message: "Grok is disabled in supa3 settings.",
       },
     });
   }

@@ -7,10 +7,10 @@ import {
   t3OrchestrationSystemPrompt,
 } from "./T3OrchestrationInstructions.ts";
 
-describe("T3 orchestration provider instructions", () => {
+describe("supa3 orchestration provider instructions", () => {
   it("distinguishes delegated subagents from ordinary top-level threads", () => {
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Use `delegate_task`");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level T3 conversations");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level supa3 conversations");
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
   });
@@ -29,7 +29,7 @@ describe("T3 orchestration provider instructions", () => {
       hasT3Mcp: true,
     });
 
-    assert.include(injected, "<t3_code_orchestration_instructions>");
+    assert.include(injected, "<supa3_orchestration_instructions>");
     assert.include(injected, `<user_request>\n${prompt}\n</user_request>`);
     assert.equal(
       t3OrchestrationPromptForFirstRun({ prompt, runOrdinal: 2, hasT3Mcp: true }),
@@ -41,7 +41,7 @@ describe("T3 orchestration provider instructions", () => {
     );
   });
 
-  it("only exposes the system prompt when the T3 MCP server is attached", () => {
+  it("only exposes the system prompt when the supa3 MCP server is attached", () => {
     assert.equal(t3OrchestrationSystemPrompt(false), undefined);
     assert.equal(t3OrchestrationSystemPrompt(true), T3_CODE_ORCHESTRATION_INSTRUCTIONS);
   });
@@ -52,9 +52,9 @@ describe("T3 orchestration provider instructions", () => {
       state: { interactionMode: "default", hasT3Mcp: true },
     });
 
-    assert.include(injected, "T3 Code interaction mode: Default");
-    assert.include(injected, "T3 Code collaborative browser");
-    assert.include(injected, "T3 Code orchestration");
+    assert.include(injected, "supa3 interaction mode: Default");
+    assert.include(injected, "supa3 collaborative browser");
+    assert.include(injected, "supa3 orchestration");
     assert.include(injected, "<user_request>\nInspect the repository.\n</user_request>");
   });
 
@@ -72,14 +72,14 @@ describe("T3 orchestration provider instructions", () => {
         state: { ...defaultState, interactionMode: "plan" },
         previousState: defaultState,
       }),
-      "T3 Code interaction mode: Plan",
+      "supa3 interaction mode: Plan",
     );
     const withoutMcp = t3AcpPromptWithInstructions({
       prompt,
       state: { interactionMode: "default", hasT3Mcp: false },
     });
-    assert.include(withoutMcp, "T3 Code interaction mode: Default");
-    assert.notInclude(withoutMcp, "T3 Code collaborative browser");
-    assert.notInclude(withoutMcp, "T3 Code orchestration");
+    assert.include(withoutMcp, "supa3 interaction mode: Default");
+    assert.notInclude(withoutMcp, "supa3 collaborative browser");
+    assert.notInclude(withoutMcp, "supa3 orchestration");
   });
 });
