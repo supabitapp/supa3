@@ -28,7 +28,7 @@ before an upload finishes requires you to attach that file again.
 You can drag or paste images into the web or desktop composer. HEIC and HEIF
 photos are converted to JPEG there and when selected from the mobile photo
 library; photos over the image limit are also resized to fit. On mobile, you can
-also send files to supa3 through another app's system share sheet.
+also send files to Supacode through another app's system share sheet.
 
 See [images and videos](#images-and-videos-in-messages) for previewing and saving media.
 
@@ -74,7 +74,7 @@ uses its account catalog and does not support custom models.
 
 ## Model defaults
 
-supa3 remembers your provider, model, and model options for new threads. A
+Supacode remembers your provider, model, and model options for new threads. A
 project's configured model takes precedence; resetting that project setting
 returns to the remembered selection.
 
@@ -151,7 +151,7 @@ minutes long. Canceling, leaving the screen, or an audio interruption discards t
 recording and preserves your existing draft. While recording, the screen stays
 awake; it can sleep normally once recording stops.
 
-Transcription runs on your device. supa3 deletes the temporary audio after
+Transcription runs on your device. Supacode deletes the temporary audio after
 transcription or cancellation; only the message text is sent when you submit.
 
 ## Queued messages
@@ -230,7 +230,7 @@ exist only as chips: deleting a file's last chip removes the file from the messa
 Copy text that holds chips and paste it into another draft, in the same thread or another one,
 and the chips come along with what they point to. Images and files are fetched again from the
 environment they came from; while that happens the chip shows a dashed outline, and if it cannot
-complete supa3 tells you and leaves the chip for you to remove or replace. A chip whose
+complete Supacode tells you and leaves the chip for you to remove or replace. A chip whose
 context is no longer available shows the same dashed outline; hover it for what to do.
 
 Copying a message with the copy button, or copying text out of it, gives other apps readable
@@ -277,7 +277,7 @@ styles, or images from neighboring files.
 
 On web and desktop, HTML and PDF files open as rendered pages. Switch an HTML
 file to source view to read its markup; a link to a specific line opens source
-automatically. HTML previews cannot access your supa3 session.
+automatically. HTML previews cannot access your Supacode session.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.

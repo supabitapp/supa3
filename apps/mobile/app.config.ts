@@ -9,12 +9,12 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const isIosPersonalTeamBuild = repoEnv.SUPACODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
-const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
+const personalTeamBundleIdentifier = repoEnv.SUPACODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
@@ -28,7 +28,7 @@ if (
     !IOS_BUNDLE_IDENTIFIER_PATTERN.test(personalTeamBundleIdentifier))
 ) {
   throw new Error(
-    "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
+    "SUPACODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.supacode when SUPACODE_IOS_PERSONAL_TEAM=1.",
   );
 }
 
@@ -67,24 +67,24 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "supa3 Dev",
-    scheme: "supa3-dev",
-    iosBundleIdentifier: "com.supaterm.supa3.dev",
-    androidPackage: "com.supaterm.supa3.dev",
+    appName: "Supacode Dev",
+    scheme: "supacode-dev",
+    iosBundleIdentifier: "com.supaterm.supacode.dev",
+    androidPackage: "com.supaterm.supacode.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "supa3 Preview",
-    scheme: "supa3-preview",
-    iosBundleIdentifier: "com.supaterm.supa3.preview",
-    androidPackage: "com.supaterm.supa3.preview",
+    appName: "Supacode Preview",
+    scheme: "supacode-preview",
+    iosBundleIdentifier: "com.supaterm.supacode.preview",
+    androidPackage: "com.supaterm.supacode.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "supa3",
-    scheme: "supa3",
-    iosBundleIdentifier: "com.supaterm.supa3",
-    androidPackage: "com.supaterm.supa3",
+    appName: "Supacode",
+    scheme: "supacode",
+    iosBundleIdentifier: "com.supaterm.supacode",
+    androidPackage: "com.supaterm.supacode",
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -121,7 +121,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected supa3 environments.",
+        description: "Subscription quotas from your connected Supacode environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -205,7 +205,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: "supacode",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: "2.0.0",
@@ -219,7 +219,7 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    enabled: repoEnv.SUPACODE_MOBILE_UPDATES_ENABLED !== "0",
     url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
@@ -229,9 +229,9 @@ const config: ExpoConfig = {
     supportsTablet: true,
     // Multitasking-capable iPad apps cannot rotate programmatically, so the
     // showcase capture build requires full screen (see infoPlist below).
-    requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
+    requireFullScreen: process.env.SUPACODE_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
+    // Pin code signing to the Supacode team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups).
     appleTeamId: "ARK85ZXQ4Z",
     entitlements: {
@@ -242,15 +242,15 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow supa3 to connect to supa3 servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow supa3 to save images to your photo library.",
+        "Allow Supacode to connect to Supacode servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow Supacode to save images to your photo library.",
       ITSAppUsesNonExemptEncryption: false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
       // Simulator menu scripting needs), and iPadOS ignores programmatic
       // orientation requests for multitasking-capable apps — so the capture
       // build opts out of multitasking and declares landscape support.
-      ...(process.env.T3_SHOWCASE_CAPTURE_BUILD === "1"
+      ...(process.env.SUPACODE_SHOWCASE_CAPTURE_BUILD === "1"
         ? {
             "UISupportedInterfaceOrientations~ipad": [
               "UIInterfaceOrientationPortrait",
@@ -331,7 +331,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow supa3 to use your microphone for voice input.",
+        microphonePermission: "Allow Supacode to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -340,7 +340,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow supa3 to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow Supacode to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,

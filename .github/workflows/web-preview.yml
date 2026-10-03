@@ -6,7 +6,7 @@ name: Web Preview
 # latest/nightly channel aliases are never touched.
 #
 # Previews boot as the hosted-static app with manual pairing only. Pair a
-# server into a preview with `t3 pair --tailscale` (or any reachable HTTPS
+# server into a preview with `supacode pair --tailscale` (or any reachable HTTPS
 # backend) and open the pairing URL against the preview origin.
 #
 # The preview must be opened at the exact deployment URL from the PR comment.
@@ -60,8 +60,8 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
-              - --filter=@t3tools/web...
+              - --filter=@supacode/scripts...
+              - --filter=@supacode/web...
 
       - id: deploy
         name: Deploy preview
@@ -102,7 +102,7 @@ jobs:
               `${process.env.DEPLOYMENT_URL} (for ${process.env.HEAD_SHA.slice(0, 7)})`,
               "",
               "Open this exact URL — the hosted-app origin is baked in at build time.",
-              "Pair a server into it with `t3 pair --tailscale`, or paste a host + pairing",
+              "Pair a server into it with `supacode pair --tailscale`, or paste a host + pairing",
               "code under Settings → Connections.",
             ].join("\n");
 

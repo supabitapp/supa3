@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -11,7 +11,7 @@ import * as OpenCode2TextGeneration from "./OpenCode2TextGeneration.ts";
 import { OPENCODE2_TITLE_GENERATION } from "./OpenCode2TextGeneration.fixture.ts";
 
 const layer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3code-opencode2-text-generation-test-",
+  prefix: "supacode-opencode2-text-generation-test-",
 }).pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(layer)("OpenCode2TextGeneration", (it) => {

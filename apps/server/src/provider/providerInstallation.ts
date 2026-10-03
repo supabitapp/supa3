@@ -6,8 +6,8 @@ import {
   type ProviderInstanceId,
   ProviderSetupError,
   type ProviderSetupInput,
-} from "@t3tools/contracts";
-import { resolveCommandPath } from "@t3tools/shared/shell";
+} from "@supacode/contracts";
+import { resolveCommandPath } from "@supacode/shared/shell";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -83,7 +83,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
       return yield* new ProviderSetupError({
         instanceId,
         operation,
-        detail: "Choose managed setup to install Codex in supa3.",
+        detail: "Choose managed setup to install Codex in Supacode.",
       });
     }
     if (managedOnly && config.binaryPath && (!isCodex || config.binaryPath !== "codex")) {
@@ -91,7 +91,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
         instanceId,
         operation,
         detail:
-          "This instance uses a custom executable. Clear its binary path to manage installation in supa3.",
+          "This instance uses a custom executable. Clear its binary path to manage installation in Supacode.",
       });
     }
     return { installation, driver: instance.driverKind };

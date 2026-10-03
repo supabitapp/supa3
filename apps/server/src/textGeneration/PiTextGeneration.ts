@@ -10,15 +10,15 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-import { TextGenerationError, type ModelSelection, type PiSettings } from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
+import { TextGenerationError, type ModelSelection, type PiSettings } from "@supacode/contracts";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@supacode/shared/git";
+import { extractJsonObject } from "@supacode/shared/schemaJson";
 
 import { makePiRpcConnection, parsePiModelSlug } from "../orchestration-v2/Adapters/PiRpc.ts";
 import {
   buildPiRpcLaunch,
   resolvePiLaunchArgs,
-} from "../orchestration-v2/Adapters/piT3McpInjection.ts";
+} from "../orchestration-v2/Adapters/piSupacodeMcpInjection.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,

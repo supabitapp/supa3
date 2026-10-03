@@ -27,10 +27,10 @@ import {
   RunId,
   ThreadId,
   TurnItemId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { SpawnExecutableResolution } from "@t3tools/shared/shell";
+import { HostProcessEnvironment, HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { SpawnExecutableResolution } from "@supacode/shared/shell";
 import * as CodexClient from "effect-codex-app-server/client";
 import * as CodexReplay from "effect-codex-app-server/replay";
 import * as DateTime from "effect/DateTime";
@@ -400,7 +400,7 @@ describe("CodexAdapterV2 assistant message streaming", () => {
 });
 
 describe("CodexAdapterV2 runtime policy", () => {
-  it.effect("derives concrete Codex turn policies from every supa3 runtime mode", () =>
+  it.effect("derives concrete Codex turn policies from every Supacode runtime mode", () =>
     Effect.gen(function* () {
       const build = (
         runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access",
@@ -464,39 +464,41 @@ describe("CodexAdapterV2 runtime policy", () => {
     }),
   );
 
-  it.effect("adds default-mode developer instructions when the supa3 MCP server is attached", () =>
-    Effect.gen(function* () {
-      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
-        nativeThreadId: "native-orchestration-instructions",
-        codexInput: [{ type: "text", text: "delegate this task" }],
-        runtimePolicy: {
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: null,
-        },
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5.4",
-        },
-        hasT3Mcp: true,
-      });
+  it.effect(
+    "adds default-mode developer instructions when the Supacode MCP server is attached",
+    () =>
+      Effect.gen(function* () {
+        const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+          nativeThreadId: "native-orchestration-instructions",
+          codexInput: [{ type: "text", text: "delegate this task" }],
+          runtimePolicy: {
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            cwd: null,
+          },
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.4",
+          },
+          hasSupacodeMcp: true,
+        });
 
-      assert.equal(params.collaborationMode?.mode, "default");
-      assert.include(
-        params.additionalContext?.supa3_orchestration?.value ?? "",
-        "Use `delegate_task`",
-      );
-      assert.include(
-        params.additionalContext?.supa3_orchestration?.value ?? "",
-        "structured object, never as JSON text",
-      );
-    }),
+        assert.equal(params.collaborationMode?.mode, "default");
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "Use `delegate_task`",
+        );
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "structured object, never as JSON text",
+        );
+      }),
   );
 
-  it.effect("omits default-mode collaboration settings without the supa3 MCP server", () =>
+  it.effect("omits default-mode collaboration settings without the Supacode MCP server", () =>
     Effect.gen(function* () {
       const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
-        nativeThreadId: "native-default-without-t3-mcp",
+        nativeThreadId: "native-default-without-supacode-mcp",
         codexInput: [{ type: "text", text: "implement this task" }],
         runtimePolicy: {
           runtimeMode: "full-access",
@@ -507,7 +509,7 @@ describe("CodexAdapterV2 runtime policy", () => {
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.4",
         },
-        hasT3Mcp: false,
+        hasSupacodeMcp: false,
       });
 
       assert.isUndefined(params.collaborationMode);
@@ -515,11 +517,11 @@ describe("CodexAdapterV2 runtime policy", () => {
   );
 
   it.effect(
-    "adds supa3 plan-mode developer instructions when the supa3 MCP server is attached",
+    "adds Supacode plan-mode developer instructions when the Supacode MCP server is attached",
     () =>
       Effect.gen(function* () {
         const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
-          nativeThreadId: "native-plan-with-t3-mcp",
+          nativeThreadId: "native-plan-with-supacode-mcp",
           codexInput: [{ type: "text", text: "plan this task" }],
           runtimePolicy: {
             runtimeMode: "full-access",
@@ -530,7 +532,7 @@ describe("CodexAdapterV2 runtime policy", () => {
             instanceId: ProviderInstanceId.make("codex"),
             model: "gpt-5.4",
           },
-          hasT3Mcp: true,
+          hasSupacodeMcp: true,
         });
 
         assert.equal(params.collaborationMode?.mode, "plan");
@@ -538,14 +540,14 @@ describe("CodexAdapterV2 runtime policy", () => {
           params.collaborationMode?.settings.developer_instructions ?? "",
           "request_user_input",
         );
-        assert.include(params.additionalContext?.supa3_tools?.value ?? "", "preview_status");
+        assert.include(params.additionalContext?.supacode_tools?.value ?? "", "preview_status");
       }),
   );
 
-  it.effect("keeps Codex in plan mode without referencing unavailable supa3 MCP tools", () =>
+  it.effect("keeps Codex in plan mode without referencing unavailable Supacode MCP tools", () =>
     Effect.gen(function* () {
       const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
-        nativeThreadId: "native-plan-without-t3-mcp",
+        nativeThreadId: "native-plan-without-supacode-mcp",
         codexInput: [{ type: "text", text: "plan this task" }],
         runtimePolicy: {
           runtimeMode: "full-access",
@@ -556,7 +558,7 @@ describe("CodexAdapterV2 runtime policy", () => {
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.4",
         },
-        hasT3Mcp: false,
+        hasSupacodeMcp: false,
       });
 
       assert.equal(params.collaborationMode?.mode, "plan");
@@ -643,7 +645,7 @@ describe("CodexAdapterV2 process spawning", () => {
           config: {
             "tools.update_plan.enabled": true,
             mcp_servers: {
-              supa3: {
+              supacode: {
                 url: "http://127.0.0.1:43123/mcp",
                 http_headers: {
                   Authorization: "Bearer secret-codex-token",
@@ -749,7 +751,7 @@ describe("CodexAdapterV2 process spawning", () => {
           .pipe(Effect.scoped, Effect.exit);
 
       yield* open({});
-      yield* open({ T3CODE_CODEX_LAUNCH_ARGS: " --enable env-feature " });
+      yield* open({ SUPACODE_CODEX_LAUNCH_ARGS: " --enable env-feature " });
 
       assert.deepEqual(spawnedArgs, [
         ["app-server", "--strict-config", "-c", "model_reasoning_summary=detailed"],
@@ -778,7 +780,7 @@ describe("CodexAdapterV2 process spawning", () => {
         Effect.provide(
           Layer.mergeAll(
             CodexAdapterV2.codexAppServerClientFactoryFromSettingsLayer,
-            ServerConfig.layerTest(process.cwd(), { prefix: "supa3x-binary-home-" }),
+            ServerConfig.layerTest(process.cwd(), { prefix: "supacodex-binary-home-" }),
           ),
         ),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -890,7 +892,7 @@ describe("CodexAdapterV2 dynamic tool projection", () => {
     const projection = CodexAdapterV2.projectCodexDynamicToolItem({
       type: "mcpToolCall",
       id: "call-create-threads",
-      server: "supa3",
+      server: "supacode",
       tool: "create_threads",
       status: "completed",
       arguments: {
@@ -905,7 +907,7 @@ describe("CodexAdapterV2 dynamic tool projection", () => {
     });
 
     assert.deepEqual(projection, {
-      toolName: "supa3.create_threads",
+      toolName: "supacode.create_threads",
       input: {
         threads: [{ title: "Fixture child", prompt: "fixture child prompt" }],
       },
@@ -1482,7 +1484,7 @@ function codexReplayPreamble(input: {
         id: 1,
         method: "initialize",
         params: {
-          clientInfo: { name: "supa3", title: "supa3", version: packageJson.version },
+          clientInfo: { name: "supacode", title: "Supacode", version: packageJson.version },
           capabilities: {
             experimentalApi: true,
             optOutNotificationMethods: ["turn/diff/updated"],
@@ -1496,7 +1498,7 @@ function codexReplayPreamble(input: {
       frame: {
         id: 1,
         result: {
-          userAgent: "supa3/0.156.1",
+          userAgent: "supacode/0.156.1",
           codexHome: "/tmp/codex-home",
           platformFamily: "unix",
           platformOs: "macos",
@@ -1858,7 +1860,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       // version, so pin the whole value here.
       assert.deepEqual(initializeParams, [
         {
-          clientInfo: { name: "supa3", title: "supa3", version: packageJson.version },
+          clientInfo: { name: "supacode", title: "Supacode", version: packageJson.version },
           capabilities: {
             experimentalApi: true,
             optOutNotificationMethods: ["turn/diff/updated"],
@@ -2378,7 +2380,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ),
   );
 
-  it.effect("preserves supa3 context on the wire and restores it after compaction", () =>
+  it.effect("preserves Supacode context on the wire and restores it after compaction", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const nativeThreadId = "context-thread";
@@ -2388,9 +2390,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           codexInput: [{ type: "text", text: "work" }],
           runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
           modelSelection: CODEX_TEST_MODEL_SELECTION,
-          hasT3Mcp: true,
+          hasSupacodeMcp: true,
         });
-        assert.include(params.additionalContext?.supa3_orchestration?.value ?? "", "delegate_task");
+        assert.include(
+          params.additionalContext?.supacode_orchestration?.value ?? "",
+          "delegate_task",
+        );
         const entries = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "work" });
         const transcript = makeCodexReplayTranscript({
           scenario: "restore-context",
@@ -3865,7 +3870,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     return Effect.scoped(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-bg-stop-workspace-" });
+        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-bg-stop-workspace-" });
         const localTranscript = yield* decodeReplayTranscriptJson(
           (yield* encodeReplayTranscriptJson(transcript)).replaceAll(
             yield* encodeStringJson("/workspace"),
@@ -3997,7 +4002,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-bg-stale-workspace-" });
+        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-bg-stale-workspace-" });
         const staleTranscript = makeCodexReplayTranscript({
           scenario: "codex-bg-stop-untracked",
           entries: [
@@ -5867,8 +5872,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             item: {
               type: "mcpToolCall",
               id: COMPLETED_WAIT_ITEM,
-              server: "supa3",
-              tool: "t3_thread_wait",
+              server: "supacode",
+              tool: "supacode_thread_wait",
               status: "inProgress",
               arguments: { threadId: "thread:completed-wait", timeoutMs: 30000 },
             },
@@ -5887,8 +5892,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             item: {
               type: "mcpToolCall",
               id: COMPLETED_WAIT_ITEM,
-              server: "supa3",
-              tool: "t3_thread_wait",
+              server: "supacode",
+              tool: "supacode_thread_wait",
               status: "completed",
               arguments: { threadId: "thread:completed-wait", timeoutMs: 30000 },
               result: { content: [{ type: "text", text: "idle" }] },
@@ -5908,8 +5913,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             item: {
               type: "mcpToolCall",
               id: ORPHAN_WAIT_ITEM,
-              server: "supa3",
-              tool: "t3_thread_wait",
+              server: "supacode",
+              tool: "supacode_thread_wait",
               status: "inProgress",
               arguments: {
                 threadId:

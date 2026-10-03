@@ -11,7 +11,7 @@ import {
   nativeMarkdownWithPreservedSoftBreaks,
   nativeMarkdownContextCopyRanges,
   contextChipPresentation,
-} from "@t3tools/mobile-markdown-text/markdown";
+} from "@supacode/mobile-markdown-text/markdown";
 
 describe("nativeMarkdownTextRuns", () => {
   it("distinguishes video and pull-request context from generic file and review chips", () => {
@@ -39,7 +39,7 @@ describe("nativeMarkdownTextRuns", () => {
   });
 
   it("maps rendered selection offsets back to canonical references without losing repeated chips", () => {
-    const href = "t3-context://v1/image/screenshot";
+    const href = "supacode-context://v1/image/screenshot";
     expect(
       nativeMarkdownContextCopyRanges([
         { run: { text: "😀 " }, text: "😀 ", inlineImageLength: 0 },
@@ -48,8 +48,8 @@ describe("nativeMarkdownTextRuns", () => {
         { run: { href, text: "Checkout" }, text: "\uFFFC\u00A0Checkout", inlineImageLength: 0 },
       ]),
     ).toEqual([
-      { start: 3, end: 12, text: "![Checkout](t3-context://v1/image/screenshot)" },
-      { start: 18, end: 28, text: "![Checkout](t3-context://v1/image/screenshot)" },
+      { start: 3, end: 12, text: "![Checkout](supacode-context://v1/image/screenshot)" },
+      { start: 18, end: 28, text: "![Checkout](supacode-context://v1/image/screenshot)" },
     ]);
   });
   it("restores canonical skill and context text from Android's single-image chips", () => {
@@ -59,14 +59,14 @@ describe("nativeMarkdownTextRuns", () => {
         { run: { text: "Playwright", skillName: "playwright" }, text: "", inlineImageLength: 1 },
         { run: { text: " on " }, text: " on ", inlineImageLength: 0 },
         {
-          run: { text: "Screenshot", href: "t3-context://v1/image/screenshot" },
+          run: { text: "Screenshot", href: "supacode-context://v1/image/screenshot" },
           text: "",
           inlineImageLength: 1,
         },
       ]),
     ).toEqual([
       { start: 4, end: 5, text: "$playwright" },
-      { start: 9, end: 10, text: "![Screenshot](t3-context://v1/image/screenshot)" },
+      { start: 9, end: 10, text: "![Screenshot](supacode-context://v1/image/screenshot)" },
     ]);
   });
   it("links a path-shaped code span without changing the same path in prose", () => {
@@ -190,44 +190,44 @@ describe("nativeMarkdownTextRuns", () => {
 
   it("keeps Windows path backslashes the parser reads as escapes", () => {
     const markdown = [
-      String.raw`![shot](C:\Users\me\.t3\_build\shot.png "Shot")`,
+      String.raw`![shot](C:\Users\me\.supacode\_build\shot.png "Shot")`,
       String.raw`[settings](C:\Users\me\.claude\settings.json) and [site](https://example.com/a\.b)`,
       "![ref][ref]",
-      String.raw`[ref]: \\wsl.localhost\Ubuntu\.t3\ref.png`,
+      String.raw`[ref]: \\wsl.localhost\Ubuntu\.supacode\ref.png`,
     ].join("\n\n");
     // md4c drops each backslash that precedes punctuation.
     const node: MarkdownNode = {
       type: "document",
       children: [
-        { type: "image", href: String.raw`C:\Users\me.t3_build\shot.png` },
+        { type: "image", href: String.raw`C:\Users\me.supacode_build\shot.png` },
         { type: "link", href: String.raw`C:\Users\me.claude\settings.json` },
         { type: "link", href: "https://example.com/a.b" },
-        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.t3\ref.png` },
+        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.supacode\ref.png` },
       ],
     };
 
     expect(
       nativeMarkdownWithAuthoredWindowsPaths(node, markdown).children?.map(({ href }) => href),
     ).toEqual([
-      String.raw`C:\Users\me\.t3\_build\shot.png`,
+      String.raw`C:\Users\me\.supacode\_build\shot.png`,
       String.raw`C:\Users\me\.claude\settings.json`,
       "https://example.com/a.b",
-      String.raw`\\wsl.localhost\Ubuntu\.t3\ref.png`,
+      String.raw`\\wsl.localhost\Ubuntu\.supacode\ref.png`,
     ]);
   });
 
   it("leaves a Windows path as parsed when two written paths could have produced it", () => {
     const markdown = [
-      String.raw`\`![example](C:\Users\me\.t3\shot.png)\``,
-      String.raw`![real](C:\Users\me.t3\shot.png)`,
+      String.raw`\`![example](C:\Users\me\.supacode\shot.png)\``,
+      String.raw`![real](C:\Users\me.supacode\shot.png)`,
     ].join("\n\n");
     const node: MarkdownNode = {
       type: "document",
-      children: [{ type: "image", href: String.raw`C:\Users\me.t3\shot.png` }],
+      children: [{ type: "image", href: String.raw`C:\Users\me.supacode\shot.png` }],
     };
 
     expect(nativeMarkdownWithAuthoredWindowsPaths(node, markdown).children?.[0]?.href).toBe(
-      String.raw`C:\Users\me.t3\shot.png`,
+      String.raw`C:\Users\me.supacode\shot.png`,
     );
   });
 
@@ -311,7 +311,7 @@ describe("nativeMarkdownDocumentRuns", () => {
         {
           type: "paragraph",
           children: [
-            { type: "text", content: "Inspect @src/Checkout.tsx. Use @t3tools/contracts." },
+            { type: "text", content: "Inspect @src/Checkout.tsx. Use @supacode/contracts." },
           ],
         },
       ],
@@ -325,7 +325,7 @@ describe("nativeMarkdownDocumentRuns", () => {
         fileIcon: "react",
         sourceText: "@src/Checkout.tsx",
       },
-      { text: ". Use @t3tools/contracts.", role: "body" },
+      { text: ". Use @supacode/contracts.", role: "body" },
     ]);
   });
 
@@ -624,7 +624,7 @@ describe("nativeMarkdownDocumentRuns", () => {
   });
 
   it("keeps adjacent context links with the same href in separate runs", () => {
-    const href = "t3-context://v1/terminal/ctx-1";
+    const href = "supacode-context://v1/terminal/ctx-1";
     const link = (content: string): MarkdownNode => ({
       type: "link",
       href,
@@ -1137,14 +1137,14 @@ describe("nativeMarkdownDocumentChunks", () => {
 
 describe("composerChipSizeSuffix", () => {
   it("labels attachment records with a human size, matching web's chip", async () => {
-    const { composerChipSizeSuffix } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { composerChipSizeSuffix } = await import("@supacode/mobile-markdown-text/markdown");
     expect(composerChipSizeSuffix({ kind: "file", sizeBytes: 1024 })).toBe("1 KB");
     expect(composerChipSizeSuffix({ kind: "file", sizeBytes: 3_700_000 })).toBe("3.5 MB");
     expect(composerChipSizeSuffix({ kind: "image", sizeBytes: 2048 })).toBe("2 KB");
   });
 
   it("adds nothing for records that carry no bytes", async () => {
-    const { composerChipSizeSuffix } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { composerChipSizeSuffix } = await import("@supacode/mobile-markdown-text/markdown");
     // Terminal/review/PR chips have no size to show.
     expect(composerChipSizeSuffix({ kind: "terminal" })).toBe("");
     expect(composerChipSizeSuffix({ kind: "file" })).toBe("");
@@ -1154,7 +1154,7 @@ describe("composerChipSizeSuffix", () => {
 
 describe("contextChipPresentation image detection", () => {
   it("treats a picture attached through the file picker as an image", async () => {
-    const { contextChipPresentation } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { contextChipPresentation } = await import("@supacode/mobile-markdown-text/markdown");
     // The document picker types every pick as `file`, so the name has to carry the intent.
     expect(
       contextChipPresentation("file", { kind: "file", name: "IMG_4997.PNG", mimeType: "" }),
@@ -1169,7 +1169,7 @@ describe("contextChipPresentation image detection", () => {
   });
 
   it("leaves genuine documents and videos alone", async () => {
-    const { contextChipPresentation } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { contextChipPresentation } = await import("@supacode/mobile-markdown-text/markdown");
     expect(
       contextChipPresentation("file", { kind: "file", name: "notes.txt", mimeType: "text/plain" }),
     ).toEqual({ accent: "#0090cd", symbol: "doc" });
@@ -1181,7 +1181,7 @@ describe("contextChipPresentation image detection", () => {
 
 describe("pull request chip status", () => {
   const chip = async (state: string, isDraft = false) => {
-    const { contextChipPresentation } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { contextChipPresentation } = await import("@supacode/mobile-markdown-text/markdown");
     return contextChipPresentation("review-comment", {
       kind: "review-comment",
       sectionId: "pull-request:10978",
@@ -1208,7 +1208,7 @@ describe("pull request chip status", () => {
   });
 
   it("falls back to the generic pull request chip when the state is unknown", async () => {
-    const { contextChipPresentation } = await import("@t3tools/mobile-markdown-text/markdown");
+    const { contextChipPresentation } = await import("@supacode/mobile-markdown-text/markdown");
     // An older server may send no metadata at all; the chip still has to render.
     expect(
       contextChipPresentation("review-comment", {

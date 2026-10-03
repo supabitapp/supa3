@@ -9,7 +9,7 @@ import {
   OrchestrationV2ThreadDetailSnapshot,
   OrchestrationV2ThreadBoundedSnapshot,
   type OrchestrationV2ThreadHistoryPage,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Fiber from "effect/Fiber";
@@ -61,7 +61,7 @@ const AUTH = {
   policy: "remote-reachable",
   bootstrapMethods: ["one-time-token"],
   sessionMethods: ["bearer-access-token"],
-  sessionCookieName: "t3_session",
+  sessionCookieName: "supacode_session",
 } satisfies AuthSessionState["auth"];
 const SESSION = {
   authenticated: true,

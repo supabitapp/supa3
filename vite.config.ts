@@ -10,9 +10,9 @@ import vitest from "ultracite/oxlint/vitest";
 /** Import restrictions every file keeps, including the one module exempt from the glyph rule. */
 const RESTRICTED_IMPORT_PATHS = [
   {
-    name: "@t3tools/client-runtime",
+    name: "@supacode/client-runtime",
     message:
-      "Import from an explicit @t3tools/client-runtime/* subpath. The package has no root export.",
+      "Import from an explicit @supacode/client-runtime/* subpath. The package has no root export.",
   },
   {
     name: "@pierre/diffs/react",
@@ -104,7 +104,7 @@ export default defineConfig({
     environment: "node",
     exclude: [
       "**/.repos/**",
-      "**/.t3/**",
+      "**/.supacode/**",
       "**/node_modules/**",
       "**/dist/**",
       "**/dist-electron/**",
@@ -163,14 +163,14 @@ export default defineConfig({
       "apps/mobile/android/**",
       "apps/mobile/ios/**",
       "apps/mobile/uniwind-types.d.ts",
-      "oxlint-plugin-t3code/**",
+      "oxlint-plugin-supacode/**",
     ],
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
     jsPlugins: [
-      "./oxlint-plugin-t3code/index.ts",
-      "./oxlint-plugin-t3code/array-guardrails.ts",
-      "./oxlint-plugin-t3code/anti-slop-effect.ts",
-      "./oxlint-plugin-t3code/test-waits.ts",
+      "./oxlint-plugin-supacode/index.ts",
+      "./oxlint-plugin-supacode/array-guardrails.ts",
+      "./oxlint-plugin-supacode/anti-slop-effect.ts",
+      "./oxlint-plugin-supacode/test-waits.ts",
       "@shadcn/lint",
     ],
     settings: {
@@ -234,12 +234,12 @@ export default defineConfig({
         "error",
         { paths: [...RESTRICTED_IMPORT_PATHS, RESTRICTED_PULL_REQUEST_GLYPH_IMPORTS] },
       ],
-      "t3code/no-global-process-runtime": "error",
-      "t3code/no-inline-schema-compile": "warn",
-      "t3code/no-manual-effect-runtime-in-tests": "error",
-      "t3code/no-native-title-tooltip": "error",
-      "t3code/no-test-in-loop": "error",
-      "t3code/namespace-node-imports": "error",
+      "supacode/no-global-process-runtime": "error",
+      "supacode/no-inline-schema-compile": "warn",
+      "supacode/no-manual-effect-runtime-in-tests": "error",
+      "supacode/no-native-title-tooltip": "error",
+      "supacode/no-test-in-loop": "error",
+      "supacode/namespace-node-imports": "error",
     },
     overrides: [
       {
@@ -271,7 +271,7 @@ export default defineConfig({
       {
         // The one place that reads the host platform to seed the injected references.
         files: ["packages/shared/src/hostProcess.ts"],
-        rules: { "t3code/no-global-process-runtime": "off" },
+        rules: { "supacode/no-global-process-runtime": "off" },
       },
       {
         files: ["apps/web/src/**"],
@@ -294,7 +294,7 @@ export default defineConfig({
       },
       {
         files: ["apps/mobile/src/**"],
-        rules: { "t3code/no-mobile-uniwind-theme-escape-hatches": "error" },
+        rules: { "supacode/no-mobile-uniwind-theme-escape-hatches": "error" },
       },
       {
         // Every class in web code must be one Tailwind generates: a typo or a class nothing
@@ -387,7 +387,7 @@ export default defineConfig({
           "packages/shared/src/**",
         ],
         excludeFiles: ["**/*.test.ts", "**/*.test.tsx"],
-        rules: { "t3code/no-hermes-unsupported-apis": "error" },
+        rules: { "supacode/no-hermes-unsupported-apis": "error" },
       },
       {
         // Reviewed native and third-party interop boundaries that cannot consume a className.
@@ -417,12 +417,12 @@ export default defineConfig({
           "apps/mobile/src/features/threads/thread-list-items.tsx",
           "apps/mobile/src/features/threads/thread-list-v2-items.tsx",
           "apps/mobile/src/lib/useMobileNavigationTheme.ts",
-          "apps/mobile/src/native/T3ComposerEditor.ios.tsx",
-          "apps/mobile/src/native/T3ComposerEditor.native.tsx",
+          "apps/mobile/src/native/SupacodeComposerEditor.ios.tsx",
+          "apps/mobile/src/native/SupacodeComposerEditor.native.tsx",
           "apps/mobile/src/native/SelectableMarkdownText.android.tsx",
         ],
         rules: {
-          "t3code/no-mobile-uniwind-theme-escape-hatches": ["error", { allowUniwindTheme: true }],
+          "supacode/no-mobile-uniwind-theme-escape-hatches": ["error", { allowUniwindTheme: true }],
         },
       },
     ],

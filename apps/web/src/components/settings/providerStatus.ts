@@ -2,7 +2,7 @@ import type {
   ServerProvider,
   ServerProviderVersionAdvisory,
   ServerProviderCompatibilityAdvisory,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 
 /**
  * Visual treatment for each server-reported provider status. Centralized so
@@ -44,7 +44,7 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
     return {
       headline: "Disabled",
       detail:
-        provider.message ?? "This provider is installed but disabled for new sessions in supa3.",
+        provider.message ?? "This provider is installed but disabled for new sessions in Supacode.",
     };
   }
   if (!provider.installed) {

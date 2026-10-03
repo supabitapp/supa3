@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@supacode/shared",
   "private": true,
   "type": "module",
   "exports": {
@@ -131,9 +131,9 @@
       "types": "./src/projectSettings.ts",
       "import": "./src/projectSettings.ts"
     },
-    "./t3ProjectFile": {
-      "types": "./src/t3ProjectFile.ts",
-      "import": "./src/t3ProjectFile.ts"
+    "./supacodeProjectFile": {
+      "types": "./src/supacodeProjectFile.ts",
+      "import": "./src/supacodeProjectFile.ts"
     },
     "./orchestrationTiming": {
       "types": "./src/orchestrationTiming.ts",
@@ -267,6 +267,10 @@
       "types": "./src/devHome.ts",
       "import": "./src/devHome.ts"
     },
+    "./supacodeHome": {
+      "types": "./src/supacodeHome.ts",
+      "import": "./src/supacodeHome.ts"
+    },
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
@@ -303,9 +307,9 @@
       "types": "./src/orchestrationV2Timeline.ts",
       "import": "./src/orchestrationV2Timeline.ts"
     },
-    "./t3McpToolPresentation": {
-      "types": "./src/t3McpToolPresentation.ts",
-      "import": "./src/t3McpToolPresentation.ts"
+    "./supacodeMcpToolPresentation": {
+      "types": "./src/supacodeMcpToolPresentation.ts",
+      "import": "./src/supacodeMcpToolPresentation.ts"
     },
     "./Array": {
       "types": "./src/Array.ts",
@@ -350,7 +354,7 @@
   },
   "dependencies": {
     "@noble/hashes": "catalog:",
-    "@t3tools/contracts": "workspace:*",
+    "@supacode/contracts": "workspace:*",
     "effect": "catalog:",
     "yaml": "catalog:"
   },

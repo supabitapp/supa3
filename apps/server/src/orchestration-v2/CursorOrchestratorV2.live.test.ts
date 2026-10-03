@@ -9,7 +9,7 @@ import {
   ProjectId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -48,7 +48,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-cursor-v2-live-",
+  prefix: "supacode-cursor-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(
@@ -138,7 +138,7 @@ const waitForIdle = Effect.fn("CursorOrchestratorV2Live.waitForIdle")(function* 
   return yield* Effect.die(new Error(`Timed out waiting for Cursor thread ${threadId}.`));
 });
 
-describe.runIf(process.env.T3_CURSOR_LIVE_ORCHESTRATOR === "1")(
+describe.runIf(process.env.SUPACODE_CURSOR_LIVE_ORCHESTRATOR === "1")(
   "Cursor V2 live orchestrator",
   () => {
     it.live(

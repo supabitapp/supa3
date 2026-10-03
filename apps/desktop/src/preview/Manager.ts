@@ -9,7 +9,7 @@ import * as NodeCrypto from "node:crypto";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import type {
   DesktopPreviewAnnotationTheme,
   DesktopPreviewAutomationStatus,
@@ -34,9 +34,9 @@ import type {
   PreviewAutomationSnapshot,
   PreviewAutomationTypeInput,
   PreviewAutomationWaitForInput,
-} from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { normalizePreviewUrl } from "@t3tools/shared/preview";
+} from "@supacode/contracts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { normalizePreviewUrl } from "@supacode/shared/preview";
 import {
   BrowserWindow,
   ClipboardItem,
@@ -1662,7 +1662,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     const installed = yield* evaluateWithDebugger<boolean>(
       tabId,
       send,
-      "Boolean(globalThis.__t3PlaywrightInjected)",
+      "Boolean(globalThis.__supacodePlaywrightInjected)",
       true,
     );
     if (installed) return;
@@ -3873,7 +3873,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       send,
       `(() => {
           try {
-            const injected = globalThis.__t3PlaywrightInjected;
+            const injected = globalThis.__supacodePlaywrightInjected;
             const parsed = injected.parseSelector(${locatorJson});
             const element = injected.querySelector(parsed, document, true);
             if (!element) return { notFound: true };
@@ -4019,7 +4019,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       send,
       `(() => {
           try {
-            const element = ${locatorJson ? `(() => { const injected = globalThis.__t3PlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, true); })()` : "document.activeElement"};
+            const element = ${locatorJson ? `(() => { const injected = globalThis.__supacodePlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, true); })()` : "document.activeElement"};
             if (!element) return { notFound: true };
             const textControl =
               element instanceof HTMLTextAreaElement ||
@@ -4133,7 +4133,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     const { frames, receiptKey } = yield* Effect.acquireRelease(
       attempt(context, () => ({
         frames: wc.mainFrame.framesInSubtree,
-        receiptKey: JSON.stringify(`__t3NativeKey_${NodeCrypto.randomUUID()}`),
+        receiptKey: JSON.stringify(`__supacodeNativeKey_${NodeCrypto.randomUUID()}`),
       })),
       ({ frames, receiptKey }) =>
         Effect.forEach(
@@ -4283,7 +4283,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           "Page.createIsolatedWorld",
           {
             frameId,
-            worldName: "t3-preview-key-target",
+            worldName: "supacode-preview-key-target",
           },
           sessionId,
         )) as { executionContextId?: number };
@@ -4391,7 +4391,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         );
         const selectionKey = yield* encodeJson(
           context,
-          `__t3EditingSelection_${NodeCrypto.randomUUID()}`,
+          `__supacodeEditingSelection_${NodeCrypto.randomUUID()}`,
         );
         // Editing requires an active document. Preserve the target
         // and selection across focus handlers without focusing the desktop.
@@ -4483,7 +4483,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       send,
       `(() => {
         try {
-          const target = ${locatorJson ? `(() => { const injected = globalThis.__t3PlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, true); })()` : "window"};
+          const target = ${locatorJson ? `(() => { const injected = globalThis.__supacodePlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, true); })()` : "window"};
           if (!target) return { notFound: true };
           target.scrollBy({ left: ${input.deltaX ?? 0}, top: ${input.deltaY ?? 0}, behavior: "instant" });
           return { ok: true };
@@ -4586,7 +4586,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         send,
         `(() => {
               try {
-                const selectorMatched = ${locatorJson ? `(() => { const injected = globalThis.__t3PlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, false) !== null; })()` : "true"};
+                const selectorMatched = ${locatorJson ? `(() => { const injected = globalThis.__supacodePlaywrightInjected; return injected.querySelector(injected.parseSelector(${locatorJson}), document, false) !== null; })()` : "true"};
                 const textMatched = ${
                   textJson ? `(document.body?.innerText || "").includes(${textJson})` : "true"
                 };
@@ -5146,7 +5146,7 @@ export class PreviewManager extends Context.Service<
       listener: RecordingFrameListener,
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
->()("@t3tools/desktop/preview/Manager/PreviewManager") {}
+>()("@supacode/desktop/preview/Manager/PreviewManager") {}
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* PreviewManagerMake() {

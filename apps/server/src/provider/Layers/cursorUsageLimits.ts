@@ -1,7 +1,7 @@
 import * as NodeOS from "node:os";
-import type { CursorSettings, ServerProviderUsageWindow } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { CURSOR_USAGE_WINDOWS } from "@t3tools/shared/usageLimits";
+import type { CursorSettings, ServerProviderUsageWindow } from "@supacode/contracts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { CURSOR_USAGE_WINDOWS } from "@supacode/shared/usageLimits";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -93,7 +93,7 @@ export const readCursorUsageLimits = Effect.fn("readCursorUsageLimits")(function
         return makeUnavailableUsageLimits({
           checkedAt,
           reason: "unsupported",
-          message: "Enable Cursor account usage in supa3 to read its Keychain login.",
+          message: "Enable Cursor account usage in Supacode to read its Keychain login.",
         });
       }
       if (endpoint !== DEFAULT_CURSOR_API_ENDPOINT) {

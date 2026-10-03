@@ -1,7 +1,7 @@
-export const BUILT_IN_THEME_IDS = ["t3-chat", "grove", "ocean", "ember", "iris"] as const;
+export const BUILT_IN_THEME_IDS = ["supacode-chat", "grove", "ocean", "ember", "iris"] as const;
 
-/** The standard T3 Code palette, kept separate from the optional built-in theme library. */
-export const MOBILE_DEFAULT_THEME_ID = "t3-code";
+/** The standard Supacode palette, kept separate from the optional built-in theme library. */
+export const MOBILE_DEFAULT_THEME_ID = "supacode";
 
 /**
  * Every palette the mobile app can render. Declared here so host-side tooling
@@ -11,21 +11,16 @@ export const MOBILE_DEFAULT_THEME_ID = "t3-code";
 export const MOBILE_THEME_IDS = [MOBILE_DEFAULT_THEME_ID, ...BUILT_IN_THEME_IDS] as const;
 
 /**
- * Ids a theme may not take: the appearance keywords a stored preference uses,
- * every built-in, and the legacy aliases older saves still carry. Taking one
- * would either be shadowed by the built-in or capture clients that never chose
- * it, so the client library and the publish path both consult this set.
+ * Ids a theme may not take: the appearance keywords a stored preference uses
+ * and every built-in. Taking one would either be shadowed by the built-in or
+ * capture clients that never chose it, so the client library and the publish
+ * path both consult this set.
  */
 export const RESERVED_THEME_IDS: ReadonlySet<string> = new Set([
   "system",
   "light",
   "dark",
   ...BUILT_IN_THEME_IDS,
-  "t3-chat-dark",
-  "t3-grove",
-  "t3-ocean",
-  "t3-ember",
-  "t3-iris",
 ]);
 
 /**
@@ -122,13 +117,13 @@ export type ThemeDefinition = Readonly<{
 }>;
 
 /**
- * The palette T3 Code wears with no theme installed, captured from the app's
+ * The palette Supacode wears with no theme installed, captured from the app's
  * stock tokens (index.css) so a draft seeded from the default look paints the
  * pixels the user is already seeing. Alpha-bearing tokens are flattened over
  * their real backdrops (canvas, or the sidebar for its rows) because theme
  * colors are stored as opaque OKLCH tokens.
  */
-export const T3_CODE_LIGHT_THEME_COLORS: ThemeColors = {
+export const SUPACODE_LIGHT_THEME_COLORS: ThemeColors = {
   canvas: "#fcfcfc",
   chrome: "#fcfcfc",
   toolbar: "#fcfcfc",
@@ -188,7 +183,7 @@ export const T3_CODE_LIGHT_THEME_COLORS: ThemeColors = {
   terminalScrollbarHover: "#bdbdbd",
 };
 
-export const T3_CODE_DARK_THEME_COLORS: ThemeColors = {
+export const SUPACODE_DARK_THEME_COLORS: ThemeColors = {
   canvas: "#0a0a0a",
   chrome: "#0a0a0a",
   toolbar: "#0a0a0a",
@@ -248,9 +243,9 @@ export const T3_CODE_DARK_THEME_COLORS: ThemeColors = {
   terminalScrollbarHover: "#363636",
 };
 
-export const T3_CHAT_THEME: ThemeDefinition = {
-  id: "t3-chat",
-  label: "supa3 Chat",
+export const SUPACODE_CHAT_THEME: ThemeDefinition = {
+  id: "supacode-chat",
+  label: "Supacode Chat",
   appearance: "light",
   colors: {
     canvas: "oklch(0.982446 0.010114 325.653)",
@@ -884,7 +879,7 @@ export const IRIS_THEME: ThemeDefinition = {
 };
 
 export const BUILT_IN_THEMES: ReadonlyArray<ThemeDefinition> = [
-  T3_CHAT_THEME,
+  SUPACODE_CHAT_THEME,
   GROVE_THEME,
   OCEAN_THEME,
   EMBER_THEME,

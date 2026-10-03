@@ -1,14 +1,14 @@
 {
-  "name": "t3",
+  "name": "supacode",
   "version": "0.0.45",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/supabitapp/supa3",
+    "url": "https://github.com/supabitapp/supacode-next",
     "directory": "apps/server"
   },
   "bin": {
-    "supa3": "./dist/bin.mjs"
+    "supacode": "./dist/bin.mjs"
   },
   "files": [
     "dist"
@@ -50,11 +50,11 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
-    "@t3tools/ssh": "workspace:*",
-    "@t3tools/tailscale": "workspace:*",
-    "@t3tools/web": "workspace:*",
+    "@supacode/contracts": "workspace:*",
+    "@supacode/shared": "workspace:*",
+    "@supacode/ssh": "workspace:*",
+    "@supacode/tailscale": "workspace:*",
+    "@supacode/web": "workspace:*",
     "@types/node": "catalog:",
     "@types/proper-lockfile": "^4.1.4",
     "@types/yauzl": "^3.4.0",

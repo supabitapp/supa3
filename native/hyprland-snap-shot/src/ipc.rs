@@ -139,13 +139,13 @@ pub fn destination(windows: Vec<Window>, pid: u32, title: &str) -> Result<Option
         .filter(|w| w.pid == pid && w.title == title && w.mapped && !w.hidden);
     let found = matches.next();
     if matches.next().is_some() {
-        return Err("More than one supa3 window matches the capture destination.".into());
+        return Err("More than one Supacode window matches the capture destination.".into());
     }
     Ok(found)
 }
 
 pub fn activate(pid: u32, title: &str) -> Result<()> {
-    // Subscribe before looking up a newly mapped T3 window, so no map/title event is missed.
+    // Subscribe before looking up a newly mapped Supacode window, so no map/title event is missed.
     let socket = UnixStream::connect(session_directory()?.join(".socket2.sock"))?;
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut events = BufReader::new(socket);
@@ -157,14 +157,14 @@ pub fn activate(pid: u32, title: &str) -> Result<()> {
             if request(&lua)?.trim() != "ok"
                 && request(&format!("/dispatch focuswindow address:0x{address:x}"))?.trim() != "ok"
             {
-                return Err("Hyprland could not focus supa3.".into());
+                return Err("Hyprland could not focus Supacode.".into());
             }
             return Ok(());
         }
         events.get_ref().set_read_timeout(Some(
             deadline
                 .checked_duration_since(Instant::now())
-                .ok_or("supa3 did not become visible.")?,
+                .ok_or("Supacode did not become visible.")?,
         ))?;
         let mut event = Vec::new();
         if events.by_ref().take(8193).read_until(b'\n', &mut event)? == 0 || event.len() > 8192 {
@@ -181,7 +181,7 @@ mod tests {
             address: "0x123456789abcdef".into(),
             pid,
             title: title.into(),
-            class: "t3".into(),
+            class: "supacode".into(),
             at: [-1920, 20],
             size: [1000, 800],
             mapped: true,
@@ -195,20 +195,31 @@ mod tests {
     #[test]
     fn destination_requires_unique_process_and_title() {
         assert!(
-            destination(vec![window(2, "T3")], 1, "T3")
+            destination(vec![window(2, "Supacode")], 1, "Supacode")
                 .unwrap()
                 .is_none()
         );
         assert!(
-            destination(vec![window(1, "other")], 1, "T3")
+            destination(vec![window(1, "other")], 1, "Supacode")
                 .unwrap()
                 .is_none()
         );
-        assert!(destination(vec![window(1, "T3"), window(1, "T3")], 1, "T3").is_err());
         assert!(
-            destination(vec![window(2, "T3"), window(1, "T3")], 1, "T3")
-                .unwrap()
-                .is_some()
+            destination(
+                vec![window(1, "Supacode"), window(1, "Supacode")],
+                1,
+                "Supacode"
+            )
+            .is_err()
+        );
+        assert!(
+            destination(
+                vec![window(2, "Supacode"), window(1, "Supacode")],
+                1,
+                "Supacode"
+            )
+            .unwrap()
+            .is_some()
         );
     }
     #[test]

@@ -3,8 +3,8 @@ import {
   ProviderInstanceId,
   ProviderDriverKind,
   type ProviderOptionDescriptor,
-} from "@t3tools/contracts";
-import { getSpeedToggle } from "@t3tools/client-runtime/provider-speed-toggle";
+} from "@supacode/contracts";
+import { getSpeedToggle } from "@supacode/client-runtime/provider-speed-toggle";
 import { buildTraitsTriggerLabel, buildUnavailableModelOptionDescriptors } from "./TraitsPicker";
 
 function selectDescriptor(

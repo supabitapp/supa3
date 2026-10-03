@@ -1,4 +1,4 @@
-import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import { resolveThreadWorkingStartedAt } from "@supacode/client-runtime/state/models";
 import {
   type AssetResource,
   type OrchestrationV2ExecutionNode,
@@ -12,26 +12,26 @@ import {
   type ToolActivitySurface,
   type ToolActivityIcon,
   type ToolActivitySource,
-} from "@t3tools/contracts";
-import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
+} from "@supacode/contracts";
+import { extractToolActivityPresentation } from "@supacode/client-runtime/work-log/tool-presentation";
 import {
   classifyToolActivity,
   collectToolFilePaths,
   formatReadToolLabel,
   formatSearchToolLabel,
-} from "@t3tools/shared/toolActivity";
+} from "@supacode/shared/toolActivity";
 import {
   contextCompactionLabel,
   workEntryIndicatesToolFailure,
-} from "@t3tools/client-runtime/work-log/presentation";
-import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
+} from "@supacode/client-runtime/work-log/presentation";
+import type { ThreadCheckpointSummary } from "@supacode/client-runtime/state/thread-checkpoints";
 import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
-} from "@t3tools/client-runtime/state/thread-requests";
-import type { ThreadRunSummary, ThreadRuntimeSummary } from "@t3tools/client-runtime/state/shell";
-import { threadRuntimeHasInterruptibleRun } from "@t3tools/client-runtime/state/thread-execution";
-import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
+} from "@supacode/client-runtime/state/thread-requests";
+import type { ThreadRunSummary, ThreadRuntimeSummary } from "@supacode/client-runtime/state/shell";
+import { threadRuntimeHasInterruptibleRun } from "@supacode/client-runtime/state/thread-execution";
+import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/turn-item-presentation";
 
 import {
   isImageAttachment,
@@ -45,11 +45,11 @@ import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
 
-export { formatDuration } from "@t3tools/shared/orchestrationTiming";
+export { formatDuration } from "@supacode/shared/orchestrationTiming";
 export {
   workEntryDisplayIndicatesToolFailure,
   workEntryIndicatesToolFailure,
-} from "@t3tools/client-runtime/work-log/presentation";
+} from "@supacode/client-runtime/work-log/presentation";
 
 export type WorkLogToolLifecycleStatus =
   | "idle"
@@ -60,7 +60,7 @@ export type WorkLogToolLifecycleStatus =
   | "stopped";
 
 export interface WorkLogEntry {
-  readonly questionAnswer?: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
+  readonly questionAnswer?: import("@supacode/contracts").UserInputAttachmentAnswerPayload;
   readonly id: string;
   readonly createdAt: string;
   readonly runId?: RunId | null;

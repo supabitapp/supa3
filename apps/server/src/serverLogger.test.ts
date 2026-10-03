@@ -9,8 +9,8 @@ import * as Tracer from "effect/Tracer";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
+import { DEFAULT_SIGNAL_EXPORT } from "@supacode/shared/observability";
+import * as OtelEnvironment from "@supacode/shared/otelEnvironment";
 
 import * as ServerConfig from "./config.ts";
 import { ServerLoggerLive } from "./serverLogger.ts";
@@ -43,7 +43,7 @@ const configLayer = (overrides: Partial<ServerConfig.ServerConfig["Service"]>) =
     ServerConfig.ServerConfig,
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      const baseDir = path.join(NodeOS.tmpdir(), "t3-server-logger-test");
+      const baseDir = path.join(NodeOS.tmpdir(), "supacode-server-logger-test");
       const derivedPaths = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
       return ServerConfig.make({
         logLevel: "Info",
@@ -146,7 +146,7 @@ describe("ServerLoggerLive", () => {
       const [request] = requests;
       assert.strictEqual(request?.url, "https://collector.example.com/v1/logs");
       assert.include(request?.body ?? "", "server logger under test");
-      assert.include(request?.body ?? "", "t3code-server");
+      assert.include(request?.body ?? "", "supacode-server");
       assert.include(request?.body ?? "", "service.runtime");
     }),
   );
@@ -171,9 +171,9 @@ describe("ServerLoggerLive", () => {
 
       assert.lengthOf(requests, 1);
       const body = requests[0]?.body ?? "";
-      assert.include(body, '"stringValue":"t3code-server"');
+      assert.include(body, '"stringValue":"supacode-server"');
       assert.include(body, "deployment.environment.name");
-      assert.include(body, '"key":"service.namespace","value":{"stringValue":"t3code"}');
+      assert.include(body, '"key":"service.namespace","value":{"stringValue":"supacode"}');
       assert.notInclude(body, "renamed");
     }),
   );

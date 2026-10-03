@@ -1,4 +1,4 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey } from "@supacode/client-runtime/environment";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 

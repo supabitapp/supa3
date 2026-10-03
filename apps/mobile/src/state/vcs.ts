@@ -1,9 +1,9 @@
 import {
   createVcsActionManager,
   createVcsEnvironmentAtoms,
-} from "@t3tools/client-runtime/state/vcs";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
-import { WS_METHODS } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/vcs";
+import { createEnvironmentRpcCommand } from "@supacode/client-runtime/state/runtime";
+import { WS_METHODS } from "@supacode/contracts";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 

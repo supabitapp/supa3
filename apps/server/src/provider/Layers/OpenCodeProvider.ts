@@ -4,15 +4,15 @@ import {
   type ServerProviderModel,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 
-import { createModelCapabilities } from "@t3tools/shared/model";
-import { compareSemverVersions } from "@t3tools/shared/semver";
+import { createModelCapabilities } from "@supacode/shared/model";
+import { compareSemverVersions } from "@supacode/shared/semver";
 import {
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
@@ -357,8 +357,8 @@ export const makePendingOpenCodeProvider = (
           auth: { status: "unknown" },
           message:
             openCodeSettings.serverUrl.trim().length > 0
-              ? "OpenCode is disabled in supa3 settings. A server URL is configured."
-              : "OpenCode is disabled in supa3 settings.",
+              ? "OpenCode is disabled in Supacode settings. A server URL is configured."
+              : "OpenCode is disabled in Supacode settings.",
         },
       });
     }
@@ -630,8 +630,8 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         status: "warning",
         auth: { status: "unknown" },
         message: isExternalServer
-          ? "OpenCode is disabled in supa3 settings. A server URL is configured."
-          : "OpenCode is disabled in supa3 settings.",
+          ? "OpenCode is disabled in Supacode settings. A server URL is configured."
+          : "OpenCode is disabled in Supacode settings.",
       },
     });
   }

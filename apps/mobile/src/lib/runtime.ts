@@ -2,7 +2,7 @@ import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Socket from "effect/unstable/socket/Socket";
 
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+import { remoteHttpClientLayer } from "@supacode/client-runtime/rpc";
 
 import * as Persistence from "../persistence/layer";
 import { cryptoLayer } from "./crypto";

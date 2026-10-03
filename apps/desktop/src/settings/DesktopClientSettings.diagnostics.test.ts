@@ -32,7 +32,7 @@ function makeLayer(fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) {
     runningUnderArm64Translation: false,
   }).pipe(
     Layer.provide(
-      Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({ SUPA3_HOME: baseDir })),
+      Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({ SUPACODE_HOME: baseDir })),
     ),
   );
 

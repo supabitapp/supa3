@@ -36,11 +36,15 @@ describe("Self invocation", () => {
     Effect.gen(function* () {
       // Node repeats the binary at argv[1] for a single-executable; it is not a script.
       const invocation = yield* resolveSelfInvocation().pipe(
-        Effect.provideService(HostProcessExecutablePath, "/packaged/t3"),
+        Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
         Effect.provideService(HostProcessIsExecutable, true),
-        Effect.provideService(HostProcessArguments, ["/packaged/t3", "/packaged/t3", "serve"]),
+        Effect.provideService(HostProcessArguments, [
+          "/packaged/supacode",
+          "/packaged/supacode",
+          "serve",
+        ]),
       );
-      expect(invocation).toEqual({ command: "/packaged/t3", entrypoint: undefined });
+      expect(invocation).toEqual({ command: "/packaged/supacode", entrypoint: undefined });
       expect(selfInvocationArgs(invocation, ["acp-mcp-bridge"])).toEqual(["acp-mcp-bridge"]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -49,7 +53,7 @@ describe("Self invocation", () => {
 describe("Node runtime selection", () => {
   it.effect("keeps the current Node or Electron runtime without requiring Node on PATH", () =>
     Effect.gen(function* () {
-      for (const executable of ["/runtime/node", "/Applications/supa3.app/Electron"]) {
+      for (const executable of ["/runtime/node", "/Applications/Supacode.app/Electron"]) {
         expect(
           yield* resolveNodeExecutable("Local device support", { PATH: "" }).pipe(
             Effect.provideService(HostProcessExecutablePath, executable),
@@ -60,7 +64,7 @@ describe("Node runtime selection", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("uses installed Node instead of the standalone supa3 executable", () =>
+  it.effect("uses installed Node instead of the standalone Supacode executable", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       expect(
@@ -69,7 +73,7 @@ describe("Node runtime selection", () => {
         }),
       ).toBe(process.execPath);
     }).pipe(
-      Effect.provideService(HostProcessExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
       Effect.provideService(HostProcessIsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
@@ -107,7 +111,7 @@ describe("Node runtime selection", () => {
       expect(yield* resolveNodeExecutable("Local device support", env)).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
       Effect.provideService(HostProcessIsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
@@ -134,7 +138,7 @@ describe("Node runtime selection", () => {
       ).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
       Effect.provideService(HostProcessIsExecutable, true),
       Effect.provideService(HostProcessPlatform, "win32"),
       Effect.provide(NodeServices.layer),
@@ -168,7 +172,7 @@ describe("Node runtime selection", () => {
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped();
       const platform = yield* HostProcessPlatform;
-      const executable = path.join(directory, platform === "win32" ? "t3.exe" : "t3");
+      const executable = path.join(directory, platform === "win32" ? "supacode.exe" : "supacode");
       const node = path.join(directory, platform === "win32" ? "node.exe" : "node");
       yield* fs.writeFileString(executable, "standalone executable fixture");
       yield* fs.chmod(executable, 0o755);
@@ -197,7 +201,7 @@ describe("Node runtime selection", () => {
       expect(yield* resolveNodeExecutable("Local device support", { PATH: directory })).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
       Effect.provideService(HostProcessIsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),

@@ -3,7 +3,7 @@ import {
   MessageId,
   ThreadId,
   type OrchestrationV2ShellSnapshot,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";

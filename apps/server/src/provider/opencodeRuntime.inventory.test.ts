@@ -13,7 +13,7 @@ import {
   HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@supacode/shared/hostProcess";
 
 import * as OpenCodeRuntime from "./opencodeRuntime.ts";
 import * as OpenCodeServerLedger from "./OpenCodeServerLedger.ts";
@@ -220,7 +220,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const hostEnvironment = yield* HostProcessEnvironment;
       const executablePath = yield* HostProcessExecutablePath;
       const hostPlatform = yield* HostProcessPlatform;
-      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-opencode-inventory-" });
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-opencode-inventory-" });
       const isWindows = hostPlatform === "win32";
       const binaryPath = path.join(tempDir, isWindows ? "opencode.cmd" : "opencode");
       const scriptPath = path.join(tempDir, "opencode.mjs");
@@ -243,8 +243,8 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
         [
           ...(isWindows ? ["@echo off"] : ["#!/bin/sh"]),
           isWindows
-            ? '"%T3_TEST_NODE_BINARY%" "%T3_TEST_OPENCODE_SCRIPT%" %*'
-            : 'exec "$T3_TEST_NODE_BINARY" "$T3_TEST_OPENCODE_SCRIPT" "$@"',
+            ? '"%SUPACODE_TEST_NODE_BINARY%" "%SUPACODE_TEST_OPENCODE_SCRIPT%" %*'
+            : 'exec "$SUPACODE_TEST_NODE_BINARY" "$SUPACODE_TEST_OPENCODE_SCRIPT" "$@"',
           "",
         ].join("\n"),
       );
@@ -258,8 +258,8 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
         cwd: tempDir,
         environment: {
           ...hostEnvironment,
-          T3_TEST_NODE_BINARY: executablePath,
-          T3_TEST_OPENCODE_SCRIPT: scriptPath,
+          SUPACODE_TEST_NODE_BINARY: executablePath,
+          SUPACODE_TEST_OPENCODE_SCRIPT: scriptPath,
         },
       });
 

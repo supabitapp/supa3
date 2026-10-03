@@ -4,11 +4,11 @@ import type {
   ProjectScript,
   ResolvedKeybindingsConfig,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 
 import type { DraftId } from "../../composerDraftStore";
-import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
+import { useSupacodeProjectFileScripts } from "../../hooks/useSupacodeProjectFileScripts";
 import {
   shouldShowEnvironmentIndicator,
   type EnvMode,
@@ -78,7 +78,7 @@ export interface ThreadDetailsPanelProps extends Pick<
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
-  const fileScripts = useT3ProjectFileScripts(
+  const fileScripts = useSupacodeProjectFileScripts(
     props.environmentId,
     props.activeProjectScripts ? props.gitCwd : null,
   );

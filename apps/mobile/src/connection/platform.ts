@@ -2,9 +2,9 @@ import {
   ClientCapabilities,
   PlatformConnectionSource,
   Persistence,
-} from "@t3tools/client-runtime/platform";
-import { ConnectionBlockedError, Connectivity, Wakeups } from "@t3tools/client-runtime/connection";
-import { AuthStandardClientScopes } from "@t3tools/contracts";
+} from "@supacode/client-runtime/platform";
+import { ConnectionBlockedError, Connectivity, Wakeups } from "@supacode/client-runtime/connection";
+import { AuthStandardClientScopes } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
