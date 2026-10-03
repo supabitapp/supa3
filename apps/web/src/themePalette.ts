@@ -4,10 +4,7 @@ import "culori/css";
 import { converter, parse } from "culori/fn";
 import {
   BUILT_IN_THEMES,
-  EMBER_THEME,
   GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
   SUPACODE_CHAT_THEME,
   SUPACODE_LIGHT_THEME_COLORS,
   SUPACODE_DARK_THEME_COLORS,
@@ -20,14 +17,7 @@ import {
   type ThemeVariants,
 } from "@supacode/shared/themePalettes";
 
-export {
-  EMBER_THEME,
-  GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
-  SUPACODE_CHAT_THEME,
-  THEME_COLOR_ROLES,
-};
+export { GROVE_THEME, SUPACODE_CHAT_THEME, THEME_COLOR_ROLES };
 export type { ThemeAppearance, ThemeColorRole, ThemeColors, ThemeDefinition, ThemeVariants };
 
 export const SUPACODE_CHAT_THEME_ID = "supacode-chat" as const;
