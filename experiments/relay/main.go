@@ -15,7 +15,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const drainTimeout = 5 * time.Second
+const (
+	drainTimeout    = 5 * time.Second
+	closeReserve    = 750 * time.Millisecond
+	hardStopReserve = 100 * time.Millisecond
+)
 
 func main() {
 	log.SetOutput(os.Stderr)
@@ -49,19 +53,16 @@ func main() {
 
 func (s *server) shutdown(srv *http.Server) {
 	start := time.Now()
+	hardStop := start.Add(drainTimeout - hardStopReserve)
+	closeAt := hardStop.Add(-closeReserve)
 	s.draining.Store(true)
 	log.Println("relay: draining")
-	ctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
-	defer cancel()
 	srv.SetKeepAlivesEnabled(false)
 
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
-	for s.pairCount() > 0 && ctx.Err() == nil {
-		select {
-		case <-tick.C:
-		case <-ctx.Done():
-		}
+	for s.pairCount() > 0 && time.Now().Before(closeAt) {
+		<-tick.C
 	}
 	remaining := s.pairCount()
 
@@ -73,16 +74,10 @@ func (s *server) shutdown(srv *http.Server) {
 	s.mu.Unlock()
 	msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "relay shutting down")
 	for _, ws := range conns {
-		go func() { _ = ws.WriteControl(websocket.CloseMessage, msg, time.Now().Add(closeGrace)) }()
+		go func() { _ = ws.WriteControl(websocket.CloseMessage, msg, hardStop) }()
 	}
-	grace := time.After(closeGrace)
-	for s.socketCount() > 0 {
-		select {
-		case <-tick.C:
-			continue
-		case <-grace:
-		}
-		break
+	for s.socketCount() > 0 && time.Now().Before(hardStop) {
+		<-tick.C
 	}
 	for _, ws := range conns {
 		_ = ws.Close()

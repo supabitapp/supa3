@@ -2,6 +2,8 @@ package e2e
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -209,29 +211,57 @@ func TestGracefulShutdownWaitsForActivePairs(t *testing.T) {
 	}
 }
 
-func TestGracefulShutdownForcesCloseAfterDeadline(t *testing.T) {
-	r := startRelay(t)
+func TestGracefulShutdownExitsWithinBudget(t *testing.T) {
+	r := startRelay(t, "RELAY_PAIR_TIMEOUT_MS=60000")
 	h := register(t, r)
-	client, host, _ := pairUp(t, r, h)
+	var readers []*websocket.Conn
+	for range 3 {
+		client, host, _ := pairUp(t, r, h)
+		readers = append(readers, client, host)
+	}
+	pairUp(t, r, h)
+	pending, _ := connect(t, r, h)
+	readers = append(readers, pending)
+	r.waitMetrics("pairs established", func(m map[string]float64) bool { return m["activePairs"] == 4 && m["pendingPairs"] == 1 })
+
+	results := make(chan error, len(readers)+1)
+	for _, ws := range readers {
+		go func() {
+			ce, err := readClose(ws)
+			if err == nil && ce.Code != websocket.CloseGoingAway {
+				err = fmt.Errorf("close %d %q", ce.Code, ce.Text)
+			}
+			results <- err
+		}()
+	}
+	go func() {
+		<-h.Done
+		var ce *websocket.CloseError
+		if !errors.As(h.Err, &ce) || ce.Code != websocket.CloseGoingAway {
+			results <- fmt.Errorf("control: %v", h.Err)
+			return
+		}
+		results <- nil
+	}()
+
 	start := time.Now()
 	r.signal(syscall.SIGTERM)
-	_ = client.SetReadDeadline(time.Now().Add(10 * time.Second))
-	_, _, err := client.ReadMessage()
-	var ce *websocket.CloseError
-	if !errors.As(err, &ce) || ce.Code != websocket.CloseGoingAway {
-		t.Fatalf("expected going away close, got %v", err)
-	}
-	host.Close()
-	if err := r.waitExit(10 * time.Second); err != nil {
+	if err := r.waitExit(8 * time.Second); err != nil {
 		t.Fatalf("relay exit: %v\n%s", err, r.stderr)
 	}
 	elapsed := time.Since(start)
-	if elapsed < 4500*time.Millisecond || elapsed > 7*time.Second {
-		t.Fatalf("drain took %s", elapsed)
+	if elapsed < 4*time.Second || elapsed > 5*time.Second+250*time.Millisecond {
+		t.Fatalf("shutdown took %s, want within the 5s budget\n%s", elapsed, r.stderr)
 	}
-	if !strings.Contains(r.stderr.String(), "1 pairs force-closed") {
+	for range len(readers) + 1 {
+		if err := <-results; err != nil && !errors.Is(err, io.EOF) && !strings.Contains(err.Error(), "connection reset") {
+			t.Fatalf("socket not closed cleanly: %v", err)
+		}
+	}
+	if !strings.Contains(r.stderr.String(), "5 pairs force-closed") {
 		t.Fatalf("unexpected drain log:\n%s", r.stderr)
 	}
+	t.Logf("shutdown with 4 active pairs, 1 pending pair, and a non-reading peer took %s", elapsed.Round(time.Millisecond))
 }
 
 func waitHealth(t *testing.T, r *relay, want int) {

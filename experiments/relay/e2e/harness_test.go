@@ -86,7 +86,7 @@ func startRelay(t *testing.T, env ...string) *relay {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
-	cmd.Env = append(cmd.Env, "RELAY_ADDR=127.0.0.1:0", "RELAY_ADMISSION_RATE=100000")
+	cmd.Env = append(cmd.Env, "RELAY_ADDR=127.0.0.1:0", "RELAY_ADMISSION_RATE=100000", "GORACE=atexit_sleep_ms=0")
 	cmd.Env = append(cmd.Env, env...)
 	r := &relay{t: t, cmd: cmd, stderr: &lockedBuffer{}, exited: make(chan struct{})}
 	cmd.Stderr = r.stderr
