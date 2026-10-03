@@ -336,3 +336,21 @@ func TestStalledReaderWriteTimeout(t *testing.T) {
 		t.Fatalf("stalled host socket closed with %d", code)
 	}
 }
+
+func TestTinyMessageLimitKeepsControlWorking(t *testing.T) {
+	r := startRelay(t, func(c *relay.Config) { c.MaxMessageBytes = 1 })
+	h := mustRegister(t, r, endpoint.NewIdentity())
+	client, hostData, id := mustPair(t, r, h)
+	if err := client.WriteMessage(websocket.BinaryMessage, []byte{7}); err != nil {
+		t.Fatal(err)
+	}
+	expectMessage(t, hostData, websocket.BinaryMessage, []byte{7})
+	if err := client.WriteMessage(websocket.BinaryMessage, []byte{1, 2}); err != nil {
+		t.Fatal(err)
+	}
+	expectClose(t, hostData, websocket.CloseMessageTooBig)
+	expectClosedEvent(t, h, id)
+	if m := metrics(t, r); m.ActiveHosts != 1 {
+		t.Fatalf("metrics %+v", m)
+	}
+}

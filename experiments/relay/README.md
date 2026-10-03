@@ -111,7 +111,7 @@ Payloads, tokens, nonces, signatures, and keys are never exposed or logged.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `RELAY_ADDR` | `127.0.0.1:8080` | Listen address. Port `0` picks a free port; the actual address is printed. |
-| `RELAY_MAX_MESSAGE_BYTES` | `1048576` | Largest accepted WebSocket message on any socket. |
+| `RELAY_MAX_MESSAGE_BYTES` | `1048576` | Largest accepted message on data sockets. Control sockets have a fixed 4096-byte cap. |
 | `RELAY_MAX_QUEUE_BYTES` | `4194304` | Bytes queued per data direction, including pre-pairing buffered messages. Must be at least the message limit. |
 | `RELAY_MAX_QUEUE_MESSAGES` | `256` | Messages queued per data direction. |
 | `RELAY_MAX_CLIENTS` | `1024` | Global pending plus active pairs. |

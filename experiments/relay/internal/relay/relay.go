@@ -209,7 +209,7 @@ func (r *Relay) handleControl(w http.ResponseWriter, req *http.Request) {
 		r.Metrics.RejectedConnections.Add(1)
 		return
 	}
-	sock := newSocket(conn, r.cfg)
+	sock := newSocket(conn, r.cfg, controlMessageLimit)
 	endpointID := EndpointID(pub)
 	nonce, _ := randomToken(32)
 	if err := sock.write(websocket.TextMessage, encode(controlMessage{Type: "challenge", Nonce: nonce})); err != nil {
@@ -375,7 +375,7 @@ func (r *Relay) handleConnect(w http.ResponseWriter, req *http.Request) {
 		r.closePair(p, websocket.CloseInternalServerErr, "upgrade failed")
 		return
 	}
-	sock := newSocket(conn, r.cfg)
+	sock := newSocket(conn, r.cfg, r.cfg.MaxMessageBytes)
 	r.mu.Lock()
 	if p.state == pairClosed {
 		r.mu.Unlock()
@@ -433,7 +433,7 @@ func (r *Relay) handleAccept(w http.ResponseWriter, req *http.Request) {
 		r.closePair(p, websocket.CloseInternalServerErr, "upgrade failed")
 		return
 	}
-	sock := newSocket(conn, r.cfg)
+	sock := newSocket(conn, r.cfg, r.cfg.MaxMessageBytes)
 	r.mu.Lock()
 	if p.state != pairAccepting {
 		r.mu.Unlock()

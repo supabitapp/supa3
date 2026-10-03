@@ -20,9 +20,11 @@ type socket struct {
 	closing      atomic.Bool
 }
 
-func newSocket(conn *websocket.Conn, cfg Config) *socket {
+const controlMessageLimit = 4096
+
+func newSocket(conn *websocket.Conn, cfg Config, readLimit int64) *socket {
 	s := &socket{conn: conn, writeTimeout: cfg.WriteTimeout, heartbeat: cfg.Heartbeat, readDone: make(chan struct{})}
-	conn.SetReadLimit(cfg.MaxMessageBytes)
+	conn.SetReadLimit(readLimit)
 	conn.SetReadDeadline(time.Now().Add(pongWait(cfg.Heartbeat)))
 	conn.SetCloseHandler(func(int, string) error { return nil })
 	conn.SetPongHandler(func(string) error {
