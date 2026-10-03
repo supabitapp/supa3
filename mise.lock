@@ -126,12 +126,6 @@ url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.gz"
 checksum = "sha256:158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip"
 
-[[tools."npm:vite-plus"]]
-version = "1.0.0"
-aube = { path = ".mise/locks/npm-vite-plus/1.0.0", digest = "sha256:d8f19a00c4656df682d86f519ef7d4cdea678e99c4419dfc90bf8fbf4de4eb63" }
-backend = "npm:vite-plus"
-specifiers = ["1.0.0"]
-
 [[tools.pnpm]]
 version = "11.10.0"
 backend = "aqua:pnpm/pnpm"

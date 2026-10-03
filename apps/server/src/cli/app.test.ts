@@ -6,14 +6,14 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import type { DesktopAppActivationRequest } from "@t3tools/contracts";
-import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
+import type { DesktopAppActivationRequest } from "@supacode/contracts";
+import { resolveDesktopAppControlAddress } from "@supacode/shared/desktopAppControl";
 import {
   HostProcessPlatform,
   HostProcessUserId,
   HostProcessWorkingDirectory,
-} from "@t3tools/shared/hostProcess";
-import * as NetService from "@t3tools/shared/Net";
+} from "@supacode/shared/hostProcess";
+import * as NetService from "@supacode/shared/Net";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -130,11 +130,11 @@ const withTempDirectory = <A, E, R>(
     (root) => Effect.promise(() => NodeFSP.rm(root, { recursive: true, force: true })),
   );
 
-describe("supa3 app", () => {
+describe("supacode app", () => {
   it.effect("rejects SSH before it tries to reach a desktop app", () =>
-    withTempDirectory("t3-app-ssh-test-", (root) =>
+    withTempDirectory("supacode-app-ssh-test-", (root) =>
       Effect.gen(function* () {
-        const baseDir = NodePath.join(root, "missing-t3-home");
+        const baseDir = NodePath.join(root, "missing-supacode-home");
         const error = yield* runCli(["app", "--base-dir", baseDir], {
           SSH_CONNECTION: "client server",
         }).pipe(Effect.flip);
@@ -142,7 +142,7 @@ describe("supa3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppSshUnsupportedError",
           message:
-            "`supa3 app` only controls a desktop app on the same machine. It cannot run over SSH.",
+            "`supacode app` only controls a desktop app on the same machine. It cannot run over SSH.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -150,9 +150,9 @@ describe("supa3 app", () => {
   );
 
   it.effect("rejects unsupported platforms without creating state", () =>
-    withTempDirectory("t3-app-platform-test-", (root) =>
+    withTempDirectory("supacode-app-platform-test-", (root) =>
       Effect.gen(function* () {
-        const baseDir = NodePath.join(root, "missing-t3-home");
+        const baseDir = NodePath.join(root, "missing-supacode-home");
         const error = yield* runCli(["app", "--base-dir", baseDir]).pipe(
           Effect.provideService(HostProcessPlatform, "freebsd"),
           Effect.flip,
@@ -161,7 +161,7 @@ describe("supa3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppPlatformUnsupportedError",
           platform: "freebsd",
-          message: "`supa3 app` is not supported on freebsd.",
+          message: "`supacode app` is not supported on freebsd.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -169,16 +169,16 @@ describe("supa3 app", () => {
   );
 
   it.effect("does not create state when only a server or no desktop app is running", () =>
-    withTempDirectory("t3-app-missing-test-", (root) =>
+    withTempDirectory("supacode-app-missing-test-", (root) =>
       Effect.gen(function* () {
-        const baseDir = NodePath.join(root, "missing-t3-home");
+        const baseDir = NodePath.join(root, "missing-supacode-home");
         const error = yield* runCli(["app", "--base-dir", baseDir]).pipe(Effect.flip);
 
         expect(error).toMatchObject({
           _tag: "DesktopAppUnreachableError",
           candidateAddresses: [expect.any(String)],
           workspaceRoot: yield* HostProcessWorkingDirectory,
-          message: expect.stringContaining("Could not reach the supa3 desktop app."),
+          message: expect.stringContaining("Could not reach the Supacode desktop app."),
           cause: { code: "ENOENT" },
         });
         expect(yield* pathExists(baseDir)).toBe(false);
@@ -186,16 +186,16 @@ describe("supa3 app", () => {
     ),
   );
 
-  it.effect("uses SUPA3_HOME or --base-dir and sends the default or explicit path", () =>
-    withTempDirectory("t3-app-command-test-", (root) =>
+  it.effect("uses SUPACODE_HOME or --base-dir and sends the default or explicit path", () =>
+    withTempDirectory("supacode-app-command-test-", (root) =>
       Effect.gen(function* () {
-        const baseDir = NodePath.join(root, "t3-home");
+        const baseDir = NodePath.join(root, "supacode-home");
         const explicitPath = NodePath.join(root, "project");
         const platform = yield* HostProcessPlatform;
         const workingDirectory = yield* HostProcessWorkingDirectory;
         const desktop = yield* fakeDesktop({ baseDir });
 
-        yield* runCli(["app"], { SUPA3_HOME: baseDir });
+        yield* runCli(["app"], { SUPACODE_HOME: baseDir });
         yield* runCli(["app", explicitPath, "--base-dir", baseDir]);
 
         expect(desktop.received.map((request) => request.workspaceRoot)).toEqual([
@@ -208,10 +208,10 @@ describe("supa3 app", () => {
   );
 
   it.effect("prefers the installed desktop app when a dev desktop is also running", () =>
-    withTempDirectory("t3-app-preferred-test-", (root) =>
+    withTempDirectory("supacode-app-preferred-test-", (root) =>
       Effect.gen(function* () {
         vi.mocked(NodeOS.homedir).mockReturnValue(root);
-        const baseDir = NodePath.join(root, ".supa3");
+        const baseDir = NodePath.join(root, ".supacode");
         const desktop = yield* fakeDesktop({ baseDir });
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
 
@@ -224,14 +224,14 @@ describe("supa3 app", () => {
   );
 
   it.effect("finds the dev desktop when the default desktop socket is absent", () =>
-    withTempDirectory("t3-app-dev-test-", (root) =>
+    withTempDirectory("supacode-app-dev-test-", (root) =>
       Effect.gen(function* () {
         vi.mocked(NodeOS.homedir).mockReturnValue(root);
-        const baseDir = NodePath.join(root, ".supa3");
+        const baseDir = NodePath.join(root, ".supacode");
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
 
         yield* runCli(["app"]);
-        yield* runCli(["app"], { SUPA3_HOME: "   " });
+        yield* runCli(["app"], { SUPACODE_HOME: "   " });
 
         expect(development.received).toHaveLength(2);
         expect(yield* pathExists(baseDir)).toBe(false);
@@ -239,15 +239,15 @@ describe("supa3 app", () => {
     ),
   );
 
-  it.effect("never searches a dev state directory for an explicit supa3 home", () =>
-    withTempDirectory("t3-app-explicit-test-", (root) =>
+  it.effect("never searches a dev state directory for an explicit Supacode home", () =>
+    withTempDirectory("supacode-app-explicit-test-", (root) =>
       Effect.gen(function* () {
         vi.mocked(NodeOS.homedir).mockReturnValue(root);
-        const baseDir = NodePath.join(root, ".supa3");
+        const baseDir = NodePath.join(root, ".supacode");
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
 
         const flagError = yield* runCli(["app", "--base-dir", baseDir]).pipe(Effect.flip);
-        const envError = yield* runCli(["app"], { SUPA3_HOME: baseDir }).pipe(Effect.flip);
+        const envError = yield* runCli(["app"], { SUPACODE_HOME: baseDir }).pipe(Effect.flip);
 
         expect(flagError).toMatchObject({ _tag: "DesktopAppUnreachableError" });
         expect(envError).toMatchObject({ _tag: "DesktopAppUnreachableError" });
@@ -259,10 +259,10 @@ describe("supa3 app", () => {
   it.effect.each(["failure", "invalid"] as const)(
     "never falls back after the default desktop sends a %s response",
     (responseKind) =>
-      withTempDirectory("t3-app-response-test-", (root) =>
+      withTempDirectory("supacode-app-response-test-", (root) =>
         Effect.gen(function* () {
           vi.mocked(NodeOS.homedir).mockReturnValue(root);
-          const baseDir = NodePath.join(root, ".supa3");
+          const baseDir = NodePath.join(root, ".supacode");
           const desktop = yield* fakeDesktop({
             baseDir,
             reply: (request) =>

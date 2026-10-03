@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   connectionCatalogDisplayUrl,
   type EnvironmentPresentation as BaseEnvironmentPresentation,
-} from "@t3tools/client-runtime/connection";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@supacode/client-runtime/connection";
+import type { EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
 import { useMemo } from "react";
 

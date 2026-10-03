@@ -1,8 +1,8 @@
 import {
   formatProviderSubagentStatus,
   type ProviderSubagentStatus,
-} from "@t3tools/client-runtime/state/thread-execution";
-import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/thread-execution";
+import { isOrchestrationV2WorkActive } from "@supacode/contracts";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
@@ -52,7 +52,10 @@ export function ProviderSubagentBar(props: {
               size={16}
             />
           ) : null}
-          <Text numberOfLines={1} className="min-w-0 shrink font-t3-bold text-sm text-foreground">
+          <Text
+            numberOfLines={1}
+            className="min-w-0 shrink font-supacode-bold text-sm text-foreground"
+          >
             {props.modelLabel}
           </Text>
           {props.effortLabel === null ? null : (

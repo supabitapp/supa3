@@ -1,8 +1,8 @@
-import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
-import type { EnvironmentId } from "@t3tools/contracts";
-import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { readFilePreviewResponse } from "@t3tools/client-runtime/file-preview";
-import { filePreviewKind, FILE_TEXT_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
+import { filePreviewDelimiter } from "@supacode/shared/delimitedPreview";
+import type { EnvironmentId } from "@supacode/contracts";
+import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
+import { readFilePreviewResponse } from "@supacode/client-runtime/file-preview";
+import { filePreviewKind, FILE_TEXT_PREVIEW_MAX_BYTES } from "@supacode/shared/filePreview";
 import {
   CheckIcon,
   ChevronRightIcon,

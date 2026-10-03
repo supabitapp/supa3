@@ -24,11 +24,11 @@ on:
       theme:
         description: Palette to capture (all multiplies the run by six)
         required: true
-        default: t3-code
+        default: supacode
         type: choice
         options:
-          - t3-code
-          - t3-chat
+          - supacode
+          - supacode-chat
           - grove
           - ocean
           - ember
@@ -61,7 +61,14 @@ jobs:
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
-        run: mise exec -- vp install --filter=@t3tools/mobile... --filter=@t3tools/scripts... --filter=t3...
+        run: mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
       - name: Capture iOS showcase
         run: pnpm screenshots:mobile --platform ios --appearance "${{ inputs.appearance }}" --theme "${{ inputs.theme }}"
 
@@ -85,7 +92,7 @@ jobs:
     # one native build is shared between them.
     timeout-minutes: ${{ inputs.theme == 'all' && 300 || 60 }}
     env:
-      T3_SHOWCASE_ANDROID_ABI: x86_64
+      SUPACODE_SHOWCASE_ANDROID_ABI: x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -98,7 +105,14 @@ jobs:
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
-        run: mise exec -- vp install --filter=@t3tools/mobile... --filter=@t3tools/scripts... --filter=t3...
+        run: mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:

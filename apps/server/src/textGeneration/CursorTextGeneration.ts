@@ -11,11 +11,11 @@ import {
   type CursorSettings,
   type ModelSelection,
   type ProviderSetupError,
-} from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
+} from "@supacode/contracts";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@supacode/shared/git";
+import { extractJsonObject } from "@supacode/shared/schemaJson";
 
-import { TextGenerationError } from "@t3tools/contracts";
+import { TextGenerationError } from "@supacode/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -87,7 +87,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       if (!cursorSettings.enabled) {
         return yield* new TextGenerationError({
           operation,
-          detail: "Cursor is disabled in supa3 settings.",
+          detail: "Cursor is disabled in Supacode settings.",
         });
       }
 
@@ -126,7 +126,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
             "Cursor text generation cannot enforce workspace isolation with a custom ~/.cursor/sandbox.json. Use another text-generation provider.",
         });
       }
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cursor-text-" });
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-cursor-text-" });
       const agentOptions = {
         apiKey,
         mode: "plan",

@@ -6,8 +6,8 @@ import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
-import { supportsSharedSettingsSync } from "@t3tools/client-runtime/state/shared-settings";
+import { DEFAULT_SERVER_SETTINGS } from "@supacode/contracts";
+import { supportsSharedSettingsSync } from "@supacode/client-runtime/state/shared-settings";
 import { AppText as Text } from "../../components/AppText";
 import {
   mobilePreferencesAtom,
@@ -233,7 +233,7 @@ function AutoSettleSettingsRows() {
               onPress={() => writeToAll(autoSettlePatch)}
               className="self-start rounded-full bg-subtle px-4 py-2 active:opacity-70"
             >
-              <Text className="text-sm font-t3-medium text-foreground">
+              <Text className="text-sm font-supacode-medium text-foreground">
                 Apply auto-settle defaults
               </Text>
             </Pressable>

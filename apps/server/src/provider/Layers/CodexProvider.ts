@@ -22,16 +22,16 @@ import type {
   ProviderOptionDescriptor,
   ServerProviderModel,
   ServerProviderSkill,
-} from "@t3tools/contracts";
-import { PREFERRED_DEFAULT_CODEX_MODELS, ServerSettingsError } from "@t3tools/contracts";
+} from "@supacode/contracts";
+import { PREFERRED_DEFAULT_CODEX_MODELS, ServerSettingsError } from "@supacode/contracts";
 
 import {
   codexModelFamily,
   createModelCapabilities,
   formatCodexModelName,
   readCustomModelEntries,
-} from "@t3tools/shared/model";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+} from "@supacode/shared/model";
+import { resolveSpawnCommand } from "@supacode/shared/shell";
 import { codexAppServerArgs, resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 import {
   AUTH_PROBE_TIMEOUT_MS,
@@ -347,8 +347,8 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
-      name: "supa3",
-      title: "supa3",
+      name: "supacode",
+      title: "Supacode",
       version: packageJson.version,
     },
     capabilities: {
@@ -515,7 +515,7 @@ const makePendingCodexProvider = (
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Codex is disabled in supa3 settings.",
+          message: "Codex is disabled in Supacode settings.",
         },
       });
     }
@@ -603,7 +603,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in supa3 settings.",
+        message: "Codex is disabled in Supacode settings.",
       },
     });
   }

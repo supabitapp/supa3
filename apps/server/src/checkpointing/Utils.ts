@@ -1,7 +1,7 @@
 import * as Encoding from "effect/Encoding";
-import { CheckpointRef, ProjectId, type ThreadId } from "@t3tools/contracts";
+import { CheckpointRef, ProjectId, type ThreadId } from "@supacode/contracts";
 
-const CHECKPOINT_REFS_PREFIX = "refs/supa3/checkpoints";
+const CHECKPOINT_REFS_PREFIX = "refs/supacode/checkpoints";
 
 export function checkpointRefForThreadTurn(threadId: ThreadId, turnCount: number): CheckpointRef {
   return CheckpointRef.make(

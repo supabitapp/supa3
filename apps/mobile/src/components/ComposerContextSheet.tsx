@@ -1,13 +1,13 @@
 import { SourceFileSurface } from "../features/files/SourceFileSurface";
-import { filePreviewKind } from "@t3tools/shared/filePreview";
+import { filePreviewKind } from "@supacode/shared/filePreview";
 import type {
   ComposerContextRecord,
   ElementContextSource,
   EnvironmentId,
   ScopedThreadRef,
-} from "@t3tools/contracts";
-import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { videoMimeType } from "@t3tools/shared/video";
+} from "@supacode/contracts";
+import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
+import { videoMimeType } from "@supacode/shared/video";
 import { useState } from "react";
 import {
   Alert,
@@ -223,7 +223,7 @@ export function ComposerContextSheet(props: {
               <SymbolView name="terminal" size={20} tintColor={terminalTheme.palette[2]} />
             ) : null}
             <View className="min-w-0 flex-1">
-              <Text className="text-base font-t3-semibold text-foreground" numberOfLines={2}>
+              <Text className="text-base font-supacode-semibold text-foreground" numberOfLines={2}>
                 {terminal?.terminalLabel ?? props.label}
               </Text>
               {terminal ? (

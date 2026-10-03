@@ -6,7 +6,7 @@ import {
 } from "./legacy-plan-mode";
 
 describe("resolveProviderInteractionMode", () => {
-  it("clears saved plan mode when the provider cannot use supa3 interaction modes", () => {
+  it("clears saved plan mode when the provider cannot use Supacode interaction modes", () => {
     expect(resolveProviderInteractionMode({ showInteractionModeToggle: false }, "plan")).toBe(
       "default",
     );

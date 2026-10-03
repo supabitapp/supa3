@@ -10,9 +10,9 @@ import {
   ThreadId,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2RunStatus,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
-import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
+import { usageLimitBlockedRun } from "@supacode/shared/orchestrationV2ThreadError";
 import { describe, expect, it } from "vite-plus/test";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
@@ -400,7 +400,7 @@ describe("deriveProviderSubagentStatus", () => {
     expect(formatProviderSubagentStatus(null, 0)).toBe("Starting");
   });
 
-  it("leaves supa3 delegated tasks and ordinary threads alone", () => {
+  it("leaves Supacode delegated tasks and ordinary threads alone", () => {
     expect(deriveProviderSubagentStatus(child("mcp"))).toBeNull();
     expect(deriveProviderSubagentStatus({ ...v2Projection, nodes: [root] })).toBeNull();
   });

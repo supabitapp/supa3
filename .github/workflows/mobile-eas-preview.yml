@@ -49,7 +49,15 @@ jobs:
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
         if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- vp install --filter=@t3tools/mobile...
+        run: mise exec -- vp install --filter=@supacode/mobile...
+      - name: Expose pnpm
+        if: steps.expo-token.outputs.present == 'true'
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
       - name: Setup EAS
         if: steps.expo-token.outputs.present == 'true'
         uses: expo/expo-github-action@v8

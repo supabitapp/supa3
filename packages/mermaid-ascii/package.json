@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/mermaid-ascii",
+  "name": "@supacode/mermaid-ascii",
   "private": true,
   "type": "module",
   "exports": {

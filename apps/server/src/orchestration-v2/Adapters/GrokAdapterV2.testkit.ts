@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { GrokSettings } from "@t3tools/contracts";
+import { GrokSettings } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
 import * as FileSystem from "effect/FileSystem";
@@ -7,8 +7,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { resolveSelfInvocation } from "@supacode/shared/nodeRuntime";
 
 import * as ServerConfig from "../../config.ts";
 import {
@@ -56,7 +56,7 @@ function makeGrokProviderAdapterRegistryReplayLayer(
       const replayGate = options.replayGate;
       const replayDir = yield* fileSystem
         .makeTempDirectory({
-          prefix: `t3-orchestration-v2-grok-replay-${transcript.scenario}-`,
+          prefix: `supacode-orchestration-v2-grok-replay-${transcript.scenario}-`,
         })
         .pipe(Effect.orDie);
       const statusPath = path.join(replayDir, "status.json");

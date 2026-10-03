@@ -62,7 +62,7 @@ const makeEnvironmentLayer = (
       Layer.mergeAll(
         NodeServices.layer,
         DesktopConfig.layerTest({
-          SUPA3_HOME: baseDir,
+          SUPACODE_HOME: baseDir,
           VITE_DEV_SERVER_URL: isDevelopment ? "http://127.0.0.1:5733" : undefined,
           ...env,
         }),
@@ -144,7 +144,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir);
       const tracePath = yield* Effect.gen(function* () {
@@ -193,7 +193,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-log-test-",
+        prefix: "supacode-desktop-backend-output-log-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -271,7 +271,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-snapshot-test-",
+        prefix: "supacode-desktop-backend-output-snapshot-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -311,7 +311,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-bound-test-",
+        prefix: "supacode-desktop-backend-output-bound-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -355,7 +355,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-chunks-test-",
+        prefix: "supacode-desktop-backend-output-chunks-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -390,11 +390,11 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, true, {
-        T3CODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
-        T3CODE_OTLP_HEADERS: "x-scope=desktop",
+        SUPACODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
+        SUPACODE_OTLP_HEADERS: "x-scope=desktop",
       });
       const tracePath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -436,10 +436,10 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, true, {
-        T3CODE_OTLP_HEADERS: "x-scope=desktop",
+        SUPACODE_OTLP_HEADERS: "x-scope=desktop",
       });
       yield* writeObservabilitySettings(environmentLayer, {
         otlpLogsUrl: "https://settings.example.com/v1/logs",
@@ -482,10 +482,10 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, true, {
-        T3CODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
+        SUPACODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
       });
 
       yield* Effect.scoped(
@@ -496,9 +496,9 @@ describe("DesktopObservability", () => {
 
       assert.lengthOf(requests, 1);
       const body = requests[0]?.body ?? "";
-      assert.include(body, '"stringValue":"t3code-desktop"');
+      assert.include(body, '"stringValue":"supacode-desktop"');
       assert.include(body, "deployment.environment.name");
-      assert.include(body, '"key":"service.namespace","value":{"stringValue":"t3code"}');
+      assert.include(body, '"key":"service.namespace","value":{"stringValue":"supacode"}');
       assert.notInclude(body, "renamed");
     }).pipe(
       Effect.scoped,
@@ -525,10 +525,10 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, true, {
-        T3CODE_OTLP_HEADERS: "x-scope=desktop",
+        SUPACODE_OTLP_HEADERS: "x-scope=desktop",
       });
       yield* writeObservabilitySettings(environmentLayer, {
         otlpLogsUrl: "https://settings.example.com/v1/logs",
@@ -565,10 +565,10 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir, true, {
-        T3CODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
+        SUPACODE_OTLP_LOGS_URL: "https://collector.example.com/v1/logs",
       });
 
       yield* Effect.scoped(
@@ -595,7 +595,7 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir);
       yield* writeObservabilitySettings(environmentLayer, {
@@ -636,7 +636,7 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
 
       yield* Effect.scoped(
@@ -660,7 +660,7 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "supacode-desktop-observability-test-",
       });
       const environmentLayer = makeEnvironmentLayer(baseDir);
       yield* writeObservabilitySettings(environmentLayer, {

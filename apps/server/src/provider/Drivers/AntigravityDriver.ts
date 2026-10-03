@@ -1,11 +1,11 @@
 import { withAgentDeviceEnvironment } from "../../mcp/McpProviderSession.ts";
-import { AntigravitySettings, ProviderDriverKind, ProviderSetupError } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+import { AntigravitySettings, ProviderDriverKind, ProviderSetupError } from "@supacode/contracts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { resolveSelfInvocation } from "@supacode/shared/nodeRuntime";
 import {
   NodeRuntimeUnavailableError,
   nodeRuntimeUnavailableMessage,
-} from "@t3tools/shared/nodeRuntime";
+} from "@supacode/shared/nodeRuntime";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -266,7 +266,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         input: Pick<AntigravityAcpRuntimeInput, "onAuthorizationUrl">,
       ) {
         const cwd = yield* fileSystem
-          .makeTempDirectoryScoped({ prefix: "t3-antigravity-setup-" })
+          .makeTempDirectoryScoped({ prefix: "supacode-antigravity-setup-" })
           .pipe(
             Effect.mapError(
               () =>
@@ -290,7 +290,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         );
         const runtime = yield* makeRuntime({
           cwd,
-          clientInfo: { name: "supa3-provider-setup", version: "0.0.0" },
+          clientInfo: { name: "supacode-provider-setup", version: "0.0.0" },
           mcpServers: [],
           ...(input.onAuthorizationUrl ? { onAuthorizationUrl: input.onAuthorizationUrl } : {}),
         });
@@ -439,7 +439,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         makeRuntime: (cwd) =>
           makeRuntime({
             cwd,
-            clientInfo: { name: "supa3-text", version: "0.0.0" },
+            clientInfo: { name: "supacode-text", version: "0.0.0" },
             mcpServers: [],
           }),
       });

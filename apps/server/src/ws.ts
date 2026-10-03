@@ -1,4 +1,4 @@
-import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import { OrchestrationDispatchCommandError } from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as NodeCrypto from "node:crypto";
@@ -94,8 +94,8 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@supacode/contracts";
+import { resolveServerBackgroundActivitySettings } from "@supacode/shared/backgroundActivitySettings";
 import {
   HttpRouter,
   HttpServerRequest,
@@ -233,7 +233,7 @@ import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
-} from "@t3tools/shared/usageLimits";
+} from "@supacode/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
@@ -1411,7 +1411,7 @@ const makeWsRpcLayer = (
               if (racedImport !== null) return { threadId, imported: false } as const;
               return yield* new AcpRegistryOperationError({
                 reason: "session_import_failed",
-                message: "Could not create a supa3 thread for the ACP session.",
+                message: "Could not create a Supacode thread for the ACP session.",
                 cause: launched.failure,
               });
             }
@@ -1452,7 +1452,8 @@ const makeWsRpcLayer = (
             if (importedThread !== null) {
               return yield* new AcpRegistryOperationError({
                 reason: "session_delete_failed",
-                message: "Delete the imported supa3 thread before deleting its native ACP session.",
+                message:
+                  "Delete the imported Supacode thread before deleting its native ACP session.",
               });
             }
             yield* manager.deleteSession({
@@ -2197,7 +2198,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.serverRefreshProviders,
             Effect.gen(function* () {
-              // Only explicit catalog refreshes bypass T3's caches. Workspace
+              // Only explicit catalog refreshes bypass Supacode's caches. Workspace
               // discovery and background status checks retain their timers.
               if (input.refreshModels) {
                 yield* modelManifest.forceRefresh;

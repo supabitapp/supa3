@@ -140,7 +140,7 @@ jobs:
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
         if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- vp install --filter=@t3tools/mobile...
+        run: mise exec -- vp install --filter=@supacode/mobile...
       - name: Verify v2 preview source
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.profile == 'v2-preview'
         run: |
@@ -150,6 +150,14 @@ jobs:
               throw new Error("V2 previews require a v2 source branch. Select the v2 branch when running this workflow.");
             }
           '
+
+      - name: Expose pnpm
+        if: steps.expo-token.outputs.present == 'true'
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
 
       - name: Setup EAS
         if: steps.expo-token.outputs.present == 'true'

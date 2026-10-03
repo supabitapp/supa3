@@ -6,7 +6,7 @@ import {
   type OrchestrationV2ServerCommand as OrchestrationCommand,
   type OrchestrationProjectShell,
   type ThreadPullRequestLink,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -47,16 +47,16 @@ const invocation = (
 
 function makeProject(
   repositoryIdentity: OrchestrationProjectShell["repositoryIdentity"] = {
-    canonicalKey: "github.com/t3tools/t3code",
+    canonicalKey: "github.com/supabitapp/supacode-next",
     locator: {
       source: "git-remote",
       remoteName: "origin",
-      remoteUrl: "git@github.com:T3Tools/T3Code.git",
+      remoteUrl: "git@github.com:supabitapp/supacode-next.git",
     },
     provider: "github",
-    displayName: "T3Tools/T3Code",
-    owner: "T3Tools",
-    name: "T3Code",
+    displayName: "supabitapp/supacode-next",
+    owner: "supabitapp",
+    name: "supacode-next",
   },
 ): OrchestrationProjectShell {
   return {
@@ -101,9 +101,9 @@ function makeLink(
   const { headBranch, baseBranch, ...rest } = overrides;
   return {
     host: "github.com",
-    repository: "t3tools/t3code",
+    repository: "supabitapp/supacode-next",
     number,
-    url: `https://github.com/t3tools/t3code/pull/${number}`,
+    url: `https://github.com/supabitapp/supacode-next/pull/${number}`,
     source: "manual",
     linkedAt: "2026-08-10T00:00:00.000Z",
     snapshot:
@@ -200,13 +200,13 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("link_pull_request", {
-        url: "https://github.com/T3Tools/T3Code/pull/123/files",
+        url: "https://github.com/supabitapp/supacode-next/pull/123/files",
       });
       expect(result).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "supabitapp/supacode-next",
         number: 123,
-        url: "https://github.com/T3Tools/T3Code/pull/123/files",
+        url: "https://github.com/supabitapp/supacode-next/pull/123/files",
         alreadyLinked: false,
       });
       expect(yield* Ref.get(harness.commands)).toMatchObject([
@@ -214,7 +214,7 @@ describe("pull request toolkit handlers", () => {
           type: "thread.pull-request.link",
           threadId: THREAD_ID,
           host: "github.com",
-          repository: "t3tools/t3code",
+          repository: "supabitapp/supacode-next",
           number: 123,
           source: "agent",
         },
@@ -226,14 +226,14 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("link_pull_request", {
-        repository: "T3Tools/Other",
+        repository: "SupabitApp/Other",
         number: 7,
       });
       expect(result).toEqual({
         host: "github.com",
-        repository: "t3tools/other",
+        repository: "supabitapp/other",
         number: 7,
-        url: "https://github.com/t3tools/other/pull/7",
+        url: "https://github.com/supabitapp/other/pull/7",
         alreadyLinked: false,
       });
     }),
@@ -305,7 +305,7 @@ describe("pull request toolkit handlers", () => {
       expect(error).toMatchObject({ _tag: "PullRequestTargetIncompleteError" });
       const unknown = yield* harness
         .call("link_pull_request", {
-          url: "https://github.com/t3tools/t3code/issues/1?token=private-value",
+          url: "https://github.com/supabitapp/supacode-next/issues/1?token=private-value",
         })
         .pipe(Effect.flip);
       expect(unknown).toMatchObject({ _tag: "PullRequestUrlInvalidError" });
@@ -322,7 +322,7 @@ describe("pull request toolkit handlers", () => {
           command.type === "thread.pull-request.link" ? "already linked" : null,
       });
       const result = yield* harness.call("link_pull_request", {
-        url: "https://github.com/t3tools/t3code/pull/123",
+        url: "https://github.com/supabitapp/supacode-next/pull/123",
       });
       expect(result.alreadyLinked).toBe(true);
     }),
@@ -338,17 +338,17 @@ describe("pull request toolkit handlers", () => {
             : null,
       });
       const linked = yield* harness.call("unlink_pull_request", {
-        repository: "t3tools/t3code",
+        repository: "supabitapp/supacode-next",
         number: 5,
       });
       expect(linked).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "supabitapp/supacode-next",
         number: 5,
         wasLinked: true,
       });
       const missing = yield* harness.call("unlink_pull_request", {
-        url: "https://github.com/t3tools/t3code/pull/9",
+        url: "https://github.com/supabitapp/supacode-next/pull/9",
       });
       expect(missing.wasLinked).toBe(false);
       expect(yield* Ref.get(harness.commands)).toMatchObject([
@@ -362,7 +362,7 @@ describe("pull request toolkit handlers", () => {
       makeThread([
         makeLink(42, {
           host: "forge.example",
-          url: "http://forge.example:3000/t3tools/t3code/pulls/42",
+          url: "http://forge.example:3000/supabitapp/supacode-next/pulls/42",
         }),
       ]),
     );
@@ -392,9 +392,9 @@ describe("pull request toolkit handlers", () => {
       expect(result.pullRequests.map((entry) => entry.number)).toEqual([3, 1, 2, 10]);
       expect(result.pullRequests[0]).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "supabitapp/supacode-next",
         number: 3,
-        url: "https://github.com/t3tools/t3code/pull/3",
+        url: "https://github.com/supabitapp/supacode-next/pull/3",
         source: "agent",
         state: "open",
         title: "PR 3",
@@ -424,7 +424,7 @@ describe("listThreadPullRequests", () => {
       kind: "native" as const,
       id: "stack-1",
       number: 1,
-      url: "https://github.com/t3tools/t3code/stack/1",
+      url: "https://github.com/supabitapp/supacode-next/stack/1",
       base: "main",
       layers: [
         { number: 1, headBranch: "a", state: "open" as const },

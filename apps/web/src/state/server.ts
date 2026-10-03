@@ -8,11 +8,11 @@ import {
   type ServerLifecycleWelcomePayload,
   type ServerProvider,
   type ServerSettings,
-} from "@t3tools/contracts";
-import { createServerEnvironmentAtoms } from "@t3tools/client-runtime/state/server";
-import { createOutdatedServerUpdateCommand } from "@t3tools/client-runtime/state/outdatedServerUpdate";
-import { createEnvironmentServerConfigsAtom } from "@t3tools/client-runtime/state/shell";
-import { mergeWithDefaultKeybindings } from "@t3tools/shared/keybindings";
+} from "@supacode/contracts";
+import { createServerEnvironmentAtoms } from "@supacode/client-runtime/state/server";
+import { createOutdatedServerUpdateCommand } from "@supacode/client-runtime/state/outdatedServerUpdate";
+import { createEnvironmentServerConfigsAtom } from "@supacode/client-runtime/state/shell";
+import { mergeWithDefaultKeybindings } from "@supacode/shared/keybindings";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
