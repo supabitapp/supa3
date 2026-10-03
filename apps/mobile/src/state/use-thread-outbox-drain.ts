@@ -39,6 +39,8 @@ import {
   recordPendingThreadCreationOutcome,
 } from "./pending-thread-creation";
 import { serverEnvironment } from "./server";
+import { prepareQueuedThreadCreation } from "./queued-thread-creation";
+import { fetchVcsRefs } from "./vcs";
 import {
   confirmThreadOutboxMessageQueued,
   threadOutboxManager,
@@ -54,7 +56,6 @@ import {
   resolveQueuedThreadSettings,
   shouldRetryThreadOutboxDelivery,
   threadOutboxRetryDelayMs,
-  type QueuedThreadCreation,
   type QueuedThreadMessage,
   type ThreadOutboxCommandStage,
   type ThreadOutboxFailureAction,
@@ -619,6 +620,7 @@ async function preserveUploadedAttachmentsForEditor(
 
 export function useThreadOutboxDrain(): void {
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const fetchRefs = useAtomCommand(fetchVcsRefs, { reportFailure: false });
   const setThreadRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
     reportFailure: false,
   });
@@ -913,11 +915,28 @@ export function useThreadOutboxDrain(): void {
   );
 
   const sendQueuedCreation = useCallback(
-    async (
-      queuedMessage: QueuedThreadMessage,
-      creation: QueuedThreadCreation,
-      projectCwd: string,
-    ) => {
+    async (initialMessage: QueuedThreadMessage, projectCwd: string) => {
+      let workspaceResult;
+      try {
+        workspaceResult = await prepareQueuedThreadCreation(initialMessage, projectCwd, fetchRefs);
+      } catch (error) {
+        threadOutboxDebug.log("could not persist the queued task's base branch; retrying", {
+          environmentId: initialMessage.environmentId,
+          messageId: initialMessage.messageId,
+          error,
+        });
+        return false;
+      }
+      const workspaceFailure = makeDeliveryHelpers(initialMessage).reportFailure(
+        workspaceResult,
+        "branch-resolution",
+      );
+      if (workspaceFailure?.action === "retry") return false;
+      if (workspaceFailure?.action === "restore") {
+        return restoreQueuedMessage(initialMessage, workspaceFailure.message);
+      }
+      if (!AsyncResult.isSuccess(workspaceResult) || workspaceResult.value === null) return true;
+      const { message: queuedMessage, creation } = workspaceResult.value;
       const modelSelection = queuedMessage.modelSelection;
       if (modelSelection === undefined) {
         return false;
@@ -1044,7 +1063,7 @@ export function useThreadOutboxDrain(): void {
       }
       return outcome === "removed";
     },
-    [makeDeliveryHelpers, restoreQueuedMessage, startTurn],
+    [fetchRefs, makeDeliveryHelpers, restoreQueuedMessage, startTurn],
   );
 
   // A creation outcome bridges setup until the server's shell has a turn.
@@ -1210,8 +1229,6 @@ export function useThreadOutboxDrain(): void {
             creation.projectCwd ??
             null)
           : null;
-      // An incomplete pending task (e.g. worktree mode without a branch) stays
-      // queued until the user finishes it in the editor.
       if (deliveryAction === "send" && creation !== undefined) {
         if (!isQueuedThreadCreationSendable(nextQueuedMessage)) {
           continue;
@@ -1281,7 +1298,7 @@ export function useThreadOutboxDrain(): void {
             : removeQueuedMessage("[thread-outbox] failed to remove message for a missing thread")
           : creation !== undefined
             ? creationProjectCwd !== null
-              ? sendQueuedCreation(nextQueuedMessage, creation, creationProjectCwd)
+              ? sendQueuedCreation(nextQueuedMessage, creationProjectCwd)
               : removeQueuedMessage("[thread-outbox] dropped pending task for a missing project")
             : thread !== undefined
               ? sendQueuedMessage(nextQueuedMessage, thread)

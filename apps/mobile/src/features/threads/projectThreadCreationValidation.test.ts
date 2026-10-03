@@ -1,6 +1,45 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
+import {
+  resolveDefaultWorktreeBaseBranch,
+  resolveProjectThreadCreationBranch,
+} from "./projectThreadCreationValidation";
+
+describe("resolveDefaultWorktreeBaseBranch", () => {
+  it("prefers the repository default to the current feature branch", () => {
+    expect(
+      resolveDefaultWorktreeBaseBranch([
+        { name: "feature/x", current: true, isDefault: false, isRemote: false },
+        { name: "main", current: false, isDefault: true, isRemote: false },
+      ]),
+    ).toBe("main");
+  });
+
+  it("supports a default branch that exists only on a remote", () => {
+    expect(
+      resolveDefaultWorktreeBaseBranch([
+        { name: "origin/main", current: false, isDefault: true, isRemote: true },
+      ]),
+    ).toBe("origin/main");
+  });
+
+  it("uses the current local branch when no default is available", () => {
+    expect(
+      resolveDefaultWorktreeBaseBranch([
+        { name: "feature/x", current: true, isDefault: false, isRemote: false },
+      ]),
+    ).toBe("feature/x");
+  });
+
+  it("does not invent a base from an arbitrary branch or an empty cache", () => {
+    expect(resolveDefaultWorktreeBaseBranch([])).toBeNull();
+    expect(
+      resolveDefaultWorktreeBaseBranch([
+        { name: "release", current: false, isDefault: false, isRemote: false },
+      ]),
+    ).toBeNull();
+  });
+});
 
 describe("resolveProjectThreadCreationBranch", () => {
   it("uses the live checkout for an untouched local draft label and recorded branch", () => {

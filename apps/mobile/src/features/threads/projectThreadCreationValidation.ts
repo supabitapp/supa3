@@ -1,4 +1,4 @@
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, type VcsRef } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 export class ProjectThreadTaskRequiredError extends Schema.TaggedError<ProjectThreadTaskRequiredError>()(
@@ -31,6 +31,16 @@ export const ProjectThreadCreationValidationError = Schema.Union([
   ProjectThreadBaseBranchRequiredError,
 ]);
 export type ProjectThreadCreationValidationError = typeof ProjectThreadCreationValidationError.Type;
+
+export function resolveDefaultWorktreeBaseBranch(
+  refs: ReadonlyArray<Pick<VcsRef, "name" | "isDefault" | "current" | "isRemote">>,
+): string | null {
+  return (
+    refs.find((ref) => ref.isDefault)?.name ??
+    refs.find((ref) => ref.current && !ref.isRemote)?.name ??
+    null
+  );
+}
 
 /**
  * Branch recorded on a thread created from the new-task composer. An explicit
