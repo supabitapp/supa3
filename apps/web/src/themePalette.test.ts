@@ -543,6 +543,44 @@ describe("theme files", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps a saved theme whose id became a built-in visible and removable", () => {
+    const stored = new Map([
+      [
+        CUSTOM_THEMES_STORAGE_KEY,
+        JSON.stringify([
+          { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+          {
+            id: "zenbones",
+            label: "My Zenbones",
+            appearance: "dark",
+            colors: { canvas: "#1c1917" },
+          },
+        ]),
+      ],
+    ]);
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+      },
+    });
+
+    invalidateCustomThemes();
+    expect(getCustomThemes().map((theme) => [theme.id, theme.label])).toEqual([
+      ["zenbones-custom", "Zenbones Tweak"],
+      ["zenbones-custom-2", "My Zenbones"],
+    ]);
+    expect(getThemeDefinition("zenbones")?.label).toBe("Zenbones");
+
+    removeCustomTheme("zenbones-custom-2");
+
+    expect(JSON.parse(stored.get(CUSTOM_THEMES_STORAGE_KEY)!)).toEqual([
+      { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+    ]);
+    invalidateCustomThemes();
+    vi.unstubAllGlobals();
+  });
+
   it("preserves valid imported-theme collections and drops malformed metadata", () => {
     vi.stubGlobal("window", {
       localStorage: {

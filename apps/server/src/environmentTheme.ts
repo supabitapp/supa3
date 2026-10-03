@@ -154,7 +154,13 @@ export const readPublishedThemes = Effect.fn(function* (themesDir: string) {
     const id = entry.slice(0, -THEME_FILE_SUFFIX.length);
     // A reserved id is either shadowed by a built-in on the client or captures
     // clients that never chose it, so it is not publishable.
-    if (!isEnvironmentThemeId(id) || UNPUBLISHABLE_THEME_IDS.has(id)) continue;
+    if (!isEnvironmentThemeId(id)) continue;
+    if (UNPUBLISHABLE_THEME_IDS.has(id)) {
+      yield* Effect.logWarning("ignoring environment theme with a reserved id", {
+        path: `${themesDir}/${entry}`,
+      });
+      continue;
+    }
 
     // Counts files examined, not themes accepted: capping the output would
     // let a directory of malformed files be opened, read, and decoded in full

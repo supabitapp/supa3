@@ -900,7 +900,7 @@ export const ZENBONES_THEME: ThemeDefinition = {
     toolbarControlHover: "oklch(0.865962 0.010456 48.605)",
     surface: "oklch(0.948141 0.003511 39.483)",
     surfaceRaised: "oklch(0.930519 0.005121 48.683)",
-    surfaceOverlay: "oklch(0.965408 0.002534 48.718)",
+    surfaceOverlay: "oklch(0.913099 0.006106 43.331)",
     text: "oklch(0.32609 0.017207 234.391)",
     textMuted: "oklch(0.520455 0.009726 236.708)",
     border: "oklch(0.862878 0.010466 48.604)",

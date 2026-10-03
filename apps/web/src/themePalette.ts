@@ -213,7 +213,30 @@ function readCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
   }
   if (!Array.isArray(parsed)) return { status: "unavailable", reason: "malformed" };
 
-  return { status: "ready", storedThemes: parsed, themes: parseStoredThemes(parsed) };
+  const storedThemes = releaseBuiltInThemeIds(parsed);
+  return { status: "ready", storedThemes, themes: parseStoredThemes(storedThemes) };
+}
+
+function releaseBuiltInThemeIds(storedThemes: ReadonlyArray<unknown>): ReadonlyArray<unknown> {
+  const takenIds = new Set<string>(RESERVED_THEME_IDS);
+  for (const storedTheme of storedThemes) {
+    if (isRecord(storedTheme) && typeof storedTheme.id === "string") takenIds.add(storedTheme.id);
+  }
+  return storedThemes.map((storedTheme) => {
+    if (!isRecord(storedTheme) || typeof storedTheme.id !== "string") return storedTheme;
+    if (!BUILT_IN_THEMES.some((theme) => theme.id === storedTheme.id)) return storedTheme;
+    const id = freeThemeId(storedTheme.id, takenIds);
+    takenIds.add(id);
+    return { ...storedTheme, id };
+  });
+}
+
+function freeThemeId(builtInId: string, takenIds: ReadonlySet<string>): string {
+  for (let attempt = 1; ; attempt += 1) {
+    const suffix = attempt === 1 ? "-custom" : `-custom-${attempt}`;
+    const id = `${builtInId.slice(0, 48 - suffix.length)}${suffix}`;
+    if (!takenIds.has(id)) return id;
+  }
 }
 
 function getCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {

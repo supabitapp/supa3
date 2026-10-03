@@ -1908,9 +1908,9 @@
       --color-header: rgba(240, 237, 236, 0.97);
       --color-header-foreground: #2c363c;
       --color-header-border: #d8d0cc;
-      --color-glass-surface: rgba(245, 243, 242, 0.74);
+      --color-glass-surface: rgba(230, 225, 223, 0.74);
       --color-glass-fallback: rgba(240, 237, 236, 0.94);
-      --color-glass-tint: rgba(245, 243, 242, 0.22);
+      --color-glass-tint: rgba(230, 225, 223, 0.22);
       --color-status-bar: #f0edec;
       --color-md-body: #2c363c;
       --color-md-strong: #2c363c;
