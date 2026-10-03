@@ -3,6 +3,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -381,15 +382,13 @@ it.skipIf(process.platform !== "win32")(
       // Start-Process returns before the recorder runs; wait for its output.
       // The waits run outside the Effect runtime on purpose: the test
       // exercises the real Windows process chain in real time.
-      // @effect-diagnostics-next-line globalTimers:off
-      const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
       // @effect-diagnostics-next-line globalDate:off
       const deadline = Date.now() + 20_000;
       // @effect-diagnostics-next-line globalDate:off
       while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
-        await sleep(100);
+        await NodeTimersPromises.setTimeout(100);
       }
-      await sleep(200);
+      await NodeTimersPromises.setTimeout(200);
       const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
       assert.equal(recorded, `/select,"${explorerTarget}"`);
     } finally {

@@ -159,13 +159,15 @@ export interface SettingOverridingProject extends ProjectOverrideEntry {
   readonly open: () => void;
 }
 
+const NO_OVERRIDING_PROJECTS = [] as const;
+
 export function SettingInheritance({
   state,
   summary,
   targets,
   environments,
   keys,
-  overridingProjects = [],
+  overridingProjects = NO_OVERRIDING_PROJECTS,
   onClearOverrides,
 }: {
   state: SettingInheritanceState;

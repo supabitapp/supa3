@@ -26,6 +26,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as Struct from "effect/Struct";
 import { TestClock } from "effect/testing";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
@@ -455,7 +456,9 @@ describe("PullRequestSyncReactor", () => {
             },
           ]);
           assert.deepStrictEqual(
-            (yield* Ref.get(fixture.syncCommands)).map(({ commandId: _, ...rest }) => rest),
+            (yield* Ref.get(fixture.syncCommands)).map((command) =>
+              Struct.omit(command, ["commandId"]),
+            ),
             [
               {
                 type: "thread.pull-request-link.sync",
@@ -861,7 +864,9 @@ describe("PullRequestSyncReactor", () => {
             [[42, { kind: "native", ...stack }]],
           );
           assert.deepStrictEqual(
-            (yield* Ref.get(fixture.linkCommands)).map(({ commandId: _, ...rest }) => rest),
+            (yield* Ref.get(fixture.linkCommands)).map((command) =>
+              Struct.omit(command, ["commandId"]),
+            ),
             [
               {
                 type: "thread.pull-request.link",

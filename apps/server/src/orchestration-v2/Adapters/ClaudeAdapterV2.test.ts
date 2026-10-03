@@ -654,8 +654,9 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       ...Object.values(EnvironmentToolkit.tools),
       ...Object.values(PreviewControlsToolkit.tools),
     ]
-      .filter((tool) => Context.get(tool.annotations, Tool.Readonly))
-      .map((tool) => `mcp__supacode__${tool.name}`)
+      .flatMap((tool) =>
+        Context.get(tool.annotations, Tool.Readonly) ? [`mcp__supacode__${tool.name}`] : [],
+      )
       .sort();
 
     assert.deepEqual(
@@ -3090,9 +3091,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           ),
         );
         assert.deepEqual(
-          [...plans.values()]
-            .filter((plan) => plan.kind === "todo_list")
-            .map((plan) => plan.status),
+          [...plans.values()].flatMap((plan) => (plan.kind === "todo_list" ? [plan.status] : [])),
           ["superseded", "completed"],
         );
         const proposedPlan = [...plans.values()].find((plan) => plan.kind === "proposed_plan");

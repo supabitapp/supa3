@@ -454,10 +454,6 @@ function notifyThemeSaveFailure(): void {
   );
 }
 
-function projectFavicon(project: Project) {
-  return <ProjectFavicon project={project} className="size-4" />;
-}
-
 export function CommandPalette({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {

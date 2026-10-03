@@ -9,7 +9,7 @@ import { CaptureShortcutConfig, niriCaptureConfigPath } from "./CaptureShortcutC
 import { captureConfigBinding } from "./captureConfigEdit.ts";
 
 // oxlint-disable-next-line supacode/no-global-process-runtime -- Test collection checks the host before starting these Linux-native filesystem tests.
-const it = test.runIf(process.platform === "linux");
+const it = process.platform === "linux" ? test : test.skip;
 let directory: string;
 let path: string;
 let setup: CaptureShortcutConfig;

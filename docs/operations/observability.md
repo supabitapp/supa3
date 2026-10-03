@@ -371,13 +371,11 @@ Traces are best for one request. Metrics are best for trends.
 Good metric families to watch:
 
 - `supacode_rpc_request_duration`
-- `supacode_provider_turn_duration`
 - `supacode_git_command_duration`
 
 Counters tell you volume and failure rate:
 
 - `supacode_rpc_requests_total`
-- `supacode_provider_turns_total`
 - `supacode_git_commands_total`
 
 Use metrics when the question is:

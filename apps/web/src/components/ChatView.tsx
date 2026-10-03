@@ -77,7 +77,6 @@ import {
   type WorktreeSetupSnapshot,
 } from "@supacode/contracts";
 import { type EnvironmentConnectionPresentation } from "@supacode/client-runtime/connection";
-import { deriveThreadTitleSeed } from "@supacode/client-runtime/operations";
 import {
   wasBootstrapThreadDeleted,
   wasBootstrapThreadNotCreated,
@@ -218,8 +217,6 @@ import {
   DEFAULT_THREAD_TERMINAL_ID,
   MAX_TERMINALS_PER_GROUP,
   type ChatMessage,
-  isBrowserPreviewAttachment,
-  isImageAttachment,
   type SessionPhase,
   type Thread,
 } from "../types";
@@ -5225,7 +5222,6 @@ export default function ChatView(props: ChatViewProps) {
         linkedThreadPullRequest.number,
       ])
     : null;
-  const threadRepository = linkedThreadPullRequest?.repository ?? activeProjectRepository;
   const threadPrRelinkKeysRef = useRef(new Map<string, string>());
   const threadPrRelinkWriteRef = useRef(Promise.resolve());
   useEffect(() => {

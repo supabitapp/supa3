@@ -143,7 +143,7 @@ export function removeInlineContextReference(
   if (occurrences.length === 0) return { prompt, cursor: prompt.length };
   let result = prompt;
   let cursor = prompt.length;
-  for (const occurrence of occurrences.reverse()) {
+  for (const occurrence of occurrences.toReversed()) {
     let { start, end } = occurrence;
     if (result[end] === " ") end += 1;
     else if (result[start - 1] === " ") start -= 1;

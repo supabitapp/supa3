@@ -1337,23 +1337,25 @@ const MARKDOWN_LINK_FAVICON_CLASS_NAME = "block size-full shrink-0 select-none";
 const failedFaviconHosts = new Set<string>();
 
 /** Sites whose brand mark (drawn in `currentColor`) replaces the fetched favicon so it follows the theme. */
-function brandLinkIcon(host: string): typeof GitHubIcon | null {
+function brandLinkIcon(host: string) {
   const hostname = host.toLowerCase();
-  if (hostname === "github.com" || hostname.endsWith(".github.com")) return GitHubIcon;
+  if (hostname === "github.com" || hostname.endsWith(".github.com")) {
+    return <GitHubIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />;
+  }
   return null;
 }
 
 const MarkdownLinkFavicon = memo(function MarkdownLinkFavicon({ host }: { host: string }) {
   const [failedHost, setFailedHost] = useState<string | null>(null);
-  const BrandIcon = brandLinkIcon(host);
-  const faviconUrl = BrandIcon ? null : faviconUrlForOrigin(`https://${host}`);
+  const brandIcon = brandLinkIcon(host);
+  const faviconUrl = brandIcon ? null : faviconUrlForOrigin(`https://${host}`);
   return (
     <span
       className="ms-[0.25em] me-[0.2em] inline-flex size-[14px] [vertical-align:-0.125em]"
       aria-hidden
     >
-      {BrandIcon ? (
-        <BrandIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />
+      {brandIcon ? (
+        brandIcon
       ) : faviconUrl === null || failedHost === host || failedFaviconHosts.has(host) ? (
         <GlobeIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />
       ) : (

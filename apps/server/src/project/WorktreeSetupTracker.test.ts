@@ -12,6 +12,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as WorktreeSetupTracker from "./WorktreeSetupTracker.ts";
 
 const threadId = ThreadId.make("thread-1");
+const isWorktreeSetupSnapshot = Schema.is(WorktreeSetupSnapshot);
 
 describe("WorktreeSetupTracker", () => {
   it.effect("records stage transitions, checkout progress, and the final phase", () =>
@@ -220,7 +221,7 @@ describe("WorktreeSetupTracker", () => {
       expect(snapshot?.stages[1]?.tail[0]?.length).toBe(400);
       expect(snapshot?.error?.length).toBe(1000);
       // The wire schema must accept what the tracker publishes.
-      expect(Schema.is(WorktreeSetupSnapshot)(snapshot)).toBe(true);
+      expect(isWorktreeSetupSnapshot(snapshot)).toBe(true);
     }),
   );
 });

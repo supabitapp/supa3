@@ -179,9 +179,9 @@ function makeDatabase() {
       Effect.succeed(Option.fromUndefinedOr(values.get(cacheId(environmentId, kind, cacheKey)))),
     listCache: (kind) =>
       Effect.sync(() =>
-        [...values.entries()]
-          .filter(([key]) => key.split(":")[1] === kind)
-          .map(([, payload]) => payload),
+        [...values.entries()].flatMap(([key, payload]) =>
+          key.split(":")[1] === kind ? [payload] : [],
+        ),
       ),
     saveCache: (environmentId, kind, cacheKey, schemaVersion, payload) =>
       Effect.sync(() => {

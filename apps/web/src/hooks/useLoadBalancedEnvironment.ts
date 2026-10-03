@@ -6,6 +6,22 @@ import { useCallback, useContext, useMemo } from "react";
 
 import { serverEnvironment } from "../state/server";
 
+function hostResourcesSnapshotAtom(environmentIds: readonly EnvironmentId[]) {
+  return Atom.make((get) => ({
+    observedAt: Date.now(),
+    resources: environmentIds.map((environmentId) => {
+      const result = get(serverEnvironment.hostResources({ environmentId, input: {} }));
+      return {
+        environmentId,
+        resources: result._tag === "Success" ? result.value : null,
+        receivedAt: result._tag === "Success" ? result.timestamp : 0,
+        pending: result._tag === "Initial" || result.waiting,
+        failed: result._tag === "Failure",
+      };
+    }),
+  }));
+}
+
 /** Only mounted for unresolved automatic drafts, so idle clients do not poll hosts. */
 export function useLoadBalancedEnvironment(
   environmentIds: readonly EnvironmentId[],
@@ -20,30 +36,15 @@ export function useLoadBalancedEnvironment(
     },
     [registry],
   );
-  const resourcesAtom = useMemo(
-    () =>
-      Atom.make((get) =>
-        environmentIds.map((environmentId) => {
-          const result = get(serverEnvironment.hostResources({ environmentId, input: {} }));
-          return {
-            environmentId,
-            resources: result._tag === "Success" ? result.value : null,
-            receivedAt: result._tag === "Success" ? result.timestamp : 0,
-            pending: result._tag === "Initial" || result.waiting,
-            failed: result._tag === "Failure",
-          };
-        }),
-      ),
-    [environmentIds],
-  );
-  const resources = useAtomValue(resourcesAtom);
+  const resourcesAtom = useMemo(() => hostResourcesSnapshotAtom(environmentIds), [environmentIds]);
+  const { observedAt, resources } = useAtomValue(resourcesAtom);
   const pending = resources.some((resource) => resource.pending);
   const environmentId = chooseLoadBalancedEnvironment(
     resources.map((resource) => ({
       ...resource,
       weight: weights[resource.environmentId] ?? 50,
     })),
-    Date.now(),
+    observedAt,
   ) as EnvironmentId | null;
   return {
     refresh,

@@ -511,7 +511,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
   // when the binary lacks it). Rendering a null component type crashes the
   // app, so callers must fall back — ThreadFeed's ReviewCommentCard does the
   // same check.
-  const NativeReviewDiffView = resolveNativeReviewDiffView();
+  const [NativeReviewDiffView] = useState(() => resolveNativeReviewDiffView());
   const nativeReviewDiffViewRef = useRef<NativeReviewDiffViewHandle>(null);
   const showcasedReviewDrawRef = useRef<string | null>(null);
   // Native pull-to-refresh on the diff surface (replaces the old Refresh menu item).

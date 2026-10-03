@@ -35,6 +35,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return { ...actual, open: vi.fn(actual.open), realpath: vi.fn(actual.realpath) };
 });
 
+const encodeAssetAccessErrorJson = Schema.encodeEffect(Schema.fromJsonString(AssetAccessError));
+
 const configLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
   prefix: "supacode-asset-access-test-",
 });
@@ -1163,7 +1165,7 @@ describe("AssetAccess", () => {
       ]) {
         const error = yield* issue(url).pipe(Effect.flip);
         expect(error._tag).toBe("AssetGitHubMediaUrlValidationError");
-        const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(AssetAccessError))(error);
+        const encoded = yield* encodeAssetAccessErrorJson(error);
         expect(encoded).not.toContain(url);
       }
     }).pipe(Effect.provide(testLayer)),

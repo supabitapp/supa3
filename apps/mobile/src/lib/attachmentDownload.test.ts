@@ -34,9 +34,11 @@ vi.mock("expo-file-system", () => {
 
     list(): Directory[] {
       const prefix = `${this.uri}/`;
-      return [...mocks.directories]
-        .filter((uri) => uri.startsWith(prefix) && !uri.slice(prefix.length).includes("/"))
-        .map((uri) => new Directory(uri));
+      return [...mocks.directories].flatMap((uri) =>
+        uri.startsWith(prefix) && !uri.slice(prefix.length).includes("/")
+          ? [new Directory(uri)]
+          : [],
+      );
     }
 
     delete(): void {

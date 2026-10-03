@@ -1,6 +1,5 @@
 import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 
-import { isElectron } from "~/env";
 import {
   getPreviewPanelMaxWidth,
   type PreviewPanelInlineSize,
@@ -60,7 +59,6 @@ function PreviewPanelShellFrame(
     hostRef?: RefObject<HTMLDivElement | null>;
   },
 ) {
-  const useDragRegion = isElectron && props.mode !== "sheet" && props.mode !== "embedded";
   const isInline = props.mode === "inline";
   const collapsible = isInline && props.open !== undefined;
   const open = props.open ?? true;

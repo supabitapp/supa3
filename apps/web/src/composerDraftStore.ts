@@ -85,6 +85,7 @@ const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
 const isThreadContextRecord = Schema.is(ThreadContextRecord);
 const isSnapShotSource = Schema.is(SnapShotSource);
 const isPreviewAnnotationPayload = Schema.is(PreviewAnnotationPayloadSchema);
+const isElementContextDetails = Schema.is(ElementContextDetails);
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "supacode:composer-drafts:v1";
 const COMPOSER_DRAFT_STORAGE_VERSION = 9;
@@ -1965,7 +1966,7 @@ function normalizePersistedDraftsByThreadId(
         : [];
     for (const element of legacyElements) {
       if (
-        !Schema.is(ElementContextDetails)(element) ||
+        !isElementContextDetails(element) ||
         !("id" in element) ||
         typeof element.id !== "string" ||
         !("pickedAt" in element) ||

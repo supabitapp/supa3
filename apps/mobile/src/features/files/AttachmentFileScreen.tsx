@@ -1,4 +1,3 @@
-/* oxlint-disable react/no-array-index-key -- Captured table rows and columns have stable positions and may contain identical values. */
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { MenuAction } from "@react-native-menu/menu";
@@ -196,7 +195,6 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
   const { uri, resource } = document;
   useEffect(() => {
     if (nativeViewer !== "pending" || !uri) return;
-    // oxlint-disable-next-line react/set-state-in-effect -- Presenting the viewer waits on the resolved file.
     setNativeViewer("open");
     setNativeOpen(true);
   }, [nativeViewer, uri]);

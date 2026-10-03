@@ -9,6 +9,18 @@ const isThreadResumeResponse = Schema.is(CodexSchema.V2ThreadResumeResponse);
 const isThreadForkResponse = Schema.is(CodexSchema.V2ThreadForkResponse);
 const isTurnCompletedNotification = Schema.is(CodexSchema.V2TurnCompletedNotification);
 const decodeThreadResumeResponse = Schema.decodeUnknownSync(CodexSchema.V2ThreadResumeResponse);
+const isServerNotificationCollabAgentTool = Schema.is(
+  CodexSchema.ServerNotification__CollabAgentTool,
+);
+const isThreadResumeCollabAgentTool = Schema.is(
+  CodexSchema.V2ThreadResumeResponse__CollabAgentTool,
+);
+const isServerNotificationCollabAgentToolCallStatus = Schema.is(
+  CodexSchema.ServerNotification__CollabAgentToolCallStatus,
+);
+const isThreadResumeCollabAgentToolCallStatus = Schema.is(
+  CodexSchema.V2ThreadResumeResponse__CollabAgentToolCallStatus,
+);
 
 it("keeps async questions in live notifications and thread history", () => {
   const item = {
@@ -47,18 +59,12 @@ it("accepts Codex 0.150 multi-agent values", () => {
   }
 
   for (const tool of ["sendMessage", "followupTask", "interruptAgent", "listAgents"]) {
-    assert.equal(Schema.is(CodexSchema.ServerNotification__CollabAgentTool)(tool), true);
-    assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentTool)(tool), true);
+    assert.equal(isServerNotificationCollabAgentTool(tool), true);
+    assert.equal(isThreadResumeCollabAgentTool(tool), true);
   }
 
-  assert.equal(
-    Schema.is(CodexSchema.ServerNotification__CollabAgentToolCallStatus)("interrupted"),
-    true,
-  );
-  assert.equal(
-    Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentToolCallStatus)("interrupted"),
-    true,
-  );
+  assert.equal(isServerNotificationCollabAgentToolCallStatus("interrupted"), true);
+  assert.equal(isThreadResumeCollabAgentToolCallStatus("interrupted"), true);
 
   const resumeResponse = {
     approvalPolicy: "never",
@@ -100,7 +106,7 @@ it("accepts Codex 0.150 multi-agent values", () => {
     },
   };
 
-  assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse)(resumeResponse), true);
+  assert.equal(isThreadResumeResponse(resumeResponse), true);
 });
 
 it("accepts Codex rate limit errors for thread responses", () => {

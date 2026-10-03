@@ -2,7 +2,7 @@ import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";
 import { threadEnvironment } from "../../state/threads";
@@ -19,6 +19,16 @@ export function UsageLimitRecoveryCard({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resetAt = thread.runtime?.usageLimitResetAt ?? null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const resetMs = Date.parse(resetAt ?? "");
+    if (!Number.isFinite(resetMs) || nowMs >= resetMs) return;
+    const timer = setTimeout(
+      () => setNowMs(Date.now()),
+      Math.min(Math.max(0, resetMs - Date.now()) + 1, 2_147_483_647),
+    );
+    return () => clearTimeout(timer);
+  }, [resetAt, nowMs]);
   const canSchedule =
     resetAt !== null &&
     Date.parse(resetAt) > Date.parse(thread.latestRun?.completedAt ?? thread.updatedAt);
@@ -87,7 +97,7 @@ export function UsageLimitRecoveryCard({
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            disabled={pending || (!snoozed && Date.parse(resetAt!) <= Date.now())}
+            disabled={pending || (!snoozed && Date.parse(resetAt!) <= nowMs)}
             onPress={() => void toggle("snooze")}
             className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
           >

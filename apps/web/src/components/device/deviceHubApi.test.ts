@@ -5,16 +5,13 @@ describe("foreground app events", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("clears the last app when it exits and ignores malformed events", () => {
-    let source: FakeEventSource;
+    let onMessage: ((event: { data: string }) => void) | null = null;
+    const close = vi.fn();
     class FakeEventSource {
-      onmessage: ((event: { data: string }) => void) | null = null;
       addEventListener(_type: string, listener: (event: { data: string }) => void) {
-        this.onmessage = listener;
+        onMessage = listener;
       }
-      close = vi.fn();
-      constructor() {
-        source = this;
-      }
+      close = close;
     }
     vi.stubGlobal("EventSource", FakeEventSource);
     const onChange = vi.fn();
@@ -26,7 +23,7 @@ describe("foreground app events", () => {
       },
       onChange,
     );
-    const emit = (data: unknown) => source.onmessage?.({ data: JSON.stringify(data) });
+    const emit = (data: unknown) => onMessage?.({ data: JSON.stringify(data) });
     emit({ bundleId: "com.example.app", pid: 123 });
     emit({ bundleId: null });
     emit({ bundleId: "com.example.other" });
@@ -39,6 +36,6 @@ describe("foreground app events", () => {
       null,
     ]);
     stop();
-    expect(source!.close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
   });
 });

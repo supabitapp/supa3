@@ -43,16 +43,20 @@ const SORT_OPTIONS: ReadonlyArray<{ value: OpenVsxThemeSort; label: string }> = 
 ];
 const SEARCH_DEBOUNCE_MS = 350;
 
-function SourceLinkIcon({ url }: { url: string }) {
+function sourceLinkHost(url: string) {
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    if (host === "github.com" || host.endsWith(".github.com"))
-      return <GitHubIcon className="size-3.5" />;
-    if (host === "gitlab.com" || host.endsWith(".gitlab.com"))
-      return <GitLabIcon className="size-3.5" monochrome />;
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    // Fall through to the generic external-link icon.
+    return null;
   }
+}
+
+function SourceLinkIcon({ url }: { url: string }) {
+  const host = sourceLinkHost(url);
+  if (host === "github.com" || host?.endsWith(".github.com"))
+    return <GitHubIcon className="size-3.5" />;
+  if (host === "gitlab.com" || host?.endsWith(".gitlab.com"))
+    return <GitLabIcon className="size-3.5" monochrome />;
   return <ExternalLinkIcon className="size-3.5" />;
 }
 

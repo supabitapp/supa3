@@ -99,9 +99,9 @@ describe("scheduled task settings scope", () => {
   ])("lists only matching tasks for $search", ({ search, expected }) => {
     const scope = resolveSettingsScope(search, groups, environments);
     expect(
-      tasks
-        .filter((task) => matchesScheduledTaskScope(scope, task.environmentId, task.projectId))
-        .map((task) => task.id),
+      tasks.flatMap((task) =>
+        matchesScheduledTaskScope(scope, task.environmentId, task.projectId) ? [task.id] : [],
+      ),
     ).toEqual(expected);
   });
 

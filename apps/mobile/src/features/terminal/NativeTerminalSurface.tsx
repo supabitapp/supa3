@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -179,7 +179,7 @@ export const TerminalSurface = memo(function TerminalSurface(props: TerminalSurf
   const { themeAppearance, themeId } = useAppearancePreferences();
   const theme = props.theme ?? getMobileTerminalTheme(themeId, themeAppearance);
   const { onInput, onResize } = props;
-  const NativeTerminalSurfaceView = resolveNativeTerminalSurfaceView();
+  const [NativeTerminalSurfaceView] = useState(() => resolveNativeTerminalSurfaceView());
   const hasNativeSurface = Boolean(NativeTerminalSurfaceView);
 
   useEffect(() => {

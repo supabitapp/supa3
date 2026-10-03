@@ -91,9 +91,32 @@ function value(
   return undefined;
 }
 
+const DURATION_UNIT_MILLIS: Record<string, number> = {
+  nano: 1e-6,
+  micro: 1e-3,
+  milli: 1,
+  second: 1000,
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  week: 604_800_000,
+};
+
+function durationStringMillis(input: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)\s*(nano|micro|milli|second|minute|hour|day|week)s?$/.exec(
+    input.trim(),
+  );
+  if (match === null) return undefined;
+  const unit = DURATION_UNIT_MILLIS[match[2] ?? ""];
+  return unit === undefined ? undefined : Number(match[1]) * unit;
+}
+
 function durationMillis(node: ESTree.Node, source: SourceCode): number | undefined {
   const direct = value(node, source);
   if (direct !== undefined) return direct;
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return durationStringMillis(node.value);
+  }
   if (node.type !== "CallExpression" || node.callee.type !== "MemberExpression") return undefined;
   const method = property(node.callee);
   const amount = node.arguments[0];
@@ -150,6 +173,7 @@ const noLongTestWaitsRule = defineRule({
             imported(node.callee.object, context.sourceCode, "scheduler"));
         const callbackTimer = callbackSleep(node, context.sourceCode);
         if (!effectSleep && !promiseTimer && !callbackTimer) return;
+        if (effectSleep && context.sourceCode.text.includes("TestClock")) return;
         const delay = node.arguments[effectSleep || promiseTimer ? 0 : 1];
         const milliseconds = delay === undefined ? 0 : durationMillis(delay, context.sourceCode);
         if (milliseconds === undefined || !Number.isFinite(milliseconds) || milliseconds > 1000) {

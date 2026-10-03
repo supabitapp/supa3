@@ -2034,9 +2034,11 @@ function AutoSettleDaysInput({
   // Local draft so the field can be emptied mid-edit; the setting only moves
   // on valid input and snaps back to the persisted value on blur.
   const [draft, setDraft] = useState(String(value));
-  useEffect(() => {
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
     setDraft(String(value));
-  }, [value]);
+  }
 
   return (
     <Input

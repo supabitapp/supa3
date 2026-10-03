@@ -16,7 +16,6 @@ import {
   changeQuestionAttachmentPreparation,
 } from "../../questionAttachments";
 import type {
-  ApprovalRequestId,
   KeybindingCommand,
   AssistantCitation,
   ChatAttachment as ContractChatAttachment,
@@ -1072,7 +1071,6 @@ import { Select, SelectItem, SelectPopup, SelectValue } from "../ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
-  FileIcon,
   BotIcon,
   CircleAlertIcon,
   PaperclipIcon,
@@ -5973,11 +5971,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return true;
   };
 
+  const consumePasteAsTextShortcut = () => {
+    const armed = Date.now() <= pasteAsTextShortcutUntilRef.current;
+    pasteAsTextShortcutUntilRef.current = 0;
+    return armed;
+  };
+
   const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
     const files = Array.from(event.clipboardData.files);
     const plainText = event.clipboardData.getData("text/plain");
-    const bypassAutoAttachment = Date.now() <= pasteAsTextShortcutUntilRef.current;
-    pasteAsTextShortcutUntilRef.current = 0;
+    const bypassAutoAttachment = consumePasteAsTextShortcut();
     // Claimable pastes go through even when agent questions are pending or the
     // composer is at its attachment limit: `addComposerAttachments` surfaces
     // those as a toast and a thread error. An early return here would swallow

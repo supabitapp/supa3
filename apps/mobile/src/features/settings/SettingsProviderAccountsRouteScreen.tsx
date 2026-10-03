@@ -22,6 +22,11 @@ import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { useSettingsEnvironmentFilter, type SettingsTarget } from "./settings-environment-filter";
 
+const TERMINAL_CONTROL_SEQUENCE = new RegExp(
+  `${String.fromCharCode(0x1b)}\\[[0-?]*[ -/]*[@-~]`,
+  "g",
+);
+
 export function SettingsProviderAccountsRouteScreen() {
   const { selectedTargets } = useSettingsEnvironmentFilter();
   const insets = useSafeAreaInsets();
@@ -201,7 +206,7 @@ function ProviderAccount({
           <>
             <ScrollView className="max-h-64" nestedScrollEnabled>
               <Text selectable className="font-mono text-sm text-foreground">
-                {interaction.output.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")}
+                {interaction.output.replace(TERMINAL_CONTROL_SEQUENCE, "")}
               </Text>
             </ScrollView>
             {field("input", "Terminal response", true)}

@@ -81,7 +81,8 @@ function ArrangementRow(props: {
 function DragHandle(props: {
   title: string;
   disabled: boolean;
-  onStart: () => void;
+  row: Row;
+  onStart: (row: Row) => void;
   onMove: (translation: number) => void;
   onEnd: (cancelled: boolean) => void;
   onStep: (direction: "up" | "down") => void;
@@ -99,7 +100,7 @@ function DragHandle(props: {
         .minDistance(0)
         .shouldCancelWhenOutside(false)
         .runOnJS(true)
-        .onStart(() => latest.current.onStart())
+        .onStart(() => latest.current.onStart(latest.current.row))
         .onUpdate((event) => latest.current.onMove(event.translationY))
         .onEnd((event) => latest.current.onMove(event.translationY))
         .onFinalize((_, success) => latest.current.onEnd(!success)),
@@ -491,7 +492,8 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
                           onStep={(direction) => {
                             void moveThread(thread, direction);
                           }}
-                          onStart={() => start(item)}
+                          row={item}
+                          onStart={start}
                           onMove={update}
                           onEnd={(cancelled) => {
                             const current = drag.current;

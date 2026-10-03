@@ -48,7 +48,7 @@ it("keeps the note for the provider thread that lost the work across a provider 
   const pending = (target: OrchestrationV2Run, runs: ReadonlyArray<OrchestrationV2Run>) =>
     pendingRestartCancelledBackgroundWork({
       runs,
-      providerTurns: runs.filter((source) => source.id !== target.id).map(turnFor),
+      providerTurns: runs.flatMap((source) => (source.id === target.id ? [] : [turnFor(source)])),
       compactionMessageIds: new Set(),
       run: target,
       runAttemptIds: target.activeAttemptId === null ? [] : [target.activeAttemptId],

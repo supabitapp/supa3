@@ -32,7 +32,6 @@ import {
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   resolveEnvironmentMachineKind,
 } from "@supacode/contracts";
-import { deriveThreadTitleSeed } from "@supacode/client-runtime/operations";
 
 import {
   ComposerEditor,

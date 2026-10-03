@@ -385,6 +385,8 @@ function PullRequestLabelFilter({
   );
 }
 
+const NO_FACETS = [] as const;
+
 export function PullRequestFiltersMenu({
   onOpenChange,
   state,
@@ -395,8 +397,8 @@ export function PullRequestFiltersMenu({
   onInvolvement,
   filters,
   onFilters,
-  authorOptions = [],
-  labelOptions = [],
+  authorOptions = NO_FACETS,
+  labelOptions = NO_FACETS,
   host,
   hostOptions,
   onHost,

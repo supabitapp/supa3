@@ -131,9 +131,7 @@ describe("getProviderSkillsForSlashMenu", () => {
 
     expect(getProviderSkillsForSlashMenu(skills, true)).toEqual([enabledSkill]);
   });
-});
 
-describe("getProviderSkillsForSlashMenu", () => {
   it("drops a skill the provider reserves for the agent", () => {
     const skills = [
       {

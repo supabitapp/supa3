@@ -40,7 +40,6 @@ export function HighlightedCodeLines({ root }: { root: HighlightedRoot }) {
       undefined,
       code.children.map((node, index) => (
         // A line's position is stable as tokens and new lines are appended.
-        // oxlint-disable-next-line react/no-array-index-key
         <HighlightedLine key={index} node={node} />
       )),
     ),

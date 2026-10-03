@@ -68,9 +68,7 @@ function makeController(input: {
   const signals: Array<string> = [];
   const controller: AcpPosixProcessTreeController = {
     childPidsOf: (pid) =>
-      [...processes.values()]
-        .filter((process) => process.ppid === pid)
-        .map((process) => process.pid),
+      [...processes.values()].flatMap((process) => (process.ppid === pid ? [process.pid] : [])),
     childrenOf: (pid) => [...processes.values()].filter((process) => process.ppid === pid),
     identity: (pid) => processes.get(pid),
     snapshot: () => [...processes.values()],

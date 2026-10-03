@@ -112,7 +112,7 @@ interface HarnessOptions {
 const makeHarness = (options: HarnessOptions = {}) => {
   const thread = options.thread === undefined ? {} : options.thread;
   const scope = makeScope(options.capabilities ?? new Set(["preview", "worktree"]));
-  const dispatch = vi.fn((_: unknown) =>
+  const dispatch = vi.fn(() =>
     (options.dispatchGate ?? Effect.void).pipe(
       Effect.andThen(
         options.dispatchInterrupts
@@ -125,7 +125,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
       ),
     ),
   );
-  const listLocalBranchNames = vi.fn((_: string) =>
+  const listLocalBranchNames = vi.fn(() =>
     Effect.succeed(
       options.existingBranchWorktreePath === undefined
         ? ["dev"]
@@ -169,7 +169,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
       ? Effect.succeed(makeProjection(thread))
       : Effect.fail(new OrchestratorProjectionError({ threadId: id }));
   });
-  const sendToThread = vi.fn((_: unknown) => {
+  const sendToThread = vi.fn(() => {
     switch (options.continuation ?? "queued") {
       case "fails":
         return Effect.fail(
@@ -194,20 +194,20 @@ const makeHarness = (options: HarnessOptions = {}) => {
             : Option.none(),
         ),
   );
-  const removeWorktree = vi.fn((_: unknown) =>
+  const removeWorktree = vi.fn(() =>
     options.removeWorktreeFails
       ? (Effect.fail("simulated worktree removal failure") as never)
       : Effect.void,
   );
-  const deleteLocalBranch = vi.fn((_: unknown) =>
+  const deleteLocalBranch = vi.fn(() =>
     options.deleteLocalBranchFails
       ? (Effect.fail("simulated local branch deletion failure") as never)
       : Effect.void,
   );
-  const fetchRemote = vi.fn((_: unknown) =>
+  const fetchRemote = vi.fn(() =>
     options.fetchRemoteFails ? (Effect.fail("simulated fetch failure") as never) : Effect.void,
   );
-  const resolveRemoteTrackingCommit = vi.fn((_: unknown) =>
+  const resolveRemoteTrackingCommit = vi.fn(() =>
     options.resolveRemoteFails
       ? (Effect.fail("simulated remote resolve failure") as never)
       : Effect.succeed({ commitSha: "abc123", remoteRefName: "origin/dev" }),
@@ -246,7 +246,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
       totalCount: options.existingBranchWorktreePath === undefined ? 0 : 1,
     }),
   );
-  const localStatus = vi.fn((_: unknown) =>
+  const localStatus = vi.fn(() =>
     Effect.succeed({
       isRepo: options.notARepo !== true,
       hasPrimaryRemote: true,
@@ -256,7 +256,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
       workingTree: { files: [], insertions: 0, deletions: 0 },
     }),
   );
-  const refreshStatus = vi.fn((_: string) => Effect.die("refreshStatus stub"));
+  const refreshStatus = vi.fn(() => Effect.die("refreshStatus stub"));
   const runForThread = vi.fn((input: { readonly worktreePath: string }) => {
     switch (options.setupScript ?? "started") {
       case "no-script":

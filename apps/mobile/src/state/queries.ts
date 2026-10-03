@@ -1,12 +1,6 @@
 import { filterComposerPullRequestMatches } from "@supacode/shared/composerPullRequestMatches";
 import type { VcsRefTarget } from "@supacode/client-runtime/state/vcs";
-import type {
-  EnvironmentId,
-  ProjectId,
-  ThreadId,
-  VcsListRefsResult,
-  VcsRef,
-} from "@supacode/contracts";
+import type { EnvironmentId, ProjectId, VcsListRefsResult, VcsRef } from "@supacode/contracts";
 import {
   createThreadSearchResultsAtomFamily,
   makeThreadSearchKey,

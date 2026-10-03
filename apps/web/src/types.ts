@@ -19,7 +19,6 @@ import type {
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
-  ThreadRunSummary,
   ThreadRuntimeSummary,
 } from "@supacode/client-runtime/state/shell";
 import type { ThreadCheckpointSummary } from "@supacode/client-runtime/state/thread-checkpoints";
