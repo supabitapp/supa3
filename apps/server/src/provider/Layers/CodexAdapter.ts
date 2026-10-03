@@ -889,35 +889,33 @@ function toCanonicalUserInputAnswers(
 }
 
 function toUserInputQuestions(questions: ReadonlyArray<CodexToolUserInputQuestion>) {
-  const parsedQuestions = questions
-    .map((question) => {
-      const options =
-        question.options
-          ?.map((option) => {
-            const label = trimText(option.label);
-            const description = trimText(option.description);
-            if (!label || !description) {
-              return undefined;
-            }
-            return { label, description };
-          })
-          .filter((option) => option !== undefined) ?? [];
+  const parsedQuestions = questions.flatMap((question) => {
+    const options =
+      question.options?.flatMap((option) => {
+        const label = trimText(option.label);
+        const description = trimText(option.description);
+        if (!label || !description) {
+          return [];
+        }
+        return [{ label, description }];
+      }) ?? [];
 
-      const id = trimText(question.id);
-      const header = trimText(question.header);
-      const prompt = trimText(question.question);
-      if (!id || !header || !prompt || options.length === 0) {
-        return undefined;
-      }
-      return {
+    const id = trimText(question.id);
+    const header = trimText(question.header);
+    const prompt = trimText(question.question);
+    if (!id || !header || !prompt || options.length === 0) {
+      return [];
+    }
+    return [
+      {
         id,
         header,
         question: prompt,
         options,
         multiSelect: false,
-      };
-    })
-    .filter((question) => question !== undefined);
+      },
+    ];
+  });
 
   return parsedQuestions.length > 0 ? parsedQuestions : undefined;
 }

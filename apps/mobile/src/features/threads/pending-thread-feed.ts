@@ -18,23 +18,27 @@ export function appendPendingThreadMessages(
   );
   return [
     ...presentedFeed,
-    ...queuedMessages
-      .filter((message) => !deliveredIds.has(message.messageId))
-      .map((pendingMessage): PendingThreadFeedEntry => ({
-        type: "message",
-        id: pendingMessage.messageId,
-        createdAt: pendingMessage.createdAt,
-        pendingMessage,
-        message: {
-          id: pendingMessage.messageId,
-          role: "user",
-          text: pendingMessage.text,
-          context: pendingMessage.context,
-          createdAt: pendingMessage.createdAt,
-          updatedAt: pendingMessage.createdAt,
-          turnId: null,
-          streaming: false,
-        },
-      })),
+    ...queuedMessages.flatMap((pendingMessage): ReadonlyArray<PendingThreadFeedEntry> =>
+      deliveredIds.has(pendingMessage.messageId)
+        ? []
+        : [
+            {
+              type: "message",
+              id: pendingMessage.messageId,
+              createdAt: pendingMessage.createdAt,
+              pendingMessage,
+              message: {
+                id: pendingMessage.messageId,
+                role: "user",
+                text: pendingMessage.text,
+                context: pendingMessage.context,
+                createdAt: pendingMessage.createdAt,
+                updatedAt: pendingMessage.createdAt,
+                turnId: null,
+                streaming: false,
+              },
+            },
+          ],
+    ),
   ];
 }

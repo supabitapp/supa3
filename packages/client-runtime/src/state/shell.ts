@@ -149,7 +149,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       if (item.kind === "synchronized") {
         waiting = false;
         if (Option.isSome(next.snapshot)) {
-          next = { ...next, status: "live", error: Option.none() };
+          next = { snapshot: next.snapshot, status: "live", error: Option.none() };
         }
         continue;
       }

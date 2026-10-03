@@ -24,9 +24,9 @@ export function useSubscriptionUsage(enabled = true) {
   useEffect(() => {
     const update = () => {
       if (!enabled || AppState.currentState !== "active") return;
-      const connected = [...presentations]
-        .filter(([, presentation]) => presentation.connection.phase === "connected")
-        .map(([id]) => id);
+      const connected = [...presentations].flatMap(([id, presentation]) =>
+        presentation.connection.phase === "connected" ? [id] : [],
+      );
       void refresh(connected, Date.now());
     };
     update();

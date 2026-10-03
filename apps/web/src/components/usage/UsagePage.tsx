@@ -285,13 +285,13 @@ export function UsagePage() {
     });
   };
   const connectedLimitsEnvironments = [...presentations]
-    .filter(
-      ([environmentId, presentation]) =>
-        presentation.connection.phase === "connected" &&
-        presentation.serverConfig !== null &&
-        (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
+    .flatMap(([environmentId, presentation]) =>
+      presentation.connection.phase === "connected" &&
+      presentation.serverConfig !== null &&
+      (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId))
+        ? [environmentId]
+        : [],
     )
-    .map(([environmentId]) => environmentId)
     .sort()
     .join(",");
   const autoRefreshLimits = useEffectEvent(() => {

@@ -488,7 +488,10 @@ export function findAccessibleWindow<
     return matchMode === "wayland" ? title.replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?:\s+|$)/u, "") : title;
   };
   const titles = new Set(
-    [captured.title, captured.sourceTitle ?? ""].map(normalizeTitle).filter(Boolean),
+    [captured.title, captured.sourceTitle ?? ""].flatMap((title) => {
+      const normalized = normalizeTitle(title);
+      return normalized ? [normalized] : [];
+    }),
   );
   // Wayland accessibility providers can expose window size without a screen position.
   const boundsKeys =

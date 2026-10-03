@@ -1684,8 +1684,7 @@ export function deriveTimelineEntriesWithState(
   if (canAppend) {
     const messageRows = messages
       .slice(previous.messages.length)
-      .filter(showMessage)
-      .map(timelineEntryFromMessage);
+      .flatMap((message) => (showMessage(message) ? [timelineEntryFromMessage(message)] : []));
     const proposedPlanRows = proposedPlans
       .slice(previous.proposedPlans.length)
       .map(timelineEntryFromProposedPlan);
@@ -1701,7 +1700,9 @@ export function deriveTimelineEntriesWithState(
     };
   }
 
-  const messageRows = messages.filter(showMessage).map(timelineEntryFromMessage);
+  const messageRows = messages.flatMap((message) =>
+    showMessage(message) ? [timelineEntryFromMessage(message)] : [],
+  );
   const proposedPlanRows = proposedPlans.map(timelineEntryFromProposedPlan);
   const workRows = workEntries.map(timelineEntryFromWork);
   return {

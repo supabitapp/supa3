@@ -718,9 +718,10 @@ export const make = Effect.gen(function* () {
 
   const removeRelayEnvironments = Effect.fn("EnvironmentRegistry.removeRelayEnvironments")(
     function* () {
-      const relayEnvironmentIds = [...(yield* SubscriptionRef.get(entries)).values()]
-        .filter((entry) => entry.target._tag === "RelayConnectionTarget")
-        .map((entry) => entry.target.environmentId);
+      const relayEnvironmentIds = [...(yield* SubscriptionRef.get(entries)).values()].flatMap(
+        (entry) =>
+          entry.target._tag === "RelayConnectionTarget" ? [entry.target.environmentId] : [],
+      );
 
       yield* Effect.forEach(
         relayEnvironmentIds,

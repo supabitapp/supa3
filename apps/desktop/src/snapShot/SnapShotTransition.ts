@@ -89,15 +89,15 @@ export function snapShotAnimationDisplayBounds(
   destination: Electron.Rectangle,
 ): Array<Electron.Rectangle> {
   const flight = snapShotAnimationOverlayBounds([{ bounds: source }, { bounds: destination }]);
-  return displays
-    .map((display) => display.bounds)
-    .filter(
-      (bounds) =>
-        bounds.x < flight.x + flight.width &&
-        bounds.x + bounds.width > flight.x &&
-        bounds.y < flight.y + flight.height &&
-        bounds.y + bounds.height > flight.y,
-    );
+  return displays.flatMap((display) => {
+    const bounds = display.bounds;
+    return bounds.x < flight.x + flight.width &&
+      bounds.x + bounds.width > flight.x &&
+      bounds.y < flight.y + flight.height &&
+      bounds.y + bounds.height > flight.y
+      ? [bounds]
+      : [];
+  });
 }
 
 function createWindow(

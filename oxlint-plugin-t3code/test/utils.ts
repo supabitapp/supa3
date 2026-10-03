@@ -61,6 +61,8 @@ interface RuleHarness {
 
 interface RuleHarnessOptions {
   readonly filename?: string;
+  readonly pluginName?: string;
+  readonly pluginPath?: string;
   /** Rule options, as they would appear after the severity in the lint config. */
   readonly ruleOptions?: ReadonlyArray<unknown>;
 }
@@ -107,12 +109,13 @@ export const createOxlintRuleHarness = (
     const sourcePath = path.join(fixtureDir, options.filename ?? "fixture.ts");
     const repoRoot = path.join(import.meta.dirname, "..", "..");
     const oxlintBin = path.join(path.dirname(oxlintPackageJsonPath), "bin", "oxlint");
-    const pluginPath = path.join(repoRoot, "oxlint-plugin-t3code", "index.ts");
+    const pluginName = options.pluginName ?? "t3code";
+    const pluginPath = path.join(repoRoot, options.pluginPath ?? "oxlint-plugin-t3code/index.ts");
 
     yield* fs.writeFileString(
       configPath,
       yield* encodeOxlintConfig({
-        jsPlugins: [{ name: "t3code", specifier: pluginPath }],
+        jsPlugins: [{ name: pluginName, specifier: pluginPath }],
         rules: { [ruleName]: ["error", ...(options.ruleOptions ?? [])] },
       }),
     );

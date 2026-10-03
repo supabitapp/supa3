@@ -208,10 +208,10 @@ function splitQualifierList(raw: string): string[] {
  * is typed past those bounds is cut here rather than refused by the request that carries it.
  */
 function boundedNames(names: ReadonlyArray<string>): string[] {
-  return names
-    .slice(0, MAX_QUALIFIER_VALUES)
-    .map((name) => name.slice(0, MAX_QUALIFIER_LENGTH).trim())
-    .filter((name) => name.length > 0);
+  return names.slice(0, MAX_QUALIFIER_VALUES).flatMap((name) => {
+    const trimmed = name.slice(0, MAX_QUALIFIER_LENGTH).trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  });
 }
 
 /**
@@ -420,9 +420,9 @@ export function groupPullRequestsByInvolvement<Entry extends ScopedEntry>(
       buckets.others.push(entry);
     }
   }
-  return (["authored", "reviewRequested", "others"] as const)
-    .filter((key) => buckets[key].length > 0)
-    .map((key) => ({ key, label: GROUP_LABELS[key], entries: buckets[key] }));
+  return (["authored", "reviewRequested", "others"] as const).flatMap((key) =>
+    buckets[key].length > 0 ? [{ key, label: GROUP_LABELS[key], entries: buckets[key] }] : [],
+  );
 }
 
 /**
@@ -628,9 +628,9 @@ export function partitionPullRequestsWithPriority<Entry extends PullRequestListE
       { key: "reviewRequested", entries: [...reviewByKey.values()].toSorted(byRecency) },
       { key: "others", entries: others },
     ] as const
-  )
-    .filter((group) => group.entries.length > 0)
-    .map((group) => ({ ...group, label: GROUP_LABELS[group.key] }));
+  ).flatMap((group) =>
+    group.entries.length > 0 ? [{ ...group, label: GROUP_LABELS[group.key] }] : [],
+  );
 }
 
 export type PullRequestDiffStats = ReadonlyMap<
@@ -935,9 +935,7 @@ export function resolveQueryEnvironmentIds<Id extends string>(
   // asked about yet — reading none of them would show an empty page for a project that is there.
   if (scopedProjectId === undefined || !projectsKnown) return environmentIds;
   const holders = new Set(
-    projects
-      .filter((project) => project.id === scopedProjectId)
-      .map((project) => project.environmentId),
+    projects.flatMap((project) => (project.id === scopedProjectId ? [project.environmentId] : [])),
   );
   return environmentIds.filter((environmentId) => holders.has(environmentId));
 }

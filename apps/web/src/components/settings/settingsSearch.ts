@@ -895,12 +895,11 @@ export function getThreadAutoSettlementSearchAvailability(
     (environment) =>
       environment.connection.phase === "connected" && environment.serverConfig !== null,
   );
-  const eligibleEnvironmentIds = connected
-    .filter(
-      (environment) =>
-        environment.serverConfig?.environment.capabilities.threadAutoSettlement === true,
-    )
-    .map((environment) => environment.environmentId);
+  const eligibleEnvironmentIds = connected.flatMap((environment) =>
+    environment.serverConfig?.environment.capabilities.threadAutoSettlement === true
+      ? [environment.environmentId]
+      : [],
+  );
   const selected = connected.filter((environment) =>
     scope?.environmentIds.includes(environment.environmentId),
   );

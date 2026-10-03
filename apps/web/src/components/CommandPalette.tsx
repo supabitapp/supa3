@@ -813,13 +813,11 @@ function OpenCommandPaletteDialog(props: {
     const seen = new Set<string>();
     return [
       ...STANDARD_THEME_CARDS.map((card) => ({ ...card, id: null })),
-      ...[...BUILT_IN_THEMES, ...customThemes, ...environmentThemes]
-        .filter((definition) => {
-          if (seen.has(definition.id)) return false;
-          seen.add(definition.id);
-          return true;
-        })
-        .map(getThemeCardDefinition),
+      ...[...BUILT_IN_THEMES, ...customThemes, ...environmentThemes].flatMap((definition) => {
+        if (seen.has(definition.id)) return [];
+        seen.add(definition.id);
+        return [getThemeCardDefinition(definition)];
+      }),
     ];
   }, [customThemes, environmentThemes]);
   const providers = useAtomValue(primaryServerProvidersAtom);

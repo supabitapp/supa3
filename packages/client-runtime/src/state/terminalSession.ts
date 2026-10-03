@@ -58,9 +58,9 @@ export interface KnownTerminalSession {
 export function selectRunningSubprocessTerminalIds(
   sessions: ReadonlyArray<KnownTerminalSession>,
 ): ReadonlyArray<string> {
-  return sessions
-    .filter((session) => session.state.hasRunningSubprocess)
-    .map((session) => session.target.terminalId);
+  return sessions.flatMap((session) =>
+    session.state.hasRunningSubprocess ? [session.target.terminalId] : [],
+  );
 }
 
 export const EMPTY_TERMINAL_BUFFER_STATE = Object.freeze<TerminalBufferState>({

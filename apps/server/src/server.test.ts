@@ -8400,9 +8400,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.deepEqual(
-        analyticsEvents
-          .filter(({ event }) => event === "client.turn.requested")
-          .map(({ properties }) => properties),
+        analyticsEvents.flatMap(({ event, properties }) =>
+          event === "client.turn.requested" ? [properties] : [],
+        ),
         [
           {
             surface: "mobile",

@@ -85,9 +85,9 @@ export function snapShotShortcutKeyLabels(
     [shortcut.metaKey || (shortcut.modKey && useMetaForMod), "meta"],
   ];
   return [
-    ...modifiers
-      .filter(([enabled]) => enabled)
-      .map(([, modifier]) => modifierKeyLabel(modifier, platform)),
+    ...modifiers.flatMap(([enabled, modifier]) =>
+      enabled ? [modifierKeyLabel(modifier, platform)] : [],
+    ),
     formatShortcutKeyLabel(shortcut.key),
   ];
 }
