@@ -2,7 +2,7 @@
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-`.devcontainer/` gives you a ready-to-code Linux environment matching CI: Ubuntu 24.04, the Mise-managed Node, pnpm, and `vp` toolchain, Rust stable, and the GitHub CLI. Open the repo in VS Code and "Reopen in Container", or create a GitHub Codespace. Mise installation, dependency install, the Electron exec-bit repair, and the Vite dep-cache warmup all run automatically before you attach.
+`.devcontainer/` gives you a ready-to-code Linux environment matching CI: Ubuntu 24.04, the Mise-managed Node, pnpm, `vp`, and Git hook toolchain, Rust stable, and the GitHub CLI. Open the repo in VS Code and "Reopen in Container", or create a GitHub Codespace. Mise installation, dependency install, the Electron exec-bit repair, and the Vite dep-cache warmup all run automatically before you attach.
 
 ## What works in the container
 

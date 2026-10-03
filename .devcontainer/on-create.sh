@@ -7,7 +7,7 @@ fi
 
 export PATH="$HOME/.local/bin:$PATH"
 sudo ln -sf "$(command -v mise)" /usr/local/bin/mise
-mise install --locked node pnpm npm:vite-plus
+mise install --locked node pnpm npm:vite-plus hk actionlint shellcheck gitleaks
 mise reshim
 mise exec -- vp install
 

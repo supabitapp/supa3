@@ -105,7 +105,7 @@ Building from source? Start at [docs/internals/overview.md](./docs/internals/ove
 
 ### Install the development toolchain
 
-T3 Code uses Mise to install the pinned Node.js, pnpm, and Vite+ toolchain.
+T3 Code uses Mise to install the pinned Node.js, pnpm, Vite+, and Git hook toolchain.
 
 #### macOS / Linux
 
@@ -122,7 +122,7 @@ winget install jdx.mise
 From the repository root, install the locked tools and dependencies:
 
 ```bash
-mise install --locked node pnpm npm:vite-plus
+mise install --locked node pnpm npm:vite-plus hk actionlint shellcheck gitleaks
 mise exec -- vp i
 ```
 

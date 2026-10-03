@@ -1,0 +1,30 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+
+steps {
+  ["vp-fmt"] = Builtins.vp_fmt
+  ["gitleaks"] = (Builtins.gitleaks) {
+    scan = "staged"
+  }
+  ["large-files"] {
+    glob = List("**/*")
+    check = "hk util check-added-large-files --maxkb=2048 {{files}}"
+  }
+  ["merge-conflicts"] = Builtins.check_merge_conflict
+  ["case-conflicts"] = Builtins.check_case_conflict
+  ["actionlint"] {
+    glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
+    check = "actionlint {{files}}"
+  }
+  ["shellcheck"] {
+    glob = List("**/*.sh", "**/*.bash")
+    check = "shellcheck --severity=warning {{files}}"
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+  }
+}

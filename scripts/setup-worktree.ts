@@ -18,7 +18,17 @@ const worktree = NodePath.dirname(import.meta.dirname);
 
 const miseInstall = NodeChildProcess.spawnSync(
   "mise",
-  ["install", "--locked", "node", "pnpm", "npm:vite-plus"],
+  [
+    "install",
+    "--locked",
+    "node",
+    "pnpm",
+    "npm:vite-plus",
+    "hk",
+    "actionlint",
+    "shellcheck",
+    "gitleaks",
+  ],
   {
     cwd: worktree,
     stdio: "inherit",

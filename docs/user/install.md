@@ -47,7 +47,7 @@ Install Mise using the [development toolchain instructions](../../README.md#inst
 
 ```bash
 git clone https://github.com/pingdotgg/t3code
-cd t3code && mise install --locked node pnpm npm:vite-plus && mise exec -- vp i && mise exec -- vp run build:desktop
+cd t3code && mise install --locked node pnpm npm:vite-plus hk actionlint shellcheck gitleaks && mise exec -- vp i && mise exec -- vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 
