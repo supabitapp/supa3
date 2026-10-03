@@ -120,13 +120,11 @@ rules), and the exemption list from that same SHA. PR/fork copies and PR-body in
 change policy or exemptions. Missing, incomplete, or malformed trusted files leave routing unresolved;
 they do not grant an exemption, establish an empty list, or permit automatic closure or review handoff.
 
-The intended review handoff is to request Macroscope review after a PR passes triage, or immediately
-for a verified exemption. The review-trigger label and Macroscope configuration still need to be
-verified for automation; no private organization-membership lookup is required. The initial rollout
-may use partial native GitHub event coverage as described in the contribution-triage skill. Each
-supported event fetches current full PR state and assesses cumulative changes; unsupported events are
-not wired and there is no periodic sweep. This guide does not announce a deployed automation or change
-existing review settings. Neither triage nor a Macroscope review authorizes merging.
+After a PR passes triage, or immediately for a verified exemption, report it as ready for maintainer
+review. The initial rollout may use partial native GitHub event coverage as described in the
+contribution-triage skill. Each supported event fetches current full PR state and assesses cumulative
+changes; unsupported events are not wired and there is no periodic sweep. This guide does not announce
+a deployed automation or change existing review settings. Triage does not authorize merging.
 
 <a id="closure-and-reconsideration"></a>
 
