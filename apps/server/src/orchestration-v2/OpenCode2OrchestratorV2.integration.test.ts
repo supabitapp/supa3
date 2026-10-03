@@ -77,7 +77,8 @@ const labelled = (entry: ProviderReplayEntry, label: string): ProviderReplayEntr
  */
 const mcpRules = (name: string) => [
   { action: "t3-code-*", resource: "*", effect: "deny" },
-  { action: `t3-code-thread_${name}_*`, resource: "*", effect: "allow" },
+  { action: "supa3-*", resource: "*", effect: "deny" },
+  { action: `supa3-thread_${name}_*`, resource: "*", effect: "allow" },
 ];
 const FULL_ACCESS = [{ action: "*", resource: "*", effect: "allow" }];
 /** Full access for the thread named `name`. */
