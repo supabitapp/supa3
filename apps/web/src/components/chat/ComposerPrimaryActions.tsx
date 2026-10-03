@@ -1,11 +1,13 @@
 import { memo, type PointerEventHandler } from "react";
 import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import type { ClientSettings } from "@t3tools/contracts/settings";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
-import { cn } from "~/lib/utils";
+import { cn, isMacPlatform } from "~/lib/utils";
 import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Spinner } from "../ui/spinner";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { composerFloatingLayerProps } from "./composerEventScope";
 
 interface PendingActionState {
@@ -28,6 +30,11 @@ interface ComposerPrimaryActionsProps {
   isEnvironmentUnavailable: boolean;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
+  sendShortcut?: ClientSettings["sendShortcut"] | undefined;
+  followUpBehavior?: ClientSettings["followUpBehavior"] | undefined;
+  isDraftThread?: boolean | undefined;
+  hasMultilinePrompt?: boolean | undefined;
+  modifierLabel?: string | undefined;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -61,6 +68,83 @@ const preventPointerFocus: PointerEventHandler<HTMLElement> = (event) => {
   event.preventDefault();
 };
 
+function SendActionsTooltip(props: {
+  isRunning: boolean;
+  sendShortcut: ClientSettings["sendShortcut"];
+  followUpBehavior: ClientSettings["followUpBehavior"];
+  isDraftThread: boolean;
+  hasMultilinePrompt: boolean;
+  modifierLabel: string;
+}) {
+  const {
+    isRunning,
+    sendShortcut,
+    followUpBehavior,
+    isDraftThread,
+    hasMultilinePrompt,
+    modifierLabel,
+  } = props;
+  const primaryFollowUpAction =
+    followUpBehavior === "queue" ? "Queue message" : "Steer current run";
+  const alternateFollowUpAction =
+    followUpBehavior === "queue" ? "Steer current run" : "Queue message";
+  const modifierShortcut = `${modifierLabel} + Enter`;
+  const modifierShiftShortcut = `${modifierLabel} + Shift + Enter`;
+  const usesModifierToSend =
+    sendShortcut === "mod-enter" || (sendShortcut === "mod-enter-multiline" && hasMultilinePrompt);
+  const actions = usesModifierToSend
+    ? [
+        {
+          shortcut: "Enter",
+          label: "New line",
+        },
+        {
+          shortcut: modifierShortcut,
+          label: isRunning
+            ? primaryFollowUpAction
+            : isDraftThread
+              ? "Send in background"
+              : "Send message",
+        },
+        {
+          shortcut: modifierShiftShortcut,
+          label: isRunning ? alternateFollowUpAction : "New line",
+        },
+      ]
+    : [
+        {
+          shortcut: "Enter",
+          label: isRunning ? primaryFollowUpAction : "Send message",
+        },
+        {
+          shortcut: "Shift + Enter",
+          label: "New line",
+        },
+        {
+          shortcut: modifierShortcut,
+          label: isRunning
+            ? alternateFollowUpAction
+            : isDraftThread
+              ? "Send in background"
+              : "Send message",
+        },
+      ];
+
+  return (
+    <div className="grid gap-1.5 py-0.5">
+      <span className="font-medium">{isRunning ? primaryFollowUpAction : "Send message"}</span>
+      {actions.map((action) => (
+        <span key={`${action.shortcut}-${action.label}`} className="flex items-center gap-3">
+          <kbd className="min-w-16 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 text-center font-mono text-3xs text-muted-foreground">
+            {action.shortcut}
+          </kbd>
+          <span>{action.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
@@ -73,6 +157,13 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isEnvironmentUnavailable,
   isPreparingWorktree,
   hasSendableContent,
+  sendShortcut = "enter",
+  followUpBehavior = "queue",
+  isDraftThread = false,
+  hasMultilinePrompt = false,
+  modifierLabel = typeof navigator !== "undefined" && isMacPlatform(navigator.platform)
+    ? "⌘"
+    : "Ctrl",
   preserveComposerFocusOnPointerDown = false,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -265,8 +356,26 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     </button>
   );
 
+  const sendButtonWithTooltip = (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+        {sendButton}
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <SendActionsTooltip
+          isRunning={isRunning}
+          sendShortcut={sendShortcut}
+          followUpBehavior={followUpBehavior}
+          isDraftThread={isDraftThread}
+          hasMultilinePrompt={hasMultilinePrompt}
+          modifierLabel={modifierLabel}
+        />
+      </TooltipPopup>
+    </Tooltip>
+  );
+
   if (!isRunning) {
-    return sendButton;
+    return sendButtonWithTooltip;
   }
 
   // While a turn runs, a sendable draft queues for the next tool boundary, so
@@ -274,7 +383,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   return (
     <>
       {renderStopGenerationButton(false)}
-      {hasSendableContent ? sendButton : null}
+      {hasSendableContent ? sendButtonWithTooltip : null}
     </>
   );
 });

@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -13,6 +13,12 @@ vi.mock("~/hooks/useSettings", () => ({
 vi.mock("../SidebarStageBackdrop", () => ({
   StageBackdropButtonArt: ({ variant }: { variant: string }) => `stage-${variant}`,
   useSidebarStageBackdropVariant: (enabled = true) => (enabled ? stageArtworkState.variant : null),
+}));
+vi.mock("../ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+  TooltipTrigger: ({ render, children }: { render: ReactNode; children: ReactNode }) =>
+    createElement("div", null, render, children),
+  TooltipPopup: ({ children }: { children: ReactNode }) => children,
 }));
 
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
@@ -65,7 +71,10 @@ function renderRunningActions(hasSendableContent: boolean) {
   );
 }
 
-function renderSendButton(sendDisabledReason: string | null = null) {
+function renderSendButton(
+  sendDisabledReason: string | null = null,
+  overrides: Partial<ComponentProps<typeof ComposerPrimaryActions>> = {},
+) {
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
@@ -82,6 +91,7 @@ function renderSendButton(sendDisabledReason: string | null = null) {
       onPreviousPendingQuestion: () => {},
       onInterrupt: () => {},
       onImplementPlanInNewThread: () => {},
+      ...overrides,
     }),
   );
 }
@@ -122,6 +132,25 @@ describe("ComposerPrimaryActions", () => {
     const markup = renderSendButton();
 
     expect(markup).not.toContain("stage-nightly");
+  });
+
+  it("shows the send shortcuts for a new thread", () => {
+    const markup = renderSendButton(null, { isDraftThread: true });
+
+    expect(markup).toContain("Send in background");
+    expect(markup).toContain("Shift + Enter");
+    expect(markup).toContain("⌘ + Enter");
+  });
+
+  it("shows the configured modifier shortcut for multiline prompts", () => {
+    const markup = renderSendButton(null, {
+      sendShortcut: "mod-enter",
+      modifierLabel: "Ctrl",
+    });
+
+    expect(markup).toContain("Ctrl + Enter");
+    expect(markup).toContain("Ctrl + Shift + Enter");
+    expect(markup).toContain("New line");
   });
 
   it("renders a queue action alongside stop while running with a sendable draft", () => {
