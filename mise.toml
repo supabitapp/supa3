@@ -1,5 +1,5 @@
 [tools]
-node = "24.13.1"
+node = "24.21.0"
 pnpm = "11.10.0"
 "npm:vite-plus" = "1.0.0"
 gitleaks = "8.30.1"
