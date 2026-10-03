@@ -317,7 +317,7 @@ describe("detectComposerTrigger", () => {
     "detects a slash skill trigger after the prompt start in %j",
     (text) => {
       expect(detectComposerTrigger(text, text.length)).toEqual({
-        kind: "skill",
+        kind: "slash-skill",
         query: "rev",
         rangeStart: text.length - 4,
         rangeEnd: text.length,
@@ -325,9 +325,11 @@ describe("detectComposerTrigger", () => {
     },
   );
 
-  it("leaves slash paths inside a message alone", () => {
-    const text = "Read /Users/khoi/notes";
-    expect(detectComposerTrigger(text, text.length)).toBeNull();
+  it.each([
+    ["Read /Users/khoi/notes", "Read /Users/khoi/notes".length],
+    ["Read /Users/khoi/notes", "Read /Use".length],
+  ])("leaves slash paths in %j alone with the caret at %i", (text, cursor) => {
+    expect(detectComposerTrigger(text, cursor)).toBeNull();
   });
 
   it.each(["$", "€", "£", "¥", "₹", "₩", "₿", "𑿝"])(

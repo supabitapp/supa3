@@ -369,7 +369,7 @@ export function useComposerCommandMenu({
       return [...commandItems, ...skillItems];
     }
 
-    if (trigger.kind === "skill") {
+    if (trigger.kind === "skill" || trigger.kind === "slash-skill") {
       const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,

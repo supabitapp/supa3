@@ -2508,10 +2508,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerTerminalContexts.length === 0 &&
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
-  const slashSkillTriggerHidden =
-    composerTrigger?.kind === "skill" &&
-    !settings.showSkillsInSlashMenu &&
-    prompt.startsWith("/", composerTrigger.rangeStart);
 
   const pullRequestListTargets = useMemo(
     () =>
@@ -2660,8 +2656,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         query,
       );
     }
-    if (composerTrigger.kind === "skill") {
-      if (slashSkillTriggerHidden) return [];
+    if (composerTrigger.kind === "slash-skill" && !settings.showSkillsInSlashMenu) {
+      return [];
+    }
+    if (composerTrigger.kind === "skill" || composerTrigger.kind === "slash-skill") {
       return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
         id: `skill:${selectedProvider}:${skill.name}`,
         type: "skill" as const,
@@ -2743,11 +2741,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSlashCommands,
     selectedProviderStatus,
     settings.showSkillsInSlashMenu,
-    slashSkillTriggerHidden,
     workspaceEntries.entries,
   ]);
 
-  const composerMenuOpen = Boolean(composerTrigger);
+  const isSlashSkillTrigger = composerTrigger?.kind === "slash-skill";
+  const composerMenuOpen =
+    composerTrigger !== null && (!isSlashSkillTrigger || composerMenuItems.length > 0);
   const composerMenuSearchKey = composerTrigger
     ? `${composerSuggestionListId}:${composerTrigger.kind}:${composerTrigger.query.trim().toLowerCase()}`
     : null;
@@ -2757,6 +2756,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       highlightedItemId: composerHighlightedItemId,
       currentSearchKey: composerMenuSearchKey,
       highlightedSearchKey: composerHighlightedSearchKey,
+      defaultToFirst: !isSlashSkillTrigger,
     });
     return composerMenuItems.find((item) => item.id === activeItemId) ?? null;
   }, [
@@ -2764,6 +2764,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerHighlightedSearchKey,
     composerMenuItems,
     composerMenuSearchKey,
+    isSlashSkillTrigger,
   ]);
 
   composerMenuOpenRef.current = composerMenuOpen;
@@ -2827,7 +2828,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         exactPullRequestLookup.isPending));
   const composerMenuEmptyState = useMemo(() => {
     if (composerTriggerKind === "skill") {
-      return "No skills found. Try / to browse provider commands.";
+      return "No skills found.";
     }
     if (composerTriggerKind === "pull-request") {
       if (pullRequestProjectId === null || pullRequestRepository === null) {
@@ -3376,6 +3377,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       highlightedItemId: composerHighlightedItemId,
       currentSearchKey: composerMenuSearchKey,
       highlightedSearchKey: composerHighlightedSearchKey,
+      defaultToFirst: !isSlashSkillTrigger,
     });
     setComposerHighlightedItemId((existing) =>
       existing === nextActiveItemId ? existing : nextActiveItemId,
@@ -3389,6 +3391,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerMenuItems,
     composerMenuOpen,
     composerMenuSearchKey,
+    isSlashSkillTrigger,
   ]);
 
   const lastSyncedPendingInputRef = useRef<{
@@ -4352,7 +4355,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return true;
     }
     const { trigger } = resolveActiveComposerTrigger();
-    const menuIsActive = composerMenuOpenRef.current || trigger !== null;
+    const isSlashSkill = trigger?.kind === "slash-skill";
+    const menuIsActive = composerMenuOpenRef.current || (trigger !== null && !isSlashSkill);
     if (key === "Escape") {
       if (!menuIsActive || event.isComposing || event.keyCode === 229) return false;
       dismissComposerTrigger(trigger);
@@ -4361,7 +4365,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (menuIsActive && (submissionIntent === null || submissionIntent === "foreground")) {
       const currentItems = composerMenuItemsRef.current;
-      const selectedItem = activeComposerMenuItemRef.current ?? currentItems[0];
+      const selectedItem =
+        activeComposerMenuItemRef.current ?? (isSlashSkill ? undefined : currentItems[0]);
       if (key === "ArrowDown" && currentItems.length > 0) {
         nudgeComposerMenuHighlight("ArrowDown");
         return true;

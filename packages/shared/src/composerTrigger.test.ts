@@ -16,28 +16,32 @@ describe("detectComposerTrigger", () => {
     },
   );
 
-  it("treats a leading slash as a command and a later slash as a skill", () => {
+  it("treats a slash that opens the prompt as a command", () => {
     expect(detectComposerTrigger("/rev", 4)).toEqual({
       kind: "slash-command",
       query: "rev",
       rangeStart: 0,
       rangeEnd: 4,
     });
-    expect(detectComposerTrigger("/model", 6)?.kind).toBe("slash-model");
+  });
 
-    for (const text of ["Use /rev", "/plan then /rev", "Intro\n/rev"]) {
+  it.each(["Use /rev", "/plan then /rev", "Intro\n/rev"])(
+    "treats a later slash as a skill search in %j",
+    (text) => {
       expect(detectComposerTrigger(text, text.length)).toEqual({
-        kind: "skill",
+        kind: "slash-skill",
         query: "rev",
         rangeStart: text.length - 4,
         rangeEnd: text.length,
       });
-    }
-  });
+    },
+  );
 
-  it("leaves slash paths inside a message alone", () => {
-    const text = "Read /Users/khoi/notes";
-    expect(detectComposerTrigger(text, text.length)).toBeNull();
+  it.each([
+    ["Read /Users/khoi/notes", "Read /Users/khoi/notes".length],
+    ["Read /Users/khoi/notes", "Read /Use".length],
+  ])("leaves slash paths in %j alone with the caret at %i", (text, cursor) => {
+    expect(detectComposerTrigger(text, cursor)).toBeNull();
   });
 });
 

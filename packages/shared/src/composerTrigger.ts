@@ -3,7 +3,8 @@ export type ComposerTriggerKind =
   | "pull-request"
   | "slash-command"
   | "slash-model"
-  | "skill";
+  | "skill"
+  | "slash-skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 
 export interface ComposerTrigger {
@@ -59,35 +60,34 @@ export function detectComposerTrigger(
   isWhitespaceChar?: (char: string) => boolean,
 ): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
-  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
-  const linePrefix = text.slice(lineStart, cursor);
+  const promptPrefix = text.slice(0, cursor);
 
-  if (lineStart === 0 && linePrefix.startsWith("/")) {
-    const commandMatch = /^\/(\S*)$/.exec(linePrefix);
+  if (promptPrefix.startsWith("/") && !promptPrefix.includes("\n")) {
+    const commandMatch = /^\/(\S*)$/.exec(promptPrefix);
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
       if (commandQuery.toLowerCase() === "model") {
         return {
           kind: "slash-model",
           query: "",
-          rangeStart: lineStart,
+          rangeStart: 0,
           rangeEnd: cursor,
         };
       }
       return {
         kind: "slash-command",
         query: commandQuery,
-        rangeStart: lineStart,
+        rangeStart: 0,
         rangeEnd: cursor,
       };
     }
 
-    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(linePrefix);
+    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(promptPrefix);
     if (modelMatch) {
       return {
         kind: "slash-model",
         query: (modelMatch[1] ?? "").trim(),
-        rangeStart: lineStart,
+        rangeStart: 0,
         rangeEnd: cursor,
       };
     }
@@ -109,11 +109,23 @@ export function detectComposerTrigger(
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
-  const skillPrefix = /^(?:\p{Sc}|\/(?=[^/]*$))/u.exec(token);
+  const skillPrefix = /^\p{Sc}/u.exec(token);
   if (skillPrefix) {
     return {
       kind: "skill",
       query: token.slice(skillPrefix[0].length),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
+  let tokenEnd = cursor;
+  while (tokenEnd < text.length && !wsCheck(text[tokenEnd] ?? "")) {
+    tokenEnd += 1;
+  }
+  if (token.startsWith("/") && !text.slice(tokenStart + 1, tokenEnd).includes("/")) {
+    return {
+      kind: "slash-skill",
+      query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
