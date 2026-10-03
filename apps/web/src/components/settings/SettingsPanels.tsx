@@ -2699,7 +2699,7 @@ export function GeneralSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("skills-in-slash-menu")}
-          description="Also include skills in the / command menu. Skills always appear when you type $."
+          description="Show skills when you type /. Skills always appear when you type $."
           resetAction={
             settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu ? (
               <SettingResetButton
