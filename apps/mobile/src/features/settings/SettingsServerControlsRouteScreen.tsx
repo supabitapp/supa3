@@ -258,24 +258,22 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       ) : null
                     }
                   >
-                    {WORKSPACE_CHOICES.flatMap((choice, index) =>
-                      choice.mode !== null || !projectSelected
-                        ? [
-                            <ChoiceRow
-                              key={choice.mode ?? "inherit"}
-                              label={choice.label}
-                              description={choice.description}
-                              selected={
-                                !isMixed("defaultThreadEnvMode") &&
-                                uniform("defaultThreadEnvMode") === choice.mode
-                              }
-                              separated={index > 0}
-                              disabled={disabledFor("defaultThreadEnvMode")}
-                              onPress={() => write({ defaultThreadEnvMode: choice.mode })}
-                            />,
-                          ]
-                        : [],
-                    )}
+                    {WORKSPACE_CHOICES.flatMap((choice) =>
+                      choice.mode !== null || !projectSelected ? [choice] : [],
+                    ).map((choice, index) => (
+                      <ChoiceRow
+                        key={choice.mode ?? "inherit"}
+                        label={choice.label}
+                        description={choice.description}
+                        selected={
+                          !isMixed("defaultThreadEnvMode") &&
+                          uniform("defaultThreadEnvMode") === choice.mode
+                        }
+                        separated={index > 0}
+                        disabled={disabledFor("defaultThreadEnvMode")}
+                        onPress={() => write({ defaultThreadEnvMode: choice.mode })}
+                      />
+                    ))}
                   </SettingsSection>
                   <SettingsSection
                     title="Worktree submodules"
@@ -285,24 +283,22 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       ) : null
                     }
                   >
-                    {SUBMODULE_CHOICES.flatMap((choice, index) =>
-                      choice.mode !== null || !projectSelected
-                        ? [
-                            <ChoiceRow
-                              key={choice.mode ?? "inherit"}
-                              label={choice.label}
-                              description={choice.description}
-                              selected={
-                                !isMixed("worktreeSubmodules") &&
-                                uniform("worktreeSubmodules") === choice.mode
-                              }
-                              separated={index > 0}
-                              disabled={disabledFor("worktreeSubmodules")}
-                              onPress={() => write({ worktreeSubmodules: choice.mode })}
-                            />,
-                          ]
-                        : [],
-                    )}
+                    {SUBMODULE_CHOICES.flatMap((choice) =>
+                      choice.mode !== null || !projectSelected ? [choice] : [],
+                    ).map((choice, index) => (
+                      <ChoiceRow
+                        key={choice.mode ?? "inherit"}
+                        label={choice.label}
+                        description={choice.description}
+                        selected={
+                          !isMixed("worktreeSubmodules") &&
+                          uniform("worktreeSubmodules") === choice.mode
+                        }
+                        separated={index > 0}
+                        disabled={disabledFor("worktreeSubmodules")}
+                        onPress={() => write({ worktreeSubmodules: choice.mode })}
+                      />
+                    ))}
                   </SettingsSection>
                   <SettingsSection
                     title="Default permissions"
