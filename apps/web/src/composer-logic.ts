@@ -256,12 +256,14 @@ export function isCollapsedCursorAdjacentToInlineToken(
 
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
-  const commandMatch = /^\/(\S*)$/.exec(text.slice(0, cursor));
+  const promptPrefix = text.slice(0, cursor);
+  const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
+  const commandMatch = /^\/(\S*)$/.exec(promptPrefix.slice(commandStart));
   if (commandMatch) {
     return {
       kind: "slash-command",
       query: commandMatch[1] ?? "",
-      rangeStart: 0,
+      rangeStart: commandStart,
       rangeEnd: cursor,
     };
   }

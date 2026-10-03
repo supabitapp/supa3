@@ -61,33 +61,35 @@ export function detectComposerTrigger(
 ): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
   const promptPrefix = text.slice(0, cursor);
+  const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
+  const commandPrefix = promptPrefix.slice(commandStart);
 
-  if (promptPrefix.startsWith("/") && !promptPrefix.includes("\n")) {
-    const commandMatch = /^\/(\S*)$/.exec(promptPrefix);
+  if (commandPrefix.startsWith("/") && !commandPrefix.includes("\n")) {
+    const commandMatch = /^\/(\S*)$/.exec(commandPrefix);
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
       if (commandQuery.toLowerCase() === "model") {
         return {
           kind: "slash-model",
           query: "",
-          rangeStart: 0,
+          rangeStart: commandStart,
           rangeEnd: cursor,
         };
       }
       return {
         kind: "slash-command",
         query: commandQuery,
-        rangeStart: 0,
+        rangeStart: commandStart,
         rangeEnd: cursor,
       };
     }
 
-    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(promptPrefix);
+    const modelMatch = /^\/model(?:\s+(.*))?$/.exec(commandPrefix);
     if (modelMatch) {
       return {
         kind: "slash-model",
         query: (modelMatch[1] ?? "").trim(),
-        rangeStart: 0,
+        rangeStart: commandStart,
         rangeEnd: cursor,
       };
     }

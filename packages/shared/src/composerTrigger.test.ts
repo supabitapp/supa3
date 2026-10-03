@@ -16,12 +16,12 @@ describe("detectComposerTrigger", () => {
     },
   );
 
-  it("treats a slash that opens the prompt as a command", () => {
-    expect(detectComposerTrigger("/rev", 4)).toEqual({
+  it.each(["/rev", " /rev", "\n/rev"])("treats %j as a command at the prompt start", (text) => {
+    expect(detectComposerTrigger(text, text.length)).toEqual({
       kind: "slash-command",
       query: "rev",
-      rangeStart: 0,
-      rangeEnd: 4,
+      rangeStart: text.length - 4,
+      rangeEnd: text.length,
     });
   });
 

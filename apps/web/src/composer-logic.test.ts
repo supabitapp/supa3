@@ -313,6 +313,18 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it.each([" /rev", "\n\n/rev"])(
+    "detects a slash command after leading whitespace in %j",
+    (text) => {
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "slash-command",
+        query: "rev",
+        rangeStart: text.length - 4,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
   it.each(["Use /rev", "/plan then /rev", "Intro\n/rev"])(
     "detects a slash skill trigger after the prompt start in %j",
     (text) => {
