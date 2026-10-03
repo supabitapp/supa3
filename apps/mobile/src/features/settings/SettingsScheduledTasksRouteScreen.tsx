@@ -25,6 +25,7 @@ import {
 import { useFocusEffect, useNavigation, usePreventRemove } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, AppState, Platform, Pressable, TextInput as RNTextInput, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -995,13 +996,16 @@ function EnvironmentTasks({
         </Text>
       ) : (
         visibleTasks?.map((task, index) => (
-          <View
+          <Animated.View
             key={task.id}
             className={
               index === 0
                 ? "flex-row items-start gap-1 px-4 py-4"
                 : "flex-row items-start gap-1 border-t border-border-subtle px-4 py-4"
             }
+            entering={FadeIn.duration(140)}
+            exiting={FadeOut.duration(120)}
+            layout={LinearTransition.duration(180)}
           >
             <Pressable
               accessibilityRole="button"
@@ -1066,7 +1070,7 @@ function EnvironmentTasks({
                 />
               </Pressable>
             </ControlPillMenu>
-          </View>
+          </Animated.View>
         ))
       )}
     </SettingsSection>

@@ -3,6 +3,7 @@ import { imageMimeType } from "@t3tools/shared/image";
 import { videoMimeType } from "@t3tools/shared/video";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { AppText as Text } from "./AppText";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -350,9 +351,12 @@ export function ComposerAttachmentStrip(props: ComposerAttachmentStripProps) {
     >
       <View className="flex-row gap-2.5">
         {props.attachments.map((attachment) => (
-          <View
+          <Animated.View
             key={attachment.id}
             className="relative"
+            entering={FadeIn.duration(140)}
+            exiting={FadeOut.duration(120)}
+            layout={LinearTransition.duration(180)}
             style={{
               paddingTop: removeButtonGutter,
               paddingRight: removeButtonGutter,
@@ -384,7 +388,7 @@ export function ComposerAttachmentStrip(props: ComposerAttachmentStripProps) {
                 weight="bold"
               />
             </Pressable>
-          </View>
+          </Animated.View>
         ))}
       </View>
     </ScrollView>

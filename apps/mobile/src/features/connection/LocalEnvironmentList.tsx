@@ -1,6 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { ComponentProps } from "react";
 import { View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -47,14 +48,20 @@ export function LocalEnvironmentList({
   return (
     <View collapsable={false} className="overflow-hidden rounded-[24px] bg-grouped-card">
       {environments.map((environment) => (
-        <View key={environment.environmentId} collapsable={false}>
+        <Animated.View
+          key={environment.environmentId}
+          collapsable={false}
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(120)}
+          layout={LinearTransition.duration(220)}
+        >
           <ConnectionEnvironmentRow
             environment={environment}
             expanded={expandedId === environment.environmentId}
             onToggle={() => onToggle(environment.environmentId)}
             {...rowActions}
           />
-        </View>
+        </Animated.View>
       ))}
     </View>
   );

@@ -20,9 +20,29 @@ import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state
 import type { EnvironmentMachineKind } from "@t3tools/contracts";
 import { canSnooze, resolveSnoozePresets } from "@t3tools/client-runtime/state/thread-settled";
 import type { MenuAction } from "@react-native-menu/menu";
-import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { Alert, Pressable, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  ReduceMotion,
+  runOnJS,
+  runOnUI,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
 import { SymbolView } from "../../components/AppSymbol";
@@ -38,6 +58,7 @@ import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useThreadPr } from "../../state/use-thread-pr";
 import { useSwipeRowDormant } from "../home/swipe-row-activation";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
+import { registerThreadDismissal } from "../home/thread-dismissal";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
 import {
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
@@ -257,6 +278,92 @@ const DRAFT_TASK_MENU_ACTIONS: MenuAction[] = [
   { id: "delete", title: "Discard", image: "trash", attributes: { destructive: true } },
 ];
 
+function PendingTaskDismissableRow(props: {
+  readonly taskKey: string;
+  readonly children: ReactNode;
+}) {
+  const mountedRef = useRef(true);
+  const pendingDismissRef = useRef<(() => void) | null>(null);
+  const dismissalRef = useRef<{ finished: Promise<void>; restore: () => void } | null>(null);
+  const rowHeight = useSharedValue(0);
+  const dismissing = useSharedValue(false);
+  const collapse = useSharedValue(0);
+  const opacity = useSharedValue(1);
+
+  const restore = useCallback(() => {
+    if (!mountedRef.current) return;
+    dismissalRef.current = null;
+    pendingDismissRef.current = null;
+    cancelAnimation(collapse);
+    cancelAnimation(opacity);
+    collapse.set(0);
+    opacity.set(1);
+    dismissing.set(false);
+  }, [collapse, dismissing, opacity]);
+
+  const finishDismiss = useCallback(() => {
+    const finish = pendingDismissRef.current;
+    pendingDismissRef.current = null;
+    dismissalRef.current = null;
+    finish?.();
+  }, []);
+
+  const dismiss = useCallback(() => {
+    "worklet";
+    dismissing.set(true);
+    const timing = {
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+      reduceMotion: ReduceMotion.System,
+    };
+    opacity.set(withTiming(0, timing));
+    collapse.set(
+      withTiming(1, timing, (finished) => {
+        if (finished) runOnJS(finishDismiss)();
+      }),
+    );
+  }, [collapse, dismissing, finishDismiss, opacity]);
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelAnimation(collapse);
+      cancelAnimation(opacity);
+      finishDismiss();
+    };
+  }, [collapse, finishDismiss, opacity]);
+
+  useLayoutEffect(
+    () =>
+      registerThreadDismissal(props.taskKey, () => {
+        if (dismissalRef.current) return dismissalRef.current;
+        const finished = new Promise<void>((resolve) => {
+          pendingDismissRef.current = resolve;
+        });
+        runOnUI(dismiss)();
+        dismissalRef.current = { finished, restore };
+        return dismissalRef.current;
+      }),
+    [dismiss, props.taskKey, restore],
+  );
+
+  const style = useAnimatedStyle(() => ({
+    height: dismissing.value ? rowHeight.value * (1 - collapse.value) : undefined,
+    opacity: opacity.value,
+    pointerEvents: dismissing.value ? "none" : "auto",
+    overflow: "hidden",
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <View onLayout={({ nativeEvent }) => rowHeight.set(nativeEvent.layout.height)}>
+        {props.children}
+      </View>
+    </Animated.View>
+  );
+}
+
 /**
  * Unsent work, in the same idiom as an active v2 row: it is work the user
  * wrote, so it reads like the thread it will become. The status slot says
@@ -394,7 +501,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   );
 
   return (
-    <>
+    <PendingTaskDismissableRow key={pendingTask.key} taskKey={pendingTask.key}>
       {props.showPendingDivider ? (
         <ThreadListV2SectionDivider label="Unsent" pane={props.pane} />
       ) : null}
@@ -437,7 +544,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
           )}
         </RowPressable>
       </ControlPillMenu>
-    </>
+    </PendingTaskDismissableRow>
   );
 });
 

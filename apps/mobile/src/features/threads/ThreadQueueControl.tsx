@@ -11,7 +11,12 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import Reanimated, {
+  FadeOut,
+  ReduceMotion,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 
 import { MaterialButton } from "../../components/MaterialButton";
 import { AndroidSheetHeader } from "../../components/AndroidScreenHeader";
@@ -470,7 +475,11 @@ function QueueShiftedRow(props: {
     ],
   }));
   return (
-    <Reanimated.View onLayout={props.onLayout} style={[style, { zIndex: props.lifted ? 1 : 0 }]}>
+    <Reanimated.View
+      exiting={FadeOut.duration(120)}
+      onLayout={props.onLayout}
+      style={[style, { zIndex: props.lifted ? 1 : 0 }]}
+    >
       {props.children}
     </Reanimated.View>
   );
