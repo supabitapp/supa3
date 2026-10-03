@@ -2236,7 +2236,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain('viewBox="0 0 321.90 96.80"');
+    expect(markup).toContain('viewBox="25.69 37.17 76.40 52.95"');
     expect(markup).toContain("Read a Supacode thread");
     expect(markup).not.toContain("mcp__supacode__supacode_thread_read");
   });

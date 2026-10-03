@@ -45,7 +45,7 @@ import type { EnvironmentId, ToolActivityIcon } from "@supacode/contracts";
 import { toolActivityFaviconUrl } from "@supacode/shared/favicon";
 
 import { AppText as Text } from "../../components/AppText";
-import { SupaWordmark } from "../../components/SupaWordmark";
+import { SupacodeMark } from "../../components/SupacodeMark";
 import { cn } from "../../lib/cn";
 import { THREAD_WORK_ROW_MIN_HEIGHT, type deriveThreadWorkLogSizing } from "../../lib/layout";
 import {
@@ -101,7 +101,7 @@ function WorkLogIcon(props: {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
   if (props.icon === "supacode") {
     return (
-      <SupaWordmark
+      <SupacodeMark
         height={10}
         {...(colorClassName ? { colorClassName } : { color: props.color })}
       />

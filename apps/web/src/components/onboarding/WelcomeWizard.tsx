@@ -54,7 +54,7 @@ import { agentSessionImport } from "../../state/agentSessions";
 import { readProjects, useProjects } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironment } from "../../state/environments";
 import { useProjectScans } from "../../onboarding/useProjectScans";
-import { SupaWordmark } from "../SupaWordmark";
+import { SupacodeMark } from "../SupacodeMark";
 import { projectEnvironment } from "../../state/projects";
 import { serverEnvironment } from "../../state/server";
 import { terminalEnvironment } from "../../state/terminal";
@@ -212,10 +212,10 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up supacode"
+          title="Set up Supacode"
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="supacode">
-              <SupaWordmark className="h-7 w-auto text-muted-foreground" aria-hidden />
+            <div className="flex items-baseline gap-1.5" role="img" aria-label="Supacode">
+              <SupacodeMark className="h-7 w-auto text-muted-foreground" aria-hidden />
             </div>
           }
         >
