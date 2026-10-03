@@ -26,12 +26,15 @@ const controlMessageLimit = 4096
 func newSocket(conn *websocket.Conn, cfg Config, readLimit int64) *socket {
 	s := &socket{conn: conn, writeTimeout: cfg.WriteTimeout, heartbeat: cfg.Heartbeat, readDone: make(chan struct{})}
 	conn.SetReadLimit(readLimit)
-	conn.SetReadDeadline(time.Now().Add(pongWait(cfg.Heartbeat)))
 	conn.SetCloseHandler(func(int, string) error { return nil })
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(pongWait(cfg.Heartbeat)))
-	})
 	return s
+}
+
+func (s *socket) armLiveness() {
+	s.conn.SetReadDeadline(time.Now().Add(pongWait(s.heartbeat)))
+	s.conn.SetPongHandler(func(string) error {
+		return s.conn.SetReadDeadline(time.Now().Add(pongWait(s.heartbeat)))
+	})
 }
 
 func pongWait(heartbeat time.Duration) time.Duration {

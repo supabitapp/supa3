@@ -234,9 +234,10 @@ func (r *Relay) handleControl(w http.ResponseWriter, req *http.Request) {
 		sock.closeNow()
 		return
 	}
-	conn.SetReadDeadline(time.Now().Add(r.cfg.AuthTimeout))
+	challengeExpires := time.Now().Add(r.cfg.AuthTimeout)
+	conn.SetReadDeadline(challengeExpires)
 	mt, data, err := conn.ReadMessage()
-	if err != nil {
+	if err != nil || time.Now().After(challengeExpires) {
 		r.rejectControl(sock, "authentication timeout")
 		return
 	}
@@ -250,7 +251,7 @@ func (r *Relay) handleControl(w http.ResponseWriter, req *http.Request) {
 		r.rejectControl(sock, "invalid signature")
 		return
 	}
-	conn.SetReadDeadline(time.Now().Add(pongWait(r.cfg.Heartbeat)))
+	sock.armLiveness()
 
 	h := &host{
 		endpointID: endpointID,
@@ -396,6 +397,7 @@ func (r *Relay) handleConnect(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	sock := newSocket(conn, r.cfg, r.cfg.MaxMessageBytes)
+	sock.armLiveness()
 	r.mu.Lock()
 	if p.state == pairClosed {
 		r.mu.Unlock()
@@ -454,6 +456,7 @@ func (r *Relay) handleAccept(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	sock := newSocket(conn, r.cfg, r.cfg.MaxMessageBytes)
+	sock.armLiveness()
 	r.mu.Lock()
 	if p.state != pairAccepting {
 		r.mu.Unlock()

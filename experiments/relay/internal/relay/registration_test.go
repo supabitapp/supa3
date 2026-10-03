@@ -208,3 +208,41 @@ func TestControlSocketCap(t *testing.T) {
 		t.Fatalf("metrics after all closed %+v", m)
 	}
 }
+
+func TestUnsolicitedPongsDoNotExtendChallenge(t *testing.T) {
+	r := startRelay(t, func(c *relay.Config) {
+		c.AuthTimeout = 200 * time.Millisecond
+		c.Heartbeat = 2 * time.Second
+	})
+	id := endpoint.NewIdentity()
+	conn, challenge, err := endpoint.OpenControl(ctx(t), r.WS, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(time.Second))
+			}
+		}
+	}()
+	time.Sleep(600 * time.Millisecond)
+	close(stop)
+	reply, err := endpoint.Authenticate(conn, endpoint.Sign(id, challenge.Nonce))
+	if err == nil || reply.Type == "registered" {
+		t.Fatalf("late signature accepted: %+v", reply)
+	}
+	if ce, ok := err.(*websocket.CloseError); ok && ce.Code != websocket.ClosePolicyViolation {
+		t.Fatalf("expected 1008 after challenge expiry, got %v", err)
+	}
+	if m := metrics(t, r); m.ActiveHosts != 0 || m.ControlSockets != 0 {
+		t.Fatalf("metrics %+v", m)
+	}
+	mustRegister(t, r, id)
+}
