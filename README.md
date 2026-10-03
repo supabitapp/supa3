@@ -15,7 +15,6 @@ Install Mise using the instructions below, then run these commands from the repo
 
 ```bash
 curl https://mise.run | sh
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
 #### Windows

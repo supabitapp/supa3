@@ -28,16 +28,6 @@ Supacode has 3 key app surfaces: **web**, **desktop**, and **mobile**.
 
 **Mobile** is a React Native app for both iOS and Android. The mobile app allows for connecting to any Supacode server to control work remotely.
 
-## A note from Theo
-
-I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
-
-Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
-
-The rest of this document is meant to help you navigate the codebase and make changes effectively. Think of these instructions less as "hard rules", more as "good defaults". The developer's preferences should be able to override anything here.
-
-Of note: Most Supacode contributions will come from Supacode itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the Supacode instance that the contributor is using.
-
 ## A small glossary
 
 We need to be on the same page with terminology. When communicating, use this language:
@@ -104,7 +94,6 @@ For authorized mobile verification, a missing or outdated native client is a bui
 
 ## Pull requests
 
-- Never make a PR unless the developer explicitly asks you to do so.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.
