@@ -38,8 +38,9 @@ export function confirmThreadOutboxMessageQueued(message: QueuedThreadMessage): 
 export function updateThreadOutboxMessage(
   message: QueuedThreadMessage,
   expectedRevision?: number,
+  canUpdate?: () => boolean,
 ): Promise<boolean> {
-  return threadOutboxManager.update(message, expectedRevision);
+  return threadOutboxManager.update(message, expectedRevision, canUpdate);
 }
 
 /** Snapshot of a queued message's write revision, for update's CAS. */

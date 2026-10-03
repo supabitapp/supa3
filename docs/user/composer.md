@@ -61,6 +61,11 @@ Mobile keeps local copies of draft attachments, so you can preview them and queu
 messages while disconnected. Uploads resume when you reconnect. Drafts and queued
 messages survive app restarts.
 
+You can also queue a new thread in a project you have already opened. If a worktree's
+base branch is unavailable while offline, the task uses the repository's default
+branch after reconnecting, or its current branch when no default is available.
+An explicit branch choice stays selected.
+
 ## Custom models
 
 On web and desktop, use Settings → Providers → **Models** to add an unlisted model with a custom
