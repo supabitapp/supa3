@@ -1,3 +1,4 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
 import {
   AuthAccessTokenType,
   type AuthClientPresentationMetadata,
@@ -78,7 +79,9 @@ export const appendClientConnectionParams = (
       url.searchParams.set("clientDeviceModel", clientMetadata.deviceModel);
     }
   }
-  if (connectionMethod) {
+  if (parseRelayAddress(url.href)) {
+    url.searchParams.set("connectionMethod", "relay");
+  } else if (connectionMethod) {
     url.searchParams.set("connectionMethod", connectionMethod);
   }
 };

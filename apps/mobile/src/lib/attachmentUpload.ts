@@ -1,3 +1,5 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { fetchRelay } from "./relay";
 import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
 import {
   clampFileAttachmentUploadBytes,
@@ -280,22 +282,30 @@ async function uploadFileBytes(
         encoding: "base64",
       });
     }
-    const result = await file.upload(url, {
-      httpMethod: "POST",
-      uploadType: UploadType.BINARY_CONTENT,
-      headers: { "Content-Type": composerAttachmentWireMimeType(attachment) },
-      signal,
-      ...(onProgress
-        ? {
-            onProgress: ({ bytesSent, totalBytes }) => {
-              if (totalBytes > 0) onProgress(bytesSent / totalBytes);
-            },
-          }
-        : {}),
-    });
+    const result = parseRelayAddress(url)
+      ? await fetchRelay(url, {
+          method: "POST",
+          headers: { "Content-Type": composerAttachmentWireMimeType(attachment) },
+          body: await file.arrayBuffer(),
+          signal,
+        })
+      : await file.upload(url, {
+          httpMethod: "POST",
+          uploadType: UploadType.BINARY_CONTENT,
+          headers: { "Content-Type": composerAttachmentWireMimeType(attachment) },
+          signal,
+          ...(onProgress
+            ? {
+                onProgress: ({ bytesSent, totalBytes }) => {
+                  if (totalBytes > 0) onProgress(bytesSent / totalBytes);
+                },
+              }
+            : {}),
+        });
     if (result.status < 200 || result.status >= 300) {
       throw new Error(`Upload failed for '${attachment.name}' (${result.status}).`);
     }
+    onProgress?.(1);
   } finally {
     if (fileUri === undefined && file.exists) file.delete();
   }

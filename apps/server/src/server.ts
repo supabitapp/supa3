@@ -1,3 +1,4 @@
+import * as RelayAccess from "./relay/RelayAccess.ts";
 import * as Clock from "effect/Clock";
 import * as Random from "effect/Random";
 import * as Semaphore from "effect/Semaphore";
@@ -392,7 +393,23 @@ const ProjectFaviconResolverLayerLive = ProjectFaviconResolver.layer.pipe(
   Layer.provide(T3ProjectFileLoader.layer),
 );
 
-const ServerEnvironmentLayerLive = ServerEnvironment.layer;
+const RelayAccessLive = RelayAccess.layer.pipe(
+  Layer.provide(ServerSecretStore.layer),
+  Layer.provide(ServerSettingsLayerLive),
+);
+const ServerEnvironmentLayerLive = Layer.effect(
+  ServerEnvironment.ServerEnvironment,
+  Effect.gen(function* () {
+    const environment = yield* ServerEnvironment.ServerEnvironment;
+    const relay = yield* RelayAccess.RelayAccess;
+    return ServerEnvironment.ServerEnvironment.of({
+      ...environment,
+      getDescriptor: environment.getDescriptor.pipe(
+        Effect.map((descriptor) => ({ ...descriptor, relayEndpoint: relay.address })),
+      ),
+    });
+  }),
+).pipe(Layer.provideMerge(ServerEnvironment.layer), Layer.provide(RelayAccessLive));
 
 const AuthLayerLive = EnvironmentAuth.layer.pipe(
   Layer.provideMerge(PersistenceLayerLive),
@@ -637,6 +654,14 @@ const makeServerLayer = Layer.unwrap(
             return;
           }
 
+          const relay = yield* RelayAccess.RelayAccess;
+          const localHost =
+            config.host && config.host !== "0.0.0.0" && config.host !== "::"
+              ? config.host
+              : "127.0.0.1";
+          yield* relay.start(
+            `http://${localHost.includes(":") ? `[${localHost}]` : localHost}:${address.port}`,
+          );
           const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
           const state = yield* makePersistedServerRuntimeState({
             config,
@@ -740,6 +765,7 @@ const makeServerLayer = Layer.unwrap(
 
     return serverApplicationLayer.pipe(
       Layer.provideMerge(runtimeServicesLive),
+      Layer.provideMerge(RelayAccessLive),
       Layer.provideMerge(
         McpSessionRegistry.layer.pipe(
           Layer.provide(ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer))),

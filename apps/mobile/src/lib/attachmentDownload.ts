@@ -1,3 +1,5 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { fetchRelay } from "./relay";
 import type { ChatFileAttachment } from "@t3tools/contracts";
 import type { Directory } from "expo-file-system";
 import type { SharingOptions } from "expo-sharing";
@@ -182,7 +184,7 @@ export async function openAttachmentInViewer(input: {
     if (/^(file|content):/.test(input.uri)) {
       await new File(input.uri).copy(cached.file);
     } else {
-      await File.downloadFileAsync(input.uri, cached.file, { signal: input.signal });
+      await downloadFile(input.uri, cached.file, input.signal);
     }
     if (input.signal.aborted) return;
     const endHandoff = beginForegroundHandoff();
@@ -209,14 +211,13 @@ export async function downloadAttachmentForPreview(input: {
   readonly signal: AbortSignal;
 }): Promise<AttachmentPreviewFile | null> {
   if (input.signal.aborted) return null;
-  const { File } = await import("expo-file-system");
   const cached = await createCachedAttachmentFile(input.attachment);
   try {
     if (input.signal.aborted) {
       cached.preview.dispose();
       return null;
     }
-    await File.downloadFileAsync(input.url, cached.file, { signal: input.signal });
+    await downloadFile(input.url, cached.file, input.signal);
     if (input.signal.aborted) {
       cached.preview.dispose();
       return null;
@@ -272,5 +273,22 @@ export async function shareLocalAttachment(input: {
     }
   } finally {
     cached.preview.dispose();
+  }
+}
+
+async function downloadFile(
+  url: string,
+  file: import("expo-file-system").File,
+  signal: AbortSignal,
+) {
+  const { File } = await import("expo-file-system");
+  if (parseRelayAddress(url) || url.startsWith("data:")) {
+    const response = await fetchRelay(url, { signal });
+    if (!response.ok) throw new Error(`Download failed (${response.status}).`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    signal.throwIfAborted();
+    await file.write(bytes);
+  } else {
+    await File.downloadFileAsync(url, file, { signal });
   }
 }

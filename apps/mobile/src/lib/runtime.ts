@@ -1,8 +1,12 @@
+import * as ExpoCrypto from "expo-crypto";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
-import * as Socket from "effect/unstable/socket/Socket";
 
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+import {
+  remoteHttpClientLayer,
+  relayWebSocketLayer,
+  relayClientOptions,
+} from "@t3tools/client-runtime/rpc";
 
 import * as Persistence from "../persistence/layer";
 import { cryptoLayer } from "./crypto";
@@ -10,15 +14,17 @@ import { disposeOnFoundationReplace, type FoundationHotModule } from "./foundati
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
-const httpClientLayer = remoteHttpClientLayer(fetch);
+const relayOptions = relayClientOptions(ExpoCrypto.getRandomBytes);
+const socketLayer = relayWebSocketLayer(relayOptions);
+const httpClientLayer = remoteHttpClientLayer(fetch, relayOptions);
 
 type RuntimeLayerSource =
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof socketLayer
   | typeof cryptoLayer
   | typeof httpClientLayer
   | typeof Persistence.layer;
 
-const runtimeLayer = Socket.layerWebSocketConstructorGlobal.pipe(
+const runtimeLayer = socketLayer.pipe(
   Layer.provideMerge(cryptoLayer),
   Layer.provideMerge(httpClientLayer),
   Layer.provideMerge(Persistence.layer),

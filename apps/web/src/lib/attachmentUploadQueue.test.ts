@@ -1,3 +1,4 @@
+import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
 import { EnvironmentId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
@@ -19,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   removeUpload: Symbol("remove-upload"),
   runAtomCommand: vi.fn(),
   readPreparedConnection: vi.fn(),
+  relayFetch: vi.fn(),
 }));
+
+vi.mock("./relay", () => ({ fetchRelay: mocks.relayFetch }));
 
 vi.mock("@t3tools/client-runtime/state/runtime", () => ({
   executeAtomQuery: mocks.executeAtomQuery,
@@ -173,6 +177,7 @@ describe("attachmentUploadQueue", () => {
     mocks.executeAtomQuery.mockResolvedValue({ _tag: "Success", value: {} });
     mocks.runAtomCommand.mockReset();
     mocks.readPreparedConnection.mockReset();
+    mocks.relayFetch.mockReset();
     mocks.readPreparedConnection.mockReturnValue({ httpBaseUrl: "https://environment.test/" });
     mocks.runAtomCommand.mockImplementation(
       async (
@@ -205,6 +210,21 @@ describe("attachmentUploadQueue", () => {
       releaseAttachmentUpload(imageId);
     }
     vi.unstubAllGlobals();
+  });
+
+  it("uploads relay files without sending a request to the virtual hostname", async () => {
+    const address = relayHttpBaseUrl(new Uint8Array(32));
+    mocks.readPreparedConnection.mockReturnValue({ httpBaseUrl: address });
+    mocks.relayFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const image = makeFile("relay-file");
+    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    await awaitAttachmentUploads([image.id]);
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+    expect(mocks.relayFetch.mock.calls[0]?.[0]).toContain(`${address}api/attachments/upload/`);
+    expect(readAttachmentUpload(image.id)?.status).toBe("ready");
+    expect(
+      getUploadedAttachments({ environmentId: firstEnvironment, images: [image] }),
+    ).not.toBeNull();
   });
 
   it.each([false, true])(

@@ -3,6 +3,24 @@
 Connect a phone, browser, or another desktop app to supa3 running on a different
 machine. That machine must stay running and reachable while you work.
 
+## Pair through the public relay
+
+On the host, enable **Public relay** in **Settings → Connections**, then create
+a pairing link and choose **Public relay** when sharing it. Paste the link into
+**Add environment** in another supa3 client, or scan its QR code in the mobile
+app. Both clients need a version with relay support. The pairing address is for
+the app; opening it as a website does not work.
+
+The relay carries end-to-end encrypted connections without opening an inbound
+port on the host. Network access can stay off. The host must remain running,
+and both devices need an internet connection. Paired clients reconnect after
+an interruption without a new pairing link. Requests interrupted in flight can
+fail; check their result before retrying an action.
+
+Turn **Public relay** off to disconnect relay clients. Turn it back on to let
+previously paired devices reconnect, or revoke a device under **Authorized
+clients** to remove its access permanently.
+
 ## Pair over a LAN or private network
 
 Use direct pairing when the other device can reach the host's network address.

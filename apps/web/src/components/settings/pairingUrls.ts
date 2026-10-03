@@ -1,3 +1,4 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
 import { buildHostedPairingUrl } from "../../hostedPairing";
 import { setPairingTokenOnUrl } from "../../pairingUrl";
 
@@ -9,7 +10,7 @@ export function resolveDesktopPairingUrl(endpointUrl: string, credential: string
 
 export function resolveHostedPairingUrl(endpointUrl: string, credential: string): string | null {
   const url = new URL(endpointUrl);
-  if (url.protocol !== "https:") {
+  if (url.protocol !== "https:" || parseRelayAddress(endpointUrl)) {
     return null;
   }
 

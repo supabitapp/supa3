@@ -1,3 +1,5 @@
+import { relayFetch } from "./relay.ts";
+import type { RelayClientOptions } from "@t3tools/shared/relay/client";
 import {
   EnvironmentHttpApi,
   EnvironmentHttpCommonError,
@@ -77,8 +79,11 @@ export type RemoteEnvironmentRequestError =
 
 export const remoteHttpClientLayer = (
   fetchFn: typeof globalThis.fetch,
+  relayOptions?: RelayClientOptions,
 ): Layer.Layer<HttpClient.HttpClient> =>
-  FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn)));
+  FetchHttpClient.layer.pipe(
+    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, relayFetch(fetchFn, relayOptions))),
+  );
 
 const remoteApiBaseUrl = (httpBaseUrl: string): string => {
   const url = new URL(httpBaseUrl);

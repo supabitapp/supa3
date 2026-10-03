@@ -1,3 +1,6 @@
+import { parseRelayAddress, encodeBase64 } from "@t3tools/shared/relay/protocol";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 import {
   type AssetCreateUrlInput,
   type AssetCreateUrlResult,
@@ -98,7 +101,7 @@ export function assetUrlStateFromResult(
 }
 
 export function createAssetEnvironmentAtoms<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
+  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | HttpClient.HttpClient | R, E>,
   localMediaEnvironment?: Atom.Atom<{
     readonly environmentId: EnvironmentId;
     readonly httpBaseUrl: string;
@@ -106,7 +109,21 @@ export function createAssetEnvironmentAtoms<R, E>(
 ) {
   const execute = Effect.fn("assets.createUrl")(function* (input: AssetCreateUrlInput) {
     const result = yield* request(WS_METHODS.assetsCreateUrl, input).pipe(Effect.result);
-    if (Result.isSuccess(result)) return result.success;
+    if (Result.isSuccess(result)) {
+      const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+      const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+      if (Option.isNone(prepared) || !parseRelayAddress(prepared.value.httpBaseUrl))
+        return result.success;
+      const url = new URL(result.success.relativeUrl, prepared.value.httpBaseUrl).href;
+      const client = yield* HttpClient.HttpClient;
+      const response = yield* client.pipe(HttpClient.filterStatusOk).get(url);
+      const bytes = new Uint8Array(yield* response.arrayBuffer);
+      const base64 = encodeBase64(bytes).replaceAll("-", "+").replaceAll("_", "/");
+      return {
+        ...result.success,
+        relativeUrl: `data:${response.headers["content-type"] ?? "application/octet-stream"};base64,${base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")}`,
+      };
+    }
     const error = result.failure;
     const resource = input.resource;
     const local = localMediaEnvironment

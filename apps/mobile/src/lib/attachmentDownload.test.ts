@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   directories: new Set<string>(),
   deleted: vi.fn(),
   download: vi.fn(),
+  relayFetch: vi.fn(),
+  write: vi.fn(),
   copy: vi.fn(),
   share: vi.fn(),
   shareFromSource: vi.fn(),
@@ -11,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   uuid: vi.fn(),
 }));
+
+vi.mock("./relay", () => ({ fetchRelay: mocks.relayFetch }));
 
 vi.mock("expo-file-system", () => {
   class Directory {
@@ -48,6 +52,7 @@ vi.mock("expo-file-system", () => {
   class File {
     static downloadFileAsync = mocks.download;
     readonly uri: string;
+    write = mocks.write;
 
     constructor(source: Directory | string, name?: string) {
       this.uri = typeof source === "string" ? source : `${source.uri}/${encodeURIComponent(name!)}`;
@@ -116,6 +121,17 @@ afterEach(() => {
 });
 
 describe("downloadAndShareAttachment", () => {
+  it("writes encrypted relay media to the native cache before sharing it", async () => {
+    mocks.relayFetch.mockResolvedValue(new Response("relay bytes"));
+    await downloadAndShareAttachment({
+      ...input,
+      url: "data:application/pdf;base64,cmVsYXkgYnl0ZXM=",
+      signal: new AbortController().signal,
+    });
+    expect(mocks.download).not.toHaveBeenCalled();
+    expect(mocks.write).toHaveBeenCalledWith(new TextEncoder().encode("relay bytes"));
+    expect(mocks.share).toHaveBeenCalled();
+  });
   it("downloads the chosen environment's signed URL and shares the local file", async () => {
     const controller = new AbortController();
     await downloadAndShareAttachment({ ...input, signal: controller.signal });

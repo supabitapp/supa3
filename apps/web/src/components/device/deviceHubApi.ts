@@ -1,3 +1,4 @@
+import { fetchRelay } from "../../lib/relay";
 import { withDeviceHubQuery } from "@t3tools/client-runtime/state/deviceHubAccess";
 import type { DeviceHubAccess } from "@t3tools/client-runtime/state/deviceHubAccess";
 import type { DevicePlatform } from "@t3tools/contracts";
@@ -53,7 +54,7 @@ const hubUrl = (target: Target, path: string, params?: Record<string, string>) =
 };
 
 const fetchJson = async (target: Target, url: string, signal?: AbortSignal): Promise<unknown> => {
-  const response = await fetch(url, {
+  const response = await fetchRelay(url, {
     cache: "no-store",
     credentials: target.access.credentials ? "include" : "same-origin",
     ...(signal ? { signal } : {}),

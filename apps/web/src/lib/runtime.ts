@@ -1,21 +1,25 @@
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import type * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Socket from "effect/unstable/socket/Socket";
 
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+import {
+  remoteHttpClientLayer,
+  relayWebSocketLayer,
+  relayClientOptions,
+} from "@t3tools/client-runtime/rpc";
 import * as PrimaryEnvironmentHttpClient from "../environments/primary/httpClient";
 import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
 
 import * as ClientTracer from "../observability/clientTracer";
 import { browserCryptoLayer } from "./browserCrypto";
 
+const socketLayer = relayWebSocketLayer(relayClientOptions());
 const httpClientLayer = remoteHttpClientLayer((input, init) => globalThis.fetch(input, init));
 
 type RuntimeLayerSource =
   | typeof httpClientLayer
   | typeof browserCryptoLayer
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof socketLayer
   | typeof ClientTracer.layer;
 
 const primaryHttpRuntime = ManagedRuntime.make(
@@ -42,7 +46,7 @@ export function __setPrimaryHttpRunnerForTests(runner?: PrimaryHttpEffectRunner)
 const runtimeLayer = Layer.mergeAll(
   httpClientLayer,
   browserCryptoLayer,
-  Socket.layerWebSocketConstructorGlobal,
+  socketLayer,
   ClientTracer.layer,
 );
 

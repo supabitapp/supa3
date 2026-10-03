@@ -191,6 +191,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
+  relayEndpoint: Schema.optionalKey(Schema.String),
   environmentId: EnvironmentId,
   label: TrimmedNonEmptyString,
   platform: ExecutionEnvironmentPlatform,

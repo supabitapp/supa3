@@ -1,3 +1,6 @@
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
+import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
 import { describe, expect, it } from "@effect/vitest";
 import {
   type AssetCreateUrlResult,
@@ -67,6 +70,7 @@ describe("createAssetEnvironmentAtoms", () => {
     { name: "inspection failure", path: "/tmp/clip.mp4", error: "inspection", fallback: true },
     { name: "foreign thread", path: "/tmp/clip.mp4", error: "context", fallback: true },
     { name: "remote success", path: "/tmp/clip.mp4", success: true },
+    { name: "relay asset", path: "/tmp/clip.mp4", success: true, relay: true },
     { name: "relative path", path: "clip.mp4" },
     { name: "no primary", path: "/tmp/clip.mp4", primary: "none" },
     { name: "primary reconnect", path: "/tmp/frame.png", primary: "reconnecting" },
@@ -111,21 +115,33 @@ describe("createAssetEnvironmentAtoms", () => {
           },
         } as unknown as WsRpcProtocolClient;
         const session = { client } as RpcSession;
+        const target = new PrimaryConnectionTarget({
+          environmentId,
+          label: environmentId,
+          httpBaseUrl: scenario.relay
+            ? relayHttpBaseUrl(new Uint8Array(32))
+            : `https://${environmentId}.test`,
+          wsBaseUrl: `wss://${environmentId}.test`,
+        });
         supervisors.set(
           environmentId,
           EnvironmentSupervisor.EnvironmentSupervisor.of({
-            target: new PrimaryConnectionTarget({
-              environmentId,
-              label: environmentId,
-              httpBaseUrl: `https://${environmentId}.test`,
-              wsBaseUrl: `wss://${environmentId}.test`,
-            }),
+            target,
             state: yield* SubscriptionRef.make<SupervisorConnectionState>({
               ...AVAILABLE_CONNECTION_STATE,
               phase: "connected" as const,
             }),
             session: yield* SubscriptionRef.make(Option.some(session)),
-            prepared: yield* SubscriptionRef.make(Option.none<PreparedConnection>()),
+            prepared: yield* SubscriptionRef.make(
+              Option.some<PreparedConnection>({
+                environmentId,
+                label: environmentId,
+                httpBaseUrl: target.httpBaseUrl,
+                socketUrl: target.wsBaseUrl,
+                httpAuthorization: null,
+                target,
+              }),
+            ),
             connect: Effect.void,
             disconnect: Effect.void,
             retryNow: Effect.void,
@@ -156,16 +172,33 @@ describe("createAssetEnvironmentAtoms", () => {
         scenario.primary === "none" || scenario.primary === "reconnecting" ? null : localTarget,
       );
       const assets = createAssetEnvironmentAtoms(
-        Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, environments)),
+        Atom.runtime(
+          Layer.merge(
+            Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, environments),
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make((request) =>
+                Effect.succeed(
+                  HttpClientResponse.fromWeb(
+                    request,
+                    new Response("asset", { headers: { "content-type": "text/plain" } }),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
         localEnvironment,
       );
       const query = assets.createUrl({ environmentId: remoteId, input: { resource } });
       const result = AtomRegistry.getResult(registry, query, { suspendOnWaiting: true });
       if (scenario.fallback || scenario.success) {
         expect((yield* result).relativeUrl).toBe(
-          scenario.fallback
-            ? "https://local.test/api/assets/local/media"
-            : "/api/assets/remote/media",
+          scenario.relay
+            ? "data:text/plain;base64,YXNzZXQ="
+            : scenario.fallback
+              ? "https://local.test/api/assets/local/media"
+              : "/api/assets/remote/media",
         );
       } else {
         expect(yield* Effect.flip(result)).toEqual(error);
@@ -181,7 +214,7 @@ describe("createAssetEnvironmentAtoms", () => {
 
   it("keys asset URL queries by environment and resource", () => {
     const runtime = Atom.runtime(Layer.empty) as unknown as Atom.AtomRuntime<
-      EnvironmentRegistry.EnvironmentRegistry,
+      EnvironmentRegistry.EnvironmentRegistry | HttpClient.HttpClient,
       never
     >;
     const assets = createAssetEnvironmentAtoms(runtime);
@@ -240,7 +273,7 @@ describe("createAssetEnvironmentAtoms", () => {
 
   it("keys collections while preserving independent resource queries", () => {
     const runtime = Atom.runtime(Layer.empty) as unknown as Atom.AtomRuntime<
-      EnvironmentRegistry.EnvironmentRegistry,
+      EnvironmentRegistry.EnvironmentRegistry | HttpClient.HttpClient,
       never
     >;
     const assets = createAssetEnvironmentAtoms(runtime);

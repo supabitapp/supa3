@@ -1,3 +1,4 @@
+import { fetchRelay } from "../lib/relay";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PreviewAutomationRecordingTransferError,
@@ -50,7 +51,7 @@ export async function uploadBrowserRecording(
         done:
           remainingMs <= 0
             ? Promise.reject(new Error("Recording transfer deadline expired."))
-            : fetch(url, {
+            : fetchRelay(url, {
                 method: "POST",
                 headers: { "Content-Type": artifact.mimeType },
                 body: blob,

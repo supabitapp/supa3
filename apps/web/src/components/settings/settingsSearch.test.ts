@@ -87,7 +87,7 @@ describe("searchSettings", () => {
       searchSettings("remote pairing")
         .slice(0, 2)
         .map((item) => item.id),
-    ).toEqual(["network-access", "connections-environment"]);
+    ).toEqual(["network-access", "public-relay"]);
   });
 
   it("finds settings that used to be reachable only through their section", () => {

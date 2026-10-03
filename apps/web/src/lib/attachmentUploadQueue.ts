@@ -1,3 +1,5 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { fetchRelay } from "./relay";
 import {
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
   type ChatAttachment,
@@ -152,6 +154,19 @@ function uploadBytes(input: {
   readonly mimeType: string;
   readonly onProgress: (progress: number) => void;
 }): { readonly done: Promise<void>; readonly abort: () => void } {
+  if (parseRelayAddress(input.url)) {
+    const controller = new AbortController();
+    const done = fetchRelay(input.url, {
+      method: "POST",
+      headers: { "Content-Type": input.mimeType },
+      body: input.file,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(UPLOAD_TIMEOUT_MS)]),
+    }).then((response) => {
+      if (!response.ok) throw new Error(`Upload rejected (${response.status})`);
+      input.onProgress(1);
+    });
+    return { done, abort: () => controller.abort() };
+  }
   const xhr = new XMLHttpRequest();
   const done = new Promise<void>((resolve, reject) => {
     xhr.open("POST", input.url, true);

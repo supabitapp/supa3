@@ -1,3 +1,4 @@
+import { fetchRelay } from "../../lib/relay";
 import type { DeviceHubAccess } from "@t3tools/client-runtime/state/deviceHubAccess";
 import { withDeviceHubQuery } from "@t3tools/client-runtime/state/deviceHubAccess";
 
@@ -42,7 +43,7 @@ const foldRequest = async (
     `${access.httpBase}/vendor/serve-emu/api/fold?${new URLSearchParams({ device: deviceId })}`,
     access,
   );
-  const response = await fetch(url, {
+  const response = await fetchRelay(url, {
     method: posture ? "POST" : "GET",
     cache: "no-store",
     credentials: access.credentials ? "include" : "same-origin",

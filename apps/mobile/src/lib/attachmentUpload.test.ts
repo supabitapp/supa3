@@ -1,3 +1,5 @@
+import type { DraftComposerAttachment } from "./composerImages";
+import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -15,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   writeFile: vi.fn(),
   deleteFile: vi.fn(),
   readBase64: vi.fn(),
+  relayFetch: vi.fn(),
 }));
+
+vi.mock("./relay", () => ({ fetchRelay: mocks.relayFetch }));
 
 vi.mock("@t3tools/client-runtime/state/runtime", () => ({
   // The client-runtime attachments module resolves the same file through its
@@ -78,6 +83,10 @@ vi.mock("expo-file-system", () => ({
       return mocks.readBase64(this.uri);
     }
 
+    async arrayBuffer() {
+      return new TextEncoder().encode("abc").buffer;
+    }
+
     upload(url: string, options: unknown) {
       return mocks.upload(this.uri, url, options);
     }
@@ -97,7 +106,6 @@ import {
   withUploadedMobileAttachmentReferences,
   validateDraftFileAttachments,
 } from "./attachmentUpload";
-import type { DraftComposerAttachment } from "./composerImages";
 
 const environmentId = EnvironmentId.make("environment-1");
 const MINTED_ID = "pending-00000000-0000-4000-8000-000000000001-pdf";
@@ -202,6 +210,7 @@ describe("prepareTurnAttachments", () => {
     mocks.runAtomCommand.mockReset();
     mocks.readAtom.mockReset();
     mocks.upload.mockReset();
+    mocks.relayFetch.mockReset();
     mocks.writeFile.mockReset();
     mocks.deleteFile.mockReset();
     mocks.readBase64.mockReset();
@@ -220,6 +229,19 @@ describe("prepareTurnAttachments", () => {
         : { _tag: "Success", value: undefined },
     );
     mocks.upload.mockResolvedValue({ status: 204, body: "", headers: {} });
+  });
+
+  it("uploads owned file bytes through the relay and preserves attachment ownership", async () => {
+    const address = relayHttpBaseUrl(new Uint8Array(32));
+    mocks.readAtom.mockReturnValue(Option.some({ httpBaseUrl: address }));
+    mocks.relayFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const prepared = await prepareTurnAttachments({ environmentId, attachments: [file] });
+    expect(prepared.status).toBe("ready");
+    expect(mocks.upload).not.toHaveBeenCalled();
+    const [url, request] = mocks.relayFetch.mock.calls[0]!;
+    expect(url).toBe(`${address}api/attachments/upload/signed`);
+    expect(new TextDecoder().decode(request.body)).toBe("abc");
+    expect(mocks.deleteFile).not.toHaveBeenCalled();
   });
 
   it("keeps existing image attachments on the legacy wire path", async () => {

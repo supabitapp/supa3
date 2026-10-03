@@ -1,3 +1,4 @@
+import { fetchRelay } from "./relay";
 import { filePreviewDelimiter, parseDelimitedPreview } from "@t3tools/shared/delimitedPreview";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { readFilePreviewResponse } from "@t3tools/client-runtime/file-preview";
@@ -146,7 +147,7 @@ export function useAttachmentDocument(input: {
               textReadUrl.current = { uri: refreshed, authorizedAt: Date.now() };
             }
           }
-          return fetch(target, {
+          return fetchRelay(target, {
             signal: controller.signal,
             headers: {
               ...(sizeBytes > 0 ? { Range: `bytes=0-${FILE_TEXT_PREVIEW_MAX_BYTES}` } : {}),

@@ -1,8 +1,14 @@
+import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
 
 describe("settings pairing URL helpers", () => {
+  it("keeps relay pairing links in clients that support the relay transport", () => {
+    const address = relayHttpBaseUrl(new Uint8Array(32));
+    expect(resolveHostedPairingUrl(address, "PAIRCODE")).toBeNull();
+    expect(resolveDesktopPairingUrl(address, "PAIRCODE")).toBe(`${address}pair#token=PAIRCODE`);
+  });
   afterEach(() => {
     vi.unstubAllEnvs();
   });

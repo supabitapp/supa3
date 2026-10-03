@@ -1,3 +1,4 @@
+import { fetchRelay } from "../lib/relay";
 import * as Option from "effect/Option";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
@@ -762,7 +763,7 @@ export async function prepareRevertedMessageAttachments(input: {
       if (result._tag === "Failure") throw squashAtomCommandFailure(result);
       const url = resolveAssetUrl(input.httpBaseUrl, result.value.relativeUrl);
       if (url === null) throw new Error("The environment returned an invalid attachment URL.");
-      const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      const response = await fetchRelay(url, { signal: AbortSignal.timeout(30_000) });
       if (!response.ok) throw new Error(`Could not restore attachment: ${attachment.name}`);
       return new File([await response.blob()], attachment.name, { type: attachment.mimeType });
     }),

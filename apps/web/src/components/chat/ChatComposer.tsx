@@ -1,3 +1,4 @@
+import { fetchRelay } from "../../lib/relay";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { runtimeModeConfig, runtimeModeOptions as runtimeModes } from "./runtimeModeConfig";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
@@ -3132,7 +3133,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       let blob: Blob;
       try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+        const response = await fetchRelay(url, { signal: AbortSignal.timeout(60_000) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         blob = await response.blob();
       } catch {

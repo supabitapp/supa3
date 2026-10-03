@@ -1,3 +1,4 @@
+import { fetchRelay } from "../../lib/relay";
 /** Resolves web references without inheriting the desktop renderer's custom app scheme. */
 export function resolveProtocolRelativeMediaUrl(src: string): string {
   if (!src.startsWith("//")) return src;
@@ -10,7 +11,7 @@ export function resolveProtocolRelativeMediaUrl(src: string): string {
 async function readMediaBlob(src: string): Promise<Blob> {
   let response: Response;
   try {
-    response = await fetch(src);
+    response = await fetchRelay(src);
   } catch (cause) {
     throw new Error(
       "The file could not be fetched. The host may block browser access (CORS), or the connection may be unavailable.",

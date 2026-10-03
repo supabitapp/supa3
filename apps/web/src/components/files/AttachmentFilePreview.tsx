@@ -1,3 +1,4 @@
+import { fetchRelay } from "../../lib/relay";
 import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
@@ -166,7 +167,7 @@ export function AttachmentFilePreview(props: {
       }
       const response = file
         ? { ok: true, body: file.stream() }
-        : await fetch(url, {
+        : await fetchRelay(url, {
             signal: controller.signal,
             ...(props.sizeBytes > 0
               ? { headers: { Range: `bytes=0-${FILE_TEXT_PREVIEW_MAX_BYTES}` } }
@@ -201,7 +202,7 @@ export function AttachmentFilePreview(props: {
         if (!file) {
           const target = await prepareDownload();
           if (!target) throw new Error("Reconnect to the environment and try again.");
-          const response = await fetch(target);
+          const response = await fetchRelay(target);
           if (!response.ok) throw new Error("The file could not be loaded. Try again.");
           file = await response.blob();
         }

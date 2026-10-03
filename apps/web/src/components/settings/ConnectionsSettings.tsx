@@ -1,3 +1,6 @@
+import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { createAdvertisedEndpoint } from "@t3tools/shared/advertisedEndpoint";
+import { useUpdatePrimarySettings } from "../../hooks/useSettings";
 import {
   ChevronsLeftRightEllipsisIcon,
   EllipsisIcon,
@@ -549,6 +552,9 @@ function isHostedAppPairingUrl(value: string): boolean {
 }
 
 function endpointShareHint(endpoint: AdvertisedEndpoint, url: string): string {
+  if (parseRelayAddress(endpoint.httpBaseUrl)) {
+    return "Scan in the app, or paste into Add environment";
+  }
   if (isHostedAppPairingUrl(url)) {
     return "Opens the hosted app, no install needed";
   }
@@ -1837,6 +1843,27 @@ export function ConnectionsSettings() {
     DesktopServerExposureState["mode"] | null
   >(null);
   const primaryServerConfig = primaryEnvironment?.serverConfig ?? null;
+  const updatePrimarySettings = useUpdatePrimarySettings();
+  const relayEndpointUrl = primaryServerConfig?.settings.publicRelayEnabled
+    ? primaryServerConfig.environment.relayEndpoint
+    : undefined;
+  const relayEndpoint = useMemo(
+    () =>
+      relayEndpointUrl
+        ? createAdvertisedEndpoint({
+            id: "public-relay",
+            label: "Public relay",
+            provider: { id: "public-relay", label: "Public relay", kind: "tunnel", isAddon: false },
+            httpBaseUrl: relayEndpointUrl,
+            reachability: "public",
+            hostedHttpsCompatibility: "compatible",
+            source: "server",
+            isDefault: true,
+            description: "End-to-end encrypted access through the public relay.",
+          })
+        : null,
+    [relayEndpointUrl],
+  );
   const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
   const primaryServerUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(primaryEnvironmentId),
@@ -2393,14 +2420,17 @@ export function ConnectionsSettings() {
     [desktopAdvertisedEndpoints, isLocalBackendNetworkAccessible],
   );
   const visibleDesktopAdvertisedEndpoints = useMemo(
-    () =>
-      tailscaleHttpsEndpoint
-        ? [...visibleDesktopNetworkAdvertisedEndpoints, tailscaleHttpsEndpoint]
-        : visibleDesktopNetworkAdvertisedEndpoints,
-    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
+    () => [
+      ...(relayEndpoint ? [relayEndpoint] : []),
+      ...visibleDesktopNetworkAdvertisedEndpoints,
+      ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+    ],
+    [relayEndpoint, tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
   const isLocalBackendRemotelyReachable =
-    isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
+    relayEndpoint !== null ||
+    isLocalBackendNetworkAccessible ||
+    tailscaleHttpsEndpoint?.status === "available";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),
@@ -3076,7 +3106,7 @@ export function ConnectionsSettings() {
       description={
         currentAuthPolicy === "remote-reachable"
           ? "Remote access is already configured. Change network exposure where the server starts."
-          : "Only this machine can connect. Restart with a non-loopback host for remote pairing."
+          : "Direct access is limited to this machine. Public relay access is controlled separately."
       }
       control={
         <Tooltip>
@@ -3186,6 +3216,21 @@ export function ConnectionsSettings() {
                   ) : primaryServerUpdateState.status === "idle" && primaryServerConfig ? (
                     <span className="text-xs text-muted-foreground">Up to date</span>
                   ) : undefined
+                }
+              />
+            ) : null}
+            {canManageLocalBackend ? (
+              <SettingsRow
+                title="Public relay"
+                description="Connect from anywhere with end-to-end encryption. Pair a device below after enabling."
+                control={
+                  <Switch
+                    aria-label="Enable public relay"
+                    checked={primaryServerConfig?.settings.publicRelayEnabled ?? false}
+                    onCheckedChange={(publicRelayEnabled) =>
+                      updatePrimarySettings({ publicRelayEnabled })
+                    }
+                  />
                 }
               />
             ) : null}

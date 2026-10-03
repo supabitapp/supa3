@@ -787,6 +787,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "public-relay",
+    title: "Public relay",
+    to: "/settings/connections",
+    targetId: "connections-environment",
+    searchTerms: ["remote encrypted internet pairing qr connect anywhere"],
+    localBackendManagementOnly: true,
+  },
+  {
     id: "network-access",
     title: "Network access",
     to: "/settings/connections",
