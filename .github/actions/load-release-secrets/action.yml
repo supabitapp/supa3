@@ -1,0 +1,21 @@
+name: Load release secrets
+description: Resolve a release credential profile through fnox and mask it in job logs
+inputs:
+  profile:
+    required: true
+    description: Release credential profile
+  service-account-token:
+    required: true
+    description: Read-only 1Password service account token
+runs:
+  using: composite
+  steps:
+    - name: Install secret tools
+      shell: bash
+      run: mise install github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0
+    - name: Load credentials
+      shell: bash
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.service-account-token }}
+        RELEASE_SECRET_PROFILE: ${{ inputs.profile }}
+      run: mise exec github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 -- node .github/scripts/load-release-secrets.mjs

@@ -1006,14 +1006,31 @@ jobs:
     needs: [preflight, release]
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 10
+    environment: release
     steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+
+      - name: Load release App credentials
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: release-app
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+
       - id: app_token
         name: Mint release app token
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          app-id: ${{ env.RELEASE_APP_ID }}
+          private-key: ${{ env.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Checkout
         uses: actions/checkout@v6

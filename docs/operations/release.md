@@ -39,17 +39,17 @@ This document covers the unified release workflow for stable and nightly desktop
 - Builds a self-contained CLI archive per platform (`supacode-<version>-<platform>-<arch>.tar.gz`, `.zip` on Windows) in the same job as that target's desktop artifact and attaches them to the GitHub Release with a `SHA256SUMS` file, on every channel, for five targets: macOS arm64, Linux x64 and arm64, Windows x64 and arm64. Every archive is built, signed, and smoke-tested on hardware of its own architecture. There is no macOS x64 archive: Node single-executables are unsupported on x64 macOS (the SEA docs list macOS as arm64 only) and the binary segfaults on start; the x64 desktop app is Electron and unaffected.
   - The archive holds the server as a Node single-executable (`scripts/build-cli-archive.ts`), so unpacking it needs neither Node, npm, nor a compiler. It is the only form in which Supacode manages a runtime: the desktop's SSH environments, the boot service, `supacode update`, and the install scripts all download and verify this archive against `SHA256SUMS`. The npm packages exist for people who run `npx supacode` or `npm install -g supacode` themselves and carry the same archive contents; nothing in the product installs from npm. The `curl | sh` installers are `scripts/install.sh` and `scripts/install.ps1`; the marketing site copies them into its `public/` at build time (`apps/marketing/scripts/stage-install-scripts.mjs`) and serves them at `supacode.sh/install.sh` and `/install.ps1`.
   - The executable is built with a Node that supports `--build-sea` (`VP_NODE_VERSION=26.8.2`, kept in step with `SEA_NODE_VERSION` in `apps/server/vite.config.ts`), while the repo stays on `engines.node`.
-  - macOS archives are signed with the Developer ID certificate and notarized when the Apple secrets are present (ad hoc otherwise, which still runs from `curl`/`tar` installs). Windows executables use the same Azure Trusted Signing setup as the installer. Every native addon in the macOS archive is signed too, since the hardened runtime refuses unsigned libraries.
+  - Release macOS archives are signed with the Developer ID certificate and notarized using the Apple credentials loaded through fnox. Windows executables use the same Azure Trusted Signing setup as the installer. Every native addon in the macOS archive is signed too, since the hardened runtime refuses unsigned libraries.
   - Each archive is extracted and executed on its build runner (`scripts/smoke-cli-archive.ts`) before it is uploaded.
 - Publishes the CLI to npm with OIDC trusted publishing from the same workflow file, as the same bytes the GitHub Release carries: `scripts/build-npm-platform-packages.ts` unpacks the five CLI archives into `@supabitapp/supacode-<platform>-<arch>` packages (each with `os`/`cpu` set so npm installs only the matching one) and generates the `supacode` launcher, whose `bin/supacode.js` lists them as `optionalDependencies` and execs the installed executable. `npx supacode` therefore needs Node only to run the launcher, never to run the server. `node apps/server/scripts/cli.ts publish` publishes the platform packages first and the launcher last, after a `--dry-run` pass over all of them so an auth or scope error fails before anything is live.
   - stable releases publish npm dist-tag `latest`
   - nightly releases publish npm dist-tag `nightly`
   - preview releases publish npm dist-tag `preview`, which nothing resolves unless asked for by name
-  - one-time setup: the `supabitapp` npm account must own the `@supabitapp` scope, and `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package needs a trusted publisher registered for this workflow file (see below).
+  - one-time setup: the `supabitapp` npm organization must own the `@supabitapp` scope, and `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package needs a trusted publisher registered for this workflow file (see below).
 - Builds the hosted web app on Vercel while the desktop jobs run, and makes it live only after a release is published:
   - stable releases are aliased to the `latest` hosted app channel
   - nightly releases are aliased to the `nightly` hosted app channel
-- Signing is optional and auto-detected per platform from secrets.
+- Release macOS jobs require Apple credentials from 1Password. Windows signing is auto-detected from its Azure secrets.
 
 ## Pull request macOS previews
 
@@ -81,13 +81,16 @@ when the label is removed by hand before a build consumed it, and never checks o
 
 ## Required release credentials
 
-Stable releases require these GitHub Actions secrets in addition to the platform and deployment
-credentials documented below:
+Store `OP_SERVICE_ACCOUNT_TOKEN` in the GitHub `release` environment. Its read-only 1Password service
+account needs access to the `Supacode CI` vault. The environment must allow `main` for manual and
+scheduled releases, plus release tags for tag-triggered runs. Preview branches need explicit access
+before dispatch. The fnox profiles in [`.github/fnox.toml`](../../.github/fnox.toml) resolve the Apple
+signing fields from `Apple Desktop Signing` and these fields from `GitHub Release App`:
 
 - `RELEASE_APP_ID`
 - `RELEASE_APP_PRIVATE_KEY`
 
-The finalize job uses them to commit and push aligned package versions to `main` as the Release App.
+Credential lookup failures stop the job. The finalize job uses the App credentials to commit and push aligned package versions to `main` as the Release App.
 GitHub Release publication uses the repository-scoped workflow token so it has a rate-limit quota
 independent from the shared Release App installation.
 
@@ -285,7 +288,7 @@ packages are published per release: `supacode`, `@supabitapp/supacode-darwin-arm
 
 Checklist:
 
-1. Confirm the `supabitapp` npm account owns package `supacode` and the `@supabitapp` scope.
+1. Confirm the publishing account owns `supacode` and can publish in the `@supabitapp` organization.
 2. For `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package, configure a Trusted Publisher in the
    npm package settings (a package that has never been published needs a first publish or a
    placeholder before the setting exists; the `--dry-run` step in `publish_cli` reports which
@@ -315,12 +318,12 @@ risk, manually dispatch `channel=nightly`; this still publishes a real nightly n
 prerelease, desktop updater release, hosted nightly alias, and marketing site, but it does not update stable app aliases or
 commit a version bump to `main`. Only run it when a real nightly release is acceptable.
 
-Manual `channel=stable` is also a real stable-channel release. Omitting signing secrets only makes
-platform artifacts unsigned; it does not prevent publication.
+Manual `channel=stable` is also a real stable-channel release. Missing Apple credentials stop macOS release jobs. Missing Windows signing secrets produce unsigned
+Windows artifacts; they do not prevent publication.
 
 ## 2) Apple signing + notarization setup (macOS)
 
-Required secrets used by the workflow:
+Required fields in the `Apple Desktop Signing` item in the `Supacode CI` vault:
 
 - `CSC_LINK`
 - `CSC_KEY_PASSWORD`
@@ -345,7 +348,7 @@ Checklist:
 
 Notes:
 
-- `APPLE_API_KEY` is stored as raw key text in secrets.
+- `APPLE_API_KEY` is stored as raw key text in 1Password.
 - The workflow writes it to a temporary `AuthKey_<id>.p8` file at runtime.
 
 ## 3) Azure Trusted Signing setup (Windows)
@@ -393,9 +396,9 @@ Checklist:
 ## 5) Troubleshooting
 
 - macOS build unsigned when expected signed:
-  - Check all Apple secrets are populated and non-empty.
+  - Check the service account can read all Apple fields in `Supacode CI`.
 - Windows build unsigned when expected signed:
   - Check all Azure ATS and auth secrets are populated and non-empty.
 - Build fails with signing error:
-  - Retry with secrets removed to confirm unsigned path still works.
+  - Release macOS jobs require their fnox profile to resolve; use the unsigned PR preview workflow for an unsigned build.
   - Re-check certificate/profile names and tenant/client credentials.
