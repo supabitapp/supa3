@@ -1656,6 +1656,54 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(draftByKey(draftId)?.prompt).toBe("retry work");
   });
 
+  it("preserves draft choices changed while a failed submission was pending", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    const sentDraft = useComposerDraftStore.getState().getDraftSession(draftId)!;
+    markPromotedDraftThreadByRef(scopeThreadRef(TEST_ENVIRONMENT_ID, threadId));
+    const nextProjectRef = scopeProjectRef(OTHER_TEST_ENVIRONMENT_ID, otherProjectId);
+    store.setDraftThreadContext(draftId, {
+      projectRef: nextProjectRef,
+      environmentSelection: "manual",
+      envMode: "worktree",
+      branch: "chosen-branch",
+      startFromOrigin: true,
+    });
+    store.setPrompt(draftId, "next message");
+
+    restoreFailedBackgroundDraftThread(draftId, sentDraft, ThreadId.make("retry-thread"));
+
+    expect(useComposerDraftStore.getState().getDraftSession(draftId)).toMatchObject({
+      environmentId: nextProjectRef.environmentId,
+      projectId: nextProjectRef.projectId,
+      environmentSelection: "manual",
+      envMode: "worktree",
+      branch: "chosen-branch",
+      startFromOrigin: true,
+      threadId: "retry-thread",
+      promotedTo: null,
+    });
+    expect(draftByKey(draftId)?.prompt).toBe("next message");
+  });
+
+  it("restores a failed submission from its captured draft after promotion cleanup", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId, envMode: "worktree" });
+    const sentDraft = useComposerDraftStore.getState().getDraftSession(draftId)!;
+    const ref = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+    markPromotedDraftThreadByRef(ref);
+    finalizePromotedDraftThreadByRef(ref);
+    expect(useComposerDraftStore.getState().getDraftSession(draftId)).toBeNull();
+
+    restoreFailedBackgroundDraftThread(draftId, sentDraft, ThreadId.make("retry-thread"));
+
+    expect(useComposerDraftStore.getState().getDraftSession(draftId)).toEqual({
+      ...sentDraft,
+      threadId: "retry-thread",
+      promotedTo: null,
+    });
+  });
+
   it("moves composer edits made during promotion to the canonical thread", () => {
     const store = useComposerDraftStore.getState();
     store.setProjectDraftThreadId(projectRef, draftId, { threadId });
