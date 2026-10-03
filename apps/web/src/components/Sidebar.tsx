@@ -149,7 +149,8 @@ import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
-  useThreadShells,
+  useSidebarThreadShells,
+  waitForThreadShell,
 } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
@@ -2332,7 +2333,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
-  const threads = useThreadShells();
+  const threads = useSidebarThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -3078,8 +3079,19 @@ export default function Sidebar() {
   // Settled threads are live shells, so opening one is plain navigation:
   // history stays readable without un-settling, and sending a message or
   // starting a session un-settles server-side.
+  const threadNavigationRequestRef = useRef(0);
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
+    async (threadRef: ScopedThreadRef) => {
+      const request = ++threadNavigationRequestRef.current;
+      const location = router.state.location;
+      if (
+        readThreadShell(threadRef) === null &&
+        (!(await waitForThreadShell(threadRef)) ||
+          threadNavigationRequestRef.current !== request ||
+          router.state.location !== location)
+      ) {
+        return;
+      }
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }

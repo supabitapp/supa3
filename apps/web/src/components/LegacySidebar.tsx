@@ -67,7 +67,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
-import { useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import { useParams, useRouter } from "@tanstack/react-router";
 import {
   MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
   MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
@@ -88,8 +88,9 @@ import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import {
   readThreadShell,
   useProjects,
-  useThreadShells,
-  useThreadShellsForProjectRefs,
+  useSidebarThreadShells,
+  useSidebarThreadShellsForProjectRefs,
+  waitForThreadShell,
 } from "../state/entities";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
@@ -1255,7 +1256,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     },
   });
   const openPrLink = useOpenPrLink();
-  const sidebarThreads = useThreadShellsForProjectRefs(project.memberProjectRefs);
+  const sidebarThreads = useSidebarThreadShellsForProjectRefs(project.memberProjectRefs);
   const sidebarThreadByKey = useMemo(
     () =>
       new Map(
@@ -1801,8 +1802,19 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     ],
   );
 
+  const threadNavigationRequestRef = useRef(0);
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
+    async (threadRef: ScopedThreadRef) => {
+      const request = ++threadNavigationRequestRef.current;
+      const location = router.state.location;
+      if (
+        readThreadShell(threadRef) === null &&
+        (!(await waitForThreadShell(threadRef)) ||
+          threadNavigationRequestRef.current !== request ||
+          router.state.location !== location)
+      ) {
+        return;
+      }
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }
@@ -1848,7 +1860,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const isShiftClick = event.shiftKey;
       const threadKey = scopedThreadKey(threadRef);
-      const currentSelectionCount = useThreadSelectionStore.getState().selectedThreadKeys.size;
 
       if (isModClick) {
         event.preventDefault();
@@ -1869,27 +1880,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         return;
       }
 
-      if (currentSelectionCount > 0) {
-        clearSelection();
-      }
-      setSelectionAnchor(threadKey);
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      void router.navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
-      });
+      void navigateToThread(threadRef);
     },
-    [
-      clearSelection,
-      isMobile,
-      rangeSelectTo,
-      router,
-      setOpenMobile,
-      setSelectionAnchor,
-      toggleThreadSelection,
-    ],
+    [navigateToThread, rangeSelectTo, toggleThreadSelection],
   );
 
   const handleMultiSelectContextMenu = useCallback(
@@ -3132,11 +3125,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 
 export default function LegacySidebar() {
   const projects = useProjects();
-  const sidebarThreads = useThreadShells();
+  const sidebarThreads = useSidebarThreadShells();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const reorderProjects = useUiStateStore((store) => store.reorderProjects);
-  const navigate = useNavigate();
+  const router = useRouter();
   const sidebarThreadSortOrder = useClientSettings((s) => s.sidebarThreadSortOrder);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
@@ -3329,8 +3322,19 @@ export default function LegacySidebar() {
     shortcutLabelForCommand(keybindings, "chat.newLocal", newThreadShortcutLabelOptions) ??
     shortcutLabelForCommand(keybindings, "chat.new", newThreadShortcutLabelOptions);
 
+  const threadNavigationRequestRef = useRef(0);
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
+    async (threadRef: ScopedThreadRef) => {
+      const request = ++threadNavigationRequestRef.current;
+      const location = router.state.location;
+      if (
+        readThreadShell(threadRef) === null &&
+        (!(await waitForThreadShell(threadRef)) ||
+          threadNavigationRequestRef.current !== request ||
+          router.state.location !== location)
+      ) {
+        return;
+      }
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }
@@ -3338,12 +3342,12 @@ export default function LegacySidebar() {
       if (isMobile) {
         setOpenMobile(false);
       }
-      void navigate({
+      void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
       });
     },
-    [clearSelection, isMobile, navigate, setOpenMobile, setSelectionAnchor],
+    [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
   );
 
   const projectDnDSensors = useSensors(
