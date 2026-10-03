@@ -1167,9 +1167,14 @@ export function assertNoExtraAppRunsForProviderChildren(input: {
  */
 export function assertProviderNativeSubagentRootTurns(result: OrchestratorV2ScenarioResult) {
   const activity = (statuses: ReadonlyArray<OrchestrationV2ExecutionNode["status"]>) =>
-    statuses
-      .map((status) => (isOrchestrationV2WorkActive(status) ? "active" : status))
-      .filter((status, index, all) => status !== all[index - 1]);
+    statuses.reduce<Array<"active" | OrchestrationV2ExecutionNode["status"]>>(
+      (activity, status) => {
+        const next = isOrchestrationV2WorkActive(status) ? "active" : status;
+        if (next !== activity.at(-1)) activity.push(next);
+        return activity;
+      },
+      [],
+    );
   for (const projection of result.projections.values()) {
     for (const subagent of projection.subagents) {
       if (subagent.origin !== "provider_native" || subagent.childThreadId === null) continue;

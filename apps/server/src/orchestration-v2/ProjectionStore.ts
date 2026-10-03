@@ -5517,20 +5517,22 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
       getShellSnapshot: (options) =>
         Effect.gen(function* () {
           const existing = (yield* Ref.get(replayState)).projections;
-          const selectedThreadIds = [...existing.entries()]
-            .filter(([, projection]) => {
-              if (
-                options?.unsettledOnly &&
-                (projection.thread.settledAt !== null ||
-                  projection.thread.settledOverride === "settled")
-              ) {
-                return false;
-              }
-              if (options?.location === "active") return projection.thread.archivedAt === null;
-              if (options?.location === "archive") return projection.thread.archivedAt !== null;
-              return true;
-            })
-            .map(([threadId]) => threadId);
+          const selectedThreadIds = [...existing.entries()].flatMap(([threadId, projection]) => {
+            if (
+              options?.unsettledOnly &&
+              (projection.thread.settledAt !== null ||
+                projection.thread.settledOverride === "settled")
+            ) {
+              return [];
+            }
+            if (options?.location === "active") {
+              return projection.thread.archivedAt === null ? [threadId] : [];
+            }
+            if (options?.location === "archive") {
+              return projection.thread.archivedAt !== null ? [threadId] : [];
+            }
+            return [threadId];
+          });
           const shells = yield* Effect.forEach(
             selectedThreadIds.toSorted((left, right) => String(left).localeCompare(String(right))),
             (threadId) =>
@@ -5567,18 +5569,19 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
         Effect.gen(function* () {
           const projections = (yield* Ref.get(replayState)).projections;
           return [...projections.values()]
-            .filter(
-              ({ thread, runs, runtimeRequests }) =>
-                (threadId === undefined || thread.id === threadId) &&
+            .flatMap((projection) => {
+              const { thread, runs, runtimeRequests } = projection;
+              return (threadId === undefined || thread.id === threadId) &&
                 thread.deletedAt === null &&
                 thread.archivedAt === null &&
                 thread.settledOverride === null &&
                 thread.pinnedAt == null &&
                 thread.autoSettleDisabledAt == null &&
                 !runs.some(isActivityRunForShell) &&
-                !runtimeRequests.some((request) => request.status === "pending"),
-            )
-            .map(threadShellFromProjection)
+                !runtimeRequests.some((request) => request.status === "pending")
+                ? [threadShellFromProjection(projection)]
+                : [];
+            })
             .toSorted(
               (left, right) =>
                 DateTime.toEpochMillis(left.updatedAt) - DateTime.toEpochMillis(right.updatedAt) ||
@@ -5589,13 +5592,13 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
         Ref.get(replayState).pipe(
           Effect.map((state) =>
             [...state.projections.values()]
-              .map(({ thread }) => thread)
-              .filter(
-                (thread) =>
-                  (threadId === undefined || thread.id === threadId) &&
-                  thread.deletedAt === null &&
-                  thread.archivedAt === null &&
-                  (thread.pullRequests ?? []).length > 0,
+              .flatMap(({ thread }) =>
+                (threadId === undefined || thread.id === threadId) &&
+                thread.deletedAt === null &&
+                thread.archivedAt === null &&
+                (thread.pullRequests ?? []).length > 0
+                  ? [thread]
+                  : [],
               )
               .toSorted(
                 (left, right) =>
@@ -5615,13 +5618,14 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
         Ref.get(replayState).pipe(
           Effect.map((state) =>
             [...state.projections.values()]
-              .filter(
-                ({ thread }) =>
-                  thread.deletedAt === null &&
+              .flatMap((projection) => {
+                const { thread } = projection;
+                return thread.deletedAt === null &&
                   thread.archivedAt === null &&
-                  thread.settledOverride !== "settled",
-              )
-              .map(threadShellFromProjection)
+                  thread.settledOverride !== "settled"
+                  ? [threadShellFromProjection(projection)]
+                  : [];
+              })
               .filter(
                 (thread) =>
                   thread.status === "failed" &&
