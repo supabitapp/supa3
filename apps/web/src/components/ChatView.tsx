@@ -9321,8 +9321,10 @@ export default function ChatView(props: ChatViewProps) {
           createdAt: messageCreatedAt,
         },
       });
+      if (isLocalDraftThread) {
+        markPromotedDraftThreadByRef(scopeThreadRef(environmentId, threadIdForSend));
+      }
       if (backgroundThreadRef) {
-        markPromotedDraftThreadByRef(backgroundThreadRef);
         try {
           backgroundDraftOpened = Boolean(
             await handleNewThread(
@@ -9393,7 +9395,7 @@ export default function ChatView(props: ChatViewProps) {
     }
 
     if (failure !== null) {
-      if (submissionIntent === "background" && draftId && draftThread) {
+      if (isLocalDraftThread && draftId && draftThread) {
         restoreFailedBackgroundDraftThread(
           draftId,
           draftThread,

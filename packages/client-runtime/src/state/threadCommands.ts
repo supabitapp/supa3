@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 
 import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
+import { createOptimisticThreadCreation } from "./threadCreation.ts";
 import * as DateTime from "effect/DateTime";
 
 import {
@@ -386,9 +387,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
+  const creation = createOptimisticThreadCreation(optimistic.snapshotAtom);
   return {
     ...commands,
     snapshotAtom: optimistic.snapshotAtom,
+    sidebarSnapshotAtom: creation.snapshotAtom,
+    startTurn: creation.wrap(commands.startTurn),
     settle: optimistic.wrap(commands.settle, (thread, _input, now, accepted) =>
       !accepted &&
       (thread.pendingRuntimeRequest !== null ||
