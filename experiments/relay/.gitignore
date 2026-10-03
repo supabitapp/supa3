@@ -1,0 +1,6 @@
+/_build/
+/deps/
+/.mix/
+/.hex/
+/node_modules/
+/erl_crash.dump
