@@ -5,27 +5,18 @@ import {
   withAssistantCitationComment,
 } from "@t3tools/shared/assistantCitations";
 import {
+  detectComposerTrigger,
+  type ComposerSlashCommand,
+  type ComposerTrigger,
+} from "@t3tools/shared/composerTrigger";
+import {
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
 
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
 
-export type ComposerTriggerKind =
-  | "path"
-  | "pull-request"
-  | "slash-command"
-  | "skill"
-  | "slash-skill";
-export type ComposerSlashCommand = "model" | "plan" | "default";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
-
-export interface ComposerTrigger {
-  kind: ComposerTriggerKind;
-  query: string;
-  rangeStart: number;
-  rangeEnd: number;
-}
 
 export function formatAssistantCitationForComposer(citation: AssistantCitation, comment = "") {
   return `${serializeAssistantCitation(withAssistantCitationComment(citation, comment))} `;
@@ -80,26 +71,6 @@ const isInlineTokenSegment = (segment: ComposerPromptSegment): boolean => segmen
 function clampCursor(text: string, cursor: number): number {
   if (!Number.isFinite(cursor)) return text.length;
   return Math.max(0, Math.min(text.length, Math.floor(cursor)));
-}
-
-function isWhitespace(char: string): boolean {
-  return char === " " || char === "\n" || char === "\t" || char === "\r";
-}
-
-function tokenStartForCursor(text: string, cursor: number): number {
-  let index = cursor - 1;
-  while (index >= 0 && !isWhitespace(text[index] ?? "")) {
-    index -= 1;
-  }
-  return index + 1;
-}
-
-function tokenEndForCursor(text: string, cursor: number): number {
-  let index = cursor;
-  while (index < text.length && !isWhitespace(text[index] ?? "")) {
-    index += 1;
-  }
-  return index;
 }
 
 export function expandCollapsedComposerCursor(text: string, cursorInput: number): number {
@@ -254,63 +225,6 @@ export function isCollapsedCursorAdjacentToInlineToken(
   return false;
 }
 
-export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
-  const cursor = clampCursor(text, cursorInput);
-  const promptPrefix = text.slice(0, cursor);
-  const commandStart = promptPrefix.length - promptPrefix.trimStart().length;
-  const commandMatch = /^\/(\S*)$/.exec(promptPrefix.slice(commandStart));
-  if (commandMatch) {
-    return {
-      kind: "slash-command",
-      query: commandMatch[1] ?? "",
-      rangeStart: commandStart,
-      rangeEnd: cursor,
-    };
-  }
-
-  const tokenStart = tokenStartForCursor(text, cursor);
-  const token = text.slice(tokenStart, cursor);
-  const pullRequestMatch = /^#([\p{L}\p{N}][\p{L}\p{N}_-]*)?$/u.exec(token);
-  if (pullRequestMatch) {
-    return {
-      kind: "pull-request",
-      query: pullRequestMatch[1] ?? "",
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  }
-  const skillPrefix = /^\p{Sc}/u.exec(token);
-  if (skillPrefix) {
-    return {
-      kind: "skill",
-      query: token.slice(skillPrefix[0].length),
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  }
-  if (
-    token.startsWith("/") &&
-    !text.slice(tokenStart + 1, tokenEndForCursor(text, cursor)).includes("/")
-  ) {
-    return {
-      kind: "slash-skill",
-      query: token.slice(1),
-      rangeStart: tokenStart,
-      rangeEnd: cursor,
-    };
-  }
-  if (!token.startsWith("@")) {
-    return null;
-  }
-
-  return {
-    kind: "path",
-    query: token.slice(1),
-    rangeStart: tokenStart,
-    rangeEnd: cursor,
-  };
-}
-
 /** Caret and trigger after replacing composer text and continuing at the end. */
 export function composerStateAtPromptEnd(text: string): {
   cursor: number;
@@ -333,16 +247,4 @@ export function parseStandaloneComposerSlashCommand(
   const command = match[1]?.toLowerCase();
   if (command === "plan") return "plan";
   return "default";
-}
-
-export function replaceTextRange(
-  text: string,
-  rangeStart: number,
-  rangeEnd: number,
-  replacement: string,
-): { text: string; cursor: number } {
-  const safeStart = Math.max(0, Math.min(text.length, rangeStart));
-  const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
-  const nextText = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
-  return { text: nextText, cursor: safeStart + replacement.length };
 }

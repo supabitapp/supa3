@@ -45,6 +45,7 @@ export function SettingsThreadsRouteScreen() {
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
         >
           <AutoSettleSettingsRows />
+          <ComposerSettingsSection />
           <LegacySettingsSection />
         </ScrollView>
       </SettingsScreen>
@@ -236,6 +237,25 @@ function AutoSettleSettingsRows() {
         </SettingsSection>
       ) : null}
     </View>
+  );
+}
+
+function ComposerSettingsSection() {
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const showSkillsInSlashMenu =
+    !AsyncResult.isSuccess(preferences) || preferences.value.showSkillsInSlashMenu !== false;
+
+  return (
+    <SettingsSection title="Composer">
+      <SettingsSwitchRow
+        icon="terminal"
+        label="Show skills in slash menu"
+        subtitle="Skills always appear when you type $."
+        value={showSkillsInSlashMenu}
+        onValueChange={(value) => savePreferences({ showSkillsInSlashMenu: value })}
+      />
+    </SettingsSection>
   );
 }
 
