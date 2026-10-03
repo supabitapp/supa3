@@ -775,7 +775,9 @@ function MetricCell(props: {
   return (
     <View className="w-1/2 gap-0.5 p-4">
       <Text className="text-sm text-foreground-muted">{props.label}</Text>
-      <Text className="text-xl font-supacode-medium tabular-nums text-foreground">{props.value}</Text>
+      <Text className="text-xl font-supacode-medium tabular-nums text-foreground">
+        {props.value}
+      </Text>
       <Text className="text-xs text-foreground-tertiary">{props.detail}</Text>
     </View>
   );

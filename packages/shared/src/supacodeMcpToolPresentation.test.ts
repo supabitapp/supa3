@@ -1,26 +1,24 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { SUPACODE_MCP_TOOL_NAMES, resolveSupacodeMcpToolPresentation } from "./supacodeMcpToolPresentation.ts";
+import {
+  SUPACODE_MCP_TOOL_NAMES,
+  resolveSupacodeMcpToolPresentation,
+} from "./supacodeMcpToolPresentation.ts";
 
 describe("resolveSupacodeMcpToolPresentation", () => {
-  it("recognizes current and legacy tools across provider prefixes and completion suffixes", () => {
+  it("recognizes every tool across provider prefixes and completion suffixes", () => {
     for (const tool of SUPACODE_MCP_TOOL_NAMES) {
       const presentation = resolveSupacodeMcpToolPresentation(tool);
+      expect(presentation, tool).not.toBeNull();
       for (const prefix of [
         "mcp__supacode__",
+        "mcp__Supacode__",
         "supacode.",
-        "supacode/",
-        "supacode:",
-        "mcp_supacode_",
-        "supacode ",
-        "supacode · ",
-        "mcp__supacode__",
-        "mcp__supacode__",
-        "mcp__supacode__",
         "Supacode.",
         "supacode/",
         "supacode:",
         "mcp_supacode_",
+        "supacode ",
         "Supacode ",
         "supacode · ",
       ]) {
@@ -86,12 +84,6 @@ describe("resolveSupacodeMcpToolPresentation", () => {
       "mcp_supacode_delegate_task",
       "supacode:delegate_task",
       "supacode/delegate_task",
-      "supacode delegate_task",
-      "supacode__delegate_task",
-      "mcp_supacode_delegate_task",
-      "supacode:delegate_task",
-      "supacode/delegate_task",
-      "supacode delegate_task",
       "supacode delegate_task",
       "supacode__delegate_task",
     ]) {

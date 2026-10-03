@@ -33,7 +33,12 @@ export function useSupacodeProjectFileState(
   environmentId: EnvironmentId,
   cwd: string | null,
 ): SupacodeProjectFileState {
-  const query = useProjectFileQuery(environmentId, cwd ?? "", SUPACODE_PROJECT_FILE_NAME, cwd !== null);
+  const query = useProjectFileQuery(
+    environmentId,
+    cwd ?? "",
+    SUPACODE_PROJECT_FILE_NAME,
+    cwd !== null,
+  );
   const contents = query.data && !query.data.truncated ? query.data.contents : null;
   const isPending = query.isPending;
   return useMemo(() => {

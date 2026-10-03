@@ -461,7 +461,9 @@ const command = Command.make(
   "build-npm-platform-packages",
   {
     archivesDir: Flag.String("archives-dir").pipe(
-      Flag.withDescription("Directory holding the release's supacode-<version>-<platform> archives."),
+      Flag.withDescription(
+        "Directory holding the release's supacode-<version>-<platform> archives.",
+      ),
     ),
     version: Flag.String("version").pipe(
       Flag.withDescription(

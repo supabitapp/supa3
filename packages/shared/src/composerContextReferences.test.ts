@@ -82,12 +82,15 @@ describe("labels and reference links", () => {
   });
 
   it("ignores links whose href does not parse", () => {
-    expect(collectComposerContextReferences("[x](supacode-context://v1/image/ctx_1?y)")).toEqual([]);
+    expect(collectComposerContextReferences("[x](supacode-context://v1/image/ctx_1?y)")).toEqual(
+      [],
+    );
     expect(collectComposerContextReferences("[x](https://example.com)")).toEqual([]);
   });
 
   it("replaces occurrences in place", () => {
-    const text = "a [x](supacode-context://v1/skill/ctx_1) b [y](supacode-context://v1/file/ctx_2) c";
+    const text =
+      "a [x](supacode-context://v1/skill/ctx_1) b [y](supacode-context://v1/file/ctx_2) c";
     expect(replaceComposerContextReferences(text, (o) => `<${o.contextId}>`)).toBe(
       "a <ctx_1> b <ctx_2> c",
     );

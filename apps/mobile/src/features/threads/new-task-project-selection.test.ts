@@ -72,7 +72,9 @@ describe("getProjectScopeSelectionTarget", () => {
 
 describe("resolveEnvironmentProjectMatch", () => {
   it("follows the same repository onto the target machine", () => {
-    const selected = makeProject("supacode", "mac", { repositoryKey: "github.com/supabitapp/supacode" });
+    const selected = makeProject("supacode", "mac", {
+      repositoryKey: "github.com/supabitapp/supacode",
+    });
     const target = [
       makeProject("other", "server", { repositoryKey: "github.com/supacode/other" }),
       makeProject("supacode-clone", "server", { repositoryKey: "github.com/supabitapp/supacode" }),
@@ -112,7 +114,9 @@ describe("resolveEnvironmentProjectMatch", () => {
   });
 
   it("falls back to the first project on the target so the draft has a key to carry over to", () => {
-    const selected = makeProject("supacode", "mac", { repositoryKey: "github.com/supabitapp/supacode" });
+    const selected = makeProject("supacode", "mac", {
+      repositoryKey: "github.com/supabitapp/supacode",
+    });
     const target = [makeProject("unrelated", "server"), makeProject("also-unrelated", "server")];
     expect(resolveEnvironmentProjectMatch(target, selected)).toBe(target[0]);
     expect(resolveEnvironmentProjectMatch([], selected)).toBeNull();
@@ -136,7 +140,11 @@ describe("resolveDraftProjectSelection", () => {
   });
 
   it("selects one logical project even when it has multiple physical workspaces", () => {
-    const projects = [makeProject("supacode"), makeProject("supacode-2"), makeProject("supacode-3")];
+    const projects = [
+      makeProject("supacode"),
+      makeProject("supacode-2"),
+      makeProject("supacode-3"),
+    ];
     expect(resolveDraftProjectSelection(null, projects, [makeScope(projects)])).toEqual({
       kind: "select",
       project: projects[0],

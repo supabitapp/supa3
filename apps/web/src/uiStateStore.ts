@@ -7,12 +7,6 @@ export const PERSISTED_STATE_KEY = "supacode:ui-state:v1";
 // Version 1 stored card visibility, not folder expansion.
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
 const LEGACY_PERSISTED_STATE_KEYS = [
-  "supacode:renderer-state:v8",
-  "supacode:renderer-state:v7",
-  "supacode:renderer-state:v6",
-  "supacode:renderer-state:v5",
-  "supacode:renderer-state:v4",
-  "supacode:renderer-state:v3",
   "codething:renderer-state:v4",
   "codething:renderer-state:v3",
   "codething:renderer-state:v2",

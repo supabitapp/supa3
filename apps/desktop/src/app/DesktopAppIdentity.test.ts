@@ -22,9 +22,9 @@ const defaultEnvironmentInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/supacode.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Supacode.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/supacode.app/Contents/Resources",
+  resourcesPath: "/Applications/Supacode.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -41,7 +41,7 @@ interface ElectronAppCalls {
 const makeElectronAppLayer = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("supacode"),
+    name: Effect.succeed("Supacode"),
     systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit: Effect.void,
@@ -130,11 +130,11 @@ const withIdentity = <A, E, R>(
         Layer.provideMerge(
           FileSystem.layerNoop({
             exists: (path) =>
-              input.legacyPathProbeError
-                ? Effect.fail(input.legacyPathProbeError)
-                : Effect.succeed(
-                    input.legacyPathExists === true && /supacode \((Alpha|Dev)\)/.test(path),
-                  ),
+              !/Supacode \((Alpha|Dev)\)/.test(path)
+                ? Effect.succeed(false)
+                : input.legacyPathProbeError
+                  ? Effect.fail(input.legacyPathProbeError)
+                  : Effect.succeed(input.legacyPathExists === true),
             readFileString: () =>
               Effect.succeed(input.packageJson ?? '{"supacodeCommitHash":"abcdef1234567890"}'),
           }),
@@ -166,7 +166,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         assert.equal(
           yield* identity.resolveUserDataPath,
-          "/Users/alice/Library/Application Support/supacode (Dev)",
+          "/Users/alice/Library/Application Support/Supacode (Dev)",
         );
       }),
       {
@@ -177,7 +177,7 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect("preserves failures while inspecting the legacy userData path", () => {
-    const legacyPath = "/Users/alice/Library/Application Support/supacode (Dev)";
+    const legacyPath = "/Users/alice/Library/Application Support/Supacode (Dev)";
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",
@@ -218,8 +218,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["supacode (Alpha)"]);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "supacode (Alpha)");
+        assert.deepEqual(calls.setName, ["Supacode (Alpha)"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Supacode (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
         // Packaged: the bundle's own icon stands, so a custom one the user

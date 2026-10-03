@@ -56,9 +56,9 @@ describe("normalizeGitRemoteUrl", () => {
     expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/Supacode/Platform/Supacode")).toBe(
       "dev.azure.com/supacode/platform/_git/supacode",
     );
-    expect(normalizeGitRemoteUrl("ssh://git@ssh.dev.azure.com:22/v3/Supacode/Platform/Supacode")).toBe(
-      "dev.azure.com/supacode/platform/_git/supacode",
-    );
+    expect(
+      normalizeGitRemoteUrl("ssh://git@ssh.dev.azure.com:22/v3/Supacode/Platform/Supacode"),
+    ).toBe("dev.azure.com/supacode/platform/_git/supacode");
     expect(
       normalizeGitRemoteUrl("https://Supacode@dev.azure.com/Supacode/Platform/_git/Supacode"),
     ).toBe("dev.azure.com/supacode/platform/_git/supacode");

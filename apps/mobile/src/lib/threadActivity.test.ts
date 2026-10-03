@@ -1349,18 +1349,21 @@ describe("buildThreadFeed", () => {
   it("uses canonical Supacode orchestration summaries in compact work groups", () => {
     const rows = [
       projected(command("2026-06-20T00:00:01.000Z"), 0),
-      ...["mcp__supacode__supacode_thread_send", "supacode.supacode_thread_send", "supacode_thread_send"].map(
-        (toolName, index) =>
-          projected(
-            {
-              ...base(`item-send-${index}`, `2026-06-20T00:00:0${index + 2}.000Z`, index + 2),
-              type: "dynamic_tool" as const,
-              toolName,
-              input: { threadId: `thread-${index}`, message: "Continue" },
-              output: { threadId: `thread-${index}`, messageId: `message-${index}` },
-            },
-            index + 1,
-          ),
+      ...[
+        "mcp__supacode__supacode_thread_send",
+        "supacode.supacode_thread_send",
+        "supacode_thread_send",
+      ].map((toolName, index) =>
+        projected(
+          {
+            ...base(`item-send-${index}`, `2026-06-20T00:00:0${index + 2}.000Z`, index + 2),
+            type: "dynamic_tool" as const,
+            toolName,
+            input: { threadId: `thread-${index}`, message: "Continue" },
+            output: { threadId: `thread-${index}`, messageId: `message-${index}` },
+          },
+          index + 1,
+        ),
       ),
       projected(
         {

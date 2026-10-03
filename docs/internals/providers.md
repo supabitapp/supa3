@@ -15,7 +15,7 @@ The `opencode` driver probes the installed version and runs the 1.x or 2.x runti
 registrations are directory-scoped, while Supacode's MCP connection is thread-scoped, so threads in one
 directory must not share one Supacode MCP entry.
 
-- **1.x** uses one supacode-managed chat server per thread, so threads cannot replace each other's
+- **1.x** uses one Supacode-managed chat server per thread, so threads cannot replace each other's
   connection. Catalog and text-generation work can share the
   [instance-owned helper](../../apps/server/src/provider/OpenCodeServerOwner.ts), which closes
   after an idle period. See the [1.x adapter](../../apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts).

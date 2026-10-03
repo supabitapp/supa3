@@ -8,7 +8,7 @@
 #   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   SUPACODE_VERSION           exact version to install (overrides SUPACODE_CHANNEL)
-#   SUPACODE_HOME              supacode home directory (default: ~/.supacode)
+#   SUPACODE_HOME              Supacode home directory (default: ~/.supacode)
 #   SUPACODE_INSTALL_BIN_DIR   where the `supacode` symlink goes (default: ~/.local/bin)
 #   SUPACODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
@@ -40,7 +40,7 @@ step() {
   else printf '  %s\n' "$1" >&2; fi
 }
 if "$interactive"; then
-  printf '\n  %ssupacode%s\n  %sCLI installer%s\n\n' "$bold" "$reset" "$muted" "$reset" >&2
+  printf '\n  %sSupacode%s\n  %sCLI installer%s\n\n' "$bold" "$reset" "$muted" "$reset" >&2
 fi
 step "Finding your release..."
 
@@ -156,7 +156,7 @@ fi
 case "$version" in
   *-preview.*)
     printf '%s\n' \
-      "supacode ${version} is a preview build." \
+      "Supacode ${version} is a preview build." \
       "  Preview builds are cut by maintainers from unreleased branches to exercise the release" \
       "  pipeline. They can be broken, receive no fixes, and are never offered as updates." \
       "  Set SUPACODE_CHANNEL=stable (the default) for a supported build." >&2
@@ -182,12 +182,12 @@ else
   trap 'printf "\n" >&2; exit 143' TERM
 
   if "$interactive"; then printf '\r\033[2K' >&2; fi
-  printf '  %sInstalling%s supacode %s%s%s\n\n' "$muted" "$reset" "$bold" "$version" "$reset" >&2
+  printf '  %sInstalling%s Supacode %s%s%s\n\n' "$muted" "$reset" "$bold" "$version" "$reset" >&2
   step "Downloading..."
   fetch_status=0
   fetch "${base_url}/v${version}/SHA256SUMS" "${staging}/SHA256SUMS" || fetch_status=$?
   if [ "$fetch_status" -eq 44 ]; then
-    fail "supacode ${version} has no release archive for ${platform}-${arch}; releases before the self-contained CLI can only be installed with \`npm install -g supacode@${version}\`"
+    fail "Supacode ${version} has no release archive for ${platform}-${arch}; releases before the self-contained CLI can only be installed with \`npm install -g supacode@${version}\`"
   elif [ "$fetch_status" -ne 0 ]; then
     fail "could not download the release checksums"
   fi
@@ -199,7 +199,7 @@ else
   actual="$(checksum "${staging}/${archive}")"
   [ "$actual" = "$expected" ] || fail "checksum mismatch for ${archive}"
 
-  step "Extracting supacode..."
+  step "Extracting Supacode..."
   tar -xzf "${staging}/${archive}" -C "$staging" --strip-components=1
   rm -f "${staging}/${archive}" "${staging}/SHA256SUMS"
   "${staging}/supacode" --version >/dev/null || fail "the downloaded executable does not run"
@@ -214,7 +214,7 @@ step "Setting up the supacode command..."
 mkdir -p "$bin_dir"
 ln -sfn "${target_dir}/supacode" "${bin_dir}/supacode"
 if "$interactive"; then printf '\r\033[2K' >&2; fi
-printf '  %sInstalled supacode %s%s\n\n' "$green" "$version" "$reset" >&2
+printf '  %sInstalled Supacode %s%s\n\n' "$green" "$version" "$reset" >&2
 case ":${PATH}:" in
   *":${bin_dir}:"*) printf '  Run %ssupacode%s to get started.\n\n' "$bold" "$reset" ;;
   *) printf '  Add %s to your PATH, then run %ssupacode%s.\n\n' "$bin_dir" "$bold" "$reset" ;;

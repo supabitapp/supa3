@@ -26,8 +26,8 @@ See [development](../operations/development.md) for desktop and mobile builds.
 
 If you have a packaged `supacode` executable installed, these commands are available:
 
-| Task                                             | Command                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------ |
+| Task                                             | Command                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------- |
 | Start the server and open the web app            | `supacode`                                                      |
 | Start the server without a browser               | `supacode serve`                                                |
 | Keep it running in the background (macOS, Linux) | `supacode service install` ([details](./background-service.md)) |
@@ -39,7 +39,7 @@ Run `supacode --help` for the full reference.
 ## Desktop app
 
 Build the desktop client from this repository. Distribution artifacts belong to
-the fork's [GitHub Releases](https://github.com/supabitapp/supacode/releases).
+Supacode's [GitHub Releases](https://github.com/supabitapp/supacode/releases).
 
 ### Windows Subsystem for Linux
 
@@ -87,7 +87,7 @@ computer.
 | Cursor      | Install [Cursor CLI](https://cursor.com/cli), then run `agent login`.                                                                                     |
 | Grok Build  | Install [Grok Build CLI](https://x.ai/cli), then run `grok login`.                                                                                        |
 | OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                                                                                  |
-| Antigravity | Install and sign in with Google from Supacode's provider settings.                                                                                           |
+| Antigravity | Install and sign in with Google from Supacode's provider settings.                                                                                        |
 | Pi          | Install [Pi](https://pi.dev), then run `pi` once to finish its login or API-key setup.                                                                    |
 
 Provider CLIs must be on the server's `PATH`. If Supacode cannot find one, set its
@@ -124,4 +124,4 @@ For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 - [Permission modes](./permission-modes.md): choose when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.
 - [Running in the background](./background-service.md): keep a Linux or macOS host available.
-- [Updating supacode](./updating.md): update the app and connected servers.
+- [Updating Supacode](./updating.md): update the app and connected servers.

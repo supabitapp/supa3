@@ -210,7 +210,7 @@ macOS app bundle example:
 SUPACODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 SUPACODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
 SUPACODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
-"/Applications/supacode.app/Contents/MacOS/supacode"
+"/Applications/Supacode.app/Contents/MacOS/Supacode"
 ```
 
 Direct binary example:

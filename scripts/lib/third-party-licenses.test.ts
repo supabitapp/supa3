@@ -81,7 +81,10 @@ describe("third-party license generation", () => {
     const [config, revision] = await Promise.all([
       NodeFSP.readFile(NodePath.join(REPOSITORY_ROOT, "third-party-licenses.config.json"), "utf8"),
       NodeFSP.readFile(
-        NodePath.join(REPOSITORY_ROOT, "apps/mobile/modules/supacode-terminal/Vendor/libghostty/VERSION"),
+        NodePath.join(
+          REPOSITORY_ROOT,
+          "apps/mobile/modules/supacode-terminal/Vendor/libghostty/VERSION",
+        ),
         "utf8",
       ),
     ]);
@@ -157,7 +160,7 @@ describe("third-party license generation", () => {
     });
 
     expect(manifest.entries.find((entry) => entry.name === "generated-asset")?.noticeText).toBe(
-      "Adapted for supacode.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
+      "Adapted for Supacode.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
     );
   });
 

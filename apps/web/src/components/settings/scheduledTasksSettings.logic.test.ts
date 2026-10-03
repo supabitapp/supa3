@@ -75,7 +75,10 @@ function group(
 // Project IDs are environment-local. This unrelated server checkout deliberately
 // shares an ID with a laptop checkout in the selected group.
 const sameIdElsewhere = member("first", serverId);
-const groups = [group("supacode", [first, second, third]), group("other", [other, sameIdElsewhere])];
+const groups = [
+  group("supacode", [first, second, third]),
+  group("other", [other, sameIdElsewhere]),
+];
 const tasks = [first, second, third, other, sameIdElsewhere].map((project, index) => ({
   id: `task-${index}`,
   environmentId: project.environmentId,

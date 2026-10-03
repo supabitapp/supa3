@@ -33,10 +33,10 @@ for native clients.
 - [Background service](./docs/user/background-service.md)
 
 The [documentation index](./docs/README.md) includes provider guides and internal
-architecture notes. Report bugs in the fork's
+architecture notes. Report bugs in the
 [issue tracker](https://github.com/supabitapp/supacode/issues).
 
 ## Attribution
 
-Supacode is a fork of the [upstream project](https://github.com/supabitapp/supacode).
-The [MIT license](./LICENSE) and third-party notices retain their original attribution.
+Supacode is a fork of an MIT-licensed project. The [MIT license](./LICENSE) and
+third-party notices retain their original attribution.

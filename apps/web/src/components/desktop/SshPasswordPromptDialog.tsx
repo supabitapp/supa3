@@ -161,7 +161,8 @@ function ActiveSshPasswordPrompt({
           <DialogTitle>SSH Password Required</DialogTitle>
           <DialogDescription>
             Supacode needs your SSH password to connect to <code>{target}</code>. The password is
-            passed to the local SSH process for this connection attempt and is not saved by Supacode.
+            passed to the local SSH process for this connection attempt and is not saved by
+            Supacode.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>

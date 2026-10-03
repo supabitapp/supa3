@@ -74,7 +74,7 @@ function tool(
   return { displayName, labels, icon, summaryAction };
 }
 
-const SUPACODE_MCP_SERVER_ALIASES = new Set(["supacode", "supacode", "supacode", "supacode"]);
+const SUPACODE_MCP_SERVER_NAME = "supacode";
 
 // Cards, activity rows, summaries, and provider identity recovery share this inventory.
 const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = {
@@ -116,9 +116,12 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Delete", "Deleting", "Requested deletion of", "a scheduled task"],
     "schedule-delete",
   ),
-  create_threads: tool(["Create", "Creating", "Created", "supacode threads"], "thread-create"),
-  supacode_thread_start: tool(["Start", "Starting", "Started", "a Supacode thread"], "thread-create"),
-  supacode_thread_list: tool(["List", "Listing", "Listed", "supacode threads"], "thread-list"),
+  create_threads: tool(["Create", "Creating", "Created", "Supacode threads"], "thread-create"),
+  supacode_thread_start: tool(
+    ["Start", "Starting", "Started", "a Supacode thread"],
+    "thread-create",
+  ),
+  supacode_thread_list: tool(["List", "Listing", "Listed", "Supacode threads"], "thread-list"),
   supacode_thread_read: tool(["Read", "Reading", "Read", "a Supacode thread"], "thread-read"),
   supacode_thread_send: tool(["Send", "Sending", "Sent", "to a Supacode thread"], "thread-send"),
   supacode_thread_wait: tool(["Wait", "Waiting", "Waited", "for a Supacode thread"], "thread-wait"),
@@ -130,7 +133,10 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Hand off", "Handing off", "Handed off", "thread to a git worktree"],
     "worktree-handoff",
   ),
-  supacode_worktree_status: tool(["Get", "Getting", "Got", "thread worktree status"], "worktree-status"),
+  supacode_worktree_status: tool(
+    ["Get", "Getting", "Got", "thread worktree status"],
+    "worktree-status",
+  ),
   preview_status: tool(["Get", "Getting", "Got", "preview browser status"], "browser", "browser"),
   preview_open: tool(
     ["Open", "Opening", "Opened", "a page in the preview browser"],
@@ -217,7 +223,10 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Cancel", "Canceling", "Requested cancellation of", "a queued run"],
     "queue-cancel",
   ),
-  supacode_queue_reorder: tool(["Reorder", "Reordering", "Reordered", "a queued run"], "queue-reorder"),
+  supacode_queue_reorder: tool(
+    ["Reorder", "Reordering", "Reordered", "a queued run"],
+    "queue-reorder",
+  ),
   supacode_queue_promote_to_steer: tool(
     ["Steer with", "Steering with", "Requested steering with", "a queued message"],
     "queue-steer",
@@ -226,7 +235,10 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["List", "Listing", "Listed", "pending questions"],
     "question-list",
   ),
-  supacode_pending_request_read: tool(["Read", "Reading", "Read", "pending questions"], "question-read"),
+  supacode_pending_request_read: tool(
+    ["Read", "Reading", "Read", "pending questions"],
+    "question-read",
+  ),
   supacode_pending_request_respond: tool(
     ["Answer", "Answering", "Answered", "pending questions"],
     "question-respond",
@@ -236,21 +248,40 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     "thread-configuration",
   ),
   supacode_thread_configure: tool(["Set", "Setting", "Set", "thread model"], "thread-configure"),
-  supacode_thread_fork: tool(["Fork", "Forking", "Requested a fork of", "this thread"], "thread-fork"),
+  supacode_thread_fork: tool(
+    ["Fork", "Forking", "Requested a fork of", "this thread"],
+    "thread-fork",
+  ),
   supacode_thread_merge_back: tool(
     ["Merge", "Merging", "Requested a merge of", "thread context"],
     "thread-merge",
   ),
-  supacode_thread_search: tool(["Search", "Searching", "Searched", "thread content"], "thread-search"),
-  supacode_thread_transfers: tool(["Read", "Reading", "Read", "thread transfers"], "thread-transfers"),
-  supacode_thread_organize: tool(["Organize", "Organizing", "Organized", "a thread"], "thread-organize"),
+  supacode_thread_search: tool(
+    ["Search", "Searching", "Searched", "thread content"],
+    "thread-search",
+  ),
+  supacode_thread_transfers: tool(
+    ["Read", "Reading", "Read", "thread transfers"],
+    "thread-transfers",
+  ),
+  supacode_thread_organize: tool(
+    ["Organize", "Organizing", "Organized", "a thread"],
+    "thread-organize",
+  ),
   supacode_thread_update: tool(
-    ["Update", "Updating", "Updated", "supacode thread metadata"],
+    ["Update", "Updating", "Updated", "Supacode thread metadata"],
     "thread-update",
   ),
-  supacode_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
+  supacode_worktree_list: tool(
+    ["List", "Listing", "Listed", "workspace branches"],
+    "worktree-list",
+  ),
   supacode_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
-  supacode_preview_close: tool(["Close", "Closing", "Closed", "a preview tab"], "browser", "browser"),
+  supacode_preview_close: tool(
+    ["Close", "Closing", "Closed", "a preview tab"],
+    "browser",
+    "browser",
+  ),
   supacode_environment_read: tool(
     ["Read", "Reading", "Read", "environment preferences"],
     "environment-read",
@@ -259,10 +290,16 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Update", "Updating", "Updated", "environment preferences"],
     "environment-update",
   ),
-  supacode_thread_launch: tool(["Launch", "Launching", "Launched", "a project thread"], "thread-create"),
+  supacode_thread_launch: tool(
+    ["Launch", "Launching", "Launched", "a project thread"],
+    "thread-create",
+  ),
   supacode_project_list: tool(["List", "Listing", "Listed", "projects"], "project-list"),
   supacode_project_read: tool(["Read", "Reading", "Read", "a project"], "project-read"),
-  supacode_project_create: tool(["Register", "Registering", "Registered", "a project"], "project-create"),
+  supacode_project_create: tool(
+    ["Register", "Registering", "Registered", "a project"],
+    "project-create",
+  ),
   supacode_project_update: tool(["Update", "Updating", "Updated", "a project"], "project-update"),
   supacode_project_delete: tool(["Delete", "Deleting", "Deleted", "a project"], "project-delete"),
   supacode_project_clone: tool(["Clone", "Cloning", "Cloned", "a repository"], "project-clone"),
@@ -274,14 +311,19 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Discard", "Discarding", "Discarded", "a pending attachment"],
     "attachment-discard",
   ),
-  supacode_thread_send_attachments: tool(["Send", "Sending", "Sent", "attachments"], "attachment-send"),
+  supacode_thread_send_attachments: tool(
+    ["Send", "Sending", "Sent", "attachments"],
+    "attachment-send",
+  ),
 };
 
 /**
  * The Supacode orchestration tool inventory, used to gate loose name matching on
  * both the server (ACP MCP identity recovery) and the client (logo branding).
  */
-export const SUPACODE_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(SUPACODE_MCP_TOOLS));
+export const SUPACODE_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(SUPACODE_MCP_TOOLS),
+);
 
 function normalizeSupacodeMcpToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
@@ -299,31 +341,30 @@ function resolveSupacodeMcpToolName(value: string): string | null {
   const mcpMatch = /^mcp__(?<server>.+?)__(?<tool>.+)$/i.exec(label);
   if (mcpMatch?.groups) {
     const { server, tool } = mcpMatch.groups;
-    return server !== undefined &&
-      tool !== undefined &&
-      SUPACODE_MCP_SERVER_ALIASES.has(server.toLowerCase())
-      ? tool
-      : null;
+    return tool !== undefined && server?.toLowerCase() === SUPACODE_MCP_SERVER_NAME ? tool : null;
   }
 
-  const namespaceMatch =
-    /^(?<server>supacode|supacode|supacode|supacode)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
+  const namespaceMatch = /^supacode(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
   if (namespaceMatch?.groups) {
     return namespaceMatch.groups.tool ?? null;
   }
 
-  const prefixed = /^(?:mcp[-_]{1,2})?(?:supacode|supacode[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(
-    label,
-  );
-  const candidate = prefixed?.groups?.tool ?? label;
-  return Object.hasOwn(SUPACODE_MCP_TOOLS, candidate) ? candidate : null;
+  if (Object.hasOwn(SUPACODE_MCP_TOOLS, label)) {
+    return label;
+  }
+
+  const candidate = /^(?:mcp[-_]{1,2})?supacode(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label)?.groups
+    ?.tool;
+  return candidate !== undefined && Object.hasOwn(SUPACODE_MCP_TOOLS, candidate) ? candidate : null;
 }
 
 export function resolveSupacodeMcpToolDefinition(
   toolName: string | null | undefined,
 ): SupacodeMcpToolDefinition | null {
   const name = toolName == null ? null : resolveSupacodeMcpToolName(toolName);
-  return name !== null && Object.hasOwn(SUPACODE_MCP_TOOLS, name) ? SUPACODE_MCP_TOOLS[name]! : null;
+  return name !== null && Object.hasOwn(SUPACODE_MCP_TOOLS, name)
+    ? SUPACODE_MCP_TOOLS[name]!
+    : null;
 }
 
 export function resolveSupacodeMcpToolPresentation(

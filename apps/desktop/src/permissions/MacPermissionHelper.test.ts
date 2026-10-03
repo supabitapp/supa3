@@ -61,7 +61,7 @@ vi.mock("electron", async () => {
   }
   return {
     app: {
-      getPath: () => "/Applications/supacode (Nightly).app/Contents/MacOS/supacode",
+      getPath: () => "/Applications/Supacode (Nightly).app/Contents/MacOS/Supacode (Nightly)",
     },
     nativeImage: { createFromPath: mocks.createFromPath },
     BrowserWindow: class extends MockWindow {},
@@ -124,11 +124,11 @@ function send(action: string, trusted = true) {
 
 describe("macAppBundlePath", () => {
   it("resolves bundles with spaces and refuses non-bundle executables", () => {
-    expect(macAppBundlePath("/Applications/supacode.app/Contents/MacOS/supacode")).toBe(
-      "/Applications/supacode.app",
+    expect(macAppBundlePath("/Applications/Supacode.app/Contents/MacOS/Supacode")).toBe(
+      "/Applications/Supacode.app",
     );
     expect(macAppBundlePath("/usr/local/bin/electron")).toBeUndefined();
-    expect(macAppBundlePath("/Applications/supacode.app/other/MacOS/supacode")).toBeUndefined();
+    expect(macAppBundlePath("/Applications/Supacode.app/other/MacOS/Supacode")).toBeUndefined();
   });
 });
 it("drags the running app bundle only for the helper's own renderer", async () => {
@@ -138,11 +138,11 @@ it("drags the running app bundle only for the helper's own renderer", async () =
   send("drag");
   expect(mocks.createFromPath).toHaveBeenCalledWith("/bundle/prod-resources/icon.png");
   expect(mocks.startDrag).toHaveBeenCalledWith({
-    file: "/Applications/supacode (Nightly).app",
+    file: "/Applications/Supacode (Nightly).app",
     icon: mocks.createFromPath.mock.results[0]!.value.resize(),
   });
   send("finder");
-  expect(mocks.showItemInFolder).toHaveBeenCalledWith("/Applications/supacode (Nightly).app");
+  expect(mocks.showItemInFolder).toHaveBeenCalledWith("/Applications/Supacode (Nightly).app");
 });
 it("rechecks permissions and releases resources when granted", async () => {
   await open();
@@ -184,7 +184,7 @@ it("offers the Finder fallback when native dragging fails", async () => {
     throw new Error("drag failed");
   });
   send("drag");
-  expect(mocks.showItemInFolder).toHaveBeenCalledWith("/Applications/supacode (Nightly).app");
+  expect(mocks.showItemInFolder).toHaveBeenCalledWith("/Applications/Supacode (Nightly).app");
   expect(windows[0]!.destroyed).toBe(false);
 });
 

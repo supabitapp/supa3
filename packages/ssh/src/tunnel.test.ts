@@ -107,8 +107,14 @@ describe("ssh tunnel scripts", () => {
       script,
       "SUPACODE_RELEASE_BASE_URL='https://github.com/supabitapp/supacode/releases/download'",
     );
-    assert.include(script, 'SUPACODE_RUNTIME_DIR="$HOME/.supacode/runtime/versions/$SUPACODE_ARCHIVE_VERSION"');
-    assert.include(script, 'SUPACODE_ARCHIVE="supacode-$SUPACODE_ARCHIVE_VERSION-$SUPACODE_PLATFORM-$SUPACODE_ARCH.tar.gz"');
+    assert.include(
+      script,
+      'SUPACODE_RUNTIME_DIR="$HOME/.supacode/runtime/versions/$SUPACODE_ARCHIVE_VERSION"',
+    );
+    assert.include(
+      script,
+      'SUPACODE_ARCHIVE="supacode-$SUPACODE_ARCHIVE_VERSION-$SUPACODE_PLATFORM-$SUPACODE_ARCH.tar.gz"',
+    );
     assert.include(script, "SHA256SUMS");
     assert.include(script, 'exec "$SUPACODE_RUNTIME_DIR/supacode" "$@"');
     assert.notInclude(script, "npx");
@@ -200,7 +206,7 @@ describe("ssh tunnel scripts", () => {
     assert.notInclude(script, TEST_NODE_ENGINE_RANGE);
   });
 
-  it("builds the remote supacode runner with a node script override", () => {
+  it("builds the remote Supacode runner with a node script override", () => {
     const script = SshTunnel.buildRemoteSupacodeRunnerScript({
       ...NODE_SCRIPT,
       nodeEngineRange: TEST_NODE_ENGINE_RANGE,
@@ -232,7 +238,7 @@ describe("ssh tunnel scripts", () => {
     assert.notInclude(script, "npx");
   });
 
-  it("uses the remote supacode runner for launch and pairing scripts", () => {
+  it("uses the remote Supacode runner for launch and pairing scripts", () => {
     const target = {
       alias: "devbox",
       hostname: "devbox.example.com",
@@ -514,7 +520,9 @@ describe("ssh tunnel scripts", () => {
                 ...makeSuccessfulProcess(""),
                 exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(1)),
                 stderr: Stream.make(
-                  new TextEncoder().encode("Remote Supacode server did not stop within 2 seconds.\n"),
+                  new TextEncoder().encode(
+                    "Remote Supacode server did not stop within 2 seconds.\n",
+                  ),
                 ),
               };
             }

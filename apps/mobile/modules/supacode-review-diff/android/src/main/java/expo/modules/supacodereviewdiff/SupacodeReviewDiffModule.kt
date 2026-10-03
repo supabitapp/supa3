@@ -23,8 +23,8 @@ class SupacodeReviewDiffModule : Module() {
       Prop("selectedRowIdsJson") { view: SupacodeReviewDiffView, selectedRowIdsJson: String ->
         view.setSelectedRowIdsJson(selectedRowIdsJson)
       }
-      Prop("collapsedCommentIdsJson") { view: SupacodeReviewDiffView, collapsedCommentIdsJson: String ->
-        view.setCollapsedCommentIdsJson(collapsedCommentIdsJson)
+      Prop("collapsedCommentIdsJson") { view: SupacodeReviewDiffView, json: String ->
+        view.setCollapsedCommentIdsJson(json)
       }
       Prop("appearanceScheme") { view: SupacodeReviewDiffView, appearanceScheme: String ->
         view.setAppearanceScheme(appearanceScheme)
@@ -54,8 +54,8 @@ class SupacodeReviewDiffModule : Module() {
         "onToggleComment",
       )
 
-      AsyncFunction("scrollToFile") { view: SupacodeReviewDiffView, fileId: String, animated: Boolean ->
-        view.scrollToFile(fileId, animated)
+      AsyncFunction("scrollToFile") { view: SupacodeReviewDiffView, id: String, animated: Boolean ->
+        view.scrollToFile(id, animated)
       }
       AsyncFunction("scrollToTop") { view: SupacodeReviewDiffView, animated: Boolean ->
         view.scrollToTop(animated)

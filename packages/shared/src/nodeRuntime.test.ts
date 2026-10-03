@@ -38,7 +38,11 @@ describe("Self invocation", () => {
       const invocation = yield* resolveSelfInvocation().pipe(
         Effect.provideService(HostProcessExecutablePath, "/packaged/supacode"),
         Effect.provideService(HostProcessIsExecutable, true),
-        Effect.provideService(HostProcessArguments, ["/packaged/supacode", "/packaged/supacode", "serve"]),
+        Effect.provideService(HostProcessArguments, [
+          "/packaged/supacode",
+          "/packaged/supacode",
+          "serve",
+        ]),
       );
       expect(invocation).toEqual({ command: "/packaged/supacode", entrypoint: undefined });
       expect(selfInvocationArgs(invocation, ["acp-mcp-bridge"])).toEqual(["acp-mcp-bridge"]);
@@ -49,7 +53,7 @@ describe("Self invocation", () => {
 describe("Node runtime selection", () => {
   it.effect("keeps the current Node or Electron runtime without requiring Node on PATH", () =>
     Effect.gen(function* () {
-      for (const executable of ["/runtime/node", "/Applications/supacode.app/Electron"]) {
+      for (const executable of ["/runtime/node", "/Applications/Supacode.app/Electron"]) {
         expect(
           yield* resolveNodeExecutable("Local device support", { PATH: "" }).pipe(
             Effect.provideService(HostProcessExecutablePath, executable),

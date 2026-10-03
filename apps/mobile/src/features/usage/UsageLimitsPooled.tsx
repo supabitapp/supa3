@@ -103,7 +103,9 @@ function PoolWindowCard({
     <View className="gap-3 rounded-[24px] border-continuous bg-grouped-card p-4">
       <View className="flex-row items-start justify-between gap-3">
         <View className="gap-1">
-          <Text className="text-sm font-supacode-medium text-foreground">{label ?? pool.label}</Text>
+          <Text className="text-sm font-supacode-medium text-foreground">
+            {label ?? pool.label}
+          </Text>
           <View className="flex-row items-baseline gap-1.5">
             <Text className="text-3xl font-supacode-bold tabular-nums text-foreground">
               {pool.remainingPercent}%

@@ -14,9 +14,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/supacode.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Supacode.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/supacode.app/Contents/Resources",
+  resourcesPath: "/Applications/Supacode.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -84,7 +84,10 @@ describe("DesktopEnvironment", () => {
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
       );
-      assert.deepEqual(environment.devRemoteSupacodeServerEntryPath, Option.some("/remote/server.mjs"));
+      assert.deepEqual(
+        environment.devRemoteSupacodeServerEntryPath,
+        Option.some("/remote/server.mjs"),
+      );
       assert.deepEqual(environment.configuredBackendPort, Option.some(4949));
       assert.deepEqual(environment.commitHashOverride, Option.some("0123456789abcdef"));
       assert.deepEqual(environment.otlpTracesUrl, Option.some("http://127.0.0.1:4318/v1/traces"));

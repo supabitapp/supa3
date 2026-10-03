@@ -121,7 +121,7 @@ export const resolveNightlyReleaseMetadata = (
     baseVersion,
     version,
     tag: `v${version}`,
-    name: `supacode ${CHANNEL_RELEASE_LABELS[channel]} ${version} (${shortSha})`,
+    name: `Supacode ${CHANNEL_RELEASE_LABELS[channel]} ${version} (${shortSha})`,
     shortSha,
   };
 };

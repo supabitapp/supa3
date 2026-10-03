@@ -429,7 +429,7 @@ describe("filterComposerPullRequestMatches", () => {
     {
       number: 8987,
       projectId: "project-1",
-      repository: "supabitapp/supacode",
+      repository: "SupabitApp/Supacode",
       updatedAt: "2026-09-03T12:00:00.000Z",
     },
     {
@@ -447,7 +447,7 @@ describe("filterComposerPullRequestMatches", () => {
     {
       number: 70,
       projectId: "project-2",
-      repository: "supacode/other",
+      repository: "supabitapp/other",
       updatedAt: "2026-09-04T12:00:00.000Z",
     },
   ];

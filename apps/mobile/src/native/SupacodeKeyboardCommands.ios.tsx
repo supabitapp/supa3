@@ -11,7 +11,9 @@ interface NativeKeyboardCommandsProps extends ViewProps {
   ) => void;
 }
 
-const NativeKeyboardCommands = requireNativeView<NativeKeyboardCommandsProps>("SupacodeKeyboardCommands");
+const NativeKeyboardCommands = requireNativeView<NativeKeyboardCommandsProps>(
+  "SupacodeKeyboardCommands",
+);
 
 export function SupacodeKeyboardCommands(
   props: PropsWithChildren<{

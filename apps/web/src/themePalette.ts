@@ -20,21 +20,23 @@ import {
   type ThemeVariants,
 } from "@supacode/shared/themePalettes";
 
-export { EMBER_THEME, GROVE_THEME, IRIS_THEME, OCEAN_THEME, SUPACODE_CHAT_THEME, THEME_COLOR_ROLES };
+export {
+  EMBER_THEME,
+  GROVE_THEME,
+  IRIS_THEME,
+  OCEAN_THEME,
+  SUPACODE_CHAT_THEME,
+  THEME_COLOR_ROLES,
+};
 export type { ThemeAppearance, ThemeColorRole, ThemeColors, ThemeDefinition, ThemeVariants };
 
 export const SUPACODE_CHAT_THEME_ID = "supacode-chat" as const;
-const GROVE_THEME_ID = "grove" as const;
 export const OCEAN_THEME_ID = "ocean" as const;
-const EMBER_THEME_ID = "ember" as const;
-const IRIS_THEME_ID = "iris" as const;
 export const THEME_FILE_VERSION = 1 as const;
 export const CUSTOM_THEMES_STORAGE_KEY = "supacode:themes:v1";
 export const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "supacode:theme-follow-system";
 export const THEME_APPEARANCE_MODE_STORAGE_KEY = "supacode:theme-appearance-mode";
 export const THEME_HALVES_STORAGE_KEY = "supacode:theme-halves:v1";
-
-const LEGACY_SUPACODE_CHAT_DARK_THEME_ID = "supacode-chat-dark";
 
 export const ThemePreference = Schema.String;
 export type ThemePreference = typeof ThemePreference.Type;
@@ -292,40 +294,6 @@ export function subscribeToCustomThemes(listener: () => void): () => void {
     customThemeListeners.delete(listener);
     window.removeEventListener("storage", handleStorage);
   };
-}
-
-// Earlier builds shipped every maintainer theme under a supacode- prefix; only the
-// genuinely Supacode-branded palette keeps it. Stored preferences and mixes with the
-// old ids stay readable through this alias table.
-const LEGACY_THEME_ID_ALIASES: Readonly<Record<string, string>> = {
-  [LEGACY_SUPACODE_CHAT_DARK_THEME_ID]: SUPACODE_CHAT_THEME_ID,
-  "supacode-grove": GROVE_THEME_ID,
-  "supacode-ocean": OCEAN_THEME_ID,
-  "supacode-ember": EMBER_THEME_ID,
-  "supacode-iris": IRIS_THEME_ID,
-};
-
-function normalizeThemeId(themeId: string): string {
-  return LEGACY_THEME_ID_ALIASES[themeId] ?? themeId;
-}
-
-/**
- * Map a stored preference onto the id the runtime applies, so selection state
- * matches the theme cards. The legacy dark-variant id stays as-is because it
- * still carries the appearance hint getThemePreferenceMode reads.
- */
-export function canonicalThemePreference(theme: string): string {
-  return theme === LEGACY_SUPACODE_CHAT_DARK_THEME_ID ? theme : normalizeThemeId(theme);
-}
-
-function themeIdFromPreference(theme: ThemePreference): string {
-  return normalizeThemeId(theme);
-}
-
-// Older builds stored the dark Supacode Chat palette as a separate theme. Keep
-// those preferences readable while mapping them to the dark variant.
-function legacyThemeMode(theme: ThemePreference): ThemeAppearance | null {
-  return theme === LEGACY_SUPACODE_CHAT_DARK_THEME_ID ? "dark" : null;
 }
 
 /**
@@ -1070,22 +1038,20 @@ export function updateThemeColorFamily(
 const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = BUILT_IN_THEMES;
 
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {
-  const themeId = themeIdFromPreference(theme);
   return (
-    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId) ??
-    getCustomThemes().find((definition) => definition.id === themeId) ??
+    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === theme) ??
+    getCustomThemes().find((definition) => definition.id === theme) ??
     // Resolved last so a theme the user saved always wins over one the
     // machine happens to publish under the same id.
-    environmentThemeDefinitions.find((definition) => definition.id === themeId) ??
+    environmentThemeDefinitions.find((definition) => definition.id === theme) ??
     null
   );
 }
 
 /** Artwork palettes are reviewed alongside built-ins; user themes always use the pill fallback. */
 export function themeAllowsSidebarArtwork(theme: ThemePreference): boolean {
-  const themeId = themeIdFromPreference(theme);
   return (
-    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId)?.sidebarArtwork ===
+    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === theme)?.sidebarArtwork ===
     true
   );
 }
@@ -1116,8 +1082,6 @@ export function getThemeModes(theme: ThemeDefinition): ReadonlyArray<ThemeAppear
 export function getThemePreferenceMode(theme: ThemePreference): ThemeAppearance | null {
   if (theme === "system") return null;
   if (theme === "light" || theme === "dark") return theme;
-  const legacyMode = legacyThemeMode(theme);
-  if (legacyMode) return legacyMode;
   return getThemeDefinition(theme)?.appearance ?? null;
 }
 
@@ -1524,7 +1488,7 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
 
   if (palette) {
     root.dataset.themeId = palette.id;
-    const mode = appearance ?? legacyThemeMode(theme) ?? palette.appearance;
+    const mode = appearance ?? palette.appearance;
     const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
     for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
       root.style.setProperty(APP_THEME_VARIABLES[role], value);
@@ -1617,8 +1581,6 @@ export function parseThemeHalves(raw: string | null): ThemeHalves | null {
       if (typeof themeId !== "string") continue;
       const definition = getThemeDefinition(themeId);
       if (definition && getThemeColorsForMode(definition, appearance) !== null) {
-        // Store the definition's id so legacy aliases resolve to the same
-        // value the runtime applies to the document.
         halves[appearance] = definition.id;
       }
     }

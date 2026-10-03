@@ -9,7 +9,7 @@
 
 using namespace facebook::react;
 
-@interface SupacodeMarkdownTextRun () <RCTT3MarkdownTextRunViewProtocol>
+@interface SupacodeMarkdownTextRun () <RCTSupacodeMarkdownTextRunViewProtocol>
 
 @end
 

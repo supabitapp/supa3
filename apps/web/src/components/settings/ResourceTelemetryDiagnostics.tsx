@@ -137,7 +137,7 @@ function categoryLabel(category: ResourceTelemetryProcessCategory): string {
     case "resource-monitor":
       return "Monitor";
     case "unknown-supacode":
-      return "supacode process";
+      return "Supacode process";
   }
 }
 
@@ -1004,14 +1004,20 @@ export function ResourceTelemetryDiagnostics({
               icon={<CpuIcon className="size-3.5" />}
               label="Current CPU"
               value={allSupacode ? `${allSupacode.currentCpuPercent.toFixed(1)}%` : "..."}
-              detail={allSupacode ? `${formatCpuTime(allSupacode.cpuTimeMs)} observed CPU time` : undefined}
+              detail={
+                allSupacode
+                  ? `${formatCpuTime(allSupacode.cpuTimeMs)} observed CPU time`
+                  : undefined
+              }
             />
             <IconStat
               icon={<MemoryStickIcon className="size-3.5" />}
               label="Resident memory"
               value={allSupacode ? formatBytes(allSupacode.currentRssBytes) : "..."}
               detail={
-                allSupacode ? `${formatBytes(allSupacode.peakRssBytes)} combined process peaks` : undefined
+                allSupacode
+                  ? `${formatBytes(allSupacode.peakRssBytes)} combined process peaks`
+                  : undefined
               }
             />
             <IconStat
@@ -1019,7 +1025,9 @@ export function ResourceTelemetryDiagnostics({
               label="Process count"
               value={allSupacode ? String(allSupacode.processCount) : "..."}
               detail={
-                allSupacode ? `${allSupacode.processStarts} starts · ${allSupacode.processExits} exits` : undefined
+                allSupacode
+                  ? `${allSupacode.processStarts} starts · ${allSupacode.processExits} exits`
+                  : undefined
               }
             />
             <IconStat

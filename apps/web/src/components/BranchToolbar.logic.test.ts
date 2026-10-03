@@ -102,9 +102,9 @@ describe("resolvePreviousWorktreeSeed", () => {
 
 describe("resolvePreviousWorktreeLabel", () => {
   it("includes the branch when known", () => {
-    expect(resolvePreviousWorktreeLabel({ branch: "supacode/fix-thing", worktreePath: "/wt" })).toBe(
-      "Previous worktree (supacode/fix-thing)",
-    );
+    expect(
+      resolvePreviousWorktreeLabel({ branch: "supacode/fix-thing", worktreePath: "/wt" }),
+    ).toBe("Previous worktree (supacode/fix-thing)");
     expect(resolvePreviousWorktreeLabel({ branch: null, worktreePath: "/wt" })).toBe(
       "Previous worktree",
     );
@@ -548,7 +548,9 @@ describe("resolveCurrentWorkspaceLabel", () => {
   });
 
   it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.supacode/worktrees/feature-a")).toBe("Current worktree");
+    expect(resolveCurrentWorkspaceLabel("/repo/.supacode/worktrees/feature-a")).toBe(
+      "Current worktree",
+    );
   });
 });
 

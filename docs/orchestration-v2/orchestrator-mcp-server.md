@@ -146,7 +146,7 @@ provider-specific extensions; those remain in flavors such as Grok.
 ### Pi V2
 
 Pi core has no MCP client. When a provider session credential exists, the
-adapter writes a supacode-owned extension into the server cache and spawns
+adapter writes a Supacode-owned extension into the server cache and spawns
 `pi --mode rpc --extension <cache>/pi-supacode-mcp-extension.ts` with:
 
 ```text
@@ -200,7 +200,7 @@ adapter support, disabled state, missing executable, or missing authentication.
 
 ### `delegate_task`
 
-Creates a supacode-owned child thread and immediately dispatches the supplied task
+Creates a Supacode-owned child thread and immediately dispatches the supplied task
 prompt.
 
 ```ts

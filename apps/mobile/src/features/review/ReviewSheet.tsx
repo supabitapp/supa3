@@ -167,7 +167,9 @@ const ReviewNotice = memo(function ReviewNotice(props: { readonly notice: string
         Platform.OS === "android" ? "m-2 rounded-[20px]" : "border-b border-warning-border",
       )}
     >
-      <Text className="text-xs font-supacode-bold uppercase text-warning-foreground">Partial diff</Text>
+      <Text className="text-xs font-supacode-bold uppercase text-warning-foreground">
+        Partial diff
+      </Text>
       <Text className="text-xs leading-normal text-warning-foreground">{props.notice}</Text>
     </View>
   );
@@ -284,7 +286,9 @@ const ReviewFileNavigatorRow = memo(function ReviewFileNavigatorRow(props: {
         <Text className="text-2xs font-supacode-bold text-adaptive-emerald-700-300">
           +{file.additions}
         </Text>
-        <Text className="text-2xs font-supacode-bold text-adaptive-rose-700-300">-{file.deletions}</Text>
+        <Text className="text-2xs font-supacode-bold text-adaptive-rose-700-300">
+          -{file.deletions}
+        </Text>
       </View>
     </Pressable>
   );
@@ -832,7 +836,9 @@ export function ReviewSheet(props: ReviewSheetProps) {
                       : "border-b border-border bg-card px-4 py-5"
                   }
                 >
-                  <Text className="text-sm font-supacode-bold text-foreground">No review diffs</Text>
+                  <Text className="text-sm font-supacode-bold text-foreground">
+                    No review diffs
+                  </Text>
                   <Text
                     className={cn(
                       "text-xs leading-normal text-foreground-muted",

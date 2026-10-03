@@ -43,7 +43,7 @@ provides=("supacode=$pkgver")
 conflicts=('supacode')
 options=('!debug' '!strip')
 
-_appimage="Supacode-${pkgver}-x86_64.AppImage"
+_appimage="supacode-${pkgver}-x86_64.AppImage"
 source=(
   "$_appimage::https://github.com/supabitapp/supacode/releases/download/v${pkgver}/$_appimage"
   "${pkgname}-${pkgver}-LICENSE::https://raw.githubusercontent.com/supabitapp/supacode/v${pkgver}/LICENSE"

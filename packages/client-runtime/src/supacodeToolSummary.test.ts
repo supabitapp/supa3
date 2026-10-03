@@ -68,7 +68,8 @@ describe("summarizeSupacodeToolCalls", () => {
       failedCount: 0,
     });
     expect(
-      summarizeSupacodeToolCalls("attachment-send", [first, completed({ threadId: "thread-1" })]).label,
+      summarizeSupacodeToolCalls("attachment-send", [first, completed({ threadId: "thread-1" })])
+        .label,
     ).toBe("Sent attachments to 1 thread 2 times");
   });
 
@@ -80,8 +81,9 @@ describe("summarizeSupacodeToolCalls", () => {
       ]).label,
     ).toBe("Requested 2 scheduled task runs");
     expect(
-      summarizeSupacodeToolCalls("thread-fork", [completed({}, { targetThreadId: "fork", sequence: 3 })])
-        .label,
+      summarizeSupacodeToolCalls("thread-fork", [
+        completed({}, { targetThreadId: "fork", sequence: 3 }),
+      ]).label,
     ).toBe("Requested 1 thread fork");
     expect(
       summarizeSupacodeToolCalls("thread-merge", [
@@ -139,7 +141,9 @@ describe("summarizeSupacodeToolCalls", () => {
         output,
       ),
     );
-    expect(summarizeSupacodeToolCalls("thread-send", calls).label).toBe("Sent 1 message to 1 thread");
+    expect(summarizeSupacodeToolCalls("thread-send", calls).label).toBe(
+      "Sent 1 message to 1 thread",
+    );
     expect(
       summarizeSupacodeToolCalls("thread-send", [
         completed({ toolName: "supacode_thread_send", args: { threadId: "input-thread" } }),
@@ -204,7 +208,10 @@ describe("summarizeSupacodeToolCalls", () => {
   it("does not confuse a child's failure or wait timeout with failure of the orchestration call", () => {
     const failedChild = { taskId: "task-1", status: "failed", summary: "command not found" };
     expect(
-      summarizeSupacodeToolCalls("delegate", [completed({}, failedChild), completed({}, failedChild)]),
+      summarizeSupacodeToolCalls("delegate", [
+        completed({}, failedChild),
+        completed({}, failedChild),
+      ]),
     ).toEqual({
       label: "Delegated 1 task",
       failedCount: 0,

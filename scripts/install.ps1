@@ -7,7 +7,7 @@
 #   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   SUPACODE_VERSION           exact version to install (overrides SUPACODE_CHANNEL)
-#   SUPACODE_HOME              supacode home directory (default: ~\.supacode)
+#   SUPACODE_HOME              Supacode home directory (default: ~\.supacode)
 #   SUPACODE_INSTALL_BIN_DIR   where supacode.cmd is written (default: ~\.local\bin)
 #   SUPACODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
@@ -99,7 +99,7 @@ function Fetch([string] $uri, [string] $destination, [switch] $progress) {
   }
 }
 if ($interactive) {
-  [Console]::Error.WriteLine("`n  ${bold}supacode$reset`n  ${muted}CLI installer$reset`n")
+  [Console]::Error.WriteLine("`n  ${bold}Supacode$reset`n  ${muted}CLI installer$reset`n")
 }
 Step "Finding your release..."
 
@@ -131,7 +131,7 @@ if (-not $version) {
   $version = $tag.Substring(1)
 }
 if ($version -match '-preview\.') {
-  Write-Warning "supacode $version is a preview build. Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, and are never offered as updates. Set SUPACODE_CHANNEL=stable (the default) for a supported build."
+  Write-Warning "Supacode $version is a preview build. Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, and are never offered as updates. Set SUPACODE_CHANNEL=stable (the default) for a supported build."
   if ($channel -ne "preview" -and -not $env:SUPACODE_VERSION) {
     Fail "refusing a preview build that was not explicitly requested"
   }
@@ -151,14 +151,14 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
   New-Item -ItemType Directory -Path $staging | Out-Null
   try {
     if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-    [Console]::Error.WriteLine("  ${muted}Installing$reset supacode $bold$version$reset`n")
+    [Console]::Error.WriteLine("  ${muted}Installing$reset Supacode $bold$version$reset`n")
     Step "Downloading..."
     try {
       Fetch "$baseUrl/v$version/SHA256SUMS" (Join-Path $staging "SHA256SUMS")
     } catch {
       $status = $_.Exception.Response.StatusCode.value__
       if ($status -eq 404) {
-        Fail "supacode $version has no release archive for win32-$arch; releases before the self-contained CLI can only be installed with 'npm install -g supacode@$version'"
+        Fail "Supacode $version has no release archive for win32-$arch; releases before the self-contained CLI can only be installed with 'npm install -g supacode@$version'"
       }
       throw
     }
@@ -172,7 +172,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $staging $archive)).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail "checksum mismatch for $archive" }
 
-    Step "Extracting supacode..."
+    Step "Extracting Supacode..."
     # The archive module reads the global preference, not the caller's local scope.
     $savedProgress = $global:ProgressPreference
     try {
@@ -202,7 +202,7 @@ $shim = Join-Path $binDir "supacode.cmd"
 # non-ASCII characters in the user's home path.
 [System.IO.File]::WriteAllText($shim, "@echo off`r`n`"$(Join-Path $targetDir 'supacode.exe')`" %*", (New-Object System.Text.UTF8Encoding $false))
 if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-[Console]::Error.WriteLine("  ${green}Installed supacode $version$reset`n")
+[Console]::Error.WriteLine("  ${green}Installed Supacode $version$reset`n")
 if (($env:PATH -split ";") -notcontains $binDir) {
   Write-Host "  Add $binDir to your PATH, then run ${bold}supacode$reset.`n"
 } else {

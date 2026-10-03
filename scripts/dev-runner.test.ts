@@ -1272,7 +1272,10 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             }),
           );
 
-          yield* runDevRunnerWithInput({ ...devServerInput, supacodeHome: input.supacodeHome }).pipe(
+          yield* runDevRunnerWithInput({
+            ...devServerInput,
+            supacodeHome: input.supacodeHome,
+          }).pipe(
             Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
             Effect.provideService(HostProcessPlatform, "linux"),
             Effect.provideService(HostProcessWorkingDirectory, input.cwd),

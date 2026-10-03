@@ -42,7 +42,7 @@ const makeDesktopDeepLinksLayer = ({
     isDevelopment,
     appDataDirectory: "/tmp/app-data",
     userDataDirName: isDevelopment ? "supacode-dev" : "supacode",
-    legacyUserDataDirName: isDevelopment ? "supacode (Dev)" : "supacode (Alpha)",
+    legacyUserDataDirName: isDevelopment ? "Supacode (Dev)" : "Supacode (Alpha)",
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 

@@ -486,7 +486,12 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file", "supacode-citation", "supacode-context"],
+    href: [
+      ...(defaultSchema.protocols?.href ?? []),
+      "file",
+      "supacode-citation",
+      "supacode-context",
+    ],
     src: [...(defaultSchema.protocols?.src ?? []), "file", "supacode-context"],
   },
 } satisfies Parameters<typeof rehypeSanitize>[0];

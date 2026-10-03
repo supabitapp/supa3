@@ -13,7 +13,9 @@ describe.skipIf(HostProcessPlatform.defaultValue() !== "linux")("installer termi
   it.each([false, true])(
     "preserves download and install behavior (HTTP failure: %s)",
     async (fail) => {
-      const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "supacode-install-progress-"));
+      const root = await NodeFSP.mkdtemp(
+        NodePath.join(NodeOS.tmpdir(), "supacode-install-progress-"),
+      );
       const version = "1.2.3";
       const stem = `supacode-${version}-linux-${HostProcessArchitecture.defaultValue()}`;
       const archiveName = `${stem}.tar.gz`;
@@ -21,9 +23,13 @@ describe.skipIf(HostProcessPlatform.defaultValue() !== "linux")("installer termi
       let sawPartialProgress = false;
       let output = "";
       await NodeFSP.mkdir(NodePath.join(root, stem));
-      await NodeFSP.writeFile(NodePath.join(root, stem, "supacode"), "#!/bin/sh\necho 'supacode v1.2.3'\n", {
-        mode: 0o755,
-      });
+      await NodeFSP.writeFile(
+        NodePath.join(root, stem, "supacode"),
+        "#!/bin/sh\necho 'supacode v1.2.3'\n",
+        {
+          mode: 0o755,
+        },
+      );
       await NodeFSP.writeFile(
         NodePath.join(root, stem, "payload"),
         NodeCrypto.randomBytes(64 * 1024),
@@ -86,7 +92,7 @@ describe.skipIf(HostProcessPlatform.defaultValue() !== "linux")("installer termi
           expect(code).not.toBe(0);
           expect(output).toContain("500");
           expect(output).not.toContain("100%");
-          expect(output).not.toContain("Installed supacode");
+          expect(output).not.toContain("Installed Supacode");
           expect(await NodeFSP.readdir(versions)).toEqual([]);
         } else {
           expect(code).toBe(0);

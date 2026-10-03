@@ -76,18 +76,18 @@ describe("electron development launcher", () => {
 
   it("keeps the native Electron executable name inside the branded macOS bundle", () => {
     const paths = resolveMacLauncherPaths(
-      "/repo/apps/desktop/.electron-runtime/supacode (Dev).app",
-      "supacode (Dev)",
+      "/repo/apps/desktop/.electron-runtime/Supacode (Dev).app",
+      "Supacode (Dev)",
     );
 
-    assert.equal(paths.launcherExecutableName, "supacode (Dev) Launcher");
+    assert.equal(paths.launcherExecutableName, "Supacode (Dev) Launcher");
     assert.equal(
       paths.launcherBinaryPath,
-      "/repo/apps/desktop/.electron-runtime/supacode (Dev).app/Contents/MacOS/supacode (Dev) Launcher",
+      "/repo/apps/desktop/.electron-runtime/Supacode (Dev).app/Contents/MacOS/Supacode (Dev) Launcher",
     );
     assert.equal(
       paths.runtimeElectronBinaryPath,
-      "/repo/apps/desktop/.electron-runtime/supacode (Dev).app/Contents/MacOS/Electron",
+      "/repo/apps/desktop/.electron-runtime/Supacode (Dev).app/Contents/MacOS/Electron",
     );
 
     const script = makeDevelopmentLauncherScript({
@@ -98,32 +98,32 @@ describe("electron development launcher", () => {
     });
     assert.include(
       script,
-      "exec '/repo/apps/desktop/.electron-runtime/supacode (Dev).app/Contents/MacOS/Electron'",
+      "exec '/repo/apps/desktop/.electron-runtime/Supacode (Dev).app/Contents/MacOS/Electron'",
     );
     assert.notInclude(script, "node_modules/electron");
   });
 
   it("declares why the macOS app needs protected access", () => {
-    const values = resolveMacBundleInfoPlistStrings("supacode (Dev) Launcher");
+    const values = resolveMacBundleInfoPlistStrings("Supacode (Dev) Launcher");
 
     assert.equal(
       values.NSScreenCaptureUsageDescription,
-      "supacode captures the active window when you use the snapshot shortcut.",
+      "Supacode captures the active window when you use the snapshot shortcut.",
     );
     assert.equal(
       values.NSDocumentsFolderUsageDescription,
-      "supacode reads project files you open in the desktop app.",
+      "Supacode reads project files you open in the desktop app.",
     );
   });
 
   it("ad-hoc signs the complete development app bundle", () => {
-    assert.deepEqual(resolveMacCodeSignArguments("/runtime/supacode (Dev).app"), [
+    assert.deepEqual(resolveMacCodeSignArguments("/runtime/Supacode (Dev).app"), [
       "--force",
       "--deep",
       "--sign",
       "-",
       "--timestamp=none",
-      "/runtime/supacode (Dev).app",
+      "/runtime/Supacode (Dev).app",
     ]);
   });
 

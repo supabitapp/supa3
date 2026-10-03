@@ -938,9 +938,9 @@ it.effect.each(["win32", "darwin", "linux"] as const)(
     const bounds = { x: 10, y: 20, width: 800, height: 600 };
     const supacode = {
       id: 42,
-      title: "supacode",
+      title: "Supacode",
       appIdentifier: "com.supaterm.supacode.desktop",
-      owner: { name: "supacode", processId: 123 },
+      owner: { name: "Supacode", processId: 123 },
       bounds,
       png: Buffer.from([1, 2, 3]),
     };
@@ -1017,7 +1017,10 @@ it.effect.each(["win32", "darwin", "linux"] as const)(
         const saved = yield* decodePendingMetadata(metadata);
         assert.equal(saved.source.windowTitle, supacode.title);
         assert.equal(saved.source.appName, supacode.owner.name);
-        assert.equal(saved.source.accessibleText, `Window from process ${supacode.owner.processId}`);
+        assert.equal(
+          saved.source.accessibleText,
+          `Window from process ${supacode.owner.processId}`,
+        );
         assert.deepEqual(images, [supacode.png]);
         assert.equal(prepareCaptureRevealMock.mock.calls.length, platform === "win32" ? 1 : 0);
         if (platform === "linux") {
@@ -1614,7 +1617,7 @@ it.effect(
     focusedWindowMock.mockReturnValue(undefined);
     const destination = {
       getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }),
-      getTitle: () => "supacode",
+      getTitle: () => "Supacode",
       isDestroyed: () => false,
       isVisible: () => true,
       isMinimized: () => false,
@@ -2625,8 +2628,8 @@ it.each([
 );
 
 it.each([
-  { names: ["⠙ supacode"], expected: "Verified text" },
-  { names: ["⠋ supacode", "⠙ supacode"], expected: undefined },
+  { names: ["⠙ Supacode"], expected: "Verified text" },
+  { names: ["⠋ Supacode", "⠙ Supacode"], expected: undefined },
 ])("reads a changing Wayland title only when unambiguous: $names", async ({ names, expected }) => {
   vi.stubEnv("XDG_SESSION_TYPE", "wayland");
   const tree = vi.fn(async () => ({ value: "Verified text", children: [] }));
@@ -2642,12 +2645,12 @@ it.each([
     assert.strictEqual(
       await readAccessibleWindowText(
         {
-          title: "⠋ supacode",
+          title: "⠋ Supacode",
           bounds: { x: 479, y: 342, width: 700, height: 520 },
           owner: { processId: 123 },
         },
         "linux",
-        "⠋ supacode",
+        "⠋ Supacode",
       ),
       expected,
     );
@@ -3880,7 +3883,7 @@ it.effect.each([false, true])(
       platform: "macos",
       id: 42,
       title: "Setup",
-      owner: { name: "supacode", processId: 123, path: "/Applications/supacode.app" },
+      owner: { name: "Supacode", processId: 123, path: "/Applications/Supacode.app" },
       bounds: { x: 0, y: 0, width: 800, height: 600 },
     };
     activeWindowMock.mockReset().mockResolvedValue(active);

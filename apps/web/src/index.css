@@ -819,7 +819,11 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     }
   }
 
-  :is(html[data-theme-id="supacode-chat"], html[data-theme-id="ocean"], html[data-theme-id="iris"]) {
+  :is(
+    html[data-theme-id="supacode-chat"],
+    html[data-theme-id="ocean"],
+    html[data-theme-id="iris"]
+  ) {
     --stage-night-top: color-mix(in oklch, var(--stage-art-top) 38%, var(--stage-night-base-top));
     --stage-night-mid: color-mix(in oklch, var(--stage-art-mid) 38%, var(--stage-night-base-mid));
     --stage-night-bottom: color-mix(
@@ -1433,9 +1437,9 @@ html[data-theme-id] .chat-markdown .chat-markdown-codeblock-header {
   color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
 }
 
-/* Supacode Chat renders inline code and compact chat artifacts with its translucent
-   secondary surface flattened over the light chat canvas. The raw muted and
-   secondary tokens are substantially darker than those visible pixels. */
+/* Supacode Chat draws inline code and compact chat artifacts on its translucent
+   secondary surface flattened over the light chat canvas, which is much lighter
+   than the raw muted and secondary tokens. */
 html[data-theme-id="supacode-chat"] {
   @variant light {
     & .chat-markdown :not(pre) > code,
@@ -1652,9 +1656,8 @@ body {
   --surface-grain-size: 256px 256px;
 }
 
-/* The live Supacode Chat texture is a 128px grayscale tile with a constant 7/255
-   alpha. Keep our procedural texture cheap while matching that scale and
-   strength for the branded preset. */
+/* Supacode Chat uses a finer grain: a 128px grayscale tile at a constant 7/255
+   alpha, kept procedural so it stays cheap. */
 html[data-theme-id="supacode-chat"] {
   --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02745'/%3E%3C/svg%3E");
   --surface-grain-size: 128px 128px;

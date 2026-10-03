@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `supacode Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `supacode Preview`
-- `production`: store/release build as `supacode`
+- `development`: Expo dev client, installable side-by-side as `Supacode Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `Supacode Preview`
+- `production`: store/release build as `Supacode`
 
 Run commands from `apps/mobile`.
 

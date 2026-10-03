@@ -61,7 +61,7 @@ img { width: 32px; height: 32px; pointer-events: none; }
 </style></head><body><main id="panel">
 <button id="close" aria-label="Close permission helper">×</button>
 <header>↑ Drag Supacode into the list above</header>
-<button id="app" draggable="true" aria-label="Drag Supacode to System Settings, or click to reveal in Finder"><img src="${escapeHtml(icon)}" alt="" draggable="false">supacode</button>
+<button id="app" draggable="true" aria-label="Drag Supacode to System Settings, or click to reveal in Finder"><img src="${escapeHtml(icon)}" alt="" draggable="false">Supacode</button>
 </main></body></html>`;
 }
 

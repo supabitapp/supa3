@@ -352,9 +352,9 @@ const main = Command.make(
             [
               "xcodebuild",
               "-workspace",
-              path.join(mobile, "ios/supacodeDev.xcworkspace"),
+              path.join(mobile, "ios/SupacodeDev.xcworkspace"),
               "-scheme",
-              "supacodeDev",
+              "SupacodeDev",
               "-configuration",
               "Debug",
               "-destination",
@@ -371,7 +371,7 @@ const main = Command.make(
               "simctl",
               "install",
               device,
-              path.join(output, "Build/Products/Debug-iphonesimulator/supacodeDev.app"),
+              path.join(output, "Build/Products/Debug-iphonesimulator/SupacodeDev.app"),
             ],
             true,
           );

@@ -39,7 +39,7 @@ describe("BrowserSession", () => {
       const browserSession = {
         clearCache: vi.fn(() => Promise.resolve()),
         clearStorageData: vi.fn(() => Promise.resolve()),
-        getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 supacode/0.0.27"),
+        getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 Supacode/0.0.27"),
         setPermissionRequestHandler: vi.fn(),
         setPermissionCheckHandler: vi.fn(),
         setUserAgent: vi.fn(),
@@ -95,7 +95,10 @@ describe("BrowserSession", () => {
       const nondefaultProfile = yield* browserSessions.getPartition("a::b", true, "profile");
 
       assert.strictEqual(legacyDefault, "persist:supacode-preview-78f0be89237d77f7a70e");
-      assert.strictEqual(nondefaultProfile, "persist:supacode-preview-profile-78f0be89237d77f7a70e");
+      assert.strictEqual(
+        nondefaultProfile,
+        "persist:supacode-preview-profile-78f0be89237d77f7a70e",
+      );
       assert.notStrictEqual(nondefaultProfile, legacyDefault);
       assert.isTrue(browserSessions.isPartition(legacyDefault));
       assert.isTrue(browserSessions.isPartition(nondefaultProfile));

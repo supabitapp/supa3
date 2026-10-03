@@ -14,8 +14,9 @@ interface SupacodeMarkdownTextSelectionNativeModule {
   } | null;
 }
 
-const nativeModule =
-  requireOptionalNativeModule<SupacodeMarkdownTextSelectionNativeModule>("SupacodeMarkdownTextSelection");
+const nativeModule = requireOptionalNativeModule<SupacodeMarkdownTextSelectionNativeModule>(
+  "SupacodeMarkdownTextSelection",
+);
 
 export function installMarkdownCopySanitizer(reactTag: number, contextClipboardConfig = ""): void {
   nativeModule?.installCopySanitizer(reactTag, contextClipboardConfig);

@@ -22,8 +22,8 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-pre-ready-fs-" });
-      yield* fileSystem.makeDirectory(path.join(root, "supacode (Alpha)"));
-      yield* fileSystem.writeFileString(path.join(root, "supacode (Alpha)", "Local State"), "keys");
+      yield* fileSystem.makeDirectory(path.join(root, "Supacode (Alpha)"));
+      yield* fileSystem.writeFileString(path.join(root, "Supacode (Alpha)", "Local State"), "keys");
 
       const userData = yield* resolveWindowsUserData(root);
 
@@ -37,7 +37,9 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
-        const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-pre-ready-fs-" });
+        const root = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "supacode-pre-ready-fs-",
+        });
         yield* fileSystem.chmod(root, 0o000);
         yield* Effect.addFinalizer(() => fileSystem.chmod(root, 0o700).pipe(Effect.orDie));
 

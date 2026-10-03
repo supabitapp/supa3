@@ -12,7 +12,9 @@ import * as NodePath from "node:path";
 
 const projectRoot = process.env.SUPACODE_PROJECT_ROOT;
 if (!projectRoot) {
-  throw new Error("SUPACODE_PROJECT_ROOT is not set. Run this through the supacode.json setup action.");
+  throw new Error(
+    "SUPACODE_PROJECT_ROOT is not set. Run this through the supacode.json setup action.",
+  );
 }
 const worktree = NodePath.dirname(import.meta.dirname);
 

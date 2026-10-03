@@ -15,7 +15,7 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "supacode (Dev)" : "supacode (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "Supacode (Dev)" : "Supacode (Alpha)";
 const APP_BUNDLE_ID = isDevelopment
   ? `com.supaterm.supacode.dev.${devBundleIdSuffix || "local"}`
   : "com.supaterm.supacode";
@@ -270,8 +270,8 @@ export function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "supacode captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "supacode reads project files you open in the desktop app.",
+      "Supacode captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "Supacode reads project files you open in the desktop app.",
   };
 }
 

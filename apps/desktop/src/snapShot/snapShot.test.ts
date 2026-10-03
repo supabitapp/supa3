@@ -506,17 +506,17 @@ describe("findAccessibleWindow", () => {
   it.each(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])(
     "ignores a leading Wayland title spinner frame %s",
     (frame) => {
-      const windows = [{ name: `${frame} supacode`, bounds: captured.bounds }];
+      const windows = [{ name: `${frame} Supacode`, bounds: captured.bounds }];
 
-      expect(findAccessibleWindow(windows, { ...captured, title: "⠋ supacode" }, "wayland")).toBe(
+      expect(findAccessibleWindow(windows, { ...captured, title: "⠋ Supacode" }, "wayland")).toBe(
         windows[0],
       );
     },
   );
 
   it.each([
-    ["⠋ supacode", "supacode"],
-    ["supacode", "⠙ supacode"],
+    ["⠋ Supacode", "Supacode"],
+    ["Supacode", "⠙ Supacode"],
   ])("matches a Wayland spinner starting or stopping: %s → %s", (title, name) => {
     const windows = [{ name, bounds: captured.bounds }];
 
@@ -524,10 +524,10 @@ describe("findAccessibleWindow", () => {
   });
 
   it.each([
-    ["⠋ supacode", "⠙ private"],
-    ["supacode ⠋", "supacode ⠙"],
-    ["⠋supacode", "⠙supacode"],
-    ["⠁ supacode", "⠙ supacode"],
+    ["⠋ Supacode", "⠙ private"],
+    ["Supacode ⠋", "Supacode ⠙"],
+    ["⠋Supacode", "⠙Supacode"],
+    ["⠁ Supacode", "⠙ Supacode"],
     ["⠋", "⠋"],
   ])("does not guess a Wayland title match: %s → %s", (title, name) => {
     expect(
@@ -538,8 +538,8 @@ describe("findAccessibleWindow", () => {
   it("rejects matching spinners when the window sizes differ", () => {
     expect(
       findAccessibleWindow(
-        [{ name: "⠙ supacode", bounds: { ...captured.bounds, width: 400 } }],
-        { ...captured, title: "⠋ supacode" },
+        [{ name: "⠙ Supacode", bounds: { ...captured.bounds, width: 400 } }],
+        { ...captured, title: "⠋ Supacode" },
         "wayland",
       ),
     ).toBeUndefined();
@@ -547,20 +547,20 @@ describe("findAccessibleWindow", () => {
 
   it("rejects ambiguous normalized titles even if one matches the captured spinner exactly", () => {
     const windows = [
-      { name: "⠋ supacode", bounds: captured.bounds },
-      { name: "⠙ supacode", bounds: captured.bounds },
+      { name: "⠋ Supacode", bounds: captured.bounds },
+      { name: "⠙ Supacode", bounds: captured.bounds },
     ];
 
     expect(
-      findAccessibleWindow(windows, { ...captured, title: "⠋ supacode" }, "wayland"),
+      findAccessibleWindow(windows, { ...captured, title: "⠋ Supacode" }, "wayland"),
     ).toBeUndefined();
   });
 
   it("keeps exact title matching outside Wayland", () => {
     expect(
-      findAccessibleWindow([{ name: "⠙ supacode", bounds: captured.bounds }], {
+      findAccessibleWindow([{ name: "⠙ Supacode", bounds: captured.bounds }], {
         ...captured,
-        title: "⠋ supacode",
+        title: "⠋ Supacode",
       }),
     ).toBeUndefined();
   });
@@ -728,9 +728,9 @@ describe("isWaylandSession", () => {
                 XDG_SESSION_TYPE: "x11",
               }),
             ).toBe(false);
-            expect(isWaylandSession("linux", { XDG_RUNTIME_DIR: "/nonexistent-supacode-test" })).toBe(
-              false,
-            );
+            expect(
+              isWaylandSession("linux", { XDG_RUNTIME_DIR: "/nonexistent-supacode-test" }),
+            ).toBe(false);
           } finally {
             if (server.listening) {
               await new Promise<void>((resolve, reject) => {

@@ -15,7 +15,6 @@ import {
   getStoredCustomThemeCollection,
   invalidateCustomThemes,
   installCustomTheme,
-  canonicalThemePreference,
   parseThemeFile,
   parseThemeHalves,
   removeCustomTheme,
@@ -397,7 +396,7 @@ describe("theme files", () => {
     });
   });
 
-  it("keeps the Supacode Chat palette faithful and readable", () => {
+  it("pins the Supacode Chat palette and keeps it readable", () => {
     expectThemeColors(SUPACODE_CHAT_THEME.colors, {
       canvas: "#fdf7fd",
       chrome: "#fdf7fd",
@@ -1002,34 +1001,6 @@ describe("stored theme preferences", () => {
       vi.unstubAllGlobals();
       invalidateCustomThemes();
     }
-  });
-
-  it("resolves the legacy supacode-chat-dark preference to dark Supacode Chat", () => {
-    expect(getThemeDefinition("supacode-chat-dark")).toBe(SUPACODE_CHAT_THEME);
-    expect(getThemePreferenceMode("supacode-chat-dark")).toBe("dark");
-    expect(resolveThemeAppearance("supacode-chat-dark", true, false)).toBe("dark");
-    expect(resolveDesktopTheme("supacode-chat-dark", false)).toBe("dark");
-    expect(isKnownThemePreference("supacode-chat-dark")).toBe(true);
-  });
-
-  it("resolves legacy supacode-prefixed ids onto the renamed themes", () => {
-    for (const [legacy, theme] of [
-      ["supacode-grove", GROVE_THEME],
-      ["supacode-ocean", OCEAN_THEME],
-      ["supacode-ember", EMBER_THEME],
-      ["supacode-iris", IRIS_THEME],
-    ] as const) {
-      expect(getThemeDefinition(legacy)).toBe(theme);
-      expect(isKnownThemePreference(legacy)).toBe(true);
-      expect(canonicalThemePreference(legacy)).toBe(theme.id);
-    }
-    // The dark-variant alias keeps its raw form: it still carries a mode hint.
-    expect(canonicalThemePreference("supacode-chat-dark")).toBe("supacode-chat-dark");
-    // A stored mix that predates the rename resolves to the new ids.
-    expect(parseThemeHalves(JSON.stringify({ light: "supacode-ocean", dark: "supacode-grove" }))).toEqual({
-      light: OCEAN_THEME.id,
-      dark: GROVE_THEME.id,
-    });
   });
 
   it("recognizes only preferences the runtime can render", () => {

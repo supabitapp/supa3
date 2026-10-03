@@ -76,7 +76,7 @@ export const SupacodeProjectFile = Schema.Struct({
     trimmedNonEmpty(
       {
         description:
-          'Workspace-relative path to the project icon (e.g. "assets/logo.svg"). Checked before supacode\'s built-in icon locations.',
+          'Workspace-relative path to the project icon (e.g. "assets/logo.svg"). Checked before Supacode\'s built-in icon locations.',
       },
       SUPACODE_PROJECT_FILE_PATH_MAX_LENGTH,
     ),
@@ -101,7 +101,7 @@ export const SupacodeProjectFile = Schema.Struct({
       .check(Schema.isMaxLength(SUPACODE_PROJECT_FILE_MAX_SCRIPTS)),
   ),
 }).annotate({
-  title: "supacode project file",
+  title: "Supacode project file",
   description:
     "Checked-in project configuration for Supacode (supacode.json at the repository root). See https://github.com/supabitapp/supacode for documentation.",
 });

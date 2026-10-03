@@ -41,9 +41,10 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const names = input.isDevelopment
-      ? { current: "supacode-dev", legacy: "supacode (Dev)" }
-      : { current: "supacode-v2", legacy: "supacode (Alpha)" };
+      ? { current: "supacode-dev", previous: "supa3-dev", legacy: "Supacode (Dev)" }
+      : { current: "supacode-v2", previous: "supa3-v2", legacy: "Supacode (Alpha)" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
+    const previousPath = path.join(input.appDataDirectory, names.previous);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>
       fs
@@ -53,6 +54,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
             DesktopUserDataInitializationError.fromFileSystem(cause, "inspect", resourcePath),
           ),
         );
+    if (!(yield* inspect(destinationPath)) && (yield* inspect(previousPath))) return previousPath;
     if (input.isDevelopment) {
       return (yield* inspect(legacyPath)) ? legacyPath : destinationPath;
     }
@@ -63,7 +65,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const legacyState = path.join(legacyPath, "Local State");
     const sourceState = (yield* inspect(legacyState))
       ? legacyState
-      : path.join(input.appDataDirectory, "supacode", "Local State");
+      : path.join(input.appDataDirectory, "Supacode", "Local State");
     if (!(yield* inspect(sourceState))) return destinationPath;
     // Windows safeStorage keys live here. Copy only these preferences, never locked databases.
     const state = yield* fs

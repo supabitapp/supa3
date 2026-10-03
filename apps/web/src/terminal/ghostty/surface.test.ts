@@ -611,9 +611,9 @@ describe("terminalLinkAtPositionWithRange", () => {
       cells: [
         { ...cell("🙂"), wide: 1 },
         { ...cell(""), wide: 2 },
-        ...Array.from("https://supacode.code", (character) => cell(character)),
+        ...Array.from("https://supacode.s", (character) => cell(character)),
       ],
-      text: "🙂 https://supacode.code",
+      text: "🙂 https://supacode.s",
       isWrapContinuation: false,
       wrapsToNext: true,
     };
@@ -629,7 +629,9 @@ describe("terminalLinkAtPositionWithRange", () => {
       isWrapContinuation: false,
       wrapsToNext: false,
     };
-    expect(terminalLinkAtPositionWithRange([unwrittenTail], 0, 8)?.text).toBe("https://supacode.sh");
+    expect(terminalLinkAtPositionWithRange([unwrittenTail], 0, 8)?.text).toBe(
+      "https://supacode.sh",
+    );
   });
 });
 

@@ -204,7 +204,10 @@ describe("matchesLinkedPullRequestUrl", () => {
 
   it("rejects a different pull request or host", () => {
     expect(
-      matchesLinkedPullRequestUrl(linkedPullRequest, "https://github.com/supabitapp/supacode/pull/43"),
+      matchesLinkedPullRequestUrl(
+        linkedPullRequest,
+        "https://github.com/supabitapp/supacode/pull/43",
+      ),
     ).toBe(false);
     expect(
       matchesLinkedPullRequestUrl(
@@ -228,7 +231,7 @@ describe("shouldOpenPullRequestExternally", () => {
 
 describe("parseChangeRequestUrl", () => {
   it("reads a GitHub pull request", () => {
-    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/SupabitApp/Supacode/pull/123")).toEqual({
       host: "github.com",
       repository: "supabitapp/supacode",
       number: 123,
@@ -245,10 +248,10 @@ describe("parseChangeRequestUrl", () => {
 
   it("reads a GitLab merge request, nested groups and all", () => {
     expect(
-      parseChangeRequestUrl("https://gitlab.com/supacode/platform/supacode/-/merge_requests/42"),
+      parseChangeRequestUrl("https://gitlab.com/supabitapp/platform/supacode/-/merge_requests/42"),
     ).toEqual({
       host: "gitlab.com",
-      repository: "supacode/platform/supacode",
+      repository: "supabitapp/platform/supacode",
       number: 42,
     });
   });
@@ -289,7 +292,9 @@ describe("parseChangeRequestUrl", () => {
   });
 
   it("survives trailing segments, a trailing slash and a query string", () => {
-    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/files?w=1")).toEqual({
+    expect(
+      parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/files?w=1"),
+    ).toEqual({
       host: "github.com",
       repository: "supabitapp/supacode",
       number: 123,
@@ -465,17 +470,17 @@ describe("findProjectForChangeRequest", () => {
     // two-segment owner/name form would look for `supabitapp/supacode` and find nothing.
     const projects = [
       project({
-        canonicalKey: "gitlab.com/supacode/platform/supacode",
+        canonicalKey: "gitlab.com/supabitapp/platform/supacode",
         provider: "gitlab",
-        displayName: "supacode/platform/supacode",
-        owner: "supacode",
+        displayName: "supabitapp/platform/supacode",
+        owner: "supabitapp",
         name: "supacode",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "gitlab.com",
-        repository: "supacode/platform/supacode",
+        repository: "supabitapp/platform/supacode",
         number: 42,
       }),
     ).toBe(projects[0]);
@@ -486,7 +491,7 @@ describe("findProjectForChangeRequest", () => {
       project({
         canonicalKey: "github.com/supabitapp/supacode",
         provider: "github",
-        owner: "pingdotgg",
+        owner: "supabitapp",
         name: "supacode",
       }),
     ];
@@ -506,20 +511,22 @@ describe("findProjectForChangeRequest", () => {
     //
     // Derived from the SSH remote the way the server derives it rather than written out, so the
     // day that normalization stops reaching the web spelling this fails here too.
-    const canonicalKey = normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/Supacode/Platform/Supacode");
+    const canonicalKey = normalizeGitRemoteUrl(
+      "git@ssh.dev.azure.com:v3/SupabitApp/Platform/Supacode",
+    );
     const projects = [
       project({
         canonicalKey,
         provider: "azure-devops",
         displayName: canonicalKey.split("/").slice(1).join("/"),
-        owner: "supacode",
+        owner: "supabitapp",
         name: "supacode",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "dev.azure.com",
-        repository: "supacode/platform/_git/supacode",
+        repository: "supabitapp/platform/_git/supacode",
         number: 1,
       }),
     ).toBe(projects[0]);
@@ -530,7 +537,7 @@ describe("findProjectForChangeRequest", () => {
       project({
         canonicalKey: "github.com/supabitapp/supacode",
         provider: "github",
-        owner: "pingdotgg",
+        owner: "supabitapp",
         name: "supacode",
       }),
     ];

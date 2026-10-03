@@ -269,7 +269,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   return coordinator;
 }
 
-@interface SupacodeMarkdownText () <RCTT3MarkdownTextViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
+@interface SupacodeMarkdownText () <RCTSupacodeMarkdownTextViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
 
 @end
 

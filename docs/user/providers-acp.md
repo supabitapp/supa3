@@ -30,9 +30,9 @@ connect over a direct connection or SSH.
 
 Agents install under `tools/<agent-id>/<version>/` inside Supacode home. Supacode verifies SHA-256 when the Registry entry
 provides one; entries without a checksum retain the Registry's HTTPS distribution guarantee.
-Registry `npx` and `uvx` packages use supacode-owned npm prefixes and Python tool directories at the exact
+Registry `npx` and `uvx` packages use Supacode-owned npm prefixes and Python tool directories at the exact
 version published by the Registry. Their commands are available in a new server terminal for
-sign-in and direct use. Removing an agent's last provider instance removes supacode-managed binary files
+sign-in and direct use. Removing an agent's last provider instance removes Supacode-managed binary files
 but keeps package installs. To use an existing local binary, set **Executable override** explicitly.
 
 ## Signing in

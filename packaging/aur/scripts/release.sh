@@ -17,7 +17,7 @@ fi
 
 version="${tag#v}"
 pkgver="${version//-/_}"
-asset_name="Supacode-${version}-x86_64.AppImage"
+asset_name="supacode-${version}-x86_64.AppImage"
 release_json="$(gh api "repos/$repo/releases/tags/$tag")"
 asset_digest="$(jq -r --arg name "$asset_name" \
   '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"

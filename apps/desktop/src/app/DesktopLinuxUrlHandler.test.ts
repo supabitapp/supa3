@@ -28,7 +28,7 @@ const makeEnvironment = (path: Path.Path, overrides: Record<string, unknown> = {
     platform: "linux",
     isPackaged: true,
     isDevelopment: false,
-    displayName: "supacode (Alpha)",
+    displayName: "Supacode (Alpha)",
     linuxDesktopEntryName: "com.supaterm.supacode.desktop",
     linuxWmClass: "supacode",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
@@ -160,14 +160,14 @@ const emptyRecording = (): RecordedRegistration => ({
 describe("DesktopLinuxUrlHandler", () => {
   it("renders a scheme-handler desktop entry with freedesktop Exec quoting", () => {
     const entry = DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-      displayName: "supacode (Nightly)",
+      displayName: "Supacode (Nightly)",
       execTarget: '/home/al ice/Apps/Supacode "100%" $HOME\\x.AppImage',
       scheme: "supacode",
       iconPath: "/home/al ice/icons/Supacode\\x.png",
     });
 
     assert.include(entry, "[Desktop Entry]");
-    assert.include(entry, "Name=supacode (Nightly)");
+    assert.include(entry, "Name=Supacode (Nightly)");
     // Exec composes both escaping layers: a literal backslash becomes four
     // backslashes in the file, a quote three characters, a dollar sign two
     // backslashes plus the sign.
@@ -260,7 +260,7 @@ describe("DesktopLinuxUrlHandler", () => {
     return Effect.gen(function* () {
       yield* runRegister(recorded, {
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-          displayName: "supacode (Alpha)",
+          displayName: "Supacode (Alpha)",
           execTarget: "/home/alice/Applications/Supacode.AppImage",
           scheme: "supacode",
           iconPath: "/home/alice/.local/share/icons/com.supaterm.supacode.desktop.png",
@@ -289,7 +289,7 @@ describe("DesktopLinuxUrlHandler", () => {
       yield* runRegister(recorded, {
         iconSource: "/tmp/.mount_Supacode/resources/icon.png",
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-          displayName: "supacode (Alpha)",
+          displayName: "Supacode (Alpha)",
           execTarget: "/home/alice/Applications/Supacode.AppImage",
           scheme: "supacode",
           iconPath,

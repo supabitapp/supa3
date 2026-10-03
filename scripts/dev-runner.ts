@@ -333,7 +333,7 @@ export function createDevRunnerEnv({
     // A dev-runner server is never launcher-managed. When the shell that runs
     // this script was itself spawned by the machine's managed Supacode service (an
     // agent working inside Supacode), these leak through and the child server
-    // fails startup with "The service launcher started a different supacode version"
+    // fails startup with "The service launcher started a different Supacode version"
     // (serviceLauncherClient.ts resolveStartup).
     delete output.SUPACODE_SERVICE_LAUNCHER_CONTEXT;
     delete output.SUPACODE_BOOT_SERVICE_UNIT;

@@ -70,7 +70,9 @@ describe("parseChangeRequestUrl", () => {
   });
 
   it("survives trailing segments, a trailing slash and a query string", () => {
-    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/files?w=1")).toEqual({
+    expect(
+      parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/files?w=1"),
+    ).toEqual({
       host: "github.com",
       repository: "supabitapp/supacode",
       number: 123,

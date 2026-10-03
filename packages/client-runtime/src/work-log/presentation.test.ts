@@ -302,7 +302,11 @@ describe("resolveWorkEntryToolPresentation", () => {
     ["supacode_project_create", "Registering a project", "Registered a project"],
     ["supacode_thread_launch", "Launching a project thread", "Launched a project thread"],
     ["supacode_queue_edit", "Editing a queued message", "Edited a queued message"],
-    ["supacode_pending_request_respond", "Answering pending questions", "Answered pending questions"],
+    [
+      "supacode_pending_request_respond",
+      "Answering pending questions",
+      "Answered pending questions",
+    ],
     ["supacode_thread_configure", "Setting thread model", "Set thread model"],
     ["supacode_thread_fork", "Forking this thread", "Requested a fork of this thread"],
     ["supacode_thread_send_attachments", "Sending attachments", "Sent attachments"],
@@ -790,7 +794,7 @@ describe("toolGroupAction", () => {
 describe("resolveViewedImageAsset", () => {
   const threadId = ThreadId.make("thread-1");
 
-  it("serves supacode attachment paths in place like any other host path", () => {
+  it("serves Supacode attachment paths in place like any other host path", () => {
     const path = "/Users/demo/.supacode/dev/attachments/11111111-1111-4111-8111-111111111111.png";
     expect(resolveViewedImageAsset(path, { threadId, workspaceRoot: "/workspace" })).toEqual({
       resource: { _tag: "media-file", threadId, path },

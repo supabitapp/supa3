@@ -11,21 +11,16 @@ export const MOBILE_DEFAULT_THEME_ID = "supacode";
 export const MOBILE_THEME_IDS = [MOBILE_DEFAULT_THEME_ID, ...BUILT_IN_THEME_IDS] as const;
 
 /**
- * Ids a theme may not take: the appearance keywords a stored preference uses,
- * every built-in, and the legacy aliases older saves still carry. Taking one
- * would either be shadowed by the built-in or capture clients that never chose
- * it, so the client library and the publish path both consult this set.
+ * Ids a theme may not take: the appearance keywords a stored preference uses
+ * and every built-in. Taking one would either be shadowed by the built-in or
+ * capture clients that never chose it, so the client library and the publish
+ * path both consult this set.
  */
 export const RESERVED_THEME_IDS: ReadonlySet<string> = new Set([
   "system",
   "light",
   "dark",
   ...BUILT_IN_THEME_IDS,
-  "supacode-chat-dark",
-  "supacode-grove",
-  "supacode-ocean",
-  "supacode-ember",
-  "supacode-iris",
 ]);
 
 /**

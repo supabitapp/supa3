@@ -229,7 +229,9 @@ function contextDraft(start: number, count: number): ComposerDraft {
     name: "skill",
   }));
   return {
-    text: records.map((record) => `[Skill](supacode-context://v1/skill/${record.contextId})`).join(" "),
+    text: records
+      .map((record) => `[Skill](supacode-context://v1/skill/${record.contextId})`)
+      .join(" "),
     context: { version: 1, records },
     attachments: [],
   };
@@ -250,7 +252,9 @@ describe("mobile composer drafts", () => {
     const legacy = { text: "Review these", attachments: [file, image, video] };
     const restored = decodePersistedComposerState({ schemaVersion: 1, drafts: { thread: legacy } })
       .drafts.thread;
-    expect(restored?.text).toBe("Review these [notes.txt](supacode-context://v1/file/legacy-file) ");
+    expect(restored?.text).toBe(
+      "Review these [notes.txt](supacode-context://v1/file/legacy-file) ",
+    );
     expect(restored?.attachments).toEqual(legacy.attachments);
     expect(restored?.context?.records).toEqual([
       expect.objectContaining({ kind: "file", attachmentId: file.id }),

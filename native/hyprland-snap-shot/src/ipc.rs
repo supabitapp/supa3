@@ -164,7 +164,7 @@ pub fn activate(pid: u32, title: &str) -> Result<()> {
         events.get_ref().set_read_timeout(Some(
             deadline
                 .checked_duration_since(Instant::now())
-                .ok_or("supacode did not become visible.")?,
+                .ok_or("Supacode did not become visible.")?,
         ))?;
         let mut event = Vec::new();
         if events.by_ref().take(8193).read_until(b'\n', &mut event)? == 0 || event.len() > 8192 {
@@ -204,11 +204,22 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(destination(vec![window(1, "Supacode"), window(1, "Supacode")], 1, "Supacode").is_err());
         assert!(
-            destination(vec![window(2, "Supacode"), window(1, "Supacode")], 1, "Supacode")
-                .unwrap()
-                .is_some()
+            destination(
+                vec![window(1, "Supacode"), window(1, "Supacode")],
+                1,
+                "Supacode"
+            )
+            .is_err()
+        );
+        assert!(
+            destination(
+                vec![window(2, "Supacode"), window(1, "Supacode")],
+                1,
+                "Supacode"
+            )
+            .unwrap()
+            .is_some()
         );
     }
     #[test]

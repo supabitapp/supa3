@@ -91,8 +91,8 @@ class SupacodeComposerEditorModule : Module() {
       Prop("lineHeight") { view: SupacodeComposerEditorView, lineHeight: Double ->
         view.setLineHeight(lineHeight.toFloat())
       }
-      Prop("contentInsetVertical") { view: SupacodeComposerEditorView, contentInsetVertical: Double ->
-        view.setContentInsetVertical(contentInsetVertical.toInt())
+      Prop("contentInsetVertical") { view: SupacodeComposerEditorView, inset: Double ->
+        view.setContentInsetVertical(inset.toInt())
       }
 
       Prop("singleLineCentered") { view: SupacodeComposerEditorView, singleLineCentered: Boolean ->

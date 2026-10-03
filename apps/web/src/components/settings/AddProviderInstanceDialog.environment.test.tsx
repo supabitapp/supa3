@@ -1,4 +1,8 @@
-import { EnvironmentId, ProviderDriverKind, type AcpRegistrySearchAgent } from "@supacode/contracts";
+import {
+  EnvironmentId,
+  ProviderDriverKind,
+  type AcpRegistrySearchAgent,
+} from "@supacode/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { visitElements } from "../../test/reactElementTree";

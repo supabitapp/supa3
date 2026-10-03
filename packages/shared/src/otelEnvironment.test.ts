@@ -42,7 +42,12 @@ describe("OtelEnvironment", () => {
       warnings: [specIgnored("yes")],
     },
     // SUPACODE_OTEL_SDK_DISABLED takes Config.Boolean's values, case-insensitively.
-    { name: "supacode 1", env: { SUPACODE_OTEL_SDK_DISABLED: "1" }, disabled: true, warnings: [SUPACODE_OFF] },
+    {
+      name: "supacode 1",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "1" },
+      disabled: true,
+      warnings: [SUPACODE_OFF],
+    },
     {
       name: "supacode TRUE",
       env: { SUPACODE_OTEL_SDK_DISABLED: "TRUE" },
@@ -471,12 +476,21 @@ describe("OtelEnvironment", () => {
         export: { protocol: "http/json", headers: undefined, exportIntervalMs: 10_000 },
       } as const;
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "logs", supacode, "http://settings:4318/v1/logs"),
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "logs",
+          supacode,
+          "http://settings:4318/v1/logs",
+        ),
         undefined,
       );
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "traces", supacode, "http://settings:4318/v1/traces")
-          ?.url,
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "traces",
+          supacode,
+          "http://settings:4318/v1/traces",
+        )?.url,
         "http://settings:4318/v1/traces",
       );
     }),

@@ -81,7 +81,7 @@ const VARIANT_CONFIG = {
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "supacode",
+    appName: "Supacode",
     scheme: "supacode",
     iosBundleIdentifier: "com.supaterm.supacode",
     androidPackage: "com.supaterm.supacode",

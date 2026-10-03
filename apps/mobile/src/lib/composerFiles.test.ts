@@ -593,7 +593,8 @@ describe("composer file attachments", () => {
     expect(result.files).toEqual([
       expect.objectContaining({
         name: "Cloud recording.mp4",
-        fileUri: "file:///documents/supacode-composer-attachments/attachment-id-Cloud recording.mp4",
+        fileUri:
+          "file:///documents/supacode-composer-attachments/attachment-id-Cloud recording.mp4",
       }),
     ]);
     expect(mocks.copy).toHaveBeenCalledWith(cachedUri, result.files[0]!.fileUri);

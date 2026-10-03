@@ -8,7 +8,7 @@ import * as PlatformError from "effect/PlatformError";
 import { resolveUserDataPath } from "./DesktopUserData.ts";
 
 it.effect("identifies a failed source read and preserves its cause", () => {
-  const sourceState = "/profiles/supacode/Local State";
+  const sourceState = "/profiles/Supacode/Local State";
   const cause = PlatformError.systemError({
     _tag: "PermissionDenied",
     module: "FileSystem",
@@ -37,7 +37,7 @@ it.effect("identifies a failed source read and preserves its cause", () => {
   );
 });
 
-it.effect.each(["supacode", "supacode (Alpha)"])(
+it.effect.each(["Supacode", "Supacode (Alpha)"])(
   "preserves Windows credential keys from %s without copying browser databases",
   (sourceName) =>
     Effect.gen(function* () {
@@ -47,7 +47,7 @@ it.effect.each(["supacode", "supacode (Alpha)"])(
       const source = path.join(directory, sourceName);
       const destination = path.join(directory, "supacode-v2");
       const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "supacode (Alpha)"), { recursive: true });
+      yield* fs.makeDirectory(path.join(directory, "Supacode (Alpha)"), { recursive: true });
       yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
       yield* fs.writeFileString(path.join(source, "Local State"), state);
       yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");
@@ -69,5 +69,28 @@ it.effect.each(["supacode", "supacode (Alpha)"])(
         yield* fs.readFileString(path.join(destination, "Local State")),
         "existing V2 state",
       );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect.each([
+  { isDevelopment: false, previous: "supa3-v2", current: "supacode-v2" },
+  { isDevelopment: true, previous: "supa3-dev", current: "supacode-dev" },
+])(
+  "keeps using the $previous profile until $current exists",
+  ({ isDevelopment, previous, current }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-profile-" });
+      const resolve = resolveUserDataPath({
+        appDataDirectory: directory,
+        isDevelopment,
+        platform: "win32",
+      });
+      assert.equal(yield* resolve, path.join(directory, current));
+      yield* fs.makeDirectory(path.join(directory, previous));
+      assert.equal(yield* resolve, path.join(directory, previous));
+      yield* fs.makeDirectory(path.join(directory, current));
+      assert.equal(yield* resolve, path.join(directory, current));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

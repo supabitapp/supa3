@@ -190,16 +190,6 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
-      name: "a legacy supacode-grove preference resolves through the alias",
-      storage: { [THEME_STORAGE_KEY]: "supacode-grove", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
-      prefersDark: true,
-    },
-    {
-      name: "legacy supacode-chat-dark resolves to dark Supacode Chat",
-      storage: { [THEME_STORAGE_KEY]: "supacode-chat-dark" },
-      prefersDark: true,
-    },
-    {
       name: "a dual-mode custom theme follows the OS",
       storage: {
         [THEME_STORAGE_KEY]: "aurora",
@@ -421,22 +411,6 @@ describe("index.html boot script", () => {
     expect(boot.isDark).toBe(true);
     expect(boot.themeId).toBe(GROVE_THEME.id);
     expect(boot.themeSelected).toBe("true");
-    expect(boot.bootVariables["--boot-background"]).toBe(
-      getThemeColorsForMode(GROVE_THEME, "dark")!.canvas,
-    );
-  });
-
-  it("resolves a legacy-prefixed mix half onto the renamed theme", () => {
-    const boot = runBootScript({
-      storage: {
-        [THEME_STORAGE_KEY]: "supacode-chat",
-        [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "supacode:theme-halves:v1": JSON.stringify({ dark: "supacode-grove" }),
-      },
-      prefersDark: true,
-    });
-    expect(boot.isDark).toBe(true);
-    expect(boot.themeId).toBe(GROVE_THEME.id);
     expect(boot.bootVariables["--boot-background"]).toBe(
       getThemeColorsForMode(GROVE_THEME, "dark")!.canvas,
     );

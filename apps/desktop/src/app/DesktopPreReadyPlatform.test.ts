@@ -43,6 +43,7 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("node:fs", () => ({
+  existsSync: () => false,
   readFileSync: () => "{}",
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
@@ -117,7 +118,7 @@ describe("DesktopPreReadyPlatform", () => {
         const identity = yield* Effect.promise(() => portalIdentity);
         assert.equal(identity.desktopName, "com.supaterm.supacode.desktop");
         assert.include(identity.desktopEntry ?? "", 'Exec="/Applications/current.AppImage" %U');
-        assert.include(identity.desktopEntry ?? "", "Name=supacode (Alpha)");
+        assert.include(identity.desktopEntry ?? "", "Name=Supacode (Alpha)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/supacode;");
         assert.include(
           identity.desktopEntry ?? "",

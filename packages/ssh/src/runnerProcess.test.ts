@@ -66,7 +66,9 @@ server.listen(Number(process.env.SUPACODE_TEST_PORT ?? 0), "127.0.0.1", () => {
                 },
                 detached: false,
                 stdin: Stream.make(
-                  new TextEncoder().encode(buildRemoteSupacodeRunnerScript({ nodeScriptPath: cliPath })),
+                  new TextEncoder().encode(
+                    buildRemoteSupacodeRunnerScript({ nodeScriptPath: cliPath }),
+                  ),
                 ),
               }),
             );

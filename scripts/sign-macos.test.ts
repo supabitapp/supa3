@@ -7,8 +7,8 @@ vi.mock("@electron/osx-sign", () => ({ sign: vi.fn() }));
 
 it("batches codesign calls without changing existing signing options", async () => {
   const options = {
-    app: "/tmp/supacode.app",
-    identity: "Developer ID Application: Supacode Tools, Inc.",
+    app: "/tmp/Supacode.app",
+    identity: "Developer ID Application: Supacode",
     keychain: "/tmp/supacode.keychain",
     provisioningProfile: "/tmp/supacode.provisionprofile",
     optionsForFile: () => ({

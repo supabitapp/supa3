@@ -200,7 +200,9 @@ export function resolveWorkEntryToolPresentation(
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
   return resolveSupacodeMcpToolPresentation(
     definition,
-    definition && supacodeToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
+    definition && supacodeToolResultIndicatesFailure(workEntryToolOutput(entry))
+      ? "failed"
+      : status,
     entry.toolData,
   );
 }
@@ -653,7 +655,8 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   >();
   const sources = new Map<string, ToolActivitySource>();
   for (const entry of entries) {
-    const supacodeAction = resolveSupacodeMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
+    const supacodeAction =
+      resolveSupacodeMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
     if (entry.toolSource && supacodeAction === null) {
       sources.set(entry.toolSource.key, entry.toolSource);
       continue;

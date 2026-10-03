@@ -5,7 +5,10 @@ import * as Scope from "effect/Scope";
 import { HttpClient } from "effect/unstable/http";
 import { OtlpExporter, OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 
-import { settleAsyncResult, squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
+import {
+  settleAsyncResult,
+  squashAtomCommandFailure,
+} from "@supacode/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@supacode/client-runtime/errors";
 import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import * as ClientTracer from "./clientTracer";

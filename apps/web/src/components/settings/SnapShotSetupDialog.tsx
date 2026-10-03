@@ -174,7 +174,7 @@ export function SnapShotSetupDialog({
                       ? "Update the capture helper"
                       : "Allow snapshots",
                   description:
-                    "supacode's capture helper lets you capture other apps and return to your draft. It's included with Supacode.",
+                    "Supacode's capture helper lets you capture other apps and return to your draft. It's included with Supacode.",
                 }
           : backend === "niri"
             ? {

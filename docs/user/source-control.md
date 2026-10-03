@@ -144,7 +144,7 @@ single commit keeps them. A file pushed to after you cleared it comes back marke
 On GitHub these are GitHub's own viewed marks, so a review carries between Supacode and github.com
 in either direction. Forgejo, GitLab, Bitbucket, and Azure DevOps expose no record Supacode can read, so the
 server you are connected to keeps them instead: they follow you across the apps connected to that
-server, but the host's own site will not show them, and the count reads **viewed in supacode**.
+server, but the host's own site will not show them, and the count reads **viewed in Supacode**.
 
 The **Code** tab is a web and desktop surface. The mobile app reports a pull request's status but
 does not show its diff, so marks are made and read on web and desktop.

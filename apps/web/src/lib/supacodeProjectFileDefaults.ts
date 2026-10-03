@@ -1,4 +1,8 @@
-import { SUPACODE_PROJECT_FILE_NAME, type EnvironmentId, type SupacodeProjectFile } from "@supacode/contracts";
+import {
+  SUPACODE_PROJECT_FILE_NAME,
+  type EnvironmentId,
+  type SupacodeProjectFile,
+} from "@supacode/contracts";
 import { parseSupacodeProjectFile } from "@supacode/shared/supacodeProjectFile";
 import { executeAtomQuery } from "@supacode/client-runtime/state/runtime";
 

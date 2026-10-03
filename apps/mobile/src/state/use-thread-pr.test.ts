@@ -162,7 +162,11 @@ describe("resolveThreadPrSource compatibility", () => {
     number: 1,
     url: "https://github.com/supabitapp/supacode/pull/1",
   };
-  const branchRef = { ...legacyRef, number: 2, url: "https://github.com/supabitapp/supacode/pull/2" };
+  const branchRef = {
+    ...legacyRef,
+    number: 2,
+    url: "https://github.com/supabitapp/supacode/pull/2",
+  };
 
   it("polls the legacy reference when only the older linking capability exists", () => {
     expect(

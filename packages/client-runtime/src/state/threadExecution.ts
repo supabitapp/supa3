@@ -20,7 +20,10 @@ import {
   backgroundWorkHoldsCompletion,
   derivePendingBackgroundWork,
 } from "@supacode/shared/orchestrationV2PendingBackgroundWork";
-import { getProviderOptionCurrentLabel, getProviderOptionDescriptors } from "@supacode/shared/model";
+import {
+  getProviderOptionCurrentLabel,
+  getProviderOptionDescriptors,
+} from "@supacode/shared/model";
 import { formatDuration } from "@supacode/shared/orchestrationTiming";
 import * as DateTime from "effect/DateTime";
 

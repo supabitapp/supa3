@@ -529,7 +529,10 @@ function itemToolPresentation(item: OrchestrationV2TurnItem): SupacodeMcpToolPre
   if (item.type !== "dynamic_tool") {
     return null;
   }
-  return resolveSupacodeMcpToolPresentation(item.toolName) ?? resolveSupacodeMcpToolPresentation(item.title);
+  return (
+    resolveSupacodeMcpToolPresentation(item.toolName) ??
+    resolveSupacodeMcpToolPresentation(item.title)
+  );
 }
 
 function itemSummary(

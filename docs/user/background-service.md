@@ -5,11 +5,11 @@ to keep a terminal open.
 
 ## Manage the service
 
-Install the `supacode` CLI first ([Install supacode](./install.md#command-line)), then
+Install the `supacode` CLI first ([Install Supacode](./install.md#command-line)), then
 run these commands on the machine that will host Supacode:
 
-| Task                            | Command                   |
-| ------------------------------- | ------------------------- |
+| Task                            | Command                      |
+| ------------------------------- | ---------------------------- |
 | Install and start               | `supacode service install`   |
 | Inspect status and log location | `supacode service status`    |
 | Move to a newer release         | `supacode update`            |
@@ -27,7 +27,7 @@ the old version until you run `supacode service restart`. Pass `--yes` from a
 script. A server you started by hand is left running; stop and start it again
 to pick up the new version. Wait for any remote update already in progress
 before updating; to match a remote client's version, follow
-[Updating supacode](./updating.md).
+[Updating Supacode](./updating.md).
 
 Pass an exact version (`supacode update 0.0.42`) to pin one, `--channel nightly` to
 switch trains, or `--allow-downgrade` to move backwards. `preview` is a
@@ -80,8 +80,8 @@ administrator access, run `supacode serve` in a terminal and keep that session o
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `linger-unavailable`                    | Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.                             |
 | `user-manager-unavailable`              | Run `systemctl --user status` in a login session for the service user; check your distribution's systemd user-session support. |
-| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status supacode.service`, then use the repair command printed by Supacode.                        |
-| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `supacode service restart`.                         |
+| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status supacode.service`, then use the repair command printed by Supacode.                  |
+| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `supacode service restart`.                      |
 
 On macOS, check **System Settings → General → Login Items** if the service no
 longer starts at login. If agent work cannot access Desktop, Documents, or

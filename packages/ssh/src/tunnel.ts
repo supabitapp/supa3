@@ -438,7 +438,7 @@ if [ -n "$SUPACODE_NODE_SCRIPT_PATH" ]; then
 fi
 SUPACODE_ARCHIVE_VERSION=@@SUPACODE_ARCHIVE_VERSION@@
 if [ -z "$SUPACODE_ARCHIVE_VERSION" ]; then
-  printf 'No supacode release version was provided for the remote runtime.\\n' >&2
+  printf 'No Supacode release version was provided for the remote runtime.\\n' >&2
   exit 1
 fi
 # Self-contained release archive: no Node, npm, or compiler on the remote.
@@ -479,7 +479,7 @@ if ! supacode_runtime_ready; then
       fi
     fi
     if [ "$SUPACODE_LOCK_WAITED" -ge @@SUPACODE_ARCHIVE_LOCK_WAIT_SECONDS@@ ]; then
-      printf 'Another supacode %s installation has held %s for too long.\\n' "$SUPACODE_ARCHIVE_VERSION" "$SUPACODE_LOCK" >&2
+      printf 'Another Supacode %s installation has held %s for too long.\\n' "$SUPACODE_ARCHIVE_VERSION" "$SUPACODE_LOCK" >&2
       exit 1
     fi
     sleep 1
@@ -492,12 +492,12 @@ if ! supacode_runtime_ready; then
   case "$(uname -s)" in
     Darwin) SUPACODE_PLATFORM="darwin" ;;
     Linux) SUPACODE_PLATFORM="linux" ;;
-    *) printf 'Remote host %s has no supacode release archive.\\n' "$(uname -s)" >&2; exit 1 ;;
+    *) printf 'Remote host %s has no Supacode release archive.\\n' "$(uname -s)" >&2; exit 1 ;;
   esac
   case "$(uname -m)" in
     arm64 | aarch64) SUPACODE_ARCH="arm64" ;;
     x86_64 | amd64) SUPACODE_ARCH="x64" ;;
-    *) printf 'Remote host %s has no supacode release archive.\\n' "$(uname -m)" >&2; exit 1 ;;
+    *) printf 'Remote host %s has no Supacode release archive.\\n' "$(uname -m)" >&2; exit 1 ;;
   esac
   SUPACODE_ARCHIVE="supacode-$SUPACODE_ARCHIVE_VERSION-$SUPACODE_PLATFORM-$SUPACODE_ARCH.tar.gz"
   SUPACODE_STAGING="$(mktemp -d "$HOME/.supacode/runtime/versions/.staging-XXXXXX")"
@@ -524,7 +524,7 @@ if ! supacode_runtime_ready; then
   # Prove the binary runs here (libc, arch) before marking it ready, or every
   # later launch would exec a broken install instead of retrying.
   if ! "$SUPACODE_STAGING/supacode" --version >/dev/null 2>&1; then
-    printf 'The supacode %s executable does not run on this host.\\n' "$SUPACODE_ARCHIVE_VERSION" >&2; exit 1
+    printf 'The Supacode %s executable does not run on this host.\\n' "$SUPACODE_ARCHIVE_VERSION" >&2; exit 1
   fi
   printf '%s\\n' "$SUPACODE_ARCHIVE_VERSION" > "$SUPACODE_STAGING/.install-complete"
   rm -rf "$SUPACODE_RUNTIME_DIR"
@@ -767,7 +767,7 @@ export class SshInvalidArchiveVersionError extends Schema.TaggedError<SshInvalid
   { archiveVersion: Schema.String },
 ) {
   override get message(): string {
-    return `'${this.archiveVersion}' is not an exact supacode version and cannot name a runtime directory.`;
+    return `'${this.archiveVersion}' is not an exact Supacode version and cannot name a runtime directory.`;
   }
 }
 
@@ -782,7 +782,7 @@ export class SshMissingRunnerError extends Schema.TaggedError<SshMissingRunnerEr
   {},
 ) {
   override get message(): string {
-    return "A remote supacode runner needs an archive version or a node script path.";
+    return "A remote Supacode runner needs an archive version or a node script path.";
   }
 }
 

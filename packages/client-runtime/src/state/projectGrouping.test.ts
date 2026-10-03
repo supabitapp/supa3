@@ -82,7 +82,7 @@ const repositoryIdentity = {
     remoteUrl: "https://github.com/supabitapp/supacode.git",
   },
   provider: "github",
-  owner: "supacode",
+  owner: "supabitapp",
   name: "supacode",
   displayName: "supacode",
 };

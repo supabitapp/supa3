@@ -8,7 +8,7 @@ import { buildDiscordReleaseAnnouncement, postDiscordWebhook } from "./notify-di
 const latestAnnouncement = {
   target: "latest",
   roleId: "222222222222222222",
-  releaseName: "supacode v1.2.3",
+  releaseName: "Supacode v1.2.3",
   version: "1.2.3",
   tag: "v1.2.3",
   releaseUrl: new URL("https://github.com/supabitapp/supacode/releases/tag/v1.2.3"),
@@ -69,7 +69,7 @@ it("builds a latest Discord announcement for stable subscribers", () => {
     },
     embeds: [
       {
-        title: "supacode v1.2.3",
+        title: "Supacode v1.2.3",
         url: "https://github.com/supabitapp/supacode/releases/tag/v1.2.3",
         description: "A new Supacode latest release is available.",
         color: 0x2ecc71,

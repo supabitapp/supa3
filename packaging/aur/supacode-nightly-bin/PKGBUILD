@@ -44,7 +44,7 @@ conflicts=('supacode-nightly' 'supacode')
 options=('!debug' '!strip')
 
 _upstream_version="${pkgver/_nightly./-nightly.}"
-_appimage="Supacode-${_upstream_version}-x86_64.AppImage"
+_appimage="supacode-${_upstream_version}-x86_64.AppImage"
 source=(
   "$_appimage::https://github.com/supabitapp/supacode/releases/download/v${_upstream_version}/$_appimage"
   "${pkgname}-${pkgver}-LICENSE::https://raw.githubusercontent.com/supabitapp/supacode/v${_upstream_version}/LICENSE"
