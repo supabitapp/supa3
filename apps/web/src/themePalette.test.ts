@@ -27,10 +27,7 @@ import {
   subscribeToCustomThemes,
   themeAllowsSidebarArtwork,
   SUPACODE_CHAT_THEME,
-  EMBER_THEME,
   GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
   updateCustomTheme,
   CUSTOM_THEMES_STORAGE_KEY,
   createVividThemeColors,
@@ -441,7 +438,7 @@ describe("theme files", () => {
   });
 
   it("includes the dual-mode maintainer themes", () => {
-    for (const theme of [SUPACODE_CHAT_THEME, GROVE_THEME, OCEAN_THEME, EMBER_THEME, IRIS_THEME]) {
+    for (const theme of BUILT_IN_THEMES) {
       expect(getThemeDefinition(theme.id)).toBe(theme);
       expect(getThemeModes(theme)).toEqual(["light", "dark"]);
       expect(theme.sidebarArtwork).toBe(true);
@@ -542,6 +539,44 @@ describe("theme files", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(getCustomThemes()).toEqual([]);
     unsubscribe();
+    invalidateCustomThemes();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a saved theme whose id became a built-in visible and removable", () => {
+    const stored = new Map([
+      [
+        CUSTOM_THEMES_STORAGE_KEY,
+        JSON.stringify([
+          { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+          {
+            id: "zenbones",
+            label: "My Zenbones",
+            appearance: "dark",
+            colors: { canvas: "#1c1917" },
+          },
+        ]),
+      ],
+    ]);
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+      },
+    });
+
+    invalidateCustomThemes();
+    expect(getCustomThemes().map((theme) => [theme.id, theme.label])).toEqual([
+      ["zenbones-custom", "Zenbones Tweak"],
+      ["zenbones-custom-2", "My Zenbones"],
+    ]);
+    expect(getThemeDefinition("zenbones")?.label).toBe("Zenbones");
+
+    removeCustomTheme("zenbones-custom-2");
+
+    expect(JSON.parse(stored.get(CUSTOM_THEMES_STORAGE_KEY)!)).toEqual([
+      { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+    ]);
     invalidateCustomThemes();
     vi.unstubAllGlobals();
   });

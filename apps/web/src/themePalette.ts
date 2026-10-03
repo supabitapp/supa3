@@ -4,10 +4,7 @@ import "culori/css";
 import { converter, parse } from "culori/fn";
 import {
   BUILT_IN_THEMES,
-  EMBER_THEME,
   GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
   SUPACODE_CHAT_THEME,
   SUPACODE_LIGHT_THEME_COLORS,
   SUPACODE_DARK_THEME_COLORS,
@@ -20,14 +17,7 @@ import {
   type ThemeVariants,
 } from "@supacode/shared/themePalettes";
 
-export {
-  EMBER_THEME,
-  GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
-  SUPACODE_CHAT_THEME,
-  THEME_COLOR_ROLES,
-};
+export { GROVE_THEME, SUPACODE_CHAT_THEME, THEME_COLOR_ROLES };
 export type { ThemeAppearance, ThemeColorRole, ThemeColors, ThemeDefinition, ThemeVariants };
 
 export const SUPACODE_CHAT_THEME_ID = "supacode-chat" as const;
@@ -223,7 +213,30 @@ function readCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
   }
   if (!Array.isArray(parsed)) return { status: "unavailable", reason: "malformed" };
 
-  return { status: "ready", storedThemes: parsed, themes: parseStoredThemes(parsed) };
+  const storedThemes = releaseBuiltInThemeIds(parsed);
+  return { status: "ready", storedThemes, themes: parseStoredThemes(storedThemes) };
+}
+
+function releaseBuiltInThemeIds(storedThemes: ReadonlyArray<unknown>): ReadonlyArray<unknown> {
+  const takenIds = new Set<string>(RESERVED_THEME_IDS);
+  for (const storedTheme of storedThemes) {
+    if (isRecord(storedTheme) && typeof storedTheme.id === "string") takenIds.add(storedTheme.id);
+  }
+  return storedThemes.map((storedTheme) => {
+    if (!isRecord(storedTheme) || typeof storedTheme.id !== "string") return storedTheme;
+    if (!BUILT_IN_THEMES.some((theme) => theme.id === storedTheme.id)) return storedTheme;
+    const id = freeThemeId(storedTheme.id, takenIds);
+    takenIds.add(id);
+    return { ...storedTheme, id };
+  });
+}
+
+function freeThemeId(builtInId: string, takenIds: ReadonlySet<string>): string {
+  for (let attempt = 1; ; attempt += 1) {
+    const suffix = attempt === 1 ? "-custom" : `-custom-${attempt}`;
+    const id = `${builtInId.slice(0, 48 - suffix.length)}${suffix}`;
+    if (!takenIds.has(id)) return id;
+  }
 }
 
 function getCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
