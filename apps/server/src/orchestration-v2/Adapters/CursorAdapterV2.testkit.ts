@@ -1,6 +1,6 @@
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
+import * as OtelEnvironment from "@supacode/shared/otelEnvironment";
+import { DEFAULT_SIGNAL_EXPORT } from "@supacode/shared/observability";
 import type { InteractionUpdate, RunResult } from "@cursor/sdk";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -9,7 +9,7 @@ import {
   ThreadId,
   type ModelSelection,
   type ProviderReplayTranscript,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -524,7 +524,7 @@ function makeReplayServerConfig(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const baseDir = yield* fs.makeTempDirectory({
-      prefix: `t3-orchestration-v2-cursor-${scenario}-`,
+      prefix: `supacode-orchestration-v2-cursor-${scenario}-`,
     });
     const stateDir = path.join(baseDir, "userdata");
     const logsDir = path.join(stateDir, "logs");
@@ -615,7 +615,7 @@ export function makeCursorProviderAdapterRegistryReplayLayer(
     HostProcessEnvironment,
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cursor-replay-home-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-cursor-replay-home-" });
       return { HOME: home };
     }).pipe(Effect.orDie),
   ).pipe(Layer.provide(NodeServices.layer));

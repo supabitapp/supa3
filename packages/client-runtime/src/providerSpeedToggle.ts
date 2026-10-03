@@ -1,5 +1,5 @@
-import type { ProviderOptionDescriptor } from "@t3tools/contracts";
-import { getProviderOptionCurrentValue } from "@t3tools/shared/model";
+import type { ProviderOptionDescriptor } from "@supacode/contracts";
+import { getProviderOptionCurrentValue } from "@supacode/shared/model";
 
 const CODEX_STANDARD_SERVICE_TIER = "default";
 

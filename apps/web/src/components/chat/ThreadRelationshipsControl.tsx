@@ -4,9 +4,9 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
-import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
+import { scopedThreadKey, scopeThreadRef } from "@supacode/client-runtime/environment";
+import { projectedSubagentsToRuntime } from "@supacode/client-runtime/state/subagentRuntime";
+import { formatSubagentDisplayTitle } from "@supacode/client-runtime/state/subagent-display";
 import {
   deriveThreadRelationshipGraph,
   immediateThreadRelationships,
@@ -16,12 +16,12 @@ import {
   resolveMergeBackTargetThreadId,
   type ThreadRelationshipEdge,
   type ThreadRelationshipWalkRow,
-} from "@t3tools/client-runtime/state/thread-relationships";
+} from "@supacode/client-runtime/state/thread-relationships";
 import {
   canDetachThreadProviderSession,
   resolveLatestMergeBackRun,
-} from "@t3tools/client-runtime/state/thread-workflows";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/thread-workflows";
+import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@supacode/contracts";
 import { groupBy } from "effect/Array";
 import { useNavigate } from "@tanstack/react-router";
 import {

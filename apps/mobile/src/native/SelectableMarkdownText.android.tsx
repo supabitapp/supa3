@@ -1,7 +1,7 @@
 import {
-  SelectableMarkdownText as T3SelectableMarkdownText,
+  SelectableMarkdownText as SupacodeSelectableMarkdownText,
   type SelectableMarkdownTextProps,
-} from "@t3tools/mobile-markdown-text/renderer";
+} from "@supacode/mobile-markdown-text/renderer";
 import { useMemo } from "react";
 
 import { highlightCodeSnippet } from "../features/review/shikiReviewHighlighter";
@@ -18,7 +18,7 @@ export type {
   MarkdownImageRequest,
   NativeMarkdownTextStyle,
   SelectableMarkdownSkill,
-} from "@t3tools/mobile-markdown-text/types";
+} from "@supacode/mobile-markdown-text/types";
 
 // The renderer falls back to React Native Text outside iOS, so Android can use
 // the same Markdown chunking while retaining native text selection.
@@ -35,7 +35,7 @@ export function SelectableMarkdownText(props: MobileSelectableMarkdownTextProps)
     [props.textStyle, selectionColor, selectionHandleColor],
   );
   return (
-    <T3SelectableMarkdownText
+    <SupacodeSelectableMarkdownText
       {...props}
       textStyle={textStyle}
       highlightCode={highlightCodeSnippet}

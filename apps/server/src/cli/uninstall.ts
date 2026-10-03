@@ -8,7 +8,7 @@ import {
   HostProcessEnvironment,
   HostProcessIsExecutable,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@supacode/shared/hostProcess";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -33,13 +33,13 @@ export class CliUninstallError extends Schema.TaggedError<CliUninstallError>()(
 }
 
 /**
- * What `supa3 uninstall` would remove for one T3 home. Computed before anything
+ * What `supacode uninstall` would remove for one Supacode home. Computed before anything
  * is touched so the user sees the whole plan in one place.
  */
 export interface UninstallPlan {
   /** The background service serves this home and will be stopped and removed. */
   readonly service: boolean;
-  /** The `supa3` launcher (symlink or `.cmd` shim) that points into this home's runtime tree. */
+  /** The `supacode` launcher (symlink or `.cmd` shim) that points into this home's runtime tree. */
   readonly launcher: string | undefined;
   /** `<home>/runtime`, holding every downloaded version, when it exists. */
   readonly runtimeDir: string | undefined;
@@ -110,7 +110,7 @@ export const uninstallCommand = Command.make("uninstall", {
   ),
 }).pipe(
   Command.withDescription(
-    "Remove supa3 from this machine: the background service, the launcher, and every downloaded version. Your projects and threads are kept.",
+    "Remove Supacode from this machine: the background service, the launcher, and every downloaded version. Your projects and threads are kept.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {
@@ -134,10 +134,10 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
   const plan = yield* planUninstall({ baseDir: input.baseDir });
 
   if (!plan.service && plan.launcher === undefined && plan.runtimeDir === undefined) {
-    yield* Console.log(`Nothing to remove: supa3 is not installed for ${input.baseDir}.`);
+    yield* Console.log(`Nothing to remove: Supacode is not installed for ${input.baseDir}.`);
     if (!(yield* HostProcessIsExecutable)) {
       yield* Console.log(
-        "  This supa3 runs from a Node script, so it was installed by npm or built from source. Remove it the same way (`npm uninstall -g t3`, or delete the checkout).",
+        "  This Supacode runs from a Node script, so it was installed by npm or built from source. Remove it the same way (`npm uninstall -g supacode`, or delete the checkout).",
       );
     }
     return;
@@ -161,7 +161,7 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
       });
     }
     const confirmed = yield* Prompt.run(
-      Prompt.Confirm({ message: "Remove supa3 from this machine?", initial: false }),
+      Prompt.Confirm({ message: "Remove Supacode from this machine?", initial: false }),
     ).pipe(Effect.catchTag("QuitError", () => Effect.succeed(false)));
     if (!confirmed) {
       yield* Console.log("Left as is.");
@@ -205,7 +205,7 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
             reason: `Could not schedule removal of ${runtimeDir}. Delete it yourself once this window is closed.`,
           }),
       });
-      yield* Console.log(`${runtimeDir} will be removed once supa3 exits.`);
+      yield* Console.log(`${runtimeDir} will be removed once Supacode exits.`);
     } else {
       yield* fs
         .remove(plan.runtimeDir, { recursive: true, force: true })
@@ -218,5 +218,5 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
     }
   }
   yield* Console.log("");
-  yield* Console.log("supa3 is uninstalled. Thanks for trying supa3.");
+  yield* Console.log("supacode is uninstalled. Thanks for trying Supacode.");
 });

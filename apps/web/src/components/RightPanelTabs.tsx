@@ -1,18 +1,18 @@
-import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { pullRequestHostOf, type SourceControlProviderKind } from "@supacode/contracts";
+import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { useProjects, useServerConfigs, useThreadShells } from "~/state/entities";
 import {
   threadPullRequestKeysEqual,
   visibleThreadPullRequests,
-} from "@t3tools/shared/threadPullRequests";
+} from "@supacode/shared/threadPullRequests";
 import type {
   ContextMenuItem,
   EnvironmentId,
   PreviewSessionSnapshot,
   ProjectId,
   PullRequestState,
-} from "@t3tools/contracts";
-import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+} from "@supacode/contracts";
+import { getTerminalLabel } from "@supacode/shared/terminalLabels";
 import {
   Smartphone,
   ChevronDown,
@@ -151,7 +151,7 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the supa3 desktop app.",
+  browser: "Browser previews are only available in the Supacode desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",

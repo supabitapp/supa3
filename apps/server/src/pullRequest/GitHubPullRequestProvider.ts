@@ -5,7 +5,7 @@ import type {
   PullRequestCheck,
   PullRequestReaction,
   PullRequestViewerPermissions,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 
 import * as GitHubPullRequestCli from "./GitHubPullRequestCli.ts";
 import {

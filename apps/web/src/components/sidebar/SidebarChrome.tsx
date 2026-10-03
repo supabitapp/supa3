@@ -85,7 +85,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
-      <SupaWordmark aria-label="Supa3" className="h-3.5 w-auto shrink-0" role="img" />
+      <SupaWordmark aria-label="Supacode" className="h-3.5 w-auto shrink-0" role="img" />
     </Link>
   );
 }

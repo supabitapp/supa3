@@ -1,4 +1,4 @@
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId } from "@supacode/contracts";
 import { CircleIcon } from "lucide-react";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -119,8 +119,8 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId,
-          title: "supa3",
-          workspaceRoot: "/work/t3code",
+          title: "supacode",
+          workspaceRoot: "/work/supacode",
         },
       ],
       projectId,
@@ -145,14 +145,14 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId: "env-1" as EnvironmentId,
-          title: "supa3 · one",
-          workspaceRoot: "/work/t3code-1",
+          title: "supacode · one",
+          workspaceRoot: "/work/supacode-1",
         },
         {
           id: projectId,
           environmentId: "env-2" as EnvironmentId,
-          title: "supa3 · two",
-          workspaceRoot: "/work/t3code-2",
+          title: "supacode · two",
+          workspaceRoot: "/work/supacode-2",
         },
       ],
       onProject,

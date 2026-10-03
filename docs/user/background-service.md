@@ -1,48 +1,48 @@
-# Running supa3 in the background
+# Running Supacode in the background
 
-On Linux and macOS, supa3 can run as a service for your user so you do not need
+On Linux and macOS, Supacode can run as a service for your user so you do not need
 to keep a terminal open.
 
 ## Manage the service
 
-Install the `supa3` CLI first ([Install supa3](./install.md#command-line)), then
-run these commands on the machine that will host supa3:
+Install the `supacode` CLI first ([Install supacode](./install.md#command-line)), then
+run these commands on the machine that will host Supacode:
 
 | Task                            | Command                   |
 | ------------------------------- | ------------------------- |
-| Install and start               | `supa3 service install`   |
-| Inspect status and log location | `supa3 service status`    |
-| Move to a newer release         | `supa3 update`            |
-| Restart                         | `supa3 service restart`   |
-| Stop and remove from startup    | `supa3 service uninstall` |
+| Install and start               | `supacode service install`   |
+| Inspect status and log location | `supacode service status`    |
+| Move to a newer release         | `supacode update`            |
+| Restart                         | `supacode service restart`   |
+| Stop and remove from startup    | `supacode service uninstall` |
 
 Uninstalling the service leaves your projects, threads, and settings intact.
-Running `supa3 service install` again repairs a service that `supa3 service status`
+Running `supacode service install` again repairs a service that `supacode service status`
 reports as broken.
 
-`supa3 update` downloads the newest release on your channel and switches `supa3`
+`supacode update` downloads the newest release on your channel and switches `supacode`
 and the service to it. Restarting interrupts running agent turns, terminals,
 and remote clients, so it asks first; answer no and the service keeps running
-the old version until you run `supa3 service restart`. Pass `--yes` from a
+the old version until you run `supacode service restart`. Pass `--yes` from a
 script. A server you started by hand is left running; stop and start it again
 to pick up the new version. Wait for any remote update already in progress
 before updating; to match a remote client's version, follow
-[Updating supa3](./updating.md).
+[Updating supacode](./updating.md).
 
-Pass an exact version (`supa3 update 0.0.42`) to pin one, `--channel nightly` to
+Pass an exact version (`supacode update 0.0.42`) to pin one, `--channel nightly` to
 switch trains, or `--allow-downgrade` to move backwards. `preview` is a
 maintainers' test train: its builds can be broken and are never offered as
-updates, so the installer and `supa3 update` ask for confirmation before
+updates, so the installer and `supacode update` ask for confirmation before
 installing one.
 
-`supa3 uninstall` removes the background service, the `supa3` launcher, and the
+`supacode uninstall` removes the background service, the `supacode` launcher, and the
 downloaded versions after showing you the list and asking once. Your projects,
-threads, and settings under `~/.supa3/userdata` are kept. Pass `--yes` from a
+threads, and settings under `~/.supacode/userdata` are kept. Pass `--yes` from a
 script.
 
 ## Platform support
 
-Linux needs systemd user services. Setup enables lingering so supa3 starts at
+Linux needs systemd user services. Setup enables lingering so Supacode starts at
 boot and keeps running after logout. If this needs administrator permission,
 setup prints a recovery command before changing the service.
 
@@ -55,7 +55,7 @@ Windows background services are not supported.
 
 ## Troubleshooting
 
-Start with `supa3 service status` on the host. It prints the log path and, on Linux,
+Start with `supacode service status` on the host. It prints the log path and, on Linux,
 checks whether the installed service is running, enabled, and allowed to survive
 logout.
 
@@ -73,18 +73,18 @@ ssh -t your-server 'sudo loginctl enable-linger "$(id -un)"'
 ```
 
 Then retry service setup as your normal user. Run only the `loginctl` command
-with sudo; running supa3 as root creates a separate installation. Without
-administrator access, run `supa3 serve` in a terminal and keep that session open.
+with sudo; running Supacode as root creates a separate installation. Without
+administrator access, run `supacode serve` in a terminal and keep that session open.
 
 | Status problem                          | Next step                                                                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `linger-unavailable`                    | Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.                             |
 | `user-manager-unavailable`              | Run `systemctl --user status` in a login session for the service user; check your distribution's systemd user-session support. |
-| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status supa3.service`, then use the repair command printed by supa3.                        |
-| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `supa3 service restart`.                         |
+| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status supacode.service`, then use the repair command printed by Supacode.                        |
+| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `supacode service restart`.                         |
 
 On macOS, check **System Settings → General → Login Items** if the service no
 longer starts at login. If agent work cannot access Desktop, Documents, or
-Downloads, it may need Full Disk Access for the `supa3` executable listed in
+Downloads, it may need Full Disk Access for the `supacode` executable listed in
 `ProgramArguments` in
-`~/Library/LaunchAgents/com.supaterm.supa3.service.plist`.
+`~/Library/LaunchAgents/com.supaterm.supacode.service.plist`.

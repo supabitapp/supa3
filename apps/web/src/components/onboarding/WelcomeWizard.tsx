@@ -7,18 +7,18 @@ import type {
   ScopedProjectRef,
   ServerConfig,
   ServerProvider,
-} from "@t3tools/contracts";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+} from "@supacode/contracts";
+import { scopeProjectRef, scopeThreadRef } from "@supacode/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 import {
   CommandId,
   defaultInstanceIdForDriver,
   ProviderDriverKind,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 import {
   ArrowRightIcon,
@@ -212,9 +212,9 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up supa3"
+          title="Set up supacode"
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="supa3">
+            <div className="flex items-baseline gap-1.5" role="img" aria-label="supacode">
               <SupaWordmark className="h-7 w-auto text-muted-foreground" aria-hidden />
             </div>
           }
@@ -496,9 +496,9 @@ function PairingForm({
             <p className="pt-3 text-sm text-muted-foreground">
               Run this on the computer with your code.
             </p>
-            <CommandBlock command="supa3 pair" className="mt-2" />
+            <CommandBlock command="supacode pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Start supa3 first, or run <code className="font-mono">supa3 serve</code>. Add{" "}
+              Start Supacode first, or run <code className="font-mono">supacode serve</code>. Add{" "}
               <code className="font-mono">--tailscale</code> to use your tailnet.
             </p>
           </CollapsiblePanel>

@@ -63,7 +63,7 @@ vi.mock("electron", () => ({
     getSystemLocale: getSystemLocaleMock,
     getVersion: getVersionMock,
     isPackaged: true,
-    name: "supa3",
+    name: "supacode",
     on: onMock,
     quit: quitMock,
     relaunch: relaunchMock,

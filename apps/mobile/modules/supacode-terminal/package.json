@@ -1,0 +1,17 @@
+{
+  "name": "@supacode/mobile-terminal-native",
+  "version": "0.0.0",
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "modules": [
+        "SupacodeTerminalModule"
+      ]
+    },
+    "android": {
+      "modules": [
+        "expo.modules.supacodeterminal.SupacodeTerminalModule"
+      ]
+    }
+  }
+}

@@ -7,9 +7,9 @@ import * as NodeURL from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 
 import { isEntrypoint } from "./entrypoint.ts";
-import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { symlinksSupported } from "@supacode/shared/testing/symlinks";
 
-const makeTempDir = () => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-entrypoint-test-"));
+const makeTempDir = () => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "supacode-entrypoint-test-"));
 
 describe("isEntrypoint", () => {
   it("uses the runtime answer when Node provides one", () => {
@@ -50,7 +50,7 @@ describe("isEntrypoint", () => {
     () => {
       const dir = makeTempDir();
       const real = NodePath.join(dir, "bin.mjs");
-      const link = NodePath.join(dir, "t3");
+      const link = NodePath.join(dir, "supacode");
       NodeFS.writeFileSync(real, "");
       NodeFS.symlinkSync(real, link);
 

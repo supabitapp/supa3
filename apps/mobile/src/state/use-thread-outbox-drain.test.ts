@@ -7,7 +7,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { PreparedTurnAttachments } from "../lib/attachmentUpload";
@@ -221,7 +221,7 @@ describe("thread outbox attachment preparation", () => {
       queuedMessage({
         messageId: "message-reused-upload-race",
         text: "original text",
-        fileUri: "file:///documents/t3-composer-attachments/reused.pdf",
+        fileUri: "file:///documents/supacode-composer-attachments/reused.pdf",
       }),
       "pending-reused-upload",
     );
@@ -255,7 +255,7 @@ describe("thread outbox attachment preparation", () => {
       queuedMessage({
         messageId: "message-reused-upload-current",
         text: "unchanged text",
-        fileUri: "file:///documents/t3-composer-attachments/current.pdf",
+        fileUri: "file:///documents/supacode-composer-attachments/current.pdf",
       }),
       "pending-reused-upload",
     );
@@ -280,7 +280,7 @@ describe("thread outbox attachment preparation", () => {
     const message = queuedMessage({
       messageId: "message-new-upload-revision",
       text: "upload this file",
-      fileUri: "file:///documents/t3-composer-attachments/new.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/new.pdf",
     });
     const uploadedAttachments = message.attachments.map((attachment) =>
       attachment.type === "file"
@@ -351,7 +351,7 @@ describe("thread outbox drain delivery cleanup", () => {
     const message = queuedMessage({
       messageId: "message-edited",
       text: "original",
-      fileUri: "file:///documents/t3-composer-attachments/report.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/report.pdf",
     });
     await harness.manager.enqueue(message);
     const deliveryRevision = harness.manager.revisionOf(message.messageId);
@@ -379,7 +379,7 @@ describe("thread outbox drain delivery cleanup", () => {
     const message = queuedMessage({
       messageId: "message-editor-removal-race",
       text: "keep editor changes",
-      fileUri: "file:///documents/t3-composer-attachments/editor-race.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/editor-race.pdf",
     });
     const removeStarted = Promise.withResolvers<void>();
     const removeBarrier = Promise.withResolvers<void>();
@@ -406,7 +406,7 @@ describe("thread outbox delivered creation recovery", () => {
     const message = queuedMessage({
       messageId: "message-recovery-race",
       text: "original queued text",
-      fileUri: "file:///documents/t3-composer-attachments/report.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/report.pdf",
     });
     const originalMergeComposerDraftContent = composerDrafts.mergeComposerDraftContent;
     const mergeCompleted = Promise.withResolvers<void>();
@@ -446,7 +446,7 @@ describe("thread outbox delivered creation recovery", () => {
     const message = queuedMessage({
       messageId: "message-recovery-editor",
       text: "recover this text",
-      fileUri: "file:///documents/t3-composer-attachments/editor.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/editor.pdf",
     });
     const originalMergeComposerDraftContent = composerDrafts.mergeComposerDraftContent;
     const mergeCompleted = Promise.withResolvers<void>();
@@ -484,7 +484,7 @@ describe("thread outbox delivered creation recovery", () => {
     const message = queuedMessage({
       messageId: "message-recovery-removal",
       text: "recover once",
-      fileUri: "file:///documents/t3-composer-attachments/retry.pdf",
+      fileUri: "file:///documents/supacode-composer-attachments/retry.pdf",
     });
     const draftKey = `${message.environmentId}:${message.threadId}`;
     const removeSpy = vi
@@ -536,7 +536,7 @@ describe("thread outbox recovery rollback", () => {
       path: "src/Checkout.tsx",
     };
     const context = { version: 1 as const, records: [record] };
-    const text = "[Checkout.tsx](t3-context://v1/mention/setup-file)";
+    const text = "[Checkout.tsx](supacode-context://v1/mention/setup-file)";
     appAtomRegistry.set(composerDrafts.composerDraftsAtom, {
       [targetKey]: { text: message.text, attachments: [] },
       [sourceKey]: { text, context, attachments: [] },

@@ -1,4 +1,4 @@
-import type { ToolLifecycleItemType } from "@t3tools/contracts";
+import type { ToolLifecycleItemType } from "@supacode/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -336,7 +336,7 @@ function searchTargetName(value: string | undefined): string | undefined {
   return value.split(/[\\/]/u).findLast((part) => part.length > 0 && part !== ".");
 }
 
-/** Cursor-style row: "Searched files *.{ts,tsx} in t3chat-new". */
+/** Cursor-style row: "Searched files *.{ts,tsx} in supacodechat-new". */
 export function formatSearchToolLabel(
   data: Record<string, unknown> | undefined,
 ): string | undefined {

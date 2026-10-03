@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/client-runtime",
+  "name": "@supacode/client-runtime",
   "private": true,
   "type": "module",
   "exports": {
@@ -115,9 +115,9 @@
       "types": "./src/voice-input/index.ts",
       "default": "./src/voice-input/index.ts"
     },
-    "./t3ToolSummary": {
-      "types": "./src/t3ToolSummary.ts",
-      "default": "./src/t3ToolSummary.ts"
+    "./supacodeToolSummary": {
+      "types": "./src/supacodeToolSummary.ts",
+      "default": "./src/supacodeToolSummary.ts"
     },
     "./state/auth": {
       "types": "./src/state/auth.ts",
@@ -369,9 +369,9 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/mermaid-ascii": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@supacode/contracts": "workspace:*",
+    "@supacode/mermaid-ascii": "workspace:*",
+    "@supacode/shared": "workspace:*",
     "effect": "catalog:",
     "mdast-util-directive": "^3.1.0",
     "micromark-extension-directive": "^4.0.0",

@@ -1,4 +1,4 @@
-import { DesktopHostTelemetryMessage } from "@t3tools/contracts";
+import { DesktopHostTelemetryMessage } from "@supacode/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -25,7 +25,7 @@ function makeElectronAppLayer(
 ) {
   return Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("supa3"),
+    name: Effect.succeed("supacode"),
     systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit: Effect.void,

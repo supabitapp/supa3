@@ -1,7 +1,7 @@
 import {
-  SelectableMarkdownText as T3SelectableMarkdownText,
+  SelectableMarkdownText as SupacodeSelectableMarkdownText,
   type SelectableMarkdownTextProps,
-} from "@t3tools/mobile-markdown-text/renderer";
+} from "@supacode/mobile-markdown-text/renderer";
 
 import { highlightCodeSnippet } from "../features/review/shikiReviewHighlighter";
 import { renderMermaidDiagram } from "../lib/mermaidRenderer.native";
@@ -18,7 +18,7 @@ export type {
   MarkdownImageRequest,
   NativeMarkdownTextStyle,
   SelectableMarkdownSkill,
-} from "@t3tools/mobile-markdown-text/types";
+} from "@supacode/mobile-markdown-text/types";
 
 export function hasNativeSelectableMarkdownText(): boolean {
   return true;
@@ -26,7 +26,7 @@ export function hasNativeSelectableMarkdownText(): boolean {
 
 export function SelectableMarkdownText(props: MobileSelectableMarkdownTextProps) {
   return (
-    <T3SelectableMarkdownText
+    <SupacodeSelectableMarkdownText
       {...props}
       highlightCode={highlightCodeSnippet}
       renderDiagram={renderMermaidDiagram}

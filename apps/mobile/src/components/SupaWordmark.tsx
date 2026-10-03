@@ -11,7 +11,7 @@ export function SupaWordmark(props: {
 }) {
   return (
     <Svg
-      accessibilityLabel="Supa3"
+      accessibilityLabel="Supacode"
       height={props.height}
       width={props.height * (321.9 / 96.8)}
       viewBox="0 0 321.90 96.80"

@@ -242,7 +242,7 @@ const SettingsContentStack = createNativeStackNavigator({
     SettingsAbout: createNativeStackScreen({
       screen: SettingsAboutRouteScreen,
       linking: "about",
-      options: { title: "About supa3" },
+      options: { title: "About supacode" },
     }),
     SettingsEnvironmentNew: createNativeStackScreen({
       screen: ConnectionsNewRouteScreen,
@@ -631,14 +631,14 @@ function NotFoundScreen() {
       }}
       style={[{ flex: 1 }, screenBgStyle]}
     >
-      <Text className="text-3xl font-t3-bold text-foreground" selectable>
+      <Text className="text-3xl font-supacode-bold text-foreground" selectable>
         Route not found
       </Text>
       <Pressable
         style={returnHomeButtonStyle}
         onPress={() => navigation.dispatch(StackActions.replace("Home"))}
       >
-        <Text className="text-base font-t3-bold text-primary-foreground">Return home</Text>
+        <Text className="text-base font-supacode-bold text-primary-foreground">Return home</Text>
       </Pressable>
     </ScrollView>
   );

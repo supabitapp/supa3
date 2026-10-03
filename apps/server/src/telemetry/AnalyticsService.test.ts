@@ -11,7 +11,7 @@ import * as HttpClientError from "effect/unstable/http/HttpClientError";
 import * as HttpServer from "effect/unstable/http/HttpServer";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessArchitecture, HostProcessPlatform } from "@supacode/shared/hostProcess";
 
 import * as ServerConfig from "../config.ts";
 import { getTelemetryIdentifier } from "./Identify.ts";
@@ -29,7 +29,7 @@ interface RecordedBatchRequest {
         readonly serverArch?: string;
         readonly serverAppVersion?: string;
         readonly serverMode?: string;
-        readonly t3CodeVersion?: string;
+        readonly supacodeVersion?: string;
       };
     }>;
   } | null;
@@ -45,7 +45,7 @@ interface RecordedBatchBody {
       readonly serverArch?: string;
       readonly serverAppVersion?: string;
       readonly serverMode?: string;
-      readonly t3CodeVersion?: string;
+      readonly supacodeVersion?: string;
     };
   }>;
 }
@@ -92,14 +92,14 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
       const batches: Array<ReadonlyArray<{ readonly uuid: string }>> = [];
       const runtimeLayer = AnalyticsService.layer.pipe(
         Layer.provideMerge(
-          ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "t3-telemetry-retry-" }),
+          ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "supacode-telemetry-retry-" }),
         ),
         Layer.provide(
           ConfigProvider.layer(
             ConfigProvider.fromUnknown({
-              T3CODE_TELEMETRY_ENABLED: true,
-              T3CODE_POSTHOG_KEY: "phc_test_key",
-              T3CODE_POSTHOG_HOST: "http://localhost",
+              SUPACODE_TELEMETRY_ENABLED: true,
+              SUPACODE_POSTHOG_KEY: "phc_test_key",
+              SUPACODE_POSTHOG_HOST: "http://localhost",
             }),
           ),
         ),
@@ -134,16 +134,16 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
     Effect.gen(function* () {
       const capturedRequests: Array<RecordedBatchRequest> = [];
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-        prefix: "t3-telemetry-base-",
+        prefix: "supacode-telemetry-base-",
       });
 
       const telemetryLayer = AnalyticsService.layer.pipe(Layer.provideMerge(serverConfigLayer));
       const configLayer = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: true,
-          T3CODE_POSTHOG_KEY: "phc_test_key",
-          T3CODE_POSTHOG_HOST: "http://localhost",
-          T3CODE_TELEMETRY_FLUSH_BATCH_SIZE: 20,
+          SUPACODE_TELEMETRY_ENABLED: true,
+          SUPACODE_POSTHOG_KEY: "phc_test_key",
+          SUPACODE_POSTHOG_HOST: "http://localhost",
+          SUPACODE_TELEMETRY_FLUSH_BATCH_SIZE: 20,
         }),
       );
       const batchServerLayer = HttpServer.serve(
@@ -223,7 +223,7 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
             (event) =>
               event.properties?.serverOs === "Linux" &&
               event.properties.serverArch === "arm64" &&
-              event.properties.serverAppVersion === event.properties.t3CodeVersion &&
+              event.properties.serverAppVersion === event.properties.supacodeVersion &&
               event.properties.serverMode === "web",
           ),
         ),
@@ -236,14 +236,14 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
     Effect.gen(function* () {
       const capturedPaths: Array<string> = [];
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-        prefix: "t3-telemetry-disabled-",
+        prefix: "supacode-telemetry-disabled-",
       });
       const telemetryLayer = AnalyticsService.layer.pipe(Layer.provideMerge(serverConfigLayer));
       const configLayer = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: false,
-          T3CODE_POSTHOG_KEY: "phc_test_key",
-          T3CODE_POSTHOG_HOST: "http://localhost",
+          SUPACODE_TELEMETRY_ENABLED: false,
+          SUPACODE_POSTHOG_KEY: "phc_test_key",
+          SUPACODE_POSTHOG_HOST: "http://localhost",
         }),
       );
       const batchServerLayer = HttpServer.serve(

@@ -3,7 +3,7 @@ import type {
   AuthClientPresentationMetadata,
   ClientOs,
   DesktopBridge,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 
 interface BrowserIdentity {
   readonly userAgent: string;
@@ -77,7 +77,7 @@ export function clientPresentationMetadata(input: {
 }): AuthClientPresentationMetadata {
   if (input.desktopBridge !== undefined) {
     return {
-      label: "supa3 Desktop",
+      label: "Supacode Desktop",
       deviceType: "desktop",
       os: clientOsFromElectronPlatform(input.desktopBridge.getClientPlatform?.()),
       surface: "desktop",
@@ -86,7 +86,7 @@ export function clientPresentationMetadata(input: {
   }
 
   return {
-    label: "supa3 Web",
+    label: "Supacode Web",
     deviceType: browserDeviceType(input.identity),
     os: browserClientOs(input.identity),
     surface: "web",

@@ -1,5 +1,5 @@
-import { type ModelCapabilities, type ProviderOptionChoice } from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+import { type ModelCapabilities, type ProviderOptionChoice } from "@supacode/contracts";
+import { createModelCapabilities } from "@supacode/shared/model";
 import * as Predicate from "effect/Predicate";
 
 /**

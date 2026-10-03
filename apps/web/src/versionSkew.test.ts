@@ -1,5 +1,5 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
+import { EnvironmentId } from "@supacode/contracts";
+import type { ServerUpdateState } from "@supacode/client-runtime/state/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import serverPackage from "../../server/package.json" with { type: "json" };
 
@@ -25,7 +25,7 @@ import {
 } from "./versionSkew";
 
 const MISMATCH_HINT =
-  "Version mismatch. Try syncing the client and server to the same supa3 version.";
+  "Version mismatch. Try syncing the client and server to the same Supacode version.";
 
 describe("versionSkew", () => {
   beforeEach(() => {

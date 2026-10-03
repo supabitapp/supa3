@@ -11,7 +11,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -44,7 +44,7 @@ import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts
 // official Registry distribution. It uses credentials already owned by the
 // Antigravity agent and never stores them in the test database.
 //
-// T3_ACP_ANTIGRAVITY_LIVE=1 ../../node_modules/.bin/vp test run \
+// SUPACODE_ACP_ANTIGRAVITY_LIVE=1 ../../node_modules/.bin/vp test run \
 //   src/orchestration-v2/AcpRegistryOrchestratorV2.live.test.ts
 const PlatformTestLayer = Layer.merge(
   NodeServices.layer,
@@ -53,11 +53,11 @@ const PlatformTestLayer = Layer.merge(
   }),
 );
 
-const runAntigravityFixture = process.env.T3_ACP_ANTIGRAVITY_LIVE === "1";
+const runAntigravityFixture = process.env.SUPACODE_ACP_ANTIGRAVITY_LIVE === "1";
 const liveAgentId = runAntigravityFixture
   ? "antigravity-acp"
-  : process.env.T3_ACP_REGISTRY_LIVE_AGENT_ID?.trim() || "devin";
-const liveCommandPath = process.env.T3_ACP_REGISTRY_LIVE_COMMAND?.trim();
+  : process.env.SUPACODE_ACP_REGISTRY_LIVE_AGENT_ID?.trim() || "devin";
+const liveCommandPath = process.env.SUPACODE_ACP_REGISTRY_LIVE_COMMAND?.trim();
 const liveInstanceId = ProviderInstanceId.make("acpRegistry_live");
 const liveModelSelection = {
   instanceId: liveInstanceId,
@@ -65,7 +65,7 @@ const liveModelSelection = {
 } satisfies ModelSelection;
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-acp-registry-v2-live-",
+  prefix: "supacode-acp-registry-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(
@@ -164,7 +164,7 @@ const waitForIdle = Effect.fn("AcpRegistryOrchestratorV2Live.waitForIdle")(funct
   return yield* Effect.die(new Error(`Timed out waiting for ACP Registry thread ${threadId}.`));
 });
 
-describe.runIf(runAntigravityFixture || process.env.T3_ACP_REGISTRY_LIVE_ORCHESTRATOR === "1")(
+describe.runIf(runAntigravityFixture || process.env.SUPACODE_ACP_REGISTRY_LIVE_ORCHESTRATOR === "1")(
   "ACP Registry V2 live orchestrator",
   () => {
     it.live(

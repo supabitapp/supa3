@@ -31,7 +31,7 @@ import {
   type VcsStatusInput,
   type VcsStatusResult,
   type WorktreeSubmodules,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import {
   makeGitVcsDriverCore,
   PATCH_RENDER_PREFIX_ARGS,
@@ -139,7 +139,7 @@ export interface CreateWorktreeProgress {
   readonly onSubmodulesStarted?: () => Effect.Effect<void, never>;
   /** Fires when `.gitmodules` exists but the resolved submodule mode is `"none"`. */
   readonly onSubmodulesDisabled?: (input: {
-    source: "settings" | "t3.json";
+    source: "settings" | "supacode.json";
   }) => Effect.Effect<void, never>;
   readonly onSubmoduleLine?: (line: string) => Effect.Effect<void, never>;
   readonly onSubmodulesFinished?: (input: {
@@ -153,7 +153,7 @@ export interface CreateWorktreeOptions {
   /**
    * The project-over-environment `worktreeSubmodules` setting. Null (or
    * omitted, for callers without settings access) defers to the checkout's
-   * own t3.json.
+   * own supacode.json.
    */
   readonly submodules?: WorktreeSubmodules | null;
 }
@@ -409,7 +409,7 @@ export class GitVcsDriver extends Context.Service<
     readonly initRepo: (input: VcsInitInput) => Effect.Effect<void, GitCommandError>;
     readonly listLocalBranchNames: (cwd: string) => Effect.Effect<string[], GitCommandError>;
   }
->()("t3/vcs/GitVcsDriver") {}
+>()("supacode/vcs/GitVcsDriver") {}
 
 const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
@@ -787,7 +787,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     });
 
   // Git renames loose objects and refs into place without fsync by default, so
-  // an unclean restart can leave 0-byte files under refs/supa3/** that break every
+  // an unclean restart can leave 0-byte files under refs/supacode/** that break every
   // later fetch and push. Checkpoint writes flush before they are published;
   // macOS defaults to writeout-only, which does not reach the disk either.
   const durableWrite = [
@@ -809,15 +809,15 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
       const tempIndexPath = path.join(
         gitCommonDir,
-        `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
+        `supacode-checkpoint-index-${NodeCrypto.randomUUID()}`,
       );
       const commitEnv: NodeJS.ProcessEnv = {
         ...process.env,
         GIT_INDEX_FILE: tempIndexPath,
-        GIT_AUTHOR_NAME: "supa3",
-        GIT_AUTHOR_EMAIL: "t3code@users.noreply.github.com",
-        GIT_COMMITTER_NAME: "supa3",
-        GIT_COMMITTER_EMAIL: "t3code@users.noreply.github.com",
+        GIT_AUTHOR_NAME: "supacode",
+        GIT_AUTHOR_EMAIL: "supacode@users.noreply.github.com",
+        GIT_COMMITTER_NAME: "supacode",
+        GIT_COMMITTER_EMAIL: "supacode@users.noreply.github.com",
       };
 
       // Forced process termination can leave Git's private index lock behind.
@@ -1040,7 +1040,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           });
         }
 
-        const message = `t3 checkpoint ref=${input.checkpointRef}`;
+        const message = `supacode checkpoint ref=${input.checkpointRef}`;
         const commitTreeResult = yield* execute({
           operation,
           cwd: input.cwd,

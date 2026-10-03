@@ -203,7 +203,7 @@ jobs:
             echo "release_channel=stable" >> "$GITHUB_OUTPUT"
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=supa3 v$version" >> "$GITHUB_OUTPUT"
+            echo "name=supacode v$version" >> "$GITHUB_OUTPUT"
             echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
             if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
@@ -254,7 +254,7 @@ jobs:
           run-install: true
 
       - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+        run: vp run --filter @supacode/desktop ensure:electron
 
       - name: Check
         run: vp check
@@ -288,7 +288,7 @@ jobs:
           run-install: true
 
       - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+        run: vp run --filter @supacode/desktop ensure:electron
 
       - uses: ./.github/actions/setup-apt-mirrors
 
@@ -298,7 +298,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config build-essential
 
       - name: Test
-        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
+        run: vp run --parallel --concurrency-limit 4 --filter '!supacode' --filter '!@supacode/monorepo' test
 
   test_server:
     name: Release server tests ${{ matrix.shard }}
@@ -327,11 +327,11 @@ jobs:
           cache: true
           run-install: true
 
-      # No Electron setup here: `t3` (apps/server) has no Electron dependency
+      # No Electron setup here: `supacode` (apps/server) has no Electron dependency
       # and none of its tests touch the runtime. Only the non-server `test`
-      # job, which covers @t3tools/desktop, needs the download.
+      # job, which covers @supacode/desktop, needs the download.
       - name: Test
-        run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: vp run --filter supacode test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
   # The platform-independent JS (server bundle, web client, Electron main) is
   # built exactly once here and handed to every platform job as `js-bundle`.
@@ -370,20 +370,20 @@ jobs:
       - name: Install bundle dependencies
         env:
           pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
-        run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+        run: vp install --filter=supacode... --filter=@supacode/web... --filter=@supacode/desktop... --filter=@supacode/scripts...
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
       - uses: ./.github/actions/setup-apt-mirrors
 
-      # @t3tools/desktop#build compiles the Linux browser secret helper on a
+      # @supacode/desktop#build compiles the Linux browser secret helper on a
       # Linux host before packing, and that needs libsecret headers.
       - name: Install browser secret helper build libraries
         run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
 
-      # Runs t3#build (which depends on @t3tools/web#build) and
-      # @t3tools/desktop#build, so apps/server/dist holds the server bundle
+      # Runs supacode#build (which depends on @supacode/web#build) and
+      # @supacode/desktop#build, so apps/server/dist holds the server bundle
       # plus the web client and apps/desktop/dist-electron the Electron main.
       - name: Build JS bundle
         run: vp run build:desktop
@@ -569,8 +569,8 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=t3...
-              - --filter=@t3tools/scripts...
+              - --filter=supacode...
+              - --filter=@supacode/scripts...
 
       - name: Download all CLI archives
         uses: actions/download-artifact@v8
@@ -583,12 +583,12 @@ jobs:
         run: node scripts/build-npm-platform-packages.ts --archives-dir release-cli --version "${{ needs.preflight.outputs.version }}" --output-dir npm-packages
 
       # A dry run of every package first: an auth or scope error here (the
-      # @t3code org missing, a package without a trusted publisher) fails
+      # @supacode org missing, a package without a trusted publisher) fails
       # before anything is live, instead of after some platforms already are.
       - name: Check npm publish access (dry run)
         run: |
           if ! node apps/server/scripts/cli.ts publish --packages-dir npm-packages --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --provenance --dry-run --verbose; then
-            echo "::error::npm publish --dry-run failed. Make sure the @t3code npm org exists and that t3 and every @t3code/t3-<platform> package has a trusted publisher registered for .github/workflows/release.yml (see docs/operations/release.md)." >&2
+            echo "::error::npm publish --dry-run failed. Make sure the @supacode npm org exists and that supacode and every @supacode/supacode-<platform> package has a trusted publisher registered for .github/workflows/release.yml (see docs/operations/release.md)." >&2
             exit 1
           fi
 
@@ -630,7 +630,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
+              - --filter=@supacode/scripts...
 
       - name: Download all desktop artifacts
         uses: actions/download-artifact@v8
@@ -654,7 +654,7 @@ jobs:
           set -euo pipefail
           cd release-assets
           shopt -s nullglob
-          archives=(t3-*.tar.gz t3-*.zip)
+          archives=(supacode-*.tar.gz supacode-*.zip)
           if [[ ${#archives[@]} -eq 0 ]]; then
             echo "No CLI archives were produced." >&2
             exit 1
@@ -744,7 +744,7 @@ jobs:
           > [!WARNING]
           > **This is a preview build. Do not install it unless you know exactly why you are here.**
           >
-          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want supa3, install the [latest release](https://github.com/supabitapp/supa3/releases/latest) or a nightly instead.
+          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want supacode, install the [latest release](https://github.com/supabitapp/supacode/releases/latest) or a nightly instead.
 
           Built from `${{ needs.preflight.outputs.ref }}`.
           EOF
@@ -808,7 +808,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
+      SUPACODE_WEB_ROUTER_URL: ${{ vars.SUPACODE_WEB_ROUTER_URL }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
     steps:
       - name: Checkout
@@ -827,8 +827,8 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
-              - --filter=@t3tools/web...
+              - --filter=@supacode/scripts...
+              - --filter=@supacode/web...
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
@@ -847,7 +847,7 @@ jobs:
             exit 1
           fi
 
-          router_url="${T3CODE_WEB_ROUTER_URL:-https://app.t3.codes}"
+          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.supacode.sh}"
           if [[ "${{ needs.preflight.outputs.release_channel }}" == "stable" ]]; then
             channel_name="latest"
           else
@@ -881,9 +881,9 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
-      T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
-      T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
+      SUPACODE_WEB_ROUTER_URL: ${{ vars.SUPACODE_WEB_ROUTER_URL }}
+      SUPACODE_WEB_LATEST_DOMAIN: ${{ vars.SUPACODE_WEB_LATEST_DOMAIN }}
+      SUPACODE_WEB_NIGHTLY_DOMAIN: ${{ vars.SUPACODE_WEB_NIGHTLY_DOMAIN }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
     steps:
       - name: Checkout
@@ -912,9 +912,9 @@ jobs:
             exit 1
           fi
 
-          router_url="${T3CODE_WEB_ROUTER_URL:-https://app.t3.codes}"
-          latest_domain="${T3CODE_WEB_LATEST_DOMAIN:-latest.app.t3.codes}"
-          nightly_domain="${T3CODE_WEB_NIGHTLY_DOMAIN:-nightly.app.t3.codes}"
+          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.supacode.sh}"
+          latest_domain="${SUPACODE_WEB_LATEST_DOMAIN:-latest.app.supacode.sh}"
+          nightly_domain="${SUPACODE_WEB_NIGHTLY_DOMAIN:-nightly.app.supacode.sh}"
           router_domain="${router_url#http://}"
           router_domain="${router_domain#https://}"
           router_domain="${router_domain%%/*}"
@@ -942,7 +942,7 @@ jobs:
           fi
 
   # Same split as the web app: build a production deployment early, then
-  # promote it to t3.codes once the release it links to exists. As above, the
+  # promote it to supacode.sh once the release it links to exists. As above, the
   # project's own *.vercel.app hostname moves at build time.
   build_marketing:
     name: Build marketing site
@@ -974,7 +974,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/marketing...
+              - --filter=@supacode/marketing...
 
       - id: deploy
         name: Build staged deployment
@@ -990,7 +990,7 @@ jobs:
           VERCEL_PROJECT_ID="$(
             curl --fail --silent --show-error \
               --header "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v9/projects/t3code-marketing?teamId=$VERCEL_ORG_ID" \
+              "https://api.vercel.com/v9/projects/supacode-marketing?teamId=$VERCEL_ORG_ID" \
               | jq --exit-status --raw-output '.id'
           )"
           export VERCEL_PROJECT_ID
@@ -1097,8 +1097,8 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
-              - --filter=@t3tools/oxlint-plugin-t3code...
+              - --filter=@supacode/scripts...
+              - --filter=@supacode/oxlint-plugin-supacode...
 
       - id: update_versions
         name: Update version strings
@@ -1161,7 +1161,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
+              - --filter=@supacode/scripts...
 
       - name: Announce prerelease on Discord
         if: needs.preflight.outputs.is_prerelease == 'true'

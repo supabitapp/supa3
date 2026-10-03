@@ -4,7 +4,7 @@ import {
   type OrchestrationV2ShellSnapshot,
   ORCHESTRATION_PROTOCOL_VERSION,
   type ExecutionEnvironmentDescriptor,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";

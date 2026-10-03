@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off globalFetchInEffect:off - Hosted handoff test uses a real localhost listener without an OpenAI account.
 import * as NodeHttp from "node:http";
-import { codexAuthHandoffUrl, readCodexAuthDelivery } from "@t3tools/shared/codexAuthHandoff";
-import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
-import { HostProcessArguments } from "@t3tools/shared/hostProcess";
+import { codexAuthHandoffUrl, readCodexAuthDelivery } from "@supacode/shared/codexAuthHandoff";
+import { EnvironmentId, ProviderInstanceId } from "@supacode/contracts";
+import { HostProcessArguments } from "@supacode/shared/hostProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -38,11 +38,11 @@ const makeDesktopDeepLinksLayer = ({
 } = {}) => {
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     platform,
-    stateDir: "/tmp/t3-state",
+    stateDir: "/tmp/supacode-state",
     isDevelopment,
     appDataDirectory: "/tmp/app-data",
-    userDataDirName: isDevelopment ? "supa3-dev" : "supa3",
-    legacyUserDataDirName: isDevelopment ? "supa3 (Dev)" : "supa3 (Alpha)",
+    userDataDirName: isDevelopment ? "supacode-dev" : "supacode",
+    legacyUserDataDirName: isDevelopment ? "supacode (Dev)" : "supacode (Alpha)",
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
@@ -95,9 +95,9 @@ describe("DesktopDeepLinks", () => {
       yield* Effect.scoped(Layer.build(makeDesktopDeepLinksLayer({ events })));
 
       assert.deepEqual(events, [
-        "setPath:userData:/tmp/app-data/supa3-dev",
+        "setPath:userData:/tmp/app-data/supacode-dev",
         "requestSingleInstanceLock",
-        "setAsDefaultProtocolClient:supa3-dev",
+        "setAsDefaultProtocolClient:supacode-dev",
       ]);
     });
   });
@@ -118,8 +118,8 @@ describe("DesktopDeepLinks", () => {
       );
 
       assert.deepEqual(events, [
-        "setPath:userData:/tmp/app-data/supa3-v2",
-        "setAsDefaultProtocolClient:supa3",
+        "setPath:userData:/tmp/app-data/supacode-v2",
+        "setAsDefaultProtocolClient:supacode",
       ]);
     });
   });
@@ -134,7 +134,7 @@ describe("DesktopDeepLinks", () => {
 
       assert.isTrue(Exit.hasInterrupts(exit));
       assert.deepEqual(events, [
-        "setPath:userData:/tmp/app-data/supa3-dev",
+        "setPath:userData:/tmp/app-data/supacode-dev",
         "requestSingleInstanceLock",
         "quit",
       ]);
@@ -180,7 +180,7 @@ describe("DesktopDeepLinks", () => {
     return Effect.gen(function* () {
       const deepLinks = yield* DesktopDeepLinks.DesktopDeepLinks;
       yield* deepLinks.configure;
-      listeners.get("second-instance")!({}, ["supa3", "--some-flag"]);
+      listeners.get("second-instance")!({}, ["supacode", "--some-flag"]);
 
       assert.strictEqual(yield* Effect.promise(() => revealed.promise), window);
       assert.equal(window.loadURL.mock.calls.length, 0);
@@ -206,19 +206,19 @@ describe("DesktopDeepLinks", () => {
       const deepLinks = yield* DesktopDeepLinks.DesktopDeepLinks;
       yield* deepLinks.configure;
       const event = { preventDefault: vi.fn() };
-      listeners.get("open-url")!(event, "supa3-dev://app/auth/callback?code=unrelated-code");
-      listeners.get("open-url")!(event, "supa3://app/welcome");
+      listeners.get("open-url")!(event, "supacode-dev://app/auth/callback?code=unrelated-code");
+      listeners.get("open-url")!(event, "supacode://app/welcome");
       assert.equal(loadURL.mock.calls.length, 0);
       assert.equal(event.preventDefault.mock.calls.length, 0);
       listeners.get("second-instance")!({}, [
-        "supa3",
-        "supa3-dev://app/settings/providers?instanceId=work&code=never-forward",
+        "supacode",
+        "supacode-dev://app/settings/providers?instanceId=work&code=never-forward",
       ]);
       yield* Effect.promise(() => revealed.promise);
       assert.deepEqual(loadURL.mock.calls, [
-        ["supa3-dev://app/settings/providers?instanceId=work"],
+        ["supacode-dev://app/settings/providers?instanceId=work"],
       ]);
-      listeners.get("open-url")!(event, "supa3-dev://app/welcome#agents:machine-id");
+      listeners.get("open-url")!(event, "supacode-dev://app/welcome#agents:machine-id");
       assert.equal(event.preventDefault.mock.calls.length, 1);
     }).pipe(
       Effect.scoped,
@@ -251,7 +251,7 @@ describe("DesktopDeepLinks", () => {
         }).toString();
         const request = {
           authorizationUrl: authorize.toString(),
-          returnUrl: "https://app.t3.codes/welcome#agents:remote-one",
+          returnUrl: "https://app.supacode.sh/welcome#agents:remote-one",
           environmentId: EnvironmentId.make("remote-one"),
           instanceId: ProviderInstanceId.make("work"),
           flowId: "flow-one",
@@ -293,7 +293,7 @@ describe("DesktopDeepLinks", () => {
           Effect.provide(makeDesktopDeepLinksLayer({ shell })),
           Effect.provideService(
             HostProcessArguments,
-            entry === "startup" ? ["supa3", link] : ["supa3"],
+            entry === "startup" ? ["supacode", link] : ["supacode"],
           ),
           Effect.provideService(ElectronApp.ElectronApp, makeListenerApp(listeners)),
           Effect.provideService(

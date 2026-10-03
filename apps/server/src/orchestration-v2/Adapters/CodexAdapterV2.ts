@@ -27,12 +27,12 @@ import {
   isOrchestrationV2WorkActive,
   ProviderDriverKind,
   type ProviderSetupError,
-} from "@t3tools/contracts";
-import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import { dynamicToolTitle } from "@t3tools/shared/toolActivity";
-import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@t3tools/shared/model";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+} from "@supacode/contracts";
+import { SKILL_MENTION_PATTERN } from "@supacode/shared/composerInlineTokens";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
+import { dynamicToolTitle } from "@supacode/shared/toolActivity";
+import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@supacode/shared/model";
+import { resolveSpawnCommand } from "@supacode/shared/shell";
 import type {
   ChatAttachment,
   OrchestrationV2AppThread,
@@ -60,7 +60,7 @@ import type {
   RuntimeMode,
   RuntimeRequestId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexSchema from "effect-codex-app-server/schema";
@@ -698,7 +698,7 @@ export function buildCodexTurnStartParams(input: {
   readonly codexInput: ReadonlyArray<CodexSchema.V2TurnStartParams__UserInput>;
   readonly runtimePolicy: ProviderAdapterV2RuntimePolicy;
   readonly modelSelection: ModelSelection;
-  readonly hasT3Mcp?: boolean;
+  readonly hasSupacodeMcp?: boolean;
   readonly browserToolsAvailable?: boolean;
   readonly deviceToolsAvailable?: boolean;
   /** ChatGPT token sharing does not accept service tiers. */
@@ -725,11 +725,11 @@ export function buildCodexTurnStartParams(input: {
         ? undefined
         : getCodexServiceTierOptionValue(input.modelSelection);
     const developerInstructions =
-      input.hasT3Mcp !== true
+      input.hasSupacodeMcp !== true
         ? undefined
         : buildCodexDeveloperInstructions(input.runtimePolicy.interactionMode);
     const additionalContext =
-      input.hasT3Mcp === true
+      input.hasSupacodeMcp === true
         ? buildCodexAdditionalContext(
             { model: input.modelSelection.model, reasoningEffort: effort ?? "medium" },
             {
@@ -759,7 +759,7 @@ export function buildCodexTurnStartParams(input: {
       cwd: input.runtimePolicy.cwd,
       model: input.modelSelection.model,
       // Model catalogues can default summaries to "none". Request them on every
-      // turn, including resumed threads, for T3's reasoning timeline.
+      // turn, including resumed threads, for Supacode's reasoning timeline.
       summary: "detailed",
       // Always explicit: omitting this on resume leaves Codex's previous
       // reviewer sticky after switching away from Auto mode.
@@ -1187,11 +1187,11 @@ export interface CodexAppServerClientFactoryShape {
 export class CodexAppServerClientFactory extends Context.Service<
   CodexAppServerClientFactory,
   CodexAppServerClientFactoryShape
->()("t3/orchestration-v2/Adapters/CodexAdapterV2/CodexAppServerClientFactory") {}
+>()("supacode/orchestration-v2/Adapters/CodexAdapterV2/CodexAppServerClientFactory") {}
 
 /**
  * Config overrides sent with every `thread/start`, `thread/resume` and `thread/fork`.
- * Codex 0.152 made the `update_plan` checklist tool opt-in; T3 renders it as the
+ * Codex 0.152 made the `update_plan` checklist tool opt-in; Supacode renders it as the
  * todo list. Codex layers these above the user's and project's `config.toml`.
  */
 export const CODEX_THREAD_CONFIG = { "tools.update_plan.enabled": true } as const;
@@ -1216,7 +1216,7 @@ export function codexThreadRuntimeParams(input: {
         ? {}
         : {
             mcp_servers: {
-              supa3: {
+              Supacode: {
                 url: mcpSession.endpoint,
                 http_headers: {
                   Authorization: mcpSession.authorizationHeader,
@@ -1528,7 +1528,7 @@ export interface CodexAdapterV2Options {
   readonly onUsageLimits?: ServerProviderShape["applyUsageLimits"];
   /**
    * Resolves launch settings when each session opens, replacing `settings` and
-   * `environment`. Managed ChatGPT sign-in uses it to launch the T3-installed
+   * `environment`. Managed ChatGPT sign-in uses it to launch the Supacode-installed
    * Codex with a current access token.
    */
   readonly resolveRuntime?: Effect.Effect<CodexEffectiveRuntime, ProviderSetupError, Scope.Scope>;
@@ -5542,7 +5542,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 codexInput,
                 runtimePolicy: turnInput.runtimePolicy,
                 modelSelection: turnInput.modelSelection,
-                hasT3Mcp: mcpSession !== undefined,
+                hasSupacodeMcp: mcpSession !== undefined,
                 browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
                 deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
                 omitServiceTier: adapterOptions.resolveRuntime !== undefined,

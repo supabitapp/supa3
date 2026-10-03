@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@supacode/contracts";
 import type { Project, Thread } from "../types";
 import { makeThreadFixture } from "../test-fixtures";
 import {
@@ -74,24 +74,24 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projects: [
         {
           environmentId: localEnvironmentId,
-          title: "supa3",
-          workspaceRoot: "/Users/theo/Projects/t3code",
+          title: "supacode",
+          workspaceRoot: "/Users/theo/Projects/supacode",
         },
         {
           environmentId: remoteEnvironmentId,
-          title: "t3code",
-          workspaceRoot: "/srv/t3code",
+          title: "supacode",
+          workspaceRoot: "/srv/supacode",
         },
       ],
       locationByEnvironmentId: locations,
     });
 
     expect(metadata.searchTerms).toEqual([
-      "supa3",
-      "/Users/theo/Projects/t3code",
+      "supacode",
+      "/Users/theo/Projects/supacode",
       "Local",
-      "t3code",
-      "/srv/t3code",
+      "supacode",
+      "/srv/supacode",
       "Build box",
     ]);
     expect(metadata.environmentLabels).toEqual(["Local", "Build box"]);
@@ -103,8 +103,8 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projectSearchItems: [
         {
           kind: "action",
-          value: "project:t3code",
-          title: "supa3",
+          value: "project:supacode",
+          title: "supacode",
           searchTerms: metadata.searchTerms,
           icon: null,
           run: async () => undefined,
@@ -120,13 +120,13 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projects: [
         {
           environmentId: remoteEnvironmentId,
-          title: "supa3",
-          workspaceRoot: "/srv/t3code",
+          title: "supacode",
+          workspaceRoot: "/srv/supacode",
         },
         {
           environmentId: remoteEnvironmentId,
-          title: "supa3 worktree",
-          workspaceRoot: "/srv/t3code-feature",
+          title: "supacode worktree",
+          workspaceRoot: "/srv/supacode-feature",
         },
       ],
       locationByEnvironmentId: locations,
@@ -141,13 +141,13 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projects: [
         {
           environmentId: remoteEnvironmentId,
-          title: "supa3",
-          workspaceRoot: "/srv/t3code",
+          title: "supacode",
+          workspaceRoot: "/srv/supacode",
         },
         {
           environmentId: secondRemoteEnvironmentId,
-          title: "supa3 mirror",
-          workspaceRoot: "/srv/mirror/t3code",
+          title: "supacode mirror",
+          workspaceRoot: "/srv/mirror/supacode",
         },
       ],
       locationByEnvironmentId: new Map([
@@ -164,8 +164,8 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projects: [
         {
           environmentId: remoteEnvironmentId,
-          title: "supa3",
-          workspaceRoot: "/srv/t3code",
+          title: "supacode",
+          workspaceRoot: "/srv/supacode",
         },
       ],
       locationByEnvironmentId: new Map(),
@@ -461,7 +461,7 @@ describe("buildThreadActionItems", () => {
     ];
     const items = buildThreadActionItems({
       threads,
-      projectTitleById: new Map([[PROJECT_ID, "supa3"]]),
+      projectTitleById: new Map([[PROJECT_ID, "supacode"]]),
       sortOrder: "created_at",
       icon: null,
       getContentMatch: (thread) =>
@@ -610,7 +610,7 @@ describe("buildThreadActionItems", () => {
   it("keeps message excerpts searchable without replacing thread metadata", () => {
     const [item] = buildThreadActionItems({
       threads: [makeThread({ branch: "feat/search" })],
-      projectTitleById: new Map([[PROJECT_ID, "supa3"]]),
+      projectTitleById: new Map([[PROJECT_ID, "supacode"]]),
       sortOrder: "updated_at",
       icon: null,
       getContentMatch: () => ({
@@ -627,7 +627,7 @@ describe("buildThreadActionItems", () => {
       snippet: "The relay reconnect is now bounded.",
       query: "reconnect",
     });
-    expect(item?.description).toBe("supa3 · #feat/search");
+    expect(item?.description).toBe("supacode · #feat/search");
   });
 
   it("surfaces threads when the query is their ID, without outranking title matches", () => {
@@ -643,7 +643,7 @@ describe("buildThreadActionItems", () => {
     });
     const items = buildThreadActionItems({
       threads: [idThread, titleThread],
-      projectTitleById: new Map([[PROJECT_ID, "supa3"]]),
+      projectTitleById: new Map([[PROJECT_ID, "supacode"]]),
       sortOrder: "updated_at",
       icon: null,
       runThread: async (_thread) => undefined,
@@ -667,7 +667,7 @@ describe("buildThreadActionItems", () => {
   it("prefers renderDescription when provided", () => {
     const [item] = buildThreadActionItems({
       threads: [makeThread({ branch: "feat/search", worktreePath: "/tmp/wt" })],
-      projectTitleById: new Map([[PROJECT_ID, "supa3"]]),
+      projectTitleById: new Map([[PROJECT_ID, "supacode"]]),
       sortOrder: "updated_at",
       icon: null,
       renderDescription: (thread, { projectTitle }) =>
@@ -675,7 +675,7 @@ describe("buildThreadActionItems", () => {
       runThread: async (_thread) => undefined,
     });
 
-    expect(item?.description).toBe("supa3:feat/search:wt");
+    expect(item?.description).toBe("supacode:feat/search:wt");
   });
 
   it("filters archived threads out of thread search items", () => {
@@ -781,8 +781,8 @@ describe("filterPinnedBrowseEntries", () => {
 it.each([
   "#10839",
   "10839",
-  "pingdotgg/t3code#10839",
-  "https://github.com/pingdotgg/t3code/pull/10839",
+  "supabitapp/supacode#10839",
+  "https://github.com/supabitapp/supacode/pull/10839",
 ])("finds linked threads from PR query %s", (query) => {
   const items = buildThreadActionItems({
     threads: [
@@ -791,9 +791,9 @@ it.each([
         pullRequests: [
           {
             host: "github.com",
-            repository: "pingdotgg/t3code",
+            repository: "supabitapp/supacode",
             number: 10839,
-            url: "https://github.com/pingdotgg/t3code/pull/10839",
+            url: "https://github.com/supabitapp/supacode/pull/10839",
             source: "manual",
             linkedAt: "2026-09-08T00:00:00Z",
             snapshot: null,

@@ -5,22 +5,22 @@ import {
   type ProviderApprovalOption,
   ProviderDriverKind,
   type RuntimeMode,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { normalizeModelSlug } from "@supacode/shared/model";
 
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import { makeXAiPromptCompletionRuntime } from "./XAiAcpExtension.ts";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";
 const GROK_OAUTH2_REFERRER_ENV = "GROK_OAUTH2_REFERRER";
-const T3_CODE_OAUTH_REFERRER = "t3code";
+const SUPACODE_OAUTH_REFERRER = "supacode";
 const GROK_AUTH_METHOD_API_KEY = "xai.api_key";
 const GROK_AUTH_METHOD_CACHED_TOKEN = "cached_token";
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
@@ -78,7 +78,7 @@ export function buildGrokAcpSpawnInput(
     cwd,
     env: {
       ...environment,
-      [GROK_OAUTH2_REFERRER_ENV]: T3_CODE_OAUTH_REFERRER,
+      [GROK_OAUTH2_REFERRER_ENV]: SUPACODE_OAUTH_REFERRER,
     },
   };
 }
@@ -115,7 +115,7 @@ export const GROK_ACP_CANCEL_META = { cancelTrigger: "ctrl_c" } as const;
  * Grok's Auto mode asks the client about an action its classifier blocks only
  * when the client declares a type that can show a prompt; the default
  * (`generic`) gets a silent denial instead. `extension` is the prompting type
- * that keeps the permission options T3 already maps (no always-approve row,
+ * that keeps the permission options Supacode already maps (no always-approve row,
  * no per-command persistent grants).
  */
 export const GROK_ACP_INITIALIZE_META = { clientType: "extension" } as const;
@@ -189,7 +189,7 @@ export const makeGrokAcpRuntime = (
   });
 
 /**
- * T3's built-in Grok slug. It is the CLI's product name, not a model id the ACP accepts,
+ * Supacode's built-in Grok slug. It is the CLI's product name, not a model id the ACP accepts,
  * so selecting it means "use whatever model the Grok session currently runs on".
  */
 export const GROK_DEFAULT_MODEL_SLUG = "grok-build";

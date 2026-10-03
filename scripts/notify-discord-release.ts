@@ -130,8 +130,8 @@ export const buildDiscordReleaseAnnouncement = (
       url: options.releaseUrl.href,
       description:
         options.target === "prerelease"
-          ? "A new supa3 prerelease is available for nightly testers."
-          : "A new supa3 latest release is available.",
+          ? "A new Supacode prerelease is available for nightly testers."
+          : "A new Supacode latest release is available.",
       color: targetColors[options.target],
       fields: [
         {
@@ -271,7 +271,7 @@ export const notifyDiscordReleaseCommand = Command.make(
       yield* postDiscordWebhook(webhookUrl, payload, announcement);
       yield* Effect.logInfo("discord release announcement completed");
     }),
-).pipe(Command.withDescription("Post a supa3 release announcement to Discord."));
+).pipe(Command.withDescription("Post a Supacode release announcement to Discord."));
 
 if (import.meta.main) {
   Command.run(notifyDiscordReleaseCommand, { version: "0.0.0" }).pipe(

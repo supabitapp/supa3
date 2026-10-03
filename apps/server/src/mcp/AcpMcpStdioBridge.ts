@@ -9,11 +9,11 @@ import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 /**
- * Stdio-to-HTTP bridge for T3's MCP endpoint.
+ * Stdio-to-HTTP bridge for Supacode's MCP endpoint.
  *
  * ACP agents must support stdio MCP servers, while optional http/sse support
- * is unevenly implemented. `t3 acp-mcp-bridge` runs as the stdio MCP server an
- * ACP agent spawns and forwards each JSON-RPC line to T3's authenticated
+ * is unevenly implemented. `supacode acp-mcp-bridge` runs as the stdio MCP server an
+ * ACP agent spawns and forwards each JSON-RPC line to Supacode's authenticated
  * streamable-HTTP endpoint: single JSON responses and SSE streams are written
  * back as newline-delimited JSON-RPC, notification acknowledgements (202/204)
  * produce no output, and the `mcp-session-id` / negotiated protocol version
@@ -161,7 +161,7 @@ export function callAcpMcpTool(
         if (!response.ok) {
           yield* discardResponseBody(response);
           return yield* Effect.fail(
-            new AcpMcpBridgeError(`supa3 MCP endpoint responded with HTTP ${response.status}.`),
+            new AcpMcpBridgeError(`Supacode MCP endpoint responded with HTTP ${response.status}.`),
           );
         }
         const payloads = yield* Stream.runCollect(responsePayloads(response));
@@ -171,7 +171,7 @@ export function callAcpMcpTool(
         return payloads;
       });
 
-    const initializeId = "t3-acp-cli-initialize";
+    const initializeId = "supacode-acp-cli-initialize";
     const initialized = yield* send({
       jsonrpc: "2.0",
       id: initializeId,
@@ -179,18 +179,18 @@ export function callAcpMcpTool(
       params: {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "supa3-acp-cli", version: "0.0.0" },
+        clientInfo: { name: "supacode-acp-cli", version: "0.0.0" },
       },
     });
     const initializeResponse = initialized.find((entry) => asEnvelope(entry)?.id === initializeId);
     if (initializeResponse === undefined || asEnvelope(initializeResponse)?.error !== undefined) {
       return yield* Effect.fail(
-        new AcpMcpBridgeError("supa3 MCP endpoint rejected initialization."),
+        new AcpMcpBridgeError("Supacode MCP endpoint rejected initialization."),
       );
     }
     yield* send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
-    const callId = "t3-acp-cli-tool-call";
+    const callId = "supacode-acp-cli-tool-call";
     const responses = yield* send({
       jsonrpc: "2.0",
       id: callId,
@@ -202,7 +202,7 @@ export function callAcpMcpTool(
     if (envelope === null || envelope.error !== undefined) {
       return yield* Effect.fail(
         new AcpMcpBridgeError(
-          `supa3 MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
+          `Supacode MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
         ),
       );
     }
@@ -266,7 +266,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           if (envelope.id !== undefined) {
             yield* respondWithError(
               envelope.id,
-              `supa3 MCP endpoint responded with HTTP ${response.status}.`,
+              `Supacode MCP endpoint responded with HTTP ${response.status}.`,
             );
           }
           return yield* discardResponseBody(response);
@@ -278,7 +278,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           const error = Cause.squash(cause);
           return respondWithError(
             envelope.id,
-            `supa3 MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Supacode MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
           );
         }),
       );
@@ -359,7 +359,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
 }
 
 /**
- * Argv runner for `t3 acp-mcp-bridge` and `t3 acp-mcp-call`, shared by the
+ * Argv runner for `supacode acp-mcp-bridge` and `supacode acp-mcp-call`, shared by the
  * fast-path dispatch in bin.ts and the full CLI's command handlers. Kept free
  * of heavy imports: these commands run on the ACP first-message critical path.
  */
@@ -367,10 +367,10 @@ export async function runAcpMcpCliFastPath(
   command: "acp-mcp-bridge" | "acp-mcp-call",
   args: ReadonlyArray<string>,
 ): Promise<void> {
-  const endpoint = process.env.T3_ACP_MCP_ENDPOINT;
-  const authorization = process.env.T3_ACP_MCP_AUTHORIZATION;
+  const endpoint = process.env.SUPACODE_ACP_MCP_ENDPOINT;
+  const authorization = process.env.SUPACODE_ACP_MCP_AUTHORIZATION;
   if (endpoint === undefined || authorization === undefined) {
-    process.stderr.write(`${command} requires T3_ACP_MCP_ENDPOINT and T3_ACP_MCP_AUTHORIZATION.\n`);
+    process.stderr.write(`${command} requires SUPACODE_ACP_MCP_ENDPOINT and SUPACODE_ACP_MCP_AUTHORIZATION.\n`);
     process.exitCode = 2;
     return;
   }

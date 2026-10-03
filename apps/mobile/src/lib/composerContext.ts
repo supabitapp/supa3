@@ -1,6 +1,6 @@
-import { serializeLegacyContextMessage } from "@t3tools/shared/composerContextLegacySend";
-import { filePreviewKind } from "@t3tools/shared/filePreview";
-import { videoMimeType } from "@t3tools/shared/video";
+import { serializeLegacyContextMessage } from "@supacode/shared/composerContextLegacySend";
+import { filePreviewKind } from "@supacode/shared/filePreview";
+import { videoMimeType } from "@supacode/shared/video";
 import {
   COMPOSER_CONTEXT_MAX_RECORDS,
   ComposerContextId,
@@ -10,18 +10,18 @@ import {
   type ReviewCommentContextRecord,
   type ScopedThreadRef,
   type ThreadContextRecord,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 import {
   collectComposerContextReferences,
   formatComposerContextReference,
   replaceComposerContextReferences,
   sanitizeComposerContextLabel,
-} from "@t3tools/shared/composerContextReferences";
+} from "@supacode/shared/composerContextReferences";
 import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
-} from "@t3tools/shared/composerInlineTokens";
+} from "@supacode/shared/composerInlineTokens";
 
 const isMessageContext = Schema.is(OrchestrationMessageContext);
 const decodeMessageContext = Schema.decodeUnknownOption(OrchestrationMessageContext);

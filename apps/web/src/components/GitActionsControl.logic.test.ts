@@ -1,5 +1,5 @@
-import type { VcsStatusResult } from "@t3tools/contracts";
-import { WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+import type { VcsStatusResult } from "@supacode/contracts";
+import { WORKTREE_BRANCH_PREFIX } from "@supacode/shared/git";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildGitActionProgressStages,

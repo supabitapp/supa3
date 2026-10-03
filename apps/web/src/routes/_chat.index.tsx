@@ -1,5 +1,5 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef } from "@supacode/client-runtime/environment";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -136,9 +136,9 @@ function HostedStaticOnboardingState() {
               <div className="mx-auto mb-5 flex size-11 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-muted-foreground">
                 <LinkIcon className="size-5" />
               </div>
-              <EmptyTitle>Connect to a computer running supa3</EmptyTitle>
+              <EmptyTitle>Connect to a computer running supacode</EmptyTitle>
               <EmptyDescription>
-                This app connects to supa3 running on your computer or a server. Start the supa3
+                This app connects to Supacode running on your computer or a server. Start the supacode
                 desktop app or command-line server on that machine and keep it running.
               </EmptyDescription>
               <EmptyDescription>{description}</EmptyDescription>

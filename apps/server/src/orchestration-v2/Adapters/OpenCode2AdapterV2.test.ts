@@ -21,7 +21,7 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurn,
   type ProviderReplayEntry,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -73,16 +73,16 @@ const event = (type: string, data: Record<string, unknown>): ProviderReplayEntry
 });
 const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 
-/** The rules T3 gives every session it runs, with only this thread's own T3 MCP server allowed. */
+/** The rules Supacode gives every session it runs, with only this thread's own Supacode MCP server allowed. */
 const mcpRules = [
-  { action: "t3-code-*", resource: "*", effect: "deny" },
-  { action: "supa3-*", resource: "*", effect: "deny" },
-  { action: "supa3-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
+  { action: "supacode-*", resource: "*", effect: "deny" },
+  { action: "supacode-*", resource: "*", effect: "deny" },
+  { action: "supacode-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
-const t3Rules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
+const supacodeRules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
 const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
   id: SESSION,
-  permissions: t3Rules,
+  permissions: supacodeRules,
   projectID: "global",
   model: { id: "big-pickle", providerID: "opencode", variant: "default" },
   cost: 0,
@@ -115,7 +115,7 @@ const modelCatalog = {
   ],
 };
 
-/** The prompt id the recorded answer carries; a replay maps it to the one T3 chose. */
+/** The prompt id the recorded answer carries; a replay maps it to the one Supacode chose. */
 const PROMPT_ID = "msg_0eb735d41001NJee1EvVePJAK5";
 const promptAccepted = replyData("session.prompt", {
   id: PROMPT_ID,
@@ -135,7 +135,7 @@ const noOpenRequests: ReadonlyArray<ProviderReplayEntry> = [
 ];
 
 /**
- * A thread's first turn writes T3's instructions entry before it starts; the
+ * A thread's first turn writes Supacode's instructions entry before it starts; the
  * adapter only rewrites it when it changes, so later turns do not.
  */
 const withInstructions = (
@@ -155,7 +155,7 @@ const withInstructions = (
         "skill.list",
       ].includes(String(entry.frame.type)),
   );
-  // T3's MCP server is added before the entry that describes it.
+  // Supacode's MCP server is added before the entry that describes it.
   const after = entries.findIndex(
     (entry, index) =>
       index < first &&
@@ -172,7 +172,7 @@ const withInstructions = (
         ...entries.slice(0, at),
         out("session.instructions.entry.put", {
           sessionID: SESSION,
-          key: "t3-code",
+          key: "supacode",
           value: "<any>",
         }),
         reply("session.instructions.entry.put", null),
@@ -774,7 +774,7 @@ describe("OpenCode2 adapter", () => {
         reply("agent.list", agentList),
         out("session.update", { sessionID: SESSION, permissions: supervisedRules }),
         reply("session.update", null),
-        // A subagent's session may use its thread's T3 MCP server.
+        // A subagent's session may use its thread's Supacode MCP server.
         out("session.update", {
           sessionID: CHILD,
           permissions: [...supervisedRules.slice(0, 3), ...mcpRules],
@@ -975,7 +975,7 @@ describe("OpenCode2 adapter", () => {
         reply("session.interrupt", { interrupted: true }),
         event("session.execution.interrupted", { sessionID: MIDDLE }),
         // Later OpenCode runs the thread's own session by itself: a follow-up
-        // T3 offers a turn for, which marks that everything above was handled.
+        // Supacode offers a turn for, which marks that everything above was handled.
         event("session.execution.started", { sessionID: SESSION }),
       ]).pipe(
         Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
@@ -1143,7 +1143,7 @@ describe("OpenCode2 adapter", () => {
         reply("session.interrupt", { interrupted: true }),
         event("session.execution.interrupted", { sessionID: MIDDLE }),
         // Later OpenCode runs the thread's own session by itself: a follow-up
-        // T3 offers a turn for, which marks that everything above was handled.
+        // Supacode offers a turn for, which marks that everything above was handled.
         event("session.execution.started", { sessionID: SESSION }),
       ]).pipe(
         Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
@@ -1528,7 +1528,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("gives a resumed session supa3's rules when it was made with others", () =>
+  it.effect("gives a resumed session Supacode's rules when it was made with others", () =>
     Effect.gen(function* () {
       const runtime = yield* openCode2ReplayRuntimeWithInstructions([
         ...opening,
@@ -1544,7 +1544,7 @@ describe("OpenCode2 adapter", () => {
           }),
         ),
         ...noOpenRequests,
-        out("session.update", { sessionID: SESSION, permissions: t3Rules }),
+        out("session.update", { sessionID: SESSION, permissions: supacodeRules }),
         reply("session.update", null),
       ]);
       yield* runtime.resumeThread({
@@ -1598,7 +1598,7 @@ describe("OpenCode2 adapter", () => {
       }).pipe(Effect.scoped),
   );
 
-  it.effect("breaks the thread and forgets it when the session was deleted outside T3", () =>
+  it.effect("breaks the thread and forgets it when the session was deleted outside Supacode", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -1650,9 +1650,9 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the requests a session still waits on when a restarted supa3 loads it", () =>
+  it.effect("stops the requests a session still waits on when a restarted Supacode loads it", () =>
     Effect.gen(function* () {
-      // T3 restarted while the server kept waiting on an ask T3 no longer shows.
+      // Supacode restarted while the server kept waiting on an ask Supacode no longer shows.
       const runtime = yield* openCode2ReplayRuntimeWithInstructions(
         [
           ...opening,
@@ -1729,7 +1729,7 @@ describe("OpenCode2 adapter", () => {
       assert.equal(ended?.status, "failed");
       assert.equal(
         ended?.status === "failed" ? ended.failure.message : undefined,
-        "OpenCode is waiting on a request supa3 couldn't answer.",
+        "OpenCode is waiting on a request Supacode couldn't answer.",
       );
     }).pipe(Effect.scoped),
   );
@@ -1764,12 +1764,12 @@ describe("OpenCode2 adapter", () => {
       yield* runtime.startTurn(turnInput(thread, bigPickle, "approval-required"));
       const request = yield* Fiber.join(requested);
       yield* runtime.respondToRuntimeRequest({ requestId: request!.id, decision: "accept" });
-      // Not "waiting on a request T3 Code couldn't answer": nothing waits on it.
+      // Not "waiting on a request Supacode couldn't answer": nothing waits on it.
       assert.equal((yield* Fiber.join(terminal))?.status, "completed");
     }).pipe(Effect.scoped),
   );
 
-  it.effect("declines a form supa3 cannot show with the reason, instead of leaving it open", () =>
+  it.effect("declines a form Supacode cannot show with the reason, instead of leaving it open", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -1895,7 +1895,7 @@ describe("OpenCode2 adapter", () => {
             permissions: [
               ...supervisedRules.slice(0, 3),
               { action: "shell", resource: "echo *", effect: "allow" },
-              // A subagent's session may use its thread's T3 MCP server.
+              // A subagent's session may use its thread's Supacode MCP server.
               ...mcpRules,
             ],
           }),
@@ -1960,7 +1960,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the subagent whose form supa3 cannot show or decline", () =>
+  it.effect("stops the subagent whose form Supacode cannot show or decline", () =>
     Effect.gen(function* () {
       const linkForm = {
         id: "frm_0eb79ab35001fkvFECSh3wYNVD",
@@ -2660,7 +2660,7 @@ describe("OpenCode2 adapter", () => {
   );
 
   it.effect(
-    "registers supa3's MCP server for the thread alone and removes it when the thread unloads",
+    "registers Supacode's MCP server for the thread alone and removes it when the thread unloads",
     () =>
       Effect.gen(function* () {
         McpProviderSession.setMcpProviderSession({
@@ -2675,10 +2675,10 @@ describe("OpenCode2 adapter", () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId)),
         );
-        const server = "supa3-thread_opencode2-adapter";
+        const server = "supacode-thread_opencode2-adapter";
         const { runtime, thread } = yield* resumed([
           // Registered for the session's directory under the thread's own name;
-          // the session's rules allow only this name's tools (see `t3Rules`).
+          // the session's rules allow only this name's tools (see `supacodeRules`).
           out("mcp.add", {
             server,
             "location[directory]": WORK,
@@ -2819,7 +2819,7 @@ describe("OpenCode2 adapter", () => {
         out("session.create", {
           location: { directory: custom },
           model: { providerID: "opencode", id: "big-pickle" },
-          permissions: t3Rules,
+          permissions: supacodeRules,
         }),
         replyData("session.create", sessionInfo({ location: { directory: custom } })),
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -2865,8 +2865,8 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("clears a staged revert whose commit failed, before the next prompt too", () =>
     Effect.gen(function* () {
-      const kept = "msg_t3_turn_run-attempt:kept:1";
-      const dropped = "msg_t3_turn_run-attempt:dropped:1";
+      const kept = "msg_supacode_turn_run-attempt:kept:1";
+      const dropped = "msg_supacode_turn_run-attempt:dropped:1";
       const { runtime, thread } = yield* resumed([
         out("message.list", "<any>"),
         reply("message.list", {
@@ -2907,7 +2907,7 @@ describe("OpenCode2 adapter", () => {
         runAttemptId: RunAttemptId.make(`run-attempt:${attempt}:1`),
         nativeTurnRef: {
           driver: OPENCODE_PROVIDER,
-          nativeId: `msg_t3_turn_run-attempt:${attempt}:1`,
+          nativeId: `msg_supacode_turn_run-attempt:${attempt}:1`,
           strength: "weak" as const,
         },
         ordinal,
@@ -2935,8 +2935,8 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("offers no follow-up for the execution a cleared revert starts", () =>
     Effect.gen(function* () {
-      const kept = "msg_t3_turn_run-attempt:kept:1";
-      const dropped = "msg_t3_turn_run-attempt:dropped:1";
+      const kept = "msg_supacode_turn_run-attempt:kept:1";
+      const dropped = "msg_supacode_turn_run-attempt:dropped:1";
       const offers: Array<ProviderContinuationRequest> = [];
       const { runtime, thread } = yield* resumed([
         out("message.list", "<any>"),
@@ -2956,7 +2956,7 @@ describe("OpenCode2 adapter", () => {
         }),
         // Uncleared, OpenCode would commit the stage on the next prompt. The
         // clear wakes the session into an empty execution of its own, with no
-        // turn of T3's running: it is no subagent's follow-up.
+        // turn of Supacode's running: it is no subagent's follow-up.
         out("session.revert.clear", { sessionID: SESSION }),
         reply("session.revert.clear", null),
         event("session.revert.cleared", { sessionID: SESSION }),
@@ -2976,7 +2976,7 @@ describe("OpenCode2 adapter", () => {
         runAttemptId: RunAttemptId.make(`run-attempt:${attempt}:1`),
         nativeTurnRef: {
           driver: OPENCODE_PROVIDER,
-          nativeId: `msg_t3_turn_run-attempt:${attempt}:1`,
+          nativeId: `msg_supacode_turn_run-attempt:${attempt}:1`,
           strength: "weak" as const,
         },
         ordinal,
@@ -3004,7 +3004,7 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("prompts under ids no other session on the server can hold", () =>
     Effect.gen(function* () {
-      // Two T3 databases on one external server repeat thread ids and run
+      // Two Supacode databases on one external server repeat thread ids and run
       // ordinals, so their turns can share an attempt id and their steers a
       // message id. OpenCode refuses a prompt id another session already
       // holds with 409 ConflictError; the replay refuses a client id it
@@ -3053,7 +3053,7 @@ describe("OpenCode2 adapter", () => {
         ...promptInto(SESSION, "msg_recorded_turn_a"),
         ...steerInto(SESSION, "msg_recorded_steer_a"),
         // The other session gets its own instructions entry before its first prompt.
-        out("session.instructions.entry.put", { sessionID: OTHER, key: "t3-code", value: "<any>" }),
+        out("session.instructions.entry.put", { sessionID: OTHER, key: "supacode", value: "<any>" }),
         reply("session.instructions.entry.put", null),
         ...promptInto(OTHER, "msg_recorded_turn_b"),
         ...steerInto(OTHER, "msg_recorded_steer_b"),
@@ -3105,7 +3105,7 @@ describe("OpenCode2 adapter", () => {
     ["rolls back once a timed-out Stop's run has left the server", false],
   ] as const)("%s", ([, running]) =>
     Effect.gen(function* () {
-      const prompt = `msg_t3_turn_${SESSION}:attempt:opencode2-adapter`;
+      const prompt = `msg_supacode_turn_${SESSION}:attempt:opencode2-adapter`;
       const { runtime, thread } = yield* resumed([
         ...stopTimedOut,
         // The server says whether the stopped run still goes.
@@ -3175,7 +3175,7 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("takes back a stranded steer again when its first cancel failed", () =>
     Effect.gen(function* () {
-      const steerId = `msg_t3_steer_${SESSION}:message:opencode2-adapter:steer`;
+      const steerId = `msg_supacode_steer_${SESSION}:message:opencode2-adapter:steer`;
       const cancelOut = out("session.inbox.cancel", { sessionID: SESSION, inboxID: steerId });
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -3263,8 +3263,8 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("drops the turns a rollback cut from the snapshot it returns", () =>
     Effect.gen(function* () {
-      const kept = `msg_t3_turn_${SESSION}:attempt:opencode2-adapter`;
-      const dropped = `msg_t3_turn_${SESSION}:attempt:opencode2-adapter:2`;
+      const kept = `msg_supacode_turn_${SESSION}:attempt:opencode2-adapter`;
+      const dropped = `msg_supacode_turn_${SESSION}:attempt:opencode2-adapter:2`;
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
         promptAccepted,
@@ -3332,7 +3332,7 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("starts a turn sent during a rollback only once the cut is made", () =>
     Effect.gen(function* () {
-      const prompted = `msg_t3_turn_${SESSION}:attempt:earlier`;
+      const prompted = `msg_supacode_turn_${SESSION}:attempt:earlier`;
       // The replay is strictly ordered: a prompt sent while the rollback still
       // reads or cuts the history fails it.
       const { runtime, thread } = yield* resumed([
@@ -3391,9 +3391,9 @@ describe("OpenCode2 adapter", () => {
     ],
   ] as const)("%s", ([, running]) =>
     Effect.gen(function* () {
-      const first = `msg_t3_turn_${SESSION}:attempt:first`;
-      const second = `msg_t3_turn_${SESSION}:attempt:second`;
-      // A runtime that never loaded the session, as after a T3 restart
+      const first = `msg_supacode_turn_${SESSION}:attempt:first`;
+      const second = `msg_supacode_turn_${SESSION}:attempt:second`;
+      // A runtime that never loaded the session, as after a Supacode restart
       // against a server that kept running.
       const runtime = yield* openCode2ReplayRuntime([
         ...opening,
@@ -3513,7 +3513,7 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("lets the next turn start when a rollback's stage never answers", () =>
     Effect.gen(function* () {
-      const prompted = `msg_t3_turn_${SESSION}:attempt:earlier`;
+      const prompted = `msg_supacode_turn_${SESSION}:attempt:earlier`;
       const { runtime, thread } = yield* resumed([
         out("message.list", "<any>"),
         reply("message.list", {
@@ -3588,14 +3588,14 @@ describe("OpenCode2 adapter", () => {
       const { runtime, thread } = yield* resumed([
         out("session.fork", { sessionID: SESSION }),
         replyData("session.fork", sessionInfo({ id: FORK })),
-        // The fork's T3 MCP server is the target thread's.
+        // The fork's Supacode MCP server is the target thread's.
         out("session.update", {
           sessionID: FORK,
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
-            { action: "t3-code-*", resource: "*", effect: "deny" },
-            { action: "supa3-*", resource: "*", effect: "deny" },
-            { action: "supa3-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
+            { action: "supacode-*", resource: "*", effect: "deny" },
+            { action: "supacode-*", resource: "*", effect: "deny" },
+            { action: "supacode-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
           ],
         }),
         reply("session.update", null),
@@ -3693,7 +3693,7 @@ describe("OpenCode2 adapter", () => {
       const [first, second] = turns;
       return { runtime, thread, first: first!, second: second! };
     });
-  const CONTINUED_PROMPT = `msg_t3_turn_${SESSION}:attempt:attempt:opencode2-adapter`;
+  const CONTINUED_PROMPT = `msg_supacode_turn_${SESSION}:attempt:attempt:opencode2-adapter`;
   const CONTINUED_REPORT = `<subagent sessionID="${CHILD}" state="completed" description="Sleep">\nCHILD_OK\n</subagent>`;
   const continuedHistory = {
     data: [
@@ -3758,7 +3758,7 @@ describe("OpenCode2 adapter", () => {
   it.effect("ends a follow-up turn a steer joined exactly once", () =>
     Effect.gen(function* () {
       const reportText = `<subagent sessionID="${CHILD}" state="completed" description="Sleep">\nCHILD_OK\n</subagent>`;
-      const steerId = `msg_t3_steer_${SESSION}:message:opencode2-adapter:steer`;
+      const steerId = `msg_supacode_steer_${SESSION}:message:opencode2-adapter:steer`;
       const offers: Array<ProviderContinuationRequest> = [];
       const { runtime, thread } = yield* resumed([
         ...backgroundLaunch(CHILD),
@@ -3782,7 +3782,7 @@ describe("OpenCode2 adapter", () => {
             delivery: "steer",
           },
         }),
-        // OpenCode starts the follow-up on its own; T3 holds it for its turn.
+        // OpenCode starts the follow-up on its own; Supacode holds it for its turn.
         event("session.execution.started", { sessionID: SESSION }),
         event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_report" }),
         // The user steers into the follow-up turn; its execution reads the steer.

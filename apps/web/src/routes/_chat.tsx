@@ -146,7 +146,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open supa3 in the desktop app to use the in-app preview.",
+              description: "Open Supacode in the desktop app to use the in-app preview.",
             }),
           );
           return;

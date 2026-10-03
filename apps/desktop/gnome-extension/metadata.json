@@ -1,8 +1,8 @@
 {
-  "uuid": "snap-shot@supa3.supaterm.com",
-  "name": "supa3 SnapShots",
-  "description": "Allows supa3 to capture the focused window, identify it for optional accessibility text, and animate it into supa3. Disable this extension to revoke access.",
+  "uuid": "snap-shot@supacode.sh",
+  "name": "Supacode SnapShots",
+  "description": "Allows Supacode to capture the focused window, identify it for optional accessibility text, and animate it into Supacode. Disable this extension to revoke access.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
   "version": 2,
-  "url": "https://github.com/supabitapp/supa3"
+  "url": "https://github.com/supabitapp/supacode"
 }

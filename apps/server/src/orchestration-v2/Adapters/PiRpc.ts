@@ -27,8 +27,8 @@ import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import { resolveSpawnCommand } from "@supacode/shared/shell";
 
 import { signalProcessGroup } from "../../process/processGroup.ts";
 
@@ -446,7 +446,7 @@ export const makePiRpcConnection = Effect.fnUntraced(function* (options: PiRpcSp
     timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Effect.Effect<unknown, PiRpcError | PiRpcTimeoutError> =>
     Effect.gen(function* () {
-      const id = `t3-${nextRequestId++}`;
+      const id = `supacode-${nextRequestId++}`;
       const deferred = yield* Deferred.make<unknown, PiRpcError>();
       pendingRequests.set(id, { deferred });
       yield* send({ ...record, id }).pipe(

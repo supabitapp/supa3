@@ -1,11 +1,11 @@
-import type { ServerSelfUpdateOutcome } from "@t3tools/contracts";
+import type { ServerSelfUpdateOutcome } from "@supacode/contracts";
 
 // Protocol 3 requires the standalone executable layout. Bump when runtimePaths
 // or the installed runtime tree changes incompatibly; launchers survive self-updates.
 export const SERVICE_LAUNCHER_PROTOCOL = 3 as const;
-export const SERVICE_LAUNCHER_CONTEXT_ENV = "T3_SERVICE_LAUNCHER_CONTEXT";
+export const SERVICE_LAUNCHER_CONTEXT_ENV = "SUPACODE_SERVICE_LAUNCHER_CONTEXT";
 export const SERVICE_STATE_FILE = "service-state.json";
-/** Written by `supa3 update` when the unit was repointed at a new version but the
+/** Written by `supacode update` when the unit was repointed at a new version but the
     running service was deliberately left on the old one. The launcher removes
     it when it starts (whoever restarted the service), so while it exists the
     service is known to be behind its unit and status reports it that way. */

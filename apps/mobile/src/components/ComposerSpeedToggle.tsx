@@ -2,8 +2,8 @@ import {
   getSpeedToggle,
   getSpeedToggleNextValue,
   SPEED_TOGGLE_LABELS,
-} from "@t3tools/client-runtime/provider-speed-toggle";
-import type { ProviderOptionDescriptor, ProviderOptionSelection } from "@t3tools/contracts";
+} from "@supacode/client-runtime/provider-speed-toggle";
+import type { ProviderOptionDescriptor, ProviderOptionSelection } from "@supacode/contracts";
 import { Pressable } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { withUniwind } from "uniwind";

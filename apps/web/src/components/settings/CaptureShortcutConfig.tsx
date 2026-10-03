@@ -3,8 +3,8 @@ import {
   type DesktopCaptureConfigApplied,
   type DesktopCaptureConfigPreview,
   type DesktopSnapShotState,
-} from "@t3tools/contracts";
-import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
+} from "@supacode/contracts";
+import { parseKeybindingShortcut } from "@supacode/shared/keybindings";
 import { FileDiff } from "@pierre/diffs/react";
 import { parseDiffFromFile } from "@pierre/diffs";
 import { useMemo, useState } from "react";
@@ -217,7 +217,7 @@ export function CaptureShortcutConfig({
       ) : (
         <>
           <p className="text-muted-foreground">
-            Allow supa3 to read your desktop settings. You'll review any changes here before saving.
+            Allow Supacode to read your desktop settings. You'll review any changes here before saving.
           </p>
           <Button
             disabled={actionBusy || !supported}
@@ -228,7 +228,7 @@ export function CaptureShortcutConfig({
           </Button>
           {!supported ? (
             <p className="text-xs text-muted-foreground">
-              Update supa3 to finish setting up your shortcut.
+              Update Supacode to finish setting up your shortcut.
             </p>
           ) : null}
         </>
@@ -242,7 +242,7 @@ export function CaptureShortcutConfig({
         <p role="status" className="text-muted-foreground">
           {state.shortcutPending
             ? "Connecting to your desktop…"
-            : "Restart supa3 to finish connecting your shortcut."}
+            : "Restart Supacode to finish connecting your shortcut."}
         </p>
       ) : null}
       <details className="text-xs text-muted-foreground">
@@ -261,7 +261,7 @@ export function CaptureShortcutConfig({
                 state.shortcutConfigPath ??
                 (niri ? "~/.config/niri/config.kdl" : "~/.config/hypr/hyprland.conf")}
             </p>
-            {niri ? <p>supa3 also reads any files included by this file.</p> : null}
+            {niri ? <p>supacode also reads any files included by this file.</p> : null}
             {preview && preview.resolvedPath !== preview.path ? (
               <p className="break-all">Linked to {preview.resolvedPath}. The link will be kept.</p>
             ) : null}
@@ -322,7 +322,7 @@ export function CaptureShortcutConfig({
             {isCopied ? "Copied" : "Copy shortcut"}
           </Button>
           <p>
-            Turn capture off in supa3 to stop it. Remove the shortcut from {desktop} to free up the
+            Turn capture off in Supacode to stop it. Remove the shortcut from {desktop} to free up the
             keys.
           </p>
           {state.shortcutActionRegistered === false ? (

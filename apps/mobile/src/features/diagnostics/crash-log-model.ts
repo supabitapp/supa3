@@ -72,7 +72,7 @@ export function formatStartupCrashReport(
   records: ReadonlyArray<StartupCrashRecord>,
   app: { readonly version: string; readonly build: string },
 ): string {
-  const header = `supa3 ${app.version} (${app.build})`;
+  const header = `supacode ${app.version} (${app.build})`;
   if (records.length === 0) return `${header}\nNo startup crashes recorded.`;
   return [
     header,

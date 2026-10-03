@@ -8,10 +8,10 @@ import { buildDiscordReleaseAnnouncement, postDiscordWebhook } from "./notify-di
 const latestAnnouncement = {
   target: "latest",
   roleId: "222222222222222222",
-  releaseName: "supa3 v1.2.3",
+  releaseName: "supacode v1.2.3",
   version: "1.2.3",
   tag: "v1.2.3",
-  releaseUrl: new URL("https://github.com/t3dotgg/t3-code/releases/tag/v1.2.3"),
+  releaseUrl: new URL("https://github.com/supabitapp/supacode/releases/tag/v1.2.3"),
   timestamp: "2026-05-01T01:41:00.000Z",
 } as const;
 
@@ -22,25 +22,25 @@ it("builds a prerelease Discord announcement for nightly subscribers", () => {
     buildDiscordReleaseAnnouncement({
       target: "prerelease",
       roleId: "111111111111111111",
-      releaseName: "supa3 Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
+      releaseName: "Supacode Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
       version: "1.2.4-nightly.20260501.17",
       tag: "v1.2.4-nightly.20260501.17",
       releaseUrl: new URL(
-        "https://github.com/t3dotgg/t3-code/releases/tag/v1.2.4-nightly.20260501.17",
+        "https://github.com/supabitapp/supacode/releases/tag/v1.2.4-nightly.20260501.17",
       ),
       timestamp: "2026-05-01T01:41:00.000Z",
     }),
     {
       content:
-        "<@&111111111111111111> Prerelease published: supa3 Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
+        "<@&111111111111111111> Prerelease published: Supacode Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
       allowed_mentions: {
         roles: ["111111111111111111"],
       },
       embeds: [
         {
-          title: "supa3 Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
-          url: "https://github.com/t3dotgg/t3-code/releases/tag/v1.2.4-nightly.20260501.17",
-          description: "A new supa3 prerelease is available for nightly testers.",
+          title: "Supacode Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
+          url: "https://github.com/supabitapp/supacode/releases/tag/v1.2.4-nightly.20260501.17",
+          description: "A new Supacode prerelease is available for nightly testers.",
           color: 0x5865f2,
           fields: [
             {
@@ -63,15 +63,15 @@ it("builds a prerelease Discord announcement for nightly subscribers", () => {
 
 it("builds a latest Discord announcement for stable subscribers", () => {
   assert.deepStrictEqual(buildDiscordReleaseAnnouncement(latestAnnouncement), {
-    content: "<@&222222222222222222> Latest published: supa3 v1.2.3",
+    content: "<@&222222222222222222> Latest published: Supacode v1.2.3",
     allowed_mentions: {
       roles: ["222222222222222222"],
     },
     embeds: [
       {
-        title: "supa3 v1.2.3",
-        url: "https://github.com/t3dotgg/t3-code/releases/tag/v1.2.3",
-        description: "A new supa3 latest release is available.",
+        title: "supacode v1.2.3",
+        url: "https://github.com/supabitapp/supacode/releases/tag/v1.2.3",
+        description: "A new Supacode latest release is available.",
         color: 0x2ecc71,
         fields: [
           {

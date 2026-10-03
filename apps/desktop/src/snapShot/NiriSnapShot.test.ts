@@ -41,7 +41,7 @@ let version: string;
 const send = (socket: NodeNet.Socket, value: unknown) => socket.write(`${JSON.stringify(value)}\n`);
 
 beforeEach(async () => {
-  directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-niri-test-"));
+  directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "supacode-niri-test-"));
   socketPath = NodePath.join(directory, "ipc");
   sockets = new Set();
   events = [];
@@ -109,11 +109,11 @@ afterEach(async () => {
 });
 
 it("selects the native adapter without needing a portal or GNOME extension", async () => {
-  expect(await getLinuxCaptureSupport("com.supaterm.supa3")).toEqual({
+  expect(await getLinuxCaptureSupport("com.supaterm.supacode")).toEqual({
     linuxBackend: "niri",
     linuxFeedbackAvailable: false,
   });
-  const snapshot = await captureLinuxWindow("com.supaterm.supa3");
+  const snapshot = await captureLinuxWindow("com.supaterm.supacode");
   expect(snapshot?.png).toEqual(png);
   expect(snapshot?.window).toMatchObject({
     processId: 123,
@@ -129,36 +129,36 @@ it("selects the native adapter without needing a portal or GNOME extension", asy
   expect(await NodeFSP.stat(NodePath.dirname(capturePath!)).catch(() => undefined)).toBeUndefined();
 });
 
-it("does not activate supa3 until requested, then matches PID and title", async () => {
+it("does not activate Supacode until requested, then matches PID and title", async () => {
   const snapshot = await captureNiriWindow(socketPath);
   expect(calls.some((call) => typeof call !== "string" && call.Action.FocusWindow)).toBe(false);
   windows = [
-    { ...window, id: 1, pid: 999, title: "supa3" },
-    { ...window, id: 2, pid: process.pid, title: "Other T3" },
-    { ...window, id: 3, pid: process.pid, title: "supa3" },
+    { ...window, id: 1, pid: 999, title: "supacode" },
+    { ...window, id: 2, pid: process.pid, title: "Other Supacode" },
+    { ...window, id: 3, pid: process.pid, title: "supacode" },
   ];
-  await snapshot.feedback!.activate("supa3");
+  await snapshot.feedback!.activate("supacode");
   expect(calls).toContainEqual({ Action: { FocusWindow: { id: 3 } } });
 });
 
-it("waits for the restored supa3 window to map instead of polling", async () => {
+it("waits for the restored Supacode window to map instead of polling", async () => {
   const snapshot = await captureNiriWindow(socketPath);
   const original = handler;
   handler = async (request, socket) => {
     await original(request, socket);
     if (request === "EventStream")
       send(socket, {
-        WindowOpenedOrChanged: { window: { ...window, id: 4, pid: process.pid, title: "supa3" } },
+        WindowOpenedOrChanged: { window: { ...window, id: 4, pid: process.pid, title: "supacode" } },
       });
   };
-  await snapshot.feedback!.activate("supa3");
+  await snapshot.feedback!.activate("supacode");
   expect(calls).toContainEqual({ Action: { FocusWindow: { id: 4 } } });
 });
 
 it("rejects ambiguous activation targets", async () => {
   const snapshot = await captureNiriWindow(socketPath);
-  windows = [1, 2].map((id) => ({ ...window, id, pid: process.pid, title: "supa3" }));
-  await expect(snapshot.feedback!.activate("supa3")).rejects.toThrow("More than one");
+  windows = [1, 2].map((id) => ({ ...window, id, pid: process.pid, title: "supacode" }));
+  await expect(snapshot.feedback!.activate("supacode")).rejects.toThrow("More than one");
 });
 
 it("cancels pending activation when capture feedback is closed", async () => {
@@ -169,7 +169,7 @@ it("cancels pending activation when capture feedback is closed", async () => {
     await original(request, socket);
     if (request === "EventStream") started.resolve();
   };
-  const activation = expect(snapshot.feedback!.activate("supa3")).rejects.toThrow("cancelled");
+  const activation = expect(snapshot.feedback!.activate("supacode")).rejects.toThrow("cancelled");
   await started.promise;
   snapshot.feedback!.close();
   await activation;
@@ -197,7 +197,7 @@ it("rejects compositor errors and cleans up its temporary image", async () => {
       send(socket, { Err: "window disappeared" });
     } else await original(request, socket);
   };
-  await expect(captureLinuxWindow("com.supaterm.supa3")).rejects.toThrow("window disappeared");
+  await expect(captureLinuxWindow("com.supaterm.supacode")).rejects.toThrow("window disappeared");
   expect(await NodeFSP.stat(NodePath.dirname(capturePath!)).catch(() => undefined)).toBeUndefined();
 });
 

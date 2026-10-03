@@ -1,6 +1,6 @@
-# supa3
+# Supacode
 
-supa3 runs coding agents on your computer and provides web, desktop, and mobile
+Supacode runs coding agents on your computer and provides web, desktop, and mobile
 clients for controlling them locally or remotely.
 
 ## Development
@@ -34,9 +34,9 @@ for native clients.
 
 The [documentation index](./docs/README.md) includes provider guides and internal
 architecture notes. Report bugs in the fork's
-[issue tracker](https://github.com/supabitapp/supa3/issues).
+[issue tracker](https://github.com/supabitapp/supacode/issues).
 
 ## Attribution
 
-supa3 is a fork of the [upstream project](https://github.com/pingdotgg/t3code).
+Supacode is a fork of the [upstream project](https://github.com/supabitapp/supacode).
 The [MIT license](./LICENSE) and third-party notices retain their original attribution.

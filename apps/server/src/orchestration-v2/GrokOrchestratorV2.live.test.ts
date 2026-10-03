@@ -9,7 +9,7 @@ import {
   type OrchestrationV2ThreadProjection,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -47,7 +47,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-grok-v2-live-",
+  prefix: "supacode-grok-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(
@@ -135,7 +135,7 @@ const waitForIdle = Effect.fn("GrokOrchestratorV2Live.waitForIdle")(function* (t
   return yield* Effect.die(new Error(`Timed out waiting for Grok thread ${threadId}.`));
 });
 
-describe.runIf(process.env.T3_GROK_LIVE_ORCHESTRATOR === "1")("Grok V2 live orchestrator", () => {
+describe.runIf(process.env.SUPACODE_GROK_LIVE_ORCHESTRATOR === "1")("Grok V2 live orchestrator", () => {
   it.live(
     "forks through portable context using real Grok ACP agents",
     () =>

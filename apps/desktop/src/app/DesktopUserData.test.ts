@@ -8,7 +8,7 @@ import * as PlatformError from "effect/PlatformError";
 import { resolveUserDataPath } from "./DesktopUserData.ts";
 
 it.effect("identifies a failed source read and preserves its cause", () => {
-  const sourceState = "/profiles/supa3/Local State";
+  const sourceState = "/profiles/supacode/Local State";
   const cause = PlatformError.systemError({
     _tag: "PermissionDenied",
     module: "FileSystem",
@@ -37,17 +37,17 @@ it.effect("identifies a failed source read and preserves its cause", () => {
   );
 });
 
-it.effect.each(["supa3", "supa3 (Alpha)"])(
+it.effect.each(["supacode", "supacode (Alpha)"])(
   "preserves Windows credential keys from %s without copying browser databases",
   (sourceName) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "supa3-v2-profile-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-v2-profile-" });
       const source = path.join(directory, sourceName);
-      const destination = path.join(directory, "supa3-v2");
+      const destination = path.join(directory, "supacode-v2");
       const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "supa3 (Alpha)"), { recursive: true });
+      yield* fs.makeDirectory(path.join(directory, "supacode (Alpha)"), { recursive: true });
       yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
       yield* fs.writeFileString(path.join(source, "Local State"), state);
       yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");

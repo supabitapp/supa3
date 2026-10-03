@@ -4,11 +4,11 @@ import { Argument, Command } from "effect/unstable/cli";
 import { runAcpMcpCliFastPath } from "../mcp/AcpMcpStdioBridge.ts";
 
 /**
- * `t3 acp-mcp-bridge` — internal stdio MCP server that ACP agents spawn.
+ * `supacode acp-mcp-bridge` — internal stdio MCP server that ACP agents spawn.
  *
- * The T3 server injects this command (with per-session endpoint and
+ * The Supacode server injects this command (with per-session endpoint and
  * credential environment variables) into `session/new` so every ACP agent
- * reaches the t3-code toolkit through ACP's required stdio MCP transport.
+ * reaches the supacode toolkit through ACP's required stdio MCP transport.
  * The credential stays in the environment, never on the command line.
  *
  * Real invocations dispatch through the bin.ts fast path before the CLI
@@ -16,7 +16,7 @@ import { runAcpMcpCliFastPath } from "../mcp/AcpMcpStdioBridge.ts";
  * anything that drives the full CLI programmatically.
  */
 export const acpMcpBridgeCommand = Command.make("acp-mcp-bridge").pipe(
-  Command.withDescription("Bridge supa3's MCP endpoint to stdio for ACP agents."),
+  Command.withDescription("Bridge Supacode's MCP endpoint to stdio for ACP agents."),
   Command.unlisted,
   Command.withHandler(() => Effect.promise(() => runAcpMcpCliFastPath("acp-mcp-bridge", []))),
 );
@@ -26,7 +26,7 @@ export const acpMcpCallCommand = Command.make("acp-mcp-call", {
   tool: Argument.String("tool"),
   argumentsJson: Argument.String("arguments-json"),
 }).pipe(
-  Command.withDescription("Call one supa3 MCP tool from an ACP agent terminal."),
+  Command.withDescription("Call one Supacode MCP tool from an ACP agent terminal."),
   Command.unlisted,
   Command.withHandler(({ tool, argumentsJson }) =>
     Effect.promise(() => runAcpMcpCliFastPath("acp-mcp-call", [tool, argumentsJson])),

@@ -2,7 +2,7 @@ import {
   ProviderDriverKind,
   ProviderReplayEntry,
   type ProviderReplayTranscript,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
 import * as FileSystem from "effect/FileSystem";
@@ -222,9 +222,9 @@ export function makeAcpReplayRuntime(input: {
             cwd: runtimeInput.cwd,
             env: {
               ...process.env,
-              T3_ACP_REPLAY_TRANSCRIPT_PATH: transcriptPath,
-              T3_ACP_REPLAY_STATUS_PATH: input.statusPath,
-              T3_ACP_REPLAY_WORKSPACE: runtimeInput.cwd,
+              SUPACODE_ACP_REPLAY_TRANSCRIPT_PATH: transcriptPath,
+              SUPACODE_ACP_REPLAY_STATUS_PATH: input.statusPath,
+              SUPACODE_ACP_REPLAY_WORKSPACE: runtimeInput.cwd,
             },
           },
           authMethodId: "replay",

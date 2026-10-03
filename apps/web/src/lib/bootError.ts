@@ -1,6 +1,6 @@
 /** Shows startup failures before React can replace the boot splash. */
 export function showBootError(error: unknown) {
-  console.error("supa3 failed to start.", error);
+  console.error("supacode failed to start.", error);
   const bootShell = document.getElementById("boot-shell");
   if (!bootShell) return;
 
@@ -9,7 +9,7 @@ export function showBootError(error: unknown) {
   content.setAttribute("role", "alert");
 
   const message = document.createElement("p");
-  message.textContent = "supa3 could not load.";
+  message.textContent = "supacode could not load.";
   content.append(message);
 
   if (import.meta.env.DEV && error instanceof Error) {

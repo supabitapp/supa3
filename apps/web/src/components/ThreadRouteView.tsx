@@ -1,5 +1,5 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { scopedThreadKey } from "@supacode/client-runtime/environment";
+import type { ScopedThreadRef } from "@supacode/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 

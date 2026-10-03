@@ -1,29 +1,29 @@
 #!/bin/sh
-# Installs the T3 Code CLI from a GitHub Release archive. Needs only sh, tar,
+# Installs the Supacode CLI from a GitHub Release archive. Needs only sh, tar,
 # sha256sum or shasum, and curl or wget; no Node, npm, or compiler.
 #
-#   curl -fsSL https://t3.codes/install.sh | sh
+#   curl -fsSL https://supacode.sh/install.sh | sh
 #
 # Environment:
-#   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
+#   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
-#   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   SUPA3_HOME              supa3 home directory (default: ~/.supa3)
-#   T3CODE_INSTALL_BIN_DIR   where the `supa3` symlink goes (default: ~/.local/bin)
-#   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
+#   SUPACODE_VERSION           exact version to install (overrides SUPACODE_CHANNEL)
+#   SUPACODE_HOME              supacode home directory (default: ~/.supacode)
+#   SUPACODE_INSTALL_BIN_DIR   where the `supacode` symlink goes (default: ~/.local/bin)
+#   SUPACODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
-# The archive is unpacked into $SUPA3_HOME/runtime/versions/<version>, the
-# same layout `supa3 service install` uses, so the service reuses this download
+# The archive is unpacked into $SUPACODE_HOME/runtime/versions/<version>, the
+# same layout `supacode service install` uses, so the service reuses this download
 # instead of fetching the release again.
 set -eu
 
-repo="supabitapp/supa3"
-base_url="${T3CODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
-t3_home="${SUPA3_HOME:-$HOME/.supa3}"
-bin_dir="${T3CODE_INSTALL_BIN_DIR:-$HOME/.local/bin}"
+repo="supabitapp/supacode"
+base_url="${SUPACODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
+supacode_home="${SUPACODE_HOME:-$HOME/.supacode}"
+bin_dir="${SUPACODE_INSTALL_BIN_DIR:-$HOME/.local/bin}"
 
 fail() {
-  printf '\nsupa3 install: %s\n' "$1" >&2
+  printf '\nsupacode install: %s\n' "$1" >&2
   exit 1
 }
 
@@ -40,7 +40,7 @@ step() {
   else printf '  %s\n' "$1" >&2; fi
 }
 if "$interactive"; then
-  printf '\n  %ssupa3%s\n  %sCLI installer%s\n\n' "$bold" "$reset" "$muted" "$reset" >&2
+  printf '\n  %ssupacode%s\n  %sCLI installer%s\n\n' "$bold" "$reset" "$muted" "$reset" >&2
 fi
 step "Finding your release..."
 
@@ -136,8 +136,8 @@ else
   fail "sha256sum or shasum is required"
 fi
 
-channel="${T3CODE_CHANNEL:-stable}"
-version="${T3CODE_VERSION:-}"
+channel="${SUPACODE_CHANNEL:-stable}"
+version="${SUPACODE_VERSION:-}"
 if [ -z "$version" ]; then
   # Tags are v<semver>; the channel is the prerelease identifier, or none for
   # stable. Only tags of the requested train are considered, so a stable
@@ -145,30 +145,30 @@ if [ -z "$version" ]; then
   case "$channel" in
     stable) tag_pattern='v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)' ;;
     nightly | preview) tag_pattern="v\([0-9][^\"]*-${channel}\.[0-9]*\.[0-9]*\)" ;;
-    *) fail "T3CODE_CHANNEL must be stable, nightly, or preview" ;;
+    *) fail "SUPACODE_CHANNEL must be stable, nightly, or preview" ;;
   esac
   tmp_index="$(mktemp)"
   fetch "https://api.github.com/repos/${repo}/releases?per_page=100" "$tmp_index"
   version="$(sed -n "s/.*\"tag_name\": *\"${tag_pattern}\".*/\1/p" "$tmp_index" | head -n 1)"
   rm -f "$tmp_index"
-  [ -n "$version" ] || fail "could not find a ${channel} release; set T3CODE_VERSION"
+  [ -n "$version" ] || fail "could not find a ${channel} release; set SUPACODE_VERSION"
 fi
 case "$version" in
   *-preview.*)
     printf '%s\n' \
-      "supa3 ${version} is a preview build." \
+      "supacode ${version} is a preview build." \
       "  Preview builds are cut by maintainers from unreleased branches to exercise the release" \
       "  pipeline. They can be broken, receive no fixes, and are never offered as updates." \
-      "  Set T3CODE_CHANNEL=stable (the default) for a supported build." >&2
-    if [ "$channel" != "preview" ] && [ -z "${T3CODE_VERSION:-}" ]; then
+      "  Set SUPACODE_CHANNEL=stable (the default) for a supported build." >&2
+    if [ "$channel" != "preview" ] && [ -z "${SUPACODE_VERSION:-}" ]; then
       fail "refusing a preview build that was not explicitly requested"
     fi
     ;;
 esac
 
-stem="t3-${version}-${platform}-${arch}"
+stem="supacode-${version}-${platform}-${arch}"
 archive="${stem}.tar.gz"
-versions_dir="${t3_home}/runtime/versions"
+versions_dir="${supacode_home}/runtime/versions"
 target_dir="${versions_dir}/${version}"
 
 if [ -f "${target_dir}/.install-complete" ] && [ "$(cat "${target_dir}/.install-complete")" = "$version" ]; then
@@ -182,12 +182,12 @@ else
   trap 'printf "\n" >&2; exit 143' TERM
 
   if "$interactive"; then printf '\r\033[2K' >&2; fi
-  printf '  %sInstalling%s supa3 %s%s%s\n\n' "$muted" "$reset" "$bold" "$version" "$reset" >&2
+  printf '  %sInstalling%s supacode %s%s%s\n\n' "$muted" "$reset" "$bold" "$version" "$reset" >&2
   step "Downloading..."
   fetch_status=0
   fetch "${base_url}/v${version}/SHA256SUMS" "${staging}/SHA256SUMS" || fetch_status=$?
   if [ "$fetch_status" -eq 44 ]; then
-    fail "supa3 ${version} has no release archive for ${platform}-${arch}; releases before the self-contained CLI can only be installed with \`npm install -g t3@${version}\`"
+    fail "supacode ${version} has no release archive for ${platform}-${arch}; releases before the self-contained CLI can only be installed with \`npm install -g supacode@${version}\`"
   elif [ "$fetch_status" -ne 0 ]; then
     fail "could not download the release checksums"
   fi
@@ -199,10 +199,10 @@ else
   actual="$(checksum "${staging}/${archive}")"
   [ "$actual" = "$expected" ] || fail "checksum mismatch for ${archive}"
 
-  step "Extracting supa3..."
+  step "Extracting supacode..."
   tar -xzf "${staging}/${archive}" -C "$staging" --strip-components=1
   rm -f "${staging}/${archive}" "${staging}/SHA256SUMS"
-  "${staging}/t3" --version >/dev/null || fail "the downloaded executable does not run"
+  "${staging}/supacode" --version >/dev/null || fail "the downloaded executable does not run"
   printf '%s\n' "$version" > "${staging}/.install-complete"
 
   rm -rf "$target_dir"
@@ -210,12 +210,12 @@ else
   trap - EXIT
 fi
 
-step "Setting up the supa3 command..."
+step "Setting up the supacode command..."
 mkdir -p "$bin_dir"
-ln -sfn "${target_dir}/t3" "${bin_dir}/supa3"
+ln -sfn "${target_dir}/supacode" "${bin_dir}/supacode"
 if "$interactive"; then printf '\r\033[2K' >&2; fi
-printf '  %sInstalled supa3 %s%s\n\n' "$green" "$version" "$reset" >&2
+printf '  %sInstalled supacode %s%s\n\n' "$green" "$version" "$reset" >&2
 case ":${PATH}:" in
-  *":${bin_dir}:"*) printf '  Run %ssupa3%s to get started.\n\n' "$bold" "$reset" ;;
-  *) printf '  Add %s to your PATH, then run %ssupa3%s.\n\n' "$bin_dir" "$bold" "$reset" ;;
+  *":${bin_dir}:"*) printf '  Run %ssupacode%s to get started.\n\n' "$bold" "$reset" ;;
+  *) printf '  Add %s to your PATH, then run %ssupacode%s.\n\n' "$bin_dir" "$bold" "$reset" ;;
 esac

@@ -2,7 +2,7 @@ import {
   AuthStandardClientScopes,
   EnvironmentId,
   ORCHESTRATION_PROTOCOL_VERSION,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,7 +22,7 @@ const CLIENT_PRESENTATION_LAYER = Layer.succeed(
   ClientCapabilities.ClientPresentation,
   ClientCapabilities.ClientPresentation.of({
     metadata: {
-      label: "supa3 Test",
+      label: "Supacode Test",
       deviceType: "desktop",
       os: "Test OS",
     },
@@ -42,7 +42,7 @@ function pairingHttpLayer(
     const url = String(input);
     calls.push({ url, init });
 
-    if (url.endsWith("/.well-known/t3/environment")) {
+    if (url.endsWith("/.well-known/supacode/environment")) {
       if (options?.failDescriptor === true) {
         return Promise.resolve(
           Response.json({ message: "descriptor unavailable" }, { status: 503 }),
@@ -112,7 +112,7 @@ describe("connection onboarding", () => {
         },
       });
       expect(calls.map((call) => call.url)).toEqual([
-        "https://remote.example.test/.well-known/t3/environment",
+        "https://remote.example.test/.well-known/supacode/environment",
         "https://remote.example.test/oauth/token",
       ]);
 
@@ -124,7 +124,7 @@ describe("connection onboarding", () => {
       const tokenParams = new URLSearchParams(tokenBody);
       expect(tokenParams.get("subject_token")).toBe("pairing-token");
       expect(tokenParams.get("scope")).toBe(AuthStandardClientScopes.join(" "));
-      expect(tokenParams.get("client_label")).toBe("supa3 Test");
+      expect(tokenParams.get("client_label")).toBe("Supacode Test");
     }),
   );
 
@@ -145,7 +145,7 @@ describe("connection onboarding", () => {
       );
       expect(error).toMatchObject({ reason: "unsupported" });
       expect(calls.map((call) => call.url)).toEqual([
-        "https://remote.example.test/.well-known/t3/environment",
+        "https://remote.example.test/.well-known/supacode/environment",
       ]);
     }),
   );
@@ -190,7 +190,7 @@ describe("connection onboarding", () => {
       expect(error).toMatchObject({ reason: "unsupported" });
       expect(error).not.toHaveProperty("serverUpdateRequired");
       expect(calls.map((call) => call.url)).toEqual([
-        "https://remote.example.test/.well-known/t3/environment",
+        "https://remote.example.test/.well-known/supacode/environment",
       ]);
     }),
   );
@@ -213,7 +213,7 @@ describe("connection onboarding", () => {
       );
 
       expect(calls.map((call) => call.url)).toEqual([
-        "https://remote.example.test/.well-known/t3/environment",
+        "https://remote.example.test/.well-known/supacode/environment",
       ]);
     }),
   );

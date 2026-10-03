@@ -30,7 +30,7 @@ async function createFixture(): Promise<{
   readonly dependencyRoot: string;
   readonly root: string;
 }> {
-  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3code-licenses-"));
+  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "supacode-licenses-"));
   tempDirectories.push(root);
   const appManifest = NodePath.join(root, "package.json");
   const dependencyRoot = NodePath.join(root, "node_modules", "demo-dependency");
@@ -81,7 +81,7 @@ describe("third-party license generation", () => {
     const [config, revision] = await Promise.all([
       NodeFSP.readFile(NodePath.join(REPOSITORY_ROOT, "third-party-licenses.config.json"), "utf8"),
       NodeFSP.readFile(
-        NodePath.join(REPOSITORY_ROOT, "apps/mobile/modules/t3-terminal/Vendor/libghostty/VERSION"),
+        NodePath.join(REPOSITORY_ROOT, "apps/mobile/modules/supacode-terminal/Vendor/libghostty/VERSION"),
         "utf8",
       ),
     ]);
@@ -142,7 +142,7 @@ describe("third-party license generation", () => {
             {
               licenseId: "MIT",
               copyrights: ["Copyright (c) 2026 Example Author"],
-              preamble: ["Adapted for supa3."],
+              preamble: ["Adapted for Supacode."],
             },
           ],
           bundles: ["assets", "web"],
@@ -157,7 +157,7 @@ describe("third-party license generation", () => {
     });
 
     expect(manifest.entries.find((entry) => entry.name === "generated-asset")?.noticeText).toBe(
-      "Adapted for supa3.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
+      "Adapted for supacode.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
     );
   });
 

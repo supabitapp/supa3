@@ -6,8 +6,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ProviderSessionId, ThreadId } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { EnvironmentId, ProviderInstanceId, ProviderSessionId, ThreadId } from "@supacode/contracts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -40,7 +40,7 @@ import { ProviderAdapterV2RuntimePolicy } from "../../orchestration-v2/ProviderA
 import * as ProviderCredentialStore from "../ProviderCredentialStore.ts";
 
 const testLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "supa3x-driver-maintenance-",
+  prefix: "supacodex-driver-maintenance-",
 }).pipe(
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(IdAllocator.layer),
@@ -205,7 +205,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
           `providers/codex/${instanceId}/shadow`,
         );
         yield* Deferred.await(observedAccount);
-        // Sessions launch the T3-installed Codex with the account's token, not ambient credentials.
+        // Sessions launch the Supacode-installed Codex with the account's token, not ambient credentials.
         const threadId = ThreadId.make("managed-account-thread");
         yield* instance.orchestrationAdapter
           .openSession({
@@ -273,7 +273,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const tempDir = yield* fs
-          .makeTempDirectoryScoped({ prefix: "supa3x-driver-" })
+          .makeTempDirectoryScoped({ prefix: "supacodex-driver-" })
           .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
         const sharedHome = NodePath.join(tempDir, "codex-home");
         const shadowHome = NodePath.join(tempDir, "codex-shadow");
@@ -317,7 +317,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
         environment: [],
         config: {
           ...CodexDriver.defaultConfig(),
-          binaryPath: NodePath.join(NodeOS.tmpdir(), "supa3x-missing", "codex"),
+          binaryPath: NodePath.join(NodeOS.tmpdir(), "supacodex-missing", "codex"),
         },
       });
       expect((yield* instance.snapshot.resolveMaintenance()).update).toBeNull();
@@ -350,7 +350,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const tempDir = yield* fs
-          .makeTempDirectoryScoped({ prefix: "supa3x-installer-" })
+          .makeTempDirectoryScoped({ prefix: "supacodex-installer-" })
           .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
         const installPath = NodePath.join(tempDir, ...fixture.installSegments);
         const realBinaryPath = NodePath.join(
@@ -409,7 +409,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const tempDir = yield* fs
-          .makeTempDirectoryScoped({ prefix: `supa3x-mise-${layout}-` })
+          .makeTempDirectoryScoped({ prefix: `supacodex-mise-${layout}-` })
           .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
         const binaryPath =
           layout === "direct"
@@ -486,7 +486,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const tempDir = yield* fs
-          .makeTempDirectoryScoped({ prefix: "supa3x-mise-shim-" })
+          .makeTempDirectoryScoped({ prefix: "supacodex-mise-shim-" })
           .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
         const brewPrefix = NodePath.join(tempDir, "homebrew");
         const brewPath = NodePath.join(brewPrefix, "bin", "brew");

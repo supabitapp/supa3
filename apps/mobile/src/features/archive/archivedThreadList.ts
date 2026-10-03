@@ -1,11 +1,11 @@
-import type { ArchivedSnapshotEntry } from "@t3tools/client-runtime/state/threads";
+import type { ArchivedSnapshotEntry } from "@supacode/client-runtime/state/threads";
 import {
   scopeProject,
   scopeThreadShell,
   type EnvironmentProject,
   type EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/shell";
+import type { EnvironmentId } from "@supacode/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 

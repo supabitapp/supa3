@@ -18,9 +18,9 @@ import {
   type OrchestrationV2RunAttempt,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2TurnItem,
-} from "@t3tools/contracts";
-import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
-import { summarizeToolGroup } from "@t3tools/client-runtime/work-log/presentation";
+} from "@supacode/contracts";
+import { resolveUserMessagePresentation } from "@supacode/client-runtime/user-message";
+import { summarizeToolGroup } from "@supacode/client-runtime/work-log/presentation";
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -1317,11 +1317,11 @@ describe("buildThreadFeed", () => {
     expect(activity?.workEntry.viewedImagePath).toBe("/workspace/reference.png");
   });
 
-  it("pretty prints supa3 MCP dynamic tool activities and attaches the product logo", () => {
+  it("pretty prints Supacode MCP dynamic tool activities and attaches the product logo", () => {
     const toolItem: OrchestrationV2TurnItem = {
-      ...base("item-t3-tool", "2026-06-20T00:00:04.000Z", 3),
+      ...base("item-supacode-tool", "2026-06-20T00:00:04.000Z", 3),
       type: "dynamic_tool",
-      toolName: "mcp__t3-code__t3_thread_read",
+      toolName: "mcp__supacode__supacode_thread_read",
       input: { threadId: "thread-child" },
       output: { messages: [] },
     };
@@ -1329,9 +1329,9 @@ describe("buildThreadFeed", () => {
     const feed = buildThreadFeed([projected(toolItem, 0)]);
     const activity = feed[0]?.type === "activity-group" ? feed[0].activities[0] : null;
 
-    expect(activity?.summary).toBe("Read a supa3 thread");
-    expect(activity?.logo).toBe("t3-code");
-    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a supa3 thread");
+    expect(activity?.summary).toBe("Read a Supacode thread");
+    expect(activity?.logo).toBe("supacode");
+    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a Supacode thread");
   });
 
   it("uses the CUA action title in the mobile feed", () => {
@@ -1346,10 +1346,10 @@ describe("buildThreadFeed", () => {
     expect(activity?.summary).toBe("Inspect Saga music screen");
   });
 
-  it("uses canonical supa3 orchestration summaries in compact work groups", () => {
+  it("uses canonical Supacode orchestration summaries in compact work groups", () => {
     const rows = [
       projected(command("2026-06-20T00:00:01.000Z"), 0),
-      ...["mcp__t3-code__t3_thread_send", "t3_code.t3_thread_send", "t3_thread_send"].map(
+      ...["mcp__supacode__supacode_thread_send", "supacode.supacode_thread_send", "supacode_thread_send"].map(
         (toolName, index) =>
           projected(
             {
@@ -1394,7 +1394,7 @@ describe("buildThreadFeed", () => {
         ...base("list", "2026-09-19T00:00:01.000Z", 1),
         type: "dynamic_tool",
         title: "Custom provider title",
-        toolName: "T3-code.t3_project_list",
+        toolName: "Supacode.supacode_project_list",
         input: {},
         output: { projects: [] },
       },
@@ -1402,7 +1402,7 @@ describe("buildThreadFeed", () => {
         ...base("clone", "2026-09-19T00:00:02.000Z", 2),
         type: "dynamic_tool",
         title: "Custom provider title",
-        toolName: "mcp__t3_code__t3_project_clone",
+        toolName: "mcp__supacode__supacode_project_clone",
         input: {},
         output: { cwd: "/tmp/repo" },
       },
@@ -1410,7 +1410,7 @@ describe("buildThreadFeed", () => {
         ...base("failed-clone", "2026-09-19T00:00:03.000Z", 3),
         type: "dynamic_tool",
         title: "Custom provider title",
-        toolName: "t3_project_clone",
+        toolName: "supacode_project_clone",
         input: {},
         output: { isError: true },
       },
@@ -1422,7 +1422,7 @@ describe("buildThreadFeed", () => {
     expect(workEntryRowLabel(activities[0]!.workEntry)).toBe("Listed projects");
     expect(workEntryRowLabel(activities[1]!.workEntry)).toBe("Cloned a repository");
     expect(workEntryRowLabel(activities[2]!.workEntry)).toBe("Failed to clone a repository");
-    expect(activities.every((activity) => activity.logo === "t3-code")).toBe(true);
+    expect(activities.every((activity) => activity.logo === "supacode")).toBe(true);
     const presented = deriveThreadFeedPresentation(
       feed,
       { runId, status: "running", startedAt: null, completedAt: null },
@@ -1683,7 +1683,7 @@ describe("retained v2 feed presentation", () => {
             ...base("preview-click", "2026-06-20T00:00:02.000Z", 1),
             type: "dynamic_tool",
             status,
-            toolName: "mcp__t3-code__preview_click",
+            toolName: "mcp__supacode__preview_click",
             input: { element: "button" },
             output: null,
           },
@@ -1736,7 +1736,7 @@ describe("retained v2 feed presentation", () => {
           {
             ...base(id, "2026-06-20T00:00:02.000Z", index),
             type: "dynamic_tool",
-            toolName: "t3-code.delegate_task",
+            toolName: "supacode.delegate_task",
             input: { task: "Identical task" },
             output,
             ...overrides,

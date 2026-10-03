@@ -31,17 +31,17 @@ import {
 
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 const MOBILE_ROOT = NodePath.join(REPO_ROOT, "apps/mobile");
-const ANDROID_PACKAGE = "com.supaterm.supa3";
-const APP_SCHEME = "supa3";
+const ANDROID_PACKAGE = "com.supaterm.supacode";
+const APP_SCHEME = "supacode";
 // expo-dev-launcher reads these off the manifest URL and updates the dev menu
 // preferences before the app loads, keeping captures free of dev chrome.
 const DEV_CLIENT_LAUNCH_FLAGS = "disableOnboarding=1&disableFab=1&disableAutoLaunch=1";
-const IOS_READY_FILENAME = "T3ShowcaseReadyScene";
+const IOS_READY_FILENAME = "SupacodeShowcaseReadyScene";
 const SERVER_HOST = "0.0.0.0";
 const IOS_SIMULATOR_ARCH = NodeProcess.arch === "arm64" ? "arm64" : "x86_64";
 const IOS_APP_PATH = NodePath.join(
   MOBILE_ROOT,
-  ".showcase/ios-derived-data/Build/Products/Debug-iphonesimulator/supa3.app",
+  ".showcase/ios-derived-data/Build/Products/Debug-iphonesimulator/supacode.app",
 );
 const ANDROID_APK_PATH = NodePath.join(
   MOBILE_ROOT,
@@ -66,7 +66,7 @@ const MOBILE_BUILD_ENV = {
   EXPO_NO_GIT_STATUS: "1",
   // Lets the capture build require full screen on iPad so the app can rotate
   // itself to landscape (see app.config.ts).
-  T3_SHOWCASE_CAPTURE_BUILD: "1",
+  SUPACODE_SHOWCASE_CAPTURE_BUILD: "1",
   JAVA_HOME:
     NodeProcess.env.JAVA_HOME ??
     (NodeProcess.platform === "darwin"
@@ -416,7 +416,7 @@ function printUsage(config: ShowcaseConfig): void {
   NodeProcess.stdout.write(`App screenshot showcase
 
 Usage:
-  pnpm --filter @t3tools/mobile screenshots [options]
+  pnpm --filter @supacode/mobile screenshots [options]
 
 Options:
   --platform ios|android|all  Capture one platform (repeatable)
@@ -706,9 +706,9 @@ async function buildIos(): Promise<string> {
     "xcodebuild",
     [
       "-workspace",
-      NodePath.join(MOBILE_ROOT, "ios/supa3.xcworkspace"),
+      NodePath.join(MOBILE_ROOT, "ios/supacode.xcworkspace"),
       "-scheme",
-      "supa3",
+      "supacode",
       "-configuration",
       "Debug",
       "-sdk",
@@ -973,7 +973,7 @@ async function captureIos(
   const metroUrl = `http://${metroHost}:${config.metroPort}?${DEV_CLIENT_LAUNCH_FLAGS}`;
   const scenePath = NodePath.join(
     await iosAppContainer(simulator.udid),
-    "Library/Caches/T3ShowcaseScene",
+    "Library/Caches/SupacodeShowcaseScene",
   );
   const readyPath = NodePath.join(
     await iosAppContainer(simulator.udid),
@@ -1165,7 +1165,7 @@ async function waitForAndroidShowcaseScene(
       "run-as",
       ANDROID_PACKAGE,
       "cat",
-      "files/t3-showcase-ready",
+      "files/supacode-showcase-ready",
     ]).catch(() => "");
     if (readyScene.trim() === scene) return;
     await delay(500);
@@ -1176,7 +1176,7 @@ async function waitForAndroidShowcaseScene(
 async function writeAndroidShowcaseScene(serial: string, scene: ShowcaseScene): Promise<void> {
   await runAdb(serial, [
     "shell",
-    `run-as ${ANDROID_PACKAGE} sh -c 'mkdir -p files && rm -f files/t3-showcase-ready && printf %s ${scene} > files/t3-showcase-scene'`,
+    `run-as ${ANDROID_PACKAGE} sh -c 'mkdir -p files && rm -f files/supacode-showcase-ready && printf %s ${scene} > files/supacode-showcase-scene'`,
   ]);
 }
 
@@ -1335,7 +1335,7 @@ async function main(): Promise<void> {
   }
 
   const showcaseRootDir = await NodeFSP.mkdtemp(
-    NodePath.join(NodeOS.tmpdir(), "t3-mobile-showcase-"),
+    NodePath.join(NodeOS.tmpdir(), "supacode-mobile-showcase-"),
   );
   const showcaseServers: NodeChildProcess.ChildProcess[] = [];
   const showcaseEnvironments: Array<{

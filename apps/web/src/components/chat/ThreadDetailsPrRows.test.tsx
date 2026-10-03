@@ -1,4 +1,4 @@
-import { EnvironmentId, type ThreadPullRequestLink } from "@t3tools/contracts";
+import { EnvironmentId, type ThreadPullRequestLink } from "@supacode/contracts";
 import { act } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, it, vi } from "vite-plus/test";
@@ -22,9 +22,9 @@ function link(
 ): ThreadPullRequestLink {
   return {
     host: "github.com",
-    repository: "pingdotgg/t3code",
+    repository: "supabitapp/supacode",
     number,
-    url: `https://github.com/pingdotgg/t3code/pull/${number}`,
+    url: `https://github.com/supabitapp/supacode/pull/${number}`,
     source: "manual",
     linkedAt: updatedAt,
     snapshot: {

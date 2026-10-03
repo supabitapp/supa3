@@ -1,17 +1,17 @@
-# Install supa3
+# Install Supacode
 
-supa3 runs coding agents on your computer and lets you control them from its
+Supacode runs coding agents on your computer and lets you control them from its
 desktop, web, or mobile app. Set up the machine where the agents will work first.
 
 ## Requirements
 
 You need an installed, authenticated provider before starting a thread. You can
-launch supa3 and configure providers afterwards.
+launch Supacode and configure providers afterwards.
 
 ## From source
 
 Use Node.js 24 and Vite+ (`vp`). Get the source from
-[supabitapp/supa3](https://github.com/supabitapp/supa3), then run these commands
+[supabitapp/supacode](https://github.com/supabitapp/supacode), then run these commands
 from the repository root:
 
 ```bash
@@ -24,27 +24,27 @@ See [development](../operations/development.md) for desktop and mobile builds.
 
 ## Command line
 
-If you have a packaged `supa3` executable installed, these commands are available:
+If you have a packaged `supacode` executable installed, these commands are available:
 
 | Task                                             | Command                                                      |
 | ------------------------------------------------ | ------------------------------------------------------------ |
-| Start the server and open the web app            | `supa3`                                                      |
-| Start the server without a browser               | `supa3 serve`                                                |
-| Keep it running in the background (macOS, Linux) | `supa3 service install` ([details](./background-service.md)) |
-| Move to the newest release                       | `supa3 update`                                               |
-| Remove it again                                  | `supa3 uninstall`                                            |
+| Start the server and open the web app            | `supacode`                                                      |
+| Start the server without a browser               | `supacode serve`                                                |
+| Keep it running in the background (macOS, Linux) | `supacode service install` ([details](./background-service.md)) |
+| Move to the newest release                       | `supacode update`                                               |
+| Remove it again                                  | `supacode uninstall`                                            |
 
-Run `supa3 --help` for the full reference.
+Run `supacode --help` for the full reference.
 
 ## Desktop app
 
 Build the desktop client from this repository. Distribution artifacts belong to
-the fork's [GitHub Releases](https://github.com/supabitapp/supa3/releases).
+the fork's [GitHub Releases](https://github.com/supabitapp/supacode/releases).
 
 ### Windows Subsystem for Linux
 
 Choose a WSL distro in **Settings → Connections** to run agents and projects
-there. Install the provider CLIs inside that distro. supa3 installs its own
+there. Install the provider CLIs inside that distro. Supacode installs its own
 server runtime there automatically; the first launch after an app update can
 take longer.
 
@@ -53,11 +53,11 @@ take longer.
 With the desktop app already running on the same machine:
 
 ```bash
-supa3 app
+supacode app
 ```
 
 This opens a new thread for the current directory, adding the project if needed.
-Pass a path, such as `supa3 app ../my-project`, to open another directory. It requires
+Pass a path, such as `supacode app ../my-project`, to open another directory. It requires
 the desktop app, so a standalone server or an SSH session is not enough. If the
 command cannot reach the app, start or update the desktop app and try again.
 
@@ -87,23 +87,23 @@ computer.
 | Cursor      | Install [Cursor CLI](https://cursor.com/cli), then run `agent login`.                                                                                     |
 | Grok Build  | Install [Grok Build CLI](https://x.ai/cli), then run `grok login`.                                                                                        |
 | OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                                                                                  |
-| Antigravity | Install and sign in with Google from supa3's provider settings.                                                                                           |
+| Antigravity | Install and sign in with Google from Supacode's provider settings.                                                                                           |
 | Pi          | Install [Pi](https://pi.dev), then run `pi` once to finish its login or API-key setup.                                                                    |
 
-Provider CLIs must be on the server's `PATH`. If supa3 cannot find one, set its
+Provider CLIs must be on the server's `PATH`. If Supacode cannot find one, set its
 **Binary path** in provider settings, especially when using a version manager.
 Cursor's executable is `cursor-agent`, although its login command is
 `agent login`. Codex connected through ChatGPT and Antigravity can use their
 managed runtimes without a `PATH` entry.
 
-supa3 warns when a provider version has known compatibility problems with your
+Supacode warns when a provider version has known compatibility problems with your
 release. Check **Settings → Providers** on that environment for the recommended
 version or range. When its package manager supports installing a specific version,
 you can install the recommendation there. Otherwise use the provider's installer
 on the environment's machine. An unlisted version is unverified.
 
 When a provider CLI is behind its latest release, its provider card shows the
-available version. **Update now** appears only when supa3 can tell which
+available version. **Update now** appears only when Supacode can tell which
 installer owns the CLI (its own update command, Homebrew, or a global npm, pnpm,
 bun, or Vite+ install) and runs that installer. Otherwise update the CLI the same
 way you installed it. Homebrew installs compare against the version Homebrew
@@ -111,7 +111,7 @@ offers, which can trail the npm release by a few hours.
 
 Add another provider instance for a separate account or configuration. Each
 instance can have its own environment variables, such as API keys or a custom
-base URL. Mark secret values as sensitive; after saving, supa3 does not display
+base URL. Mark secret values as sensitive; after saving, Supacode does not display
 their original values.
 
 For provider-specific setup and accounts, see [Codex](./providers-codex.md),
@@ -124,4 +124,4 @@ For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 - [Permission modes](./permission-modes.md): choose when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.
 - [Running in the background](./background-service.md): keep a Linux or macOS host available.
-- [Updating supa3](./updating.md): update the app and connected servers.
+- [Updating supacode](./updating.md): update the app and connected servers.

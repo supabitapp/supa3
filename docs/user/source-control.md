@@ -1,11 +1,11 @@
 # Source control
 
-supa3 integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, and Azure DevOps to clone and publish
+Supacode integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, and Azure DevOps to clone and publish
 repositories, create pull requests, and review changes.
 
 ## Connect an account
 
-Install Git and configure authentication on the machine running your supa3 server. For a remote
+Install Git and configure authentication on the machine running your Supacode server. For a remote
 environment, do this on the remote machine. After signing in, open **Settings → Source Control**
 and choose **Rescan**.
 
@@ -20,11 +20,11 @@ gh auth login
 ### Forgejo and Gitea
 
 Install [Forgejo CLI (`fj`)](https://codeberg.org/forgejo-contrib/forgejo-cli) or
-[Gitea CLI (`tea`)](https://gitea.com/gitea/tea) 0.16 or later on your supa3 server.
+[Gitea CLI (`tea`)](https://gitea.com/gitea/tea) 0.16 or later on your Supacode server.
 Sign in with `fj --host https://your-server auth add-token` or `tea login add`.
 Repeat for each server you use, including Codeberg.
 
-supa3 prefers a matching `fj` login and falls back to `tea` when `fj` is unavailable
+Supacode prefers a matching `fj` login and falls back to `tea` when `fj` is unavailable
 or has no login for that server. Once an account is selected, failed actions stay on that
 account. Settings shows the detected CLI. Forgejo and Gitea share one integration entry.
 Servers hosted under a URL subpath, such as `https://example.com/forgejo`, use `tea` because
@@ -60,14 +60,14 @@ method. Credentials are saved on the environment's server, so select a remote en
 configure it. Saved tokens can't be viewed again; enter a new one to replace it, or choose
 **Remove**.
 
-If no credentials are saved, supa3 falls back to these variables in the server's environment.
+If no credentials are saved, Supacode falls back to these variables in the server's environment.
 Restart the server after changing them:
 
 ```bash
-export T3CODE_BITBUCKET_ACCESS_TOKEN="your-access-token"
+export SUPACODE_BITBUCKET_ACCESS_TOKEN="your-access-token"
 # or
-export T3CODE_BITBUCKET_EMAIL="you@example.com"
-export T3CODE_BITBUCKET_API_TOKEN="your-token"
+export SUPACODE_BITBUCKET_EMAIL="you@example.com"
+export SUPACODE_BITBUCKET_API_TOKEN="your-token"
 ```
 
 ### Azure DevOps
@@ -82,8 +82,8 @@ az login
 ## Start, clone, or publish a project
 
 To start from nothing, choose **New project** in the command palette (`Cmd/Ctrl+K`), or
-**New project** under **Add Project** on any client, and type a name. supa3 makes a Git
-repository in `~/.supa3/projects` (the `projects` folder of your T3 data directory) with a README,
+**New project** under **Add Project** on any client, and type a name. Supacode makes a Git
+repository in `~/.supacode/projects` (the `projects` folder of your Supacode data directory) with a README,
 an icon, and a first commit, then opens a new thread in it. The folder is named after the project,
 like `pinball-stats` for "Pinball Stats". Turn on **Create private repository on GitHub** to also
 publish it. If Git has no name or email on that machine, the project is created without the
@@ -101,7 +101,7 @@ make your first commit before pushing.
 
 ## Create a pull request
 
-Use a thread's Git actions to commit, push, and create a pull request. supa3 can generate commit
+Use a thread's Git actions to commit, push, and create a pull request. Supacode can generate commit
 messages, review titles, and descriptions from your changes.
 
 Choose the writing style and model in **Settings → Source Control**. **Repository conventions**
@@ -141,10 +141,10 @@ Tick a file off in the **Code** tab once you have read it and it collapses; the 
 running count. A tick belongs to the pull request rather than to a commit, so scoping the tab to a
 single commit keeps them. A file pushed to after you cleared it comes back marked **Changed**.
 
-On GitHub these are GitHub's own viewed marks, so a review carries between supa3 and github.com
-in either direction. Forgejo, GitLab, Bitbucket, and Azure DevOps expose no record supa3 can read, so the
+On GitHub these are GitHub's own viewed marks, so a review carries between Supacode and github.com
+in either direction. Forgejo, GitLab, Bitbucket, and Azure DevOps expose no record Supacode can read, so the
 server you are connected to keeps them instead: they follow you across the apps connected to that
-server, but the host's own site will not show them, and the count reads **viewed in supa3**.
+server, but the host's own site will not show them, and the count reads **viewed in supacode**.
 
 The **Code** tab is a web and desktop surface. The mobile app reports a pull request's status but
 does not show its diff, so marks are made and read on web and desktop.
