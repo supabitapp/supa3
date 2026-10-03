@@ -3,7 +3,7 @@ import * as NodeChildProcess from "node:child_process";
 const hkSupported = !(process.platform === "darwin" && process.arch === "x64");
 const config = NodeChildProcess.spawnSync(
   "mise",
-  ["exec", "--", "vp", "config", ...(hkSupported ? ["--no-hooks"] : []), "--no-agent"],
+  ["exec", "--", "vp", "config", "--no-hooks", "--no-agent"],
   { stdio: "inherit" },
 );
 if (config.error) throw config.error;

@@ -1,5 +1,1 @@
-#!/bin/sh
-set -eu
-
-mise exec -- vp staged
-mise exec -- gitleaks git --staged --redact --no-banner
+vp staged
