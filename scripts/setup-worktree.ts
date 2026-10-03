@@ -16,24 +16,10 @@ if (!projectRoot) {
 }
 const worktree = NodePath.dirname(import.meta.dirname);
 
-const miseInstall = NodeChildProcess.spawnSync(
-  "mise",
-  [
-    "install",
-    "--locked",
-    "node",
-    "pnpm",
-    "npm:vite-plus",
-    "hk",
-    "actionlint",
-    "shellcheck",
-    "gitleaks",
-  ],
-  {
-    cwd: worktree,
-    stdio: "inherit",
-  },
-);
+const miseInstall = NodeChildProcess.spawnSync("mise", ["install", "--locked"], {
+  cwd: worktree,
+  stdio: "inherit",
+});
 if (miseInstall.status !== 0) process.exit(miseInstall.status ?? 1);
 
 const install = NodeChildProcess.spawnSync("mise", ["exec", "--", "vp", "i"], {

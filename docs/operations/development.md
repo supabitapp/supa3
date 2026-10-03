@@ -6,7 +6,7 @@ Install Mise using the [root README](../../README.md#install-the-development-too
 repository root:
 
 ```sh
-mise install --locked node pnpm npm:vite-plus hk actionlint shellcheck gitleaks
+mise install --locked
 mise exec -- vp i
 mise exec -- vp run dev
 ```

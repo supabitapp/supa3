@@ -122,7 +122,7 @@ winget install jdx.mise
 From the repository root, install the locked tools and dependencies:
 
 ```bash
-mise install --locked node pnpm npm:vite-plus hk actionlint shellcheck gitleaks
+mise install --locked
 mise exec -- vp i
 ```
 
