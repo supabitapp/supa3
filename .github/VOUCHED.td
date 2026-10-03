@@ -1,8 +1,8 @@
 # Trust list for this repository.
 #
-# External contributors listed here are treated as trusted by the vouch
-# workflow. Collaborators with write access are automatically trusted and
-# do not need to be duplicated in this file.
+# External contributors listed here are trusted by the signed macOS desktop
+# preview workflow. Collaborators with write access are automatically
+# trusted and do not need to be duplicated in this file.
 #
 # Syntax:
 #   github:username

@@ -52,7 +52,7 @@ and lines beginning with `#`; every other line must be exactly `github:<login>`,
 of 1–39 ASCII letters or digits with optional single interior hyphens. Reject malformed entries and duplicate
 logins (case-insensitively); denouncements and inline comments are not supported. Match the current PR
 author login returned by GitHub against complete entries, case-insensitively. Do not infer exemptions
-from organization membership, `VOUCHED.td`, vouch labels, collaborator or bot status, repository write
+from organization membership, `VOUCHED.td`, collaborator or bot status, repository write
 access, or previous PR success. No organization-membership lookup is required.
 
 If the trusted main SHA or any required file cannot be retrieved completely or validated, report
