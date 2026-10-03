@@ -532,33 +532,37 @@ function exportNameForPath(filePath: string): string {
 function buildJsonSchemaFiles(
   entries: ReadonlyArray<GithubContentEntry>,
 ): ReadonlyArray<JsonSchemaFile> {
-  return entries
-    .filter(
-      (entry) =>
-        entry.type === "file" &&
-        entry.name.endsWith(".json") &&
-        entry.download_url !== null &&
-        !entry.name.startsWith("codex_app_server_protocol."),
-    )
-    .map((entry) => {
-      const relative = entry.path.replace(/^codex-rs\/app-server-protocol\/schema\/json\//, "");
-      const parts = relative.split("/");
-      if (parts.length > 1) {
-        return {
+  return entries.flatMap((entry) => {
+    if (
+      entry.type !== "file" ||
+      !entry.name.endsWith(".json") ||
+      entry.download_url === null ||
+      entry.name.startsWith("codex_app_server_protocol.")
+    ) {
+      return [];
+    }
+    const relative = entry.path.replace(/^codex-rs\/app-server-protocol\/schema\/json\//, "");
+    const parts = relative.split("/");
+    if (parts.length > 1) {
+      return [
+        {
           namespace: parts[0]!,
           exportName: exportNameForPath(relative),
           fileName: entry.name,
-          downloadUrl: entry.download_url!,
+          downloadUrl: entry.download_url,
           qualifiedName: relative.replace(/\.json$/, ""),
-        } satisfies JsonSchemaFile;
-      }
-      return {
+        } satisfies JsonSchemaFile,
+      ];
+    }
+    return [
+      {
         exportName: exportNameForPath(relative),
         fileName: entry.name,
-        downloadUrl: entry.download_url!,
+        downloadUrl: entry.download_url,
         qualifiedName: relative.replace(/\.json$/, ""),
-      } satisfies JsonSchemaFile;
-    });
+      } satisfies JsonSchemaFile,
+    ];
+  });
 }
 
 function rewriteExternalRefs(

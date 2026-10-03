@@ -504,9 +504,9 @@ function seedDatabase(
       const workspaceRoot = workspaceRoots.get(project.id);
       if (!workspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
       const latestThreadMinutes = Math.min(
-        ...threads
-          .filter((thread) => thread.projectId === project.id)
-          .map((thread) => thread.minutesAgo),
+        ...threads.flatMap((thread) =>
+          thread.projectId === project.id ? [thread.minutesAgo] : [],
+        ),
       );
       insertProject.run(
         project.id,
@@ -662,7 +662,7 @@ export async function seedShowcaseEnvironment(input: {
   }
   await Promise.all(
     projects
-      .filter((project) => project.id !== SHOWCASE_PROJECT_ID)
+      .flatMap((project) => (project.id === SHOWCASE_PROJECT_ID ? [] : [project]))
       .map(async (project) => {
         const projectWorkspaceRoot = workspaceRoots.get(project.id);
         if (!projectWorkspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);

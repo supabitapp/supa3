@@ -14,6 +14,20 @@ tagComparison.invalid(
   'const read = (value: { _tag: string }) => { switch (value._tag) { case "Expected": return true; default: return false; } };',
 );
 
+const errorTag = createOxlintRuleHarness("anti-slop-effect/no-manual-effect-error-tag", {
+  pluginName: "anti-slop-effect",
+  pluginPath: "oxlint-plugin-t3code/anti-slop-effect.ts",
+});
+
+errorTag.valid(
+  "predicate outside catch",
+  'const read = (value: { _tag: string }) => value._tag === "Expected";',
+);
+errorTag.invalid(
+  "broad catch comparison",
+  'Effect.catchAll(effect, (error) => error._tag === "Expected");',
+);
+
 const taggedConstruction = createOxlintRuleHarness(
   "anti-slop-effect/no-manual-tagged-construction",
   {
@@ -26,6 +40,17 @@ taggedConstruction.valid("match pattern", 'Match.when({ _tag: "Expected" }, () =
 taggedConstruction.invalid(
   "tag literal",
   'const failure = { _tag: "Expected", message: "failed" };',
+);
+
+const effectMatch = createOxlintRuleHarness("anti-slop-effect/prefer-effect-match", {
+  pluginName: "anti-slop-effect",
+  pluginPath: "oxlint-plugin-t3code/anti-slop-effect.ts",
+});
+
+effectMatch.valid("single branch", 'const result = value === "Expected" ? first : fallback;');
+effectMatch.invalid(
+  "chained branches",
+  'const result = value === "Expected" ? first : value === "Other" ? second : fallback;',
 );
 
 const serviceImports = createOxlintRuleHarness("anti-slop-effect/no-service-constructor-imports", {
