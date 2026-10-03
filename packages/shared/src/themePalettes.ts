@@ -504,7 +504,7 @@ export const GROVE_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
-export const OCEAN_THEME: ThemeDefinition = {
+const OCEAN_THEME: ThemeDefinition = {
   id: "ocean",
   label: "Ocean",
   appearance: "light",
@@ -631,7 +631,7 @@ export const OCEAN_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
-export const EMBER_THEME: ThemeDefinition = {
+const EMBER_THEME: ThemeDefinition = {
   id: "ember",
   label: "Ember",
   appearance: "light",
@@ -758,7 +758,7 @@ export const EMBER_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
-export const IRIS_THEME: ThemeDefinition = {
+const IRIS_THEME: ThemeDefinition = {
   id: "iris",
   label: "Iris",
   appearance: "light",
@@ -885,7 +885,7 @@ export const IRIS_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
-export const ZENBONES_THEME: ThemeDefinition = {
+const ZENBONES_THEME: ThemeDefinition = {
   id: "zenbones",
   label: "Zenbones",
   appearance: "light",
