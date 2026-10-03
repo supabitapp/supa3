@@ -13,8 +13,8 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 const DESKTOP_HOST = "app";
-const DESKTOP_PRODUCTION_SCHEME = "supa3";
-const DESKTOP_DEVELOPMENT_SCHEME = "supa3-dev";
+const DESKTOP_PRODUCTION_SCHEME = "supacode";
+const DESKTOP_DEVELOPMENT_SCHEME = "supacode-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
@@ -65,7 +65,7 @@ export class ElectronProtocol extends Context.Service<
       input: DesktopProtocolRegistrationInput,
     ) => Effect.Effect<void, ElectronProtocolRegistrationError, Scope.Scope>;
   }
->()("@t3tools/desktop/electron/ElectronProtocol") {}
+>()("@supacode/desktop/electron/ElectronProtocol") {}
 
 export function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInput): string {
   const scriptSources = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];

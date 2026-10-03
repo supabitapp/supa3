@@ -6,7 +6,7 @@ import {
   remoteHttpClientLayer,
   relayWebSocketLayer,
   relayClientOptions,
-} from "@t3tools/client-runtime/rpc";
+} from "@supacode/client-runtime/rpc";
 
 import * as Persistence from "../persistence/layer";
 import { cryptoLayer } from "./crypto";

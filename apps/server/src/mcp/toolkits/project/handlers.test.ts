@@ -5,7 +5,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationV2ThreadShell,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -69,7 +69,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       Layer.mock(Project.ProjectService)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/projects" }),
       NodeServices.layer,
-      ServerConfig.layerTest(process.cwd(), { prefix: "t3-source-link-" }).pipe(
+      ServerConfig.layerTest(process.cwd(), { prefix: "supacode-source-link-" }).pipe(
         Layer.provide(NodeServices.layer),
       ),
     );
@@ -77,7 +77,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       Effect.provide(ProjectHandlersLive.pipe(Layer.provide(dependencies))),
     );
     const result = yield* toolkit
-      .handle("t3_thread_launch", { title: "Audit", message: "Review the change" })
+      .handle("supacode_thread_launch", { title: "Audit", message: "Review the change" })
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
     expect(result.at(-1)?.result).toMatchObject({ projectId, modelSelection });
     expect(launchedSender).toBe(sourceThreadId);
@@ -134,16 +134,16 @@ it.effect("launches a scratch thread into the Scratch project", () =>
         ensureScratchProject: Effect.succeed({ projectId: scratchProjectId }),
       }),
       NodeServices.layer,
-      ServerConfig.layerTest(process.cwd(), { prefix: "t3-scratch-launch-" }).pipe(
+      ServerConfig.layerTest(process.cwd(), { prefix: "supacode-scratch-launch-" }).pipe(
         Layer.provide(NodeServices.layer),
       ),
     );
     const toolkit = yield* ProjectToolkit.pipe(
       Effect.provide(ProjectHandlersLive.pipe(Layer.provide(dependencies))),
     );
-    const handle = (params: Parameters<typeof toolkit.handle<"t3_thread_launch">>[1]) =>
+    const handle = (params: Parameters<typeof toolkit.handle<"supacode_thread_launch">>[1]) =>
       toolkit
-        .handle("t3_thread_launch", params)
+        .handle("supacode_thread_launch", params)
         .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
     const result = yield* handle({ title: "Notes", scratch: true, message: "Draft a list" });
@@ -228,16 +228,16 @@ it.effect("starts a project from just a title when workspaceRoot is omitted", ()
           }),
       }),
       NodeServices.layer,
-      ServerConfig.layerTest(process.cwd(), { prefix: "t3-named-project-" }).pipe(
+      ServerConfig.layerTest(process.cwd(), { prefix: "supacode-named-project-" }).pipe(
         Layer.provide(NodeServices.layer),
       ),
     );
     const toolkit = yield* ProjectToolkit.pipe(
       Effect.provide(ProjectHandlersLive.pipe(Layer.provide(dependencies))),
     );
-    const handle = (params: Parameters<typeof toolkit.handle<"t3_project_create">>[1]) =>
+    const handle = (params: Parameters<typeof toolkit.handle<"supacode_project_create">>[1]) =>
       toolkit
-        .handle("t3_project_create", params)
+        .handle("supacode_project_create", params)
         .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
     const result = yield* handle({ title: "Pinball Stats" });

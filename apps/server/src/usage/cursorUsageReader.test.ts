@@ -16,7 +16,7 @@ describe("readCursorAccountUsage", () => {
       accountKey: null,
       records: [],
       missing: false,
-      error: "Allow Keychain access on the Mac running supa3, then refresh.",
+      error: "Allow Keychain access on the Mac running Supacode, then refresh.",
     });
   });
 });

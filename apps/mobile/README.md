@@ -1,7 +1,7 @@
-# supa3 Mobile
+# Supacode Mobile
 
 > [!WARNING]
-> supa3 Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> Supacode Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `supa3 Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `supa3 Preview`
-- `production`: store/release build as `supa3`
+- `development`: Expo dev client, installable side-by-side as `Supacode Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `Supacode Preview`
+- `production`: store/release build as `Supacode`
 
 Run commands from `apps/mobile`.
 
@@ -70,8 +70,8 @@ reduced-capability local build. Personal Team builds omit the widget and share e
 without this opt-in are unchanged.
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.supa3.dev \
+SUPACODE_IOS_PERSONAL_TEAM=1 \
+SUPACODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.supacode.dev \
 vp run ios:dev
 ```
 
@@ -84,8 +84,8 @@ vp run ios:release
 The Personal Team equivalent also needs a unique bundle identifier:
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.supa3 \
+SUPACODE_IOS_PERSONAL_TEAM=1 \
+SUPACODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.supacode \
 vp run ios:release
 ```
 
@@ -124,7 +124,7 @@ Preview and production variants use Expo fingerprinting so OTA updates only reac
 
 The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
 
-Set `T3CODE_MOBILE_UPDATES_ENABLED=0` before prebuild and bundling a private binary to disable the
+Set `SUPACODE_MOBILE_UPDATES_ENABLED=0` before prebuild and bundling a private binary to disable the
 repository's configured Expo OTA update source.
 
 Create a PR preview dev-client build manually:

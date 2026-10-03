@@ -12,11 +12,11 @@ describe("DesktopEarlyElectronStartup", () => {
 
   it("reads the persisted linux password-store preference before Electron is ready", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: { SUPA3_HOME: "/home/user/.t3-test" },
+      env: { SUPACODE_HOME: "/home/user/.supacode-test" },
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3-test/userdata/desktop-settings.json");
+        assert.equal(path, "/home/user/.supacode-test/userdata/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "kwallet6" });
       },
     });
@@ -26,7 +26,7 @@ describe("DesktopEarlyElectronStartup", () => {
 
   it("accepts JSONC in the early desktop settings file", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: { SUPA3_HOME: "/home/user/.t3-test" },
+      env: { SUPACODE_HOME: "/home/user/.supacode-test" },
       homeDirectory: "/home/user",
       joinPath,
       readFileString: () => `{
@@ -53,7 +53,7 @@ describe("DesktopEarlyElectronStartup", () => {
 
   it("preserves absolute root paths when resolving early settings", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: { SUPA3_HOME: "/" },
+      env: { SUPACODE_HOME: "/" },
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
@@ -68,27 +68,27 @@ describe("DesktopEarlyElectronStartup", () => {
   it("resolves the early linux Electron switches", () => {
     const options = resolveEarlyLinuxElectronOptions({
       env: {
-        SUPA3_HOME: "/home/user/.t3-test",
+        SUPACODE_HOME: "/home/user/.supacode-test",
         XDG_CURRENT_DESKTOP: "niri",
         VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
       },
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3-test/userdata/desktop-settings.json");
+        assert.equal(path, "/home/user/.supacode-test/userdata/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "auto" });
       },
     });
 
     assert.deepEqual(options, {
       isDevelopment: true,
-      linuxWmClass: "supa3-dev",
-      linuxDesktopEntryName: "com.supaterm.supa3.Development.desktop",
+      linuxWmClass: "supacode-dev",
+      linuxDesktopEntryName: "com.supaterm.supacode.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });
 
-  it("keeps implicit development state under ~/.supa3/dev when SUPA3_HOME is unset", () => {
+  it("keeps implicit development state under ~/.supacode/dev when SUPACODE_HOME is unset", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
       env: {
         VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
@@ -96,7 +96,7 @@ describe("DesktopEarlyElectronStartup", () => {
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.supa3/dev/desktop-settings.json");
+        assert.equal(path, "/home/user/.supacode/dev/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "kwallet" });
       },
     });
@@ -104,16 +104,16 @@ describe("DesktopEarlyElectronStartup", () => {
     assert.equal(preference, "kwallet");
   });
 
-  it("treats whitespace-only SUPA3_HOME as unconfigured in development", () => {
+  it("treats whitespace-only SUPACODE_HOME as unconfigured in development", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
       env: {
-        SUPA3_HOME: "   ",
+        SUPACODE_HOME: "   ",
         VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
       },
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.supa3/dev/desktop-settings.json");
+        assert.equal(path, "/home/user/.supacode/dev/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "gnome-libsecret" });
       },
     });

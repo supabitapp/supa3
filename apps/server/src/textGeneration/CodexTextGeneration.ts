@@ -13,9 +13,9 @@ import {
   type ModelSelection,
   type ServerProviderModel,
   TextGenerationError,
-} from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+} from "@supacode/contracts";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@supacode/shared/git";
+import { resolveSpawnCommand } from "@supacode/shared/shell";
 
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -35,7 +35,7 @@ import {
   sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "./TextGenerationUtils.ts";
-import { codexModelFamily, getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { codexModelFamily, getModelSelectionStringOptionValue } from "@supacode/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 
 const CODEX_TIMEOUT_MS = 180_000;
@@ -50,7 +50,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
   getModels: Effect.Effect<ReadonlyArray<ServerProviderModel>> = Effect.succeed([]),
   resolveRuntime?: Effect.Effect<
     import("../provider/CodexManagedRuntime.ts").CodexEffectiveRuntime,
-    import("@t3tools/contracts").ProviderSetupError,
+    import("@supacode/contracts").ProviderSetupError,
     Scope.Scope
   >,
 ) {
@@ -98,7 +98,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
   ): Effect.Effect<string, TextGenerationError> =>
     fileSystem
       .makeTempFile({
-        prefix: `t3code-${prefix}-${process.pid}-`,
+        prefix: `supacode-${prefix}-${process.pid}-`,
       })
       .pipe(
         Effect.tap((filePath) =>

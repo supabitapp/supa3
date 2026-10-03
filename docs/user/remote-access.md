@@ -1,13 +1,13 @@
 # Remote access
 
-Connect a phone, browser, or another desktop app to supa3 running on a different
+Connect a phone, browser, or another desktop app to Supacode running on a different
 machine. That machine must stay running and reachable while you work.
 
 ## Pair through the public relay
 
 On the host, enable **Public relay** in **Settings → Connections**, then create
 a pairing link and choose **Public relay** when sharing it. Paste the link into
-**Add environment** in another supa3 client, or scan its QR code in the mobile
+**Add environment** in another Supacode client, or scan its QR code in the mobile
 app. Both clients need a version with relay support. The pairing address is for
 the app; opening it as a website does not work.
 
@@ -36,13 +36,13 @@ For a command-line host, replace `<private-ip>` with the host's LAN or tailnet
 address:
 
 ```bash
-supa3 serve --host <private-ip>
+supacode serve --host <private-ip>
 ```
 
 If a server is already running, generate a fresh link without restarting it:
 
 ```bash
-supa3 pair
+supacode pair
 ```
 
 Scan the QR code on your phone or paste the pairing URL into **Add environment**
@@ -82,13 +82,13 @@ HTTPS** in **Settings → Connections**. Turn it off there to remove that route.
 To start a command-line server with Tailscale HTTPS:
 
 ```bash
-supa3 serve --tailscale-serve
+supacode serve --tailscale-serve
 ```
 
 For an already-running server:
 
 ```bash
-supa3 pair --tailscale
+supacode pair --tailscale
 ```
 
 The pairing link uses an address such as `https://machine.tailnet.ts.net/`.
@@ -100,7 +100,7 @@ tailscale serve --https=443 off
 ```
 
 If that port is already in use, choose another with
-`--tailscale-serve-port`. See `supa3 pair --help` for other pairing options.
+`--tailscale-serve-port`. See `supacode pair --help` for other pairing options.
 
 ### Hosted web app
 
@@ -115,13 +115,13 @@ scheme uses HTTP, so include `https://` when your server uses HTTPS.
 ## Desktop-managed SSH
 
 In the desktop app, open **Settings → Connections → Add environment**, choose
-**SSH**, and enter a host or SSH alias such as `user@example.com`. supa3 starts
+**SSH**, and enter a host or SSH alias such as `user@example.com`. Supacode starts
 or reuses a server there and opens the port forward for you. Projects, provider
 credentials, and agent work stay on the remote machine.
 
 The remote host must be Linux or an Apple Silicon Mac with `curl` or `wget`,
 `tar`, `sha256sum` or `shasum`, and [provider setup](./install.md#providers).
-The first launch downloads supa3's server to `~/.supa3/runtime` on the host, so
+The first launch downloads Supacode's server to `~/.supacode/runtime` on the host, so
 it takes longer than later ones.
 Provider CLIs must be on the `PATH` of a non-interactive login shell there;
 check with:
@@ -131,7 +131,7 @@ ssh user@example.com 'sh -lc "command -v claude codex"'
 ```
 
 If SSH reconnecting fails after an app update, retry the launch once. Removing
-the connection stops a server that supa3 launched; a server that was already
+the connection stops a server that Supacode launched; a server that was already
 running is left alone.
 
 For Antigravity's Google callback on a remote host, see
@@ -142,7 +142,7 @@ For Antigravity's Google callback on a remote host, see
 On the host, **Settings → Connections** lets authorized administrators create
 pairing links and revoke client sessions. Revoking an unused link prevents new
 pairings; revoke a device's session to remove its existing access. Command-line
-management is available through `supa3 auth --help`.
+management is available through `supacode auth --help`.
 
 A session with an open connection stays listed after its access credential
 expires.
@@ -154,7 +154,7 @@ screenshots, logs, or bug reports.
 
 If a computer should only drive work running elsewhere, turn off its local environment. In the
 desktop app, open **Settings → Connections** and switch off **Local
-environment**. supa3 restarts without a local server: no local agents or terminals run, WSL
+environment**. Supacode restarts without a local server: no local agents or terminals run, WSL
 backends stay off, and other devices can no longer connect to this computer. Your projects,
 history, and saved connections are kept, and you keep working through paired environments or SSH.
 

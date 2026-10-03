@@ -3,10 +3,10 @@ import {
   PrimaryConnectionTarget,
   type EnvironmentPresentation,
   type NetworkStatus,
-} from "@t3tools/client-runtime/connection";
-import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
-import type { EnvironmentShellSummary } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, type ServerConfig } from "@t3tools/contracts";
+} from "@supacode/client-runtime/connection";
+import type { EnvironmentCatalogState } from "@supacode/client-runtime/state/connections";
+import type { EnvironmentShellSummary } from "@supacode/client-runtime/state/shell";
+import { EnvironmentId, type ServerConfig } from "@supacode/contracts";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 

@@ -1,28 +1,28 @@
-# Installs the T3 Code CLI from a GitHub Release archive on Windows. Needs
+# Installs the Supacode CLI from a GitHub Release archive on Windows. Needs
 # only PowerShell 5.1+; no Node, npm, or compiler.
 #
-#   irm https://t3.codes/install.ps1 | iex
+#   irm https://supacode.sh/install.ps1 | iex
 #
 # Environment:
-#   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
+#   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
-#   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   SUPA3_HOME              supa3 home directory (default: ~\.supa3)
-#   T3CODE_INSTALL_BIN_DIR   where supa3.cmd is written (default: ~\.local\bin)
-#   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
+#   SUPACODE_VERSION           exact version to install (overrides SUPACODE_CHANNEL)
+#   SUPACODE_HOME              Supacode home directory (default: ~\.supacode)
+#   SUPACODE_INSTALL_BIN_DIR   where supacode.cmd is written (default: ~\.local\bin)
+#   SUPACODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
-# The archive is unpacked into $SUPA3_HOME\runtime\versions\<version>, the
-# same layout `supa3 service install` uses, so the service reuses this download.
+# The archive is unpacked into $SUPACODE_HOME\runtime\versions\<version>, the
+# same layout `supacode service install` uses, so the service reuses this download.
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "supabitapp/supa3"
-$baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
-$t3Home = if ($env:SUPA3_HOME) { $env:SUPA3_HOME } else { Join-Path $HOME ".supa3" }
-$binDir = if ($env:T3CODE_INSTALL_BIN_DIR) { $env:T3CODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }
+$repo = "supabitapp/supacode-next"
+$baseUrl = if ($env:SUPACODE_RELEASE_BASE_URL) { $env:SUPACODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
+$supacodeHome = if ($env:SUPACODE_HOME) { $env:SUPACODE_HOME } else { Join-Path $HOME ".supacode" }
+$binDir = if ($env:SUPACODE_INSTALL_BIN_DIR) { $env:SUPACODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }
 
 function Fail([string] $message) {
-  Write-Error "supa3 install: $message"
+  Write-Error "supacode install: $message"
   exit 1
 }
 
@@ -99,7 +99,7 @@ function Fetch([string] $uri, [string] $destination, [switch] $progress) {
   }
 }
 if ($interactive) {
-  [Console]::Error.WriteLine("`n  ${bold}supa3$reset`n  ${muted}CLI installer$reset`n")
+  [Console]::Error.WriteLine("`n  ${bold}Supacode$reset`n  ${muted}CLI installer$reset`n")
 }
 Step "Finding your release..."
 
@@ -113,8 +113,8 @@ $arch = switch ($rawArch) {
   default { Fail "unsupported architecture $rawArch" }
 }
 
-$channel = if ($env:T3CODE_CHANNEL) { $env:T3CODE_CHANNEL } else { "stable" }
-$version = $env:T3CODE_VERSION
+$channel = if ($env:SUPACODE_CHANNEL) { $env:SUPACODE_CHANNEL } else { "stable" }
+$version = $env:SUPACODE_VERSION
 if (-not $version) {
   # Tags are v<semver>; the channel is the prerelease identifier, or none for
   # stable. Only tags of the requested train are considered, so a stable
@@ -123,23 +123,23 @@ if (-not $version) {
     "stable" { '^v\d+\.\d+\.\d+$' }
     "nightly" { '^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$' }
     "preview" { '^v\d+\.\d+\.\d+-preview\.\d+\.\d+$' }
-    default { Fail "T3CODE_CHANNEL must be stable, nightly, or preview" }
+    default { Fail "SUPACODE_CHANNEL must be stable, nightly, or preview" }
   }
-  $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -Headers @{ "User-Agent" = "t3-install" }
+  $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -Headers @{ "User-Agent" = "supacode-install" }
   $tag = ($releases | Where-Object { -not $_.draft -and $_.tag_name -match $tagPattern } | Select-Object -First 1).tag_name
-  if (-not $tag) { Fail "could not find a $channel release; set T3CODE_VERSION" }
+  if (-not $tag) { Fail "could not find a $channel release; set SUPACODE_VERSION" }
   $version = $tag.Substring(1)
 }
 if ($version -match '-preview\.') {
-  Write-Warning "supa3 $version is a preview build. Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, and are never offered as updates. Set T3CODE_CHANNEL=stable (the default) for a supported build."
-  if ($channel -ne "preview" -and -not $env:T3CODE_VERSION) {
+  Write-Warning "Supacode $version is a preview build. Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, and are never offered as updates. Set SUPACODE_CHANNEL=stable (the default) for a supported build."
+  if ($channel -ne "preview" -and -not $env:SUPACODE_VERSION) {
     Fail "refusing a preview build that was not explicitly requested"
   }
 }
 
-$stem = "t3-$version-win32-$arch"
+$stem = "supacode-$version-win32-$arch"
 $archive = "$stem.zip"
-$versionsDir = Join-Path $t3Home "runtime\versions"
+$versionsDir = Join-Path $supacodeHome "runtime\versions"
 $targetDir = Join-Path $versionsDir $version
 $marker = Join-Path $targetDir ".install-complete"
 
@@ -151,14 +151,14 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
   New-Item -ItemType Directory -Path $staging | Out-Null
   try {
     if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-    [Console]::Error.WriteLine("  ${muted}Installing$reset supa3 $bold$version$reset`n")
+    [Console]::Error.WriteLine("  ${muted}Installing$reset Supacode $bold$version$reset`n")
     Step "Downloading..."
     try {
       Fetch "$baseUrl/v$version/SHA256SUMS" (Join-Path $staging "SHA256SUMS")
     } catch {
       $status = $_.Exception.Response.StatusCode.value__
       if ($status -eq 404) {
-        Fail "supa3 $version has no release archive for win32-$arch; releases before the self-contained CLI can only be installed with 'npm install -g t3@$version'"
+        Fail "Supacode $version has no release archive for win32-$arch; releases before the self-contained CLI can only be installed with 'npm install -g supacode@$version'"
       }
       throw
     }
@@ -172,7 +172,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $staging $archive)).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail "checksum mismatch for $archive" }
 
-    Step "Extracting supa3..."
+    Step "Extracting Supacode..."
     # The archive module reads the global preference, not the caller's local scope.
     $savedProgress = $global:ProgressPreference
     try {
@@ -183,7 +183,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
     Get-ChildItem (Join-Path $staging $stem) | Move-Item -Destination $staging
     Remove-Item (Join-Path $staging $stem), (Join-Path $staging $archive), (Join-Path $staging "SHA256SUMS") -Recurse -Force
 
-    & (Join-Path $staging "t3.exe") --version | Out-Null
+    & (Join-Path $staging "supacode.exe") --version | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "the downloaded executable does not run" }
     Set-Content -Path (Join-Path $staging ".install-complete") -Value $version -NoNewline
 
@@ -195,16 +195,16 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
   }
 }
 
-Step "Setting up the supa3 command..."
+Step "Setting up the supacode command..."
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-$shim = Join-Path $binDir "supa3.cmd"
+$shim = Join-Path $binDir "supacode.cmd"
 # UTF-8 without a BOM: cmd.exe reads the shim as-is, and ASCII would corrupt
 # non-ASCII characters in the user's home path.
-[System.IO.File]::WriteAllText($shim, "@echo off`r`n`"$(Join-Path $targetDir 't3.exe')`" %*", (New-Object System.Text.UTF8Encoding $false))
+[System.IO.File]::WriteAllText($shim, "@echo off`r`n`"$(Join-Path $targetDir 'supacode.exe')`" %*", (New-Object System.Text.UTF8Encoding $false))
 if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-[Console]::Error.WriteLine("  ${green}Installed supa3 $version$reset`n")
+[Console]::Error.WriteLine("  ${green}Installed Supacode $version$reset`n")
 if (($env:PATH -split ";") -notcontains $binDir) {
-  Write-Host "  Add $binDir to your PATH, then run ${bold}supa3$reset.`n"
+  Write-Host "  Add $binDir to your PATH, then run ${bold}supacode$reset.`n"
 } else {
-  Write-Host "  Run ${bold}supa3$reset to get started.`n"
+  Write-Host "  Run ${bold}supacode$reset to get started.`n"
 }

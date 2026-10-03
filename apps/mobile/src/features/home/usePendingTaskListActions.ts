@@ -2,10 +2,16 @@ import { useNavigation } from "@react-navigation/native";
 import { useCallback } from "react";
 import { Alert } from "react-native";
 
+import { withThreadDismissal } from "./thread-dismissal";
+import { appAtomRegistry } from "../../state/atom-registry";
 import { removeThreadOutboxMessage } from "../../state/thread-outbox-removal";
 import { clearComposerDraftContent } from "../../state/use-composer-drafts";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
-import { releaseEditingQueuedMessage } from "../../state/use-thread-outbox";
+import {
+  dispatchingQueuedMessageIdAtom,
+  holdEditingQueuedMessage,
+  releaseEditingQueuedMessage,
+} from "../../state/use-thread-outbox";
 
 export function usePendingTaskListActions(): {
   readonly openPendingTask: (pendingTask: PendingNewTask) => void;
@@ -37,12 +43,17 @@ export function usePendingTaskListActions(): {
           text: "Discard",
           style: "destructive",
           onPress: () => {
-            // Same reset a submit performs: the next task in this project
-            // re-resolves project defaults instead of inheriting the pick.
-            clearComposerDraftContent(pendingTask.draftKey, {
-              clearModelSelection: true,
-              clearWorkspaceSelection: true,
-            });
+            void withThreadDismissal(
+              pendingTask.key,
+              async () => {
+                clearComposerDraftContent(pendingTask.draftKey, {
+                  clearModelSelection: true,
+                  clearWorkspaceSelection: true,
+                });
+                return true;
+              },
+              (result) => result,
+            );
           },
         },
       ]);
@@ -57,17 +68,33 @@ export function usePendingTaskListActions(): {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            // Release the edit lock only after removal succeeds, and only if
-            // it is held for THIS task — clearing it up front (or for another
-            // task) would let the drain deliver a mid-edit payload.
-            void removeThreadOutboxMessage(pendingTask.message)
-              .then(() => releaseEditingQueuedMessage(pendingTask.message.messageId))
-              .catch((error) => {
-                Alert.alert(
-                  "Could not delete pending task",
-                  error instanceof Error ? error.message : "The pending task could not be removed.",
+            const messageId = pendingTask.message.messageId;
+            if (!holdEditingQueuedMessage(messageId)) {
+              Alert.alert(
+                "Pending task is open",
+                "Close the pending task editor before deleting it.",
+              );
+              return;
+            }
+            void withThreadDismissal(
+              pendingTask.key,
+              async () => {
+                const removed = await removeThreadOutboxMessage(
+                  pendingTask.message,
+                  undefined,
+                  () => appAtomRegistry.get(dispatchingQueuedMessageIdAtom) !== messageId,
                 );
-              });
+                releaseEditingQueuedMessage(messageId);
+                return removed;
+              },
+              (result) => result,
+            ).catch((error) => {
+              releaseEditingQueuedMessage(messageId);
+              Alert.alert(
+                "Could not delete pending task",
+                error instanceof Error ? error.message : "The pending task could not be removed.",
+              );
+            });
           },
         },
       ],

@@ -7,8 +7,8 @@ import {
   type ChatGptReconnectProfile,
   type ChatGptTransferredProfile,
   type ProviderInstanceId,
-} from "@t3tools/contracts";
-import { codexCallbackUrl } from "@t3tools/shared/codexAuthHandoff";
+} from "@supacode/contracts";
+import { codexCallbackUrl } from "@supacode/shared/codexAuthHandoff";
 import * as Clock from "effect/Clock";
 import * as Cause from "effect/Cause";
 import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
@@ -515,7 +515,7 @@ export const makeCodexChatGptAuth = Effect.fn("makeCodexChatGptAuth")(function* 
               ? { prompt: "consent" }
               : {}),
           }
-        : { agent_name_hint: "supa3" }),
+        : { agent_name_hint: "supacode" }),
       ext_agent_host_id: hostId,
       response_type: "code",
       redirect_uri: redirectUri,

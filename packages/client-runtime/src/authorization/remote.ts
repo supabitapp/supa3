@@ -1,4 +1,4 @@
-import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 import {
   AuthAccessTokenType,
   type AuthClientPresentationMetadata,
@@ -6,8 +6,8 @@ import {
   AuthTokenExchangeGrantType,
   type ClientConnectionMethod,
   type AuthEnvironmentScope,
-} from "@t3tools/contracts";
-import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
+} from "@supacode/contracts";
+import { encodeOAuthScope } from "@supacode/shared/oauthScope";
 import * as Effect from "effect/Effect";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
 import {

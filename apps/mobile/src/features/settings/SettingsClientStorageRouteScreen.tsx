@@ -1,9 +1,10 @@
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@t3tools/contracts";
+import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -104,37 +105,48 @@ export function SettingsClientStorageRouteScreen() {
                 Inspecting cached data…
               </Text>
             </View>
-          ) : environmentSummaries.length > 0 ? (
-            environmentSummaries.map((environment, index) => (
-              <CacheEnvironmentRow
-                key={environment.environmentId}
-                environment={environment}
-                environmentLabel={
-                  savedConnectionsById[environment.environmentId]?.environmentLabel ??
-                  environment.environmentId
-                }
-                machine={resolveEnvironmentMachineKind(
-                  serverConfigs.get(environment.environmentId) ?? null,
-                )}
-                disabled={isClearing}
-                first={index === 0}
-                onClear={() => confirmClearEnvironment(environment)}
-              />
-            ))
           ) : (
-            <View className="items-center gap-2 px-6 py-8">
-              <SymbolView
-                name="checkmark.circle"
-                size={28}
-                tintColorClassName="accent-icon"
-                type="monochrome"
-                weight="regular"
-              />
-              <Text className="text-center text-base text-foreground">No cached data</Text>
-              <Text className="text-center text-sm text-foreground-muted">
-                Offline cache records will appear here after environments are used.
-              </Text>
-            </View>
+            <>
+              <View>
+                {environmentSummaries.map((environment, index) => (
+                  <Animated.View
+                    key={environment.environmentId}
+                    entering={FadeIn.duration(140)}
+                    exiting={FadeOut.duration(120)}
+                    layout={LinearTransition.duration(180)}
+                  >
+                    <CacheEnvironmentRow
+                      environment={environment}
+                      environmentLabel={
+                        savedConnectionsById[environment.environmentId]?.environmentLabel ??
+                        environment.environmentId
+                      }
+                      machine={resolveEnvironmentMachineKind(
+                        serverConfigs.get(environment.environmentId) ?? null,
+                      )}
+                      disabled={isClearing}
+                      first={index === 0}
+                      onClear={() => confirmClearEnvironment(environment)}
+                    />
+                  </Animated.View>
+                ))}
+              </View>
+              {environmentSummaries.length === 0 ? (
+                <View className="items-center gap-2 px-6 py-8">
+                  <SymbolView
+                    name="checkmark.circle"
+                    size={28}
+                    tintColorClassName="accent-icon"
+                    type="monochrome"
+                    weight="regular"
+                  />
+                  <Text className="text-center text-base text-foreground">No cached data</Text>
+                  <Text className="text-center text-sm text-foreground-muted">
+                    Offline cache records will appear here after environments are used.
+                  </Text>
+                </View>
+              ) : null}
+            </>
           )}
         </SettingsSection>
 
@@ -191,7 +203,10 @@ function CacheEnvironmentRow(props: {
         onPress={props.onClear}
         className="rounded-full px-3 py-2 disabled:opacity-40"
       >
-        <Text className="font-t3-medium tabular-nums text-danger-foreground" numberOfLines={1}>
+        <Text
+          className="font-supacode-medium tabular-nums text-danger-foreground"
+          numberOfLines={1}
+        >
           Clear {formatBytes(props.environment.payloadBytes)}
         </Text>
       </Pressable>

@@ -4,7 +4,7 @@ import {
   relayEndpointId,
   relayPublicKey,
   signRelayChallenge,
-} from "@t3tools/shared/relay/protocol";
+} from "@supacode/shared/relay/protocol";
 import { describe, expect, it } from "vite-plus/test";
 import { relayLocalTarget, startRelayTransport } from "./transport.ts";
 
@@ -13,6 +13,9 @@ describe("relay local routing", () => {
     expect(relayLocalTarget("http://127.0.0.1:1000", "/api/auth/session", false).href).toBe(
       "http://127.0.0.1:1000/api/auth/session",
     );
+    expect(
+      relayLocalTarget("http://127.0.0.1:1000", "/.well-known/supacode/environment", false).href,
+    ).toBe("http://127.0.0.1:1000/.well-known/supacode/environment");
     expect(relayLocalTarget("http://127.0.0.1:1000", "/ws?wsTicket=test", true).href).toBe(
       "ws://127.0.0.1:1000/ws?wsTicket=test",
     );

@@ -5,8 +5,8 @@ import { revertCodexThread } from "../src/provider/CodexThreadRevert.ts";
 import { buildCodexInitializeParams } from "../src/provider/Layers/CodexProvider.ts";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
+import { resolveSpawnCommand } from "@supacode/shared/shell";
 import * as Console from "effect/Console";
 import * as Deferred from "effect/Deferred";
 import * as FileSystem from "effect/FileSystem";
@@ -65,7 +65,7 @@ import { codexReplayRecordingOutputRecords } from "./codexReplayRecordingRecords
 import { makeReplayRecorderDeferredRegistry } from "./replayRecorderDeferredRegistry.ts";
 
 const CODEX_REPLAY_PLAN_MODE_DEVELOPER_INSTRUCTIONS =
-  process.env.T3_CODEX_REPLAY_PLAN_DEVELOPER_INSTRUCTIONS ??
+  process.env.SUPACODEX_REPLAY_PLAN_DEVELOPER_INSTRUCTIONS ??
   "You are in Plan mode. Prefer request_user_input for clarifying questions. When presenting a complete plan, wrap it in <proposed_plan> and </proposed_plan>.";
 // Match the V2 adapter's initialize, thread and turn frames so recordings replay
 // against it without hand edits.
@@ -74,7 +74,7 @@ const CODEX_CLIENT_CAPABILITIES = {
   optOutNotificationMethods: ["turn/diff/updated"],
 } as const;
 const CODEX_REPLAY_DEFAULT_MODEL = "gpt-6-luna";
-const CODEX_REPLAY_MODEL_OVERRIDE = readArgValue("--model") ?? process.env.T3_CODEX_REPLAY_MODEL;
+const CODEX_REPLAY_MODEL_OVERRIDE = readArgValue("--model") ?? process.env.SUPACODEX_REPLAY_MODEL;
 
 const SCENARIO_NAMES = [
   "simple",
@@ -211,7 +211,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseScenarios(): ReadonlyArray<ScenarioName> {
   const rawValues = [
     ...readArgValues("--scenario"),
-    ...(process.env.T3_CODEX_REPLAY_SCENARIOS ? [process.env.T3_CODEX_REPLAY_SCENARIOS] : []),
+    ...(process.env.SUPACODEX_REPLAY_SCENARIOS ? [process.env.SUPACODEX_REPLAY_SCENARIOS] : []),
   ];
   const requested = rawValues.length > 0 ? rawValues : ["simple"];
   const names = requested.flatMap((value) =>
@@ -1212,7 +1212,7 @@ function makeCodexLayer({ recorder }: { readonly recorder: Recorder }) {
       // `node` the agent runs through a shell fail. Codex must not inherit it.
       const { VP_TOOL_RECURSION: _vpToolRecursion, ...environment } = yield* HostProcessEnvironment;
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const commandName = environment.T3_CODEX_BIN ?? environment.CODEX_BIN ?? "codex";
+      const commandName = environment.SUPACODEX_BIN ?? environment.CODEX_BIN ?? "codex";
       const spawnCommand = yield* resolveSpawnCommand(commandName, ["app-server"], {
         env: environment,
       });
@@ -1627,15 +1627,15 @@ const program = Effect.gen(function* () {
   const path = yield* Path.Path;
   const requestedScenarios = parseScenarios();
   const allScenarios = scenarios();
-  const outDir = readArgValue("--out-dir") ?? process.env.T3_CODEX_REPLAY_OUT_DIR;
-  const singleOutPath = readArgValue("--out") ?? process.env.T3_CODEX_REPLAY_OUT;
+  const outDir = readArgValue("--out-dir") ?? process.env.SUPACODEX_REPLAY_OUT_DIR;
+  const singleOutPath = readArgValue("--out") ?? process.env.SUPACODEX_REPLAY_OUT;
   const selected = allScenarios.filter((scenario) => requestedScenarios.includes(scenario.name));
 
   if (selected.length === 0) {
     throw new Error("No replay scenarios selected.");
   }
   if (singleOutPath && selected.length !== 1) {
-    throw new Error("--out / T3_CODEX_REPLAY_OUT can only be used with exactly one --scenario.");
+    throw new Error("--out / SUPACODEX_REPLAY_OUT can only be used with exactly one --scenario.");
   }
 
   yield* Effect.forEach(

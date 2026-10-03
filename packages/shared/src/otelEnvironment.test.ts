@@ -10,11 +10,11 @@ const load = (env: Record<string, string>) =>
   OtelEnvironment.load.pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
 
 const SPEC_OFF =
-  "OTEL_SDK_DISABLED is set, so no telemetry is exported, whatever configured it; set T3CODE_OTEL_SDK_DISABLED=false to export anyway";
-const T3_OFF =
-  "T3CODE_OTEL_SDK_DISABLED is set, so no telemetry is exported, whatever configured it";
+  "OTEL_SDK_DISABLED is set, so no telemetry is exported, whatever configured it; set SUPACODE_OTEL_SDK_DISABLED=false to export anyway";
+const SUPACODE_OFF =
+  "SUPACODE_OTEL_SDK_DISABLED is set, so no telemetry is exported, whatever configured it";
 const specIgnored = (value: string) =>
-  `OTEL_SDK_DISABLED=${value} was read as false; the OpenTelemetry specification recognizes only the string true, so use OTEL_SDK_DISABLED=true or T3CODE_OTEL_SDK_DISABLED to say it any other way`;
+  `OTEL_SDK_DISABLED=${value} was read as false; the OpenTelemetry specification recognizes only the string true, so use OTEL_SDK_DISABLED=true or SUPACODE_OTEL_SDK_DISABLED to say it any other way`;
 
 describe("OtelEnvironment", () => {
   it.effect.each([
@@ -41,36 +41,41 @@ describe("OtelEnvironment", () => {
       disabled: false,
       warnings: [specIgnored("yes")],
     },
-    // T3CODE_OTEL_SDK_DISABLED takes Config.Boolean's values, case-insensitively.
-    { name: "t3 1", env: { T3CODE_OTEL_SDK_DISABLED: "1" }, disabled: true, warnings: [T3_OFF] },
+    // SUPACODE_OTEL_SDK_DISABLED takes Config.Boolean's values, case-insensitively.
     {
-      name: "t3 TRUE",
-      env: { T3CODE_OTEL_SDK_DISABLED: "TRUE" },
+      name: "supacode 1",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "1" },
       disabled: true,
-      warnings: [T3_OFF],
+      warnings: [SUPACODE_OFF],
     },
-    { name: "t3 n", env: { T3CODE_OTEL_SDK_DISABLED: "n" }, disabled: false, warnings: [] },
     {
-      name: "t3 false overrides spec true",
-      env: { T3CODE_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "true" },
+      name: "supacode TRUE",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "TRUE" },
+      disabled: true,
+      warnings: [SUPACODE_OFF],
+    },
+    { name: "supacode n", env: { SUPACODE_OTEL_SDK_DISABLED: "n" }, disabled: false, warnings: [] },
+    {
+      name: "supacode false overrides spec true",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "true" },
       disabled: false,
       warnings: [],
     },
     {
-      name: "blank t3 falls through",
-      env: { T3CODE_OTEL_SDK_DISABLED: "  ", OTEL_SDK_DISABLED: "true" },
+      name: "blank supacode falls through",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "  ", OTEL_SDK_DISABLED: "true" },
       disabled: true,
       warnings: [SPEC_OFF],
     },
     {
-      name: "unreadable t3 warns and falls through",
-      env: { T3CODE_OTEL_SDK_DISABLED: "maybe", OTEL_SDK_DISABLED: "true" },
+      name: "unreadable supacode warns and falls through",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "maybe", OTEL_SDK_DISABLED: "true" },
       disabled: true,
-      warnings: ["T3CODE_OTEL_SDK_DISABLED=maybe is not a yes or a no and was ignored", SPEC_OFF],
+      warnings: ["SUPACODE_OTEL_SDK_DISABLED=maybe is not a yes or a no and was ignored", SPEC_OFF],
     },
     {
-      name: "bad spec value still warns when t3 answered",
-      env: { T3CODE_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "yes" },
+      name: "bad spec value still warns when supacode answered",
+      env: { SUPACODE_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "yes" },
       disabled: false,
       warnings: [specIgnored("yes")],
     },
@@ -196,13 +201,13 @@ describe("OtelEnvironment", () => {
       {
         name: "the kill switch wins outright over a valid endpoint",
         env: {
-          T3CODE_OTEL_SDK_DISABLED: "true",
+          SUPACODE_OTEL_SDK_DISABLED: "true",
           OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector:4318/base",
         },
         traces: "Unset",
         metrics: "Unset",
         logs: "Unset",
-        warnings: [T3_OFF],
+        warnings: [SUPACODE_OFF],
       },
       {
         name: "an exporter of none turns off only its signal",
@@ -244,7 +249,7 @@ describe("OtelEnvironment", () => {
         warnings: [],
       },
       {
-        name: "an exporter supa3 does not have is ignored with a warning",
+        name: "an exporter Supacode does not have is ignored with a warning",
         env: {
           OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector:4318",
           OTEL_METRICS_EXPORTER: "prometheus",
@@ -253,7 +258,7 @@ describe("OtelEnvironment", () => {
         metrics: "https://collector:4318/v1/metrics",
         logs: "https://collector:4318/v1/logs",
         warnings: [
-          "OTEL_METRICS_EXPORTER names prometheus, which supa3 does not export to, so it was ignored",
+          "OTEL_METRICS_EXPORTER names prometheus, which Supacode does not export to, so it was ignored",
         ],
       },
       {
@@ -267,8 +272,8 @@ describe("OtelEnvironment", () => {
         metrics: "https://collector:4318/v1/metrics",
         logs: "https://collector:4318/v1/logs",
         warnings: [
-          "OTEL_TRACES_EXPORTER names console, which supa3 does not export to, so it was ignored",
-          "OTEL_LOGS_EXPORTER names console, otlpp, which supa3 does not export to, so they were ignored",
+          "OTEL_TRACES_EXPORTER names console, which Supacode does not export to, so it was ignored",
+          "OTEL_LOGS_EXPORTER names console, otlpp, which Supacode does not export to, so they were ignored",
         ],
       },
     ])("$name", ({ env, traces, metrics, logs, warnings }) =>
@@ -298,9 +303,9 @@ describe("OtelEnvironment", () => {
       },
       {
         name: "headers are comma-separated pairs with percent-encoded values",
-        env: { ...ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS: "api-key=a%20b,tenant=t3" },
-        traces: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "t3" } },
-        logs: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "t3" } },
+        env: { ...ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS: "api-key=a%20b,tenant=supacode" },
+        traces: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "supacode" } },
+        logs: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "supacode" } },
         warnings: [],
       },
       {
@@ -390,9 +395,9 @@ describe("OtelEnvironment", () => {
   });
 
   describe("resolveSignalEndpoint", () => {
-    const t3Export = {
+    const supacodeExport = {
       protocol: "http/json",
-      headers: { "x-key": "t3" },
+      headers: { "x-key": "supacode" },
       exportIntervalMs: 5_000,
     } as const;
     const withLogs = (logs: OtelEnvironment.OtelSignal, disabled = false) => ({
@@ -407,21 +412,21 @@ describe("OtelEnvironment", () => {
     });
     it.each([
       {
-        name: "T3CODE_OTLP_*_URL wins over an OTEL endpoint",
+        name: "SUPACODE_OTLP_*_URL wins over an OTEL endpoint",
         otel: withLogs(otelExport),
-        t3Url: "http://t3:4318/v1/logs",
-        expected: { url: "http://t3:4318/v1/logs", export: t3Export },
+        supacodeUrl: "http://supacode:4318/v1/logs",
+        expected: { url: "http://supacode:4318/v1/logs", export: supacodeExport },
       },
       {
-        name: "T3CODE_OTLP_*_URL wins over a signal the OTEL variables turned off",
+        name: "SUPACODE_OTLP_*_URL wins over a signal the OTEL variables turned off",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: "http://t3:4318/v1/logs",
-        expected: { url: "http://t3:4318/v1/logs", export: t3Export },
+        supacodeUrl: "http://supacode:4318/v1/logs",
+        expected: { url: "http://supacode:4318/v1/logs", export: supacodeExport },
       },
       {
         name: "an OTEL endpoint brings its headers and protocol over the fallback",
         otel: withLogs(otelExport),
-        t3Url: " ",
+        supacodeUrl: " ",
         expected: {
           url: "http://otel:4318/v1/logs",
           export: {
@@ -434,27 +439,27 @@ describe("OtelEnvironment", () => {
       {
         name: "a signal the OTEL variables turned off does not fall through",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: undefined,
+        supacodeUrl: undefined,
         expected: undefined,
       },
       {
         name: "an unset signal takes the first non-blank fallback",
         otel: withLogs(OtelEnvironment.OtelSignal.Unset()),
-        t3Url: undefined,
-        expected: { url: "http://settings:4318/v1/logs", export: t3Export },
+        supacodeUrl: undefined,
+        expected: { url: "http://settings:4318/v1/logs", export: supacodeExport },
       },
       {
         name: "the kill switch wins over everything",
         otel: withLogs(otelExport, true),
-        t3Url: "http://t3:4318/v1/logs",
+        supacodeUrl: "http://supacode:4318/v1/logs",
         expected: undefined,
       },
-    ])("$name", ({ otel, t3Url, expected }) => {
+    ])("$name", ({ otel, supacodeUrl, expected }) => {
       assert.deepStrictEqual(
         OtelEnvironment.resolveSignalEndpoint(
           otel,
           "logs",
-          { url: t3Url, export: t3Export },
+          { url: supacodeUrl, export: supacodeExport },
           "",
           "http://settings:4318/v1/logs",
         ),
@@ -466,17 +471,26 @@ describe("OtelEnvironment", () => {
   it.effect("an exporter of none keeps the Settings endpoint from re-enabling its signal", () =>
     Effect.gen(function* () {
       const otel = yield* load({ OTEL_LOGS_EXPORTER: "none" });
-      const t3 = {
+      const supacode = {
         url: undefined,
         export: { protocol: "http/json", headers: undefined, exportIntervalMs: 10_000 },
       } as const;
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "logs", t3, "http://settings:4318/v1/logs"),
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "logs",
+          supacode,
+          "http://settings:4318/v1/logs",
+        ),
         undefined,
       );
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "traces", t3, "http://settings:4318/v1/traces")
-          ?.url,
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "traces",
+          supacode,
+          "http://settings:4318/v1/traces",
+        )?.url,
         "http://settings:4318/v1/traces",
       );
     }),
@@ -492,7 +506,7 @@ describe("OtelEnvironment", () => {
           ConfigProvider.fromEnv({ env: { OTEL_RESOURCE_ATTRIBUTES: raw } }),
         );
         const otel = yield* OtelEnvironment.load.pipe(Effect.provide(env));
-        const resource = yield* OtlpResource.fromConfig({ serviceName: "t3" }).pipe(
+        const resource = yield* OtlpResource.fromConfig({ serviceName: "supacode" }).pipe(
           Effect.provide(
             Layer.provide(OtelEnvironment.layerResourceAttributes(otel.resourceAttributes), env),
           ),

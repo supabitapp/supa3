@@ -15,7 +15,7 @@ import {
   type OrchestrationV2AppThread,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurn,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -44,7 +44,7 @@ import { makePiAdapterV2, PI_PROVIDER } from "./PiAdapterV2.ts";
 import { makePiRpcConnection, type PiRpcRecord } from "./PiRpc.ts";
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-pi-v2-adapter-",
+  prefix: "supacode-pi-v2-adapter-",
 }).pipe(Layer.provide(NodeServices.layer));
 
 const testLayer = Layer.mergeAll(NodeServices.layer, IdAllocator.layer, serverConfigLayer);
@@ -461,7 +461,7 @@ const expectModelFailure = (errorMessage: string) =>
   }).pipe(Effect.scoped, Effect.provide(testLayer));
 
 describe("PiAdapterV2", () => {
-  it.effect("stops provider-initiated work that has no supa3 turn owner", () =>
+  it.effect("stops provider-initiated work that has no Supacode turn owner", () =>
     Effect.gen(function* () {
       const fake = yield* makeFakePi;
       const { runtime, takeEvent } = yield* openRuntime(fake);
@@ -484,7 +484,7 @@ describe("PiAdapterV2", () => {
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
-  it.effect("injects the supa3 MCP extension and bearer when a session exists", () =>
+  it.effect("injects the Supacode MCP extension and bearer when a session exists", () =>
     Effect.gen(function* () {
       McpProviderSession.setMcpProviderSession({
         environmentId: EnvironmentId.make("environment-pi-mcp"),
@@ -503,10 +503,10 @@ describe("PiAdapterV2", () => {
         arg === "--extension" ? [spawn.args[index + 1]] : [],
       );
       assert.isFalse(spawn.args.includes("--no-extensions"));
-      assert.isTrue(extensions.some((path) => path?.endsWith("pi-t3-mcp-extension.ts")));
-      assert.equal(spawn.env.T3_MCP_URL, "http://127.0.0.1:43123/mcp");
-      assert.equal(spawn.env.T3_MCP_BEARER_TOKEN, "secret-pi-token");
-      assert.equal(spawn.env.T3_PI_RUNTIME_MODE, "full-access");
+      assert.isTrue(extensions.some((path) => path?.endsWith("pi-supacode-mcp-extension.ts")));
+      assert.equal(spawn.env.SUPACODE_MCP_URL, "http://127.0.0.1:43123/mcp");
+      assert.equal(spawn.env.SUPACODE_MCP_BEARER_TOKEN, "secret-pi-token");
+      assert.equal(spawn.env.SUPACODE_PI_RUNTIME_MODE, "full-access");
     }).pipe(
       Effect.ensuring(Effect.sync(() => McpProviderSession.clearMcpProviderSession(THREAD_ID))),
       Effect.scoped,

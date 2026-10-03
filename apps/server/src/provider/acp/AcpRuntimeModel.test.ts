@@ -195,7 +195,7 @@ describe("AcpRuntimeModel", () => {
     } as EffectAcpSchema.InitializeResponse);
 
     expect(response.modes).toBeUndefined();
-    expect(response._meta).toMatchObject({ t3SessionLoadReady: "replay_idle" });
+    expect(response._meta).toMatchObject({ supacodeSessionLoadReady: "replay_idle" });
   });
 
   it("builds a synthetic load response with initialize mode state", () => {
@@ -1118,7 +1118,7 @@ describe("AcpRuntimeModel", () => {
   it("turns future ACP content and session updates into explicit placeholders", () => {
     expect(
       acpContentBlockDisplayText({
-        type: "_t3_unknown",
+        type: "_supacode_unknown",
         originalType: "chart",
         raw: { type: "chart", points: [] },
       }),
@@ -1128,7 +1128,7 @@ describe("AcpRuntimeModel", () => {
       parseSessionUpdateEvent({
         sessionId: "session-1",
         update: {
-          sessionUpdate: "_t3_unknown",
+          sessionUpdate: "_supacode_unknown",
           originalSessionUpdate: "timeline_update",
           raw: { sessionUpdate: "timeline_update", entries: [] },
         },
@@ -1355,19 +1355,19 @@ describe("extractMcpToolCallIdentity", () => {
       sessionUpdate: "tool_call",
       toolCallId: "exec-f4591587-0754-4bb4-990b-f2767894ba93",
       kind: "execute",
-      title: "mcp.supa3.orchestrator_capabilities",
+      title: "mcp.supacode.orchestrator_capabilities",
       status: "in_progress",
-      rawInput: { server: "supa3", tool: "orchestrator_capabilities", arguments: {} },
+      rawInput: { server: "supacode", tool: "orchestrator_capabilities", arguments: {} },
       _meta: { is_mcp_tool_call: true },
     });
 
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({
-      server: "supa3",
+      server: "supacode",
       tool: "orchestrator_capabilities",
     });
   });
 
-  it("recovers supa3 identity from acp-mcp-call fallback commands", () => {
+  it("recovers Supacode identity from acp-mcp-call fallback commands", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "exec-1",
@@ -1379,13 +1379,13 @@ describe("extractMcpToolCallIdentity", () => {
     expect(
       extractMcpToolCallIdentity(toolCall, {
         embeddedTerminalCommands: [
-          '/usr/bin/node /srv/t3/bin.ts acp-mcp-call delegate_task {"task":"x"}',
+          '/usr/bin/node /srv/supacode/bin.ts acp-mcp-call delegate_task {"task":"x"}',
         ],
       }),
-    ).toEqual({ server: "supa3", tool: "delegate_task", input: { task: "x" } });
+    ).toEqual({ server: "supacode", tool: "delegate_task", input: { task: "x" } });
   });
 
-  it("recovers supa3 identity from pi-acp title-only fallback execs", () => {
+  it("recovers Supacode identity from pi-acp title-only fallback execs", () => {
     // Captured verbatim from pi-acp 0.0.33 2026-08-14: rawInput is null and
     // the command line only appears as the verbatim title, which the
     // presentation layer summarizes into "Ran command".
@@ -1394,7 +1394,7 @@ describe("extractMcpToolCallIdentity", () => {
       toolCallId: "call_JdxnvzjHHrbvyASTLVekLYWV|fc_08f5a805a7159aa6016a7ec4afad548191",
       kind: "execute",
       title:
-        '"$T3_ACP_MCP_NODE" "$T3_ACP_MCP_ENTRYPOINT" acp-mcp-call orchestrator_capabilities \'{}\'',
+        '"$SUPACODE_ACP_MCP_NODE" "$SUPACODE_ACP_MCP_ENTRYPOINT" acp-mcp-call orchestrator_capabilities \'{}\'',
       status: "in_progress",
       rawInput: null,
       content: [
@@ -1407,13 +1407,13 @@ describe("extractMcpToolCallIdentity", () => {
 
     expect(toolCall.title).toBe("Ran command");
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({
-      server: "supa3",
+      server: "supacode",
       tool: "orchestrator_capabilities",
       input: {},
     });
   });
 
-  it("recovers supa3 identity from server-namespaced titles across titleless updates", () => {
+  it("recovers Supacode identity from server-namespaced titles across titleless updates", () => {
     // Captured verbatim from Kilo 7.4.22 2026-08-15: the initial tool_call
     // titles the MCP function "<server>_<tool>" with kind "other", and the
     // completed update carries no title at all, so the merged presentation
@@ -1422,7 +1422,7 @@ describe("extractMcpToolCallIdentity", () => {
       sessionUpdate: "tool_call",
       toolCallId: "chatcmpl-tool-b2a6142ee1a510a5",
       kind: "other",
-      title: "supa3_orchestrator_capabilities",
+      title: "supacode_orchestrator_capabilities",
       status: "pending",
       locations: [],
       rawInput: {},
@@ -1436,38 +1436,38 @@ describe("extractMcpToolCallIdentity", () => {
     const merged = mergeToolCallState(created, completed);
 
     expect(extractMcpToolCallIdentity(merged)).toEqual({
-      server: "supa3",
+      server: "supacode",
       tool: "orchestrator_capabilities",
     });
   });
 
-  it("recovers supa3 identity from Gemini and qwen MCP-server title templates", () => {
+  it("recovers Supacode identity from Gemini and qwen MCP-server title templates", () => {
     // Gemini CLI 0.55.1: "<tool> (<server> MCP Server)"; qwen-code 0.21.12
     // appends ": <args json>" to the same template.
     const gemini = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "gemini-1",
       kind: "other",
-      title: "delegate_task (supa3 MCP Server)",
+      title: "delegate_task (Supacode MCP Server)",
       status: "in_progress",
     });
     const qwen = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "qwen-1",
       kind: "other",
-      title: 'task_status (supa3 MCP Server): {"taskId":"node:delegated-task:1"}',
+      title: 'task_status (Supacode MCP Server): {"taskId":"node:delegated-task:1"}',
       status: "pending",
       rawInput: { taskId: "node:delegated-task:1" },
     });
 
     expect(extractMcpToolCallIdentity(gemini)).toEqual({
-      server: "supa3",
+      server: "supacode",
       tool: "delegate_task",
     });
-    expect(extractMcpToolCallIdentity(qwen)).toEqual({ server: "supa3", tool: "task_status" });
+    expect(extractMcpToolCallIdentity(qwen)).toEqual({ server: "supacode", tool: "task_status" });
   });
 
-  it("recovers supa3 identity across the registry agents' naming conventions", () => {
+  it("recovers Supacode identity across the registry agents' naming conventions", () => {
     // One representative per surveyed convention (2026-08 registry builds):
     // droid triple underscore, Copilot hyphen, Amp mangled server + detail
     // tail, cline args tail, Auggie tool-first suffix.
@@ -1476,17 +1476,15 @@ describe("extractMcpToolCallIdentity", () => {
     // tail, cline args tail, Auggie tool-first suffix, fast-agent slash,
     // Kimi bare name with args tail.
     for (const title of [
-      "supa3___delegate_task",
-      "supa3-delegate_task",
-      'mcp__supa3__delegate_task: {"mode":"async"}',
-      'supa3__delegate_task: {"mode":"async"}',
-      "delegate_task_supa3",
-      "supa3/delegate_task",
-      "mcp__t3-code__delegate_task",
-      "mcp__t3_code__delegate_task",
-      "t3-code_delegate_task",
-      "delegate_task (t3-code MCP Server)",
-      "delegate_task_t3-code",
+      "supacode___delegate_task",
+      "supacode-delegate_task",
+      'mcp__supacode__delegate_task: {"mode":"async"}',
+      'supacode__delegate_task: {"mode":"async"}',
+      "delegate_task_supacode",
+      "supacode/delegate_task",
+      "mcp__supacode__delegate_task",
+      "supacode_delegate_task",
+      "delegate_task (supacode MCP Server)",
       'delegate_task: {"mode":"async"}',
     ]) {
       const toolCall = toolCallFromUpdate({
@@ -1497,13 +1495,34 @@ describe("extractMcpToolCallIdentity", () => {
         status: "pending",
       });
       expect(extractMcpToolCallIdentity(toolCall), title).toEqual({
-        server: "supa3",
+        server: "supacode",
         tool: "delegate_task",
       });
     }
   });
 
-  it("recovers supa3 identity from goose _meta despite LLM-rewritten titles", () => {
+  it("recovers Supacode tools whose names start with the server name", () => {
+    for (const title of [
+      "supacode_thread_send",
+      'supacode_thread_send: {"threadId":"thread-1"}',
+      "supacode_supacode_thread_send",
+      "mcp__supacode__supacode_thread_send",
+    ]) {
+      const toolCall = toolCallFromUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "prefixed-1",
+        kind: "other",
+        title,
+        status: "pending",
+      });
+      expect(extractMcpToolCallIdentity(toolCall), title).toEqual({
+        server: "supacode",
+        tool: "supacode_thread_send",
+      });
+    }
+  });
+
+  it("recovers Supacode identity from goose _meta despite LLM-rewritten titles", () => {
     // goose enriches titles asynchronously, so only _meta.goose.toolCall is
     // stable; shape from crates/goose/src/acp/server/tool_calls/conversion.rs.
     const toolCall = toolCallFromUpdate({
@@ -1513,19 +1532,19 @@ describe("extractMcpToolCallIdentity", () => {
       status: "in_progress",
       _meta: {
         goose: {
-          toolCall: { toolName: "supa3__task_status", extensionName: "supa3" },
+          toolCall: { toolName: "supacode__task_status", extensionName: "supacode" },
           messageId: "message-1",
         },
       },
     });
 
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({
-      server: "supa3",
+      server: "supacode",
       tool: "task_status",
     });
   });
 
-  it("recovers supa3 identity from qwen serverId meta regardless of prefix format", () => {
+  it("recovers Supacode identity from qwen serverId meta regardless of prefix format", () => {
     // qwen-code 0.21.12 emits _meta.serverId + _meta.toolName; serverId is an
     // explicit origin assertion, so a known tool suffix suffices even if the
     // prefix format changes.
@@ -1535,23 +1554,27 @@ describe("extractMcpToolCallIdentity", () => {
       kind: "other",
       title: "unrelated display title",
       status: "pending",
-      _meta: { toolName: "mcp::supa3::t3_thread_send", serverId: "supa3", provenance: "mcp" },
+      _meta: {
+        toolName: "mcp::supacode::supacode_thread_send",
+        serverId: "supacode",
+        provenance: "mcp",
+      },
     });
 
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({
-      server: "supa3",
-      tool: "t3_thread_send",
+      server: "supacode",
+      tool: "supacode_thread_send",
     });
   });
 
   it("does not brand tools whose meta asserts a foreign server", () => {
     // The foreign assertion vetoes every loose source, including a title
-    // that would otherwise match a T3 convention.
+    // that would otherwise match a Supacode convention.
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "foreign-1",
       kind: "other",
-      title: "supa3_delegate_task",
+      title: "supacode_delegate_task",
       status: "pending",
       _meta: { toolName: "delegate_task", serverId: "other-orchestrator" },
     });
@@ -1560,7 +1583,7 @@ describe("extractMcpToolCallIdentity", () => {
   });
 
   it("does not brand path-like or unknown-tool titles", () => {
-    for (const title of ["supa3/README.md", "supa3_not_a_real_tool"]) {
+    for (const title of ["supacode/README.md", "supacode_not_a_real_tool"]) {
       const toolCall = toolCallFromUpdate({
         sessionUpdate: "tool_call",
         toolCallId: "path-1",
@@ -1612,12 +1635,12 @@ describe("embeddedTerminalIdsFromSessionUpdate", () => {
           toolCallId: "call_1",
           status: "in_progress",
           content: [
-            { type: "terminal", terminalId: "t3-term-9" },
+            { type: "terminal", terminalId: "supacode-term-9" },
             { type: "content", content: { type: "text", text: "noise" } },
           ],
         },
       }),
-    ).toEqual({ toolCallId: "call_1", terminalIds: ["t3-term-9"] });
+    ).toEqual({ toolCallId: "call_1", terminalIds: ["supacode-term-9"] });
     expect(
       embeddedTerminalIdsFromSessionUpdate({
         sessionId: "session-1",

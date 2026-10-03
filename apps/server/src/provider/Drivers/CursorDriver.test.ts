@@ -2,7 +2,7 @@
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { ProviderInstanceId, ProviderSessionId, ThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, ProviderSessionId, ThreadId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -24,7 +24,7 @@ import { Cursor } from "../cursorSdk.ts";
 const testLayer = ServerSecretStore.layer.pipe(
   Layer.provideMerge(
     ServerConfig.layerTest(process.cwd(), {
-      prefix: "t3-cursor-driver-copy-command-",
+      prefix: "supacode-cursor-driver-copy-command-",
     }),
   ),
   Layer.provideMerge(NodeServices.layer),
@@ -72,7 +72,7 @@ it.layer(testLayer)("CursorDriver", (it) => {
           return { apiKey: "instance-browser-key", apiKeyExpiresAtMs: 4_000_000_000_000 };
         });
         const me = vi.spyOn(Cursor, "me").mockResolvedValue({
-          apiKeyName: "supa3",
+          apiKeyName: "supacode",
           createdAt: "2026-01-01T00:00:00.000Z",
           userEmail: "cursor@example.com",
         });

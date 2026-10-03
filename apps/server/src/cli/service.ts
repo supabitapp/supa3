@@ -66,10 +66,10 @@ export function formatServiceStatus(
   cliVersion: string,
 ): string {
   if (!status.supported) {
-    return "supa3 service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
+    return "Supacode service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
   }
   if (!status.installed) {
-    return "supa3 service\n  Status: not installed\n  Next: Run `supa3 service install`.";
+    return "supacode service\n  Status: not installed\n  Next: Run `supacode service install`.";
   }
   const installedVersion = status.installedVersion ?? cliVersion;
   const problems = (status.problems ?? []).map(
@@ -81,21 +81,21 @@ export function formatServiceStatus(
     compareExactServiceVersions(status.installedVersion, cliVersion) > 0
   ) {
     return [
-      "supa3 service",
-      `  Status: installed · supa3@${installedVersion} (newer than this supa3@${cliVersion} CLI)`,
+      "Supacode service",
+      `  Status: installed · supacode@${installedVersion} (newer than this supacode@${cliVersion} CLI)`,
       `  Unit: ${status.unitPath}`,
       `  Logs: ${status.logPath}`,
       ...problems,
-      `  Next: Run \`supa3 update ${installedVersion}\` to match it, or pass \`--allow-downgrade\` to \`supa3 service install\` explicitly.`,
+      `  Next: Run \`supacode update ${installedVersion}\` to match it, or pass \`--allow-downgrade\` to \`supacode service install\` explicitly.`,
     ].join("\n");
   }
   return [
-    "supa3 service",
-    `  Status: ${status.current ? `installed · supa3@${installedVersion}` : "needs an update or repair"}`,
+    "Supacode service",
+    `  Status: ${status.current ? `installed · supacode@${installedVersion}` : "needs an update or repair"}`,
     `  Unit: ${status.unitPath}`,
     `  Logs: ${status.logPath}`,
     ...problems,
-    ...(status.current ? [] : ["  Next: Run `supa3 service install` to repair it."]),
+    ...(status.current ? [] : ["  Next: Run `supacode service install` to repair it."]),
   ].join("\n");
 }
 
@@ -117,7 +117,7 @@ const serviceReconcileFlags = {
 };
 
 const serviceInstallCommand = Command.make("install", serviceReconcileFlags).pipe(
-  Command.withDescription("Install supa3 as a background service for this user."),
+  Command.withDescription("Install Supacode as a background service for this user."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -125,37 +125,37 @@ const serviceInstallCommand = Command.make("install", serviceReconcileFlags).pip
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
           yield* Console.log(
-            `supa3 service is already installed with supa3@${packageJson.version}.`,
+            `Supacode service is already installed with supacode@${packageJson.version}.`,
           );
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} supa3 service with supa3@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Supacode service with supacode@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),
   ),
 );
 
-// Kept one release for muscle memory and old docs. It did what `supa3 service
-// install` does; the way to move to a newer release is `supa3 update`.
+// Kept one release for muscle memory and old docs. It did what `supacode service
+// install` does; the way to move to a newer release is `supacode update`.
 const serviceUpdateCommand = Command.make("update", serviceReconcileFlags).pipe(
-  Command.withDescription("Deprecated. Run `supa3 update` to move to a newer release."),
+  Command.withDescription("Deprecated. Run `supacode update` to move to a newer release."),
   Command.unlisted,
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
       Effect.gen(function* () {
         yield* Console.log(
-          "`supa3 service update` is deprecated: run `supa3 update` to move to a newer release, or `supa3 service install` to repair the service. Repairing now.",
+          "`supacode service update` is deprecated: run `supacode update` to move to a newer release, or `supacode service install` to repair the service. Repairing now.",
         );
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
-          yield* Console.log(`supa3 service is already using supa3@${packageJson.version}.`);
+          yield* Console.log(`Supacode service is already using supacode@${packageJson.version}.`);
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} supa3 service with supa3@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Supacode service with supacode@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),
@@ -164,7 +164,7 @@ const serviceUpdateCommand = Command.make("update", serviceReconcileFlags).pipe(
 
 const serviceRestartCommand = Command.make("restart", projectLocationFlags).pipe(
   Command.withDescription(
-    "Restart the background service. Picks up a version installed by `supa3 update` that was not restarted at the time.",
+    "Restart the background service. Picks up a version installed by `supacode update` that was not restarted at the time.",
   ),
   Command.withHandler((flags) =>
     runServiceCommand(
@@ -175,8 +175,8 @@ const serviceRestartCommand = Command.make("restart", projectLocationFlags).pipe
         const restarted = yield* service.restart;
         yield* Console.log(
           restarted
-            ? `Restarted the supa3 service${status.installedVersion === undefined ? "" : ` on supa3@${status.installedVersion}`}.`
-            : "supa3 service is not installed.",
+            ? `Restarted the Supacode service${status.installedVersion === undefined ? "" : ` on supacode@${status.installedVersion}`}.`
+            : "Supacode service is not installed.",
         );
       }),
     ),
@@ -184,7 +184,7 @@ const serviceRestartCommand = Command.make("restart", projectLocationFlags).pipe
 );
 
 const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).pipe(
-  Command.withDescription("Stop and remove the supa3 background service."),
+  Command.withDescription("Stop and remove the Supacode background service."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -192,7 +192,7 @@ const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).
         const service = yield* BootService.BootService;
         const removed = yield* service.uninstall;
         yield* Console.log(
-          removed ? "Removed the supa3 service." : "supa3 service is not installed.",
+          removed ? "Removed the Supacode service." : "Supacode service is not installed.",
         );
       }),
     ),
@@ -200,7 +200,7 @@ const serviceUninstallCommand = Command.make("uninstall", projectLocationFlags).
 );
 
 const serviceStatusCommand = Command.make("status", projectLocationFlags).pipe(
-  Command.withDescription("Show whether the supa3 background service is installed."),
+  Command.withDescription("Show whether the Supacode background service is installed."),
   Command.withHandler((flags) =>
     runServiceCommand(
       flags,
@@ -213,7 +213,7 @@ const serviceStatusCommand = Command.make("status", projectLocationFlags).pipe(
 );
 
 export const serviceCommand = Command.make("service").pipe(
-  Command.withDescription("Manage the supa3 background service."),
+  Command.withDescription("Manage the Supacode background service."),
   Command.withSubcommands([
     serviceInstallCommand,
     serviceRestartCommand,

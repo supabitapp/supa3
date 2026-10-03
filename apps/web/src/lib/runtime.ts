@@ -6,7 +6,7 @@ import {
   remoteHttpClientLayer,
   relayWebSocketLayer,
   relayClientOptions,
-} from "@t3tools/client-runtime/rpc";
+} from "@supacode/client-runtime/rpc";
 import * as PrimaryEnvironmentHttpClient from "../environments/primary/httpClient";
 import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
 

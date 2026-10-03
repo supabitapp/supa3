@@ -250,7 +250,7 @@ ENV/**
 **/specs/**
 **/e2e/**
 
-# ---- t3code ----
+# ---- supacode ----
 # Vendored read-only reference checkouts of upstream Effect
 # (see scripts/lib/reference-repos.ts). Nothing imports from them; findings
 # there belong upstream.

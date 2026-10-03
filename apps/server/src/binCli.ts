@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Command } from "effect/unstable/cli";
 
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@supacode/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
@@ -27,8 +27,8 @@ import { triageCommand } from "./cli/triage.ts";
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
 export const makeCli = () =>
-  Command.make("supa3", { ...sharedServerCommandFlags }).pipe(
-    Command.withDescription("Run the supa3 server."),
+  Command.make("supacode", { ...sharedServerCommandFlags }).pipe(
+    Command.withDescription("Run the Supacode server."),
     Command.withHandler((flags) => runServerCommand(flags)),
     Command.withSubcommands([
       acpMcpBridgeCommand,

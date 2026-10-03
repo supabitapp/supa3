@@ -1,6 +1,6 @@
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
+import { relayHttpBaseUrl } from "@supacode/shared/relay/protocol";
 import { describe, expect, it } from "@effect/vitest";
 import {
   type AssetCreateUrlResult,
@@ -13,7 +13,7 @@ import {
   ProjectId,
   ThreadId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";

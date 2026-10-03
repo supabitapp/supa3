@@ -12,7 +12,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -793,7 +793,7 @@ describe("CursorAdapterV2", () => {
 
     try {
       assert.deepEqual(cursorMcpServers(threadId), {
-        supa3: {
+        supacode: {
           type: "http",
           url: "http://127.0.0.1:43123/mcp",
           headers: {

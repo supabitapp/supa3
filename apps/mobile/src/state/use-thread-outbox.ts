@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentShellStatus } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, MessageId } from "@t3tools/contracts";
+import type { EnvironmentShellStatus } from "@supacode/client-runtime/state/shell";
+import type { EnvironmentId, MessageId } from "@supacode/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import { appAtomRegistry } from "./atom-registry";
@@ -36,12 +36,13 @@ export const dispatchingQueuedMessageIdAtom = Atom.make<MessageId | null>(null).
   Atom.withLabel("mobile:thread-outbox:dispatching-message-id"),
 );
 
-export function holdEditingQueuedMessage(messageId: MessageId): void {
+export function holdEditingQueuedMessage(messageId: MessageId): boolean {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
   if (current[messageId]) {
-    return;
+    return false;
   }
   appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: true });
+  return true;
 }
 
 export function releaseEditingQueuedMessage(messageId: MessageId): void {

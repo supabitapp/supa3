@@ -1,18 +1,18 @@
 import {
   AVAILABLE_CONNECTION_STATE,
   connectionProjectionPhase,
-} from "@t3tools/client-runtime/connection";
+} from "@supacode/client-runtime/connection";
 import {
   createEnvironmentShellAtoms,
   createEnvironmentSnapshotAtom,
   createShellEnvironmentAtoms,
   type EnvironmentShellState,
-} from "@t3tools/client-runtime/state/shell";
+} from "@supacode/client-runtime/state/shell";
 import {
   type EnvironmentCatalogState,
   enabledEnvironmentIds,
-} from "@t3tools/client-runtime/state/connections";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/connections";
+import type { EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 

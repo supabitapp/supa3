@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 
-import { HostProcessArguments } from "@t3tools/shared/hostProcess";
+import { HostProcessArguments } from "@supacode/shared/hostProcess";
 
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -16,7 +16,7 @@ export type CliRunner = "npx" | "pnpm dlx" | "bunx";
  *   bunx     ~/.bun/install/cache/... or $TMPDIR/bunx-<uid>-<spec>/...
  *
  * Global installs and repo checkouts match none of these and return null.
- * Detection is best-effort; callers must fail closed to a plain `supa3` command.
+ * Detection is best-effort; callers must fail closed to a plain `supacode` command.
  */
 function detectCliRunner(entryPath: string): CliRunner | null {
   const path = entryPath.replaceAll("\\", "/");
@@ -37,20 +37,20 @@ function detectCliRunner(entryPath: string): CliRunner | null {
 }
 
 /**
- * The `t3` package spec to suggest. The literal spec the user typed (e.g.
- * `t3@nightly`) is resolved away before our process starts, so re-derive it
+ * The `supacode` package spec to suggest. The literal spec the user typed (e.g.
+ * `supacode@nightly`) is resolved away before our process starts, so re-derive it
  * from the running version: nightly builds re-suggest the nightly channel,
  * anything else suggests the bare package.
  */
 function suggestedPackageSpec(version: string): string {
   const channel = /^[^-+]+-(nightly|preview)\./.exec(version)?.[1];
-  return channel === undefined ? "t3" : `t3@${channel}`;
+  return channel === undefined ? "supacode" : `supacode@${channel}`;
 }
 
 /**
- * Render a `supa3 <subcommand>` suggestion that matches how this process was
- * launched, so copy/pasting it actually works: `npx t3 triage` suggests
- * `npx t3 serve`, a global install suggests `supa3 serve`, and a nightly build
+ * Render a `supacode <subcommand>` suggestion that matches how this process was
+ * launched, so copy/pasting it actually works: `npx supacode triage` suggests
+ * `npx supacode serve`, a global install suggests `supacode serve`, and a nightly build
  * keeps the `@nightly` tag.
  */
 export function formatCliCommand(input: {
@@ -60,7 +60,7 @@ export function formatCliCommand(input: {
 }): string {
   const runner = detectCliRunner(input.entryPath);
   if (runner === null) {
-    return `supa3 ${input.subcommand}`;
+    return `supacode ${input.subcommand}`;
   }
   return `${runner} ${suggestedPackageSpec(input.version)} ${input.subcommand}`;
 }

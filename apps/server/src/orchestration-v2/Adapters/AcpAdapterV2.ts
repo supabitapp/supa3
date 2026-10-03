@@ -30,9 +30,9 @@ import {
   type RuntimeRequestId,
   type ThreadTokenUsageSnapshot,
   type ThreadId,
-} from "@t3tools/contracts";
-import { modelSelectionsEqual } from "@t3tools/shared/model";
-import { type SelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
+} from "@supacode/contracts";
+import { modelSelectionsEqual } from "@supacode/shared/model";
+import { type SelfInvocation, selfInvocationArgs } from "@supacode/shared/nodeRuntime";
 import { FILE_HEADERS_ONLY, formatPatch, structuredPatch } from "diff";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -55,7 +55,7 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
-import { formatReadToolLabel, formatSearchToolLabel } from "@t3tools/shared/toolActivity";
+import { formatReadToolLabel, formatSearchToolLabel } from "@supacode/shared/toolActivity";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import * as ServerConfig from "../../config.ts";
 import {
@@ -92,9 +92,9 @@ import {
 import { ACP_SESSION_MODE_OPTION_ID } from "../../provider/acp/AcpSessionConfig.ts";
 import * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
 import {
-  t3AcpPromptWithInstructions,
-  type T3AcpInstructionState,
-} from "../../provider/T3OrchestrationInstructions.ts";
+  supacodeAcpPromptWithInstructions,
+  type SupacodeAcpInstructionState,
+} from "../../provider/SupacodeOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import * as IdAllocator from "../IdAllocator.ts";
 import { type ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
@@ -286,9 +286,9 @@ export interface AcpAdapterV2Flavor {
       }
     | undefined;
   /**
-   * Replaces T3's runtime-policy answer to a permission request. Grok's Auto
+   * Replaces Supacode's runtime-policy answer to a permission request. Grok's Auto
    * mode only asks about what its own classifier refused, so those must reach
-   * the user instead of being approved by T3's policy.
+   * the user instead of being approved by Supacode's policy.
    */
   readonly permissionDisposition?: (
     policy: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
@@ -324,7 +324,7 @@ export interface AcpAdapterV2Flavor {
   /**
    * Optional plan-file sniffing (#8358): providers that write their proposed
    * plan to a file mid-turn (Grok plan.md) return its markdown from a tool
-   * call so T3 can show the proposed-plan card while plan mode is active.
+   * call so Supacode can show the proposed-plan card while plan mode is active.
    */
   readonly extractProposedPlanMarkdown?: (toolCall: AcpToolCallState) => string | undefined;
   /**
@@ -371,7 +371,7 @@ export interface AcpAdapterV2Flavor {
   readonly isPersistentBackgroundTool?: (toolCall: AcpToolCallState) => boolean;
   /**
    * Whether a root-session frame belongs to a turn the agent started itself
-   * after background work ended (Grok `task-completed-*`), not to T3's prompt.
+   * after background work ended (Grok `task-completed-*`), not to Supacode's prompt.
    * Such frames never project into a root turn held open for that work; they
    * take the post-settle wake path once the held turn finalizes.
    */
@@ -615,7 +615,7 @@ export const AcpProviderCapabilitiesV2 = {
     appCanCheckpointFilesystem: true,
     supportsNestedCheckpointScopes: true,
     // ACP defines no conversation truncation, so rollback resets the provider
-    // conversation: T3 restores checkpointed state and the next turn starts a
+    // conversation: Supacode restores checkpointed state and the next turn starts a
     // fresh agent session without the rolled-back context.
     providerCanRollbackConversation: true,
     providerRollbackReturnsSnapshot: true,
@@ -628,7 +628,7 @@ export const AcpProviderCapabilitiesV2 = {
     nativeRequestIds: "weak",
   },
   runtimePolicy: {
-    // ACP agents run their own tools; T3 only answers their permission
+    // ACP agents run their own tools; Supacode only answers their permission
     // requests by policy.
     enforcement: "client-boundary",
   },
@@ -659,7 +659,7 @@ function negotiatedCapabilities(
     },
     tools: {
       ...base.tools,
-      // The stdio bridge (`t3 acp-mcp-bridge`) makes the t3-code MCP toolkit
+      // The stdio bridge (`supacode acp-mcp-bridge`) makes the Supacode MCP toolkit
       // available regardless of the agent's optional http/sse MCP support.
       supportsMcpTools: true,
     },
@@ -687,30 +687,30 @@ function acpMcpContext(threadId: ThreadId | null, self: SelfInvocation): AcpMcpC
   // Stdio is ACP's required baseline MCP transport. Agents that advertise
   // optional http support still routinely fail to wire injected http servers
   // through to their backend (codex-acp 1.2.0 and pi-acp both drop them), so
-  // every ACP session gets the `t3 acp-mcp-bridge` stdio server, which
-  // forwards JSON-RPC to T3's authenticated MCP endpoint. The credential
+  // every ACP session gets the `supacode acp-mcp-bridge` stdio server, which
+  // forwards JSON-RPC to Supacode's authenticated MCP endpoint. The credential
   // travels via environment variables, never the command line.
   return {
     servers: [
       {
-        name: "supa3",
+        name: "supacode",
         command: self.command,
         args: [...selfInvocationArgs(self, ["acp-mcp-bridge"])],
         env: [
           { name: "ELECTRON_RUN_AS_NODE", value: "1" },
-          { name: "T3_ACP_MCP_ENDPOINT", value: session.endpoint },
-          { name: "T3_ACP_MCP_AUTHORIZATION", value: session.authorizationHeader },
+          { name: "SUPACODE_ACP_MCP_ENDPOINT", value: session.endpoint },
+          { name: "SUPACODE_ACP_MCP_AUTHORIZATION", value: session.authorizationHeader },
         ],
       },
     ],
-    acpServers: [{ type: "acp", name: "supa3", serverId: "supa3" }],
+    acpServers: [{ type: "acp", name: "supacode", serverId: "supacode" }],
     endpoint: session.endpoint,
     authorization: session.authorizationHeader,
     processEnvironment: {
-      T3_ACP_MCP_ENDPOINT: session.endpoint,
-      T3_ACP_MCP_AUTHORIZATION: session.authorizationHeader,
-      T3_ACP_MCP_NODE: self.command,
-      ...(self.entrypoint === undefined ? {} : { T3_ACP_MCP_ENTRYPOINT: self.entrypoint }),
+      SUPACODE_ACP_MCP_ENDPOINT: session.endpoint,
+      SUPACODE_ACP_MCP_AUTHORIZATION: session.authorizationHeader,
+      SUPACODE_ACP_MCP_NODE: self.command,
+      ...(self.entrypoint === undefined ? {} : { SUPACODE_ACP_MCP_ENTRYPOINT: self.entrypoint }),
     },
   };
 }
@@ -1588,7 +1588,7 @@ export function makeAcpAdapterV2(
             embeddedTerminalsByToolCallId.delete(oldest);
           }
         };
-        // Client terminals (Devin) run with the T3 server's privileges, so they
+        // Client terminals (Devin) run with the Supacode server's privileges, so they
         // are policy-checked against the active turn policy; a command the user
         // already approved satisfies an "ask" disposition.
         const clientPolicyGrants = makeAcpClientPolicyGrants();
@@ -1606,7 +1606,7 @@ export function makeAcpAdapterV2(
         const providerThreadByNativeSessionId = yield* Ref.make(
           new Map<string, OrchestrationV2ProviderThread>(),
         );
-        // T3 only owns the temporary Plan override. Remember the agent's
+        // Supacode only owns the temporary Plan override. Remember the agent's
         // effective native configuration on entry and restore it on Build.
         const nativeBuildConfigurationBySessionId = new Map<string, AcpNativeBuildConfiguration>();
         const initialSessionActivationFailure = yield* Ref.make<{
@@ -1617,7 +1617,9 @@ export function makeAcpAdapterV2(
           yield* Ref.make<AcpSessionRuntime.AcpSessionRuntimeStartResult | null>(null);
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
-        const promptInstructionStates = yield* Ref.make(new Map<string, T3AcpInstructionState>());
+        const promptInstructionStates = yield* Ref.make(
+          new Map<string, SupacodeAcpInstructionState>(),
+        );
         const runtimeRestartRequired = yield* Ref.make(false);
         const runtimeTeardownState = yield* Ref.make<AcpRuntimeTeardownState>({ _tag: "Idle" });
         const runtimeCallbackGeneration = yield* Ref.make(0);
@@ -2031,7 +2033,7 @@ export function makeAcpAdapterV2(
               elicitation: { form: {}, ...(flavor.onUrlElicitation ? { url: {} } : {}) },
               ...(flavor.clientCapabilitiesMeta ? { _meta: flavor.clientCapabilitiesMeta } : {}),
             },
-            clientInfo: { name: "supa3", version: "0.0.0" },
+            clientInfo: { name: "supacode", version: "0.0.0" },
             onTermination,
             onOutgoingResponseFailure: (requestId, error) =>
               Ref.modify(nativeResponseAcknowledgements, (current) => {
@@ -3221,7 +3223,7 @@ export function makeAcpAdapterV2(
           const projectAsCommandExecution = inputVariant === "monitor" || outputIsBashResult;
           // ACP has no typed MCP item, so recover MCP identity from the
           // agent-specific shape and project the same branded dynamic_tool
-          // item native providers produce (e.g. the T3 orchestration tools).
+          // item native providers produce (e.g. the Supacode orchestration tools).
           const mcpIdentity = extractMcpToolCallIdentity(toolCall, {
             embeddedTerminalCommands: (
               embeddedTerminalsByToolCallId.get(
@@ -5377,8 +5379,8 @@ export function makeAcpAdapterV2(
               Effect.fail(
                 EffectAcpErrors.AcpRequestError.internalError(
                   disposition === "ask"
-                    ? `The active supa3 runtime policy requires approval for ${operation}. Request permission with session/request_permission before retrying.`
-                    : `The active supa3 runtime policy does not allow ${operation}.`,
+                    ? `The active Supacode runtime policy requires approval for ${operation}. Request permission with session/request_permission before retrying.`
+                    : `The active Supacode runtime policy does not allow ${operation}.`,
                 ),
               ),
             ),
@@ -6613,15 +6615,15 @@ export function makeAcpAdapterV2(
           const prompt: Array<EffectAcpSchema.ContentBlock> = [];
           const instructionState = {
             interactionMode: turnInput.runtimePolicy.interactionMode,
-            hasT3Mcp: acpMcpServers(turnInput.threadId, self).length > 0,
-          } satisfies T3AcpInstructionState;
+            hasSupacodeMcp: acpMcpServers(turnInput.threadId, self).length > 0,
+          } satisfies SupacodeAcpInstructionState;
           const previousInstructionState = (yield* Ref.get(promptInstructionStates)).get(sessionId);
           const messageText = providerMessageTextWithAttachmentPaths({
             text: turnInput.message.text,
             attachments: turnInput.message.attachments,
             attachmentsDir: serverConfig.attachmentsDir,
           });
-          const text = t3AcpPromptWithInstructions({
+          const text = supacodeAcpPromptWithInstructions({
             prompt: messageText,
             state: instructionState,
             ...(previousInstructionState === undefined

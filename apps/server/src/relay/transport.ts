@@ -1,8 +1,12 @@
-import { after, every } from "@t3tools/shared/relay/timer";
+import { after, every } from "@supacode/shared/relay/timer";
 import * as NodeCrypto from "node:crypto";
 import WebSocket from "ws";
 import * as Schema from "effect/Schema";
-import { RelayRequest, type RelayResponse } from "@t3tools/contracts";
+import {
+  ORCHESTRATION_PROTOCOL_HEADER,
+  RelayRequest,
+  type RelayResponse,
+} from "@supacode/contracts";
 import {
   PUBLIC_RELAY_URL,
   acceptClientHandshake,
@@ -14,7 +18,7 @@ import {
   createRelayStream,
   type RelayStream,
   MAX_RELAY_MESSAGE_BYTES,
-} from "@t3tools/shared/relay/protocol";
+} from "@supacode/shared/relay/protocol";
 
 const decodeRequest = Schema.decodeUnknownSync(RelayRequest);
 const ControlEvent = Schema.Union([
@@ -33,7 +37,7 @@ const allowedHeaders = new Set([
   "content-type",
   "accept",
   "range",
-  "x-t3-orchestration-protocol",
+  ORCHESTRATION_PROTOCOL_HEADER,
 ]);
 
 export function relayLocalTarget(origin: string, path: string, socket: boolean): URL {
@@ -55,7 +59,7 @@ export function relayLocalTarget(origin: string, path: string, socket: boolean):
       : !(
           target.pathname.startsWith("/api/") ||
           target.pathname === "/oauth/token" ||
-          target.pathname === "/.well-known/t3/environment"
+          target.pathname === "/.well-known/supacode/environment"
         )
   ) {
     throw new Error("Unsupported relay target");

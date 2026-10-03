@@ -7,7 +7,7 @@ import {
   ListPlusIcon,
   PlayIcon,
 } from "lucide-react";
-import type { ClientSettings } from "@t3tools/contracts/settings";
+import type { ClientSettings } from "@supacode/contracts/settings";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { useShortcutModifierState } from "../../shortcutModifierState";
@@ -20,7 +20,7 @@ import { composerFloatingLayerProps } from "./composerEventScope";
 import {
   alternateComposerDispatchAction,
   resolveComposerDispatchMode,
-} from "@t3tools/client-runtime/state/composer-dispatch";
+} from "@supacode/client-runtime/state/composer-dispatch";
 
 interface PendingActionState {
   questionIndex: number;

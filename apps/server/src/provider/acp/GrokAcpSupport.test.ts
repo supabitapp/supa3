@@ -44,11 +44,11 @@ describe("resolveGrokAcpBaseModelId", () => {
 });
 
 describe("grokAcpSpawnArgs", () => {
-  it("inherits the Grok CLI config when no supa3 runtime mode is set", () => {
+  it("inherits the Grok CLI config when no Supacode runtime mode is set", () => {
     expect(grokAcpSpawnArgs()).toEqual(["agent", "stdio"]);
   });
 
-  it("forces Grok to ask when supa3 is Supervised", () => {
+  it("forces Grok to ask when Supacode is Supervised", () => {
     expect(grokAcpSpawnArgs("approval-required")).toEqual([
       "--permission-mode",
       "default",
@@ -73,7 +73,7 @@ describe("grokAcpSpawnArgs", () => {
 });
 
 describe("buildGrokAcpSpawnInput", () => {
-  it("passes the supa3 referrer through Grok OAuth env", () => {
+  it("passes the Supacode referrer through Grok OAuth env", () => {
     const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
       XAI_API_KEY: "secret",
       GROK_OAUTH2_REFERRER: "other-client",
@@ -85,7 +85,7 @@ describe("buildGrokAcpSpawnInput", () => {
       cwd: "/tmp/project",
       env: {
         XAI_API_KEY: "secret",
-        GROK_OAUTH2_REFERRER: "t3code",
+        GROK_OAUTH2_REFERRER: "supacode",
       },
     });
   });

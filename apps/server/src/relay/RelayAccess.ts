@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import { relayHttpBaseUrl, relayPublicKey } from "@t3tools/shared/relay/protocol";
+import { relayHttpBaseUrl, relayPublicKey } from "@supacode/shared/relay/protocol";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { startRelayTransport } from "./transport.ts";
@@ -15,7 +15,7 @@ export class RelayAccess extends Context.Service<
     readonly address: string;
     readonly start: (localOrigin: string) => Effect.Effect<void, never, Scope.Scope>;
   }
->()("t3/relay/RelayAccess") {}
+>()("supacode/relay/RelayAccess") {}
 
 const make = Effect.gen(function* () {
   const fetch = yield* FetchHttpClient.Fetch;

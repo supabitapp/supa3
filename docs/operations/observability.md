@@ -1,8 +1,8 @@
 # Observability
 
-> For maintainers. Using supa3? See [docs/user](../user/).
+> For maintainers. Using Supacode? See [docs/user](../user/).
 
-supa3 has one server-side observability model:
+Supacode has one server-side observability model:
 
 - pretty logs go to stdout for humans
 - completed spans go to a local NDJSON trace file
@@ -10,7 +10,7 @@ supa3 has one server-side observability model:
 
 The local trace file is the persisted source of truth for normal local launches. Those launches do not
 write a separate server log file, but SSH-managed launches also persist the remote process's
-stdout/stderr at `~/.supa3/ssh-launch/<state>/server.log`.
+stdout/stderr at `~/.supacode/ssh-launch/<state>/server.log`.
 
 ## Where To Find Things
 
@@ -21,7 +21,7 @@ Logs are human-facing:
 - destination: stdout
 - format: `Logger.consolePretty()`
 - normal local persistence: none
-- SSH-managed launch persistence: `~/.supa3/ssh-launch/<state>/server.log`
+- SSH-managed launch persistence: `~/.supacode/ssh-launch/<state>/server.log`
 - remote export: OTLP only, when configured
 
 If you want a log message to show up in the trace file, emit it inside an active span with `Effect.log...`. `Logger.tracerLogger` will attach it as a span event.
@@ -36,10 +36,10 @@ SSH-managed launch persistence stay unchanged either way.
 
 Completed spans are written as NDJSON records to `serverTracePath`. The default depends on how the
 server starts: production and explicitly configured homes use
-`<home>/userdata/logs/server.trace.ndjson` (so `~/.supa3/userdata/...` by default, or
+`<home>/userdata/logs/server.trace.ndjson` (so `~/.supacode/userdata/...` by default, or
 `/custom/path/userdata/...` with `--home-dir /custom/path`), a linked worktree dev run uses
-`<worktree>/.t3/userdata/logs/server.trace.ndjson`, and an implicit dev run outside a linked
-worktree uses `~/.supa3/dev/logs/server.trace.ndjson`.
+`<worktree>/.supacode/userdata/logs/server.trace.ndjson`, and an implicit dev run outside a linked
+worktree uses `~/.supacode/dev/logs/server.trace.ndjson`.
 
 Important fields common to both record types:
 
@@ -58,17 +58,17 @@ The `TraceRecord`, `EffectTraceRecord`, and `OtlpTraceRecord` schemas live in
 
 #### Summarize the trace file
 
-`supa3 trace summary` reads the trace file and its rotated backups directly, so it works while the
+`supacode trace summary` reads the trace file and its rotated backups directly, so it works while the
 server is stalled or stopped. It prints counts, rates, and latency percentiles per span name. Use
 it to measure background work or to compare two builds.
 
 ```bash
-supa3 trace summary --since 30m --limit 40
+supacode trace summary --since 30m --limit 40
 ```
 
-It reads `T3CODE_TRACE_FILE` if set, else `<home>/userdata/logs/server.trace.ndjson` for
-`--base-dir` or `SUPA3_HOME`, plus the `T3CODE_TRACE_MAX_FILES` rotated backups. For a dev run or
-a copied file, set `T3CODE_TRACE_FILE`. `--since 30m` keeps spans that ended in the last 30
+It reads `SUPACODE_TRACE_FILE` if set, else `<home>/userdata/logs/server.trace.ndjson` for
+`--base-dir` or `SUPACODE_HOME`, plus the `SUPACODE_TRACE_MAX_FILES` rotated backups. For a dev run or
+a copied file, set `SUPACODE_TRACE_FILE`. `--since 30m` keeps spans that ended in the last 30
 minutes. The rate is per minute between the first and last span end.
 
 ### Metrics
@@ -86,7 +86,7 @@ If OTLP is not configured, metrics still exist in-process, but you will not have
 `apps/server/src/observability/EventLoopMonitor.ts` samples the server's event loop every 30 s. When
 the loop stalled for more than 2 s since the previous sample, it records a root
 `server.eventLoop.stall` span with a warning. The span has trace level `Warn`, so it stays when
-`T3CODE_TRACE_MIN_LEVEL` is `Warn`. The warning shows in Settings > Diagnostics unless OTLP logs are
+`SUPACODE_TRACE_MIN_LEVEL` is `Warn`. The warning shows in Settings > Diagnostics unless OTLP logs are
 on. The span time is when the sample ran, not when the stall happened.
 
 Some delay is not recorded:
@@ -133,7 +133,7 @@ You do not need any extra env vars. Just run the app normally and inspect `serve
 Examples:
 
 ```bash
-npx t3
+npx supacode
 ```
 
 ```bash
@@ -167,17 +167,17 @@ Default Grafana login:
 #### 2. Export OTLP env vars
 
 ```bash
-export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
-export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs
+export SUPACODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
+export SUPACODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
+export SUPACODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs
 export OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=development
 ```
 
 Optional:
 
 ```bash
-export T3CODE_TRACE_MIN_LEVEL=Info
-export T3CODE_TRACE_TIMING_ENABLED=true
+export SUPACODE_TRACE_MIN_LEVEL=Info
+export SUPACODE_TRACE_TIMING_ENABLED=true
 ```
 
 #### 3. Launch the app from that same shell
@@ -185,7 +185,7 @@ export T3CODE_TRACE_TIMING_ENABLED=true
 CLI:
 
 ```bash
-npx t3
+npx supacode
 ```
 
 Monorepo web/server dev:
@@ -202,23 +202,23 @@ node --run dev:desktop
 
 Packaged desktop app:
 
-Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `T3CODE_OTLP_*`.
+Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `SUPACODE_OTLP_*`.
 
 macOS app bundle example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
-"/Applications/supa3.app/Contents/MacOS/supa3"
+SUPACODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+SUPACODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+SUPACODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
+"/Applications/Supacode.app/Contents/MacOS/Supacode"
 ```
 
 Direct binary example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
+SUPACODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+SUPACODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+SUPACODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
 ./path/to/your/desktop-app-binary
 ```
 
@@ -238,19 +238,19 @@ Resolve the path for the launch mode once. Production and explicitly configured 
 state under the base directory's `userdata` folder:
 
 ```bash
-TRACE_FILE="${SUPA3_HOME:-$HOME/.supa3}/userdata/logs/server.trace.ndjson"
+TRACE_FILE="${SUPACODE_HOME:-$HOME/.supacode}/userdata/logs/server.trace.ndjson"
 ```
 
 A dev server started from a linked worktree defaults to that worktree's local home:
 
 ```bash
-TRACE_FILE="$WORKTREE/.t3/userdata/logs/server.trace.ndjson"
+TRACE_FILE="$WORKTREE/.supacode/userdata/logs/server.trace.ndjson"
 ```
 
 Only an implicit dev run outside a linked worktree uses the shared dev directory:
 
 ```bash
-TRACE_FILE="$HOME/.supa3/dev/logs/server.trace.ndjson"
+TRACE_FILE="$HOME/.supacode/dev/logs/server.trace.ndjson"
 ```
 
 Tail the selected file:
@@ -350,12 +350,12 @@ Recommended flow in Grafana:
 2. Pick the `Tempo` data source.
 3. Set the time range to something recent like `Last 15 minutes`.
 4. Start broad. Do not begin with a very narrow query.
-5. Look for spans from the `t3code-server` or `t3code-desktop` service, then narrow by span name or
+5. Look for spans from the `supacode-server` or `supacode-desktop` service, then narrow by span name or
    attributes.
 
 Good first searches:
 
-- service name `t3code-server` or `t3code-desktop`, plus a resource attribute such as
+- service name `supacode-server` or `supacode-desktop`, plus a resource attribute such as
   `deployment.environment.name`
 - span names like `sendTurn` or a Git operation such as `GitVcsDriver.statusDetails.status`
 - Git spans whose `git.operation` attribute identifies the operation
@@ -370,15 +370,15 @@ Traces are best for one request. Metrics are best for trends.
 
 Good metric families to watch:
 
-- `t3_rpc_request_duration`
-- `t3_provider_turn_duration`
-- `t3_git_command_duration`
+- `supacode_rpc_request_duration`
+- `supacode_provider_turn_duration`
+- `supacode_git_command_duration`
 
 Counters tell you volume and failure rate:
 
-- `t3_rpc_requests_total`
-- `t3_provider_turns_total`
-- `t3_git_commands_total`
+- `supacode_rpc_requests_total`
+- `supacode_provider_turns_total`
+- `supacode_git_commands_total`
 
 Use metrics when the question is:
 
@@ -418,7 +418,7 @@ Use traces when the question is:
 
 Usually one of these is true:
 
-- `T3CODE_OTLP_TRACES_URL` was not set
+- `SUPACODE_OTLP_TRACES_URL` was not set
 - the app was launched from a different environment than the one where you exported the vars
 - the app was not fully restarted after changing env
 - Grafana is looking at the wrong time range or service name
@@ -540,10 +540,10 @@ It provides:
 - Effect trace-level and timing refs
 
 The desktop main process is a second producer, assembled in
-`apps/desktop/src/app/DesktopObservability.ts`. It reads the same `T3CODE_OTLP_*` names and the same
+`apps/desktop/src/app/DesktopObservability.ts`. It reads the same `SUPACODE_OTLP_*` names and the same
 Settings entries as the backend it supervises, and covers work the backend cannot see: app startup,
 window and menu handling, backend supervision, and updates. It reports as service
-`t3code-desktop`, so a collector shows it alongside the backend rather than mixed into it. It
+`supacode-desktop`, so a collector shows it alongside the backend rather than mixed into it. It
 exports traces and logs only; the main process records no metrics, so the metrics endpoint applies
 to the backend alone.
 
@@ -551,38 +551,38 @@ to the backend alone.
 
 Local trace file:
 
-- `T3CODE_TRACE_FILE`: override trace file path
-- `T3CODE_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
-- `T3CODE_TRACE_MAX_FILES`: rotated file count, default `10`
-- `T3CODE_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
-- `T3CODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
-- `T3CODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
+- `SUPACODE_TRACE_FILE`: override trace file path
+- `SUPACODE_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
+- `SUPACODE_TRACE_MAX_FILES`: rotated file count, default `10`
+- `SUPACODE_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
+- `SUPACODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
+- `SUPACODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
 
 OTLP export:
 
-- `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
-- `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
-- `T3CODE_OTLP_LOGS_URL`: OTLP log endpoint
-- `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_HEADERS`: extra headers for all three exporters, same format as
+- `SUPACODE_OTLP_TRACES_URL`: OTLP trace endpoint
+- `SUPACODE_OTLP_METRICS_URL`: OTLP metric endpoint
+- `SUPACODE_OTLP_LOGS_URL`: OTLP log endpoint
+- `SUPACODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
+- `SUPACODE_OTLP_HEADERS`: extra headers for all three exporters, same format as
   `OTEL_EXPORTER_OTLP_HEADERS`: comma-separated `key=value` pairs with percent-encoded values.
-- `T3CODE_OTLP_PROTOCOL`: `http/json` (default) or `http/protobuf`
+- `SUPACODE_OTLP_PROTOCOL`: `http/json` (default) or `http/protobuf`
 
 The server and the desktop app also read the standard
 `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` and generic `OTEL_EXPORTER_OTLP_ENDPOINT` (with
 `/v1/traces`, `/v1/metrics`, or `/v1/logs` appended), for a collector expecting those instead. A
-non-blank `T3CODE_OTLP_*_URL` wins over either, and a per-signal endpoint wins over the generic one
+non-blank `SUPACODE_OTLP_*_URL` wins over either, and a per-signal endpoint wins over the generic one
 for its signal. A blank value counts as unset. A signal with an OTEL endpoint takes its headers from
 `OTEL_EXPORTER_OTLP_HEADERS` and its protocol from `OTEL_EXPORTER_OTLP_PROTOCOL` (default
 `http/protobuf`, read case-insensitively), and a per-signal
 `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_HEADERS` or `_PROTOCOL` wins over the generic one for its
-signal. `T3CODE_OTLP_HEADERS` and `T3CODE_OTLP_PROTOCOL` never apply to it. An endpoint that is not
+signal. `SUPACODE_OTLP_HEADERS` and `SUPACODE_OTLP_PROTOCOL` never apply to it. An endpoint that is not
 an `http` or `https` URL, a protocol other than `http/protobuf` or `http/json` such as `grpc`, or
 headers that are not `key=value` pairs with percent-encoded values turn that signal's export off
 with a startup warning, rather than sending it to the Settings endpoint.
 
-Service names are fixed: `t3code-server` for the backend and `t3code-desktop` for the desktop main
-process, both in `service.namespace` `t3code`. `OTEL_SERVICE_NAME` and a `service.name` or
+Service names are fixed: `supacode-server` for the backend and `supacode-desktop` for the desktop main
+process, both in `service.namespace` `supacode`. `OTEL_SERVICE_NAME` and a `service.name` or
 `service.namespace` in `OTEL_RESOURCE_ATTRIBUTES` are ignored. Tell installations apart with other
 resource attributes, such as `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=development`.
 
@@ -591,18 +591,18 @@ on stdout only.
 
 ### The Kill Switch
 
-`T3CODE_OTEL_SDK_DISABLED` and `OTEL_SDK_DISABLED` turn off every OTLP export in both the server and
+`SUPACODE_OTEL_SDK_DISABLED` and `OTEL_SDK_DISABLED` turn off every OTLP export in both the server and
 the desktop main process, overriding any endpoint from the environment or Settings. Local trace
 files and stdout logs are unaffected.
 
-`T3CODE_OTEL_SDK_DISABLED` wins when set, so `T3CODE_OTEL_SDK_DISABLED=false` re-enables export on a
+`SUPACODE_OTEL_SDK_DISABLED` wins when set, so `SUPACODE_OTEL_SDK_DISABLED=false` re-enables export on a
 machine that sets `OTEL_SDK_DISABLED` for everything else. It accepts the usual boolean spellings
 (`true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, `y`/`n`). `OTEL_SDK_DISABLED` follows the
 OpenTelemetry specification and only `true` disables export, so `OTEL_SDK_DISABLED=1` does not.
 Values are case-insensitive and trimmed. An unrecognized value is ignored with a startup warning.
 
 `OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`, or `OTEL_LOGS_EXPORTER` set to `none` turns off
-just that signal, overriding an OTEL endpoint and the Settings endpoint. A `T3CODE_OTLP_*_URL` still
+just that signal, overriding an OTEL endpoint and the Settings endpoint. A `SUPACODE_OTLP_*_URL` still
 wins for its signal. `otlp` is the default, and any other exporter name, such as `console` or
 `prometheus`, is ignored with a startup warning.
 
@@ -629,7 +629,7 @@ Current high-value span and metric boundaries include:
 ## Heap Snapshots
 
 To see what a long-running server holds in memory, send it `SIGUSR2`. The server writes a V8 heap
-snapshot to its logs dir and logs the path. This works for desktop, `npx t3`, and service installs
+snapshot to its logs dir and logs the path. This works for desktop, `npx supacode`, and service installs
 on macOS and Linux. Windows has no `SIGUSR2`.
 
 Send the signal to the server pid in `server-runtime.json`, which sits in the server's state dir
@@ -639,11 +639,11 @@ handler exits on `SIGUSR2`. After a crash the file can keep a stale pid that now
 different process, so check the pid first.
 
 ```bash
-pid="$(jq .pid "${SUPA3_HOME:-$HOME/.supa3}/userdata/server-runtime.json")"
+pid="$(jq .pid "${SUPACODE_HOME:-$HOME/.supacode}/userdata/server-runtime.json")"
 ps -p "$pid" -o command=
 ```
 
-If `ps` shows the supa3 server, send the signal:
+If `ps` shows the Supacode server, send the signal:
 
 ```bash
 kill -USR2 "$pid"

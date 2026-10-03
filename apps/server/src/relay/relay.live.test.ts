@@ -9,8 +9,16 @@ import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import { expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
-import { createRelayFetch, RelayWebSocket } from "@t3tools/shared/relay/client";
-import { PUBLIC_RELAY_URL, relayHttpBaseUrl, relayPublicKey } from "@t3tools/shared/relay/protocol";
+import {
+  ORCHESTRATION_PROTOCOL_HEADER,
+  ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+} from "@supacode/contracts";
+import { createRelayFetch, RelayWebSocket } from "@supacode/shared/relay/client";
+import {
+  PUBLIC_RELAY_URL,
+  relayHttpBaseUrl,
+  relayPublicKey,
+} from "@supacode/shared/relay/protocol";
 import { startRelayTransport } from "./transport.ts";
 
 it.live.skipIf(process.env.SUPACODE_RELAY_E2E !== "1")(
@@ -29,6 +37,10 @@ it.live.skipIf(process.env.SUPACODE_RELAY_E2E !== "1")(
             }
             if (request.headers.authorization !== "Bearer relay-test-credential")
               return HttpServerResponse.empty({ status: 401 });
+            if (
+              request.headers[ORCHESTRATION_PROTOCOL_HEADER] !== ORCHESTRATION_PROTOCOL_VERSION_TEXT
+            )
+              return HttpServerResponse.empty({ status: 400 });
             return request.method === "POST"
               ? HttpServerResponse.uint8Array(new Uint8Array(yield* request.arrayBuffer))
               : HttpServerResponse.text("authorized");
@@ -51,6 +63,10 @@ it.live.skipIf(process.env.SUPACODE_RELAY_E2E !== "1")(
           },
         };
         const relayFetch = createRelayFetch(fetch, options);
+        const headers = {
+          authorization: "Bearer relay-test-credential",
+          [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+        };
         const start = async () => {
           const ready = Promise.withResolvers<void>();
           const stop = startRelayTransport({
@@ -71,12 +87,16 @@ it.live.skipIf(process.env.SUPACODE_RELAY_E2E !== "1")(
         try {
           stop = await start();
           expect((await relayFetch(new URL("/api/test", base))).status).toBe(401);
+          expect(
+            (await relayFetch(new URL("/.well-known/supacode/environment", base), { headers }))
+              .status,
+          ).toBe(200);
           const payload = NodeCrypto.randomBytes(
             Number(process.env.SUPACODE_RELAY_TEST_BYTES ?? 400_000),
           );
           const response = await relayFetch(new URL("/api/test", base), {
             method: "POST",
-            headers: { authorization: "Bearer relay-test-credential" },
+            headers,
             body: payload,
           });
           expect(response.status).toBe(200);
@@ -100,7 +120,7 @@ it.live.skipIf(process.env.SUPACODE_RELAY_E2E !== "1")(
           expect(
             await (
               await relayFetch(new URL("/api/test", base), {
-                headers: { authorization: "Bearer relay-test-credential" },
+                headers,
               })
             ).text(),
           ).toBe("authorized");

@@ -2,8 +2,8 @@ import {
   createRelayFetch,
   RelayWebSocket,
   type RelayClientOptions,
-} from "@t3tools/shared/relay/client";
-import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+} from "@supacode/shared/relay/client";
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/unstable/socket/Socket";
 

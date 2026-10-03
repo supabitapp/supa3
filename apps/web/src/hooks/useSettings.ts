@@ -17,20 +17,20 @@ import {
   type ProviderInstanceMutation,
   ServerSettings,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import {
   type ClientSettingsPatch,
   type ClientSettings,
   DEFAULT_CLIENT_SETTINGS,
   type EnvironmentIdentificationMode,
   type UnifiedSettings,
-} from "@t3tools/contracts/settings";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+} from "@supacode/contracts/settings";
+import { safeErrorLogAttributes } from "@supacode/client-runtime/errors";
 import {
   filterSharedServerPatch,
   splitSharedServerPatch,
   supportsSharedSettingsSync,
-} from "@t3tools/client-runtime/state/shared-settings";
+} from "@supacode/client-runtime/state/shared-settings";
 import { ensureLocalApi } from "~/localApi";
 import {
   getThemeDefinition,

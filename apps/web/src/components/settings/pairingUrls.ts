@@ -1,4 +1,4 @@
-import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 import { buildHostedPairingUrl } from "../../hostedPairing";
 import { setPairingTokenOnUrl } from "../../pairingUrl";
 

@@ -1,5 +1,5 @@
-import { relayHttpBaseUrl } from "@t3tools/shared/relay/protocol";
-import { EnvironmentId } from "@t3tools/contracts";
+import { relayHttpBaseUrl } from "@supacode/shared/relay/protocol";
+import { EnvironmentId } from "@supacode/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./relay", () => ({ fetchRelay: mocks.relayFetch }));
 
-vi.mock("@t3tools/client-runtime/state/runtime", () => ({
+vi.mock("@supacode/client-runtime/state/runtime", () => ({
   executeAtomQuery: mocks.executeAtomQuery,
   runAtomCommand: mocks.runAtomCommand,
   squashAtomCommandFailure: (result: { readonly error: unknown }) => result.error,

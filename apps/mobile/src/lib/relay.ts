@@ -1,4 +1,4 @@
-import { relayFetch, relayClientOptions } from "@t3tools/client-runtime/rpc";
+import { relayFetch, relayClientOptions } from "@supacode/client-runtime/rpc";
 import * as ExpoCrypto from "expo-crypto";
 
 export const fetchRelay = relayFetch(

@@ -1,6 +1,6 @@
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
-import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
+import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@supacode/contracts";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +11,12 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import Reanimated, {
+  FadeOut,
+  ReduceMotion,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 
 import { MaterialButton } from "../../components/MaterialButton";
 import { AndroidSheetHeader } from "../../components/AndroidScreenHeader";
@@ -393,7 +398,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                         onPress={() => void act(run.id, "steer")}
                         className="h-8 shrink-0 justify-center rounded-full bg-primary px-3 active:opacity-70 disabled:opacity-40"
                       >
-                        <Text className="font-t3-medium text-xs text-primary-foreground">
+                        <Text className="font-supacode-medium text-xs text-primary-foreground">
                           Steer
                         </Text>
                       </Pressable>
@@ -470,7 +475,11 @@ function QueueShiftedRow(props: {
     ],
   }));
   return (
-    <Reanimated.View onLayout={props.onLayout} style={[style, { zIndex: props.lifted ? 1 : 0 }]}>
+    <Reanimated.View
+      exiting={FadeOut.duration(120)}
+      onLayout={props.onLayout}
+      style={[style, { zIndex: props.lifted ? 1 : 0 }]}
+    >
       {props.children}
     </Reanimated.View>
   );
@@ -507,7 +516,7 @@ function QueueRowSwipeable(props: {
           style={{ width: REMOVE_ACTION_WIDTH }}
         >
           <SymbolView name="trash" size={16} tintColorClassName="accent-danger-foreground" />
-          <Text className="pt-1 text-2xs font-t3-medium text-danger-foreground">Remove</Text>
+          <Text className="pt-1 text-2xs font-supacode-medium text-danger-foreground">Remove</Text>
         </View>
       )}
     >

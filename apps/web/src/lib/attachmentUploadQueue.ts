@@ -1,18 +1,18 @@
-import { parseRelayAddress } from "@t3tools/shared/relay/protocol";
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 import { fetchRelay } from "./relay";
 import {
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
   type ChatAttachment,
   type EnvironmentId,
-} from "@t3tools/contracts";
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+} from "@supacode/contracts";
+import { parseScopedThreadKey } from "@supacode/client-runtime/environment";
+import { resolveAssetUrl } from "@supacode/client-runtime/state/assets";
 import {
   deletePendingAttachmentUpload,
   runAttachmentUploadCycle,
   verifyPersistedAttachmentUpload,
   type PersistedAttachmentVerification,
-} from "@t3tools/client-runtime/state/attachments";
+} from "@supacode/client-runtime/state/attachments";
 import { create } from "zustand";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";

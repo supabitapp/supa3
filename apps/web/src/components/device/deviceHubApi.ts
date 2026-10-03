@@ -1,7 +1,7 @@
 import { fetchRelay } from "../../lib/relay";
-import { withDeviceHubQuery } from "@t3tools/client-runtime/state/deviceHubAccess";
-import type { DeviceHubAccess } from "@t3tools/client-runtime/state/deviceHubAccess";
-import type { DevicePlatform } from "@t3tools/contracts";
+import { withDeviceHubQuery } from "@supacode/client-runtime/state/deviceHubAccess";
+import type { DeviceHubAccess } from "@supacode/client-runtime/state/deviceHubAccess";
+import type { DevicePlatform } from "@supacode/contracts";
 
 /**
  * Read-only hub endpoints the Tools drawer consumes directly: the accessibility

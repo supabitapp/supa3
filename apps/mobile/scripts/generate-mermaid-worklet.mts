@@ -16,8 +16,8 @@ export async function generateMermaidWorklet(
       target: "es2022",
       minify: true,
       lib: {
-        entry: NodeURL.fileURLToPath(import.meta.resolve("@t3tools/mermaid-ascii")),
-        name: "T3MermaidAscii",
+        entry: NodeURL.fileURLToPath(import.meta.resolve("@supacode/mermaid-ascii")),
+        name: "SupacodeMermaidAscii",
         formats: ["iife"],
       },
     },
@@ -34,7 +34,7 @@ export async function generateMermaidWorklet(
 "worklet";
 ${chunk.code}
 try {
-  return T3MermaidAscii.renderMermaidAscii(source, { useAscii: true });
+  return SupacodeMermaidAscii.renderMermaidAscii(source, { useAscii: true });
 } catch {
   return null;
 }

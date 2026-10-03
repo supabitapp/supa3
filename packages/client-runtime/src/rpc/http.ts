@@ -1,5 +1,5 @@
 import { relayFetch } from "./relay.ts";
-import type { RelayClientOptions } from "@t3tools/shared/relay/client";
+import type { RelayClientOptions } from "@supacode/shared/relay/client";
 import {
   EnvironmentHttpApi,
   EnvironmentHttpCommonError,
@@ -9,7 +9,7 @@ import {
   type EnvironmentRequestInvalidError,
   type EnvironmentResourceNotFoundError,
   type EnvironmentScopeRequiredError,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

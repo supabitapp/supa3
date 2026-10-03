@@ -1,6 +1,7 @@
-import type { ChatAttachment, EnvironmentId } from "@t3tools/contracts";
+import type { ChatAttachment, EnvironmentId } from "@supacode/contracts";
 import { Image } from "expo-image";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
@@ -28,7 +29,7 @@ export function ComposerQueuedEditBanner(props: {
         hitSlop={8}
         className="min-h-8 justify-center px-1 active:opacity-70 disabled:opacity-40"
       >
-        <Text className="font-t3-medium text-xs text-primary">Cancel</Text>
+        <Text className="font-supacode-medium text-xs text-primary">Cancel</Text>
       </Pressable>
     </View>
   );
@@ -55,13 +56,19 @@ export function ComposerQueuedEditAttachments(props: {
       contentContainerClassName="flex-row items-center gap-2"
     >
       {props.attachments.map((attachment) => (
-        <QueuedEditAttachmentChip
+        <Animated.View
           key={attachment.id}
-          environmentId={props.environmentId}
-          attachment={attachment}
-          disabled={props.disabled}
-          onRemove={props.onRemove}
-        />
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(120)}
+          layout={LinearTransition.duration(180)}
+        >
+          <QueuedEditAttachmentChip
+            environmentId={props.environmentId}
+            attachment={attachment}
+            disabled={props.disabled}
+            onRemove={props.onRemove}
+          />
+        </Animated.View>
       ))}
     </ScrollView>
   );

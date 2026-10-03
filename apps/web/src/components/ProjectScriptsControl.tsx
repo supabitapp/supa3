@@ -2,12 +2,12 @@ import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import type {
   ProjectScript,
   ResolvedKeybindingsConfig,
-  T3ProjectFileScript,
-} from "@t3tools/contracts";
+  SupacodeProjectFileScript,
+} from "@supacode/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon, WrenchIcon } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
 
@@ -49,15 +49,15 @@ import {
 
 export type { NewProjectScriptInput, ProjectScriptActionResult };
 
-const NO_FILE_SCRIPTS: ReadonlyArray<T3ProjectFileScript> = [];
+const NO_FILE_SCRIPTS: ReadonlyArray<SupacodeProjectFileScript> = [];
 
 interface ProjectScriptsControlProps {
   displayMode?: "toolbar" | "panel";
   presentation?: "toolbar" | "menu";
   onRequestMenuClose?: () => void;
   scripts: ReadonlyArray<ProjectScript>;
-  /** Scripts declared in the project's checked-in t3.json, offered for import. */
-  fileScripts?: ReadonlyArray<T3ProjectFileScript>;
+  /** Scripts declared in the project's checked-in supacode.json, offered for import. */
+  fileScripts?: ReadonlyArray<SupacodeProjectFileScript>;
   keybindings: ResolvedKeybindingsConfig;
   preferredScriptId?: string | null;
   onRunScript: (script: ProjectScript) => void;
@@ -131,7 +131,7 @@ export default function ProjectScriptsControl({
     [onAddScript, onUpdateScript],
   );
 
-  const importFileScript = async (fileScript: T3ProjectFileScript) => {
+  const importFileScript = async (fileScript: SupacodeProjectFileScript) => {
     const payload: NewProjectScriptInput = {
       name: fileScript.name,
       command: fileScript.command,
@@ -159,7 +159,7 @@ export default function ProjectScriptsControl({
     <>
       {primaryScript && <MenuSeparator />}
       <MenuGroup>
-        <MenuGroupLabel>From t3.json</MenuGroupLabel>
+        <MenuGroupLabel>From supacode.json</MenuGroupLabel>
         {importableScripts.map((fileScript) => (
           <MenuItem
             density={presentation === "menu" ? "touch" : "default"}

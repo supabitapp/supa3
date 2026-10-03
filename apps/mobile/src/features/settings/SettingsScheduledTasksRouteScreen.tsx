@@ -3,15 +3,15 @@ import type {
   ProjectId,
   ScheduledTask,
   ScheduledTaskUpsertInput,
-} from "@t3tools/contracts";
-import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
+} from "@supacode/contracts";
+import { resolveEnvironmentMachineKind } from "@supacode/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 import {
   useCallback,
   useEffect,
@@ -25,6 +25,7 @@ import {
 import { useFocusEffect, useNavigation, usePreventRemove } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, AppState, Platform, Pressable, TextInput as RNTextInput, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -918,7 +919,7 @@ function TaskForm({
         onPress={() => void save()}
         className="min-h-12 items-center justify-center rounded-[14px] bg-primary px-4 disabled:opacity-50"
       >
-        <Text className="text-base font-t3-medium text-primary-foreground">
+        <Text className="text-base font-supacode-medium text-primary-foreground">
           {saving ? "Saving…" : draft.task ? "Save changes" : "Create task"}
         </Text>
       </Pressable>
@@ -989,85 +990,93 @@ function EnvironmentTasks({
         <Text className="p-4 text-base text-danger-foreground">{tasks.error}</Text>
       ) : !tasks.data ? (
         <Text className="p-4 text-base text-foreground-muted">Loading tasks…</Text>
-      ) : visibleTasks?.length === 0 ? (
-        <Text className="p-4 text-base text-foreground-muted">
-          {projectIds === null ? "No scheduled tasks yet." : "No tasks in this project."}
-        </Text>
       ) : (
-        visibleTasks?.map((task, index) => (
-          <View
-            key={task.id}
-            className={
-              index === 0
-                ? "flex-row items-start gap-1 px-4 py-4"
-                : "flex-row items-start gap-1 border-t border-border-subtle px-4 py-4"
-            }
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Edit ${task.title}`}
-              onPress={() => {
-                onEdit(task);
-              }}
-              className="min-w-0 flex-1 gap-1 active:opacity-70"
-            >
-              <Text className="text-lg font-t3-medium text-foreground" numberOfLines={1}>
-                {task.title}
-              </Text>
-              <Text className="text-sm text-foreground-muted" numberOfLines={2}>
-                {describeSchedule(task)}
-                {!task.enabled
-                  ? " · Paused"
-                  : task.nextRunAt
-                    ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
-                    : ""}
-              </Text>
-              {task.lastRunError ? (
-                <Text className="text-sm text-danger-foreground" numberOfLines={2}>
-                  Last run failed: {task.lastRunError}
-                </Text>
-              ) : null}
-            </Pressable>
-            <ControlPillMenu
-              actions={[
-                { id: "edit", title: "Edit" },
-                { id: "toggle", title: task.enabled ? "Pause" : "Resume" },
-                { id: "run", title: "Run now" },
-                { id: "delete", title: "Delete", attributes: { destructive: true } },
-              ]}
-              onPressAction={({ nativeEvent }) => {
-                const action = nativeEvent.event;
-                if (action === "edit") {
-                  onEdit(task);
-                } else if (action === "delete") {
-                  Alert.alert("Delete task?", task.title, [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => void act(task, "delete"),
-                    },
-                  ]);
-                } else if (action === "toggle" || action === "run") {
-                  void act(task, action);
+        <>
+          <View>
+            {visibleTasks?.map((task, index) => (
+              <Animated.View
+                key={task.id}
+                className={
+                  index === 0
+                    ? "flex-row items-start gap-1 px-4 py-4"
+                    : "flex-row items-start gap-1 border-t border-border-subtle px-4 py-4"
                 }
-              }}
-            >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Actions for ${task.title}`}
-                className="h-11 w-11 items-center justify-center"
+                entering={FadeIn.duration(140)}
+                exiting={FadeOut.duration(120)}
+                layout={LinearTransition.duration(180)}
               >
-                <SymbolView
-                  name="ellipsis"
-                  size={18}
-                  tintColorClassName="accent-icon"
-                  type="monochrome"
-                />
-              </Pressable>
-            </ControlPillMenu>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${task.title}`}
+                  onPress={() => {
+                    onEdit(task);
+                  }}
+                  className="min-w-0 flex-1 gap-1 active:opacity-70"
+                >
+                  <Text className="text-lg font-supacode-medium text-foreground" numberOfLines={1}>
+                    {task.title}
+                  </Text>
+                  <Text className="text-sm text-foreground-muted" numberOfLines={2}>
+                    {describeSchedule(task)}
+                    {!task.enabled
+                      ? " · Paused"
+                      : task.nextRunAt
+                        ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
+                        : ""}
+                  </Text>
+                  {task.lastRunError ? (
+                    <Text className="text-sm text-danger-foreground" numberOfLines={2}>
+                      Last run failed: {task.lastRunError}
+                    </Text>
+                  ) : null}
+                </Pressable>
+                <ControlPillMenu
+                  actions={[
+                    { id: "edit", title: "Edit" },
+                    { id: "toggle", title: task.enabled ? "Pause" : "Resume" },
+                    { id: "run", title: "Run now" },
+                    { id: "delete", title: "Delete", attributes: { destructive: true } },
+                  ]}
+                  onPressAction={({ nativeEvent }) => {
+                    const action = nativeEvent.event;
+                    if (action === "edit") {
+                      onEdit(task);
+                    } else if (action === "delete") {
+                      Alert.alert("Delete task?", task.title, [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () => void act(task, "delete"),
+                        },
+                      ]);
+                    } else if (action === "toggle" || action === "run") {
+                      void act(task, action);
+                    }
+                  }}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Actions for ${task.title}`}
+                    className="h-11 w-11 items-center justify-center"
+                  >
+                    <SymbolView
+                      name="ellipsis"
+                      size={18}
+                      tintColorClassName="accent-icon"
+                      type="monochrome"
+                    />
+                  </Pressable>
+                </ControlPillMenu>
+              </Animated.View>
+            ))}
           </View>
-        ))
+          {visibleTasks?.length === 0 ? (
+            <Text className="p-4 text-base text-foreground-muted">
+              {projectIds === null ? "No scheduled tasks yet." : "No tasks in this project."}
+            </Text>
+          ) : null}
+        </>
       )}
     </SettingsSection>
   );

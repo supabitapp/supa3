@@ -1,6 +1,6 @@
 "use client";
 
-import type { PreviewAnnotationPayload, ScopedThreadRef } from "@t3tools/contracts";
+import type { PreviewAnnotationPayload, ScopedThreadRef } from "@supacode/contracts";
 
 import type { ComposerImageAttachment } from "~/composerDraftStore";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
@@ -33,7 +33,7 @@ export function PreviewPanel({
       <PreviewPanelShell mode={mode}>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
           <p className="max-w-sm text-sm text-muted-foreground">
-            Preview is only available in the supa3 desktop app.
+            Preview is only available in the Supacode desktop app.
           </p>
         </div>
       </PreviewPanelShell>

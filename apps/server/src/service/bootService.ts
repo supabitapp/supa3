@@ -3,7 +3,7 @@ import {
   HostProcessExecutablePath,
   HostProcessPlatform,
   HostProcessUserId,
-} from "@t3tools/shared/hostProcess";
+} from "@supacode/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -16,7 +16,7 @@ import * as Path from "effect/Path";
 import { HttpClient } from "effect/unstable/http";
 import * as Schema from "effect/Schema";
 
-import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
+import { CLI_RELEASE_BASE_URL_ENV } from "@supacode/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
 import {
@@ -36,14 +36,14 @@ import {
   type ServiceState,
 } from "./serviceProtocol.ts";
 
-const BOOT_SERVICE_NAME = "supa3";
+const BOOT_SERVICE_NAME = "supacode";
 const BOOT_SERVICE_UNIT_FILE = `${BOOT_SERVICE_NAME}.service`;
 // `.service` suffix keeps the label distinct from the desktop app's bundle id
-// (com.supaterm.supa3), so launchd and TCC records never collide.
-const BOOT_SERVICE_LAUNCHD_LABEL = "com.supaterm.supa3.service";
+// (com.supaterm.supacode), so launchd and TCC records never collide.
+const BOOT_SERVICE_LAUNCHD_LABEL = "com.supaterm.supacode.service";
 const BOOT_SERVICE_PLIST_FILE = `${BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
-const BOOT_SERVICE_UNIT_ENV = "T3_BOOT_SERVICE_UNIT";
-/** File in the logs dir that receives the service's stdout and stderr. `supa3 triage` points agents at it. */
+const BOOT_SERVICE_UNIT_ENV = "SUPACODE_BOOT_SERVICE_UNIT";
+/** File in the logs dir that receives the service's stdout and stderr. `supacode triage` points agents at it. */
 export const BOOT_SERVICE_LOG_FILE = "boot-service.log";
 
 /** systemd expands `%` specifiers, including in unquoted append-log paths. */
@@ -59,12 +59,12 @@ function quoteSystemdValue(value: string): string {
 }
 
 /**
- * Reads `SUPA3_HOME` back out of a rendered unit or plist. Only values this
+ * Reads `SUPACODE_HOME` back out of a rendered unit or plist. Only values this
  * file writes are expected, so a quoted systemd value is unquoted and
  * unescaped the same way `quoteSystemdValue` produced it.
  */
 export function bootServiceBaseDirOf(contents: string): string | undefined {
-  const systemd = /^Environment=SUPA3_HOME=(.*)$/m.exec(contents)?.[1];
+  const systemd = /^Environment=SUPACODE_HOME=(.*)$/m.exec(contents)?.[1];
   if (systemd !== undefined) {
     const raw = systemd.trim();
     const unquoted =
@@ -73,7 +73,7 @@ export function bootServiceBaseDirOf(contents: string): string | undefined {
         : raw;
     return unquoted.replaceAll("%%", "%");
   }
-  const plist = /<key>SUPA3_HOME<\/key>\s*<string>([^<]*)<\/string>/.exec(contents)?.[1];
+  const plist = /<key>SUPACODE_HOME<\/key>\s*<string>([^<]*)<\/string>/.exec(contents)?.[1];
   if (plist !== undefined) {
     return plist.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
   }
@@ -98,14 +98,14 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
   // The user manager has no reliable network-online target; server networking retries itself.
   return [
     "[Unit]",
-    "Description=supa3 server",
+    "Description=Supacode server",
     "StartLimitIntervalSec=300",
     "StartLimitBurst=5",
     "",
     "[Service]",
     "Type=simple",
     "WorkingDirectory=%h",
-    `Environment=SUPA3_HOME=${quoteSystemdValue(plan.baseDir)}`,
+    `Environment=SUPACODE_HOME=${quoteSystemdValue(plan.baseDir)}`,
     `Environment=${BOOT_SERVICE_UNIT_ENV}=${BOOT_SERVICE_UNIT_FILE}`,
     `ExecStart=${plan.program.map(quoteSystemdValue).join(" ")}`,
     // Signal only the launcher first so it can stop its server child gracefully.
@@ -164,7 +164,7 @@ export function renderBootServicePlist(
     `  <dict>`,
     `    <key>PATH</key>`,
     `    <string>${escapeXmlText(options.environmentPath)}</string>`,
-    `    <key>SUPA3_HOME</key>`,
+    `    <key>SUPACODE_HOME</key>`,
     `    <string>${escapeXmlText(plan.baseDir)}</string>`,
     `    <key>${BOOT_SERVICE_UNIT_ENV}</key>`,
     `    <string>${BOOT_SERVICE_PLIST_FILE}</string>`,
@@ -437,7 +437,7 @@ export class BootServiceInstallError extends Schema.TaggedError<BootServiceInsta
   { cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return "Could not set up the supa3 background service.";
+    return "Could not set up the Supacode background service.";
   }
 }
 
@@ -455,17 +455,17 @@ type BootServiceProblem = typeof BootServiceProblem.Type;
 export function formatBootServiceProblem(problem: BootServiceProblem): string {
   switch (problem) {
     case "user-manager-unavailable":
-      return "Cannot reach the systemd user manager. Run `systemctl --user status` in a login session for the service user. Install your distribution's systemd user-session support if it is missing; do not run supa3 with sudo.";
+      return "Cannot reach the systemd user manager. Run `systemctl --user status` in a login session for the service user. Install your distribution's systemd user-session support if it is missing; do not run Supacode with sudo.";
     case "linger-unavailable":
       return 'Cannot check whether this user can run services after logout. Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.';
     case "linger-disabled":
-      return 'Lingering is disabled. supa3 will stop when your last login session ends and will not start at boot. Run `sudo loginctl enable-linger "$(id -un)"` on this machine, then retry the service command as your normal user.';
+      return 'Lingering is disabled. Supacode will stop when your last login session ends and will not start at boot. Run `sudo loginctl enable-linger "$(id -un)"` on this machine, then retry the service command as your normal user.';
     case "service-disabled":
-      return "The service is not enabled to start automatically. Run `supa3 service install` to repair it.";
+      return "The service is not enabled to start automatically. Run `supacode service install` to repair it.";
     case "service-stopped":
-      return "The service is not running. Check the service log and `systemctl --user status supa3.service`, then run `supa3 service install`.";
+      return "The service is not running. Check the service log and `systemctl --user status supacode.service`, then run `supacode service install`.";
     case "restart-pending":
-      return "A newer version is installed but the service is still running the previous one. Run `supa3 service restart` to switch.";
+      return "A newer version is installed but the service is still running the previous one. Run `supacode service restart` to switch.";
   }
 }
 
@@ -495,7 +495,7 @@ export class BootServiceDowngradeRefusedError extends Schema.TaggedError<BootSer
   },
 ) {
   override get message(): string {
-    return `Refusing to replace supa3@${this.installedVersion} with older supa3@${this.targetVersion}. Run the command again with --allow-downgrade to continue.`;
+    return `Refusing to replace supacode@${this.installedVersion} with older supacode@${this.targetVersion}. Run the command again with --allow-downgrade to continue.`;
   }
 }
 
@@ -513,9 +513,9 @@ export interface BootServiceStatus {
   readonly current: boolean;
   readonly installedVersion?: string;
   /**
-   * The T3 home the installed unit serves. The unit name is fixed per user,
+   * The Supacode home the installed unit serves. The unit name is fixed per user,
    * so a caller working against another base dir must not treat this service
-   * as its own; `supa3 update --base-dir` learned that by restarting the live
+   * as its own; `supacode update --base-dir` learned that by restarting the live
    * server of the machine it ran on.
    */
   readonly installedBaseDir?: string;
@@ -531,8 +531,8 @@ export class BootService extends Context.Service<
       readonly allowDowngrade?: boolean;
       /**
        * Write the unit for this version but leave the service on whatever it
-       * is running now. `supa3 update` uses this when the user declines the
-       * restart, so a later `supa3 service restart` lands on the new version.
+       * is running now. `supacode update` uses this when the user declines the
+       * restart, so a later `supacode service restart` lands on the new version.
        */
       readonly start?: boolean;
     }) => Effect.Effect<BootServicePlan, BootServiceError>;
@@ -546,7 +546,7 @@ export class BootService extends Context.Service<
     readonly uninstall: Effect.Effect<boolean, BootServiceError>;
     readonly status: Effect.Effect<BootServiceStatus, BootServiceError>;
   }
->()("t3/service/bootService") {}
+>()("supacode/service/bootService") {}
 
 export interface BootServiceHost {
   readonly execPath: string;
@@ -782,7 +782,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             Effect.mapError(
               (cause) =>
                 new PinnedRuntimeInstallError({
-                  step: "verifying the pinned t3 runtime",
+                  step: "verifying the pinned Supacode runtime",
                   cause,
                 }),
             ),
@@ -792,7 +792,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
                 ? Effect.void
                 : Effect.fail(
                     new PinnedRuntimeInstallError({
-                      step: "verifying the pinned t3 runtime",
+                      step: "verifying the pinned Supacode runtime",
                       exitCode: Number(result.code),
                       stdoutLength: result.stdout.length,
                       stderrLength: result.stderr.length,

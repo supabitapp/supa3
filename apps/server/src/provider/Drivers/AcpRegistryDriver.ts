@@ -7,9 +7,9 @@ import {
   type AcpRegistryOperationError,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import { createModelCapabilities } from "@t3tools/shared/model";
+} from "@supacode/contracts";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
+import { createModelCapabilities } from "@supacode/shared/model";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -294,7 +294,7 @@ const buildInitialAcpRegistrySnapshot = Effect.fn("AcpRegistryDriver.buildInitia
       auth: { status: "unknown" },
       message: input.settings.enabled
         ? "Checking ACP Registry agent readiness..."
-        : "ACP Registry is disabled in supa3 settings.",
+        : "ACP Registry is disabled in Supacode settings.",
     });
   },
 );
@@ -323,7 +323,7 @@ export function buildCheckedAcpRegistrySnapshot(
       ? `Sign in in provider settings using "${advertisedAuthMethod.name}". The login terminal runs on this environment.`
       : advertisedAuthMethod.type === "env_var" &&
           (advertisedAuthMethod.envVarNames?.length ?? 0) > 0
-        ? `Set ${advertisedAuthMethod.envVarNames!.join(", ")} under this instance's environment variables in provider settings. supa3 will detect it on the next provider refresh.`
+        ? `Set ${advertisedAuthMethod.envVarNames!.join(", ")} under this instance's environment variables in provider settings. Supacode will detect it on the next provider refresh.`
         : `Sign in in provider settings using "${advertisedAuthMethod.name}".`
     : undefined;
   return baseSnapshot({

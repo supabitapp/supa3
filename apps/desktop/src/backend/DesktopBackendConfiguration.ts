@@ -1,6 +1,6 @@
 import * as NodeOS from "node:os";
 
-import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
+import { parsePersistedServerObservabilitySettings } from "@supacode/shared/serverSettings";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -62,7 +62,7 @@ export class DesktopBackendConfiguration extends Context.Service<
     // backend that actually resolved to Windows.
     readonly resolvePrimaryLabel: Effect.Effect<string>;
   }
->()("@t3tools/desktop/backend/DesktopBackendConfiguration") {}
+>()("@supacode/desktop/backend/DesktopBackendConfiguration") {}
 
 interface BackendObservabilitySettings {
   readonly otlpTracesUrl: Option.Option<string>;
@@ -77,16 +77,16 @@ const emptyBackendObservabilitySettings: BackendObservabilitySettings = {
 };
 
 const DESKTOP_BACKEND_ENV_NAMES = [
-  "T3CODE_PORT",
-  "T3CODE_MODE",
-  "T3CODE_NO_BROWSER",
-  "T3CODE_HOST",
-  "T3CODE_DESKTOP_WS_URL",
-  "T3CODE_DESKTOP_LAN_ACCESS",
-  "T3CODE_DESKTOP_LAN_HOST",
-  "T3CODE_DESKTOP_HTTPS_ENDPOINTS",
-  "T3CODE_TAILSCALE_SERVE",
-  "T3CODE_TAILSCALE_SERVE_PORT",
+  "SUPACODE_PORT",
+  "SUPACODE_MODE",
+  "SUPACODE_NO_BROWSER",
+  "SUPACODE_HOST",
+  "SUPACODE_DESKTOP_WS_URL",
+  "SUPACODE_DESKTOP_LAN_ACCESS",
+  "SUPACODE_DESKTOP_LAN_HOST",
+  "SUPACODE_DESKTOP_HTTPS_ENDPOINTS",
+  "SUPACODE_TAILSCALE_SERVE",
+  "SUPACODE_TAILSCALE_SERVE_PORT",
 ] as const;
 
 // Env vars that the WSL backend needs but Windows process.env won't forward
@@ -96,16 +96,16 @@ const WSL_FORWARDED_ENV_NAMES = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   // Otherwise the WSL server keeps exporting to endpoints from the bootstrap.
-  "T3CODE_OTEL_SDK_DISABLED",
+  "SUPACODE_OTEL_SDK_DISABLED",
   "OTEL_SDK_DISABLED",
-  "T3CODE_OTLP_HEADERS",
-  "T3CODE_OTLP_PROTOCOL",
+  "SUPACODE_OTLP_HEADERS",
+  "SUPACODE_OTLP_PROTOCOL",
   // Forwarded without a WSLENV flag, so the values arrive untranslated. The
-  // server prefers an OTEL endpoint over the bootstrap envelope, so the T3 URLs
+  // server prefers an OTEL endpoint over the bootstrap envelope, so the Supacode URLs
   // travel as variables to keep winning inside the distro as they do on Windows.
-  "T3CODE_OTLP_TRACES_URL",
-  "T3CODE_OTLP_METRICS_URL",
-  "T3CODE_OTLP_LOGS_URL",
+  "SUPACODE_OTLP_TRACES_URL",
+  "SUPACODE_OTLP_METRICS_URL",
+  "SUPACODE_OTLP_LOGS_URL",
   "OTEL_EXPORTER_OTLP_ENDPOINT",
   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
   "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
@@ -178,7 +178,7 @@ const logBackendObservabilitySettingsReadFailure = (
 };
 
 function resourceMonitorBinaryName(platform: NodeJS.Platform): string {
-  return platform === "win32" ? "t3-resource-monitor.exe" : "t3-resource-monitor";
+  return platform === "win32" ? "supacode-resource-monitor.exe" : "supacode-resource-monitor";
 }
 
 const resolveResourceMonitorPath = Effect.fn(
@@ -242,7 +242,7 @@ const readPersistedBackendObservabilitySettings = Effect.gen(function* () {
 });
 
 // The bootstrap carries the OTLP endpoints to every backend, including a WSL
-// child that lacks the variables. The T3 URLs also travel as variables in
+// child that lacks the variables. The Supacode URLs also travel as variables in
 // WSL_FORWARDED_ENV_NAMES so they outrank a forwarded OTEL endpoint. Env beats
 // the persisted settings file, matching the precedence resolveServerConfig and
 // DesktopObservability apply.
@@ -262,7 +262,7 @@ interface SharedBootstrapInput {
 }
 
 // What the launch runs inside the distro. The staged runtime is the release's
-// self-contained `t3` executable (Node inside); the mounted server tree is a
+// self-contained `supacode` executable (Node inside); the mounted server tree is a
 // script that needs the distro's own Node.
 type WslPreflightRuntime =
   | {
@@ -439,7 +439,7 @@ const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPreflight")(f
           _tag: "Ready",
           runningDistro,
           windowsEntryPath: environment.backendEntryPath,
-          runtime: { kind: "executable", entryPath: `${runtime.linuxAppRoot}/t3` },
+          runtime: { kind: "executable", entryPath: `${runtime.linuxAppRoot}/supacode` },
           resolvedPath: stagedProbe.resolvedPath,
           runtimeId: input.runtimeArchive.runtimeId,
         } as const;
@@ -553,7 +553,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       mode: "desktop" as const,
       noBrowser: true,
       port: backendExposure.port,
-      t3Home: environment.baseDir,
+      supacodeHome: environment.baseDir,
       host: backendExposure.bindHost,
       desktopBootstrapToken: input.bootstrapToken,
       tailscaleServeEnabled: backendExposure.tailscaleServeEnabled,
@@ -585,7 +585,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
       },
-      // Primary wants process.env (PATH, dev-runner's SUPA3_HOME, etc.).
+      // Primary wants process.env (PATH, dev-runner's SUPACODE_HOME, etc.).
       extendEnv: true,
       bootstrap,
       bootstrapDelivery: "fd3",
@@ -630,7 +630,7 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     mode: "desktop" as const,
     noBrowser: true,
     port: input.port,
-    // Omit t3Home so the Linux backend uses its own home dir instead of
+    // Omit supacodeHome so the Linux backend uses its own home dir instead of
     // the Windows-side baseDir (which would be a /mnt/c path and share
     // the SQLite file with the primary).
     host: wslBindHost,
@@ -727,17 +727,17 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     }
   }
 
-  // Build an explicit copy of process.env minus SUPA3_HOME (dev-runner
+  // Build an explicit copy of process.env minus SUPACODE_HOME (dev-runner
   // exports the Windows-side base dir for the primary; if it leaks into
-  // the WSL backend the Linux side ends up sharing C:\Users\...\.t3 via
+  // the WSL backend the Linux side ends up sharing C:\Users\...\.supacode via
   // /mnt/c, which means both backends read/write the same database and
   // their env-ids collide).
-  const parentEnvWithoutT3Home: Record<string, string | undefined> = {};
+  const parentEnvWithoutSupacodeHome: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (key === "SUPA3_HOME") continue;
-    parentEnvWithoutT3Home[key] = value;
+    if (key === "SUPACODE_HOME") continue;
+    parentEnvWithoutSupacodeHome[key] = value;
   }
-  const wslEnv = mergeWslEnv(parentEnvWithoutT3Home.WSLENV, forwardedEnvNames);
+  const wslEnv = mergeWslEnv(parentEnvWithoutSupacodeHome.WSLENV, forwardedEnvNames);
 
   const baseConfig = {
     executablePath: "wsl.exe",
@@ -745,12 +745,12 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
       preflight._tag === "Ready" ? preflight.windowsEntryPath : environment.backendEntryPath,
     cwd: environment.backendCwd,
     env: {
-      ...parentEnvWithoutT3Home,
+      ...parentEnvWithoutSupacodeHome,
       ...backendChildEnvPatch(),
       ...forwardedEnv,
       ...(wslEnv !== undefined ? { WSLENV: wslEnv } : {}),
     },
-    // env is already a complete process.env minus SUPA3_HOME; pass it
+    // env is already a complete process.env minus SUPACODE_HOME; pass it
     // verbatim instead of letting the spawner re-merge process.env on top.
     extendEnv: false,
     bootstrap,

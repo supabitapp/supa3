@@ -26,12 +26,12 @@ import {
   type KeybindingWhenNode,
   type ServerRemoveKeybindingInput,
   type ServerUpsertKeybindingInput,
-} from "@t3tools/contracts";
-import { mergeWithDefaultKeybindings } from "@t3tools/shared/keybindings";
+} from "@supacode/contracts";
+import { mergeWithDefaultKeybindings } from "@supacode/shared/keybindings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 
 import { isElectron } from "../../env";
 import { useOpenInPreferredEditor } from "../../editorPreferences";
@@ -283,7 +283,7 @@ function UnknownWhenVariableWarning({
 
   return (
     <WarningTooltipIcon label={label} focusable={focusable} className="size-4.5">
-      supa3 does not recognize this condition yet. It can still be saved, but it may not match
+      Supacode does not recognize this condition yet. It can still be saved, but it may not match
       unless the runtime provides it.
     </WarningTooltipIcon>
   );
@@ -1317,8 +1317,8 @@ function BrowserKeybindingNotice() {
     <div className="flex items-center gap-2 px-3 py-2.5 text-xs leading-normal text-muted-foreground sm:px-4">
       <TriangleAlertIcon className="size-3.5 shrink-0 text-warning" aria-hidden />
       <span>
-        Some shortcuts may be claimed by the browser before supa3 sees them. Use the desktop app for
-        better keybinding support.
+        Some shortcuts may be claimed by the browser before Supacode sees them. Use the desktop app
+        for better keybinding support.
       </span>
     </div>
   );
@@ -1327,7 +1327,7 @@ function BrowserKeybindingNotice() {
 export function KeybindingsSettingsPanel() {
   // The representative environment supplies the displayed bindings; edits
   // fan out to every connected environment in the selection, so one
-  // shortcut change reaches each machine the user runs T3 Code on.
+  // shortcut change reaches each machine the user runs Supacode on.
   const { environment: primaryEnvironment, connectedEnvironments } = useSettingsScope();
   const serverKeybindings = primaryEnvironment?.serverConfig?.keybindings;
   const keybindings = useMemo(

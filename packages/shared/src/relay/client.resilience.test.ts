@@ -1,5 +1,5 @@
 import * as NodeCrypto from "node:crypto";
-import type { RelayResponse } from "@t3tools/contracts";
+import type { RelayResponse } from "@supacode/contracts";
 import type { WebSocketEvent, WebSocketLike } from "effect/unstable/socket/Socket";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { createRelayFetch, RelayWebSocket } from "./client.ts";

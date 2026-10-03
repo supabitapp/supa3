@@ -1,9 +1,9 @@
-import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
+import type { ComposerTextPaste } from "../../native/SupacodeComposerEditor.types";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { useAtomValue } from "@effect/atom-react";
-import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
-import { pastedTextDisposition, replaceTextSelection } from "@t3tools/client-runtime/text-paste";
+import { clampFileAttachmentUploadBytes } from "@supacode/client-runtime/state/attachments";
+import { pastedTextDisposition, replaceTextSelection } from "@supacode/client-runtime/text-paste";
 import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
@@ -13,14 +13,14 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
-  type ServerConfig as T3ServerConfig,
+  type ServerConfig as SupacodeServerConfig,
   type UsageLimitsReport,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import {
   collectProviderUsageLimits,
   hasProviderUsageLimits,
   isUsageLimitsCommand,
-} from "@t3tools/shared/usageLimits";
+} from "@supacode/shared/usageLimits";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import {
@@ -58,7 +58,7 @@ import {
 } from "../../state/use-composer-drafts";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
 import { useProject, useThreadShells } from "../../state/entities";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef } from "@supacode/client-runtime/environment";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentButton } from "../../components/ComposerAttachmentButton";
@@ -91,7 +91,7 @@ import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
 import { ControlPillMenu } from "../../components/ControlPill";
-import type { ActiveTurnComposerAction } from "@t3tools/client-runtime/state/composer-dispatch";
+import type { ActiveTurnComposerAction } from "@supacode/client-runtime/state/composer-dispatch";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
 import {
   resolveComposerSendPresentation,
@@ -152,7 +152,7 @@ export interface ThreadComposerProps {
   readonly selectedThread: EnvironmentThreadShell;
   readonly reportedModelSelection?: ModelSelection | null;
   readonly hasCompactableConversation: boolean;
-  readonly serverConfig: T3ServerConfig | null;
+  readonly serverConfig: SupacodeServerConfig | null;
   readonly queueCount: number;
   readonly activeThreadBusy: boolean;
   readonly canStopThread: boolean;
@@ -455,7 +455,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     });
   };
   const { onSendMessage, onChangeDraftMessage, onShowUsageLimits } = props;
-  // T3 owns /usage-limits only where Limits has data for the selected provider;
+  // Supacode owns /usage-limits only where Limits has data for the selected provider;
   // elsewhere the name stays the provider's own and is sent through untouched.
   const usageLimitsOffered =
     selectedProviderStatus !== null &&
@@ -1018,7 +1018,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 ))}
                 {stripAttachments.length > 3 ? (
                   <View className="size-[30px] items-center justify-center rounded-lg bg-subtle-strong">
-                    <Text className="text-foreground-muted text-2xs font-t3-bold">
+                    <Text className="text-foreground-muted text-2xs font-supacode-bold">
                       +{stripAttachments.length - 3}
                     </Text>
                   </View>

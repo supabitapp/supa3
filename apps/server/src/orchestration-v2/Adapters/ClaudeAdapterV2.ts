@@ -5,8 +5,8 @@ import {
   dynamicToolTitle,
   formatReadToolLabel,
   formatSearchToolLabel,
-} from "@t3tools/shared/toolActivity";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+} from "@supacode/shared/toolActivity";
+import { isWorkspaceImagePreviewPath } from "@supacode/shared/filePreview";
 import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
 import {
   type CanUseTool,
@@ -32,13 +32,13 @@ import type {
   AskUserQuestionInput,
   WebSearchOutput,
 } from "@anthropic-ai/claude-agent-sdk/sdk-tools";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
+import { parseCliArgs } from "@supacode/shared/cliArgs";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
+import { applyClaudePromptEffortPrefix } from "@supacode/shared/model";
 import {
   CLAUDE_RESUME_COMPACTION_NEVER_ANSWER,
   formatClaudeResumeCompactionQuestion,
-} from "@t3tools/shared/claudeCompaction";
+} from "@supacode/shared/claudeCompaction";
 import {
   type ChatAttachment,
   ClaudeSettings,
@@ -68,7 +68,7 @@ import {
   type ProviderThreadId,
   type ThreadId,
   type ToolActivitySource,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -114,7 +114,7 @@ import {
 } from "../../provider/Layers/claudeUsageLimits.ts";
 import type { ServerProviderShape } from "../../provider/Services/ServerProvider.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
-import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/T3OrchestrationInstructions.ts";
+import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/SupacodeOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as IdAllocator from "../IdAllocator.ts";
@@ -372,7 +372,7 @@ export interface ClaudeAgentSdkQueryRunnerShape {
 export class ClaudeAgentSdkQueryRunner extends Context.Service<
   ClaudeAgentSdkQueryRunner,
   ClaudeAgentSdkQueryRunnerShape
->()("t3/orchestration-v2/Adapters/ClaudeAdapterV2/ClaudeAgentSdkQueryRunner") {}
+>()("supacode/orchestration-v2/Adapters/ClaudeAdapterV2/ClaudeAgentSdkQueryRunner") {}
 
 export interface ClaudeAgentSdkSessionForkInput {
   readonly sessionId: string;
@@ -882,7 +882,7 @@ export function makeClaudeQueryOptions(input: {
       preset: "claude_code" as const,
       append:
         buildRuntimeInstructions({ harness: "Claude Code" }) +
-        (input.mcpServers === undefined ? "" : T3_CODE_ORCHESTRATION_INSTRUCTIONS),
+        (input.mcpServers === undefined ? "" : SUPACODE_ORCHESTRATION_INSTRUCTIONS),
     },
     ...(Object.keys(extraArgs).length === 0 ? {} : { extraArgs }),
   };
@@ -895,39 +895,39 @@ export function makeClaudeQueryOptions(input: {
   return input.cwd === null ? withDirectories : { ...withDirectories, cwd: input.cwd };
 }
 
-export const CLAUDE_T3_MCP_TOOL_WILDCARD = "mcp__supa3__*";
+export const CLAUDE_SUPACODE_MCP_TOOL_WILDCARD = "mcp__supacode__*";
 
 // Must stay in sync with the Tool.Readonly annotations on OrchestratorToolkit;
 // ClaudeAdapterV2.test.ts cross-checks this list against the toolkit.
-export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
-  "mcp__supa3__orchestrator_capabilities",
-  "mcp__supa3__list_scheduled_tasks",
-  "mcp__supa3__t3_thread_list",
-  "mcp__supa3__t3_thread_wait",
-  "mcp__supa3__t3_pending_request_list",
-  "mcp__supa3__t3_pending_request_read",
-  "mcp__supa3__t3_thread_configuration",
-  "mcp__supa3__t3_thread_transfers",
-  "mcp__supa3__t3_worktree_status",
-  "mcp__supa3__t3_worktree_list",
-  "mcp__supa3__t3_project_list",
-  "mcp__supa3__t3_project_read",
-  "mcp__supa3__t3_thread_search",
-  "mcp__supa3__t3_preview_list",
-  "mcp__supa3__t3_environment_read",
-  "mcp__supa3__t3_queue_list",
-  "mcp__supa3__t3_queue_read",
+export const CLAUDE_READ_ONLY_SUPACODE_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
+  "mcp__supacode__orchestrator_capabilities",
+  "mcp__supacode__list_scheduled_tasks",
+  "mcp__supacode__supacode_thread_list",
+  "mcp__supacode__supacode_thread_wait",
+  "mcp__supacode__supacode_pending_request_list",
+  "mcp__supacode__supacode_pending_request_read",
+  "mcp__supacode__supacode_thread_configuration",
+  "mcp__supacode__supacode_thread_transfers",
+  "mcp__supacode__supacode_worktree_status",
+  "mcp__supacode__supacode_worktree_list",
+  "mcp__supacode__supacode_project_list",
+  "mcp__supacode__supacode_project_read",
+  "mcp__supacode__supacode_thread_search",
+  "mcp__supacode__supacode_preview_list",
+  "mcp__supacode__supacode_environment_read",
+  "mcp__supacode__supacode_queue_list",
+  "mcp__supacode__supacode_queue_read",
 ];
 
 // Claude Code aborts an HTTP MCP call after 60 s ("The operation timed out.")
-// unless the server config sets `timeout`. T3's wait tools (t3_thread_wait,
+// unless the server config sets `timeout`. Supacode's wait tools (supacode_thread_wait,
 // delegate_task mode=wait) legitimately block for up to an hour
 // (MAX_WAIT_TIMEOUT_MS in OrchestratorMcpService), so the budget sits just
 // above that and the server's own wait timeout is what ends a long call.
-export const CLAUDE_T3_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
+export const CLAUDE_SUPACODE_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
 
 // The SDK's `allowedTools` only pre-approves tool calls; availability is the
-// separate `tools` option. Attaching the t3-code MCP server therefore always
+// separate `tools` option. Attaching the Supacode MCP server therefore always
 // pre-approves its tools (headless modes like `dontAsk` deny anything that is
 // not pre-approved), but read-only sandboxes pre-approve only the annotated
 // read-only orchestrator tools so a read-only session cannot silently spawn
@@ -945,18 +945,18 @@ export function claudeMcpQueryOverrides(input: {
     return input.allowedTools === undefined ? {} : { allowedTools: input.allowedTools };
   }
   const mcpAllowedTools = input.readOnlySandbox
-    ? CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS
-    : [CLAUDE_T3_MCP_TOOL_WILDCARD];
+    ? CLAUDE_READ_ONLY_SUPACODE_MCP_ALLOWED_TOOLS
+    : [CLAUDE_SUPACODE_MCP_TOOL_WILDCARD];
   return {
     allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
     mcpServers: {
-      supa3: {
+      supacode: {
         type: "http",
         url: session.endpoint,
         headers: {
           Authorization: session.authorizationHeader,
         },
-        timeout: CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,
+        timeout: CLAUDE_SUPACODE_MCP_TOOL_TIMEOUT_MS,
       },
     },
   };
@@ -1332,7 +1332,9 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
 // Stable per run attempt, so a replayed prompt offer matches its recording.
 // Claude echoes it back as user_message_uuid on the turn that answers it.
 export function claudePromptUuid(attemptId: string): NonNullable<SDKUserMessage["uuid"]> {
-  const hex = NodeCrypto.createHash("sha256").update(`t3-claude-prompt:${attemptId}`).digest("hex");
+  const hex = NodeCrypto.createHash("sha256")
+    .update(`supacode-claude-prompt:${attemptId}`)
+    .digest("hex");
   const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -1739,7 +1741,7 @@ function isClaudeBackgroundTasksChangedMessage(message: SDKMessage): boolean {
   );
 }
 
-// Claude opens every turn it runs with a root `init` frame. Outside a T3 turn
+// Claude opens every turn it runs with a root `init` frame. Outside a Supacode turn
 // that turn is a wake, and `init` comes 20-110 ms after the notification that
 // caused it but seconds before its first output (model thinking time).
 function isClaudeTurnStartMessage(message: SDKMessage): boolean {
@@ -6196,7 +6198,7 @@ export function makeClaudeAdapterV2(
 
           // The converse of the drop above, and the case actually worth
           // watching: a positive-turn task-notification result settling a turn
-          // T3 did not mark as a continuation. That is the hang fix working,
+          // Supacode did not mark as a continuation. That is the hang fix working,
           // but it is also the shape a stale result would take if one ever
           // carried model turns, which nothing on the wire lets us rule out.
           if (

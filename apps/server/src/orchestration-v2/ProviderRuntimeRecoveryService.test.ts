@@ -13,7 +13,7 @@ import {
   ThreadId,
   TurnItemId,
   type OrchestrationV2ThreadProjection,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -1051,7 +1051,7 @@ it.effect(
           providerThreadId,
           type: "dynamic_tool",
           status: "running",
-          toolName: "t3-code.t3_thread_wait",
+          toolName: "supacode.supacode_thread_wait",
           input: {
             threadId:
               "thread:delegated-task:command%3Amcp%3Aaafffab1-e811-458a-ae83-558e542c61ff%3Adelegate-task%3Areview-mobile-reconnect-opus-20260815",

@@ -22,9 +22,9 @@ const defaultEnvironmentInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/supa3.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Supacode.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/supa3.app/Contents/Resources",
+  resourcesPath: "/Applications/Supacode.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -41,7 +41,7 @@ interface ElectronAppCalls {
 const makeElectronAppLayer = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("supa3"),
+    name: Effect.succeed("Supacode"),
     systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit: Effect.void,
@@ -130,13 +130,13 @@ const withIdentity = <A, E, R>(
         Layer.provideMerge(
           FileSystem.layerNoop({
             exists: (path) =>
-              input.legacyPathProbeError
-                ? Effect.fail(input.legacyPathProbeError)
-                : Effect.succeed(
-                    input.legacyPathExists === true && /supa3 \((Alpha|Dev)\)/.test(path),
-                  ),
+              !/Supacode \((Alpha|Dev)\)/.test(path)
+                ? Effect.succeed(false)
+                : input.legacyPathProbeError
+                  ? Effect.fail(input.legacyPathProbeError)
+                  : Effect.succeed(input.legacyPathExists === true),
             readFileString: () =>
-              Effect.succeed(input.packageJson ?? '{"t3codeCommitHash":"abcdef1234567890"}'),
+              Effect.succeed(input.packageJson ?? '{"supacodeCommitHash":"abcdef1234567890"}'),
           }),
         ),
         Layer.provideMerge(makeAssetsLayer(input.pngIconPath ?? Option.none())),
@@ -154,7 +154,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         const userDataPath = yield* identity.resolveUserDataPath;
 
-        assert.equal(userDataPath, "/Users/alice/Library/Application Support/supa3-v2");
+        assert.equal(userDataPath, "/Users/alice/Library/Application Support/supacode-v2");
       }),
       { legacyPathExists: true },
     ),
@@ -166,7 +166,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         assert.equal(
           yield* identity.resolveUserDataPath,
-          "/Users/alice/Library/Application Support/supa3 (Dev)",
+          "/Users/alice/Library/Application Support/Supacode (Dev)",
         );
       }),
       {
@@ -177,7 +177,7 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect("preserves failures while inspecting the legacy userData path", () => {
-    const legacyPath = "/Users/alice/Library/Application Support/supa3 (Dev)";
+    const legacyPath = "/Users/alice/Library/Application Support/Supacode (Dev)";
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",
@@ -218,8 +218,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["supa3 (Alpha)"]);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "supa3 (Alpha)");
+        assert.deepEqual(calls.setName, ["Supacode (Alpha)"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Supacode (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
         // Packaged: the bundle's own icon stands, so a custom one the user
@@ -230,7 +230,7 @@ describe("DesktopAppIdentity", () => {
         calls,
         environment: {
           env: {
-            T3CODE_COMMIT_HASH: "0123456789abcdef",
+            SUPACODE_COMMIT_HASH: "0123456789abcdef",
           },
         },
         pngIconPath: Option.some("/icon.png"),

@@ -1,14 +1,14 @@
 import { MaterialListRow } from "../../components/MaterialListRow";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { VcsRef } from "@t3tools/client-runtime/state/vcs";
-import { type EnvironmentId, resolveEnvironmentMachineKind } from "@t3tools/contracts";
+import type { EnvironmentProject } from "@supacode/client-runtime/state/shell";
+import type { VcsRef } from "@supacode/client-runtime/state/vcs";
+import { type EnvironmentId, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { LegendList } from "@legendapp/list/react-native";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 import * as Haptics from "expo-haptics";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -105,7 +105,7 @@ function SelectionRow(props: {
         (props.icon ?? null)
       )}
       <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="text-base font-t3-medium text-foreground" numberOfLines={1}>
+        <Text className="text-base font-supacode-medium text-foreground" numberOfLines={1}>
           {props.title}
         </Text>
         {props.subtitle ? (
@@ -137,7 +137,7 @@ function ToggleRow(props: {
       <Text
         className={cn(
           "min-w-0 flex-1 text-base text-foreground",
-          Platform.OS !== "android" && "font-t3-medium",
+          Platform.OS !== "android" && "font-supacode-medium",
         )}
         numberOfLines={1}
       >
@@ -532,7 +532,7 @@ export function BranchPickerScreen(props: {
               className="rounded-full bg-card px-4 py-2 active:opacity-70"
               onPress={props.onRefresh}
             >
-              <Text className="text-sm font-t3-medium text-foreground">Try again</Text>
+              <Text className="text-sm font-supacode-medium text-foreground">Try again</Text>
             </Pressable>
           ) : null}
         </View>

@@ -1,8 +1,9 @@
 import { SymbolView } from "../components/AppSymbol";
-import { imageMimeType } from "@t3tools/shared/image";
-import { videoMimeType } from "@t3tools/shared/video";
+import { imageMimeType } from "@supacode/shared/image";
+import { videoMimeType } from "@supacode/shared/video";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { AppText as Text } from "./AppText";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -18,7 +19,7 @@ import { type MediaActionsSource } from "../lib/mediaActions";
 import { PresentationSource } from "./NativePresentation";
 import type { FilePreviewSource } from "./FilePreviewModal";
 import { isPdfFile } from "../lib/filePreview";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@supacode/contracts";
 import {
   retryComposerAttachmentUpload,
   useComposerAttachmentUploadState,
@@ -104,7 +105,7 @@ export function ComposerAttachmentThumbnail(props: ComposerAttachmentThumbnailPr
  * persisted URI renders meanwhile, which is correct everywhere but after a
  * container move.
  */
-const PREVIEW_CACHE_DIRECTORY = "t3-composer-previews";
+const PREVIEW_CACHE_DIRECTORY = "supacode-composer-previews";
 
 /**
  * Fabric re-parses an image source URL on every layout pass of the node, and a
@@ -350,9 +351,12 @@ export function ComposerAttachmentStrip(props: ComposerAttachmentStripProps) {
     >
       <View className="flex-row gap-2.5">
         {props.attachments.map((attachment) => (
-          <View
+          <Animated.View
             key={attachment.id}
             className="relative"
+            entering={FadeIn.duration(140)}
+            exiting={FadeOut.duration(120)}
+            layout={LinearTransition.duration(180)}
             style={{
               paddingTop: removeButtonGutter,
               paddingRight: removeButtonGutter,
@@ -384,7 +388,7 @@ export function ComposerAttachmentStrip(props: ComposerAttachmentStripProps) {
                 weight="bold"
               />
             </Pressable>
-          </View>
+          </Animated.View>
         ))}
       </View>
     </ScrollView>

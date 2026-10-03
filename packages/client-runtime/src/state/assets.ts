@@ -1,4 +1,4 @@
-import { parseRelayAddress, encodeBase64 } from "@t3tools/shared/relay/protocol";
+import { parseRelayAddress, encodeBase64 } from "@supacode/shared/relay/protocol";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import {
@@ -9,13 +9,13 @@ import {
   EnvironmentId,
   type ProjectCloneSnapshot,
   WS_METHODS,
-} from "@t3tools/contracts";
-import { mediaMimeTypeFromExtension } from "@t3tools/shared/filePreview";
-import { isWindowsAbsolutePath } from "@t3tools/shared/path";
+} from "@supacode/contracts";
+import { mediaMimeTypeFromExtension } from "@supacode/shared/filePreview";
+import { isWindowsAbsolutePath } from "@supacode/shared/path";
 import {
   getProjectFaviconResourceKey,
   isProjectFaviconFallbackUrl,
-} from "@t3tools/shared/projectFavicon";
+} from "@supacode/shared/projectFavicon";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";

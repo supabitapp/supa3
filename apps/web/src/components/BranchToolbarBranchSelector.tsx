@@ -1,14 +1,14 @@
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
-import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
+import { resolveThreadCurrentPullRequestLink } from "@supacode/shared/threadPullRequests";
 import { useRightPanelStore } from "../rightPanelStore";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@supacode/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { ContextMenuItem, EnvironmentId, VcsRef, ThreadId } from "@t3tools/contracts";
+} from "@supacode/client-runtime/state/runtime";
+import type { ContextMenuItem, EnvironmentId, VcsRef, ThreadId } from "@supacode/contracts";
 import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
 import {
   useCallback,

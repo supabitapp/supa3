@@ -2,11 +2,11 @@ import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { useNavigate } from "@tanstack/react-router";
 import { CalendarClockIcon, PencilIcon, PlayIcon, Settings2Icon } from "lucide-react";
 import { useState } from "react";
-import type { EnvironmentId, ScheduledTask, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ScheduledTask, ThreadId } from "@supacode/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@supacode/client-runtime/state/runtime";
 
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { cn } from "../../lib/utils";

@@ -1,5 +1,5 @@
 import { after } from "./timer.ts";
-import { RelayResponse, type RelayRequest } from "@t3tools/contracts";
+import { RelayResponse, type RelayRequest } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 import type { WebSocketLike, WebSocketEvent } from "effect/unstable/socket/Socket";
 import {

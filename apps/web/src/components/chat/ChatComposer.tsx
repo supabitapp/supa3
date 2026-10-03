@@ -6,7 +6,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { AttachmentFilePreview } from "../files/AttachmentFilePreview";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
-import { filterComposerPullRequestMatches } from "@t3tools/shared/composerPullRequestMatches";
+import { filterComposerPullRequestMatches } from "@supacode/shared/composerPullRequestMatches";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
 import { elementContextToPreviewAnnotation } from "../../lib/elementContext";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -37,30 +37,30 @@ import type {
   ServerProvider,
   ThreadId,
   SnapShotSource,
-} from "@t3tools/contracts";
+} from "@supacode/contracts";
 import {
   ProviderDriverKind,
   ProviderInstanceId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
-} from "@t3tools/contracts";
-import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+} from "@supacode/contracts";
+import type { EnvironmentConnectionPresentation } from "@supacode/client-runtime/connection";
 import {
   isPasteAsTextShortcut,
   nextPastedTextFileName,
   pastedTextDisposition,
   wouldTextPasteExceedLimit,
-} from "@t3tools/client-runtime/text-paste";
+} from "@supacode/client-runtime/text-paste";
 import {
   detectComposerTrigger,
   replaceTextRange,
   serializeComposerFileLink,
   type ComposerTrigger,
-} from "@t3tools/shared/composerTrigger";
+} from "@supacode/shared/composerTrigger";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
-import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { createModelSelection, normalizeModelSlug } from "@supacode/shared/model";
+import { USAGE_LIMITS_COMMAND } from "@supacode/shared/usageLimits";
 import {
   memo,
   type ComponentProps,
@@ -157,7 +157,7 @@ import { compressImageForStash, prepareImageForAttachment } from "../../lib/imag
 import {
   fileAttachmentTooLargeMessage,
   formatAttachmentSize,
-} from "@t3tools/client-runtime/state/attachments";
+} from "@supacode/client-runtime/state/attachments";
 import {
   attachmentsToReleaseOnUploadCapabilityLoss,
   composerOtherFilesForPresentation,
@@ -191,7 +191,7 @@ import {
   type TerminalContextSelection,
 } from "../../lib/terminalContext";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { replaceComposerContextReferences } from "@supacode/shared/composerContextReferences";
 import {
   getRestingComposerImagePreviewCounts,
   resolveRestingComposerControlsLayout,
@@ -238,12 +238,12 @@ import {
   threadContextRecord,
   threadContextReference,
 } from "~/lib/composerContextRecords";
-import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
+import { matchComposerThreadItems } from "@supacode/client-runtime/composerThreadItems";
 import { THREAD_CONTEXT_DROP_EVENT, threadContextDropTargetProps } from "./threadContextDrag";
 import { readThreadShell, useThreadShells } from "~/state/entities";
 import { requestConfirmDialog } from "~/confirmDialog";
-import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import type { ComposerContextClipboardFragment, ComposerContextRecord } from "@t3tools/contracts";
+import { encodeComposerContextFragment } from "@supacode/shared/composerContextClipboard";
+import type { ComposerContextClipboardFragment, ComposerContextRecord } from "@supacode/contracts";
 import { resolveAssetUrl } from "~/assets/assetUrls";
 import { assetEnvironment } from "~/state/assets";
 import { readPreparedConnection } from "~/state/session";
@@ -1092,7 +1092,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { UnifiedSettings } from "@supacode/contracts/settings";
 import {
   isVideoAttachment,
   type ChatMessage,
@@ -1115,7 +1115,7 @@ import type {
 import {
   resolveComposerDispatchMode,
   type ComposerDispatchMode,
-} from "@t3tools/client-runtime/state/composer-dispatch";
+} from "@supacode/client-runtime/state/composer-dispatch";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import {
   formatProviderSkillDisplayName,
@@ -1123,7 +1123,7 @@ import {
   getProviderSkillsForSlashMenu,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
-} from "@t3tools/client-runtime/providerSkills";
+} from "@supacode/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useDelayedStatus } from "../../hooks/useDelayedStatus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -5994,7 +5994,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return;
     }
 
-    // Copied T3 chips need the structured importer to bring their records and files along.
+    // Copied Supacode chips need the structured importer to bring their records and files along.
     if ((readPastedComposerContext(event.clipboardData)?.records.length ?? 0) > 0) return;
     if (!foldPastedText(plainText, bypassAutoAttachment)) {
       return;

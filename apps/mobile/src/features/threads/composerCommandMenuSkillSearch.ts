@@ -1,4 +1,4 @@
-import type { ServerProviderSkill } from "@t3tools/contracts";
+import type { ServerProviderSkill } from "@supacode/contracts";
 
 export function matchesCommandMenuSkillQuery(skill: ServerProviderSkill, query: string): boolean {
   if (!skill.enabled) return false;

@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -21,13 +21,13 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pre-ready-fs-" });
-      yield* fileSystem.makeDirectory(path.join(root, "supa3 (Alpha)"));
-      yield* fileSystem.writeFileString(path.join(root, "supa3 (Alpha)", "Local State"), "keys");
+      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "supacode-pre-ready-fs-" });
+      yield* fileSystem.makeDirectory(path.join(root, "Supacode (Alpha)"));
+      yield* fileSystem.writeFileString(path.join(root, "Supacode (Alpha)", "Local State"), "keys");
 
       const userData = yield* resolveWindowsUserData(root);
 
-      assert.equal(userData, path.join(root, "supa3-v2"));
+      assert.equal(userData, path.join(root, "supacode-v2"));
       assert.equal(yield* fileSystem.readFileString(path.join(userData, "Local State")), "keys");
     }),
   );
@@ -37,7 +37,9 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
-        const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pre-ready-fs-" });
+        const root = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "supacode-pre-ready-fs-",
+        });
         yield* fileSystem.chmod(root, 0o000);
         yield* Effect.addFinalizer(() => fileSystem.chmod(root, 0o700).pipe(Effect.orDie));
 
