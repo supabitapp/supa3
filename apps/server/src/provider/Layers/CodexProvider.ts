@@ -348,7 +348,7 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
       name: "supacode",
-      title: "supacode",
+      title: "Supacode",
       version: packageJson.version,
     },
     capabilities: {
