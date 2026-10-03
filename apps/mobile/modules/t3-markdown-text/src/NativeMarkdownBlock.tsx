@@ -1,3 +1,4 @@
+import { NativeMermaidBlock } from "./NativeMermaidBlock";
 import { createContext, memo, useContext, useMemo } from "react";
 import { Image, Platform, ScrollView, Text, useColorScheme, View } from "react-native";
 import type { MarkdownNode } from "react-native-nitro-markdown/headless";
@@ -520,6 +521,15 @@ export function NativeMarkdownBlock(props: {
         </View>
       );
     case "code_block":
+      if (props.node.language?.trim().toLowerCase() === "mermaid") {
+        return (
+          <NativeMermaidBlock
+            source={nodeText(props.node).replace(/\n$/, "")}
+            textStyle={props.textStyle}
+            compact={props.compact}
+          />
+        );
+      }
       return (
         <NativeCodeBlock
           node={props.node}

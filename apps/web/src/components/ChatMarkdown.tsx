@@ -134,6 +134,7 @@ import { openInEditorMenuLabel } from "../editorLabels";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
+import { MermaidBlock } from "../diagrams/MermaidBlock";
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
 import { GitHubIcon } from "./Icons";
 import { createIncrementalHighlightedDocument } from "../lib/incrementalHighlighting";
@@ -3276,6 +3277,15 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+    if (language.toLowerCase() === "mermaid") {
+      return (
+        <MermaidBlock
+          source={codeBlock.code}
+          complete={isClosedCodeFence(node, text)}
+          title={fenceTitle}
+        />
+      );
+    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}

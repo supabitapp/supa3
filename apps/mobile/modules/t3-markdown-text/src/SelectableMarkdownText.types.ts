@@ -75,12 +75,16 @@ export interface MarkdownFileContextMenu {
   readonly actions: ReadonlyArray<MarkdownFileContextMenuAction>;
 }
 
+export type MarkdownDiagramRenderer = (source: string) => Promise<string | null>;
+
 export interface SelectableMarkdownTextProps {
   readonly markdown: string;
   /** Opaque context payload supplied by the host for native selection copy. */
   readonly contextClipboardFragment?: string;
   readonly textStyle: NativeMarkdownTextStyle;
   readonly highlightCode: MarkdownCodeHighlighter;
+  readonly renderDiagram?: MarkdownDiagramRenderer;
+  readonly isStreaming?: boolean;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
   readonly preserveSoftBreaks?: boolean;
   readonly onLinkPress?: (href: string) => void;

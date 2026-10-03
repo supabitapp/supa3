@@ -301,6 +301,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../../packages/mermaid-ascii
       '@t3tools/mobile-markdown-text':
         specifier: file:./modules/t3-markdown-text
         version: file:apps/mobile/modules/t3-markdown-text(afae94297d61d3a65abc2214f9b05422)
@@ -497,9 +500,15 @@ importers:
       '@types/react-dom':
         specifier: ~19.2.3
         version: 19.2.3(@types/react@19.3.0)
+      '@types/react-test-renderer':
+        specifier: 19.1.0
+        version: 19.1.0
       babel-preset-expo:
         specifier: ~58.0.8
         version: 58.0.8(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo-widgets@58.0.11)(expo@58.0.2)(react-refresh@0.14.2)
+      react-test-renderer:
+        specifier: 19.2.6
+        version: 19.2.6(react@19.3.0)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -642,6 +651,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../../packages/mermaid-ascii
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -879,6 +891,9 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@t3tools/mermaid-ascii':
+        specifier: workspace:*
+        version: link:../mermaid-ascii
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -967,6 +982,15 @@ importers:
       '@effect/vitest':
         specifier: 4.0.0-rc.115
         version: 4.0.0-rc.115(patch_hash=172bd95ef73a13d322888984415d5d18d9d2aa8e13fa529eac235efac837e902)(effect@4.0.0-rc.115(patch_hash=0dfc4bb8ebd80fb3e06b91ef61346f5259517ab0f2437644fe95ae531084b1f5))
+      '@types/node':
+        specifier: 24.12.4
+        version: 24.12.4
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@types/node@24.12.4)(@vitest/ui@5.0.1)(bufferutil@4.1.0)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@types/node@24.12.4)(typescript@7.0.2))(terser@5.48.0)(typescript@7.0.2)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+
+  packages/mermaid-ascii:
+    devDependencies:
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -19990,6 +20014,12 @@ snapshots:
   react-test-renderer@19.2.6(react@19.2.6):
     dependencies:
       react: 19.2.6
+      react-is: 19.2.7
+      scheduler: 0.27.0
+
+  react-test-renderer@19.2.6(react@19.3.0):
+    dependencies:
+      react: 19.3.0
       react-is: 19.2.7
       scheduler: 0.27.0
 

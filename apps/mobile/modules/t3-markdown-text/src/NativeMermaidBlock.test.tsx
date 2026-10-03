@@ -1,0 +1,134 @@
+import { act } from "react";
+import { create, type ReactTestRenderer } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { MarkdownDiagramRendererContext, NativeMermaidBlock } from "./NativeMermaidBlock";
+import type {
+  MarkdownDiagramRenderer,
+  NativeMarkdownTextStyle,
+} from "./SelectableMarkdownText.types";
+
+const { copy } = vi.hoisted(() => ({ copy: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+  View: "View",
+  Text: "Text",
+  ScrollView: "ScrollView",
+  Pressable: "Pressable",
+}));
+vi.mock("./MarkdownTextPrimitive", () => ({ MarkdownTextPrimitive: "MarkdownTextPrimitive" }));
+vi.mock("expo-clipboard", () => ({ setStringAsync: copy }));
+vi.mock("expo-haptics", () => ({ impactAsync: vi.fn(), ImpactFeedbackStyle: { Light: "light" } }));
+vi.mock("expo-symbols", () => ({ SymbolView: "SymbolView" }));
+
+const textStyle: NativeMarkdownTextStyle = {
+  color: "black",
+  strongColor: "black",
+  mutedColor: "gray",
+  linkColor: "blue",
+  inlineCodeColor: "black",
+  codeColor: "black",
+  codeBackgroundColor: "white",
+  codeBlockBackgroundColor: "white",
+  fileTextColor: "black",
+  skillTextColor: "black",
+  quoteMarkerColor: "gray",
+  dividerColor: "gray",
+  fontSize: 14,
+  lineHeight: 20,
+  fontFamily: "sans-serif",
+  headingFontFamily: "sans-serif",
+  boldFontFamily: "sans-serif",
+};
+
+let root: ReactTestRenderer | undefined;
+
+async function render(source: string, renderer: MarkdownDiagramRenderer | null, style = textStyle) {
+  const content = (
+    <MarkdownDiagramRendererContext value={renderer}>
+      <NativeMermaidBlock source={source} textStyle={style} />
+    </MarkdownDiagramRendererContext>
+  );
+  await act(async () => {
+    if (root) root.update(content);
+    else root = create(content);
+  });
+}
+
+function displayedText() {
+  return root!.root.findByType("MarkdownTextPrimitive" as never).props.children;
+}
+
+async function press(label: string) {
+  await act(async () => {
+    root!.root
+      .find(
+        (node) => node.type === ("Pressable" as never) && node.props.accessibilityLabel === label,
+      )
+      .props.onPress();
+  });
+}
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  copy.mockClear();
+  vi.useFakeTimers();
+});
+
+afterEach(async () => {
+  await act(() => root?.unmount());
+  root = undefined;
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("NativeMermaidBlock", () => {
+  it("shows the rendered diagram and copies the selected representation", async () => {
+    const source = "graph LR\nA --> B";
+    const renderer = vi.fn().mockResolvedValue("[A] --> [B]");
+    await render(source, renderer);
+    expect(displayedText()).toBe("[A] --> [B]");
+    await press("Copy diagram");
+    expect(copy).toHaveBeenLastCalledWith("[A] --> [B]");
+    await act(() => vi.advanceTimersByTime(1200));
+    await press("Show Mermaid source");
+    expect(displayedText()).toBe(source);
+    await press("Copy Mermaid source");
+    expect(copy).toHaveBeenLastCalledWith(source);
+    await press("Show diagram");
+    expect(displayedText()).toBe("[A] --> [B]");
+    await render(source, renderer, { ...textStyle, codeColor: "white" });
+    expect(renderer).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps streaming source until rendering is enabled and ignores obsolete results", async () => {
+    const pending = new Map<string, (value: string) => void>();
+    const renderer = vi.fn(
+      (source: string) => new Promise<string>((resolve) => pending.set(source, resolve)),
+    );
+    await render("first", null);
+    expect(displayedText()).toBe("first");
+    expect(renderer).not.toHaveBeenCalled();
+    await render("first", renderer);
+    await render("second", renderer);
+    await act(() => pending.get("first")!("old diagram"));
+    expect(displayedText()).toBe("second");
+    await act(() => pending.get("second")!("new diagram"));
+    expect(displayedText()).toBe("new diagram");
+    await render("third", null);
+    expect(displayedText()).toBe("third");
+    expect(renderer).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["unsupported", "rejected"])("keeps %s input readable and copyable", async (failure) => {
+    const renderer =
+      failure === "unsupported"
+        ? vi.fn().mockResolvedValue(null)
+        : vi.fn().mockRejectedValue(new Error("invalid diagram"));
+    await render("unsupported syntax", renderer);
+    expect(displayedText()).toBe("unsupported syntax");
+    expect(root!.root.findAllByProps({ accessibilityLabel: "Show diagram" })).toHaveLength(0);
+    await press("Copy Mermaid source");
+    expect(copy).toHaveBeenLastCalledWith("unsupported syntax");
+  });
+});
