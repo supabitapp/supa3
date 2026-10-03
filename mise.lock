@@ -31,6 +31,35 @@ url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_
 url_api = "https://api.github.com/repos/rhysd/actionlint/releases/assets/384924919"
 provenance = "github-attestations"
 
+[[tools."github:voidzero-dev/vite-plus"]]
+version = "1.0.0"
+backend = "github:voidzero-dev/vite-plus"
+specifiers = ["1.0.0"]
+
+[tools."github:voidzero-dev/vite-plus"."platforms.linux-x64"]
+checksum = "sha256:2adca8386c8f7e158eea4abe1a3eda9f89313c869145f788409a0be45979dd6a"
+url = "https://github.com/voidzero-dev/vite-plus/releases/download/v1.0.0/vp-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/voidzero-dev/vite-plus/releases/assets/594610028"
+provenance = "github-attestations"
+
+[tools."github:voidzero-dev/vite-plus"."platforms.macos-arm64"]
+checksum = "sha256:309d42550348aa156e34a9a2eb6e9e8b1c5886126b14cd9a88f42d158a944b35"
+url = "https://github.com/voidzero-dev/vite-plus/releases/download/v1.0.0/vp-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/voidzero-dev/vite-plus/releases/assets/594610033"
+provenance = "github-attestations"
+
+[tools."github:voidzero-dev/vite-plus"."platforms.macos-x64"]
+checksum = "sha256:27d61dc87e3f456d086fb865aba853a1937a112881d4a7f0dfc03ad0f472fba8"
+url = "https://github.com/voidzero-dev/vite-plus/releases/download/v1.0.0/vp-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/voidzero-dev/vite-plus/releases/assets/594610032"
+provenance = "github-attestations"
+
+[tools."github:voidzero-dev/vite-plus"."platforms.windows-x64"]
+checksum = "sha256:8128e4a9d8561e0c5c5c6102557ac412f6e6d466deef632891d382e168c55ff2"
+url = "https://github.com/voidzero-dev/vite-plus/releases/download/v1.0.0/vp-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/voidzero-dev/vite-plus/releases/assets/594610027"
+provenance = "github-attestations"
+
 [[tools.gitleaks]]
 version = "8.30.1"
 backend = "aqua:gitleaks/gitleaks"

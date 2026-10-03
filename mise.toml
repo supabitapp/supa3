@@ -1,7 +1,7 @@
 [tools]
 node = "24.21.0"
 pnpm = "11.10.0"
-"npm:vite-plus" = "1.0.0"
+"github:voidzero-dev/vite-plus" = "1.0.0"
 gitleaks = "8.30.1"
 hk = { version = "2.4.0", os = ["linux", "windows", "macos/arm64"] }
 actionlint = "1.7.12"

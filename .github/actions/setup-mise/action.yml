@@ -5,4 +5,4 @@ runs:
   steps:
     - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
       with:
-        install_args: --locked node pnpm npm:vite-plus hk
+        install_args: --locked node pnpm github:voidzero-dev/vite-plus hk
