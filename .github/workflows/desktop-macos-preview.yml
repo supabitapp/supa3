@@ -50,9 +50,7 @@ jobs:
           git checkout --detach FETCH_HEAD
 
       - name: Setup Mise
-        uses: jdx/mise-action@v4
-        with:
-          install_args: --locked node pnpm npm:vite-plus
+        uses: ./.github/actions/setup-mise
       - name: Install bundle dependencies
         run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
 

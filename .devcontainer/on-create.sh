@@ -9,7 +9,6 @@ export PATH="$HOME/.local/bin:$PATH"
 sudo ln -sf "$(command -v mise)" /usr/local/bin/mise
 mise install --locked
 mise reshim
-mise exec -- vp install
 
 activation='eval "$(mise activate bash)"'
 if ! grep -Fqx "$activation" "$HOME/.bashrc" 2>/dev/null; then

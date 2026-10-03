@@ -6,12 +6,14 @@ Install Mise using the [root README](../../README.md#install-the-development-too
 repository root:
 
 ```sh
+export PATH="$HOME/.local/bin:$PATH"
 mise install --locked
 mise exec -- vp i
 mise exec -- vp run dev
 ```
 
-Configure Mise shell activation if you want to run `vp` directly.
+The commands below use bare `vp`; activate Mise as described in the README, or prefix each
+command with `mise exec --`.
 
 Open the pairing URL printed by the dev runner. The bare origin does not authenticate
 a new browser.

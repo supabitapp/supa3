@@ -137,9 +137,7 @@ jobs:
 
       - name: Setup Mise
         if: steps.expo-token.outputs.present == 'true'
-        uses: jdx/mise-action@v4
-        with:
-          install_args: --locked node pnpm npm:vite-plus
+        uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
         if: steps.expo-token.outputs.present == 'true'
         run: mise exec -- vp install --filter=@t3tools/mobile...

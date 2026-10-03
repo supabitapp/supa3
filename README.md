@@ -111,6 +111,7 @@ T3 Code uses Mise to install the pinned Node.js, pnpm, Vite+, and Git hook toolc
 
 ```bash
 curl https://mise.run | sh
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 #### Windows

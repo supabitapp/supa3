@@ -111,9 +111,7 @@ jobs:
       # 142-210s and 84-160s. The arm64 entries also filled 4 GB of the
       # repository's 10 GB Actions cache.
       - name: Setup Mise
-        uses: jdx/mise-action@v4
-        with:
-          install_args: --locked node pnpm npm:vite-plus
+        uses: ./.github/actions/setup-mise
       # pnpm checks the lockfile and policy before reusing this result. A missing
       # artifact leaves the cache empty, so installation runs the checks again.
       - name: Download dependency verification

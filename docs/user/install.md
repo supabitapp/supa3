@@ -47,7 +47,11 @@ Install Mise using the [development toolchain instructions](../../README.md#inst
 
 ```bash
 git clone https://github.com/pingdotgg/t3code
-cd t3code && mise install --locked && mise exec -- vp i && mise exec -- vp run build:desktop
+cd t3code
+export PATH="$HOME/.local/bin:$PATH"
+mise install --locked
+mise exec -- vp i
+mise exec -- vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 
