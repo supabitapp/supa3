@@ -1,17 +1,16 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 
 import { environmentCatalog } from "../../connection/catalog";
 import {
   connectPairingUrl as connectPairingUrlAtom,
   updateBearerConnection,
 } from "../../connection/onboarding";
-import { useEnvironments } from "../../state/environments";
+import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { projectWorkspaceEnvironment, type WorkspaceEnvironment } from "../../state/workspaceModel";
 
 export function useConnectionController() {
-  const { environments } = useEnvironments();
+  const connectedEnvironments = useWorkspaceEnvironments();
   const connectPairingUrlMutation = useAtomCommand(connectPairingUrlAtom, {
     reportFailure: false,
   });
@@ -21,11 +20,6 @@ export function useConnectionController() {
   const setEnvironmentEnabledMutation = useAtomCommand(
     environmentCatalog.setEnabled,
     "environment toggle",
-  );
-
-  const connectedEnvironments = useMemo<ReadonlyArray<WorkspaceEnvironment>>(
-    () => environments.map(projectWorkspaceEnvironment),
-    [environments],
   );
 
   const connectPairingUrl = useCallback(

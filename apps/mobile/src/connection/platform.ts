@@ -1,9 +1,7 @@
 import {
-  ClientPresentation,
-  EnvironmentOwnedDataCleanup,
+  ClientCapabilities,
   PlatformConnectionSource,
-  PrimaryEnvironmentAuth,
-  SshEnvironmentGateway,
+  Persistence,
 } from "@t3tools/client-runtime/platform";
 import { ConnectionBlockedError, Connectivity, Wakeups } from "@t3tools/client-runtime/connection";
 import { AuthStandardClientScopes } from "@t3tools/contracts";
@@ -99,19 +97,19 @@ const wakeupsLayer = Wakeups.layer({
 
 const capabilitiesLayer = Layer.succeedContext(
   Context.make(
-    PrimaryEnvironmentAuth,
-    PrimaryEnvironmentAuth.of({ bearerToken: Effect.succeed(Option.none()) }),
+    ClientCapabilities.PrimaryEnvironmentAuth,
+    ClientCapabilities.PrimaryEnvironmentAuth.of({ bearerToken: Effect.succeed(Option.none()) }),
   ).pipe(
     Context.add(
-      ClientPresentation,
-      ClientPresentation.of({
+      ClientCapabilities.ClientPresentation,
+      ClientCapabilities.ClientPresentation.of({
         metadata: authClientMetadata(Constants.expoConfig?.version),
         scopes: AuthStandardClientScopes,
       }),
     ),
     Context.add(
-      SshEnvironmentGateway,
-      SshEnvironmentGateway.of({
+      ClientCapabilities.SshEnvironmentGateway,
+      ClientCapabilities.SshEnvironmentGateway.of({
         provision: () =>
           Effect.fail(
             new ConnectionBlockedError({
@@ -133,8 +131,8 @@ const capabilitiesLayer = Layer.succeedContext(
 );
 
 const platformConnectionSourceLayer = Layer.succeed(
-  PlatformConnectionSource,
-  PlatformConnectionSource.of({
+  PlatformConnectionSource.PlatformConnectionSource,
+  PlatformConnectionSource.PlatformConnectionSource.of({
     registrations: Stream.empty,
   }),
 );
@@ -144,8 +142,8 @@ const providedConnectionStorageLayer = connectionStorageLayer.pipe(
 );
 
 const environmentOwnedDataCleanupLayer = Layer.succeed(
-  EnvironmentOwnedDataCleanup,
-  EnvironmentOwnedDataCleanup.of({
+  Persistence.EnvironmentOwnedDataCleanup,
+  Persistence.EnvironmentOwnedDataCleanup.of({
     clear: (environmentId) =>
       Effect.all(
         [

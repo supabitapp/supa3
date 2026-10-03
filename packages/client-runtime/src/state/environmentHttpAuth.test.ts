@@ -1,14 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  ORCHESTRATION_PROTOCOL_HEADER,
+  ORCHESTRATION_PROTOCOL_VERSION_TEXT,
   ProjectId,
-  ProviderInstanceId,
-  ThreadId,
   type AuthSessionState,
-  type OrchestrationShellSnapshot,
-  type OrchestrationThreadDetailSnapshot,
+  type OrchestrationV2ShellSnapshot,
+  OrchestrationV2ThreadDetailSnapshot,
+  OrchestrationV2ThreadBoundedSnapshot,
+  type OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as Fiber from "effect/Fiber";
 import { TestClock } from "effect/testing";
 import type { HttpClient } from "effect/unstable/http";
@@ -19,13 +22,20 @@ import {
   type PreparedHttpAuthorization,
 } from "../connection/model.ts";
 import { remoteHttpClientLayer, type RemoteEnvironmentRequestError } from "../rpc/http.ts";
-import {
-  fetchEnvironmentPullRequestDiff,
-  type PullRequestDiffCredentialRejectedError,
-} from "./pullRequestDiffHttp.ts";
+import * as PullRequestDiffLoader from "./pullRequestDiffHttp.ts";
+import { withOrchestrationProtocolHeader } from "./environmentHttpAuth.ts";
 import { fetchEnvironmentSessionState } from "./session.ts";
 import { fetchEnvironmentShellSnapshot } from "./shellSnapshotHttp.ts";
-import { fetchEnvironmentThreadSnapshot } from "./threadSnapshotHttp.ts";
+import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
+import {
+  boundedThreadSnapshotLoaderLayer,
+  fetchEnvironmentBoundedThreadSnapshot,
+} from "./boundedThreadSnapshotHttp.ts";
+import { fetchEnvironmentThreadHistoryPage } from "./threadHistoryHttp.ts";
+import { v2Projection } from "./orchestrationV2TestFixtures.ts";
+
+const encodeThreadSnapshot = Schema.encodeSync(OrchestrationV2ThreadDetailSnapshot);
+const encodeBoundedSnapshot = Schema.encodeSync(OrchestrationV2ThreadBoundedSnapshot);
 
 const TARGET = new BearerConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -61,38 +71,28 @@ const SESSION = {
 } satisfies AuthSessionState;
 const UNAUTHENTICATED_SESSION = { authenticated: false, auth: AUTH } satisfies AuthSessionState;
 const SHELL = {
+  schemaVersion: 1,
   snapshotSequence: 1,
   projects: [],
   threads: [],
-  updatedAt: "2026-09-04T00:00:00.000Z",
-} satisfies OrchestrationShellSnapshot;
+  archivedThreads: [],
+} satisfies OrchestrationV2ShellSnapshot;
 const THREAD = {
   snapshotSequence: 2,
-  thread: {
-    id: ThreadId.make("thread-1"),
-    projectId: ProjectId.make("project-1"),
-    title: "Thread",
-    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    pullRequests: [],
-    worktreePath: null,
-    latestTurn: null,
-    createdAt: "2026-09-04T00:00:00.000Z",
-    updatedAt: "2026-09-04T00:00:00.000Z",
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    deletedAt: null,
-    messages: [],
-    proposedPlans: [],
-    activities: [],
-    checkpoints: [],
-    session: null,
-  },
-  page: { beforeCursor: null, hasMore: false, snapshotSequence: 2 },
-} satisfies OrchestrationThreadDetailSnapshot;
+  projection: v2Projection,
+} satisfies OrchestrationV2ThreadDetailSnapshot;
+const BOUNDED_THREAD = {
+  ...THREAD,
+  historyCursor: "older-page",
+  hasMoreHistory: true,
+  latestLocalTurnOrdinal: 3,
+} satisfies OrchestrationV2ThreadBoundedSnapshot;
+const THREAD_HISTORY = {
+  snapshotSequence: 2,
+  items: [],
+  nextCursor: null,
+  hasMoreHistory: false,
+} satisfies OrchestrationV2ThreadHistoryPage;
 
 function makeHarness(reply: (requestNumber: number) => Response | Promise<Response>) {
   const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
@@ -113,11 +113,12 @@ const LOADERS: ReadonlyArray<{
   readonly method: string;
   readonly path: string;
   readonly response: unknown;
+  readonly expected: unknown;
   readonly load: (
     input: HttpInput,
   ) => Effect.Effect<
     unknown,
-    RemoteEnvironmentRequestError | PullRequestDiffCredentialRejectedError,
+    RemoteEnvironmentRequestError | PullRequestDiffLoader.PullRequestDiffCredentialRejectedError,
     HttpClient.HttpClient
   >;
 }> = [
@@ -126,13 +127,16 @@ const LOADERS: ReadonlyArray<{
     method: "POST",
     path: "/api/pull-requests/diff",
     response: DIFF_RESULT,
-    load: (input: HttpInput) => fetchEnvironmentPullRequestDiff({ ...input, diff: DIFF }),
+    expected: DIFF_RESULT,
+    load: (input: HttpInput) =>
+      PullRequestDiffLoader.fetchEnvironmentPullRequestDiff({ ...input, diff: DIFF }),
   },
   {
     name: "session permissions",
     method: "GET",
     path: "/api/auth/session",
     response: SESSION,
+    expected: SESSION,
     load: fetchEnvironmentSessionState,
   },
   {
@@ -140,19 +144,41 @@ const LOADERS: ReadonlyArray<{
     method: "GET",
     path: "/api/orchestration/shell",
     response: SHELL,
+    expected: SHELL,
     load: fetchEnvironmentShellSnapshot,
+  },
+  {
+    name: "thread snapshot",
+    method: "GET",
+    path: `/api/orchestration/threads/${THREAD.projection.thread.id}`,
+    response: encodeThreadSnapshot(THREAD),
+    expected: THREAD,
+    load: (input: HttpInput) =>
+      ThreadSnapshotLoader.fetchEnvironmentThreadSnapshot({
+        ...input,
+        threadId: THREAD.projection.thread.id,
+      }),
+  },
+  {
+    name: "bounded thread snapshot",
+    method: "GET",
+    path: `/api/orchestration/threads/${THREAD.projection.thread.id}/bounded`,
+    response: encodeBoundedSnapshot(BOUNDED_THREAD),
+    expected: BOUNDED_THREAD,
+    load: (input: HttpInput) =>
+      fetchEnvironmentBoundedThreadSnapshot({ ...input, threadId: THREAD.projection.thread.id }),
   },
   {
     name: "older thread history",
     method: "GET",
-    path: "/api/orchestration/threads/thread-1",
-    response: THREAD,
+    path: `/api/orchestration/threads/${THREAD.projection.thread.id}/history`,
+    response: THREAD_HISTORY,
+    expected: THREAD_HISTORY,
     load: (input: HttpInput) =>
-      fetchEnvironmentThreadSnapshot({
+      fetchEnvironmentThreadHistoryPage({
         ...input,
-        threadId: THREAD.thread.id,
-        window: { turnLimit: 20, beforeCursor: "older-page" },
-        reasoningMessages: true,
+        threadId: THREAD.projection.thread.id,
+        cursor: "older-page",
       }),
   },
 ];
@@ -186,9 +212,7 @@ describe("authenticated environment HTTP requests", () => {
         expect(new Headers(call.init.headers).get("authorization")).toBe("Bearer bearer-token");
         expect(call.init.credentials).toBeUndefined();
         if (loader.name === "older thread history") {
-          expect(url.searchParams.get("turnLimit")).toBe("20");
-          expect(url.searchParams.get("beforeCursor")).toBe("older-page");
-          expect(url.searchParams.get("reasoningMessages")).toBe("true");
+          expect(url.searchParams.get("cursor")).toBe("older-page");
         }
       }),
   );
@@ -239,4 +263,17 @@ describe("authenticated environment HTTP requests", () => {
       response.resolve(Response.json(SESSION));
     }),
   );
+});
+
+describe("orchestration HTTP compatibility header", () => {
+  it("announces the current protocol without replacing bearer authentication", () => {
+    expect(
+      withOrchestrationProtocolHeader({
+        authorization: "Bearer access-token",
+      }),
+    ).toEqual({
+      authorization: "Bearer access-token",
+      [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+    });
+  });
 });

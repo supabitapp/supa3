@@ -7,6 +7,7 @@ export type ConnectionWakeup =
   | "application-active-probe"
   | "application-active-reconnect";
 
+// A long resume replaces the session, and the new session subscribes on its own.
 export function shouldResubscribeAfterWakeup(reason: ConnectionWakeup): boolean {
   return reason === "application-active" || reason === "application-active-probe";
 }

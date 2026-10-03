@@ -18,27 +18,29 @@ export function appendPendingThreadMessages(
   );
   return [
     ...presentedFeed,
-    ...queuedMessages.flatMap((pendingMessage): ReadonlyArray<PendingThreadFeedEntry> =>
-      deliveredIds.has(pendingMessage.messageId)
-        ? []
-        : [
-            {
-              type: "message",
-              id: pendingMessage.messageId,
-              createdAt: pendingMessage.createdAt,
-              pendingMessage,
-              message: {
-                id: pendingMessage.messageId,
-                role: "user",
-                text: pendingMessage.text,
-                context: pendingMessage.context,
-                createdAt: pendingMessage.createdAt,
-                updatedAt: pendingMessage.createdAt,
-                turnId: null,
-                streaming: false,
-              },
-            },
-          ],
-    ),
+    ...queuedMessages.flatMap((pendingMessage): PendingThreadFeedEntry[] => {
+      if (deliveredIds.has(pendingMessage.messageId)) return [];
+      return [
+        {
+          type: "message",
+          id: pendingMessage.messageId,
+          createdAt: pendingMessage.createdAt,
+          pendingMessage,
+          message: {
+            id: pendingMessage.messageId,
+            role: "user",
+            text: pendingMessage.text,
+            attachments: [],
+            context: pendingMessage.context,
+            createdAt: pendingMessage.createdAt,
+            updatedAt: pendingMessage.createdAt,
+            runId: null,
+            streaming: false,
+            visibility: "local",
+            sourceThreadId: pendingMessage.threadId,
+          },
+        },
+      ];
+    }),
   ];
 }

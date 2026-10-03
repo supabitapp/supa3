@@ -73,11 +73,7 @@ export class PullRequestDiffLoader extends Context.Service<
   }
 >()("@t3tools/client-runtime/state/pullRequestDiffHttp/PullRequestDiffLoader") {}
 
-export const pullRequestDiffLoaderLayer: Layer.Layer<
-  PullRequestDiffLoader,
-  never,
-  HttpClient.HttpClient
-> = Layer.effect(
+export const layer: Layer.Layer<PullRequestDiffLoader, never, HttpClient.HttpClient> = Layer.effect(
   PullRequestDiffLoader,
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;

@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { vi } from "vite-plus/test";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -71,6 +72,7 @@ const makeDesktopDeepLinksLayer = ({
         Layer.succeed(ElectronApp.ElectronApp, electronApp),
         Layer.succeed(ElectronShell.ElectronShell, shell),
         FileSystem.layerNoop({ exists: () => Effect.succeed(false) }),
+        NodePath.layerPosix,
       ),
     ),
   );
@@ -116,7 +118,7 @@ describe("DesktopDeepLinks", () => {
       );
 
       assert.deepEqual(events, [
-        "setPath:userData:/tmp/app-data/supa3",
+        "setPath:userData:/tmp/app-data/supa3-v2",
         "setAsDefaultProtocolClient:supa3",
       ]);
     });
@@ -226,8 +228,9 @@ describe("DesktopDeepLinks", () => {
     );
   });
 
-  for (const entry of ["startup", "open-url"] as const) {
-    it.effect(`receives hosted web sign-in through the desktop ${entry} handler`, () =>
+  it.effect.each(["startup", "open-url"] as const)(
+    "receives hosted web sign-in through the desktop %s handler",
+    (entry) =>
       Effect.gen(function* () {
         const port = yield* Effect.promise(async () => {
           const server = NodeHttp.createServer();
@@ -299,6 +302,5 @@ describe("DesktopDeepLinks", () => {
           ),
         );
       }).pipe(Effect.scoped),
-    );
-  }
+  );
 });
