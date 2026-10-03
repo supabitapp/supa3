@@ -175,12 +175,14 @@ composer when it is empty, and is discarded otherwise.
 
 ## Commands and skills
 
-Type `/` for commands or `$` to add a skill from the selected environment and
-provider. On mobile, both are also available before starting a thread on
+Type `/` at the start of a message for commands, or `$` anywhere to add a skill
+from the selected environment and provider. Later in the message, `/` adds a
+skill too. On mobile, both are also available before starting a thread on
 **New task**.
 
 The slash menu also includes skills unless you turn off **Settings → General →
-Show skills in slash menu**. Only skills enabled for the provider are listed.
+Show skills in slash menu**, which also stops `/` from adding skills later in a
+message. Only skills enabled for the provider are listed.
 
 After you add or change skills, plugins, or MCP servers, use **Restart agent
 session** in the command palette on web and desktop. The conversation continues,

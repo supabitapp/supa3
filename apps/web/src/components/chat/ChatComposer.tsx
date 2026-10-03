@@ -278,10 +278,7 @@ import {
   matchesPullRequestQuery,
   rankPullRequestMatches,
 } from "../pullRequest/pullRequestList.logic";
-import {
-  searchSlashCommandItems,
-  slashCommandItemsForPromptPosition,
-} from "./composerSlashCommandSearch";
+import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
@@ -2504,7 +2501,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   });
   const compactSlashCommandAvailable =
     composerTrigger?.kind === "slash-command" &&
-    prompt.slice(0, composerTrigger.rangeStart).trim() === "" &&
     !compactThreadUnavailable &&
     prompt.slice(composerTrigger.rangeEnd).trim() === "" &&
     composerImages.length + composerFiles.length === 0 &&
@@ -2512,6 +2508,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerTerminalContexts.length === 0 &&
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
+  const slashSkillTriggerHidden =
+    composerTrigger?.kind === "skill" &&
+    !settings.showSkillsInSlashMenu &&
+    prompt.startsWith("/", composerTrigger.rangeStart);
 
   const pullRequestListTargets = useMemo(
     () =>
@@ -2655,13 +2655,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       const visibleProviderSlashCommandItems = providerSlashCommandItems.filter(
         (item) => item.command.name !== "compact" || compactSlashCommandAvailable,
       );
-      const slashCommandItems = slashCommandItemsForPromptPosition(
+      return searchSlashCommandItems(
         [...builtInSlashCommandItems, ...visibleProviderSlashCommandItems, ...skillItems],
-        composerTrigger.rangeStart === 0,
+        query,
       );
-      return searchSlashCommandItems(slashCommandItems, query);
     }
     if (composerTrigger.kind === "skill") {
+      if (slashSkillTriggerHidden) return [];
       return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
         id: `skill:${selectedProvider}:${skill.name}`,
         type: "skill" as const,
@@ -2743,6 +2743,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSlashCommands,
     selectedProviderStatus,
     settings.showSkillsInSlashMenu,
+    slashSkillTriggerHidden,
     workspaceEntries.entries,
   ]);
 

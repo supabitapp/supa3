@@ -313,6 +313,23 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it.each(["Use /rev", "/plan then /rev", "Intro\n/rev"])(
+    "detects a slash skill trigger after the prompt start in %j",
+    (text) => {
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "skill",
+        query: "rev",
+        rangeStart: text.length - 4,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
+  it("leaves slash paths inside a message alone", () => {
+    const text = "Read /Users/khoi/notes";
+    expect(detectComposerTrigger(text, text.length)).toBeNull();
+  });
+
   it.each(["$", "€", "£", "¥", "₹", "₩", "₿", "𑿝"])(
     "detects %sskill trigger at cursor",
     (prefix) => {

@@ -46,7 +46,8 @@ function isWhitespace(char: string): boolean {
 }
 
 /**
- * Detect an active trigger (@path, $skill, /command) at the cursor position.
+ * Detect an active trigger (@path, $skill, /command at prompt start, /skill
+ * elsewhere) at the cursor position.
  *
  * Accepts an optional `isWhitespaceChar` override so callers with inline
  * placeholder characters (e.g. terminal context chips on web) can treat
@@ -61,7 +62,7 @@ export function detectComposerTrigger(
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
   const linePrefix = text.slice(lineStart, cursor);
 
-  if (linePrefix.startsWith("/")) {
+  if (lineStart === 0 && linePrefix.startsWith("/")) {
     const commandMatch = /^\/(\S*)$/.exec(linePrefix);
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
@@ -108,7 +109,7 @@ export function detectComposerTrigger(
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
-  const skillPrefix = /^\p{Sc}/u.exec(token);
+  const skillPrefix = /^(?:\p{Sc}|\/(?=[^/]*$))/u.exec(token);
   if (skillPrefix) {
     return {
       kind: "skill",

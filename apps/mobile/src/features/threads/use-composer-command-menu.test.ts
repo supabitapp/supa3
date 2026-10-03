@@ -35,7 +35,6 @@ describe("mobile slash commands", () => {
     (allowInteractionMode) => {
       const items = buildComposerSlashCommandItems({
         query: "pl",
-        atMessageStart: true,
         hasThread: true,
         allowInteractionMode,
         selectedProviderStatus: antigravity,
@@ -56,22 +55,9 @@ describe("mobile slash commands", () => {
     },
   );
 
-  it("does not offer a native command inside the message", () => {
-    expect(
-      buildComposerSlashCommandItems({
-        query: "plan",
-        atMessageStart: false,
-        hasThread: false,
-        allowInteractionMode: true,
-        selectedProviderStatus: antigravity,
-      }),
-    ).toEqual([]);
-  });
-
   it("still applies the supa3 plan command for supported providers", () => {
     const items = buildComposerSlashCommandItems({
       query: "plan",
-      atMessageStart: true,
       hasThread: true,
       allowInteractionMode: true,
       selectedProviderStatus: {

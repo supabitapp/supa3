@@ -246,7 +246,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
   const linePrefix = text.slice(lineStart, cursor);
 
-  if (linePrefix.startsWith("/")) {
+  if (lineStart === 0 && linePrefix.startsWith("/")) {
     const commandMatch = /^\/(\S*)$/.exec(linePrefix);
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
@@ -270,7 +270,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
       rangeEnd: cursor,
     };
   }
-  const skillPrefix = /^\p{Sc}/u.exec(token);
+  const skillPrefix = /^(?:\p{Sc}|\/(?=[^/]*$))/u.exec(token);
   if (skillPrefix) {
     return {
       kind: "skill",
