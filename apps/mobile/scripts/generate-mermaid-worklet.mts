@@ -16,7 +16,7 @@ export async function generateMermaidWorklet(
       target: "es2022",
       minify: true,
       lib: {
-        entry: NodePath.resolve(mobileRoot, "../../packages/mermaid-ascii/src/ascii/index.ts"),
+        entry: NodeURL.fileURLToPath(import.meta.resolve("@t3tools/mermaid-ascii")),
         name: "T3MermaidAscii",
         formats: ["iife"],
       },
