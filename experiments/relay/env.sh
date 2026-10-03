@@ -1,0 +1,5 @@
+RELAY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export MIX_HOME="$RELAY_DIR/.mix"
+export HEX_HOME="$RELAY_DIR/.hex"
+export PATH="/opt/homebrew/bin:$PATH"
+RELAY_BIN="$RELAY_DIR/_build/prod/rel/passio_relay/bin/passio_relay"

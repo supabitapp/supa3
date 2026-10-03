@@ -1,0 +1,10 @@
+/_build/
+/deps/
+/.mix/
+/.hex/
+/cover/
+/tmp/
+/node_modules/
+/clients/node_modules/
+erl_crash.dump
+*.ez
