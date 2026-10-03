@@ -27,13 +27,10 @@ export async function runEchoCase({ urlFor, clients, payloadBytes, warmupMs, mea
   async function connectOne(i) {
     const start = performance.now();
     const ws = await openWs(urlFor(i), { timeoutMs: 15_000 });
-    const probe = deferred();
-    ws.once('message', () => probe.resolve());
     ws.send(Buffer.from([0, 0, 0, 0]), { binary: true });
-    await probe.promise;
+    await ws.queue.next(30_000);
     establishMs.push(performance.now() - start);
-    ws.queue = null;
-    ws.removeAllListeners('message');
+    ws.queue.detach();
     return ws;
   }
 

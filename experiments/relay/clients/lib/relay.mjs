@@ -5,6 +5,9 @@ import { deferred, withDeadline } from './util.mjs';
 
 const relayDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+const children = new Set();
+process.once('exit', () => { for (const child of children) { try { child.kill('SIGKILL'); } catch {} } });
+
 export const testDefaults = {
   RELAY_ADDR: '127.0.0.1:0',
   RELAY_ADMISSION_RATE: '100000',
@@ -16,6 +19,7 @@ export async function startRelay(env = {}, { wrapper = [] } = {}) {
     env: { ...process.env, ...testDefaults, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  children.add(child);
   const listening = deferred();
   const exit = deferred();
   let stderr = '';
@@ -33,7 +37,7 @@ export async function startRelay(env = {}, { wrapper = [] } = {}) {
   });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => { stderr += chunk; });
-  child.on('exit', (code, signal) => { exit.resolve({ code, signal }); listening.reject(new Error(`relay exited early: ${stderr}`)); });
+  child.on('exit', (code, signal) => { children.delete(child); exit.resolve({ code, signal }); listening.reject(new Error(`relay exited early: ${stderr}`)); });
   child.on('error', (err) => { exit.reject(err); listening.reject(err); });
 
   const address = await withDeadline(listening.promise, 15000, 'relay listening');
@@ -68,7 +72,7 @@ export async function startRelay(env = {}, { wrapper = [] } = {}) {
       if (child.exitCode === null && child.signalCode === null) {
         child.kill('SIGKILL');
       }
-      return exit.promise;
+      return withDeadline(exit.promise, 10_000, 'relay exit after SIGKILL');
     },
   };
   return relay;

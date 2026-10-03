@@ -28,6 +28,15 @@ const relayEnv = {
 
 function log(msg) { process.stderr.write(`[bench] ${msg}\n`); }
 
+const watchdogMs = quick ? 8 * 60_000 : 30 * 60_000;
+const childProcesses = new Set();
+setTimeout(() => {
+  log(`watchdog: run exceeded ${watchdogMs}ms; killing children and exiting`);
+  for (const child of childProcesses) { try { child.kill('SIGKILL'); } catch {} }
+  process.exit(3);
+}, watchdogMs).unref();
+process.once('exit', () => { for (const child of childProcesses) { try { child.kill('SIGKILL'); } catch {} } });
+
 function sampleProcess(pid) {
   const out = execFileSync('ps', ['-o', 'rss=,cputime=', '-p', String(pid)], { encoding: 'utf8' }).trim();
   const [rss, cputime] = out.split(/\s+/);
@@ -38,6 +47,8 @@ function sampleProcess(pid) {
 
 function forkChild(script, args) {
   const child = fork(path.join(here, script), args, { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  childProcesses.add(child);
+  child.once('exit', () => childProcesses.delete(child));
   const ready = deferred();
   child.once('message', (msg) => { if (msg.type === 'ready') ready.resolve(msg); });
   child.once('exit', (code) => ready.reject(new Error(`${script} exited with ${code}`)));
@@ -139,10 +150,16 @@ async function reconnectChurn() {
       for (;;) {
         let incoming;
         try { incoming = await host.nextIncoming(60_000); } catch { return; }
-        host.accept(incoming).then((s) => { s.on('message', (d, b) => s.send(d, { binary: b })); s.on('error', () => {}); }).catch(() => {});
+        host.accept(incoming).then((s) => {
+          const echo = (d, b) => s.send(d, { binary: b });
+          const pending = s.queue.detach();
+          s.on('message', echo);
+          s.on('error', () => {});
+          for (const item of pending) echo(item.data, item.isBinary);
+        }).catch(() => {});
       }
     })();
-    const cycles = quick ? 100 : 400;
+    const cycles = quick ? 100 : 200;
     const concurrency = 10;
     const before = sampleProcess(relay.pid);
     const cycleMs = [];
@@ -153,16 +170,18 @@ async function reconnectChurn() {
       while (next < cycles) {
         next++;
         const t = performance.now();
+        let client = null;
         try {
-          const client = await connectClient(relay.address, host.key.endpointId);
+          client = await connectClient(relay.address, host.key.endpointId);
           await send(client, 'churn', false);
           await client.queue.next(10_000);
           const closed = trackClose(client);
           client.close(1000);
-          await closed;
+          await withDeadline(closed, 10_000, 'churn close');
           cycleMs.push(performance.now() - t);
         } catch (err) {
           failures++;
+          if (client) client.terminate();
           if (err instanceof PortExhaustion) { next = cycles; throw err; }
         }
       }
@@ -183,10 +202,10 @@ async function slowReaderIsolation() {
     const host = await connectHost(relay.address, generateHostKey());
     const healthy = await pair(relay, host);
     const slow = await pair(relay, host);
+    healthy.hostSocket.queue.detach();
     healthy.hostSocket.on('message', (d, b) => healthy.hostSocket.send(d, { binary: b }));
     healthy.hostSocket.on('error', () => {});
-    healthy.client.queue = null;
-    healthy.client.removeAllListeners('message');
+    healthy.client.queue.detach();
     const payload = crypto.randomBytes(1024);
     const measure = async (ms) => {
       const samples = [];
@@ -213,12 +232,19 @@ async function slowReaderIsolation() {
         floodSent++;
       }
     })();
-    const during = await measure(quick ? 1500 : 4000);
-    const slowClose = await withDeadline(slowClosed, 15_000, 'slow pair closed');
-    const slowClosedAfterMs = performance.now() - floodStart;
-    await flood;
-    slow.client._socket.resume();
-    await trackClose(slow.client);
+    let during;
+    let slowClose;
+    let slowClosedAfterMs;
+    try {
+      during = await measure(quick ? 1500 : 4000);
+      slowClose = await withDeadline(slowClosed, 15_000, 'slow pair closed');
+      slowClosedAfterMs = performance.now() - floodStart;
+      await flood;
+    } finally {
+      slow.client._socket.resume();
+      slow.client.terminate();
+    }
+    await withDeadline(trackClose(slow.client), 10_000, 'slow client closed');
     const afterwards = await measure(quick ? 1000 : 2000);
     await host.close(1000);
     return { healthyRttMsQuiet: quiet, healthyRttMsDuringFlood: during, healthyRttMsAfter: afterwards, slowPair: { closeCode: slowClose.code, closeReason: slowClose.reason, closedAfterMs: slowClosedAfterMs, floodMessagesSent: floodSent, floodBytesSent: floodSent * chunk.length } };

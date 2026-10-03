@@ -12,8 +12,11 @@ for (let i = 0; i < count; i++) {
       let incoming;
       try { incoming = await host.nextIncoming(24 * 3600 * 1000); } catch { return; }
       host.accept(incoming).then((socket) => {
-        socket.on('message', (data, isBinary) => socket.send(data, { binary: isBinary }));
+        const echo = (data, isBinary) => socket.send(data, { binary: isBinary });
+        const pending = socket.queue.detach();
+        socket.on('message', echo);
         socket.on('error', () => {});
+        for (const item of pending) echo(item.data, item.isBinary);
       }).catch(() => {});
     }
   })();

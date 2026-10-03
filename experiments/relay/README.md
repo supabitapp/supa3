@@ -172,3 +172,59 @@ level in ExUnit instead.
   with `1008` after the upgrade. The token is still consumed exactly once.
 - The benchmark drivers are single-threaded Node processes and become the bottleneck at 64 KiB payloads with
   many clients; the numbers bound the relay from below.
+
+## Benchmark results
+
+One measured full run on 2026-10-03 (run duration 4 min 16 s, 2000 ms warmup and 5000 ms measurement per case) through the shared-machine advisory lock, followed by no further runs. A shorter smoke matrix (500 ms warmup, 1500 ms measurement) produced results of the same shape. Numbers are from a shared, loaded workstation and are provisional.
+
+Measured on Darwin 27.0.0 arm64, Apple M5 Max (18 cores), Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit] [dtrace], Elixir 1.20.4 (compiled with Erlang/OTP 29), Cowboy 2.19.0, Node v26.5.1, ws 8.22.0. Build: MIX_ENV=prod mix release (strip_beams, JIT enabled by default on this OTP). Load average at start 4.6, 5.5, 5.9, at end 3.7, 5.3, 5.8. Shared machine: results are provisional.
+
+Workload: each client keeps 1 message in flight (send, wait for the echo, repeat), warmup 2000 ms discarded, then 5000 ms measured. Relay path is client -> relay -> echo host -> relay -> client; baseline is client -> Node ws echo server -> client with the same driver. RTT in milliseconds. Throughput counts completed round trips; payload MiB/s is one direction of application payload.
+
+| Target | Payload | Clients | Rep | Samples | p50 | p95 | p99 | max | msg/s | payload MiB/s | establish p50/p99 ms | mismatches/timeouts/closes | relay CPU % | relay RSS MiB |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| relay | 64 B | 1 | 1 | 78050 | 0.057 | 0.101 | 0.174 | 5.84 | 15610 | 0.95 | 3.37/3.37 | 0/0/0 | 86 | 169 |
+| relay | 64 B | 32 | 1 | 253311 | 0.625 | 0.725 | 0.785 | 6.13 | 50662 | 3.09 | 7.32/7.64 | 0/0/0 | 787 | 175 |
+| relay | 64 B | 128 | 1 | 254192 | 2.476 | 2.805 | 2.982 | 7.55 | 50838 | 3.10 | 4.92/7.35 | 0/0/0 | 939 | 193 |
+| relay | 1024 B | 1 | 1 | 79694 | 0.060 | 0.072 | 0.095 | 2.43 | 15939 | 15.57 | 1.77/1.77 | 0/0/0 | 87 | 167 |
+| relay | 1024 B | 32 | 1 | 251148 | 0.626 | 0.742 | 0.993 | 3.61 | 50229 | 49.05 | 8.86/9.65 | 0/0/0 | 760 | 182 |
+| relay | 1024 B | 32 | 2 | 253269 | 0.625 | 0.732 | 0.791 | 3.44 | 50654 | 49.47 | 8.01/8.36 | 0/0/0 | 765 | 182 |
+| relay | 1024 B | 32 | 3 | 239569 | 0.652 | 0.786 | 0.886 | 8.86 | 47914 | 46.79 | 7.13/7.55 | 0/0/0 | 764 | 177 |
+| relay | 1024 B | 128 | 1 | 216767 | 2.937 | 3.301 | 3.585 | 12.15 | 43354 | 42.34 | 5.42/7.48 | 0/0/0 | 1068 | 204 |
+| relay | 65536 B | 1 | 1 | 14996 | 0.327 | 0.377 | 0.518 | 2.91 | 2999 | 187.46 | 1.85/1.85 | 0/0/0 | 56 | 166 |
+| relay | 65536 B | 32 | 1 | 65262 | 2.196 | 4.257 | 5.062 | 8.21 | 13047 | 815.42 | 7.01/7.43 | 0/0/0 | 349 | 316 |
+| relay | 65536 B | 128 | 1 | 67289 | 9.194 | 11.185 | 18.382 | 23.75 | 13443 | 840.20 | 5.53/7.35 | 0/0/0 | 437 | 440 |
+| baseline | 64 B | 1 | 1 | 238373 | 0.020 | 0.027 | 0.033 | 1.05 | 47675 | 2.91 | 3.01/3.01 | 0/0/0 | - | - |
+| baseline | 64 B | 32 | 1 | 778806 | 0.181 | 0.357 | 0.388 | 2.84 | 155761 | 9.51 | 5.26/5.83 | 0/0/0 | - | - |
+| baseline | 64 B | 128 | 1 | 779949 | 0.768 | 1.419 | 1.598 | 5.11 | 156007 | 9.52 | 2.33/5.79 | 0/0/0 | - | - |
+| baseline | 1024 B | 1 | 1 | 198395 | 0.024 | 0.030 | 0.039 | 4.78 | 39679 | 38.75 | 3.12/3.12 | 0/0/0 | - | - |
+| baseline | 1024 B | 32 | 1 | 669461 | 0.211 | 0.420 | 0.542 | 5.86 | 133895 | 130.76 | 5.17/5.82 | 0/0/0 | - | - |
+| baseline | 1024 B | 32 | 2 | 690119 | 0.208 | 0.412 | 0.435 | 1.35 | 138024 | 134.79 | 5.48/6.05 | 0/0/0 | - | - |
+| baseline | 1024 B | 32 | 3 | 671341 | 0.210 | 0.419 | 0.548 | 5.65 | 134270 | 131.12 | 5.30/5.93 | 0/0/0 | - | - |
+| baseline | 1024 B | 128 | 1 | 663901 | 0.898 | 1.489 | 1.885 | 5.28 | 132768 | 129.66 | 2.29/5.66 | 0/0/0 | - | - |
+| baseline | 65536 B | 1 | 1 | 39353 | 0.115 | 0.144 | 0.352 | 1.08 | 7871 | 491.91 | 2.84/2.84 | 0/0/0 | - | - |
+| baseline | 65536 B | 32 | 1 | 82027 | 1.806 | 2.891 | 3.855 | 5.48 | 16405 | 1025.33 | 5.55/6.18 | 0/0/0 | - | - |
+| baseline | 65536 B | 128 | 1 | 78786 | 8.011 | 8.950 | 10.014 | 18.99 | 15744 | 984.01 | 2.72/5.98 | 0/0/0 | - | - |
+
+Relay CPU is the BEAM process's CPU time during the case divided by wall time (warmup plus measurement), sampled with `ps`; RSS is the peak sample during the case.
+
+Idle memory (5 hosts, RSS of the relay process, 2 s idle before each sample):
+
+| Paired clients | RSS MiB | Note |
+| --- | --- | --- |
+| 0 | 163 | fresh start |
+| 100 | 170 | connected in 23 ms |
+| 500 | 206 | connected in 73 ms |
+| 0 | 196 | after disconnecting all pairs |
+
+Releasing all 500 pairs took 1423 ms until `/metrics` reported zero pairs. The BEAM keeps freed heap in its allocators, so RSS does not drop back to the starting value immediately.
+
+Reconnect churn: 200 connect, pair, echo, close cycles at concurrency 10 completed in 0.05 s (4084 cycles/s) with 0 failures; cycle p50 2.23 ms, p99 4.58 ms; relay RSS 171 MiB before, 173 MiB after, 0.35 CPU seconds; all pairs released afterwards.
+
+Slow reader isolation: a paused client was flooded with 64 KiB messages (142 sent, 9 MiB) until the relay closed that pair after 4003 ms (flooding sender observed close 1006). An independent 1 KiB echo pair measured concurrently: p50/p99 0.061/0.140 ms before, 0.061/0.084 ms during (max 7.44 ms), 0.061/0.087 ms after.
+
+Connection attempts in the whole run: 2505; local port exhaustion events: 0; failed cases: 0.
+
+Raw per-case JSON including every RTT sample: `/tmp/passio-relay-bench/elixir-r06-full` (outside the worktree).
+
+Interpretation: the relay adds roughly 2 to 3 process hops and two extra WebSocket encode/decode passes per echo compared with the direct baseline, which shows up as 2 to 3 times the baseline RTT at low concurrency. Relay CPU above 100% reflects the BEAM spreading socket processes across schedulers; it is not a saturation figure, and the single-threaded Node drivers are the throughput limit at 64 KiB payloads. No message was lost, corrupted, or reordered in any case. These are measured results for this machine only and must not be extrapolated to other hardware or to the unmeasured capacity of a production deployment.

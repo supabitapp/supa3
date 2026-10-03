@@ -64,12 +64,20 @@ export class MessageQueue {
     this.items = [];
     this.waiters = [];
     this.closed = null;
-    ws.on('message', (data, isBinary) => this.#push({ data: Buffer.from(data), isBinary }));
+    this.ws = ws;
+    this.onMessage = (data, isBinary) => this.#push({ data: Buffer.from(data), isBinary });
+    ws.on('message', this.onMessage);
     ws.on('close', (code, reason) => {
       this.closed = { code, reason: reason.toString() };
       for (const w of this.waiters.splice(0)) w.reject(new Error(`closed ${code} ${this.closed.reason}`));
     });
     ws.on('error', () => {});
+  }
+
+  detach() {
+    this.ws.off('message', this.onMessage);
+    this.ws.queue = null;
+    return this.items.splice(0);
   }
 
   #push(item) {
