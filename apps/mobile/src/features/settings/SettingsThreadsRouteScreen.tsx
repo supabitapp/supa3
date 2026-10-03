@@ -9,7 +9,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DEFAULT_SERVER_SETTINGS } from "@supacode/contracts";
 import { supportsSharedSettingsSync } from "@supacode/client-runtime/state/shared-settings";
 import { AppText as Text } from "../../components/AppText";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import {
+  mobilePreferencesAtom,
+  showSkillsInSlashMenuAtom,
+  updateMobilePreferencesAtom,
+} from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
@@ -45,6 +49,7 @@ export function SettingsThreadsRouteScreen() {
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
         >
           <AutoSettleSettingsRows />
+          <ComposerSettingsSection />
           <LegacySettingsSection />
         </ScrollView>
       </SettingsScreen>
@@ -236,6 +241,23 @@ function AutoSettleSettingsRows() {
         </SettingsSection>
       ) : null}
     </View>
+  );
+}
+
+function ComposerSettingsSection() {
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const showSkillsInSlashMenu = useAtomValue(showSkillsInSlashMenuAtom);
+
+  return (
+    <SettingsSection title="Composer">
+      <SettingsSwitchRow
+        icon="terminal"
+        label="Show skills in slash menu"
+        subtitle="Show skills when you type /. Skills always appear when you type $."
+        value={showSkillsInSlashMenu}
+        onValueChange={(value) => savePreferences({ showSkillsInSlashMenu: value })}
+      />
+    </SettingsSection>
   );
 }
 

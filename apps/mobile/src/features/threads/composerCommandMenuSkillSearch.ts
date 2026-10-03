@@ -1,6 +1,6 @@
 import type { ServerProviderSkill } from "@supacode/contracts";
 
-export function matchesSlashSkillQuery(skill: ServerProviderSkill, query: string): boolean {
+export function matchesCommandMenuSkillQuery(skill: ServerProviderSkill, query: string): boolean {
   if (!skill.enabled) return false;
   const normalizedQuery = query.toLowerCase();
   const skillQuery =

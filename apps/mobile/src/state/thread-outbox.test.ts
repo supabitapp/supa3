@@ -1430,6 +1430,15 @@ describe("thread outbox", () => {
       false,
     );
     expect(isQueuedThreadCreationSendable(base)).toBe(false);
+
+    const deferredCreation = {
+      ...creationMessage,
+      creation: { ...creationMessage.creation, branch: null, useDefaultBranch: true as const },
+    };
+    const restored = decodeQueuedThreadMessage(encodeQueuedThreadMessage(deferredCreation));
+    expect(restored).toEqual(deferredCreation);
+    expect(isQueuedThreadCreationSendable(restored)).toBe(true);
+    expect(isQueuedThreadCreationSendable({ ...restored, text: " " })).toBe(false);
   });
 
   it("retries transport failures but drops deterministic command failures", () => {
@@ -1513,6 +1522,26 @@ describe("thread outbox", () => {
       resolveThreadOutboxFailureAction({
         stage: "start-turn",
         error: deterministicFailure,
+        interrupted: false,
+      }),
+    ).toBe("restore");
+  });
+
+  it("retries transport failures during base resolution and restores unresolvable workspaces", () => {
+    expect(
+      resolveThreadOutboxFailureAction({
+        stage: "branch-resolution",
+        error: new EnvironmentRpcUnavailableError({
+          environmentId: EnvironmentId.make("environment-1"),
+          message: "Not connected",
+        }),
+        interrupted: false,
+      }),
+    ).toBe("retry");
+    expect(
+      resolveThreadOutboxFailureAction({
+        stage: "branch-resolution",
+        error: new Error("No default or current branch is available"),
         interrupted: false,
       }),
     ).toBe("restore");

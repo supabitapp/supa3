@@ -110,6 +110,7 @@ import {
   resolveNewTaskLocalWorkspaceSelection,
 } from "./new-task-context-presentation";
 import { resolveEnvironmentProjectMatch } from "./new-task-project-selection";
+import { resolveDefaultWorktreeBaseBranch } from "../../lib/worktree-base-branch";
 import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
 
 type WorkspaceMode = "local" | "worktree";
@@ -161,6 +162,7 @@ type NewTaskFlowContextValue = {
   /** False for threads without a project: their folder has no branch or worktree. */
   readonly canChooseWorkspace: boolean;
   readonly selectedBranchName: string | null;
+  readonly defaultBaseBranchName: string | null;
   readonly selectedWorktreePath: string | null;
   readonly startFromOrigin: boolean;
   readonly draftKey: string | null;
@@ -216,6 +218,7 @@ type NewTaskFlowContextValue = {
     options?: {
       /** The live checkout, recorded as a local task's branch when it sends now. */
       readonly currentCheckoutBranch?: string | null;
+      readonly useDefaultBranch?: boolean;
     },
   ) => QueuedThreadMessage | null;
   readonly setPrompt: (value: string) => void;
@@ -702,6 +705,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const hasMoreBranches =
     branchState.data?.nextCursor !== null && branchState.data?.nextCursor !== undefined;
   const allBranchRefs = branchState.refs;
+  const defaultBaseBranchName = resolveDefaultWorktreeBaseBranch(allBranchRefs);
   const availableBranches = useMemo(
     () =>
       pipe(
@@ -1006,7 +1010,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const buildPendingTaskMessage = useCallback(
     (
       metadata: TurnCommandMetadata,
-      options?: { readonly currentCheckoutBranch?: string | null },
+      options?: {
+        readonly currentCheckoutBranch?: string | null;
+        readonly useDefaultBranch?: boolean;
+      },
     ): QueuedThreadMessage | null => {
       if (!selectedProject || !selectedProjectDraftKey) {
         return null;
@@ -1029,6 +1036,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       // Fall back to the resolved mode (server default) so queued tasks drain
       // with the same mode the composer displayed.
       const mode = workspaceSelection?.mode ?? workspaceMode;
+      const branch = resolveProjectThreadCreationBranch({
+        workspaceMode: mode,
+        selectedBranch:
+          workspaceSelection?.branch ?? (mode === "worktree" ? defaultBaseBranchName : null),
+        currentCheckoutBranch: options?.currentCheckoutBranch ?? null,
+      });
       // When the selection is the stand-in built from the queued snapshot,
       // persist the original (possibly absent) snapshot values — the
       // stand-in's placeholder title/workspaceRoot must never be written back
@@ -1064,15 +1077,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
           ...(projectTitle !== undefined ? { projectTitle } : {}),
           ...(projectCwd !== undefined ? { projectCwd } : {}),
           workspaceMode: mode,
-          // An explicit picker choice wins. Otherwise only a task sending now
-          // records the current checkout: a queued local task drains days
-          // later against whatever is checked out then, so a queue-time
-          // guess would pin a stale label to a thread that ran somewhere else.
-          branch: resolveProjectThreadCreationBranch({
-            workspaceMode: mode,
-            selectedBranch: workspaceSelection?.branch ?? null,
-            currentCheckoutBranch: options?.currentCheckoutBranch ?? null,
-          }),
+          branch,
+          ...(mode === "worktree" &&
+          !branch &&
+          (options?.useDefaultBranch || editingPendingTask?.creation?.useDefaultBranch)
+            ? { useDefaultBranch: true as const }
+            : {}),
           worktreePath: mode === "worktree" ? null : (workspaceSelection?.worktreePath ?? null),
           // The draft only carries the flag when the user touched it; fall
           // back to the resolved default (server settings) so queued tasks
@@ -1086,6 +1096,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     },
     [
       canChooseWorkspace,
+      defaultBaseBranchName,
       defaultRuntimeMode,
       editingPendingProject,
       editingPendingTask,
@@ -1211,6 +1222,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       workspaceMode,
       canChooseWorkspace,
       selectedBranchName,
+      defaultBaseBranchName,
       selectedWorktreePath,
       startFromOrigin,
       draftKey: selectedProjectDraftKey,
@@ -1275,6 +1287,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       buildPendingTaskMessage,
       cancelEditingPendingTask,
       currentCheckoutBranchName,
+      defaultBaseBranchName,
       editingPendingTask,
       environments,
       expandedProvider,

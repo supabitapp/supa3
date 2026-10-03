@@ -41,6 +41,7 @@ const QueuedThreadCreationSchema = Schema.Struct({
   projectCwd: Schema.optional(Schema.String),
   workspaceMode: Schema.Literals(["local", "worktree"]),
   branch: Schema.NullOr(Schema.String),
+  useDefaultBranch: Schema.optional(Schema.Literal(true)),
   worktreePath: Schema.NullOr(Schema.String),
   startFromOrigin: Schema.optional(Schema.Boolean),
 });
@@ -73,6 +74,7 @@ export interface QueuedThreadCreation {
   readonly projectCwd?: string;
   readonly workspaceMode: "local" | "worktree";
   readonly branch: string | null;
+  readonly useDefaultBranch?: true;
   readonly worktreePath: string | null;
   readonly startFromOrigin?: boolean;
 }
@@ -239,10 +241,6 @@ export function resolveThreadOutboxDispatchStep(input: {
     : { step: "send" };
 }
 
-/**
- * A queued creation can only be dispatched once its payload would pass server
- * validation; incomplete payloads stay pending until the user edits them.
- */
 export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): boolean {
   if (!message.creation) {
     return false;
@@ -250,7 +248,11 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
   if (message.text.trim().length === 0 || message.modelSelection === undefined) {
     return false;
   }
-  return message.creation.workspaceMode !== "worktree" || Boolean(message.creation.branch);
+  return (
+    message.creation.workspaceMode !== "worktree" ||
+    Boolean(message.creation.branch) ||
+    message.creation.useDefaultBranch === true
+  );
 }
 
 function errorMessage(error: unknown): string | null {
@@ -291,7 +293,7 @@ export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
   return isTransportConnectionErrorMessage(errorMessage(error));
 }
 
-export type ThreadOutboxCommandStage = "settings-sync" | "start-turn";
+export type ThreadOutboxCommandStage = "settings-sync" | "branch-resolution" | "start-turn";
 export type ThreadOutboxFailureAction = "retry" | "restore";
 
 export function resolveThreadOutboxFailureAction(input: {

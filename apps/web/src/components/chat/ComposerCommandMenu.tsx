@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { memo, useLayoutEffect, useRef } from "react";
 
-import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
+import type { ComposerSlashCommand, ComposerTriggerKind } from "@supacode/shared/composerTrigger";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
@@ -145,7 +145,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                     : "Searching workspace files..."
                 : (props.emptyStateText ??
                   (props.triggerKind === "skill"
-                    ? "No skills found. Try / to browse provider commands."
+                    ? "No skills found."
                     : props.triggerKind === "path"
                       ? "No matching files or folders."
                       : "No matching command."))}
@@ -168,7 +168,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
 }) {
   const skillSourceKind =
     props.item.type === "skill" ? resolveProviderSkillSourceKind(props.item.skill) : null;
-  const isSlashSkill =
+  const commandMenuSkill =
     props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
   const pullRequestPresentation =
     props.item.type === "pull-request" ? resolvePullRequestState(props.item.pullRequest) : null;
@@ -209,10 +209,10 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
-          {isSlashSkill ? (
+          {commandMenuSkill ? (
             <>
               <span className="text-secondary-label">/skill:</span>
-              {formatProviderSkillDisplayName(isSlashSkill)}
+              {formatProviderSkillDisplayName(commandMenuSkill)}
             </>
           ) : (
             props.item.label
@@ -224,7 +224,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         {skillSourceKind ? (
           <SkillSourceBadge
             kind={skillSourceKind}
-            showSkillSuffix={props.triggerKind === "skill"}
+            showSkillSuffix={props.triggerKind === "skill" || props.triggerKind === "slash-skill"}
           />
         ) : null}
       </span>
@@ -242,6 +242,7 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   "pull-request": "Pull requests",
   "slash-command": "Commands",
   skill: "Skills",
+  "slash-skill": "Skills",
 };
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {

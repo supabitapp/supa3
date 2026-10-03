@@ -65,7 +65,7 @@ export function resolveNewTaskBranchLabel(input: {
   readonly workspaceMode: WorkspaceMode;
 }): string {
   if (!input.branchName) {
-    return "Choose branch";
+    return input.workspaceMode === "worktree" ? "Default branch" : "Choose branch";
   }
 
   if (input.workspaceMode === "local") {

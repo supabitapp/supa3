@@ -117,14 +117,14 @@ describe("resolveNewTaskBranchLabel", () => {
     ).toBe("From origin/main");
   });
 
-  it("prompts when no branch is available", () => {
+  it("shows the default base intent when no branch is available", () => {
     expect(
       resolveNewTaskBranchLabel({
         branchName: null,
         startFromOrigin: true,
         workspaceMode: "worktree",
       }),
-    ).toBe("Choose branch");
+    ).toBe("Default branch");
   });
 });
 
