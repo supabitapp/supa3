@@ -90,8 +90,9 @@ import {
   useProjects,
   useSidebarThreadShells,
   useSidebarThreadShellsForProjectRefs,
-  waitForThreadShell,
+  useThreadShell,
 } from "../state/entities";
+import { useSidebarThreadNavigation } from "../hooks/useSidebarThreadNavigation";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
@@ -386,8 +387,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     onFileDropThreads,
     thread,
   } = props;
-  const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+  const threadRef = useMemo(
+    () => scopeThreadRef(thread.environmentId, thread.id),
+    [thread.environmentId, thread.id],
+  );
   const threadKey = scopedThreadKey(threadRef);
+  const isPendingCreation = useThreadShell(threadRef) === null;
   const [isFileDragOver, setIsFileDragOver] = useState(false);
   const fileDropHandlers = useMemo(
     () =>
@@ -465,7 +470,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     },
     [discoveredPorts, navigateToThread, openPreview, threadRef],
   );
-  const isThreadRunning = !threadRuntimeCanArchive(thread.runtime);
+  const canArchive = !isPendingCreation && threadRuntimeCanArchive(thread.runtime);
   const threadStatus = resolveThreadStatusPill({
     thread: {
       ...thread,
@@ -486,10 +491,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     : null;
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
-  const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && !isThreadRunning;
+  const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && canArchive;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
-    : !isThreadRunning
+    : canArchive
       ? "pointer-events-none transition-opacity duration-150 max-sm:pr-6 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0"
       : "pointer-events-none";
   const clearConfirmingArchive = useCallback(() => {
@@ -518,6 +523,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   );
   const handleRowDoubleClick = useCallback(
     (event: React.MouseEvent) => {
+      if (isPendingCreation) return;
       // Already renaming this row: a double-click on the row chrome (outside the
       // input) must not restart and discard the in-progress edit.
       if (renamingThreadKey === threadKey) return;
@@ -532,7 +538,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       event.preventDefault();
       startThreadRename(threadKey, thread.title);
     },
-    [isMobile, renamingThreadKey, startThreadRename, threadKey, thread.title],
+    [isPendingCreation, isMobile, renamingThreadKey, startThreadRename, threadKey, thread.title],
   );
   const handleRowKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -862,7 +868,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               >
                 Confirm
               </button>
-            ) : !isThreadRunning ? (
+            ) : canArchive ? (
               appSettingsConfirmThreadArchive ? (
                 <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
                   <button
@@ -1142,6 +1148,7 @@ interface SidebarProjectItemProps {
   openPullRequestsInRightPanel: boolean;
   newThreadShortcutLabel: string | null;
   handleNewThread: ReturnType<typeof useNewThreadHandler>;
+  navigateToThread: ReturnType<typeof useSidebarThreadNavigation>;
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
@@ -1164,6 +1171,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     openPullRequestsInRightPanel,
     newThreadShortcutLabel,
     handleNewThread,
+    navigateToThread,
     archiveThread,
     deleteThread,
     markThreadUnread,
@@ -1214,7 +1222,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const rangeSelectTo = useThreadSelectionStore((state) => state.rangeSelectTo);
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const removeFromSelection = useThreadSelectionStore((state) => state.removeFromSelection);
-  const setSelectionAnchor = useThreadSelectionStore((state) => state.setAnchor);
   const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{
     threadId: ThreadId;
   }>({
@@ -1802,33 +1809,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     ],
   );
 
-  const threadNavigationRequestRef = useRef(0);
-  const navigateToThread = useCallback(
-    async (threadRef: ScopedThreadRef) => {
-      const request = ++threadNavigationRequestRef.current;
-      const location = router.state.location;
-      if (
-        readThreadShell(threadRef) === null &&
-        (!(await waitForThreadShell(threadRef)) ||
-          threadNavigationRequestRef.current !== request ||
-          router.state.location !== location)
-      ) {
-        return;
-      }
-      if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
-        clearSelection();
-      }
-      setSelectionAnchor(scopedThreadKey(threadRef));
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      return router.navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
-      });
-    },
-    [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
-  );
   const handleThreadFileDrop = useCallback(
     async (threadRef: ScopedThreadRef, files: File[]) => {
       const dropId = queuePendingFileDrop({ threadRef, files });
@@ -1856,6 +1836,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       orderedProjectThreadKeys: readonly string[],
     ) => {
       if (isSidebarNestedLinkClick(event.target)) return;
+      if (readThreadShell(threadRef) === null) {
+        event.preventDefault();
+        void navigateToThread(threadRef);
+        return;
+      }
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const isShiftClick = event.shiftKey;
@@ -1869,7 +1854,13 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
       if (isShiftClick) {
         event.preventDefault();
-        rangeSelectTo(threadKey, orderedProjectThreadKeys);
+        rangeSelectTo(
+          threadKey,
+          orderedProjectThreadKeys.filter((key) => {
+            const ref = parseScopedThreadKey(key);
+            return ref !== null && readThreadShell(ref) !== null;
+          }),
+        );
         return;
       }
 
@@ -1891,12 +1882,13 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       if (!api) return;
       const threadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
       if (threadKeys.length === 0) return;
-      const count = threadKeys.length;
       const selectedThreadEntries = threadKeys.flatMap((threadKey) => {
         const threadRef = parseScopedThreadKey(threadKey);
         const thread = threadRef ? readThreadShell(threadRef) : null;
         return threadRef && thread ? [{ threadKey, threadRef, thread }] : [];
       });
+      const count = selectedThreadEntries.length;
+      if (count === 0) return;
       const hasRunningThread = selectedThreadEntries.some(
         ({ thread }) => !threadRuntimeCanArchive(thread.runtime),
       );
@@ -2236,7 +2228,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const api = readLocalApi();
       if (!api) return;
       const threadKey = scopedThreadKey(threadRef);
-      const thread = sidebarThreadByKeyRef.current.get(threadKey) ?? null;
+      const thread = readThreadShell(threadRef);
       if (!thread) return;
       const threadProject = memberProjectByScopedKey.get(
         scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
@@ -2880,6 +2872,7 @@ interface SidebarProjectsContentProps {
   handleProjectDragEnd: (event: DragEndEvent) => void;
   handleProjectDragCancel: (event: DragCancelEvent) => void;
   handleNewThread: ReturnType<typeof useNewThreadHandler>;
+  navigateToThread: ReturnType<typeof useSidebarThreadNavigation>;
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
@@ -2923,6 +2916,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     handleProjectDragEnd,
     handleProjectDragCancel,
     handleNewThread,
+    navigateToThread,
     archiveThread,
     deleteThread,
     markThreadUnread,
@@ -3064,6 +3058,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                         openPullRequestsInRightPanel={openPullRequestsInRightPanel}
                         newThreadShortcutLabel={newThreadShortcutLabel}
                         handleNewThread={handleNewThread}
+                        navigateToThread={navigateToThread}
                         archiveThread={archiveThread}
                         deleteThread={deleteThread}
                         markThreadUnread={markThreadUnread}
@@ -3098,6 +3093,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 openPullRequestsInRightPanel={openPullRequestsInRightPanel}
                 newThreadShortcutLabel={newThreadShortcutLabel}
                 handleNewThread={handleNewThread}
+                navigateToThread={navigateToThread}
                 archiveThread={archiveThread}
                 deleteThread={deleteThread}
                 markThreadUnread={markThreadUnread}
@@ -3137,7 +3133,7 @@ export default function LegacySidebar() {
   const updateSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
   const { archiveThread, deleteThread, markThreadUnread } = useThreadActions();
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile } = useSidebar();
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -3170,7 +3166,6 @@ export default function LegacySidebar() {
   const desktopUpdateState = useDesktopUpdateState();
   const [desktopUpdateActionPending, setDesktopUpdateActionPending] = useState(false);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
-  const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const platform = navigator.platform;
   const shortcutModifiers = useShortcutModifierState();
   const terminalFocused = useTerminalFocus();
@@ -3322,33 +3317,7 @@ export default function LegacySidebar() {
     shortcutLabelForCommand(keybindings, "chat.newLocal", newThreadShortcutLabelOptions) ??
     shortcutLabelForCommand(keybindings, "chat.new", newThreadShortcutLabelOptions);
 
-  const threadNavigationRequestRef = useRef(0);
-  const navigateToThread = useCallback(
-    async (threadRef: ScopedThreadRef) => {
-      const request = ++threadNavigationRequestRef.current;
-      const location = router.state.location;
-      if (
-        readThreadShell(threadRef) === null &&
-        (!(await waitForThreadShell(threadRef)) ||
-          threadNavigationRequestRef.current !== request ||
-          router.state.location !== location)
-      ) {
-        return;
-      }
-      if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
-        clearSelection();
-      }
-      setSelectionAnchor(scopedThreadKey(threadRef));
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      void router.navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
-      });
-    },
-    [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
-  );
+  const navigateToThread = useSidebarThreadNavigation();
 
   const projectDnDSensors = useSensors(
     useSensor(PointerSensor, {
@@ -3797,6 +3766,7 @@ export default function LegacySidebar() {
         handleProjectDragEnd={handleProjectDragEnd}
         handleProjectDragCancel={handleProjectDragCancel}
         handleNewThread={handleNewThread}
+        navigateToThread={navigateToThread}
         archiveThread={archiveThread}
         deleteThread={deleteThread}
         markThreadUnread={markThreadUnread}

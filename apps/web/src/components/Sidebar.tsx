@@ -150,8 +150,10 @@ import {
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
   useSidebarThreadShells,
-  waitForThreadShell,
+  useThreadRefs,
+  useThreadShell,
 } from "../state/entities";
+import { useSidebarThreadNavigation } from "../hooks/useSidebarThreadNavigation";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -1189,6 +1191,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const isPendingCreation = useThreadShell(threadRef) === null;
+  const settlementSupported = props.settlementSupported && !isPendingCreation;
+  const snoozeSupported = props.snoozeSupported && !isPendingCreation;
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
@@ -1273,8 +1278,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile widgets (amber approval, indigo input, sky working) so a thread
   // reads the same color everywhere it surfaces.
-  const topStatus =
-    status === "working"
+  const topStatus = isPendingCreation
+    ? { label: "Preparing", icon: null, className: "text-info" }
+    : status === "working"
       ? {
           label: "Working",
           icon: "working" as const,
@@ -1383,7 +1389,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     (event: ReactMouseEvent) => {
       if (
         event.button !== 1 ||
-        !props.settlementSupported ||
+        !settlementSupported ||
         variantAction !== "settle" ||
         (event.target as HTMLElement).closest("button, a, input")
       ) {
@@ -1391,13 +1397,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       }
       event.preventDefault();
     },
-    [props.settlementSupported, variantAction],
+    [settlementSupported, variantAction],
   );
   const handleAuxClick = useCallback(
     (event: ReactMouseEvent) => {
       if (
         event.button !== 1 ||
-        !props.settlementSupported ||
+        !settlementSupported ||
         variantAction !== "settle" ||
         (event.target as HTMLElement).closest("button, a, input")
       ) {
@@ -1407,7 +1413,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       event.stopPropagation();
       onSettle(threadRef);
     },
-    [onSettle, props.settlementSupported, threadRef, variantAction],
+    [onSettle, settlementSupported, threadRef, variantAction],
   );
   const handleAcknowledgeWokeClick = useCallback(
     (event: ReactMouseEvent) => {
@@ -1436,14 +1442,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   );
   const handleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {
-      if (isRenaming || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      if (
+        isPendingCreation ||
+        isRenaming ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
         return;
       }
       if ((event.target as HTMLElement).closest("button, a, input")) return;
       event.preventDefault();
       onStartRename(threadRef, thread.title);
     },
-    [isRenaming, onStartRename, thread.title, threadRef],
+    [isPendingCreation, isRenaming, onStartRename, thread.title, threadRef],
   );
   const [isFileDragOver, setIsFileDragOver] = useState(false);
   const fileDropHandlers = useMemo(
@@ -1534,8 +1547,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const [snoozeMenuOpenRaw, setSnoozeMenuOpen] = useState(false);
   // Snooze is offered only where it can succeed: capability-gated and never
   // on blocked-on-you work or queued turns (the server rejects both).
-  const showSnoozeButton =
-    props.snoozeSupported && canSnooze(thread, { now: new Date().toISOString() });
+  const showSnoozeButton = snoozeSupported && canSnooze(thread, { now: new Date().toISOString() });
   // If the thread becomes blocked while the popover is open, the button
   // unmounts without firing onOpenChange(false). Deriving the flag keeps a
   // stale true from permanently hiding the status label / pinning the
@@ -1865,7 +1877,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   )}
                 </span>
                 {variantAction === "unsnooze" ? (
-                  !props.snoozeSupported ? null : (
+                  !snoozeSupported ? null : (
                     <button
                       type="button"
                       aria-label="Wake thread now"
@@ -1878,7 +1890,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       <AlarmClockOffIcon className="mb-px size-3" />
                     </button>
                   )
-                ) : !props.settlementSupported ? null : variantAction === "unsettle" ? (
+                ) : !settlementSupported ? null : variantAction === "unsettle" ? (
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -1943,7 +1955,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               aria-label={accessibility.label}
               aria-current={accessibility.current}
               data-testid="sidebar-row-card"
-              aria-busy={isRegeneratingTitle || undefined}
+              aria-busy={isPendingCreation || isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}
               onMouseDown={handleMiddleMouseDown}
@@ -2048,7 +2060,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       threadTimeLabel(thread)
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
+                  {settlementSupported || showSnoozeButton || hasUnsentDraft ? (
                     <span
                       className={cn(
                         // focus-visible, not focus-within: a mouse click leaves
@@ -2085,7 +2097,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           timestampFormat={props.timestampFormat}
                         />
                       ) : null}
-                      {props.settlementSupported ? (
+                      {settlementSupported ? (
                         <Tooltip>
                           <TooltipTrigger
                             render={
@@ -2334,6 +2346,11 @@ export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useSidebarThreadShells();
+  const serverThreadRefs = useThreadRefs();
+  const serverThreadKeys = useMemo(
+    () => new Set(serverThreadRefs.map(scopedThreadKey)),
+    [serverThreadRefs],
+  );
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2425,7 +2442,6 @@ export default function Sidebar() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
-  const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
   const acknowledgeWoke = useAcknowledgeThreadWoke();
@@ -2736,10 +2752,15 @@ export default function Sidebar() {
       const supportsSettlement = capabilities?.threadSettlement === true;
       const supportsSnooze = capabilities?.threadSnooze === true;
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-      if (capabilities?.threadActiveReorder === true) activeReorderable.add(threadKey);
+      if (serverThreadKeys.has(threadKey) && capabilities?.threadActiveReorder === true)
+        activeReorderable.add(threadKey);
       // Older servers retain their existing drag actions. Active placement
       // additionally requires its own ordering capability at the drop target.
-      if (capabilities?.threadPinning === true && capabilities.threadPinReorder === true) {
+      if (
+        serverThreadKeys.has(threadKey) &&
+        capabilities?.threadPinning === true &&
+        capabilities.threadPinReorder === true
+      ) {
         draggable.add(threadKey);
       }
       if (optimisticDrop?.key === threadKey) {
@@ -2822,6 +2843,7 @@ export default function Sidebar() {
     nowMinute,
     optimisticDrop,
     scopedProjectKeys,
+    serverThreadKeys,
     serverConfigs,
     snoozeWakeTick,
     threads,
@@ -3079,33 +3101,7 @@ export default function Sidebar() {
   // Settled threads are live shells, so opening one is plain navigation:
   // history stays readable without un-settling, and sending a message or
   // starting a session un-settles server-side.
-  const threadNavigationRequestRef = useRef(0);
-  const navigateToThread = useCallback(
-    async (threadRef: ScopedThreadRef) => {
-      const request = ++threadNavigationRequestRef.current;
-      const location = router.state.location;
-      if (
-        readThreadShell(threadRef) === null &&
-        (!(await waitForThreadShell(threadRef)) ||
-          threadNavigationRequestRef.current !== request ||
-          router.state.location !== location)
-      ) {
-        return;
-      }
-      if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
-        clearSelection();
-      }
-      setSelectionAnchor(scopedThreadKey(threadRef));
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      return router.navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
-      });
-    },
-    [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
-  );
+  const navigateToThread = useSidebarThreadNavigation();
 
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
@@ -3238,6 +3234,11 @@ export default function Sidebar() {
   const handleThreadClick = useCallback(
     (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
       if (isSidebarNestedLinkClick(event.target)) return;
+      if (readThreadShell(threadRef) === null) {
+        event.preventDefault();
+        void navigateToThread(threadRef);
+        return;
+      }
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const threadKey = scopedThreadKey(threadRef);
@@ -3248,7 +3249,10 @@ export default function Sidebar() {
       }
       if (event.shiftKey) {
         event.preventDefault();
-        rangeSelectTo(threadKey, orderedThreadKeysRef.current);
+        rangeSelectTo(
+          threadKey,
+          orderedThreadKeysRef.current.filter((key) => serverThreadKeys.has(key)),
+        );
         return;
       }
       if (isTrailingDoubleClick(event.detail)) {
@@ -3256,7 +3260,7 @@ export default function Sidebar() {
       }
       navigateToThread(threadRef);
     },
-    [navigateToThread, rangeSelectTo, toggleThreadSelection],
+    [navigateToThread, rangeSelectTo, serverThreadKeys, toggleThreadSelection],
   );
 
   // A settle per thread at a time: double clicks and repeated menu picks
@@ -4097,9 +4101,12 @@ export default function Sidebar() {
       // thread deletion elsewhere) and the menu labels must count only what
       // the actions will touch.
       const selectedThreadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
-      const threadKeys = selectedThreadKeys.filter((threadKey) =>
-        threadByKeyRef.current.has(threadKey),
-      );
+      const threadKeys = selectedThreadKeys.filter((threadKey) => {
+        const ref = parseScopedThreadKey(threadKey);
+        return (
+          ref !== null && readThreadShell(ref) !== null && threadByKeyRef.current.has(threadKey)
+        );
+      });
       if (threadKeys.length === 0) return;
       const count = threadKeys.length;
       // Snooze (N) is offered when every selected thread can actually take
@@ -4326,7 +4333,7 @@ export default function Sidebar() {
           await handleMultiSelectContextMenu(position);
           return;
         }
-        const thread = threadByKeyRef.current.get(threadKey);
+        const thread = readThreadShell(threadRef);
         if (!thread) return;
         const threadWorkspacePath =
           thread.worktreePath ??

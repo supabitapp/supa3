@@ -204,6 +204,27 @@ export function waitForThreadShell(ref: ScopedThreadRef, timeoutMs = 5_000): Pro
   });
 }
 
+const sidebarThreadNavigationStateAtom = Atom.family((ref: ScopedThreadRef) =>
+  Atom.make((get) => {
+    if (get(environmentThreadShells.threadShellAtom(ref)) !== null) return "ready";
+    return get(sidebarThreadShells.threadShellAtom(ref)) !== null ? "pending" : "missing";
+  }),
+);
+
+export async function waitForSidebarThreadShell(
+  ref: ScopedThreadRef,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const atom = sidebarThreadNavigationStateAtom(ref);
+  const resolved = await waitForAtomValue({
+    registry: appAtomRegistry,
+    atom,
+    predicate: (state) => state !== "pending",
+    signal,
+  });
+  return resolved && appAtomRegistry.get(atom) === "ready";
+}
+
 export function readEnvironmentSupportsTitleRegeneration(environmentId: EnvironmentId): boolean {
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
