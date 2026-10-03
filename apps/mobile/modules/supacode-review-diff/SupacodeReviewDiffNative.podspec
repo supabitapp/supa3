@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   s.version = package['version']
   s.summary = 'Native review diff debug surface for Supacode mobile.'
   s.description = 'Native iOS review diff renderer used to prototype fast mobile review scrolling.'
-  s.homepage = 'https://supacode.sh'
+  s.homepage = 'https://next.supacode.sh'
   s.license = { :type => 'UNLICENSED' }
   s.author = { 'Supacode' => 'hello@supacode.sh' }
   s.platforms = { :ios => '16.1' }

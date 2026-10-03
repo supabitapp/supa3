@@ -1,9 +1,9 @@
 import { matchers, routes, type Transform, type VercelConfig } from "@vercel/config/v1";
 
-const ROUTER_HOST = "app.supacode.sh";
+const ROUTER_HOST = "app.next.supacode.sh";
 const HOSTED_WEB_CHANNEL_COOKIE = "supacode_web_channel";
-const LATEST_ORIGIN = "https://latest.app.supacode.sh";
-const NIGHTLY_ORIGIN = "https://nightly.app.supacode.sh";
+const LATEST_ORIGIN = "https://latest.app.next.supacode.sh";
+const NIGHTLY_ORIGIN = "https://nightly.app.next.supacode.sh";
 const CLEAN_CHANNEL_QUERY_TRANSFORMS = [
   {
     type: "request.query",

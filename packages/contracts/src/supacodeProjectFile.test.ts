@@ -13,7 +13,7 @@ const decode = Schema.decodeUnknownSync(SupacodeProjectFile as never) as (
 describe("SupacodeProjectFile", () => {
   it("decodes a full project file", () => {
     const decoded = decode({
-      $schema: "https://supacode.sh/schema/supacode.json",
+      $schema: "https://next.supacode.sh/schema/supacode.json",
       iconPath: "assets/logo.svg",
       scripts: [
         {

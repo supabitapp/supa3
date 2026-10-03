@@ -251,7 +251,7 @@ describe("DesktopDeepLinks", () => {
         }).toString();
         const request = {
           authorizationUrl: authorize.toString(),
-          returnUrl: "https://app.supacode.sh/welcome#agents:remote-one",
+          returnUrl: "https://app.next.supacode.sh/welcome#agents:remote-one",
           environmentId: EnvironmentId.make("remote-one"),
           instanceId: ProviderInstanceId.make("work"),
           flowId: "flow-one",

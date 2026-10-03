@@ -28,7 +28,7 @@ export const config: VercelConfig = {
   redirects: [
     {
       source: "/app",
-      destination: "https://app.supacode.sh",
+      destination: "https://app.next.supacode.sh",
       permanent: true,
     },
   ],

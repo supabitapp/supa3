@@ -809,7 +809,7 @@ jobs:
             exit 1
           fi
 
-          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.supacode.sh}"
+          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.next.supacode.sh}"
           if [[ "${{ needs.preflight.outputs.release_channel }}" == "stable" ]]; then
             channel_name="latest"
           else
@@ -869,9 +869,9 @@ jobs:
             exit 1
           fi
 
-          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.supacode.sh}"
-          latest_domain="${SUPACODE_WEB_LATEST_DOMAIN:-latest.app.supacode.sh}"
-          nightly_domain="${SUPACODE_WEB_NIGHTLY_DOMAIN:-nightly.app.supacode.sh}"
+          router_url="${SUPACODE_WEB_ROUTER_URL:-https://app.next.supacode.sh}"
+          latest_domain="${SUPACODE_WEB_LATEST_DOMAIN:-latest.app.next.supacode.sh}"
+          nightly_domain="${SUPACODE_WEB_NIGHTLY_DOMAIN:-nightly.app.next.supacode.sh}"
           router_domain="${router_url#http://}"
           router_domain="${router_domain#https://}"
           router_domain="${router_domain%%/*}"
@@ -899,7 +899,7 @@ jobs:
           fi
 
   # Same split as the web app: build a production deployment early, then
-  # promote it to supacode.sh once the release it links to exists. As above, the
+  # promote it to next.supacode.sh once the release it links to exists. As above, the
   # project's own *.vercel.app hostname moves at build time.
   build_marketing:
     name: Build marketing site

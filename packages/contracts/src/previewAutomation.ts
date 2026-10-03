@@ -15,7 +15,7 @@ const BoundedUrl = Schema.String.check(Schema.isTrimmed())
   .check(Schema.isNonEmpty())
   .check(Schema.isMaxLength(2048));
 const URL_GUIDANCE =
-  "Absolute http(s) URL or a schemeless host such as supacode.sh or localhost:5173. Schemeless public hosts use https; loopback hosts use http.";
+  "Absolute http(s) URL or a schemeless host such as next.supacode.sh or localhost:5173. Schemeless public hosts use https; loopback hosts use http.";
 const OptionalTimeoutMs = Schema.optional(
   Schema.Int.check(Schema.isGreaterThan(0))
     .check(Schema.isLessThanOrEqualTo(60_000))

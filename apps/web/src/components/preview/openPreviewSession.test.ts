@@ -27,7 +27,7 @@ const snapshot: PreviewSessionSnapshot = {
   tabId: "tab-1",
   navStatus: {
     _tag: "Loading",
-    url: "https://supacode.sh/",
+    url: "https://next.supacode.sh/",
     title: "",
   },
   canGoBack: false,
@@ -73,17 +73,19 @@ describe("openPreviewSession", () => {
     await openPreviewSession({
       openPreview: ({ input }) => open(input),
       threadRef,
-      url: "supacode.sh",
+      url: "next.supacode.sh",
     });
 
     expect(open).toHaveBeenCalledWith({
       threadId: "thread-1",
-      url: "supacode.sh",
+      url: "next.supacode.sh",
       viewport: FILL_PREVIEW_VIEWPORT,
       profileId: DEFAULT_BROWSER_PROFILE_ID,
     });
     expect(readThreadPreviewState(threadRef).snapshot).toEqual(snapshot);
-    expect(readThreadPreviewState(threadRef).recentlySeenUrls).toEqual(["https://supacode.sh/"]);
+    expect(readThreadPreviewState(threadRef).recentlySeenUrls).toEqual([
+      "https://next.supacode.sh/",
+    ]);
   });
 
   it("returns failures without mutating preview state", async () => {
@@ -92,7 +94,7 @@ describe("openPreviewSession", () => {
     const result = await openPreviewSession({
       openPreview: async () => AsyncResult.failure(Cause.fail(failure)),
       threadRef,
-      url: "supacode.sh",
+      url: "next.supacode.sh",
     });
 
     expect(result._tag).toBe("Failure");
@@ -113,7 +115,7 @@ describe("openPreviewSession", () => {
         browserProfiles: [{ id: "work", name: "Work", kind: "persistent" }],
       });
       const openPreview = vi.fn(async () => AsyncResult.success(snapshot));
-      const input = { openPreview, threadRef, url: "https://supacode.sh/" };
+      const input = { openPreview, threadRef, url: "https://next.supacode.sh/" };
       const open = entryPoint === "session" ? openPreviewSession : openUrlInPreview;
 
       const result = await open(input);

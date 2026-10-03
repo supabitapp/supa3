@@ -37,7 +37,7 @@ This document covers the unified release workflow for stable and nightly desktop
   - Automatically generated release notes are pinned to the previous tag in the same channel, so stable compares to the previous stable tag and nightly compares to the previous nightly tag.
 - Includes Electron auto-update metadata (for example `latest*.yml`, `nightly*.yml`, and `*.blockmap`) in release assets.
 - Builds a self-contained CLI archive per platform (`supacode-<version>-<platform>-<arch>.tar.gz`, `.zip` on Windows) in the same job as that target's desktop artifact and attaches them to the GitHub Release with a `SHA256SUMS` file, on every channel, for five targets: macOS arm64, Linux x64 and arm64, Windows x64 and arm64. Every archive is built, signed, and smoke-tested on hardware of its own architecture. There is no macOS x64 archive: Node single-executables are unsupported on x64 macOS (the SEA docs list macOS as arm64 only) and the binary segfaults on start; the x64 desktop app is Electron and unaffected.
-  - The archive holds the server as a Node single-executable (`scripts/build-cli-archive.ts`), so unpacking it needs neither Node, npm, nor a compiler. It is the only form in which Supacode manages a runtime: the desktop's SSH environments, the boot service, `supacode update`, and the install scripts all download and verify this archive against `SHA256SUMS`. The npm packages exist for people who run `npx supacode` or `npm install -g supacode` themselves and carry the same archive contents; nothing in the product installs from npm. The `curl | sh` installers are `scripts/install.sh` and `scripts/install.ps1`; the marketing site copies them into its `public/` at build time (`apps/marketing/scripts/stage-install-scripts.mjs`) and serves them at `supacode.sh/install.sh` and `/install.ps1`.
+  - The archive holds the server as a Node single-executable (`scripts/build-cli-archive.ts`), so unpacking it needs neither Node, npm, nor a compiler. It is the only form in which Supacode manages a runtime: the desktop's SSH environments, the boot service, `supacode update`, and the install scripts all download and verify this archive against `SHA256SUMS`. The npm packages exist for people who run `npx supacode` or `npm install -g supacode` themselves and carry the same archive contents; nothing in the product installs from npm. The `curl | sh` installers are `scripts/install.sh` and `scripts/install.ps1`; the marketing site copies them into its `public/` at build time (`apps/marketing/scripts/stage-install-scripts.mjs`) and serves them at `next.supacode.sh/install.sh` and `/install.ps1`.
   - The executable is built with a Node that supports `--build-sea` (`VP_NODE_VERSION=26.8.2`, kept in step with `SEA_NODE_VERSION` in `apps/server/vite.config.ts`), while the repo stays on `engines.node`.
   - Release macOS archives are signed with the Developer ID certificate and notarized using the Apple credentials loaded through fnox. Windows executables use the same Azure Trusted Signing setup as the installer. Every native addon in the macOS archive is signed too, since the hardened runtime refuses unsigned libraries.
   - Each archive is extracted and executed on its build runner (`scripts/smoke-cli-archive.ts`) before it is uploaded.
@@ -125,20 +125,20 @@ Required GitHub Actions secrets:
 Optional GitHub Actions variables:
 
 - `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `SUPACODE_WEB_ROUTER_URL`: defaults to `https://app.supacode.sh`.
-- `SUPACODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.supacode.sh`.
-- `SUPACODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.supacode.sh`.
+- `SUPACODE_WEB_ROUTER_URL`: defaults to `https://app.next.supacode.sh`.
+- `SUPACODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.next.supacode.sh`.
+- `SUPACODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.next.supacode.sh`.
 
 Required Vercel domains:
 
-- `app.supacode.sh`: the router domain users open, updated by stable releases.
-- `latest.app.supacode.sh`: channel alias updated by stable releases.
-- `nightly.app.supacode.sh`: channel alias updated by nightly releases.
+- `app.next.supacode.sh`: the router domain users open, updated by stable releases.
+- `latest.app.next.supacode.sh`: channel alias updated by stable releases.
+- `nightly.app.next.supacode.sh`: channel alias updated by nightly releases.
 
 The router domain uses `apps/web/vercel.ts` routes. Users opt into a channel by
 visiting `/__supacode/channel?channel=latest` or
 `/__supacode/channel?channel=nightly`; the router stores the
-`supacode_web_channel` cookie and rewrites future requests on `app.supacode.sh` to
+`supacode_web_channel` cookie and rewrites future requests on `app.next.supacode.sh` to
 the matching channel alias.
 
 The release deploy job rewrites release package versions before upload so the
@@ -158,7 +158,7 @@ One-time Vercel dashboard setup:
    `vercel.ts` setting is the source-of-truth, but disconnecting Git in the
    dashboard is also safe.
 4. Run one stable release deployment, or manually alias the current stable
-   deployment, so `app.supacode.sh` points at a deployment containing the router
+   deployment, so `app.next.supacode.sh` points at a deployment containing the router
    rules in `apps/web/vercel.ts`. Future stable releases keep this alias current.
 
 ## Nightly builds
@@ -308,8 +308,8 @@ Checklist:
 
 There is no dry-run tag path. Pushing any accepted non-nightly tag, including
 `v0.0.0-test.1`, classifies the run as the stable channel. It publishes `supacode` with npm dist-tag
-`latest`, creates a real GitHub Release, aliases the hosted app to `latest.app.supacode.sh` and
-`app.supacode.sh`, and can commit a version bump to `main` in the finalize job. Do not push a test tag
+`latest`, creates a real GitHub Release, aliases the hosted app to `latest.app.next.supacode.sh` and
+`app.next.supacode.sh`, and can commit a version bump to `main` in the finalize job. Do not push a test tag
 to validate the workflow.
 
 The workflow has no non-publishing `workflow_dispatch` mode. Use normal CI or local quality gates to

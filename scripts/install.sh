@@ -2,7 +2,7 @@
 # Installs the Supacode CLI from a GitHub Release archive. Needs only sh, tar,
 # sha256sum or shasum, and curl or wget; no Node, npm, or compiler.
 #
-#   curl -fsSL https://supacode.sh/install.sh | sh
+#   curl -fsSL https://next.supacode.sh/install.sh | sh
 #
 # Environment:
 #   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
