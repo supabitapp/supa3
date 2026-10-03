@@ -73,7 +73,7 @@ jobs:
         run: vp run --filter @supacode/desktop ensure:electron
 
       - name: Typecheck
-        run: vpr typecheck
+        run: mise exec -- vp run typecheck
 
   build:
     name: Build
