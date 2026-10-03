@@ -4573,7 +4573,7 @@ export function restoreFailedBackgroundDraftThread(
     draftThreadsByThreadKey: {
       ...state.draftThreadsByThreadKey,
       [draftId]: {
-        ...draftThread,
+        ...(state.draftThreadsByThreadKey[draftId] ?? draftThread),
         threadId,
         promotedTo: null,
       },
