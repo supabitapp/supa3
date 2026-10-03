@@ -1,6 +1,7 @@
 import type { ChatAttachment, EnvironmentId } from "@supacode/contracts";
 import { Image } from "expo-image";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
@@ -55,13 +56,19 @@ export function ComposerQueuedEditAttachments(props: {
       contentContainerClassName="flex-row items-center gap-2"
     >
       {props.attachments.map((attachment) => (
-        <QueuedEditAttachmentChip
+        <Animated.View
           key={attachment.id}
-          environmentId={props.environmentId}
-          attachment={attachment}
-          disabled={props.disabled}
-          onRemove={props.onRemove}
-        />
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(120)}
+          layout={LinearTransition.duration(180)}
+        >
+          <QueuedEditAttachmentChip
+            environmentId={props.environmentId}
+            attachment={attachment}
+            disabled={props.disabled}
+            onRemove={props.onRemove}
+          />
+        </Animated.View>
       ))}
     </ScrollView>
   );

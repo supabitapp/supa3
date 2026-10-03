@@ -4,6 +4,7 @@ import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@sup
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -106,20 +107,26 @@ export function SettingsClientStorageRouteScreen() {
             </View>
           ) : environmentSummaries.length > 0 ? (
             environmentSummaries.map((environment, index) => (
-              <CacheEnvironmentRow
+              <Animated.View
                 key={environment.environmentId}
-                environment={environment}
-                environmentLabel={
-                  savedConnectionsById[environment.environmentId]?.environmentLabel ??
-                  environment.environmentId
-                }
-                machine={resolveEnvironmentMachineKind(
-                  serverConfigs.get(environment.environmentId) ?? null,
-                )}
-                disabled={isClearing}
-                first={index === 0}
-                onClear={() => confirmClearEnvironment(environment)}
-              />
+                entering={FadeIn.duration(140)}
+                exiting={FadeOut.duration(120)}
+                layout={LinearTransition.duration(180)}
+              >
+                <CacheEnvironmentRow
+                  environment={environment}
+                  environmentLabel={
+                    savedConnectionsById[environment.environmentId]?.environmentLabel ??
+                    environment.environmentId
+                  }
+                  machine={resolveEnvironmentMachineKind(
+                    serverConfigs.get(environment.environmentId) ?? null,
+                  )}
+                  disabled={isClearing}
+                  first={index === 0}
+                  onClear={() => confirmClearEnvironment(environment)}
+                />
+              </Animated.View>
             ))
           ) : (
             <View className="items-center gap-2 px-6 py-8">
