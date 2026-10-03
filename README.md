@@ -52,5 +52,4 @@ architecture notes. Report bugs in the
 
 ## Attribution
 
-Supacode is a fork of an MIT-licensed project. The [MIT license](./LICENSE) and
-third-party notices retain their original attribution.
+Supacode is a fork of https://github.com/pingdotgg/t3code
