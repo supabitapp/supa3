@@ -22,9 +22,9 @@ function link(
 ): ThreadPullRequestLink {
   return {
     host: "github.com",
-    repository: "supabitapp/supacode",
+    repository: "supabitapp/supacode-next",
     number,
-    url: `https://github.com/supabitapp/supacode/pull/${number}`,
+    url: `https://github.com/supabitapp/supacode-next/pull/${number}`,
     source: "manual",
     linkedAt: updatedAt,
     snapshot: {

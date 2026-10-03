@@ -3335,7 +3335,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     packageManager: rootPackageJson.packageManager,
     description: "Supacode desktop build",
     // Required by the .deb control file.
-    homepage: "https://github.com/supabitapp/supacode",
+    homepage: "https://github.com/supabitapp/supacode-next",
     author: "Supacode",
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig(

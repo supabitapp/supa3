@@ -1151,13 +1151,17 @@ describe("orchestrator MCP toolkit", () => {
               items: [{ queuedRunId: queuedUserRun.id, text: "🙂".repeat(1000), truncated: true }],
               nextCursor: null,
             });
-            const queueRead = yield* invoke("supacode_queue_read", { queuedRunId: queuedUserRun.id });
+            const queueRead = yield* invoke("supacode_queue_read", {
+              queuedRunId: queuedUserRun.id,
+            });
             expect(queueRead.structuredContent).toEqual({
               queuedRunId: queuedUserRun.id,
               text: "🙂".repeat(16000),
               truncated: true,
             });
-            const missingQueueRead = yield* invoke("supacode_queue_read", { queuedRunId: parentRun.id });
+            const missingQueueRead = yield* invoke("supacode_queue_read", {
+              queuedRunId: parentRun.id,
+            });
             expect(missingQueueRead.structuredContent).toMatchObject({ code: "invalid_request" });
             const queueRaceStatus = yield* invoke("task_status", { taskId: queueRace.task.id });
             expect(queueRaceStatus.isError).toBe(false);
@@ -1289,10 +1293,14 @@ describe("orchestrator MCP toolkit", () => {
               ({ tool }) => tool.name === "create_threads",
             );
             expect(createThreadsTool?.tool.annotations?.destructiveHint).toBe(true);
-            const threadListTool = server.tools.find(({ tool }) => tool.name === "supacode_thread_list");
+            const threadListTool = server.tools.find(
+              ({ tool }) => tool.name === "supacode_thread_list",
+            );
             expect(threadListTool?.tool.annotations?.readOnlyHint).toBe(true);
             expect(threadListTool?.tool.annotations?.idempotentHint).toBe(true);
-            const threadReadTool = server.tools.find(({ tool }) => tool.name === "supacode_thread_read");
+            const threadReadTool = server.tools.find(
+              ({ tool }) => tool.name === "supacode_thread_read",
+            );
             expect(threadReadTool?.tool.annotations?.readOnlyHint).toBe(false);
             const threadUpdateTool = server.tools.find(
               ({ tool }) => tool.name === "supacode_thread_update",
@@ -1316,9 +1324,13 @@ describe("orchestrator MCP toolkit", () => {
               _tag: "OrchestratorMcpFailure",
               code: "capability_denied",
             });
-            const threadSendTool = server.tools.find(({ tool }) => tool.name === "supacode_thread_send");
+            const threadSendTool = server.tools.find(
+              ({ tool }) => tool.name === "supacode_thread_send",
+            );
             expect(threadSendTool?.tool.annotations?.destructiveHint).toBe(true);
-            const threadWaitTool = server.tools.find(({ tool }) => tool.name === "supacode_thread_wait");
+            const threadWaitTool = server.tools.find(
+              ({ tool }) => tool.name === "supacode_thread_wait",
+            );
             expect(threadWaitTool?.tool.annotations?.readOnlyHint).toBe(true);
             const threadInterruptTool = server.tools.find(
               ({ tool }) => tool.name === "supacode_thread_interrupt",
@@ -1927,9 +1939,9 @@ describe("orchestrator MCP toolkit", () => {
               threadId: emptyThread.threadId,
               action: "link_pull_request",
               pullRequest: {
-                repository: "supabitapp/supacode",
+                repository: "supabitapp/supacode-next",
                 number: 8689,
-                url: "https://github.com/supabitapp/supacode/pull/8689",
+                url: "https://github.com/supabitapp/supacode-next/pull/8689",
               },
               clientRequestId: "metadata-link-1",
             });
@@ -1938,9 +1950,9 @@ describe("orchestrator MCP toolkit", () => {
             );
             expect(linked.linkedPullRequest).toEqual({
               projectId,
-              repository: "supabitapp/supacode",
+              repository: "supabitapp/supacode-next",
               number: 8689,
-              url: "https://github.com/supabitapp/supacode/pull/8689",
+              url: "https://github.com/supabitapp/supacode-next/pull/8689",
             });
             const metadataReadCall = yield* invoke("supacode_thread_read", {
               threadId: emptyThread.threadId,
@@ -1982,7 +1994,10 @@ describe("orchestrator MCP toolkit", () => {
               settled: true,
               settledAt: "2026-01-01T00:00:00.000Z",
             });
-            const settledListCall = yield* invoke("supacode_thread_list", { settled: true, limit: 100 });
+            const settledListCall = yield* invoke("supacode_thread_list", {
+              settled: true,
+              limit: 100,
+            });
             const settledList = yield* decodeThreadListResult(
               settledListCall.structuredContent,
             ).pipe(Effect.orDie);
@@ -1993,7 +2008,10 @@ describe("orchestrator MCP toolkit", () => {
               settled: true,
               settledAt: "2026-01-01T00:00:00.000Z",
             });
-            const activeListCall = yield* invoke("supacode_thread_list", { settled: false, limit: 100 });
+            const activeListCall = yield* invoke("supacode_thread_list", {
+              settled: false,
+              limit: 100,
+            });
             const activeList = yield* decodeThreadListResult(activeListCall.structuredContent).pipe(
               Effect.orDie,
             );

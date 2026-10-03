@@ -22,7 +22,7 @@ describe("tryOpenExternalUrl", () => {
     openURL.mockResolvedValue(undefined);
 
     await expect(
-      tryOpenExternalUrl("https://github.com/supabitapp/supacode", "pull-request"),
+      tryOpenExternalUrl("https://github.com/supabitapp/supacode-next", "pull-request"),
     ).resolves.toBe(true);
   });
 
@@ -33,7 +33,7 @@ describe("tryOpenExternalUrl", () => {
 
     await expect(
       tryOpenExternalUrl(
-        "https://github.com/supabitapp/supacode/pull/1?token=secret",
+        "https://github.com/supabitapp/supacode-next/pull/1?token=secret",
         "pull-request",
       ),
     ).resolves.toBe(false);

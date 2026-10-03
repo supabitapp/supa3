@@ -8029,7 +8029,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
       );
 
-      // Open interrupt edge cases are tracked in https://github.com/supabitapp/supacode/issues/15013.
+      // Open interrupt edge cases are tracked in https://github.com/supabitapp/supacode-next/issues/15013.
       yield* emitEvent({
         type: "turn-item.updated",
         threadId: command.threadId,

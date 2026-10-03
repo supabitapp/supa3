@@ -9,9 +9,9 @@ import {
 
 describe("parseChangeRequestUrl", () => {
   it("reads a GitHub pull request, lower-casing the repository", () => {
-    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode-next/pull/123")).toEqual({
       host: "github.com",
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 123,
     });
   });
@@ -71,28 +71,28 @@ describe("parseChangeRequestUrl", () => {
 
   it("survives trailing segments, a trailing slash and a query string", () => {
     expect(
-      parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/files?w=1"),
+      parseChangeRequestUrl("https://github.com/supabitapp/supacode-next/pull/123/files?w=1"),
     ).toEqual({
       host: "github.com",
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 123,
     });
-    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode/pull/123/")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/supabitapp/supacode-next/pull/123/")).toEqual({
       host: "github.com",
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 123,
     });
   });
 
   it("claims nothing it cannot be sure of", () => {
     for (const link of [
-      "https://github.com/supabitapp/supacode/issues/123",
-      "https://github.com/supabitapp/supacode/commit/0a1b2c3",
-      "https://github.com/supabitapp/supacode",
-      "https://github.com/supabitapp/supacode/pull/abc",
-      "https://gitlab.com/supabitapp/supacode/-/issues/12",
+      "https://github.com/supabitapp/supacode-next/issues/123",
+      "https://github.com/supabitapp/supacode-next/commit/0a1b2c3",
+      "https://github.com/supabitapp/supacode-next",
+      "https://github.com/supabitapp/supacode-next/pull/abc",
+      "https://gitlab.com/supabitapp/supacode-next/-/issues/12",
       "https://blog.example.test/2026/updates/pull/3",
-      "javascript:alert(1)//github.com/supabitapp/supacode/pull/1",
+      "javascript:alert(1)//github.com/supabitapp/supacode-next/pull/1",
       "not a url",
     ]) {
       expect(parseChangeRequestUrl(link), link).toBeNull();

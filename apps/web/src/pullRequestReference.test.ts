@@ -4,8 +4,8 @@ import { parsePullRequestReference } from "./pullRequestReference";
 
 describe("parsePullRequestReference", () => {
   it("accepts GitHub pull request URLs", () => {
-    expect(parsePullRequestReference("https://github.com/supabitapp/supacode/pull/42")).toBe(
-      "https://github.com/supabitapp/supacode/pull/42",
+    expect(parsePullRequestReference("https://github.com/supabitapp/supacode-next/pull/42")).toBe(
+      "https://github.com/supabitapp/supacode-next/pull/42",
     );
   });
 
@@ -47,8 +47,10 @@ describe("parsePullRequestReference", () => {
 
   it("accepts gh pr checkout commands with GitHub pull request URLs", () => {
     expect(
-      parsePullRequestReference("gh pr checkout https://github.com/supabitapp/supacode/pull/42"),
-    ).toBe("https://github.com/supabitapp/supacode/pull/42");
+      parsePullRequestReference(
+        "gh pr checkout https://github.com/supabitapp/supacode-next/pull/42",
+      ),
+    ).toBe("https://github.com/supabitapp/supacode-next/pull/42");
   });
 
   it("accepts glab mr checkout commands with raw numbers", () => {

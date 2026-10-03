@@ -48,24 +48,24 @@ describe("ThreadPullRequestServiceV2 project guard", () => {
           resolve: (root) => {
             resolvedRoot = root;
             return Effect.succeed({
-              canonicalKey: "github.com/supabitapp/supacode",
+              canonicalKey: "github.com/supabitapp/supacode-next",
               locator: {
                 source: "git-remote" as const,
                 remoteName: "origin",
-                remoteUrl: "git@github.com:supabitapp/supacode.git",
+                remoteUrl: "git@github.com:supabitapp/supacode-next.git",
               },
               provider: "github" as const,
-              displayName: "supabitapp/supacode",
+              displayName: "supabitapp/supacode-next",
               owner: "supabitapp",
-              name: "supacode",
+              name: "supacode-next",
             });
           },
         },
       );
       expect(resolvedRoot).toBe("/workspace/project");
-      expect(result.repository).toBe("supabitapp/supacode");
+      expect(result.repository).toBe("supabitapp/supacode-next");
       expect(result.project.repositoryIdentity?.canonicalKey).toBe(
-        "github.com/supabitapp/supacode",
+        "github.com/supabitapp/supacode-next",
       );
     }),
   );

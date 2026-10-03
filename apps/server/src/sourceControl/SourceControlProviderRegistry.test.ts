@@ -108,7 +108,7 @@ function makeRegistry(input: {
 it.effect("routes GitHub remotes to the GitHub provider", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry({
-      remotes: [{ name: "origin", url: "git@github.com:supabitapp/supacode.git" }],
+      remotes: [{ name: "origin", url: "git@github.com:supabitapp/supacode-next.git" }],
     });
 
     const provider = yield* registry.resolve({ cwd: "/repo" });
@@ -266,7 +266,7 @@ it.effect("routes authenticated self-hosted GitLab remotes on non-standard ports
 it.effect("routes Bitbucket remotes to the Bitbucket provider", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry({
-      remotes: [{ name: "origin", url: "git@bitbucket.org:supabitapp/supacode.git" }],
+      remotes: [{ name: "origin", url: "git@bitbucket.org:supabitapp/supacode-next.git" }],
     });
 
     const provider = yield* registry.resolve({ cwd: "/repo" });

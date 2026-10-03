@@ -286,7 +286,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                SUPACODE_DESKTOP_UPDATE_REPOSITORY: "supabitapp/supacode",
+                SUPACODE_DESKTOP_UPDATE_REPOSITORY: "supabitapp/supacode-next",
               },
             }),
           ),
@@ -297,7 +297,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                GITHUB_REPOSITORY: "supabitapp/supacode",
+                GITHUB_REPOSITORY: "supabitapp/supacode-next",
               },
             }),
           ),
@@ -307,13 +307,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(latestConfig, {
         provider: "github",
         owner: "supabitapp",
-        repo: "supacode",
+        repo: "supacode-next",
         releaseType: "release",
       });
       assert.deepStrictEqual(nightlyConfig, {
         provider: "github",
         owner: "supabitapp",
-        repo: "supacode",
+        repo: "supacode-next",
         releaseType: "prerelease",
         channel: "nightly",
       });
@@ -347,14 +347,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         {
           provider: "github",
           owner: "supabitapp",
-          repo: "supacode",
+          repo: "supacode-next",
           releaseType: "release",
         },
       ]);
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(
-          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "supabitapp/supacode" } }),
+          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "supabitapp/supacode-next" } }),
         ),
       ),
     ),

@@ -57,9 +57,9 @@ const NOW = "2026-06-02T00:00:00.000Z";
 
 const linkedPullRequest = {
   projectId: ProjectId.make("project-1"),
-  repository: "supabitapp/supacode",
+  repository: "supabitapp/supacode-next",
   number: 42,
-  url: "https://github.com/supabitapp/supacode/pull/42",
+  url: "https://github.com/supabitapp/supacode-next/pull/42",
 };
 
 describe("resolveThreadListV2SnoozeMenuSelection", () => {

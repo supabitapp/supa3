@@ -1895,20 +1895,20 @@ describe("threadShellHasStarted", () => {
 it("follows a changed server PR link without replacing an unrelated open panel", () => {
   const previous = {
     projectId: ProjectId.make("project-1"),
-    repository: "supabitapp/supacode",
+    repository: "supabitapp/supacode-next",
     number: 42,
-    url: "https://github.com/supabitapp/supacode/pull/42",
+    url: "https://github.com/supabitapp/supacode-next/pull/42",
   };
   const current = {
     ...previous,
     number: 43,
-    url: "https://github.com/supabitapp/supacode/pull/43",
+    url: "https://github.com/supabitapp/supacode-next/pull/43",
   };
   const surface = {
     id: "pull-request:previous",
     kind: "pull-request",
     projectId: previous.projectId,
-    repository: "SupabitApp/Supacode",
+    repository: "SupabitApp/Supacode-Next",
     number: previous.number,
   } satisfies RightPanelSurface;
 

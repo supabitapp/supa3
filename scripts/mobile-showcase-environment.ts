@@ -117,7 +117,7 @@ export const SHOWCASE_PROJECTS = [
     id: "supacode",
     title: "supacode",
     directory: "supacode",
-    repositoryUrl: "https://github.com/supabitapp/supacode.git",
+    repositoryUrl: "https://github.com/supabitapp/supacode-next.git",
     favicon: PROJECT_FAVICONS.supacode,
   },
   {
@@ -305,7 +305,7 @@ async function seedSupacodeWorkspace(workspaceRoot: string): Promise<void> {
   );
   await initializeRepository({
     workspaceRoot,
-    repositoryUrl: "https://github.com/supabitapp/supacode.git",
+    repositoryUrl: "https://github.com/supabitapp/supacode-next.git",
     commitMessage: "Show connected environments",
   });
   await runGit(workspaceRoot, ["checkout", "-b", "feat/remote-command-center"]);

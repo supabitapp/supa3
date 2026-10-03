@@ -75,11 +75,11 @@ describe("load balancing shared project machines", () => {
   });
 });
 const repositoryIdentity = {
-  canonicalKey: "github.com/supabitapp/supacode",
+  canonicalKey: "github.com/supabitapp/supacode-next",
   locator: {
     source: "git-remote" as const,
     remoteName: "upstream",
-    remoteUrl: "https://github.com/supabitapp/supacode.git",
+    remoteUrl: "https://github.com/supabitapp/supacode-next.git",
   },
   provider: "github",
   owner: "supabitapp",

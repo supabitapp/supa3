@@ -149,10 +149,10 @@ describe("uiStateStore pure functions", () => {
   });
 
   it("stores the sidebar project scope and resets it to all projects", () => {
-    const scoped = setSidebarProjectScopeKey(makeUiState(), "github.com/supabitapp/supacode");
+    const scoped = setSidebarProjectScopeKey(makeUiState(), "github.com/supabitapp/supacode-next");
 
-    expect(scoped.sidebarProjectScopeKey).toBe("github.com/supabitapp/supacode");
-    expect(setSidebarProjectScopeKey(scoped, "github.com/supabitapp/supacode")).toBe(scoped);
+    expect(scoped.sidebarProjectScopeKey).toBe("github.com/supabitapp/supacode-next");
+    expect(setSidebarProjectScopeKey(scoped, "github.com/supabitapp/supacode-next")).toBe(scoped);
     expect(setSidebarProjectScopeKey(scoped, null).sidebarProjectScopeKey).toBeNull();
     expect(setSidebarProjectScopeKey(scoped, "").sidebarProjectScopeKey).toBeNull();
   });
@@ -339,14 +339,14 @@ describe("uiStateStore persistence", () => {
   });
 
   it("restores the sidebar project scope across reloads", () => {
-    persistState(makeUiState({ sidebarProjectScopeKey: "github.com/supabitapp/supacode" }));
+    persistState(makeUiState({ sidebarProjectScopeKey: "github.com/supabitapp/supacode-next" }));
 
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
 
     expect(parsePersistedState(persisted).sidebarProjectScopeKey).toBe(
-      "github.com/supabitapp/supacode",
+      "github.com/supabitapp/supacode-next",
     );
   });
 

@@ -902,7 +902,7 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
         yield* fileSystem.makeDirectory(path.join(repo, ".git"));
         yield* fileSystem.writeFileString(
           path.join(repo, ".git", "config"),
-          '[core]\n\tbare = false\n[remote "origin"]\n\turl = git@github.com:supabitapp/supacode.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n',
+          '[core]\n\tbare = false\n[remote "origin"]\n\turl = git@github.com:supabitapp/supacode-next.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n',
         );
         yield* fileSystem.writeFileString(
           path.join(worktree, ".git"),
@@ -943,35 +943,40 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
           { path: plain, git: null },
           {
             path: repo,
-            git: { remoteKey: "github.com/supabitapp/supacode", repository: "supabitapp/supacode" },
+            git: {
+              remoteKey: "github.com/supabitapp/supacode-next",
+              repository: "supabitapp/supacode-next",
+            },
           },
         ]);
       }),
     );
 
-    it.effect("excludes sandboxes under the configured worktrees dir without .supacode in the path", () =>
-      Effect.gen(function* () {
-        const path = yield* Path.Path;
-        const claudeHomePath = yield* makeTempDir("supacode-claude-home-");
-        const codexHomePath = yield* makeTempDir("supacode-codex-home-");
-        const configBaseDir = yield* makeTempDir("supacode-scanner-base-");
-        const fileSystem = yield* FileSystem.FileSystem;
+    it.effect(
+      "excludes sandboxes under the configured worktrees dir without .supacode in the path",
+      () =>
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          const claudeHomePath = yield* makeTempDir("supacode-claude-home-");
+          const codexHomePath = yield* makeTempDir("supacode-codex-home-");
+          const configBaseDir = yield* makeTempDir("supacode-scanner-base-");
+          const fileSystem = yield* FileSystem.FileSystem;
 
-        // worktreesDir derives as `<baseDir>/worktrees`, and the temp base
-        // dir contains no `.supacode` segment — only the config-based prefix match
-        // can exclude this one.
-        const worktreeCwd = path.join(configBaseDir, "worktrees", "supacode", "wt-2");
-        yield* fileSystem.makeDirectory(worktreeCwd, { recursive: true });
-        yield* writeTranscript({
-          filePath: path.join(claudeHomePath, "projects", "-slug", "a.jsonl"),
-          contents: claudeSessionLine(worktreeCwd),
-          mtimeMs: Date.parse("2026-01-01T00:00:00.000Z"),
-        });
+          // worktreesDir derives as `<baseDir>/worktrees`, and the temp base
+          // dir contains no `.supacode` segment — only the config-based prefix match
+          // can exclude this one.
+          const worktreeCwd = path.join(configBaseDir, "worktrees", "supacode", "wt-2");
+          yield* fileSystem.makeDirectory(worktreeCwd, { recursive: true });
+          yield* writeTranscript({
+            filePath: path.join(claudeHomePath, "projects", "-slug", "a.jsonl"),
+            contents: claudeSessionLine(worktreeCwd),
+            mtimeMs: Date.parse("2026-01-01T00:00:00.000Z"),
+          });
 
-        const result = yield* runScan({ claudeHomePath, codexHomePath, configBaseDir });
+          const result = yield* runScan({ claudeHomePath, codexHomePath, configBaseDir });
 
-        expect(result.candidates).toEqual([]);
-      }),
+          expect(result.candidates).toEqual([]);
+        }),
     );
 
     it.effect("excludes sandboxes reached through a symlink into the worktrees dir", () =>

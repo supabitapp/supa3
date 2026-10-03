@@ -4,5 +4,5 @@
   "description": "Allows Supacode to capture the focused window, identify it for optional accessibility text, and animate it into Supacode. Disable this extension to revoke access.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
   "version": 2,
-  "url": "https://github.com/supabitapp/supacode"
+  "url": "https://github.com/supabitapp/supacode-next"
 }

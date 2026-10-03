@@ -35,12 +35,12 @@ const TARGET = new PrimaryConnectionTarget({
 const PUBLISH_RESULT: SourceControlPublishRepositoryResult = {
   repository: {
     provider: "github",
-    nameWithOwner: "supabitapp/supacode",
-    url: "https://github.com/supabitapp/supacode",
-    sshUrl: "git@github.com:supabitapp/supacode.git",
+    nameWithOwner: "supabitapp/supacode-next",
+    url: "https://github.com/supabitapp/supacode-next",
+    sshUrl: "git@github.com:supabitapp/supacode-next.git",
   },
   remoteName: "origin",
-  remoteUrl: "git@github.com:supabitapp/supacode.git",
+  remoteUrl: "git@github.com:supabitapp/supacode-next.git",
   branch: "main",
   upstreamBranch: "origin/main",
   status: "pushed",
@@ -139,7 +139,7 @@ describe("source control environment atoms", () => {
             input: {
               cwd: "/repo",
               provider: "github",
-              repository: "supabitapp/supacode",
+              repository: "supabitapp/supacode-next",
               visibility: "private",
             },
           }),
@@ -155,7 +155,7 @@ describe("source control environment atoms", () => {
             input: {
               cwd: "/repo",
               provider: "github",
-              repository: "supabitapp/supacode",
+              repository: "supabitapp/supacode-next",
               visibility: "private",
             },
           }),

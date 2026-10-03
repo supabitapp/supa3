@@ -16,7 +16,7 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "supabitapp/supacode"
+$repo = "supabitapp/supacode-next"
 $baseUrl = if ($env:SUPACODE_RELEASE_BASE_URL) { $env:SUPACODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
 $supacodeHome = if ($env:SUPACODE_HOME) { $env:SUPACODE_HOME } else { Join-Path $HOME ".supacode" }
 $binDir = if ($env:SUPACODE_INSTALL_BIN_DIR) { $env:SUPACODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }

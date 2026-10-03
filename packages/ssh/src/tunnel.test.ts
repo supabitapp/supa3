@@ -105,7 +105,7 @@ describe("ssh tunnel scripts", () => {
     assert.include(script, "SUPACODE_NODE_SCRIPT_PATH=''");
     assert.include(
       script,
-      "SUPACODE_RELEASE_BASE_URL='https://github.com/supabitapp/supacode/releases/download'",
+      "SUPACODE_RELEASE_BASE_URL='https://github.com/supabitapp/supacode-next/releases/download'",
     );
     assert.include(
       script,

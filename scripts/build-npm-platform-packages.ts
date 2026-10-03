@@ -163,7 +163,7 @@ export function npmPlatformPackageReadme(platformKey: CliArchivePlatformKey): st
     `npx ${NPM_LAUNCHER_PACKAGE_NAME}@latest`,
     "```",
     "",
-    "Source and documentation: https://github.com/supabitapp/supacode",
+    "Source and documentation: https://github.com/supabitapp/supacode-next",
     "",
   ].join("\n");
 }
@@ -210,7 +210,7 @@ try {
       "supacode: no Supacode CLI build is available for this platform (" + key + ").",
       "Supported platforms: " + SUPPORTED.join(", ") + ".",
       "If yours is listed, reinstall supacode so npm fetches its optional dependency.",
-      "The desktop app and release archives are at https://github.com/supabitapp/supacode/releases",
+      "The desktop app and release archives are at https://github.com/supabitapp/supacode-next/releases",
       "",
     ].join("\\n"),
   );

@@ -85,12 +85,12 @@ describe("partitionOnboardingProjects", () => {
 describe("groupOnboardingProjects", () => {
   it("groups clones by origin, keeps local repos separate, and folds non-git folders away", () => {
     const main = candidate("/code/supacode", {
-      git: github("supabitapp/supacode"),
+      git: github("supabitapp/supacode-next"),
       threadCount: 79,
       lastActiveAt: "2026-08-21T12:00:00.000Z",
     });
     const clone = candidate("/code/clones/supacode-2", {
-      git: github("supabitapp/supacode"),
+      git: github("supabitapp/supacode-next"),
       threadCount: 13,
       lastActiveAt: "2026-08-10T12:00:00.000Z",
     });
@@ -120,7 +120,7 @@ describe("groupOnboardingProjects", () => {
         lastActiveAt: "2026-08-22T00:00:00.000Z",
       },
       {
-        label: "supabitapp/supacode",
+        label: "supabitapp/supacode-next",
         paths: ["/code/supacode", "/code/clones/supacode-2"],
         threadCount: 92,
         lastActiveAt: "2026-08-21T12:00:00.000Z",

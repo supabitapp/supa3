@@ -17,7 +17,7 @@
 # instead of fetching the release again.
 set -eu
 
-repo="supabitapp/supacode"
+repo="supabitapp/supacode-next"
 base_url="${SUPACODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
 supacode_home="${SUPACODE_HOME:-$HOME/.supacode}"
 bin_dir="${SUPACODE_INSTALL_BIN_DIR:-$HOME/.local/bin}"

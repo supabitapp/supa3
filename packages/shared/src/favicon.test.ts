@@ -29,7 +29,7 @@ describe("faviconUrlForOrigin", () => {
 
   it("keeps the public origin, port and requested size", () => {
     expect(
-      faviconUrlForOrigin("https://github.com:8443/supabitapp/supacode?private=query", 64),
+      faviconUrlForOrigin("https://github.com:8443/supabitapp/supacode-next?private=query", 64),
     ).toBe("https://www.google.com/s2/favicons?domain=github.com%3A8443&sz=64");
   });
 

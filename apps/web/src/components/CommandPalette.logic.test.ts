@@ -781,8 +781,8 @@ describe("filterPinnedBrowseEntries", () => {
 it.each([
   "#10839",
   "10839",
-  "supabitapp/supacode#10839",
-  "https://github.com/supabitapp/supacode/pull/10839",
+  "supabitapp/supacode-next#10839",
+  "https://github.com/supabitapp/supacode-next/pull/10839",
 ])("finds linked threads from PR query %s", (query) => {
   const items = buildThreadActionItems({
     threads: [
@@ -791,9 +791,9 @@ it.each([
         pullRequests: [
           {
             host: "github.com",
-            repository: "supabitapp/supacode",
+            repository: "supabitapp/supacode-next",
             number: 10839,
-            url: "https://github.com/supabitapp/supacode/pull/10839",
+            url: "https://github.com/supabitapp/supacode-next/pull/10839",
             source: "manual",
             linkedAt: "2026-09-08T00:00:00Z",
             snapshot: null,

@@ -73,18 +73,18 @@ it("links and unlinks a pull request through thread.metadata.update (#8160)", ()
     threadId: "thread-1",
     linkedPullRequest: {
       projectId: "project-1",
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 8160,
-      url: "https://github.com/supabitapp/supacode/pull/8160",
+      url: "https://github.com/supabitapp/supacode-next/pull/8160",
     },
   });
   assert.deepStrictEqual(
     (linked as Extract<typeof linked, { type: "thread.metadata.update" }>).linkedPullRequest,
     {
       projectId: "project-1",
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 8160,
-      url: "https://github.com/supabitapp/supacode/pull/8160",
+      url: "https://github.com/supabitapp/supacode-next/pull/8160",
     },
   );
   const unlinked = decode({

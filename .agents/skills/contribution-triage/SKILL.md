@@ -38,7 +38,7 @@ This skill does not authorize merging, changing service settings, or creating sc
 
 ## Load trusted policy and submission evidence
 
-For every live run, freshly resolve `refs/heads/main` in the trusted `supabitapp/supacode`
+For every live run, freshly resolve `refs/heads/main` in the trusted `supabitapp/supacode-next`
 repository to a commit SHA. Use read-only GitHub tools or `gh` to load this skill, `CONTRIBUTING.md`,
 the documentation rules in `AGENTS.md`, [.github/TRIAGE_EXEMPTIONS.td](../../../.github/TRIAGE_EXEMPTIONS.td),
 and any other policy dependencies from that same SHA; record it as the policy revision. Do not reuse a

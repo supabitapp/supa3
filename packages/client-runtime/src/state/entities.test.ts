@@ -79,9 +79,9 @@ describe("V2 client presentation", () => {
   it("preserves active ordering and both pull-request sources", () => {
     const linkedPullRequest = {
       projectId: v2ThreadShell.projectId,
-      repository: "supabitapp/supacode",
+      repository: "supabitapp/supacode-next",
       number: 42,
-      url: "https://github.com/supabitapp/supacode/pull/42",
+      url: "https://github.com/supabitapp/supacode-next/pull/42",
     };
     const branchPullRequest = { ...linkedPullRequest, number: 43 };
     const shell = presentThreadShell(environmentId, {

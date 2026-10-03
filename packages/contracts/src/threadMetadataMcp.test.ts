@@ -18,17 +18,17 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       decodeUpdate({
         action: "link_pull_request",
         pullRequest: {
-          repository: "supabitapp/supacode",
+          repository: "supabitapp/supacode-next",
           number: 8689,
-          url: "https://github.com/supabitapp/supacode/pull/8689",
+          url: "https://github.com/supabitapp/supacode-next/pull/8689",
         },
       }),
       {
         action: "link_pull_request",
         pullRequest: {
-          repository: "supabitapp/supacode",
+          repository: "supabitapp/supacode-next",
           number: 8689,
-          url: "https://github.com/supabitapp/supacode/pull/8689",
+          url: "https://github.com/supabitapp/supacode-next/pull/8689",
         },
       },
     );
@@ -45,9 +45,9 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       decodeUpdate({
         action: "unlink_pull_request",
         pullRequest: {
-          repository: "supabitapp/supacode",
+          repository: "supabitapp/supacode-next",
           number: 8689,
-          url: "https://github.com/supabitapp/supacode/pull/8689",
+          url: "https://github.com/supabitapp/supacode-next/pull/8689",
         },
       }),
     );
@@ -92,7 +92,7 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       assert.throws(() =>
         decodeUpdate({
           action: "link_pull_request",
-          pullRequest: { repository: "supabitapp/supacode", number: 8690, url },
+          pullRequest: { repository: "supabitapp/supacode-next", number: 8690, url },
         }),
       );
     }

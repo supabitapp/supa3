@@ -11,7 +11,7 @@ const latestAnnouncement = {
   releaseName: "Supacode v1.2.3",
   version: "1.2.3",
   tag: "v1.2.3",
-  releaseUrl: new URL("https://github.com/supabitapp/supacode/releases/tag/v1.2.3"),
+  releaseUrl: new URL("https://github.com/supabitapp/supacode-next/releases/tag/v1.2.3"),
   timestamp: "2026-05-01T01:41:00.000Z",
 } as const;
 
@@ -26,7 +26,7 @@ it("builds a prerelease Discord announcement for nightly subscribers", () => {
       version: "1.2.4-nightly.20260501.17",
       tag: "v1.2.4-nightly.20260501.17",
       releaseUrl: new URL(
-        "https://github.com/supabitapp/supacode/releases/tag/v1.2.4-nightly.20260501.17",
+        "https://github.com/supabitapp/supacode-next/releases/tag/v1.2.4-nightly.20260501.17",
       ),
       timestamp: "2026-05-01T01:41:00.000Z",
     }),
@@ -39,7 +39,7 @@ it("builds a prerelease Discord announcement for nightly subscribers", () => {
       embeds: [
         {
           title: "Supacode Nightly 1.2.4-nightly.20260501.17 (abcdef123456)",
-          url: "https://github.com/supabitapp/supacode/releases/tag/v1.2.4-nightly.20260501.17",
+          url: "https://github.com/supabitapp/supacode-next/releases/tag/v1.2.4-nightly.20260501.17",
           description: "A new Supacode prerelease is available for nightly testers.",
           color: 0x5865f2,
           fields: [
@@ -70,7 +70,7 @@ it("builds a latest Discord announcement for stable subscribers", () => {
     embeds: [
       {
         title: "Supacode v1.2.3",
-        url: "https://github.com/supabitapp/supacode/releases/tag/v1.2.3",
+        url: "https://github.com/supabitapp/supacode-next/releases/tag/v1.2.3",
         description: "A new Supacode latest release is available.",
         color: 0x2ecc71,
         fields: [

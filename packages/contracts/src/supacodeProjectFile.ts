@@ -103,7 +103,7 @@ export const SupacodeProjectFile = Schema.Struct({
 }).annotate({
   title: "Supacode project file",
   description:
-    "Checked-in project configuration for Supacode (supacode.json at the repository root). See https://github.com/supabitapp/supacode for documentation.",
+    "Checked-in project configuration for Supacode (supacode.json at the repository root). See https://github.com/supabitapp/supacode-next for documentation.",
 });
 export type SupacodeProjectFile = typeof SupacodeProjectFile.Type;
 

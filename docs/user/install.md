@@ -11,7 +11,7 @@ launch Supacode and configure providers afterwards.
 ## From source
 
 Use Node.js 24 and Vite+ (`vp`). Get the source from
-[supabitapp/supacode](https://github.com/supabitapp/supacode), then run these commands
+[supabitapp/supacode-next](https://github.com/supabitapp/supacode-next), then run these commands
 from the repository root:
 
 ```bash
@@ -39,7 +39,7 @@ Run `supacode --help` for the full reference.
 ## Desktop app
 
 Build the desktop client from this repository. Distribution artifacts belong to
-Supacode's [GitHub Releases](https://github.com/supabitapp/supacode/releases).
+Supacode's [GitHub Releases](https://github.com/supabitapp/supacode-next/releases).
 
 ### Windows Subsystem for Linux
 

@@ -14,7 +14,7 @@ const labels = new Map([
 function project(
   id: string,
   environmentId = nucbox,
-  canonicalKey: string | null = "github.com/supabitapp/supacode",
+  canonicalKey: string | null = "github.com/supabitapp/supacode-next",
 ) {
   return {
     id: ProjectId.make(id),
@@ -61,7 +61,7 @@ describe("pull request project filter choices", () => {
 
   it("matches canonical repositories regardless of casing", () => {
     const main = project("main");
-    const worktree = project("worktree", nucbox, "GitHub.com/SupabitApp/Supacode");
+    const worktree = project("worktree", nucbox, "GitHub.com/SupabitApp/Supacode-Next");
 
     expect(pullRequestFilterProjects([main, worktree], labels)).toEqual([main]);
   });
@@ -89,7 +89,10 @@ describe("pull request project filter choices", () => {
 
   it("keeps repositories on different hosts separate", () => {
     const choices = pullRequestFilterProjects(
-      [project("github"), project("enterprise", nucbox, "git.example.com/supabitapp/supacode")],
+      [
+        project("github"),
+        project("enterprise", nucbox, "git.example.com/supabitapp/supacode-next"),
+      ],
       labels,
     );
 
