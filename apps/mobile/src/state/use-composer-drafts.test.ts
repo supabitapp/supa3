@@ -125,6 +125,11 @@ vi.mock("../lib/composerImages", async (importOriginal) => ({
 }));
 
 vi.mock("../lib/uuid", () => ({ uuidv4: () => "uuid", randomHex: () => "0000" }));
+vi.mock("../lib/relay", () => ({
+  fetchRelay: () => {
+    throw new Error("Unexpected network fetch in the inline read test");
+  },
+}));
 vi.mock("./assets", () => ({ assetEnvironment: {} }));
 vi.mock("./attachments", () => ({ attachmentEnvironment: {} }));
 vi.mock("./session", () => ({ environmentSession: {} }));

@@ -76,7 +76,7 @@ const keyBytes = (value: string) => {
 const transcript = (identity: Uint8Array, client: Uint8Array, host: Uint8Array) =>
   concatBytes(encoder.encode("supacode-tunnel-v1\n"), identity, client, host);
 
-export function createRelayCipher(shared: Uint8Array, context: Uint8Array, host: boolean) {
+function createRelayCipher(shared: Uint8Array, context: Uint8Array, host: boolean) {
   const keys = hkdf(
     sha256,
     shared,
