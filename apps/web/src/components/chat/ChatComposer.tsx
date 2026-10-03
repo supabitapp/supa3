@@ -1210,6 +1210,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
+  sendShortcut?: UnifiedSettings["sendShortcut"] | undefined;
+  followUpBehavior?: UnifiedSettings["followUpBehavior"] | undefined;
+  isDraftThread?: boolean | undefined;
+  hasMultilinePrompt?: boolean | undefined;
+  modifierLabel?: string | undefined;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -1243,6 +1248,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
+        sendShortcut={props.sendShortcut}
+        followUpBehavior={props.followUpBehavior}
+        isDraftThread={props.isDraftThread}
+        hasMultilinePrompt={props.hasMultilinePrompt}
+        modifierLabel={props.modifierLabel}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
@@ -7065,6 +7075,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }
                     isPreparingWorktree={isPreparingWorktree}
                     hasSendableContent={composerSendState.hasSendableContent}
+                    sendShortcut={settings.sendShortcut}
+                    followUpBehavior={settings.followUpBehavior}
+                    isDraftThread={_isLocalDraftThread}
+                    hasMultilinePrompt={hasMultilinePrompt}
+                    modifierLabel={isMacPlatform(navigator.platform) ? "⌘" : "Ctrl"}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}

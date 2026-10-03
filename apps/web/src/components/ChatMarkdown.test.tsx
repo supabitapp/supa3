@@ -5,11 +5,13 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
+import { renderMermaidDiagram } from "../diagrams/mermaidRenderer";
 import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+vi.mock("../diagrams/mermaidRenderer", () => ({ renderMermaidDiagram: vi.fn() }));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
 vi.mock("../hooks/useSettings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../hooks/useSettings")>();
@@ -445,6 +447,47 @@ describe("ChatMarkdown streaming", () => {
       vi.unstubAllGlobals();
     }
   });
+});
+
+describe("ChatMarkdown diagrams", () => {
+  it.each([
+    { text: "```mermaid\ngraph TD\n A-->B\n```", streaming: false, expected: "diagram" },
+    { text: "~~~MERMAID\ngraph TD\n A-->B\n~~~", streaming: false, expected: "diagram" },
+    {
+      text: "```mermaid\ngraph TD\n A-->B\n```\n\nFollowing text",
+      streaming: true,
+      expected: "diagram",
+    },
+    {
+      text: "> ```mermaid\n> graph TD\n>  A-->B\n> ```",
+      streaming: false,
+      expected: "diagram",
+    },
+    {
+      text: "```mermaid\ngraph TD\n A-->B",
+      streaming: true,
+      expected: "graph TD\n A-->B\n",
+    },
+  ])(
+    "renders completed fences while retaining unfinished source: $text",
+    async ({ text, streaming, expected }) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      vi.mocked(renderMermaidDiagram).mockReset().mockResolvedValue("diagram");
+      let renderer: ReactTestRenderer | undefined;
+      try {
+        await act(async () => {
+          renderer = create(<ChatMarkdown cwd={undefined} text={text} isStreaming={streaming} />, {
+            createNodeMock: () => ({}),
+          });
+        });
+        expect(renderer!.root.findByType("code").children.join("")).toBe(expected);
+        expect(renderMermaidDiagram).toHaveBeenCalledTimes(expected === "diagram" ? 1 : 0);
+      } finally {
+        await act(async () => renderer?.unmount());
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 });
 
 describe("canUseMarkdownFileShellActions", () => {

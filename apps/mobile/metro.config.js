@@ -18,6 +18,7 @@ const licenseGeneratorSource = path.join(
 const escapedWorkspaceRoot = workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const mobileShikiRoot = path.dirname(require.resolve("shiki/package.json", { paths: [__dirname] }));
 const generatedDeviceStreamRoot = path.join(__dirname, ".generated", "device-stream");
+const generatedMermaidWorkletRoot = path.join(__dirname, ".generated", "mermaid-worklet");
 const resolveShikiDependencyRoot = (packageName) => {
   const entryPath = require.resolve(packageName, { paths: [mobileShikiRoot] });
   let currentDir = path.dirname(entryPath);
@@ -48,6 +49,7 @@ config.resolver = {
     ...config.resolver?.extraNodeModules,
     "@t3tools/mobile-third-party-licenses": generatedLicenseModuleRoot,
     "@t3tools/mobile-device-stream": generatedDeviceStreamRoot,
+    "@t3tools/mobile-mermaid-worklet": generatedMermaidWorkletRoot,
     shiki: mobileShikiRoot,
     "@shikijs/core": resolveShikiDependencyRoot("@shikijs/core"),
     "@shikijs/engine-javascript": resolveShikiDependencyRoot("@shikijs/engine-javascript"),
@@ -120,7 +122,33 @@ async function prepareDeviceStream() {
   }
 }
 
-module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareDeviceStream()]).then(() =>
+async function prepareMermaidWorklet() {
+  const { generateMermaidWorklet } = await import(
+    pathToFileURL(path.join(__dirname, "scripts", "generate-mermaid-worklet.mts")).href
+  );
+  await generateMermaidWorklet();
+  if (process.env.NODE_ENV !== "production") {
+    let rebuild = Promise.resolve();
+    fs.watch(
+      path.join(workspaceRoot, "packages/mermaid-ascii/src"),
+      { persistent: false, recursive: true },
+      (_event, filename) => {
+        if (filename && !String(filename).endsWith(".ts")) return;
+        rebuild = rebuild
+          .then(() => generateMermaidWorklet())
+          .catch((error) => {
+            console.error("Could not rebuild the Mermaid worklet:", error);
+          });
+      },
+    );
+  }
+}
+
+module.exports = Promise.all([
+  generateMobileThirdPartyLicenses(),
+  prepareDeviceStream(),
+  prepareMermaidWorklet(),
+]).then(() =>
   withUniwindConfig(config, {
     cssEntryFile: "./global.css",
     extraThemes,
