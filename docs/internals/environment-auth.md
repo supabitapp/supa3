@@ -1,30 +1,27 @@
 # Environment authentication
 
-The environment issues its own sessions and enforces their capabilities. Cloud
-identity and relay credentials belong to a separate trust boundary, described in
-[T3 Connect](./t3-connect.md). A relay token is never an environment login.
+The environment issues its own sessions and enforces their capabilities.
 
 ## Authority survives transport changes
 
 Pairing delegates a set of scopes. Exchanging a bootstrap credential can narrow
 that grant but cannot widen it. Ordinary pairing does not grant access-management
-or relay-management authority. Creating another pairing link requires both
-`access:write` and every scope being delegated. The
-[auth handlers](../../apps/server/src/auth/http.ts) enforce this at issuance;
-client labels and device metadata have no authorization role.
+authority. Creating another pairing link requires both `access:write` and every
+scope being delegated. The [auth handlers](../../apps/server/src/auth/http.ts)
+enforce this at issuance; client labels and device metadata have no authorization
+role. Unknown scope strings, whether requested or stored, are dropped rather than
+rejected, so clients and records from other versions keep working.
 
 The access read model contains pairing metadata, never recoverable pairing
 secrets. Only the creation response returns the raw credential. Otherwise read
 access to the connections list would become a way to acquire another client's
 authority.
 
-Browser cookies, bearer tokens, and DPoP tokens adapt the same scoped session
-model. DPoP binds a token to a client's proof key; an invalid proof must fail
-rather than fall back to bearer authentication. The OAuth token-exchange
-vocabulary gives these grants a familiar meaning, but the environment does not
-implement a general-purpose OAuth authorization server.
+Browser cookies and bearer tokens adapt the same scoped session model. The OAuth
+token-exchange vocabulary gives these grants a familiar meaning, but the
+environment does not implement a general-purpose OAuth authorization server.
 
-Bearer and DPoP clients obtain short-lived WebSocket tickets through authenticated
+Bearer clients obtain short-lived WebSocket tickets through authenticated
 HTTP so long-lived tokens stay out of socket URLs. Browser sessions can
 authenticate the upgrade with their cookie. A successful handshake grants no
 extra authority: [every RPC declares a required
@@ -53,8 +50,8 @@ and restarting invalidates the old credential and its WebSocket tickets.
 
 Normal credentials keep precedence. A rejected normal credential never falls
 back to the reusable credential. OAuth exchanges create ordinary local bearer
-or DPoP children with normal expiry and revocation. The reusable cookie expires
-after 30 days.
+children with normal expiry and revocation. The reusable cookie expires after 30
+days.
 
 ## The environment is the filesystem boundary
 

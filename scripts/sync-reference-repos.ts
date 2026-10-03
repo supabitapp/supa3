@@ -97,7 +97,6 @@ export type ReferenceRepoSyncError =
   | ReferenceRepoVersionResolutionError
   | ReferenceRepoGitSubtreeError;
 
-const decodeJsonSource = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeYamlSource = Schema.decodeEffect(fromYaml(Schema.Unknown));
 
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
@@ -125,11 +124,7 @@ function decodeVersionSource(
   sourcePath: string,
   content: string,
 ): Effect.Effect<unknown, ReferenceRepoSyncError> {
-  const decode =
-    repo.versionSourcePath.endsWith(".yaml") || repo.versionSourcePath.endsWith(".yml")
-      ? decodeYamlSource
-      : decodeJsonSource;
-  return decode(content).pipe(
+  return decodeYamlSource(content).pipe(
     Effect.mapError(
       (cause) =>
         new ReferenceRepoVersionSourceError({

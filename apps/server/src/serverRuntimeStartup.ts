@@ -48,7 +48,7 @@ import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
-import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import * as ServiceLauncherClient from "./service/serviceLauncherClient.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import {
   formatHeadlessServeOutput,

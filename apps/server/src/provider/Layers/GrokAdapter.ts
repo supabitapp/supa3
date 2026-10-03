@@ -14,7 +14,7 @@ import {
 } from "@t3tools/contracts";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { stableStringify } from "@t3tools/shared/relaySigning";
+import { stableStringify } from "@t3tools/shared/stableStringify";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";

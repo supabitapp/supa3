@@ -189,16 +189,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(exchanged.access_token).not.toBe(token);
       expect(exchanged.scope).toBe("orchestration:read");
-      const dpop = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
-        token,
-        ["orchestration:read"],
-        requestMetadata,
-        { proofKeyThumbprint: "test-proof-key" },
-      );
-      expect(dpop.access_token).not.toBe(token);
-      expect(dpop.access_token).not.toBe(exchanged.access_token);
-      expect(dpop.token_type).toBe("DPoP");
-      expect(dpop.scope).toBe("orchestration:read");
+      expect(exchanged.token_type).toBe("Bearer");
 
       const secondBearer = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
         token,
@@ -333,7 +324,6 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
-        "relay:read",
       ]);
       expect(verified.subject).toBe("one-time-token");
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
@@ -491,10 +481,8 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
-        "relay:read",
         "access:read",
         "access:write",
-        "relay:write",
       ]);
       expect(verified.subject).toBe("administrative-bootstrap");
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),

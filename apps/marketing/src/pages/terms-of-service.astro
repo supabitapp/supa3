@@ -3,7 +3,7 @@ import LegalPage from "../components/LegalPage.astro";
 
 const sections = [
   ["introduction", "Introduction"],
-  ["accounts", "Accounts"],
+  ["accounts", "Credentials"],
   ["content", "Your content and providers"],
   ["rights", "T3 Code and proprietary rights"],
   ["acceptable-use", "Acceptable use"],
@@ -27,9 +27,9 @@ const sections = [
 
 <LegalPage
   title="Terms of Service — T3 Code"
-  description="The terms that govern your use of T3 Code, app.t3.codes, T3 Connect, and t3.codes."
+  description="The terms that govern your use of T3 Code, app.t3.codes, and t3.codes."
   heading="T3 Code Terms of Service"
-  lede="These Terms govern your use of T3 Code, including its desktop, mobile, and hosted applications, the optional T3 Connect service, and the t3.codes website."
+  lede="These Terms govern your use of T3 Code, including its desktop, mobile, and hosted applications and the t3.codes website."
   effectiveDate="2026-07-15"
   lastUpdated="2026-07-15"
   sections={sections}
@@ -40,10 +40,11 @@ const sections = [
     <p>
       These Terms of Service (the “Terms”) are a binding agreement between you and T3 Tools, Inc.
       (“T3 Tools,” “we,” “us,” or “our”). They govern your access to and use of the T3 Code desktop
-      and mobile applications, the hosted T3 Code application at{" "}<a href="https://app.t3.codes"
+      and mobile applications and the hosted T3 Code application at{" "}<a href="https://app.t3.codes"
         >https://app.t3.codes</a
-      >, and the optional T3 Connect service (together, the “Services”), as well as the T3 Code
-      marketing website at{" "}<a href="https://t3.codes">https://t3.codes</a> (the “Site”).
+      > (together, the “Services”), as well as the T3 Code marketing website at{" "}<a
+        href="https://t3.codes">https://t3.codes</a
+      > (the “Site”).
     </p>
     <p>
       By accessing or using the Site or Services, you agree to these Terms. If you use the Services
@@ -60,18 +61,11 @@ const sections = [
 
   <section id="accounts">
     <p class="section-number">02</p>
-    <h2>Accounts</h2>
+    <h2>Credentials</h2>
     <p>
-      You can use some T3 Code features without creating a T3 account. An account may be required
-      for account-backed features, including T3 Connect. You agree to provide accurate account
-      information, keep your credentials secure, and promptly notify us if you suspect unauthorized
-      access. You are responsible for activity performed through your account and connected devices,
-      except to the extent caused by our failure to use reasonable security measures.
-    </p>
-    <p>
-      You may not share credentials in a way that compromises the Services, impersonate another
-      person, or create accounts through unauthorized automated means. We may require reasonable
-      verification before restoring access or acting on an account request.
+      T3 Code does not require a T3 Tools account. You are responsible for keeping your environment,
+      pairing, and provider credentials secure, for activity performed through devices you pair with
+      your environments, and for promptly revoking credentials you believe may be compromised.
     </p>
   </section>
 
@@ -148,10 +142,10 @@ const sections = [
     <h2>Availability and Changes</h2>
     <p>
       We may add, change, suspend, or discontinue features, integrations, or supported platforms. We
-      aim to provide reasonable notice when a change materially reduces an account-backed feature,
-      but urgent security, legal, or reliability changes may take effect immediately. The Services
-      may be unavailable because of maintenance, provider outages, network conditions, or events
-      outside our control.
+      aim to provide reasonable notice when a change materially reduces a hosted feature, but urgent
+      security, legal, or reliability changes may take effect immediately. The Services may be
+      unavailable because of maintenance, provider outages, network conditions, or events outside
+      our control.
     </p>
     <p>
       T3 Code depends on software, environments, networks, and coding-agent providers that you
@@ -187,14 +181,14 @@ const sections = [
     <h2>Suspension and Termination</h2>
     <p>
       You may stop using the Services at any time. You may disconnect environments and devices from
-      within T3 Code and may request deletion of an account as described in our Privacy Policy.
+      within T3 Code.
     </p>
     <p>
-      We may suspend or terminate access to account-backed or hosted features if we reasonably
-      believe you materially violated these Terms, created a security or legal risk, failed to pay an
-      applicable fee, or used the Services in a way that could harm other users or shared
-      infrastructure. When practicable, we will give notice and an opportunity to cure. We may act
-      immediately where needed to prevent harm or comply with law.
+      We may suspend or terminate access to hosted features if we reasonably believe you materially
+      violated these Terms, created a security or legal risk, failed to pay an applicable fee, or used
+      the Services in a way that could harm other users or shared infrastructure. When practicable,
+      we will give notice and an opportunity to cure. We may act immediately where needed to prevent
+      harm or comply with law.
     </p>
     <p>
       Provisions that by their nature should survive termination—including ownership, disclaimers,

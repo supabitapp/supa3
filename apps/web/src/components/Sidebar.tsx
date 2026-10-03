@@ -1188,8 +1188,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     isSelected,
   });
   // Status hues follow the system-wide convention set by sidebar v1 and the
-  // mobile Live Activity/widgets (amber approval, indigo input, sky working)
-  // so a thread reads the same color everywhere it surfaces.
+  // mobile widgets (amber approval, indigo input, sky working) so a thread
+  // reads the same color everywhere it surfaces.
   const topStatus =
     status === "working"
       ? {
@@ -2441,7 +2441,7 @@ export default function Sidebar() {
   const projectGroupsRef = useRef(projectGroups);
   projectGroupsRef.current = projectGroups;
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
-  // Threads on non-primary environments (T3 Connect, hosted) resolve their
+  // Threads on non-primary environments (remote, SSH, hosted) resolve their
   // provider entry from their own environment's config: default instance ids
   // are driver slugs, so a flat map would collide across environments.
   const providerEntriesByEnvironment = useMemo(

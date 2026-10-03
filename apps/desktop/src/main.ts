@@ -35,7 +35,7 @@ import * as DesktopApp from "./app/DesktopApp.ts";
 import * as DesktopAppActivation from "./app/DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./app/DesktopAppIdentity.ts";
 import * as DesktopConnectionCatalogStore from "./app/DesktopConnectionCatalogStore.ts";
-import * as DesktopClerk from "./app/DesktopClerk.ts";
+import * as DesktopDeepLinks from "./app/DesktopDeepLinks.ts";
 import * as DesktopApplicationMenu from "./window/DesktopApplicationMenu.ts";
 import * as DesktopAssets from "./app/DesktopAssets.ts";
 import * as DesktopBackendConfiguration from "./backend/DesktopBackendConfiguration.ts";
@@ -204,7 +204,7 @@ const desktopApplicationLayer = Layer.mergeAll(
   Layer.provideMerge(desktopLocalEnvironmentAuthLayer),
 );
 
-const desktopClerkLayer = DesktopClerk.layer.pipe(
+const desktopDeepLinksLayer = DesktopDeepLinks.layer.pipe(
   Layer.provideMerge(ElectronShell.layer),
   Layer.provideMerge(desktopEnvironmentLayer),
   Layer.provideMerge(NodeServices.layer),
@@ -218,11 +218,11 @@ const desktopApplicationRuntimeLayer = desktopApplicationLayer.pipe(
   Layer.provideMerge(electronLayer),
 );
 
-// Acquire strict pre-ready setup before Clerk, whose userData resolution can
+// Acquire strict pre-ready setup before deep links, whose userData resolution can
 // yield and let Electron emit ready.
-const desktopRuntimeLayer = desktopClerkLayer.pipe(
-  Layer.flatMap((clerkContext) =>
-    desktopApplicationRuntimeLayer.pipe(Layer.provideMerge(Layer.succeedContext(clerkContext))),
+const desktopRuntimeLayer = desktopDeepLinksLayer.pipe(
+  Layer.flatMap((deepLinksContext) =>
+    desktopApplicationRuntimeLayer.pipe(Layer.provideMerge(Layer.succeedContext(deepLinksContext))),
   ),
   Layer.provideMerge(DesktopPreReadyPlatform.layer),
 );

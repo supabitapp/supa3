@@ -1,4 +1,3 @@
-import { httpHeaderRedactionLayer } from "@t3tools/shared/httpObservability";
 import {
   makeLocalFileTracer,
   makeTraceSink,
@@ -33,7 +32,6 @@ export const ObservabilityLive = Layer.unwrap(
     const traceReferencesLayer = Layer.mergeAll(
       Layer.succeed(Tracer.MinimumTraceLevel, config.traceMinLevel),
       Layer.succeed(References.TracerTimingEnabled, config.traceTimingEnabled),
-      httpHeaderRedactionLayer,
     );
 
     const tracerLayer = Layer.unwrap(

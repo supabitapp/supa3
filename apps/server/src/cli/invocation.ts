@@ -49,7 +49,7 @@ function suggestedPackageSpec(version: string): string {
 
 /**
  * Render a `supa3 <subcommand>` suggestion that matches how this process was
- * launched, so copy/pasting it actually works: `npx t3 connect` suggests
+ * launched, so copy/pasting it actually works: `npx t3 triage` suggests
  * `npx t3 serve`, a global install suggests `supa3 serve`, and a nightly build
  * keeps the `@nightly` tag.
  */

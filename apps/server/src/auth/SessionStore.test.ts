@@ -8,6 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -22,6 +23,7 @@ import {
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import * as SessionStore from "./SessionStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
+import { base64UrlDecodeUtf8, base64UrlEncode, signPayload } from "./utils.ts";
 
 const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -51,12 +53,15 @@ const makeSessionStoreLayer = (
     Layer.provide(makeServerConfigLayer(overrides)),
   );
 
-const relaySessionInput = {
-  subject: "managed-relay-bootstrap",
-  method: "dpop-access-token",
-  proofKeyThumbprint: "relay-proof-key",
+const SessionClaimsJson = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
+const decodeSessionClaimsJson = Schema.decodeUnknownEffect(SessionClaimsJson);
+const encodeSessionClaimsJson = Schema.encodeEffect(SessionClaimsJson);
+
+const shortLivedSessionInput = {
+  subject: "short-lived-client",
+  method: "bearer-access-token",
   ttl: Duration.hours(1),
-  client: { label: "Relay desktop", deviceType: "desktop" },
+  client: { label: "Short-lived desktop", deviceType: "desktop" },
 } as const;
 
 const makeDiskSessionStoreLayer = Effect.fn("makeDiskSessionStoreLayer")(function* (
@@ -339,9 +344,73 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
-        "relay:read",
       ]);
     }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
+  );
+
+  it.effect("rejects session tokens minted for the retired DPoP method", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const issued = yield* sessions.issue({ method: "bearer-access-token" });
+      const [encodedPayload] = issued.token.split(".");
+      const claims = yield* decodeSessionClaimsJson(base64UrlDecodeUtf8(encodedPayload ?? ""));
+      const legacyPayload = base64UrlEncode(
+        yield* encodeSessionClaimsJson({
+          ...claims,
+          method: "dpop-access-token",
+          jkt: "legacy-proof-key-thumbprint",
+        }),
+      );
+      const signingSecret = yield* secretStore.getOrCreateRandom("server-signing-key", 32);
+      const legacyToken = `${legacyPayload}.${signPayload(legacyPayload, signingSecret)}`;
+
+      expect(yield* sessions.verify(issued.token)).toMatchObject({ sessionId: issued.sessionId });
+      expect(yield* Effect.flip(sessions.verify(legacyToken))).toMatchObject({
+        _tag: "InvalidSessionTokenPayloadError",
+      });
+    }).pipe(
+      Effect.provide(
+        SessionStore.layer.pipe(
+          Layer.provide(SqlitePersistenceMemory),
+          Layer.provideMerge(ServerSecretStore.layer),
+          Layer.provide(makeServerEnvironmentLayer(EnvironmentId.make("test-environment"))),
+          Layer.provide(makeServerConfigLayer()),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("lists stored sessions that carry the retired DPoP method and relay scopes", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const sql = yield* SqlClient.SqlClient;
+      const issued = yield* sessions.issue(shortLivedSessionInput);
+      yield* sql`
+        UPDATE auth_sessions
+        SET method = ${"dpop-access-token"},
+            scopes = ${'["orchestration:read","relay:read","relay:write"]'}
+        WHERE session_id = ${issued.sessionId}
+      `;
+
+      const listed = yield* sessions.listActive();
+
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({
+        sessionId: issued.sessionId,
+        method: "dpop-access-token",
+        scopes: ["orchestration:read"],
+      });
+    }).pipe(
+      Effect.provide(
+        SessionStore.layer.pipe(
+          Layer.provideMerge(SqlitePersistenceMemory),
+          Layer.provide(ServerSecretStore.layer),
+          Layer.provide(makeServerEnvironmentLayer(EnvironmentId.make("test-environment"))),
+          Layer.provide(makeServerConfigLayer()),
+        ),
+      ),
+    ),
   );
 
   it.effect("atomically replaces active sessions with the same subject and method", () =>
@@ -582,10 +651,10 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
   );
 
-  it.effect("keeps connected relay sessions visible through expiry and HTTP renewal", () =>
+  it.effect("keeps connected short-lived sessions visible through expiry and HTTP renewal", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
-      const original = yield* sessions.issue(relaySessionInput);
+      const original = yield* sessions.issue(shortLivedSessionInput);
       const websocket = yield* sessions.issueWebSocketToken(original.sessionId, {
         ttl: Duration.hours(2),
       });
@@ -605,7 +674,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         _tag: "WebSocketSessionExpiredError",
       });
 
-      const renewed = yield* sessions.issue(relaySessionInput);
+      const renewed = yield* sessions.issue(shortLivedSessionInput);
       const afterRenewal = yield* sessions.listActive();
       expect(renewed.sessionId).not.toBe(original.sessionId);
       expect(afterRenewal).toHaveLength(2);
@@ -627,7 +696,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     (socketCount) =>
       Effect.gen(function* () {
         const sessions = yield* SessionStore.SessionStore;
-        const issued = yield* sessions.issue(relaySessionInput);
+        const issued = yield* sessions.issue(shortLivedSessionInput);
         const changes = yield* Queue.unbounded<SessionStore.SessionCredentialChange>();
         yield* sessions.streamChanges.pipe(
           Stream.runForEach((change) => Queue.offer(changes, change)),
@@ -671,7 +740,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       Effect.gen(function* () {
         const sessions = yield* SessionStore.SessionStore;
         const administrative = yield* sessions.issue({ subject: "desktop-bootstrap" });
-        const client = yield* sessions.issue(relaySessionInput);
+        const client = yield* sessions.issue(shortLivedSessionInput);
         yield* sessions.markConnected(client.sessionId);
         yield* TestClock.adjust(Duration.minutes(61));
         const changes = yield* Queue.unbounded<SessionStore.SessionCredentialChange>();

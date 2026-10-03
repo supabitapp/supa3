@@ -8,7 +8,6 @@ import {
   type EnvironmentResourceNotFoundError,
   type EnvironmentScopeRequiredError,
 } from "@t3tools/contracts";
-import { httpHeaderRedactionLayer } from "@t3tools/shared/httpObservability";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -20,9 +19,7 @@ import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
 
 const isEnvironmentHttpCommonError = Schema.is(EnvironmentHttpCommonError);
 
-export class RemoteEnvironmentAuthFetchError extends Data.TaggedError(
-  "RemoteEnvironmentAuthFetchError",
-)<{
+class RemoteEnvironmentAuthFetchError extends Data.TaggedError("RemoteEnvironmentAuthFetchError")<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -81,10 +78,7 @@ export type RemoteEnvironmentRequestError =
 export const remoteHttpClientLayer = (
   fetchFn: typeof globalThis.fetch,
 ): Layer.Layer<HttpClient.HttpClient> =>
-  Layer.merge(
-    FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn))),
-    httpHeaderRedactionLayer,
-  );
+  FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn)));
 
 const remoteApiBaseUrl = (httpBaseUrl: string): string => {
   const url = new URL(httpBaseUrl);
@@ -113,7 +107,7 @@ export const makeEnvironmentHttpApiGroupClient = <
     }),
   );
 
-/** Contract-derived request URLs for authentication proofs, tracing, and structured errors. */
+/** Contract-derived request URLs for tracing and structured errors. */
 export const makeEnvironmentHttpApiUrlBuilder = (httpBaseUrl: string) =>
   HttpApiClient.urlBuilder(EnvironmentHttpApi, {
     baseUrl: remoteApiBaseUrl(httpBaseUrl),

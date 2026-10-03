@@ -127,7 +127,6 @@ export default defineConfig({
       // Macroscope's glob-per-line ignore grammar, not Markdown: formatting
       // it rewrites `*` as `_` and joins lines.
       ".macroscope/ignore.md",
-      ".alchemy",
       "dist",
       "dist-electron",
       "node_modules",
@@ -374,11 +373,6 @@ export default defineConfig({
             },
           ],
         },
-      },
-      {
-        // The sign-in masthead is T3 brand artwork: fixed gradients, not theme surfaces.
-        files: ["apps/web/src/components/auth/AuthSurfaceShell.tsx"],
-        rules: { "shadcn/no-arbitrary-values": "off" },
       },
       {
         // Shared client code must not call APIs missing from Hermes. Our ESNext

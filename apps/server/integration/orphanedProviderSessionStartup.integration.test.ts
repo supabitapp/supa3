@@ -24,7 +24,7 @@ import { HttpServer } from "effect/unstable/http";
 import * as NetAddress from "effect/unstable/net/NetAddress";
 
 import * as EnvironmentAuth from "../src/auth/EnvironmentAuth.ts";
-import * as ServiceLauncherClient from "../src/cloud/serviceLauncherClient.ts";
+import * as ServiceLauncherClient from "../src/service/serviceLauncherClient.ts";
 import * as ServerConfig from "../src/config.ts";
 import * as ServerEnvironment from "../src/environment/ServerEnvironment.ts";
 import * as Keybindings from "../src/keybindings.ts";

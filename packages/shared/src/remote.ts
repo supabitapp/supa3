@@ -1,11 +1,13 @@
 import * as Schema from "effect/Schema";
 
+export const DEFAULT_HOSTED_APP_URL = "https://app.t3.codes";
+
 const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";
 const HOSTED_PAIRING_LABEL_PARAM = "label";
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
 
-export const readHashParams = (url: URL): URLSearchParams =>
+const readHashParams = (url: URL): URLSearchParams =>
   new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
 
 export class RemoteBackendUrlMissingError extends Schema.TaggedError<RemoteBackendUrlMissingError>()(

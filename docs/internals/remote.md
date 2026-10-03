@@ -2,8 +2,8 @@
 
 Each connection joins a client to one environment over HTTP and WebSocket. The
 environment owns providers, execution, files, and durable state. Direct access,
-Tailscale, SSH, and T3 Connect change how the client reaches that server; they do
-not introduce another execution model. See
+Tailscale, and SSH change how the client reaches that server; they do not
+introduce another execution model. See
 [remote access](../user/remote-access.md) for setup.
 
 ## Identity is independent of the route
@@ -41,8 +41,7 @@ parameter would disclose it to the wrong origin.
 
 Tailscale supplies an endpoint for ordinary pairing, so it needs no separate
 environment type. Authentication remains the environment's responsibility for
-every route. See [environment authentication](./environment-auth.md) and the
-[T3 Connect trust boundary](./t3-connect.md).
+every route. See [environment authentication](./environment-auth.md).
 
 SSH can launch a server as well as forward a port. Desktop main owns that
 lifecycle because it can spawn SSH and handle authentication prompts. The
@@ -65,7 +64,7 @@ Desktop normally launches its own primary server, but the desktop setting `local
 no local state is deleted. On the next start the main process skips port selection, server exposure,
 and the primary and WSL backends, and opens the window right away. The renderer sees this through
 `desktopBridge.getLocalEnvironmentEnabled()`: `readPrimaryEnvironmentTarget` returns null, so primary
-auth and platform-managed discovery are skipped and only saved environments (pairing, relay, SSH)
-connect. This is possible because the desktop renderer is not served by the backend: the `supa3://`
-scheme serves the bundled client from disk (Vite in development) and API traffic always goes to the
+auth and platform-managed discovery are skipped and only saved environments (pairing, SSH) connect.
+This is possible because the desktop renderer is not served by the backend: the `supa3://` scheme
+serves the bundled client from disk (Vite in development) and API traffic always goes to the
 environment's own URL.

@@ -1,4 +1,5 @@
 import {
+  BearerConnectionTarget,
   ConnectionTransientError,
   PrimaryConnectionTarget,
 } from "@t3tools/client-runtime/connection";
@@ -23,11 +24,11 @@ const emptyCatalog = {
   targets: [],
   profiles: [],
   credentials: [],
-  remoteDpopTokens: [],
   disabledEnvironmentIds: [],
 } as const;
 const decodeCatalog = Schema.decodeUnknownSync(Schema.fromJsonString(ConnectionCatalogDocument));
 const encodeCatalog = Schema.encodeSync(Schema.fromJsonString(ConnectionCatalogDocument));
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -50,6 +51,58 @@ describe("makeCatalogStore", () => {
       expect(writes).toHaveLength(1);
       expect(decodeCatalog(writes[0]!)).toEqual(emptyCatalog);
     }),
+  );
+
+  it.effect(
+    "keeps saved environments when a stored catalog still holds retired relay records",
+    () =>
+      Effect.gen(function* () {
+        const quarantined: string[] = [];
+        const store = yield* makeCatalogStore({
+          read: Effect.succeed(
+            encodeJson({
+              schemaVersion: 1,
+              targets: [
+                {
+                  _tag: "RelayConnectionTarget",
+                  environmentId: "environment-relay",
+                  label: "Relay",
+                },
+                {
+                  _tag: "BearerConnectionTarget",
+                  environmentId: "environment-remote",
+                  label: "Remote",
+                  connectionId: "remote-1",
+                },
+              ],
+              profiles: [],
+              credentials: [],
+              remoteDpopTokens: [
+                {
+                  _tag: "RemoteDpopAccessToken",
+                  environmentId: "environment-relay",
+                  label: "Relay",
+                  accessToken: "dpop-token",
+                  expiresAtEpochMs: 1_000_000,
+                  dpopThumbprint: "thumbprint",
+                },
+              ],
+              disabledEnvironmentIds: [],
+            }),
+          ),
+          write: () => Effect.void,
+          quarantine: (raw) => Effect.sync(() => quarantined.push(raw)),
+        });
+
+        expect((yield* store.read).targets).toEqual([
+          new BearerConnectionTarget({
+            environmentId: EnvironmentId.make("environment-remote"),
+            label: "Remote",
+            connectionId: "remote-1",
+          }),
+        ]);
+        expect(quarantined).toEqual([]);
+      }),
   );
 
   it.effect("does not hide catalog read failures", () =>

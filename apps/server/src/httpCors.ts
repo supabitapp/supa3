@@ -4,5 +4,4 @@ export const browserApiCorsAllowedHeaders = [
   "b3",
   "traceparent",
   "content-type",
-  "dpop",
 ] as const;

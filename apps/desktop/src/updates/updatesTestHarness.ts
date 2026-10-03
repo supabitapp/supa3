@@ -208,9 +208,6 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         } satisfies DesktopAppSettings.DesktopAppSettings["Service"])
       : DesktopAppSettings.layer;
 
-  // Tracks the restart markers installs leave, so installs stay free of real
-  // disk I/O that would outrun the tests' settle loops.
-  const updateRestartMarkers = new Set<string>();
   const fileSystemLayer = FileSystem.layerNoop({
     readFileString: (path) =>
       path === "/missing/resources/package-type" && options.packageType !== undefined
@@ -223,15 +220,6 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
               pathOrDescriptor: path,
             }),
           ),
-    makeDirectory: () => Effect.void,
-    writeFileString: (path) =>
-      Effect.sync(() => {
-        updateRestartMarkers.add(path);
-      }),
-    remove: (path) =>
-      Effect.sync(() => {
-        updateRestartMarkers.delete(path);
-      }),
   });
 
   const layer = DesktopUpdates.layer.pipe(
@@ -258,7 +246,6 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     checkCount: () => checkCount,
     quitAndInstalls: () => quitAndInstallCount,
     installSteps,
-    updateRestartMarkers,
     downloadCount: () => downloadCount,
     feedUrls: (): ElectronUpdater.ElectronUpdaterFeedUrl[] => feedUrls,
     fullChangelog: () => fullChangelog,
