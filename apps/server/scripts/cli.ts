@@ -168,7 +168,7 @@ const buildExeCmd = Command.make(
 
 /**
  * Publishes the tarballs scripts/build-npm-platform-packages.ts produced:
- * every `@supacode/supacode-<platform>.tgz` first, `supacode.tgz` (the launcher) last, so
+ * every `@supabitapp/supacode-<platform>.tgz` first, `supacode.tgz` (the launcher) last, so
  * the launcher is never installable before the executables it depends on.
  * Tarballs rather than directories because `npm publish <dir>` strips the
  * `node_modules/` the executable loads its native addons from.
@@ -231,7 +231,7 @@ const publishCmd = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Publish the @supacode/supacode-<platform> tarballs and then the supacode launcher to npm.",
+    "Publish the @supabitapp/supacode-<platform> tarballs and then the supacode launcher to npm.",
   ),
 );
 

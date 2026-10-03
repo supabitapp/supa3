@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Turns the per-platform CLI archives of one release into the npm packages
- * behind `npx supacode` / `npm i -g supacode`: one `@supacode/supacode-<platformKey>` package per
+ * behind `npx supacode` / `npm i -g supacode`: one `@supabitapp/supacode-<platformKey>` package per
  * archive holding the archive's contents verbatim, plus the `supacode` launcher
  * that lists them as optionalDependencies and execs the one npm installed.
  * The bytes a user gets from npm are therefore the release archive's, and
@@ -9,8 +9,8 @@
  *
  * Output layout under `--output-dir`:
  *
- *   @supacode/supacode-<platformKey>/      archive contents flattened + package.json
- *   @supacode/supacode-<platformKey>.tgz   the same tree as an npm tarball
+ *   @supabitapp/supacode-<platformKey>/      archive contents flattened + package.json
+ *   @supabitapp/supacode-<platformKey>.tgz   the same tree as an npm tarball
  *   supacode/                             launcher: package.json, bin/supacode.js, README.md
  *   supacode.tgz                          the launcher as an npm tarball
  *
@@ -43,7 +43,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 
 import { windowsSystemTar } from "./build-cli-archive.ts";
 
-export const NPM_PLATFORM_PACKAGE_SCOPE = "@supacode";
+export const NPM_PLATFORM_PACKAGE_SCOPE = "@supabitapp";
 export const NPM_LAUNCHER_PACKAGE_NAME = "supacode";
 
 const encodePackageJson = Schema.encodeEffect(fromJsonStringPretty(Schema.Unknown));
@@ -479,7 +479,7 @@ const command = Command.make(
   buildNpmPlatformPackages,
 ).pipe(
   Command.withDescription(
-    "Build the supacode launcher and @supacode/supacode-<platform> npm packages from CLI release archives.",
+    "Build the supacode launcher and @supabitapp/supacode-<platform> npm packages from CLI release archives.",
   ),
 );
 
