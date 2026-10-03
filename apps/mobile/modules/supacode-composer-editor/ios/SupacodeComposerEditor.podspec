@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary        = 'Native attributed composer editor for Supacode mobile.'
   s.description    = 'UIKit-backed rich text composer with atomic skill and file tokens.'
   s.author         = 'Supacode'
-  s.homepage       = 'https://supacode.sh'
+  s.homepage       = 'https://next.supacode.sh'
   s.platforms      = {
     :ios => '16.4',
   }

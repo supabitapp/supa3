@@ -33,19 +33,7 @@ const configuredWsUrl = isSingleOriginDev ? undefined : process.env.VITE_WS_URL?
 const configuredHttpUrl = isSingleOriginDev ? undefined : process.env.VITE_HTTP_URL?.trim();
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
-const configuredHostedAppUrl = (() => {
-  const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
-  if (explicitHostedAppUrl) {
-    return explicitHostedAppUrl;
-  }
-  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  return undefined;
-})();
+const configuredHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim() || undefined;
 const sourcemapEnv = process.env.SUPACODE_WEB_SOURCEMAP?.trim().toLowerCase();
 
 // Vite 8.1's experimental bundled dev mode: serves rolldown-bundled chunks in

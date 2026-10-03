@@ -37,7 +37,7 @@ This document covers the unified release workflow for stable and nightly desktop
   - Automatically generated release notes are pinned to the previous tag in the same channel, so stable compares to the previous stable tag and nightly compares to the previous nightly tag.
 - Includes Electron auto-update metadata (for example `latest*.yml`, `nightly*.yml`, and `*.blockmap`) in release assets.
 - Builds a self-contained CLI archive per platform (`supacode-<version>-<platform>-<arch>.tar.gz`, `.zip` on Windows) in the same job as that target's desktop artifact and attaches them to the GitHub Release with a `SHA256SUMS` file, on every channel, for five targets: macOS arm64, Linux x64 and arm64, Windows x64 and arm64. Every archive is built, signed, and smoke-tested on hardware of its own architecture. There is no macOS x64 archive: Node single-executables are unsupported on x64 macOS (the SEA docs list macOS as arm64 only) and the binary segfaults on start; the x64 desktop app is Electron and unaffected.
-  - The archive holds the server as a Node single-executable (`scripts/build-cli-archive.ts`), so unpacking it needs neither Node, npm, nor a compiler. It is the only form in which Supacode manages a runtime: the desktop's SSH environments, the boot service, `supacode update`, and the install scripts all download and verify this archive against `SHA256SUMS`. The npm packages exist for people who run `npx supacode` or `npm install -g supacode` themselves and carry the same archive contents; nothing in the product installs from npm. The `curl | sh` installers are `scripts/install.sh` and `scripts/install.ps1`; the marketing site copies them into its `public/` at build time (`apps/marketing/scripts/stage-install-scripts.mjs`) and serves them at `supacode.sh/install.sh` and `/install.ps1`.
+  - The archive holds the server as a Node single-executable (`scripts/build-cli-archive.ts`), so unpacking it needs neither Node, npm, nor a compiler. It is the only form in which Supacode manages a runtime: the desktop's SSH environments, the boot service, `supacode update`, and the install scripts all download and verify this archive against `SHA256SUMS`. The npm packages exist for people who run `npx supacode` or `npm install -g supacode` themselves and carry the same archive contents; nothing in the product installs from npm. The `curl | sh` installers are `scripts/install.sh` and `scripts/install.ps1`; the marketing site copies them into its `public/` at build time (`apps/marketing/scripts/stage-install-scripts.mjs`) and serves them at `next.supacode.sh/install.sh` and `/install.ps1`.
   - The executable is built with a Node that supports `--build-sea` (`VP_NODE_VERSION=26.8.2`, kept in step with `SEA_NODE_VERSION` in `apps/server/vite.config.ts`), while the repo stays on `engines.node`.
   - Release macOS archives are signed with the Developer ID certificate and notarized using the Apple credentials loaded through fnox. Windows executables use the same Azure Trusted Signing setup as the installer. Every native addon in the macOS archive is signed too, since the hardened runtime refuses unsigned libraries.
   - Each archive is extracted and executed on its build runner (`scripts/smoke-cli-archive.ts`) before it is uploaded.
@@ -46,7 +46,7 @@ This document covers the unified release workflow for stable and nightly desktop
   - nightly releases publish npm dist-tag `nightly`
   - preview releases publish npm dist-tag `preview`, which nothing resolves unless asked for by name
   - one-time setup: the `supabitapp` npm organization must own the `@supabitapp` scope, and `supacode` and each `@supabitapp/supacode-<platform>-<arch>` package needs a trusted publisher registered for this workflow file (see below).
-- Builds the hosted web app on Vercel while the desktop jobs run, and makes it live only after a release is published:
+- Builds the hosted web app for Cloudflare while the desktop jobs run, and makes it live only after a release is published:
   - stable releases are aliased to the `latest` hosted app channel
   - nightly releases are aliased to the `nightly` hosted app channel
 - Release macOS jobs require Apple credentials from 1Password. Windows signing is auto-detected from its Azure secrets.
@@ -94,72 +94,17 @@ Credential lookup failures stop the job. The finalize job uses the App credentia
 GitHub Release publication uses the repository-scoped workflow token so it has a rate-limit quota
 independent from the shared Release App installation.
 
-## Marketing site deployment
+## Cloudflare hosting
 
-On nightly releases, the release workflow builds the same commit as a staged
-production deployment of the marketing site's Vercel project while the desktop
-jobs run, and promotes it with `vercel promote` after the release is published.
-Stable releases do not deploy the marketing site because they can promote an
-older nightly commit.
+Cloudflare Workers serves the marketing site and hosted web client. The agent server continues to run on users' machines. Hosting configuration lives in `apps/marketing/wrangler.json` and `apps/web/cloudflare/`.
 
-The job looks up the `supacode-marketing` project using the existing `VERCEL_TOKEN`
-and `VERCEL_ORG_ID` secrets. It also respects the optional `VERCEL_TEAM_SLUG`
-variable. The Vercel project's root directory must be `apps/marketing`.
-Git deployments remain disabled in `apps/marketing/vercel.ts`.
+The release workflow builds static assets while desktop jobs run and uploads them as GitHub artifacts. Deployment starts only after the GitHub Release succeeds. Stable releases update `latest.app.next.supacode.sh`; nightly releases update `nightly.app.next.supacode.sh` and the marketing site at `next.supacode.sh`. Stable releases leave the marketing site unchanged because they can promote an older nightly commit.
 
-## Hosted web app release deployment
+`app.next.supacode.sh` routes requests to the selected channel. Visiting `/__supacode/channel?channel=latest` or `/__supacode/channel?channel=nightly` saves the `supacode_web_channel` cookie and redirects to the app root. Builds receive the release version through `APP_VERSION` and the channel through `VITE_HOSTED_APP_CHANNEL`.
 
-The hosted app is intentionally not deployed by Vercel's Git integration. The
-web project disables automatic Git deployments in `apps/web/vercel.ts` via
-`git.deploymentEnabled: false`. `.github/workflows/release.yml` builds the web
-app with Vercel CLI as a staged production deployment (`--skip-domain`) while
-the desktop jobs run, and aliases the channel domains to it after the GitHub
-Release succeeds.
+The `cloudflare` fnox profile reads `CLOUDFLARE_API_TOKEN` from the `Cloudflare Hosting` item in the `Supacode CI` vault. The token needs Workers Scripts edit access in the configured account, plus Workers Routes edit and Zone read access for `supacode.sh`. Deployment jobs use the `release` GitHub environment. Wrangler manages the custom domains and their certificates.
 
-Required GitHub Actions secrets:
-
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
-
-Optional GitHub Actions variables:
-
-- `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `SUPACODE_WEB_ROUTER_URL`: defaults to `https://app.supacode.sh`.
-- `SUPACODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.supacode.sh`.
-- `SUPACODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.supacode.sh`.
-
-Required Vercel domains:
-
-- `app.supacode.sh`: the router domain users open, updated by stable releases.
-- `latest.app.supacode.sh`: channel alias updated by stable releases.
-- `nightly.app.supacode.sh`: channel alias updated by nightly releases.
-
-The router domain uses `apps/web/vercel.ts` routes. Users opt into a channel by
-visiting `/__supacode/channel?channel=latest` or
-`/__supacode/channel?channel=nightly`; the router stores the
-`supacode_web_channel` cookie and rewrites future requests on `app.supacode.sh` to
-the matching channel alias.
-
-The release deploy job rewrites release package versions before upload so the
-hosted app's About panel renders the release version. Stable deploys alias the
-same deployment to both the `latest` channel and the router domain so the router
-rules stay current. Nightly deploys only alias the `nightly` channel. The job
-also passes `VITE_HOSTED_APP_CHANNEL=latest|nightly`, which renders the hosted
-update track selector in the About panel. Changing the selector navigates
-through `/__supacode/channel` on the router domain so the user's channel cookie is
-updated before redirecting to the hosted app root.
-
-One-time Vercel dashboard setup:
-
-1. Confirm the web project root directory remains `apps/web`.
-2. Add the three domains above to the web project.
-3. Disable automatic Git deployments in the dashboard if desired; the committed
-   `vercel.ts` setting is the source-of-truth, but disconnecting Git in the
-   dashboard is also safe.
-4. Run one stable release deployment, or manually alias the current stable
-   deployment, so `app.supacode.sh` points at a deployment containing the router
-   rules in `apps/web/vercel.ts`. Future stable releases keep this alias current.
+Same-repository pull requests labeled `preview:web` deploy to `preview-<number>.next.supacode.sh`. The `web-preview` GitHub environment supplies `OP_SERVICE_ACCOUNT_TOKEN` for those deployments. Open the URL posted on the pull request and pair a reachable server under Settings → Connections.
 
 ## Nightly builds
 
@@ -191,10 +136,7 @@ The workflow enforces this ordering:
 1. `publish_cli` publishes the exact release version to npm, on every channel.
 2. `release` depends on `publish_cli` before exposing desktop artifacts in GitHub Releases.
 3. `deploy_web` depends on `release` before moving the hosted channel to the new client.
-   `build_web` builds that client earlier with `vercel deploy --prod --skip-domain`, which
-   leaves the custom domains alone but moves the project's own `*.vercel.app` production
-   hostname. That hostname is behind Vercel SSO, so users only get the client through the
-   custom domains.
+   `build_web` stages static assets as a GitHub artifact without exposing the new client. Cloudflare receives those assets only in `deploy_web`.
 
 Preserve these dependencies when changing the release graph. Publishing a client first would leave
 the **Update server** action targeting a package version that does not exist yet.
@@ -308,8 +250,8 @@ Checklist:
 
 There is no dry-run tag path. Pushing any accepted non-nightly tag, including
 `v0.0.0-test.1`, classifies the run as the stable channel. It publishes `supacode` with npm dist-tag
-`latest`, creates a real GitHub Release, aliases the hosted app to `latest.app.supacode.sh` and
-`app.supacode.sh`, and can commit a version bump to `main` in the finalize job. Do not push a test tag
+`latest`, creates a real GitHub Release, aliases the hosted app to `latest.app.next.supacode.sh` and
+`app.next.supacode.sh`, and can commit a version bump to `main` in the finalize job. Do not push a test tag
 to validate the workflow.
 
 The workflow has no non-publishing `workflow_dispatch` mode. Use normal CI or local quality gates to

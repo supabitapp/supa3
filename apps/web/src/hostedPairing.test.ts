@@ -14,7 +14,7 @@ describe("hostedPairing", () => {
   });
 
   it("reads hosted pairing host and query token parameters", () => {
-    const url = new URL("https://app.supacode.sh/pair?host=100.64.1.2:3773&token=ABCD1234");
+    const url = new URL("https://app.next.supacode.sh/pair?host=100.64.1.2:3773&token=ABCD1234");
 
     expect(readHostedPairingRequest(url)).toEqual({
       host: "100.64.1.2:3773",
@@ -25,7 +25,7 @@ describe("hostedPairing", () => {
   });
 
   it("prefers hash tokens so generated hosted links do not put credentials in search params", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.supacode.sh");
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.next.supacode.sh");
 
     const url = new URL(
       buildHostedPairingUrl({
@@ -35,7 +35,7 @@ describe("hostedPairing", () => {
       }),
     );
 
-    expect(url.origin).toBe("https://preview.supacode.sh");
+    expect(url.origin).toBe("https://preview.next.supacode.sh");
     expect(url.pathname).toBe("/pair");
     expect(url.searchParams.get("host")).toBe("https://backend.example.com:3773");
     expect(url.searchParams.get("label")).toBe("Workstation");
@@ -44,7 +44,7 @@ describe("hostedPairing", () => {
   });
 
   it("builds hosted channel selection URLs through the configured router origin", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://app.supacode.sh");
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://app.next.supacode.sh");
 
     const url = new URL(
       buildHostedChannelSelectionUrl({
@@ -52,7 +52,7 @@ describe("hostedPairing", () => {
       }),
     );
 
-    expect(url.origin).toBe("https://app.supacode.sh");
+    expect(url.origin).toBe("https://app.next.supacode.sh");
     expect(url.pathname).toBe("/__supacode/channel");
     expect(url.searchParams.get("channel")).toBe("nightly");
     expect(url.searchParams.has("next")).toBe(false);
@@ -60,35 +60,37 @@ describe("hostedPairing", () => {
 
   it("ignores incomplete hosted pairing requests", () => {
     expect(
-      hasHostedPairingRequest(new URL("https://app.supacode.sh/pair?host=backend.example.com")),
+      hasHostedPairingRequest(
+        new URL("https://app.next.supacode.sh/pair?host=backend.example.com"),
+      ),
     ).toBe(false);
-    expect(hasHostedPairingRequest(new URL("https://app.supacode.sh/pair?token=ABCD1234"))).toBe(
-      false,
-    );
+    expect(
+      hasHostedPairingRequest(new URL("https://app.next.supacode.sh/pair?token=ABCD1234")),
+    ).toBe(false);
   });
 
   it("detects the hosted static app only when no backend URL is configured", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.supacode.sh");
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.next.supacode.sh");
     vi.stubEnv("VITE_HTTP_URL", "");
     vi.stubEnv("VITE_WS_URL", "");
 
-    expect(isHostedStaticApp(new URL("https://preview.supacode.sh/"))).toBe(true);
-    expect(isHostedStaticApp(new URL("https://preview.supacode.sh/pair"))).toBe(true);
+    expect(isHostedStaticApp(new URL("https://preview.next.supacode.sh/"))).toBe(true);
+    expect(isHostedStaticApp(new URL("https://preview.next.supacode.sh/pair"))).toBe(true);
     expect(isHostedStaticApp(new URL("https://backend.example.com/"))).toBe(false);
 
     vi.stubEnv("VITE_HTTP_URL", "https://backend.example.com");
-    expect(isHostedStaticApp(new URL("https://preview.supacode.sh/"))).toBe(false);
+    expect(isHostedStaticApp(new URL("https://preview.next.supacode.sh/"))).toBe(false);
   });
 
   it("detects hosted channel aliases as static apps", () => {
-    vi.stubEnv("VITE_HOSTED_APP_URL", "https://app.supacode.sh");
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://app.next.supacode.sh");
     vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "nightly");
     vi.stubEnv("VITE_HTTP_URL", "");
     vi.stubEnv("VITE_WS_URL", "");
 
-    expect(isHostedStaticApp(new URL("https://nightly.app.supacode.sh/"))).toBe(true);
+    expect(isHostedStaticApp(new URL("https://nightly.app.next.supacode.sh/"))).toBe(true);
 
     vi.stubEnv("VITE_HTTP_URL", "https://backend.example.com");
-    expect(isHostedStaticApp(new URL("https://nightly.app.supacode.sh/"))).toBe(false);
+    expect(isHostedStaticApp(new URL("https://nightly.app.next.supacode.sh/"))).toBe(false);
   });
 });

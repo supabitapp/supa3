@@ -1,19 +1,5 @@
 name: Web Preview
 
-# Label a PR `preview:web` to get a hosted-web preview deployment on Vercel for
-# that push and every subsequent push. The deployment is a plain (non-prod,
-# non-aliased) deploy into the existing hosted-web Vercel project, so the
-# latest/nightly channel aliases are never touched.
-#
-# Previews boot as the hosted-static app with manual pairing only. Pair a
-# server into a preview with `supacode pair --tailscale` (or any reachable HTTPS
-# backend) and open the pairing URL against the preview origin.
-#
-# The preview must be opened at the exact deployment URL from the PR comment.
-# Vite bakes that URL in as the hosted origin (via VERCEL_URL), and
-# `isHostedStaticApp` matches on origin, so branch-alias URLs will not
-# self-identify as the hosted app.
-
 on:
   pull_request:
     types: [labeled, synchronize, reopened]
@@ -29,20 +15,15 @@ concurrency:
 jobs:
   deploy:
     name: Deploy web preview
-    # Same-repo PRs only: fork PRs do not receive the Vercel secrets, and this
-    # workflow should skip rather than fail for them. On `labeled` events, only
-    # the preview label itself triggers a deploy.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.labels.*.name, 'preview:web') &&
       (github.event.action != 'labeled' || github.event.label.name == 'preview:web')
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 10
+    environment: web-preview
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
+      VITE_HOSTED_APP_URL: https://preview-${{ github.event.pull_request.number }}.next.supacode.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -57,29 +38,27 @@ jobs:
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
         run: mise exec -- vp install --filter=@supacode/scripts... --filter=@supacode/web...
+      - name: Build preview
+        run: vp run --filter @supacode/web build
+      - name: Load hosting credentials
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: cloudflare
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
       - id: deploy
         name: Deploy preview
-        shell: bash
+        env:
+          PREVIEW_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set -euo pipefail
-
-          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
-            echo "Missing one or more required Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID." >&2
-            exit 1
-          fi
-
-          vercel_scope="${VERCEL_TEAM_SLUG:-$VERCEL_ORG_ID}"
-
-          deployment_url="$(
-            vp dlx vercel@53.1.1 deploy \
-              --archive=tgz \
-              --yes \
-              --token "$VERCEL_TOKEN" \
-              --scope "$vercel_scope"
-          )"
-
-          echo "Deployed $deployment_url"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          node --input-type=module <<'JS'
+          import * as fs from "node:fs";
+          const config = JSON.parse(fs.readFileSync("apps/web/cloudflare/latest.json", "utf8"));
+          config.name = `supacode-next-preview-${process.env.PREVIEW_NUMBER}`;
+          config.routes = [{ pattern: new URL(process.env.VITE_HOSTED_APP_URL).hostname, custom_domain: true }];
+          fs.writeFileSync("apps/web/cloudflare/preview.json", JSON.stringify(config));
+          JS
+          vp dlx wrangler@4.147.0 deploy --config apps/web/cloudflare/preview.json
+          echo "deployment_url=$VITE_HOSTED_APP_URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment deployment URL
         uses: actions/github-script@v8

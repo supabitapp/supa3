@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-export const DEFAULT_HOSTED_APP_URL = "https://app.supacode.sh";
+export const DEFAULT_HOSTED_APP_URL = "https://app.next.supacode.sh";
 
 const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";

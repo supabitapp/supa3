@@ -12,3 +12,6 @@ APPLE_API_ISSUER = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_
 [profiles.release-app.secrets]
 RELEASE_APP_ID = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_ID" }
 RELEASE_APP_PRIVATE_KEY = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_PRIVATE_KEY" }
+
+[profiles.cloudflare.secrets]
+CLOUDFLARE_API_TOKEN = { provider = "op", value = "Cloudflare Hosting/CLOUDFLARE_API_TOKEN" }

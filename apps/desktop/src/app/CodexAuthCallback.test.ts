@@ -57,7 +57,7 @@ describe("desktop Codex callback helper", () => {
     const input = {
       authorizationUrl,
       returnUrl:
-        "https://app.supacode.sh/settings/providers?environmentId=remote-one&instanceId=work",
+        "https://app.next.supacode.sh/settings/providers?environmentId=remote-one&instanceId=work",
       environmentId: EnvironmentId.make("remote-one"),
       instanceId: ProviderInstanceId.make("work"),
       flowId: "flow-one",

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://supacode.sh/schema/supacode.json",
+  "$schema": "https://next.supacode.sh/schema/supacode.json",
   "iconPath": "assets/dev/blueprint-web-apple-touch-180.png",
   "scripts": [
     {

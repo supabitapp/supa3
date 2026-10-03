@@ -41,7 +41,7 @@ describe("resolveMediaSource", () => {
       });
     });
 
-    it.each(["data:image/png;base64,AAAA", "blob:https://app.supacode.sh/id"])(
+    it.each(["data:image/png;base64,AAAA", "blob:https://app.next.supacode.sh/id"])(
       "loads %s directly",
       (href) => {
         expect(resolveMediaSource(href, { threadId, imageEmbed: true })).toMatchObject({

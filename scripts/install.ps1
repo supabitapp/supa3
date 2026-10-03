@@ -1,7 +1,7 @@
 # Installs the Supacode CLI from a GitHub Release archive on Windows. Needs
 # only PowerShell 5.1+; no Node, npm, or compiler.
 #
-#   irm https://supacode.sh/install.ps1 | iex
+#   irm https://next.supacode.sh/install.ps1 | iex
 #
 # Environment:
 #   SUPACODE_CHANNEL           release train to follow: stable, nightly, or preview
