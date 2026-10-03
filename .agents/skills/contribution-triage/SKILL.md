@@ -1,12 +1,12 @@
 ---
 name: contribution-triage
-description: Enforce Supacode's PR contribution policy by closing ineligible submissions and triggering Macroscope review for eligible work within authorized scope. Supports explicit dry runs. Use for contribution moderation, not installation diagnostics or a full code review.
+description: Enforce Supacode's PR contribution policy by closing ineligible submissions and identifying eligible work within authorized scope. Supports explicit dry runs. Use for contribution moderation, not installation diagnostics or a full code review.
 ---
 
 # Contribution triage
 
 Enforce [CONTRIBUTING.md](../../../CONTRIBUTING.md), the authoritative eligibility policy:
-close PRs with established violations and send eligible PRs to Macroscope for deeper review.
+close PRs with established violations and identify eligible PRs for maintainer review.
 Carry out authorized moderation through completion, without per-PR approval requests.
 This skill does not define automatic closure rules for issues or discussions.
 End-user `npx supacode triage` diagnostics belong to
@@ -118,10 +118,9 @@ retry safeguards below. In a dry run or without the required authority, prepare 
 comment text but do not write to GitHub. Keep the eligibility finding separate from action completion.
 
 - **Eligible for deeper review.** The required assessment is complete and the PR meets the guide.
-  Apply the configured, verified Macroscope review-trigger label and confirm it is present. If that
-  integration is missing, retain the eligibility finding and report the handoff as pending configuration.
+  Report the eligibility finding for maintainer review.
 - **Immediate review via verified bypass.** Record the matching exemption entry and policy revision.
-  Apply and verify the same review-trigger label without requiring the eligibility assessment first.
+  Report the PR as ready for maintainer review without requiring the eligibility assessment first.
   This is a routing exception, not a claim that the PR passed eligibility or correctness review.
 - **Closure warranted.** The assessment is complete and establishes a specific policy violation.
   Prepare a clear explanation under [closure and reconsideration](../../../CONTRIBUTING.md#closure-and-reconsideration),
@@ -129,8 +128,7 @@ comment text but do not write to GitHub. Keep the eligibility finding separate f
   must name the violated rule, cite supporting submission evidence, link the maintained guide section,
   and give a concrete remedy. Missing contributor evidence can warrant closure; explain what must be
   established. Missing product approval calls for maintainer discussion, not an agent's product decision.
-  Close for multiple problems only when the independence of those changes is supported. Closing a PR
-  does not require a configured Macroscope label.
+  Close for multiple problems only when the independence of those changes is supported.
 - **Needs explanation or maintainer decision.** Name the unresolved question and who can resolve it.
   Post the specific question on the PR when commenting is within the authorized scope, and verify it
   was posted. If tracing the source leaves an extra diff's necessity unclear, request the causal
@@ -149,35 +147,18 @@ and evidence using descriptive text. For live findings, link guide sections at t
 revision so the contributor can see the rule used. Preserve useful problem reports in the assessment
 or authorized closure comment without creating new issues or discussions unless separately authorized.
 
-## Review integration
-
-Use one configured Macroscope review-trigger label either after successful triage or immediately for
-verified exemption. The repository's opt-in label is `macroscope-review`; verify its configured
-review behavior before using it. Applying the label requests review and does not prove that a review
-has completed. Passing triage once does not grant future bypass. Never treat `vouch:trusted` as the
-review trigger.
-
-Missing integration configuration blocks only the dependent action. A missing review-trigger label
-prevents review handoff, not an authorized closure or clarification comment after bypass routing is
-resolved. Unavailable or malformed trusted policy or exemption files block automatic closure and
-handoff, while read-only investigation can continue. Keep any existing broad vouched-contributor
-auto-review enabled during rollout validation; its presence does not block triage or the verified
-explicit handoff. A maintainer can disable it once the triager is verified. This skill does not change
-service settings itself. Neither this label nor Macroscope review grants merge permission.
-
 ## Recheck, execute, and verify
 
 Before each authorized mutation, recheck the current head and relevant submission state, including
-description, evidence, approvals, existing triage comments, PR open/closed state, and review-trigger
-label when relevant. Reassess changes that could invalidate the finding. Reuse an existing explanation
-only if it still matches the current finding; avoid duplicate comments, closures, or label applications.
+description, evidence, approvals, existing triage comments, and PR open/closed state. Reassess changes
+that could invalidate the finding. Reuse an existing explanation only if it still matches the current
+finding; avoid duplicate comments or closures.
 
 For closure, establish that the required explanation is posted before closing. If posting fails or its
 result is ambiguous, read back the comments before retrying or proceeding. If the comment succeeds but
 closure fails, preserve the comment and retry only the unfinished closure after checking current state.
-Handle a failed or ambiguous label application the same way: inspect labels before any retry. If access
-or state still cannot be verified, report an incomplete action and the step needed to resume. Do not
-retry blindly or claim success for an unverified action.
+If access or state still cannot be verified, report an incomplete action and the step needed to resume.
+Do not retry blindly or claim success for an unverified action.
 
 Report the PR and assessed head, policy revision, eligibility outcome, supporting evidence and guide
 links, and actions actually completed or still pending. In a dry run, mark all comments and actions as
