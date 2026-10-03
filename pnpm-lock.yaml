@@ -2230,7 +2230,7 @@ packages:
     peerDependencies:
       effect: 4.0.0-rc.115
       react: '>=19.0.0 <20.0.0'
-      scheduler: 0.27.0
+      scheduler: '>=0.25.0 <0.28.0'
 
   '@effect/openapi-generator@4.0.0-rc.115':
     resolution: {integrity: sha512-/AkcQ4GdoTTa7CwkybSnKc0U0FhOCA+TAV6E93Ozz4XshgKCC2F75Zik+3EOlTfbENmvAsYNEIVrPfqupoO+ng==}
