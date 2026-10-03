@@ -8,6 +8,7 @@ import * as NetService from "@supacode/shared/Net";
 import { resolveGitWorktreePath, resolveWorktreeSupacodeHome } from "@supacode/shared/devHome";
 import { HostProcessEnvironment, HostProcessWorkingDirectory } from "@supacode/shared/hostProcess";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
+import { resolveDefaultSupacodeHome } from "@supacode/shared/supacodeHome";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Hash from "effect/Hash";
@@ -68,7 +69,7 @@ export function isProxiableBindHost(host: string): boolean {
 }
 
 export const DEFAULT_SUPACODE_HOME = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(NodeOS.homedir(), ".supacode"),
+  resolveDefaultSupacodeHome(NodeOS.homedir(), path.join),
 );
 
 const MODE_ARGS = {

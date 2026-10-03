@@ -1,3 +1,4 @@
+import { resolveDefaultSupacodeHome } from "@supacode/shared/supacodeHome";
 import * as Option from "effect/Option";
 
 export type JoinPath = (first: string, ...segments: string[]) => string;
@@ -16,7 +17,7 @@ export function resolveDesktopBaseDir(input: {
   readonly supacodeHome: Option.Option<string>;
 }): string {
   return Option.getOrElse(normalizeConfiguredBaseDir(input.supacodeHome), () =>
-    input.joinPath(input.homeDirectory, ".supacode"),
+    resolveDefaultSupacodeHome(input.homeDirectory, input.joinPath),
   );
 }
 

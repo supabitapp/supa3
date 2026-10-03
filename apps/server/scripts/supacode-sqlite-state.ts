@@ -4,6 +4,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
 import { fromJsonStringPretty } from "@supacode/shared/schemaJson";
+import { resolveDefaultSupacodeHome } from "@supacode/shared/supacodeHome";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -181,7 +182,9 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const baseDir = path.resolve(input.baseDir);
-  const sharedHome = path.resolve(options.sharedHome ?? path.join(NodeOS.homedir(), ".supacode"));
+  const sharedHome = path.resolve(
+    options.sharedHome ?? resolveDefaultSupacodeHome(NodeOS.homedir(), path.join),
+  );
   const databasePath = path.join(baseDir, "userdata", "statev2.sqlite");
   const source = yield* resolveSqlSource(input.sql, input.file);
 

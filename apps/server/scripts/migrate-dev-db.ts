@@ -29,6 +29,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
 import { resolveWorktreeSupacodeHome } from "@supacode/shared/devHome";
+import { resolveDefaultSupacodeHome } from "@supacode/shared/supacodeHome";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -403,7 +404,9 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  const sharedHome = path.resolve(options.sharedHome ?? path.join(NodeOS.homedir(), ".supacode"));
+  const sharedHome = path.resolve(
+    options.sharedHome ?? resolveDefaultSupacodeHome(NodeOS.homedir(), path.join),
+  );
   const sourcePath = path.resolve(
     input.source ?? path.join(sharedHome, "userdata", "statev2.sqlite"),
   );
@@ -565,7 +568,9 @@ export const migrateDevDbCommand = Command.make(
     ),
     baseDir: Flag.String("base-dir").pipe(
       Flag.optional,
-      Flag.withDescription("Isolated .supacode directory. Defaults to the current worktree's .supacode."),
+      Flag.withDescription(
+        "Isolated .supacode directory. Defaults to the current worktree's .supacode.",
+      ),
     ),
     source: Flag.String("source").pipe(
       Flag.optional,
