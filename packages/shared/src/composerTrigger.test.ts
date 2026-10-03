@@ -57,9 +57,23 @@ describe("detectComposerTrigger", () => {
   );
 
   it.each([
+    ["Use /", "Use /".length],
+    ["and / or", "and /".length],
+    ["Read /Users", "Read /".length],
+  ])("opens slash skill completion from a bare slash in %j", (text, cursor) => {
+    expect(detectComposerTrigger(text, cursor)).toEqual({
+      kind: "slash-skill",
+      query: "",
+      rangeStart: cursor - 1,
+      rangeEnd: cursor,
+    });
+  });
+
+  it.each([
     ["Read /Users/khoi/notes", "Read /Users/khoi/notes".length],
     ["Read /Users/khoi/notes", "Read /Use".length],
-    ["and / or", "and /".length],
+    ["Read /Users/khoi/notes", "Read /".length],
+    ["and / or", "and / ".length],
   ])("leaves %j alone with the caret at %i", (text, cursor) => {
     expect(detectComposerTrigger(text, cursor)).toBeNull();
   });

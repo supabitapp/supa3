@@ -181,8 +181,8 @@ composer when it is empty, and is discarded otherwise.
 ## Commands and skills
 
 Type `/` at the start of a message for commands, or `$` anywhere to add a skill
-from the selected environment and provider. Later in the message, `/` followed
-by a letter suggests matching skills too. Enter still sends the message unless
+from the selected environment and provider. Later in the message, `/` suggests
+skills too, just like `$`. Enter still sends the message unless
 you arrow to a suggestion first, so paths like `/tmp` stay as typed. On mobile,
 both are also available before starting a thread on **New task**.
 

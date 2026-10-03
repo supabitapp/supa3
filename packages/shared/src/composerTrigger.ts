@@ -79,7 +79,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
       };
     }
     const word = text.slice(tokenStart, tokenEndForCursor(text, cursor));
-    if (token.length > 1 && !word.slice(1).includes("/")) {
+    if (!word.slice(1).includes("/")) {
       return {
         kind: "slash-skill",
         query: token.slice(1),
