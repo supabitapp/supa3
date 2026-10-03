@@ -10,7 +10,7 @@ Built on `github.com/gorilla/websocket` v1.5.3 and `golang.org/x/time/rate`. Go 
 experiments/relay/build.sh    # bin/relay and bin/relay-bench (CGO_ENABLED=0, -trimpath, -ldflags="-s -w")
 experiments/relay/run.sh      # runs bin/relay with the RELAY_* environment, never rebuilds
 experiments/relay/test.sh     # gofmt, go vet, unit tests, real-socket e2e suite, all with -race
-python3 /tmp/passio-relay-benchmark-lock.py -- bash experiments/relay/bench.sh
+bash experiments/relay/bench.sh
 ```
 
 `test.sh` builds the relay with `-race`, then `e2e/` starts that binary on an ephemeral loopback port for each test and drives it with real host and client sockets. Extra arguments go to `go test`, for example `./test.sh -run TestDataTokens -v`.
@@ -18,7 +18,7 @@ python3 /tmp/passio-relay-benchmark-lock.py -- bash experiments/relay/bench.sh
 `bench.sh` runs the sections `matrix-64 matrix-1024 matrix-65536 idle churn slow`. Each section starts its own relay and runs under a budget of 2000 connections. Sections are separated by a 35 s cooldown so TIME_WAIT sockets can clear. If the driver hits local port exhaustion (`EADDRNOTAVAIL`), it aborts the section without retrying. To rerun only failed sections into the same directory:
 
 ```bash
-RELAY_BENCH_OUT=/path/to/previous/run RELAY_BENCH_SECTIONS="slow" python3 /tmp/passio-relay-benchmark-lock.py -- bash experiments/relay/bench.sh
+RELAY_BENCH_OUT=/path/to/previous/run RELAY_BENCH_SECTIONS="slow" bash experiments/relay/bench.sh
 ```
 
 Raw JSON is written to `$RELAY_BENCH_OUT`, which defaults to `$TMPDIR/passio-relay-go-bench/<UTC timestamp>`. Each section writes a `section-*.json`, and the matrix also writes one `case-*.json` per case. The merged `results.json` is also printed to stdout. Other settings: `RELAY_BENCH_COOLDOWN_SECONDS`, plus the driver flags `-warmup`, `-duration`, `-inflight`, `-reps`, `-churn-cycles`, `-max-stalled`, `-max-dials`, and `-max-runtime`. When `-max-runtime` expires, the driver prints a goroutine dump, stops the processes it spawned, and exits 3.
