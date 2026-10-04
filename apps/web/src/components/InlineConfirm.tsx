@@ -1,11 +1,13 @@
 import { CheckIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
 const ICON_SWAP_CLASS =
   "col-start-1 row-start-1 transition-[opacity,scale,filter] duration-300 ease-drawer motion-reduce:transition-none";
 const ICON_HIDDEN_CLASS = "scale-30 opacity-0 blur-xs";
+const LABEL_SHOWN_CLASS = "transition-opacity duration-150 ease-out motion-reduce:transition-none";
+const LABEL_HIDDEN_CLASS = "opacity-0 transition-none";
 
 export function InlineConfirmIcon({ armed, children }: { armed: boolean; children: ReactNode }) {
   return (
@@ -29,24 +31,60 @@ export function InlineConfirmLabel({
   idle: ReactNode;
   confirm: ReactNode;
 }) {
+  const idleRef = useRef<HTMLSpanElement>(null);
+  const confirmRef = useRef<HTMLSpanElement>(null);
+  const [widths, setWidths] = useState<{
+    readonly idle: number;
+    readonly confirm: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const idleLabel = idleRef.current;
+    const confirmLabel = confirmRef.current;
+    if (idleLabel === null || confirmLabel === null || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const measure = () =>
+      setWidths({
+        idle: Math.ceil(idleLabel.getBoundingClientRect().width),
+        confirm: Math.ceil(confirmLabel.getBoundingClientRect().width),
+      });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(idleLabel);
+    observer.observe(confirmLabel);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <span className="inline-grid justify-items-center">
+    <span
+      className="inline-grid grid-cols-1 overflow-hidden transition-[width] duration-200 ease-in-out motion-reduce:transition-none"
+      style={
+        widths === null
+          ? undefined
+          : { width: armed ? Math.max(widths.idle, widths.confirm) : widths.idle }
+      }
+    >
       <span
+        ref={idleRef}
         aria-hidden={armed || undefined}
         className={cn(
-          "col-start-1 row-start-1",
-          armed
-            ? "opacity-0 transition-none"
-            : "transition-opacity duration-150 ease-out motion-reduce:transition-none",
+          "col-start-1 row-start-1 justify-self-center",
+          armed ? LABEL_HIDDEN_CLASS : LABEL_SHOWN_CLASS,
         )}
       >
         {idle}
       </span>
-      {armed ? (
-        <span className="col-start-1 row-start-1 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none">
-          {confirm}
-        </span>
-      ) : null}
+      <span
+        ref={confirmRef}
+        aria-hidden={!armed || undefined}
+        className={cn(
+          "col-start-1 row-start-1 justify-self-center",
+          armed ? LABEL_SHOWN_CLASS : LABEL_HIDDEN_CLASS,
+        )}
+      >
+        {confirm}
+      </span>
     </span>
   );
 }

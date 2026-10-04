@@ -88,7 +88,10 @@ const clickMerge = (event: { detail?: number; timeStamp: number }) =>
       .props.onClick({ currentTarget: null, detail: 1, ...event });
   });
 
-const armed = () => renderer.root.findAll((node) => node.children.includes("Confirm")).length > 0;
+const armed = () =>
+  renderer.root.findAll(
+    (node) => node.children.includes("Confirm") && node.props["aria-hidden"] !== true,
+  ).length > 0;
 
 const stubWindow = () =>
   vi.stubGlobal("window", Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
