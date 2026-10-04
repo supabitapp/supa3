@@ -291,23 +291,6 @@ export function useThreadComposerState() {
     selectedThreadQueuedMessages,
     acknowledgedMessages,
   ]);
-  useEffect(() => {
-    const echoedIds = new Set(selectedThreadMessages?.map((message) => message.id));
-    const echoedMessages = appAtomRegistry
-      .get(acknowledgedThreadMessagesAtom)
-      .filter((message) => echoedIds.has(message.messageId));
-    if (echoedMessages.length > 0) {
-      appAtomRegistry.set(
-        acknowledgedThreadMessagesAtom,
-        appAtomRegistry
-          .get(acknowledgedThreadMessagesAtom)
-          .filter((message) => !echoedIds.has(message.messageId)),
-      );
-      scheduleUnusedComposerAttachmentCleanup(
-        echoedMessages.flatMap((message) => message.attachments),
-      );
-    }
-  }, [acknowledgedMessages, selectedThreadMessages]);
 
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const followUpBehavior = AsyncResult.isSuccess(preferencesResult)

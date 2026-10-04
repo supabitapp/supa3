@@ -1,3 +1,4 @@
+import { useAcknowledgedThreadMessageCleanup } from "./use-acknowledged-thread-message-cleanup";
 import { useAtomValue } from "@effect/atom-react";
 import {
   threadRuntimeIsActive,
@@ -619,6 +620,7 @@ async function preserveUploadedAttachmentsForEditor(
 }
 
 export function useThreadOutboxDrain(): void {
+  useAcknowledgedThreadMessageCleanup();
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const fetchRefs = useAtomCommand(fetchVcsRefs, { reportFailure: false });
   const setThreadRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
