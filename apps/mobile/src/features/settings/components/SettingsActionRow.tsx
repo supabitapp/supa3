@@ -12,7 +12,9 @@ export function SettingsActionRow(props: {
   readonly tone?: "default" | "danger";
   readonly disabled?: boolean;
   readonly loading?: boolean;
+  readonly accessibilityHint?: string;
   readonly onPress: () => void;
+  readonly onTouchStart?: ComponentProps<typeof Pressable>["onTouchStart"];
 }) {
   const danger = props.tone === "danger";
   const textClassName = danger ? "tabular-nums text-danger-foreground" : "text-foreground";
@@ -37,7 +39,9 @@ export function SettingsActionRow(props: {
         leading={icon}
         trailing={spinner}
         disabled={props.disabled}
+        accessibilityHint={props.accessibilityHint}
         onPress={props.onPress}
+        onTouchStart={props.onTouchStart}
       />
     );
   }
@@ -45,8 +49,10 @@ export function SettingsActionRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityHint={props.accessibilityHint}
       disabled={props.disabled}
       onPress={props.onPress}
+      onTouchStart={props.onTouchStart}
       className="flex-row items-center gap-4 p-4 disabled:opacity-40"
     >
       {icon}

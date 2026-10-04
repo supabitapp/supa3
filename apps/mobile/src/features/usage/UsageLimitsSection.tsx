@@ -18,10 +18,11 @@ import {
 } from "@supacode/shared/usageLimits";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 import { refreshUsageLimits } from "@supacode/client-runtime/state/usage";
-import { Alert, Linking, Pressable, View } from "react-native";
+import { Linking, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { ProviderIcon } from "../../components/ProviderIcon";
+import { useInlineConfirm } from "../../lib/useInlineConfirm";
 import { environmentPresentations } from "../../state/presentation";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -195,8 +196,8 @@ const OUTCOME_TEXT: Record<ProviderConsumeResetCreditOutcome, string> = {
 
 /**
  * Banked reset credits with a confirmed redeem action. Redeeming spends a
- * credit the provider granted the user, so it goes through the native
- * confirm alert rather than firing on a bare tap.
+ * credit the provider granted the user, so it asks for a second tap rather
+ * than firing on a bare tap.
  */
 export function ResetCredits(props: {
   readonly environmentId: EnvironmentId;
@@ -212,6 +213,8 @@ export function ResetCredits(props: {
   });
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const confirm = useInlineConfirm<"reset">();
+  const armed = confirm.armed === "reset";
   if (dense && credits.availableCount === 0 && status === null) return null;
 
   const expiresIn = credits.nextExpiresAt
@@ -240,17 +243,6 @@ export function ResetCredits(props: {
     );
   };
 
-  const confirm = () => {
-    Alert.alert(
-      "Use a reset credit?",
-      "This redeems one credit on your account and clears the current rate-limit windows. It cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Use credit", onPress: () => void redeem() },
-      ],
-    );
-  };
-
   return (
     <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
       <Text className="text-xs tabular-nums text-foreground-tertiary">{summary}</Text>
@@ -259,7 +251,7 @@ export function ResetCredits(props: {
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}
-          onPress={confirm}
+          {...confirm.bind("reset", () => void redeem())}
           className={
             dense
               ? "rounded-full bg-subtle-strong px-2.5 py-1"
@@ -273,11 +265,17 @@ export function ResetCredits(props: {
                 : "text-sm font-supacode-medium text-foreground"
             }
           >
-            {busy ? "Using…" : "Use reset"}
+            {busy ? "Using…" : armed ? "Confirm reset" : "Use reset"}
           </Text>
         </Pressable>
       ) : null}
-      {status ? <Text className="text-sm text-foreground">{status}</Text> : null}
+      {armed ? (
+        <Text className="text-sm text-foreground-muted">
+          Uses one credit and clears the current rate-limit windows. This can't be undone.
+        </Text>
+      ) : status ? (
+        <Text className="text-sm text-foreground">{status}</Text>
+      ) : null}
     </View>
   );
 }

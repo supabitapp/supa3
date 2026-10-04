@@ -2,14 +2,15 @@ import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollVie
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useMemo } from "react";
-import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import { type ComponentProps, useMemo } from "react";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
+import { useInlineConfirm } from "../../lib/useInlineConfirm";
 import {
   clearClientCacheAtom,
   clientCacheSummaryAtom,
@@ -29,6 +30,7 @@ export function SettingsClientStorageRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const serverConfigs = useServerConfigs();
   const isClearing = clearResult.waiting;
+  const confirm = useInlineConfirm<"all" | `environment:${string}`>();
   const summary = AsyncResult.isSuccess(summaryResult) ? summaryResult.value : null;
   const environmentSummaries = useMemo(
     () =>
@@ -39,40 +41,6 @@ export function SettingsClientStorageRouteScreen() {
       }),
     [savedConnectionsById, summary?.environments],
   );
-
-  const confirmClearEnvironment = (environment: EnvironmentClientCacheSummary) => {
-    const label =
-      savedConnectionsById[environment.environmentId]?.environmentLabel ??
-      environment.environmentId;
-    Alert.alert(
-      `Clear cache for ${label}?`,
-      "This removes offline threads, server metadata, and cached branches for this environment. The saved connection and credentials stay intact.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear Cache",
-          style: "destructive",
-          onPress: () =>
-            clearCache({ type: "environment", environmentId: environment.environmentId }),
-        },
-      ],
-    );
-  };
-
-  const confirmClearAll = () => {
-    Alert.alert(
-      "Clear all client caches?",
-      "This removes offline data for every environment. Connections, credentials, account data, and app preferences stay intact.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All Caches",
-          style: "destructive",
-          onPress: () => clearCache({ type: "all" }),
-        },
-      ],
-    );
-  };
 
   return (
     <SettingsScreen title="Client Storage">
@@ -126,7 +94,13 @@ export function SettingsClientStorageRouteScreen() {
                       )}
                       disabled={isClearing}
                       first={index === 0}
-                      onClear={() => confirmClearEnvironment(environment)}
+                      armed={confirm.armed === `environment:${environment.environmentId}`}
+                      clear={confirm.bind(`environment:${environment.environmentId}`, () =>
+                        clearCache({
+                          type: "environment",
+                          environmentId: environment.environmentId,
+                        }),
+                      )}
                     />
                   </Animated.View>
                 ))}
@@ -154,11 +128,17 @@ export function SettingsClientStorageRouteScreen() {
           <SettingsSection title="Actions">
             <SettingsActionRow
               icon="trash"
-              label={summary ? `Clear ${formatBytes(summary.payloadBytes)}` : "Clear caches"}
+              label={
+                confirm.armed === "all"
+                  ? "Confirm clearing all caches"
+                  : summary
+                    ? `Clear ${formatBytes(summary.payloadBytes)}`
+                    : "Clear caches"
+              }
               tone="danger"
               disabled={isClearing || !summary || summary.recordCount === 0}
               loading={isClearing}
-              onPress={confirmClearAll}
+              {...confirm.bind("all", () => clearCache({ type: "all" }))}
             />
           </SettingsSection>
           <Text className="px-2 text-sm leading-normal text-foreground-muted">
@@ -182,7 +162,11 @@ function CacheEnvironmentRow(props: {
   readonly machine: EnvironmentMachineKind;
   readonly disabled: boolean;
   readonly first: boolean;
-  readonly onClear: () => void;
+  readonly armed: boolean;
+  readonly clear: Pick<
+    ComponentProps<typeof Pressable>,
+    "accessibilityHint" | "onPress" | "onTouchStart"
+  >;
 }) {
   return (
     <View
@@ -197,17 +181,21 @@ function CacheEnvironmentRow(props: {
         {props.environmentLabel}
       </Text>
       <Pressable
-        accessibilityLabel={`Clear cache for ${props.environmentLabel}`}
+        accessibilityLabel={
+          props.armed
+            ? `Confirm clearing cache for ${props.environmentLabel}`
+            : `Clear cache for ${props.environmentLabel}`
+        }
         accessibilityRole="button"
         disabled={props.disabled}
-        onPress={props.onClear}
+        {...props.clear}
         className="rounded-full px-3 py-2 disabled:opacity-40"
       >
         <Text
           className="font-supacode-medium tabular-nums text-danger-foreground"
           numberOfLines={1}
         >
-          Clear {formatBytes(props.environment.payloadBytes)}
+          {props.armed ? "Confirm clear" : `Clear ${formatBytes(props.environment.payloadBytes)}`}
         </Text>
       </Pressable>
     </View>
