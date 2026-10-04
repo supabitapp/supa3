@@ -6,7 +6,7 @@
   "ignoreBinaries": ["eas", "file", "mkfifo", "pkill", "pkg-config", "plutil", "sips"],
   "workspaces": {
     ".": {
-      // Keep vendored reference repositories outside the root project.
+      "ignoreDependencies": ["effect"],
       "project": ["*.{js,mjs,cjs,ts,mts,cts}", ".github/**/*.cjs"],
       "entry": [".github/scripts/thread-transfer-report.cjs"],
       "vite": { "entry": [".github/**/*.test.cjs"] },
