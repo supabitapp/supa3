@@ -13,14 +13,18 @@ import type {
   SidebarProjectGroupMember,
   SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
-import { resolveSettingsScope, type SettingsScopeSearch } from "./settingsScope";
+import { resolveSettingsScope, type SettingsScopeSearch } from "../settings/settingsScope";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
+  lastRunLabel,
+  relativeLabel,
+  scheduleLabel,
   scheduledTaskDefaultModel,
   matchesScheduledTaskScope,
   taskToDraft,
-} from "./scheduledTasksSettings.logic";
+  validateAutomationsSearch,
+} from "./automations.logic";
 
 const laptopId = EnvironmentId.make("laptop");
 const serverId = EnvironmentId.make("server");
@@ -263,5 +267,57 @@ describe("scheduled task model defaults", () => {
         null,
       ),
     ).toBeNull();
+  });
+});
+
+describe("automation labels", () => {
+  const now = Date.parse("2026-10-04T12:00:00.000Z");
+  const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+  it("marks fixed times as environment time and leaves intervals unqualified", () => {
+    expect(
+      scheduleLabel({ type: "fixed_time", timeOfDay: "09:00", weekdays: [1, 2, 3, 4, 5] }),
+    ).toBe("Weekdays at 09:00 (environment time)");
+    expect(scheduleLabel({ type: "fixed_time", timeOfDay: "18:30" })).toBe(
+      "Daily at 18:30 (environment time)",
+    );
+    expect(scheduleLabel({ type: "interval", everyMs: 15 * 60_000 })).toBe("Every 15 min");
+  });
+
+  it.each([
+    [null, "Not scheduled"],
+    [at(30_000), "in under a minute"],
+    [at(5 * 60_000), "in 5m"],
+    [at(3 * 3_600_000), "in 3h"],
+    [at(-30_000), "just now"],
+    [at(-5 * 60_000), "5m ago"],
+    [at(-2 * 86_400_000), "2d ago"],
+  ])("labels %s relative to now as %s", (value, expected) => {
+    expect(relativeLabel(value, now)).toBe(expected);
+  });
+
+  it("describes delivery, not agent completion", () => {
+    expect(lastRunLabel({ lastRunStatus: "never", lastRunAt: null }, now)).toBeNull();
+    expect(lastRunLabel({ lastRunStatus: "running", lastRunAt: at(0) }, now)).toBe("Sending…");
+    expect(lastRunLabel({ lastRunStatus: "succeeded", lastRunAt: at(-5 * 60_000) }, now)).toBe(
+      "Sent 5m ago",
+    );
+    expect(lastRunLabel({ lastRunStatus: "failed", lastRunAt: at(-60_000) }, now)).toBe(
+      "Couldn't send",
+    );
+  });
+});
+
+describe("automations search", () => {
+  it("keeps the project filter separate from the one-shot task link", () => {
+    expect(
+      validateAutomationsSearch({
+        project: "supacode",
+        environmentId: "laptop",
+        taskId: "task-1",
+        machine: "ignored",
+      }),
+    ).toEqual({ project: "supacode", environmentId: laptopId, taskId: "task-1" });
+    expect(validateAutomationsSearch({ project: " ", taskId: 4 })).toEqual({});
   });
 });

@@ -7,7 +7,6 @@ import {
   ChevronRightIcon,
   FolderPlusIcon,
   Globe2Icon,
-  SearchIcon,
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
@@ -124,7 +123,8 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useHandleNewThread, useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -138,7 +138,6 @@ import {
 } from "../threadRoutes";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
-import { Kbd } from "./ui/kbd";
 import {
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
@@ -210,7 +209,7 @@ import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
-import { CommandDialogTrigger } from "./ui/command";
+import { SidebarPrimaryNavigation } from "./sidebar/SidebarPrimaryNavigation";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import {
@@ -2889,7 +2888,7 @@ interface SidebarProjectsContentProps {
   routeThreadKey: string | null;
   openPullRequestsInRightPanel: boolean;
   newThreadShortcutLabel: string | null;
-  commandPaletteShortcutLabel: string | null;
+  onNewThreadFromContext: () => void;
   threadJumpLabelByKey: ReadonlyMap<string, string>;
   attachThreadListAutoAnimateRef: (node: HTMLElement | null) => void;
   expandThreadListForProject: (projectKey: string) => void;
@@ -2933,7 +2932,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     routeThreadKey,
     openPullRequestsInRightPanel,
     newThreadShortcutLabel,
-    commandPaletteShortcutLabel,
+    onNewThreadFromContext,
     threadJumpLabelByKey,
     attachThreadListAutoAnimateRef,
     expandThreadListForProject,
@@ -2968,19 +2967,15 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     <SidebarContent
       fixedHeader={
         // Lifted above the stage backdrop, whose fade bleeds below the
-        // header and would otherwise paint across the search row's outline.
+        // header and would otherwise paint across its rows.
         <SidebarGroup className="z-[1]">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <CommandDialogTrigger
-                render={<SidebarMenuButton data-testid="command-palette-trigger" />}
-              >
-                <SearchIcon />
-                <span className="flex-1 truncate">Search</span>
-                {commandPaletteShortcutLabel ? <Kbd>{commandPaletteShortcutLabel}</Kbd> : null}
-              </CommandDialogTrigger>
-            </SidebarMenuItem>
-          </SidebarMenu>
+          <SidebarPrimaryNavigation
+            onNewThread={onNewThreadFromContext}
+            newThreadDisabled={projectsLength === 0}
+            newThreadTooltip={
+              newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : null
+            }
+          />
         </SidebarGroup>
       }
     >
@@ -3138,8 +3133,20 @@ export default function LegacySidebar() {
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const updateSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
+  const newThreadContext = useHandleNewThread();
   const { archiveThread, deleteThread, markThreadUnread } = useThreadActions();
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
+  // The legacy sidebar keeps chat.new's immediate create in the current
+  // project instead of routing through the palette's project picker.
+  const handleNewThreadFromContext = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void startNewThreadFromContext({
+      activeDraftThread: newThreadContext.activeDraftThread,
+      activeThread: newThreadContext.activeThread ?? undefined,
+      defaultProjectRef: newThreadContext.defaultProjectRef,
+      handleNewThread: newThreadContext.handleNewThread,
+    });
+  }, [isMobile, newThreadContext, setOpenMobile]);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -3628,9 +3635,6 @@ export default function LegacySidebar() {
     desktopUpdateState && showArm64IntelBuildWarning
       ? getArm64IntelBuildWarningDescription(desktopUpdateState)
       : null;
-  const commandPaletteShortcutLabel = isMobile
-    ? null
-    : shortcutLabelForCommand(keybindings, "commandPalette.toggle", newThreadShortcutLabelOptions);
   const handleDesktopUpdateButtonClick = useCallback(async () => {
     const bridge = window.desktopBridge;
     if (!bridge || !desktopUpdateState) return;
@@ -3782,7 +3786,7 @@ export default function LegacySidebar() {
         routeThreadKey={routeThreadKey}
         openPullRequestsInRightPanel={routeThreadRef !== null}
         newThreadShortcutLabel={newThreadShortcutLabel}
-        commandPaletteShortcutLabel={commandPaletteShortcutLabel}
+        onNewThreadFromContext={handleNewThreadFromContext}
         threadJumpLabelByKey={visibleThreadJumpLabelByKey}
         attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
         expandThreadListForProject={expandThreadListForProject}

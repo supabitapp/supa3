@@ -1,14 +1,12 @@
 import { resolveThreadWorkingStartedAt } from "@supacode/client-runtime/state/models";
 import { backgroundWorkHoldsCompletion } from "@supacode/shared/orchestrationV2PendingBackgroundWork";
-import { threadPullRequestSearchTerms } from "@supacode/shared/threadPullRequests";
 import * as React from "react";
 import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
 } from "@supacode/client-runtime/state/runtime";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
-import { threadSearchMatchKey } from "@supacode/client-runtime/state/thread-search";
-import type { ContextMenuItem, EnvironmentId, ThreadId } from "@supacode/contracts";
+import type { ContextMenuItem } from "@supacode/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@supacode/contracts/settings";
 import type { AsyncResult } from "effect/unstable/reactivity";
 import { planPinnedReorder } from "@supacode/client-runtime/state/thread-sort";
@@ -1028,47 +1026,6 @@ export {
 // (state/thread-sort) so web and mobile compute identical pinned orders.
 export { pinOrderKeyBetween } from "@supacode/client-runtime/state/thread-sort";
 export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@supacode/client-runtime/state/thread-sort";
-
-const EMPTY_CONTENT_MATCH_KEYS: ReadonlySet<string> = new Set<string>();
-
-/**
- * Search the already-ordered sidebar thread collection by title or linked PR,
- * plus any thread whose messages the server matched (`contentMatchKeys`, keyed
- * by `threadSearchMatchKey`). Keeping the input order means lifecycle ordering
- * (active, snoozed, settled) remains stable while the user narrows the list.
- */
-export function searchSidebarThreads<
-  T extends {
-    readonly environmentId: EnvironmentId;
-    readonly id: ThreadId;
-    readonly title: string;
-  } & Parameters<typeof threadPullRequestSearchTerms>[0],
->(
-  threads: readonly T[],
-  query: string,
-  contentMatchKeys: ReadonlySet<string> = EMPTY_CONTENT_MATCH_KEYS,
-): T[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.length === 0) return [];
-  const titleMatches: T[] = [];
-  const contentMatches: T[] = [];
-  for (const thread of threads) {
-    const matchesTitle = [thread.title, ...threadPullRequestSearchTerms(thread)].some((term) =>
-      term.toLowerCase().includes(normalizedQuery),
-    );
-    if (matchesTitle) {
-      titleMatches.push(thread);
-    } else if (
-      contentMatchKeys.size > 0 &&
-      contentMatchKeys.has(
-        threadSearchMatchKey({ environmentId: thread.environmentId, threadId: thread.id }),
-      )
-    ) {
-      contentMatches.push(thread);
-    }
-  }
-  return [...titleMatches, ...contentMatches];
-}
 
 export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
   items: readonly TItem[];

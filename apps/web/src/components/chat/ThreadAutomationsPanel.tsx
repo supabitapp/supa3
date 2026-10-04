@@ -10,7 +10,8 @@ import {
 
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { cn } from "../../lib/utils";
-import { relativeLabel, scheduleLabel } from "../settings/ScheduledTasksSettings";
+import { lastRunLabel, relativeLabel, scheduleLabel } from "../automations/automations.logic";
+import { useRelativeTimeTick } from "../settings/settingsLayout";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -25,7 +26,7 @@ import {
 
 const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   never: "bg-muted-foreground/40",
-  running: "animate-pulse bg-sky-500",
+  running: "bg-sky-500",
   succeeded: "bg-emerald-500",
   failed: "bg-destructive",
 };
@@ -51,6 +52,7 @@ export function ThreadAutomationsPanel(props: {
   });
   const navigate = useNavigate();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const now = useRelativeTimeTick(60_000);
 
   const boundTasks = (tasksQuery.data?.tasks ?? []).filter(
     (task) => task.threadId === props.threadId,
@@ -111,19 +113,14 @@ export function ThreadAutomationsPanel(props: {
                 size="icon-xs"
                 variant="ghost"
                 part="icon"
-                aria-label="Manage scheduled tasks"
-                onClick={() =>
-                  void navigate({
-                    to: "/settings/scheduled-tasks",
-                    search: { environmentId: props.environmentId },
-                  })
-                }
+                aria-label="Manage automations"
+                onClick={() => void navigate({ to: "/automations" })}
               >
                 <Settings2Icon className="size-3.5" />
               </ThreadDetailsControl>
             }
           />
-          <TooltipPopup>Manage scheduled tasks</TooltipPopup>
+          <TooltipPopup>Manage automations</TooltipPopup>
         </Tooltip>
       }
     >
@@ -142,16 +139,24 @@ export function ThreadAutomationsPanel(props: {
               THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
             )}
           >
-            <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-              <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
-              <span
-                className={cn(
-                  "absolute -right-1 -top-1 size-1.5 rounded-full",
-                  STATUS_DOT_CLASS[task.lastRunStatus],
-                )}
-                aria-hidden
-              />
-            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="relative inline-flex size-4 shrink-0 items-center justify-center" />
+                }
+              >
+                <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+                <span
+                  className={cn(
+                    "absolute -right-1 -top-1 size-1.5 rounded-full",
+                    STATUS_DOT_CLASS[task.lastRunStatus],
+                  )}
+                  aria-hidden
+                />
+                <span className="sr-only">{lastRunLabel(task, now) ?? "Not run yet"}</span>
+              </TooltipTrigger>
+              <TooltipPopup>{lastRunLabel(task, now) ?? "Not run yet"}</TooltipPopup>
+            </Tooltip>
             <div className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-foreground/80">
                 {task.title}
@@ -159,7 +164,7 @@ export function ThreadAutomationsPanel(props: {
               <p className="truncate text-2xs text-muted-foreground">
                 {scheduleLabel(task.schedule)}
                 {task.enabled && task.nextRunAt !== null
-                  ? ` · next ${relativeLabel(task.nextRunAt)}`
+                  ? ` · next ${relativeLabel(task.nextRunAt, now)}`
                   : task.enabled
                     ? ""
                     : " · paused"}
@@ -175,7 +180,7 @@ export function ThreadAutomationsPanel(props: {
                     aria-label={`Edit ${task.title}`}
                     onClick={() =>
                       void navigate({
-                        to: "/settings/scheduled-tasks",
+                        to: "/automations",
                         search: { environmentId: props.environmentId, taskId: task.id },
                       })
                     }

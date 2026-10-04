@@ -3,6 +3,7 @@ import {
   type ProjectId,
   ScheduledTaskId,
   type ScheduledTask,
+  type ScheduledTaskSchedule,
   type ModelSelection,
   type RuntimeMode,
   type ProviderInteractionMode,
@@ -15,7 +16,7 @@ import {
 } from "@supacode/shared/projectSettings";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 
-import type { ResolvedSettingsScope } from "./settingsScope";
+import type { ResolvedSettingsScope } from "../settings/settingsScope";
 
 /** Project IDs belong to an environment, including when a grouped project spans machines. */
 export function matchesScheduledTaskScope(
@@ -32,8 +33,20 @@ export function matchesScheduledTaskScope(
   return true;
 }
 
-export function validateScheduledTasksSearch(raw: Record<string, unknown>) {
+/**
+ * `project` is the page's filter, a sidebar project key. `environmentId` and
+ * `taskId` are a one-shot deep link that opens the editor; the page drops them
+ * once the editor closes so Back never reopens it.
+ */
+export interface AutomationsSearch {
+  readonly project?: string;
+  readonly environmentId?: EnvironmentId;
+  readonly taskId?: ScheduledTaskId;
+}
+
+export function validateAutomationsSearch(raw: Record<string, unknown>): AutomationsSearch {
   return {
+    ...(typeof raw.project === "string" && raw.project.trim() ? { project: raw.project } : {}),
     ...(typeof raw.environmentId === "string" && raw.environmentId.trim()
       ? { environmentId: EnvironmentId.make(raw.environmentId) }
       : {}),
@@ -41,6 +54,67 @@ export function validateScheduledTasksSearch(raw: Record<string, unknown>) {
       ? { taskId: ScheduledTaskId.make(raw.taskId) }
       : {}),
   };
+}
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** Fixed times run on the environment's clock, which may not be this device's. */
+export function scheduleLabel(schedule: ScheduledTaskSchedule): string {
+  if (schedule.type === "interval") {
+    const minutes = schedule.everyMs / 60_000;
+    return Number.isInteger(minutes)
+      ? `Every ${minutes} min`
+      : `Every ${Math.round(schedule.everyMs / 1000)} sec`;
+  }
+  const weekdays = schedule.weekdays ?? [];
+  const days =
+    weekdays.length === 0
+      ? "Daily"
+      : weekdays.length === 5 && weekdays.every((day) => day >= 1 && day <= 5)
+        ? "Weekdays"
+        : weekdays.map((day) => WEEKDAY_LABELS[day]).join(", ");
+  return `${days} at ${schedule.timeOfDay} (environment time)`;
+}
+
+/** "in 5m" for upcoming runs, "5m ago" for past ones. */
+export function relativeLabel(value: string | null, now: number): string {
+  const time = value ? new Date(value).getTime() : Number.NaN;
+  if (Number.isNaN(time)) return "Not scheduled";
+  const diffMs = time - now;
+  if (diffMs <= 0) {
+    const minutes = Math.floor(-diffMs / 60_000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+  const minutes = Math.ceil(diffMs / 60_000);
+  if (minutes < 2) return "in under a minute";
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.round(hours / 24)}d`;
+}
+
+/**
+ * A run succeeds once its prompt is delivered (a new thread, or a send that
+ * may steer a turn already running), not when the agent finishes. Say "sent".
+ */
+export function lastRunLabel(
+  task: Pick<ScheduledTask, "lastRunStatus" | "lastRunAt">,
+  now: number,
+): string | null {
+  switch (task.lastRunStatus) {
+    case "never":
+      return null;
+    case "running":
+      return "Sending…";
+    case "failed":
+      return "Couldn't send";
+    case "succeeded":
+      return task.lastRunAt ? `Sent ${relativeLabel(task.lastRunAt, now)}` : "Sent";
+  }
 }
 
 type ScheduleMode = "fixed" | "interval";

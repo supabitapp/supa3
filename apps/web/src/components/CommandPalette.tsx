@@ -45,6 +45,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  CalendarClockIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -565,6 +566,13 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         event.stopPropagation();
         setOpen(false);
         void navigate({ to: "/usage" });
+        return;
+      }
+      if (command === "automations.open") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        void navigate({ to: "/automations" });
         return;
       }
       const mode = overlayModeForCommand(command);
@@ -2272,6 +2280,26 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:automations",
+    searchTerms: [
+      "automations",
+      "scheduled tasks",
+      "schedule",
+      "recurring",
+      "cron",
+      "timer",
+      "run automatically",
+    ],
+    title: "Open automations",
+    icon: <CalendarClockIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "automations.open",
+    run: async () => {
+      await navigate({ to: "/automations" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

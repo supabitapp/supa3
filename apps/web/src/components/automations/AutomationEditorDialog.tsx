@@ -1,13 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  Clock3Icon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlayIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import type {
   EnvironmentId,
   ModelSelection,
@@ -29,7 +21,6 @@ import {
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
 
-import { formatRelativeTime } from "../../timestampFormat";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import {
@@ -44,20 +35,9 @@ import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import { useSettingsScope } from "./SettingsScopeContext";
-import {
-  matchesScheduledTaskScope,
-  scheduledTaskDefaultModel,
-  taskToDraft,
-  type DraftState,
-  type WorkspaceMode,
-} from "./scheduledTasksSettings.logic";
-import { Label } from "../ui/label";
-import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "../ui/menu";
-import { ToggleGroup, Toggle } from "../ui/toggle-group";
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "../ui/empty";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
-import { Badge } from "../ui/badge";
+import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../settings/settingsLayout";
+import type { ResolvedSettingsScope } from "../settings/settingsScope";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -70,17 +50,19 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { ToggleGroup, Toggle } from "../ui/toggle-group";
 import {
-  SettingsPageContainer,
-  SettingsRow,
-  SettingsSection,
-  SETTINGS_PICKER_TRIGGER_CLASSNAME,
-  useRelativeTimeTick,
-} from "./settingsLayout";
+  matchesScheduledTaskScope,
+  scheduledTaskDefaultModel,
+  taskToDraft,
+  type DraftState,
+  type WorkspaceMode,
+} from "./automations.logic";
 
 /** JS day-of-week (0 = Sunday) rendered Monday-first, matching how people read a week. */
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
@@ -161,325 +143,23 @@ function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
   };
 }
 
-export function scheduleLabel(schedule: ScheduledTaskSchedule): string {
-  if (schedule.type === "interval") {
-    const minutes = schedule.everyMs / 60_000;
-    return Number.isInteger(minutes)
-      ? `Every ${minutes} min`
-      : `Every ${Math.round(schedule.everyMs / 1000)} sec`;
-  }
-  const weekdays = schedule.weekdays ?? [];
-  const days =
-    weekdays.length === 0
-      ? "Daily"
-      : weekdays.length === 5 && weekdays.every((day) => day >= 1 && day <= 5)
-        ? "Weekdays"
-        : weekdays.map((day) => WEEKDAY_LABELS[day]).join(", ");
-  return `${days} at ${schedule.timeOfDay}`;
-}
-
 /**
- * Human label for a run timestamp. `formatRelativeTime` only handles the
- * past, and `nextRunAt` is a future instant — render "in 5m" style labels
- * for upcoming runs instead of a misleading "just now".
+ * Creates or edits one automation. `scope` narrows the projects it offers, so
+ * a project-filtered page creates into that project by default.
  */
-export function relativeLabel(value: string | null): string {
-  if (!value) return "Not scheduled";
-  const diffMs = new Date(value).getTime() - Date.now();
-  if (diffMs <= 0) {
-    const relative = formatRelativeTime(value);
-    if (!relative) return "Not scheduled";
-    return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
-  }
-  const minutes = Math.ceil(diffMs / 60_000);
-  if (minutes < 2) return "in under a minute";
-  if (minutes < 60) return `in ${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `in ${hours}h`;
-  return `in ${Math.round(hours / 24)}d`;
-}
-
-function statusVariant(status: ScheduledTask["lastRunStatus"]) {
-  if (status === "failed") return "error";
-  if (status === "succeeded") return "success";
-  if (status === "running") return "info";
-  return "outline";
-}
-
-export function ScheduledTasksSettings(target: {
-  readonly environmentId?: EnvironmentId;
-  readonly taskId?: ScheduledTaskId | undefined;
-}) {
-  const { scope, environments, connectedEnvironments, environment } = useSettingsScope();
-  const [editor, setEditor] = useState<{
-    environmentId: EnvironmentId;
-    task: ScheduledTask | null;
-  } | null>(null);
-  const openForEdit = useCallback((environmentId: EnvironmentId, task: ScheduledTask) => {
-    setEditor({ environmentId, task });
-  }, []);
-  const defaultEnvironment = environment ?? connectedEnvironments[0];
-  return (
-    <SettingsPageContainer>
-      <SettingsSection
-        title="Scheduled tasks"
-        variant="plain"
-        headerAction={
-          <Button
-            size="xs"
-            variant="ghost-muted"
-            disabled={!defaultEnvironment}
-            onClick={() =>
-              defaultEnvironment &&
-              setEditor({ environmentId: defaultEnvironment.environmentId, task: null })
-            }
-          >
-            <PlusIcon className="size-3" />
-            New task
-          </Button>
-        }
-      >
-        {scope.kind === "unavailable" ? (
-          <SettingsSection title="Unavailable selection">
-            <SettingsRow title={scope.message} />
-          </SettingsSection>
-        ) : environments.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Clock3Icon />
-              </EmptyMedia>
-              <EmptyTitle>No environments available</EmptyTitle>
-              <EmptyDescription>Connect an environment to manage scheduled tasks.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="space-y-8">
-            {environments.map((entry) => (
-              <ScheduledTaskEnvironmentSection
-                key={`${entry.environmentId}:${target.taskId ?? ""}`}
-                environment={entry}
-                showEnvironmentHeading={environments.length > 1}
-                taskId={
-                  (target.environmentId ?? defaultEnvironment?.environmentId) ===
-                  entry.environmentId
-                    ? target.taskId
-                    : undefined
-                }
-                onEdit={openForEdit}
-              />
-            ))}
-          </div>
-        )}
-      </SettingsSection>
-      {editor ? (
-        <ScheduledTaskEditorDialog
-          key={`${editor.environmentId}:${editor.task?.id ?? "new"}`}
-          initialEnvironmentId={editor.environmentId}
-          task={editor.task}
-          onClose={() => setEditor(null)}
-        />
-      ) : null}
-    </SettingsPageContainer>
-  );
-}
-
-function ScheduledTaskEnvironmentSection({
-  environment,
-  showEnvironmentHeading,
-  taskId,
-  onEdit,
-}: {
-  readonly environment: EnvironmentPresentation;
-  readonly showEnvironmentHeading: boolean;
-  readonly taskId?: ScheduledTaskId | undefined;
-  readonly onEdit: (environmentId: EnvironmentId, task: ScheduledTask) => void;
-}) {
-  const { scope } = useSettingsScope();
-  const connected =
-    environment.connection.phase === "connected" && environment.serverConfig !== null;
-  const tasksQuery = useEnvironmentQuery(
-    connected
-      ? serverEnvironment.scheduledTasksLive({
-          environmentId: environment.environmentId,
-          input: {},
-        })
-      : null,
-  );
-  const tasks = tasksQuery.data?.tasks.filter((task) =>
-    matchesScheduledTaskScope(scope, environment.environmentId, task.projectId),
-  );
-  const linkedTask = tasks?.find((task) => task.id === taskId);
-  const openedLink = useRef(false);
-  useEffect(() => {
-    if (!openedLink.current && linkedTask) {
-      openedLink.current = true;
-      onEdit(environment.environmentId, linkedTask);
-    }
-  }, [environment.environmentId, linkedTask, onEdit]);
-  useRelativeTimeTick(60_000);
-  return (
-    <SettingsSection
-      title={environment.label}
-      hideTitle={!showEnvironmentHeading}
-      icon={
-        <EnvironmentMachineIcon
-          kind={resolveEnvironmentMachineKind(environment.serverConfig)}
-          className="size-3.5"
-        />
-      }
-    >
-      {!connected ? (
-        <SettingsRow
-          title="Environment disconnected"
-          description={`Reconnect ${environment.label} to view its scheduled tasks.`}
-        />
-      ) : tasksQuery.error ? (
-        <SettingsRow title="Could not load scheduled tasks" description={tasksQuery.error} />
-      ) : !tasks ? (
-        <SettingsRow title="Loading scheduled tasks…" role="status" />
-      ) : (
-        <>
-          {taskId && !linkedTask ? (
-            <SettingsRow
-              title="Task unavailable"
-              description="This task no longer exists or is outside the selected project scope."
-              role="status"
-            />
-          ) : null}
-          {tasks.length === 0 ? (
-            <SettingsRow
-              title="No scheduled tasks"
-              description="No tasks match this environment and project selection."
-            />
-          ) : (
-            tasks.map((task) => (
-              <ScheduledTaskRow
-                key={task.id}
-                environmentId={environment.environmentId}
-                task={task}
-                onEdit={() => onEdit(environment.environmentId, task)}
-              />
-            ))
-          )}
-        </>
-      )}
-    </SettingsSection>
-  );
-}
-
-function ScheduledTaskRow({
-  environmentId,
-  task,
-  onEdit,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly task: ScheduledTask;
-  readonly onEdit: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const toggle = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
-    label: "scheduled task enabled",
-  });
-  const run = useAtomCommand(serverEnvironment.runScheduledTaskNow, {
-    label: "scheduled task run now",
-  });
-  const remove = useAtomCommand(serverEnvironment.deleteScheduledTask, {
-    label: "scheduled task delete",
-  });
-  const act = async (action: "toggle" | "run" | "delete") => {
-    if (busy) return;
-    setBusy(true);
-    const result =
-      action === "toggle"
-        ? await toggle({ environmentId, input: { id: task.id, enabled: !task.enabled } })
-        : action === "run"
-          ? await run({ environmentId, input: { id: task.id } })
-          : await remove({ environmentId, input: { id: task.id } });
-    setBusy(false);
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not update scheduled task",
-          description: String(squashAtomCommandFailure(result)),
-        }),
-      );
-    }
-  };
-  return (
-    <SettingsRow
-      title={task.title}
-      description={<span className="line-clamp-2">{task.prompt}</span>}
-      status={
-        <div className="flex flex-wrap items-center gap-2">
-          <span>
-            {scheduleLabel(task.schedule)} ·{" "}
-            {task.enabled
-              ? task.nextRunAt
-                ? `Next run ${relativeLabel(task.nextRunAt)}`
-                : "Not scheduled"
-              : "Paused"}
-          </span>
-          {task.lastRunStatus !== "never" ? (
-            <Badge variant={statusVariant(task.lastRunStatus)}>{task.lastRunStatus}</Badge>
-          ) : null}
-          {task.lastRunError ? <span className="text-destructive">{task.lastRunError}</span> : null}
-        </div>
-      }
-      control={
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={task.enabled}
-            disabled={busy}
-            aria-label={`Enable ${task.title}`}
-            onCheckedChange={() => void act("toggle")}
-          />
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  disabled={busy}
-                  aria-label={`Actions for ${task.title}`}
-                />
-              }
-            >
-              <MoreHorizontalIcon className="size-4" />
-            </MenuTrigger>
-            <MenuPopup align="end">
-              <MenuItem onClick={onEdit}>
-                <PencilIcon />
-                Edit
-              </MenuItem>
-              <MenuItem onClick={() => void act("run")}>
-                <PlayIcon />
-                Run now
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem onClick={() => void act("delete")}>
-                <Trash2Icon />
-                Delete
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        </div>
-      }
-    />
-  );
-}
-
-function ScheduledTaskEditorDialog({
+export function AutomationEditorDialog({
   initialEnvironmentId,
   task,
+  scope,
+  connectedEnvironments,
   onClose,
 }: {
   readonly initialEnvironmentId: EnvironmentId;
   readonly task: ScheduledTask | null;
+  readonly scope: ResolvedSettingsScope;
+  readonly connectedEnvironments: readonly EnvironmentPresentation[];
   readonly onClose: () => void;
 }) {
-  const { scope, connectedEnvironments } = useSettingsScope();
   const [environmentId, setEnvironmentId] = useState(initialEnvironmentId);
   const environment = useEnvironment(environmentId);
   const connected =
@@ -562,7 +242,7 @@ function ScheduledTaskEditorDialog({
       !projects.some((project) => project.id === selectedProjectId) ||
       selection === null
     ) {
-      reportFailure("Scheduled task is incomplete", "Add a title, prompt, project, and model.");
+      reportFailure("Automation is incomplete", "Add a title, prompt, project, and model.");
       return;
     }
     const schedule = scheduleFromDraft(draft);
@@ -617,7 +297,7 @@ function ScheduledTaskEditorDialog({
     if (result._tag === "Failure") {
       submissionPending.current = false;
       if (!isAtomCommandInterrupted(result)) {
-        reportFailure("Could not save scheduled task", squashAtomCommandFailure(result));
+        reportFailure("Could not save automation", squashAtomCommandFailure(result));
       }
       return;
     }
@@ -633,7 +313,7 @@ function ScheduledTaskEditorDialog({
     >
       <DialogPopup className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{draft.editingId ? "Edit task" : "New task"}</DialogTitle>
+          <DialogTitle>{draft.editingId ? "Edit automation" : "New automation"}</DialogTitle>
           <DialogDescription>
             Run a prompt automatically — on an interval or at a fixed time.
           </DialogDescription>
@@ -694,7 +374,7 @@ function ScheduledTaskEditorDialog({
             ) : null}
             {editingTaskMissing ? (
               <p className="text-xs text-destructive" role="status">
-                This scheduled task no longer exists.
+                This automation no longer exists.
               </p>
             ) : null}
             <Field label="Name" htmlFor="scheduled-task-title">
@@ -815,8 +495,8 @@ function ScheduledTaskEditorDialog({
               {task?.schedule.type === "interval" &&
               task.schedule.everyMs < MIN_SCHEDULED_TASK_INTERVAL_MS ? (
                 <p className="text-sm text-muted-foreground" role="status">
-                  This task uses a legacy interval below one minute. Saving updates it to at least
-                  one minute.
+                  This automation uses a legacy interval below one minute. Saving updates it to at
+                  least one minute.
                 </p>
               ) : null}
               <div className="flex items-center justify-between gap-2">
@@ -836,41 +516,47 @@ function ScheduledTaskEditorDialog({
               </div>
 
               {draft.scheduleMode === "fixed" ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="scheduled-task-time">Run at</Label>
-                    <Input
-                      type="time"
-                      id="scheduled-task-time"
-                      nativeInput
-                      className="w-32"
-                      value={draft.timeOfDay}
-                      onChange={(event) =>
-                        setDraft((current) => ({ ...current, timeOfDay: event.target.value }))
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground">on</span>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="scheduled-task-time">Run at</Label>
+                      <Input
+                        type="time"
+                        id="scheduled-task-time"
+                        nativeInput
+                        className="w-32"
+                        aria-describedby="scheduled-task-time-zone"
+                        value={draft.timeOfDay}
+                        onChange={(event) =>
+                          setDraft((current) => ({ ...current, timeOfDay: event.target.value }))
+                        }
+                      />
+                      <span className="text-xs text-muted-foreground">on</span>
+                    </div>
+                    <ToggleGroup
+                      multiple
+                      variant="outline"
+                      size="sm"
+                      aria-label="Days to run"
+                      value={[...draft.weekdays].map(String)}
+                      onValueChange={(values) => {
+                        if (values.length === 0) return;
+                        setDraft((current) => ({
+                          ...current,
+                          weekdays: new Set(values.map(Number)),
+                        }));
+                      }}
+                    >
+                      {WEEKDAY_ORDER.map((day) => (
+                        <Toggle key={day} value={String(day)} aria-label={WEEKDAY_LABELS[day]}>
+                          {WEEKDAY_SHORT[day]}
+                        </Toggle>
+                      ))}
+                    </ToggleGroup>
                   </div>
-                  <ToggleGroup
-                    multiple
-                    variant="outline"
-                    size="sm"
-                    aria-label="Days to run"
-                    value={[...draft.weekdays].map(String)}
-                    onValueChange={(values) => {
-                      if (values.length === 0) return;
-                      setDraft((current) => ({
-                        ...current,
-                        weekdays: new Set(values.map(Number)),
-                      }));
-                    }}
-                  >
-                    {WEEKDAY_ORDER.map((day) => (
-                      <Toggle key={day} value={String(day)} aria-label={WEEKDAY_LABELS[day]}>
-                        {WEEKDAY_SHORT[day]}
-                      </Toggle>
-                    ))}
-                  </ToggleGroup>
+                  <p id="scheduled-task-time-zone" className="text-xs text-muted-foreground">
+                    Uses the environment's time zone.
+                  </p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -899,7 +585,7 @@ function ScheduledTaskEditorDialog({
                   id="scheduled-task-enabled-description"
                   className="text-sm text-muted-foreground"
                 >
-                  Disabled tasks stay saved but do not run.
+                  Paused automations do not run automatically. Run now still works.
                 </p>
               </div>
               <Switch
@@ -921,7 +607,7 @@ function ScheduledTaskEditorDialog({
             disabled={saving || editingTaskMissing || !connected || !tasksQuery.data}
             onClick={() => void submit()}
           >
-            {draft.editingId ? "Save task" : "Create task"}
+            {draft.editingId ? "Save automation" : "Create automation"}
           </Button>
         </DialogFooter>
       </DialogPopup>
