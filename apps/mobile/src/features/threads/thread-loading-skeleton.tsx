@@ -28,6 +28,7 @@ import Animated, {
   Easing,
   ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -42,6 +43,7 @@ export function ThreadLoadingSkeleton(props: {
 }) {
   const progress = useSharedValue(0);
   const measuredWidth = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
   const gradientId = `thread-skeleton-${useId().replaceAll(":", "")}`;
   const sweepStyle = useAnimatedStyle(() => ({
     opacity: measuredWidth.value > 0 ? 1 : 0,
@@ -49,6 +51,7 @@ export function ThreadLoadingSkeleton(props: {
   }));
 
   const onLayout = (event: LayoutChangeEvent) => {
+    if (reduceMotion) return;
     const firstLayout = measuredWidth.get() === 0;
     measuredWidth.set(event.nativeEvent.layout.width);
     if (firstLayout && event.nativeEvent.layout.width > 0) {
@@ -73,18 +76,20 @@ export function ThreadLoadingSkeleton(props: {
         borderRadius: props.radius ?? 6,
       }}
     >
-      <Animated.View style={[StyleSheet.absoluteFill, sweepStyle]}>
-        <Svg width="100%" height="100%">
-          <Defs>
-            <LinearGradient id={gradientId} x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0" stopColor={props.shimmerColor} stopOpacity={0} />
-              <Stop offset="0.5" stopColor={props.shimmerColor} stopOpacity={0.7} />
-              <Stop offset="1" stopColor={props.shimmerColor} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
-        </Svg>
-      </Animated.View>
+      {!reduceMotion ? (
+        <Animated.View style={[StyleSheet.absoluteFill, sweepStyle]}>
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id={gradientId} x1="0%" x2="100%" y1="0%" y2="0%">
+                <Stop offset="0" stopColor={props.shimmerColor} stopOpacity={0} />
+                <Stop offset="0.5" stopColor={props.shimmerColor} stopOpacity={0.7} />
+                <Stop offset="1" stopColor={props.shimmerColor} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
+          </Svg>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

@@ -108,6 +108,7 @@ import Animated, {
   FadeOut,
   ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
   type SharedValue,
@@ -2738,15 +2739,19 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     hasQueuedMessages: props.queuedMessages.length > 0,
   });
   const feedOpacity = useSharedValue(feedLoading ? 0 : 1);
+  const reduceMotion = useReducedMotion();
   useLayoutEffect(() => {
+    const opacity = feedLoading ? 0 : 1;
     feedOpacity.set(
-      withTiming(feedLoading ? 0 : 1, {
-        duration: feedLoading ? 0 : 180,
-        easing: Easing.out(Easing.cubic),
-        reduceMotion: ReduceMotion.System,
-      }),
+      reduceMotion
+        ? opacity
+        : withTiming(opacity, {
+            duration: feedLoading ? 0 : 180,
+            easing: Easing.out(Easing.cubic),
+            reduceMotion: ReduceMotion.System,
+          }),
     );
-  }, [feedLoading, feedOpacity]);
+  }, [feedLoading, feedOpacity, reduceMotion]);
   const feedRevealStyle = useAnimatedStyle(() => ({ opacity: feedOpacity.value }));
   const seededListMountKeyRef = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -3126,7 +3131,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       <View className="flex-1" onLayout={handleViewportLayout}>
         <Animated.View
           className="flex-1"
-          style={feedRevealStyle}
+          style={reduceMotion ? { opacity: feedLoading ? 0 : 1 } : feedRevealStyle}
           pointerEvents={feedLoading ? "none" : "auto"}
           accessibilityElementsHidden={feedLoading}
           importantForAccessibility={feedLoading ? "no-hide-descendants" : "auto"}
@@ -3267,9 +3272,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             key={feedThreadKey}
             pointerEvents="none"
             style={StyleSheet.absoluteFill}
-            exiting={FadeOut.duration(180)
-              .easing(Easing.out(Easing.cubic))
-              .reduceMotion(ReduceMotion.System)}
+            exiting={
+              reduceMotion
+                ? undefined
+                : FadeOut.duration(180)
+                    .easing(Easing.out(Easing.cubic))
+                    .reduceMotion(ReduceMotion.System)
+            }
           >
             <ThreadFeedLoading
               topInset={anchorTopInset}
