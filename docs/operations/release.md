@@ -4,6 +4,14 @@
 
 This document covers the unified release workflow for stable and nightly desktop releases.
 
+## Version numbers
+
+Public releases use `YY.MINOR.PATCH`, starting at `26.0.0` in 2026. Maintainers manually bump
+the major to `27` in 2027; the release workflow treats it as an ordinary version number.
+Use `node scripts/update-release-package-versions.ts 27.0.0` to align server, desktop, web,
+and contracts, and update the mobile version in `apps/mobile/app.config.ts`. Mobile major
+bumps require a new store binary under the existing OTA fingerprint policy.
+
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`

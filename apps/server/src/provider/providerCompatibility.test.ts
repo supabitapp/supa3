@@ -26,7 +26,7 @@ import {
 const driver = ProviderDriverKind.make("codex");
 const policy: ProviderCompatibilityPolicy = {
   driver,
-  supacodeRange: ">=0.0.42 <0.1.0",
+  supacodeRange: ">=0.0.42",
   recommendedVersion: "2.0.0",
   recommendedRange: ">=2.0.0 <3.0.0",
   ranges: [
@@ -203,7 +203,7 @@ describe("provider compatibility", () => {
     ] as const) {
       assert.strictEqual(resolveProviderCompatibility([policy], driver, version)?.status, expected);
     }
-    assert.isUndefined(resolveProviderCompatibility([policy], driver, "0.9.0", "0.1.0"));
+    assert.isUndefined(resolveProviderCompatibility([policy], driver, "0.9.0", "0.0.41"));
   });
 
   it("supports every driver without inventing policies for uncovered adapters", () => {
@@ -234,7 +234,7 @@ describe("provider compatibility", () => {
     assert.strictEqual(supported.status, "error");
     assert.strictEqual(supported.message, "Authentication failed");
     assert.strictEqual(
-      applyProviderCompatibility(supported, [{ ...policy, supacodeRange: ">=9.0.0" }], [policy])
+      applyProviderCompatibility(supported, [{ ...policy, supacodeRange: "<0.0.42" }], [policy])
         .compatibilityAdvisory?.status,
       "broken",
     );
@@ -256,7 +256,7 @@ describe("provider compatibility", () => {
     assert.doesNotThrow(() => decode(policy));
     const prefixed = decode({
       ...policy,
-      supacodeRange: ">=v0.0.42 <v0.1",
+      supacodeRange: ">=v0.0.42",
       recommendedRange: "^v2",
       ranges: [{ range: ">=v2.0 <v3", status: "supported" }],
     });
