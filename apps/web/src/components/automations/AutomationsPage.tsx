@@ -237,10 +237,12 @@ function AutomationProjectFilter({
           value={value ?? ALL_PROJECTS}
           onValueChange={(next: string) => onChange(next === ALL_PROJECTS ? undefined : next)}
         >
-          <MenuRadioItem value={ALL_PROJECTS}>All projects</MenuRadioItem>
+          <MenuRadioItem value={ALL_PROJECTS} closeOnClick>
+            All projects
+          </MenuRadioItem>
           {groups.length > 0 ? <MenuSeparator /> : null}
           {groups.map((group) => (
-            <MenuRadioItem key={group.projectKey} value={group.projectKey}>
+            <MenuRadioItem key={group.projectKey} value={group.projectKey} closeOnClick>
               <span className="min-w-0 truncate">{group.displayName}</span>
             </MenuRadioItem>
           ))}
