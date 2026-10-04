@@ -1740,7 +1740,7 @@ export function NewTaskDraftScreen(props: {
                     onPickMedia={handlePickMedia}
                     onPickFiles={handlePickFiles}
                   />
-                  <View className="min-w-0 flex-1 flex-row items-center justify-end">
+                  <View className="min-w-0 flex-1 flex-row items-center">
                     <View className="min-w-0 shrink">
                       <ComposerInlineControl
                         accessibilityLabel="Model and reasoning settings"
@@ -1766,12 +1766,6 @@ export function NewTaskDraftScreen(props: {
                       disabled={isComposerInteractionLocked}
                       onChange={flow.setSelectedModelOptions}
                     />
-                    <ComposerSpeedToggle
-                      provider={flow.selectedModelOption?.providerDriver}
-                      descriptors={providerOptionDescriptors}
-                      disabled={isComposerInteractionLocked}
-                      onChange={flow.setSelectedModelOptions}
-                    />
                     {flow.planModeEnabled ? (
                       <ComposerInlineControl
                         accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
@@ -1794,6 +1788,12 @@ export function NewTaskDraftScreen(props: {
                       />
                     ) : null}
                   </View>
+                  <ComposerSpeedToggle
+                    provider={flow.selectedModelOption?.providerDriver}
+                    descriptors={providerOptionDescriptors}
+                    disabled={isComposerInteractionLocked}
+                    onChange={flow.setSelectedModelOptions}
+                  />
                 </>
               )}
               <ComposerDictationPrimaryAction

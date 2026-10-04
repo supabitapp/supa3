@@ -1106,7 +1106,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     onDismissError={voiceInput.cancel}
                   />
                 ) : (
-                  <View className="min-w-0 flex-1 flex-row items-center justify-between">
+                  <View className="min-w-0 flex-1 flex-row items-center">
                     <ComposerAttachmentButton
                       supportsFiles={Boolean(
                         props.serverConfig?.environment.capabilities.fileAttachments,
@@ -1114,7 +1114,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                       onPickMedia={props.onPickDraftMedia}
                       onPickFiles={props.onPickDraftFiles}
                     />
-                    <View className="min-w-0 shrink flex-row items-center">
+                    <View className="min-w-0 flex-1 flex-row items-center">
                       <View className="min-w-0 shrink">
                         <ComposerInlineControl
                           accessibilityLabel="Model and reasoning settings"
@@ -1139,14 +1139,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                         reportedModelSelection={props.reportedModelSelection}
                         onChange={settingsRouteSession.onUpdateOptionSelections}
                       />
-                      <ComposerSpeedToggle
-                        provider={currentModelOption?.providerDriver}
-                        descriptors={providerOptionDescriptors}
-                        onChange={(options) =>
-                          props.onUpdateModelSelection({ ...currentModelSelection, options })
-                        }
-                      />
                     </View>
+                    <ComposerSpeedToggle
+                      provider={currentModelOption?.providerDriver}
+                      descriptors={providerOptionDescriptors}
+                      onChange={(options) =>
+                        props.onUpdateModelSelection({ ...currentModelSelection, options })
+                      }
+                    />
                   </View>
                 )}
                 <View className="shrink-0 flex-row items-center">
