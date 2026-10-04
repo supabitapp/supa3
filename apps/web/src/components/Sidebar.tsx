@@ -136,6 +136,7 @@ import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
+import { useInlineConfirm } from "../hooks/useInlineConfirm";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -266,6 +267,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { InlineConfirmIcon } from "./InlineConfirm";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
   composerDraftHasUserContent,
@@ -1084,6 +1086,62 @@ const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
   ),
 };
 
+function toastUnpinFailure(result: AtomCommandResult<unknown, unknown>) {
+  if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
+  const error = squashAtomCommandFailure(result);
+  toastManager.add(
+    stackedThreadToast({
+      type: "error",
+      title: "Failed to unpin thread",
+      description: error instanceof Error ? error.message : "An error occurred.",
+    }),
+  );
+}
+
+function SidebarUnpinButton({ onUnpin }: { onUnpin: () => void }) {
+  const confirmThreadUnpin = useClientSettings((settings) => settings.confirmThreadUnpin);
+  const confirm = useInlineConfirm<"unpin">();
+  const armed = confirm.armed === "unpin";
+  const { onClick: pressUnpinConfirm, ...unpinConfirmTarget } = confirm.bind("unpin", onUnpin);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        closeOnClick={false}
+        render={
+          <button
+            type="button"
+            aria-label={armed ? "Confirm unpin" : "Unpin thread"}
+            {...(confirmThreadUnpin ? unpinConfirmTarget : {})}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (confirmThreadUnpin) pressUnpinConfirm(event);
+              else onUnpin();
+            }}
+            className="group/unpin inline-flex cursor-pointer items-center rounded-sm text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3"
+          />
+        }
+      >
+        <InlineConfirmIcon armed={armed}>
+          {/* Pin marks the pinned state at rest; hover and focus swap in pin-off so the
+              icon reads as the action the button performs. */}
+          <PinIcon
+            aria-hidden
+            className="shrink-0 group-hover/unpin:hidden group-focus-visible/unpin:hidden"
+          />
+          <PinOffIcon
+            aria-hidden
+            className="hidden shrink-0 group-hover/unpin:block group-focus-visible/unpin:block"
+          />
+        </InlineConfirmIcon>
+      </TooltipTrigger>
+      <TooltipPopup key={armed ? "armed" : "idle"}>
+        {armed ? "Click again to unpin" : "Unpin thread"}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   thread: SidebarThreadSummary;
   variant: "card" | "slim";
@@ -1520,14 +1578,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     },
     [onUnsnooze, threadRef],
   );
-  const handleUnpinClick = useCallback(
-    (event: ReactMouseEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      onUnpin(threadRef);
-    },
-    [onUnpin, threadRef],
-  );
+  const handleUnpin = useCallback(() => onUnpin(threadRef), [onUnpin, threadRef]);
   const handleSnoozePreset = useCallback(
     (preset: Pick<SnoozePreset, "snoozedUntil">) => {
       onSnooze(threadRef, preset);
@@ -1750,30 +1801,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
     props.pinningSupported && !sortable?.isDragging ? (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label="Unpin thread"
-              onClick={handleUnpinClick}
-              className="group/unpin inline-flex cursor-pointer items-center rounded-sm text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          }
-        >
-          {/* Pin marks the pinned state at rest; hover and focus swap in pin-off so the
-              icon reads as the action the button performs. */}
-          <PinIcon
-            aria-hidden
-            className="size-3 shrink-0 group-hover/unpin:hidden group-focus-visible/unpin:hidden"
-          />
-          <PinOffIcon
-            aria-hidden
-            className="hidden size-3 shrink-0 group-hover/unpin:block group-focus-visible/unpin:block"
-          />
-        </TooltipTrigger>
-        <TooltipPopup>Unpin thread</TooltipPopup>
-      </Tooltip>
+      <SidebarUnpinButton onUnpin={handleUnpin} />
     ) : (
       <PinIcon
         aria-label="Pinned"
@@ -3708,22 +3736,12 @@ export default function Sidebar() {
     [pinThread],
   );
   const attemptUnpin = useCallback(
-    (threadRef: ScopedThreadRef) => {
-      void (async () => {
-        const result = await confirmAndUnpinThread(threadRef);
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Failed to unpin thread",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
-          );
-        }
-      })();
-    },
+    (threadRef: ScopedThreadRef) => void confirmAndUnpinThread(threadRef).then(toastUnpinFailure),
     [confirmAndUnpinThread],
+  );
+  const attemptUnpinFromRow = useCallback(
+    (threadRef: ScopedThreadRef) => void unpinThread(threadRef).then(toastUnpinFailure),
+    [unpinThread],
   );
 
   const handleThreadDragStart = useCallback(
@@ -5272,7 +5290,7 @@ export default function Sidebar() {
                             onUnsettle={attemptUnsettle}
                             onSnooze={attemptSnooze}
                             onUnsnooze={attemptUnsnooze}
-                            onUnpin={attemptUnpin}
+                            onUnpin={attemptUnpinFromRow}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
                           />

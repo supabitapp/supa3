@@ -128,6 +128,7 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
 import { useThreadActions } from "../hooks/useThreadActions";
+import { useInlineConfirm } from "../hooks/useInlineConfirm";
 import { projectEnvironment } from "../state/projects";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import { useEnvironment, useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -336,9 +337,6 @@ interface SidebarThreadRowProps {
   startThreadRename: (threadKey: string, title: string) => void;
   renamingInputRef: React.RefObject<HTMLInputElement | null>;
   renamingCommittedRef: React.RefObject<boolean>;
-  confirmingArchiveThreadKey: string | null;
-  setConfirmingArchiveThreadKey: React.Dispatch<React.SetStateAction<string | null>>;
-  confirmArchiveButtonRefs: React.RefObject<Map<string, HTMLButtonElement>>;
   handleThreadClick: (
     event: React.MouseEvent,
     threadRef: ScopedThreadRef,
@@ -379,9 +377,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     startThreadRename,
     renamingInputRef,
     renamingCommittedRef,
-    confirmingArchiveThreadKey,
-    setConfirmingArchiveThreadKey,
-    confirmArchiveButtonRefs,
     handleThreadClick,
     navigateToThread,
     handleMultiSelectContextMenu,
@@ -498,30 +493,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     : null;
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
-  const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && canArchive;
+  const archiveConfirm = useInlineConfirm<"archive">();
+  const isConfirmingArchive = archiveConfirm.armed === "archive" && canArchive;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
     : canArchive
       ? "pointer-events-none transition-opacity duration-150 max-sm:pr-6 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0"
       : "pointer-events-none";
-  const clearConfirmingArchive = useCallback(() => {
-    setConfirmingArchiveThreadKey((current) => (current === threadKey ? null : current));
-  }, [setConfirmingArchiveThreadKey, threadKey]);
-  const handleMouseLeave = useCallback(() => {
-    clearConfirmingArchive();
-  }, [clearConfirmingArchive]);
-  const handleBlurCapture = useCallback(
-    (event: React.FocusEvent<HTMLLIElement>) => {
-      const currentTarget = event.currentTarget;
-      requestAnimationFrame(() => {
-        if (currentTarget.contains(document.activeElement)) {
-          return;
-        }
-        clearConfirmingArchive();
-      });
-    },
-    [clearConfirmingArchive],
-  );
   const handleRowClick = useCallback(
     (event: React.MouseEvent) => {
       handleThreadClick(event, threadRef, orderedProjectThreadKeys);
@@ -670,54 +648,26 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const handleRenameInputClick = useCallback((event: React.MouseEvent<HTMLInputElement>) => {
     event.stopPropagation();
   }, []);
-  const handleConfirmArchiveRef = (element: HTMLButtonElement | null) => {
-    if (element) {
-      confirmArchiveButtonRefs.current.set(threadKey, element);
-    } else {
-      confirmArchiveButtonRefs.current.delete(threadKey);
-    }
-  };
   const stopPropagationOnPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
     },
     [],
   );
-  const handleConfirmArchiveClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      clearConfirmingArchive();
-      void attemptArchiveThread(threadRef);
-    },
-    [attemptArchiveThread, clearConfirmingArchive, threadRef],
+  const archive = () => void attemptArchiveThread(threadRef);
+  const { onClick: pressArchiveConfirm, ...archiveConfirmTarget } = archiveConfirm.bind(
+    "archive",
+    archive,
   );
-  const handleStartArchiveConfirmation = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleArchiveClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setConfirmingArchiveThreadKey(threadKey);
-    requestAnimationFrame(() => {
-      confirmArchiveButtonRefs.current.get(threadKey)?.focus();
-    });
+    if (appSettingsConfirmThreadArchive) pressArchiveConfirm(event);
+    else archive();
   };
-  const handleArchiveImmediateClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void attemptArchiveThread(threadRef);
-    },
-    [attemptArchiveThread, threadRef],
-  );
 
   return (
-    <SidebarMenuSubItem
-      ref={rowRef}
-      className="w-full"
-      data-thread-item
-      {...fileDropHandlers}
-      onMouseLeave={handleMouseLeave}
-      onBlurCapture={handleBlurCapture}
-    >
+    <SidebarMenuSubItem ref={rowRef} className="w-full" data-thread-item {...fileDropHandlers}>
       {/* A thread row is the legacy sidebar's own control (a focusable div that hosts nested
           links and buttons), not a SidebarMenuSubButton, so it owns its look here. */}
       <div
@@ -856,56 +806,46 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               isRemoteThread ? "max-sm:min-w-24" : "max-sm:min-w-20"
             }`}
           >
-            {isConfirmingArchive ? (
-              <button
-                ref={handleConfirmArchiveRef}
-                type="button"
-                data-thread-selection-safe
-                data-testid={`thread-archive-confirm-${thread.id}`}
-                aria-label={`Confirm archive ${thread.title}`}
-                className="absolute top-1/2 right-1 inline-flex h-5 -translate-y-1/2 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-3xs font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40"
-                onPointerDown={stopPropagationOnPointerDown}
-                onClick={handleConfirmArchiveClick}
-              >
-                Confirm
-              </button>
-            ) : canArchive ? (
-              appSettingsConfirmThreadArchive ? (
-                <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
-                  <button
-                    type="button"
-                    data-thread-selection-safe
-                    data-testid={`thread-archive-${thread.id}`}
-                    aria-label={`Archive ${thread.title}`}
-                    className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
-                    onPointerDown={stopPropagationOnPointerDown}
-                    onClick={handleStartArchiveConfirmation}
-                  >
-                    <ArchiveIcon className="size-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
-                        <button
-                          type="button"
-                          data-thread-selection-safe
-                          data-testid={`thread-archive-${thread.id}`}
-                          aria-label={`Archive ${thread.title}`}
-                          className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
-                          onPointerDown={stopPropagationOnPointerDown}
-                          onClick={handleArchiveImmediateClick}
-                        >
-                          <ArchiveIcon className="size-3.5" />
-                        </button>
-                      </div>
-                    }
-                  />
-                  <TooltipPopup side="top">Archive</TooltipPopup>
-                </Tooltip>
-              )
+            {canArchive ? (
+              <Tooltip>
+                <TooltipTrigger
+                  closeOnClick={false}
+                  render={
+                    <div
+                      className={cn(
+                        "absolute top-1/2 -translate-y-1/2",
+                        isConfirmingArchive
+                          ? "right-1"
+                          : "pointer-events-none right-0.5 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        data-thread-selection-safe
+                        data-testid={`thread-archive-${thread.id}`}
+                        aria-label={
+                          isConfirmingArchive
+                            ? `Confirm archive ${thread.title}`
+                            : `Archive ${thread.title}`
+                        }
+                        className={
+                          isConfirmingArchive
+                            ? "inline-flex h-5 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-3xs font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40"
+                            : SIDEBAR_ICON_ACTION_BUTTON_CLASS
+                        }
+                        {...(appSettingsConfirmThreadArchive ? archiveConfirmTarget : {})}
+                        onPointerDown={stopPropagationOnPointerDown}
+                        onClick={handleArchiveClick}
+                      >
+                        {isConfirmingArchive ? "Confirm" : <ArchiveIcon className="size-3.5" />}
+                      </button>
+                    </div>
+                  }
+                />
+                <TooltipPopup key={isConfirmingArchive ? "armed" : "idle"} side="top">
+                  {isConfirmingArchive ? "Click again to archive" : "Archive"}
+                </TooltipPopup>
+              </Tooltip>
             ) : null}
             <span className={threadMetaClassName}>
               <span className="inline-flex items-center gap-1">
@@ -981,9 +921,6 @@ interface SidebarProjectThreadListProps {
   startThreadRename: (threadKey: string, title: string) => void;
   renamingInputRef: React.RefObject<HTMLInputElement | null>;
   renamingCommittedRef: React.RefObject<boolean>;
-  confirmingArchiveThreadKey: string | null;
-  setConfirmingArchiveThreadKey: React.Dispatch<React.SetStateAction<string | null>>;
-  confirmArchiveButtonRefs: React.RefObject<Map<string, HTMLButtonElement>>;
   attachThreadListAutoAnimateRef: (node: HTMLElement | null) => void;
   handleThreadClick: (
     event: React.MouseEvent,
@@ -1037,9 +974,6 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     startThreadRename,
     renamingInputRef,
     renamingCommittedRef,
-    confirmingArchiveThreadKey,
-    setConfirmingArchiveThreadKey,
-    confirmArchiveButtonRefs,
     attachThreadListAutoAnimateRef,
     handleThreadClick,
     navigateToThread,
@@ -1090,9 +1024,6 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
               startThreadRename={startThreadRename}
               renamingInputRef={renamingInputRef}
               renamingCommittedRef={renamingCommittedRef}
-              confirmingArchiveThreadKey={confirmingArchiveThreadKey}
-              setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
-              confirmArchiveButtonRefs={confirmArchiveButtonRefs}
               handleThreadClick={handleThreadClick}
               navigateToThread={navigateToThread}
               onFileDropThreads={onFileDropThreads}
@@ -1299,7 +1230,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   );
   const [renamingThreadKey, setRenamingThreadKey] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
-  const [confirmingArchiveThreadKey, setConfirmingArchiveThreadKey] = useState<string | null>(null);
   const [projectRenameTarget, setProjectRenameTarget] = useState<SidebarProjectGroupMember | null>(
     null,
   );
@@ -1311,7 +1241,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   >("inherit");
   const renamingCommittedRef = useRef(false);
   const renamingInputRef = useRef<HTMLInputElement | null>(null);
-  const confirmArchiveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const memberProjectByScopedKey = useMemo(
     () =>
       new Map(
@@ -2481,9 +2410,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         startThreadRename={startThreadRename}
         renamingInputRef={renamingInputRef}
         renamingCommittedRef={renamingCommittedRef}
-        confirmingArchiveThreadKey={confirmingArchiveThreadKey}
-        setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
-        confirmArchiveButtonRefs={confirmArchiveButtonRefs}
         attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
         handleThreadClick={handleThreadClick}
         navigateToThread={navigateToThread}

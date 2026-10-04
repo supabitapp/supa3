@@ -14,6 +14,7 @@ import {
 import { ExternalLinkIcon, GitBranchIcon, RotateCcwIcon } from "lucide-react";
 import { memo, Suspense, use, useMemo } from "react";
 
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
 import { resolveDiffThemeName } from "../../lib/diffRendering";
@@ -22,7 +23,9 @@ import { useTurnItemDetail } from "../../state/queries";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatMarkdown from "../ChatMarkdown";
+import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import { RenderErrorBoundary } from "../RenderErrorBoundary";
 import { resolveExternalWebLinkHref } from "./externalLinkContextMenu";
 
@@ -194,6 +197,41 @@ function ToolCallBody(
   );
 }
 
+function CheckpointRollbackButton(props: {
+  readonly checkpointId: string;
+  readonly scopeId: string;
+  readonly onRollback: NonNullable<V2ItemInspectorProps["onRollbackCheckpoint"]>;
+}) {
+  const confirm = useInlineConfirm<"rollback">();
+  const armed = confirm.armed === "rollback";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        closeOnClick={false}
+        render={
+          <Button
+            size="xs"
+            variant="outline"
+            {...confirm.bind("rollback", () =>
+              props.onRollback({ checkpointId: props.checkpointId, scopeId: props.scopeId }),
+            )}
+          />
+        }
+      >
+        <InlineConfirmIcon armed={armed}>
+          <RotateCcwIcon className="size-3" />
+        </InlineConfirmIcon>
+        <InlineConfirmLabel armed={armed} idle="Roll back" confirm="Confirm roll back" />
+      </TooltipTrigger>
+      <TooltipPopup key={armed ? "armed" : "idle"} side="top">
+        {armed
+          ? "Click again to roll back this thread to this checkpoint. This can't be undone."
+          : "Roll back this thread to this checkpoint"}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspectorProps) {
   const fetched = useFetchedTurnItem(props.projectedItem, props.environmentId);
   const item = fetched.item;
@@ -344,19 +382,11 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
             {support.checkpoint?.status ?? item.status} · {item.files.length} files
           </span>
           {props.onRollbackCheckpoint && support.checkpoint?.status === "ready" ? (
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() =>
-                props.onRollbackCheckpoint?.({
-                  checkpointId: item.checkpointId,
-                  scopeId: item.scopeId,
-                })
-              }
-            >
-              <RotateCcwIcon className="size-3" />
-              Roll back
-            </Button>
+            <CheckpointRollbackButton
+              checkpointId={item.checkpointId}
+              scopeId={item.scopeId}
+              onRollback={props.onRollbackCheckpoint}
+            />
           ) : null}
         </div>
       ) : null}
