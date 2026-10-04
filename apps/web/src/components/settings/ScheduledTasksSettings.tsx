@@ -42,6 +42,7 @@ import { useProjects } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -378,6 +379,7 @@ function ScheduledTaskRow({
   readonly onEdit: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const confirm = useInlineConfirm<"delete">();
   const toggle = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
     label: "scheduled task enabled",
   });
@@ -458,9 +460,9 @@ function ScheduledTaskRow({
                 Run now
               </MenuItem>
               <MenuSeparator />
-              <MenuItem onClick={() => void act("delete")}>
+              <MenuItem {...confirm.bind("delete", () => void act("delete"))} variant="destructive">
                 <Trash2Icon />
-                Delete
+                {confirm.armed === "delete" ? "Confirm delete" : "Delete"}
               </MenuItem>
             </MenuPopup>
           </Menu>

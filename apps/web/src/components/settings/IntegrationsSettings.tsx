@@ -47,6 +47,7 @@ import { AnimatedHeight } from "~/components/AnimatedHeight";
 import { resolveEnvironmentOptionLabel } from "~/components/BranchToolbar.logic";
 import { previewBridge } from "~/components/preview/previewBridge";
 import { cn, randomUUID } from "~/lib/utils";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
 import { deviceEnvironment, useDeviceState } from "~/state/device";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -896,6 +897,29 @@ function BrowserAutoShowFloatingPreviewSetting({ disabled }: { readonly disabled
   );
 }
 
+function ClearBrowserProfileDataItem({
+  disabled,
+  onClear,
+}: {
+  readonly disabled: boolean;
+  readonly onClear: () => void;
+}) {
+  const confirm = useInlineConfirm<"clear">();
+  const armed = confirm.armed === "clear";
+  return (
+    <>
+      <MenuItem {...confirm.bind("clear", onClear)} disabled={disabled}>
+        {armed ? "Confirm clear" : "Clear cookies and cache"}
+      </MenuItem>
+      {armed ? (
+        <p className="px-2 py-1 text-xs text-muted-foreground">
+          Signs you out of every site in this profile.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * Profile list, its header menu, and the import flow.
  *
@@ -1317,12 +1341,10 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
                   >
                     Set as default
                   </MenuItem>
-                  <MenuItem
+                  <ClearBrowserProfileDataItem
                     disabled={!settingsHydrated || !removalAvailable}
-                    onClick={() => clearProfileData(profile.id, profile.name)}
-                  >
-                    Clear cookies and cache
-                  </MenuItem>
+                    onClear={() => clearProfileData(profile.id, profile.name)}
+                  />
                   {builtIn ? null : (
                     <MenuItem
                       variant="destructive"

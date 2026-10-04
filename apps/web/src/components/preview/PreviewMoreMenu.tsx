@@ -19,6 +19,7 @@ import {
   MenuTrigger,
 } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 
 import { previewBridge } from "./previewBridge";
 
@@ -83,6 +84,7 @@ export function PreviewMoreMenu({
   profileId,
   profileName,
 }: Props) {
+  const confirm = useInlineConfirm<"cookies" | "cache">();
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
@@ -212,17 +214,26 @@ export function PreviewMoreMenu({
             </MenuGroupLabel>
           ) : null}
           <MenuItem
-            onClick={() =>
-              void bridge.clearCookies(environmentId, profileId).catch(() => undefined)
-            }
+            {...confirm.bind(
+              "cookies",
+              () => void bridge.clearCookies(environmentId, profileId).catch(() => undefined),
+            )}
           >
-            Clear cookies
+            {confirm.armed === "cookies" ? "Confirm clear" : "Clear cookies"}
           </MenuItem>
           <MenuItem
-            onClick={() => void bridge.clearCache(environmentId, profileId).catch(() => undefined)}
+            {...confirm.bind(
+              "cache",
+              () => void bridge.clearCache(environmentId, profileId).catch(() => undefined),
+            )}
           >
-            Clear cache
+            {confirm.armed === "cache" ? "Confirm clear" : "Clear cache"}
           </MenuItem>
+          {confirm.armed === "cookies" ? (
+            <p className="max-w-64 px-2 py-1 text-xs text-muted-foreground">
+              Signs you out of every site in this profile.
+            </p>
+          ) : null}
         </MenuGroup>
       </MenuPopup>
     </Menu>
