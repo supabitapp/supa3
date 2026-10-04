@@ -1,6 +1,7 @@
 import {
   ContextMenuItemSchema,
   DesktopAppBrandingSchema,
+  DesktopEnvironmentMachineIconsSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopThemeSchema,
   EDITORS,
@@ -77,6 +78,15 @@ export const getSystemLocale = DesktopIpc.makeSyncIpcMethod({
   handler: Effect.fn("desktop.ipc.window.getSystemLocale")(function* () {
     const electronApp = yield* ElectronApp.ElectronApp;
     return yield* electronApp.systemLocale;
+  }),
+});
+
+export const getEnvironmentMachineIcons = DesktopIpc.makeSyncIpcMethod({
+  channel: IpcChannels.GET_ENVIRONMENT_MACHINE_ICONS_CHANNEL,
+  result: DesktopEnvironmentMachineIconsSchema,
+  handler: Effect.fn("desktop.ipc.window.getEnvironmentMachineIcons")(function* () {
+    const electronApp = yield* ElectronApp.ElectronApp;
+    return yield* electronApp.environmentMachineIcons;
   }),
 });
 

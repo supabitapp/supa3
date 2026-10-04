@@ -119,6 +119,12 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   displayName: Schema.String,
 });
 
+export const DesktopEnvironmentMachineIconsSchema = Schema.Struct({
+  "mac-mini": Schema.optionalKey(Schema.String),
+  "mac-studio": Schema.optionalKey(Schema.String),
+});
+export type DesktopEnvironmentMachineIcons = typeof DesktopEnvironmentMachineIconsSchema.Type;
+
 export const DesktopSnapShotMode = Schema.Literals(["direct", "portal", "unavailable"]);
 export type DesktopSnapShotMode = typeof DesktopSnapShotMode.Type;
 
@@ -1122,6 +1128,8 @@ export interface DesktopBridge {
   getPathForFile?: (file: File) => string;
   /** The desktop client's OS platform, read from Electron's preload process. */
   getClientPlatform?: () => string;
+  /** Native macOS symbol PNGs; missing symbols use the client's SVG fallback. */
+  getEnvironmentMachineIcons?: () => DesktopEnvironmentMachineIcons;
   setNotificationBadge?: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear?: (listener: () => void) => () => void;
   onTrackpadScrollEnd?: (listener: () => void) => () => void;
