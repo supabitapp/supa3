@@ -63,7 +63,7 @@ import { FilePreviewModal, type FilePreviewSource } from "../../components/FileP
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
-import { ComposerReasoningControl } from "../../components/ComposerReasoningControl";
+import { ComposerReasoningControl } from "./ComposerReasoningControl";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";

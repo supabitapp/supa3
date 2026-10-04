@@ -90,7 +90,7 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
-import { ComposerReasoningControl } from "../../components/ComposerReasoningControl";
+import { ComposerReasoningControl } from "./ComposerReasoningControl";
 import { ControlPillMenu } from "../../components/ControlPill";
 import type { ActiveTurnComposerAction } from "@supacode/client-runtime/state/composer-dispatch";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";

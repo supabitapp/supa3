@@ -9,10 +9,13 @@ import {
 } from "@supacode/shared/model";
 import * as Haptics from "expo-haptics";
 
-import { selectableChoices } from "../features/threads/thread-settings-options";
-import { applyProviderOptionSelection, getReasoningOptionDescriptor } from "../lib/providerOptions";
-import { ComposerInlineControl } from "./ComposerToolbar";
-import { ControlPillMenu } from "./ControlPill";
+import { selectableChoices } from "./thread-settings-options";
+import {
+  applyProviderOptionSelection,
+  getReasoningOptionDescriptor,
+} from "../../lib/providerOptions";
+import { ComposerInlineControl } from "../../components/ComposerToolbar";
+import { ControlPillMenu } from "../../components/ControlPill";
 
 export function ComposerReasoningControl(props: {
   readonly descriptors: ReadonlyArray<ProviderOptionDescriptor>;
