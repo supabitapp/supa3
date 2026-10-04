@@ -217,6 +217,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   </time>
                   <Tooltip>
                     <TooltipTrigger
+                      closeOnClick={false}
                       render={
                         <ComposerBanner.Dismiss
                           className="z-10"

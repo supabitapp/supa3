@@ -474,6 +474,7 @@ export function QueuedRunsControl({
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger
+                            closeOnClick={false}
                             render={
                               <ComposerBanner.Dismiss
                                 aria-label={

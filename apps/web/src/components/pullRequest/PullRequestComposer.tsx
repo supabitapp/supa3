@@ -137,6 +137,7 @@ export function PullRequestComposer({
             {mode === "review" && pendingComments.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger
+                  closeOnClick={false}
                   render={
                     <Button
                       size="icon-xs"
@@ -157,7 +158,7 @@ export function PullRequestComposer({
                 </TooltipTrigger>
                 <TooltipPopup side="top">
                   {confirm.armed === "discard"
-                    ? `Click again to discard ${pendingComments.length === 1 ? "the pending line comment" : `all ${pendingComments.length} pending line comments`}`
+                    ? `Click again to discard ${pendingComments.length} pending line ${pendingComments.length === 1 ? "comment" : "comments"}`
                     : "Discard pending line comments"}
                 </TooltipPopup>
               </Tooltip>
