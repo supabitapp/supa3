@@ -293,12 +293,18 @@ export function useThreadComposerState() {
   ]);
   useEffect(() => {
     const echoedIds = new Set(selectedThreadMessages?.map((message) => message.id));
-    if (acknowledgedMessages.some((message) => echoedIds.has(message.messageId))) {
+    const echoedMessages = appAtomRegistry
+      .get(acknowledgedThreadMessagesAtom)
+      .filter((message) => echoedIds.has(message.messageId));
+    if (echoedMessages.length > 0) {
       appAtomRegistry.set(
         acknowledgedThreadMessagesAtom,
         appAtomRegistry
           .get(acknowledgedThreadMessagesAtom)
           .filter((message) => !echoedIds.has(message.messageId)),
+      );
+      scheduleUnusedComposerAttachmentCleanup(
+        echoedMessages.flatMap((message) => message.attachments),
       );
     }
   }, [acknowledgedMessages, selectedThreadMessages]);
