@@ -63,6 +63,7 @@ import { FilePreviewModal, type FilePreviewSource } from "../../components/FileP
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
+import { ComposerReasoningControl } from "./ComposerReasoningControl";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -1753,6 +1754,12 @@ export function NewTaskDraftScreen(props: {
                         onPress={settingsSheetPresentation.open}
                       />
                     </View>
+                    <ComposerReasoningControl
+                      descriptors={providerOptionDescriptors}
+                      selectedModel={flow.selectedModel}
+                      disabled={isComposerInteractionLocked}
+                      onChange={flow.setSelectedModelOptions}
+                    />
                     <ComposerSpeedToggle
                       provider={flow.selectedModelOption?.providerDriver}
                       descriptors={providerOptionDescriptors}
