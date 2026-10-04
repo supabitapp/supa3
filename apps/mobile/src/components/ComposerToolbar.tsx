@@ -36,6 +36,7 @@ export function ComposerInlineControl(props: {
   readonly icon?: ComponentProps<typeof SymbolView>["name"];
   readonly renderIcon?: (size: number) => ReactNode;
   readonly label: string;
+  readonly secondaryLabel?: string;
   readonly maxWidth?: ViewStyle["maxWidth"];
   readonly onPress?: () => void;
   readonly selected?: boolean;
@@ -79,13 +80,17 @@ export function ComposerInlineControl(props: {
       ) : null}
       <Text
         className={cn(
-          "shrink font-supacode-medium",
-          props.compact ? "text-xs" : "text-sm",
+          "shrink text-sm font-supacode-medium",
           props.emphasized || props.selected ? "text-foreground" : "text-foreground-muted",
         )}
         numberOfLines={1}
       >
         {props.label}
+        {props.secondaryLabel ? (
+          <Text className="font-supacode-medium text-foreground-muted">
+            {` ${props.secondaryLabel}`}
+          </Text>
+        ) : null}
       </Text>
       {props.showChevron === false ? null : (
         <SymbolView
