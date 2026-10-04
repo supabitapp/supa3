@@ -54,7 +54,7 @@ export function ComposerInlineControl(props: {
       }
       className={cn(
         "h-11 flex-row items-center rounded-xl active:bg-subtle",
-        props.compact ? "min-w-11 gap-0.5 px-0.5" : "gap-2 px-2",
+        props.compact ? "min-w-11 gap-1.5 px-1" : "gap-2 px-2",
       )}
       disabled={props.disabled || props.static}
       onPress={props.onPress}
@@ -79,7 +79,8 @@ export function ComposerInlineControl(props: {
       ) : null}
       <Text
         className={cn(
-          "shrink text-sm font-supacode-medium",
+          "shrink font-supacode-medium",
+          props.compact ? "text-xs" : "text-sm",
           props.emphasized || props.selected ? "text-foreground" : "text-foreground-muted",
         )}
         numberOfLines={1}

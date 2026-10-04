@@ -1716,7 +1716,7 @@ export function NewTaskDraftScreen(props: {
               paddingBottom={0}
               paddingHorizontal={0}
               paddingTop={0}
-              style={{ gap: 0 }}
+              style={{ gap: 0, justifyContent: "space-between" }}
             >
               <ComposerDictationCancelAction
                 presentation={voicePresentation}
@@ -1740,7 +1740,7 @@ export function NewTaskDraftScreen(props: {
                     onPickMedia={handlePickMedia}
                     onPickFiles={handlePickFiles}
                   />
-                  <View className="min-w-0 flex-1 flex-row items-center">
+                  <View className="min-w-0 shrink flex-row items-center gap-2">
                     <View className="min-w-0 shrink">
                       <ComposerInlineControl
                         accessibilityLabel="Model and reasoning settings"
@@ -1766,27 +1766,6 @@ export function NewTaskDraftScreen(props: {
                       disabled={isComposerInteractionLocked}
                       onChange={flow.setSelectedModelOptions}
                     />
-                    {flow.planModeEnabled ? (
-                      <ComposerInlineControl
-                        accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
-                        accessibilityLabel={`Interaction mode: ${flow.interactionMode === "plan" ? "Plan" : "Build"}`}
-                        compact
-                        disabled={isComposerInteractionLocked}
-                        emphasized
-                        icon={
-                          flow.interactionMode === "plan"
-                            ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
-                            : { ios: "hammer", android: "construction" }
-                        }
-                        label={flow.interactionMode === "plan" ? "Plan" : "Build"}
-                        onPress={() =>
-                          flow.setInteractionMode(
-                            flow.interactionMode === "plan" ? "default" : "plan",
-                          )
-                        }
-                        showChevron={false}
-                      />
-                    ) : null}
                   </View>
                   <ComposerSpeedToggle
                     provider={flow.selectedModelOption?.providerDriver}
@@ -1794,6 +1773,27 @@ export function NewTaskDraftScreen(props: {
                     disabled={isComposerInteractionLocked}
                     onChange={flow.setSelectedModelOptions}
                   />
+                  {flow.planModeEnabled ? (
+                    <ComposerInlineControl
+                      accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
+                      accessibilityLabel={`Interaction mode: ${flow.interactionMode === "plan" ? "Plan" : "Build"}`}
+                      compact
+                      disabled={isComposerInteractionLocked}
+                      emphasized
+                      icon={
+                        flow.interactionMode === "plan"
+                          ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
+                          : { ios: "hammer", android: "construction" }
+                      }
+                      label={flow.interactionMode === "plan" ? "Plan" : "Build"}
+                      onPress={() =>
+                        flow.setInteractionMode(
+                          flow.interactionMode === "plan" ? "default" : "plan",
+                        )
+                      }
+                      showChevron={false}
+                    />
+                  ) : null}
                 </>
               )}
               <ComposerDictationPrimaryAction

@@ -1091,7 +1091,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 paddingBottom={0}
                 paddingHorizontal={0}
                 paddingTop={0}
-                style={{ gap: 0 }}
+                style={{ gap: 0, justifyContent: "space-between" }}
               >
                 <ComposerDictationCancelAction
                   presentation={voicePresentation}
@@ -1106,7 +1106,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     onDismissError={voiceInput.cancel}
                   />
                 ) : (
-                  <View className="min-w-0 flex-1 flex-row items-center">
+                  <>
                     <ComposerAttachmentButton
                       supportsFiles={Boolean(
                         props.serverConfig?.environment.capabilities.fileAttachments,
@@ -1114,7 +1114,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                       onPickMedia={props.onPickDraftMedia}
                       onPickFiles={props.onPickDraftFiles}
                     />
-                    <View className="min-w-0 flex-1 flex-row items-center">
+                    <View className="min-w-0 shrink flex-row items-center gap-2">
                       <View className="min-w-0 shrink">
                         <ComposerInlineControl
                           accessibilityLabel="Model and reasoning settings"
@@ -1147,33 +1147,31 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                         props.onUpdateModelSelection({ ...currentModelSelection, options })
                       }
                     />
-                  </View>
+                  </>
                 )}
-                <View className="shrink-0 flex-row items-center">
-                  <ComposerDictationPrimaryAction
-                    state={voiceInput.state}
-                    presentation={voicePresentation}
-                    isAvailable={voiceInput.isAvailable}
-                    onStart={voiceInput.start}
-                    onConfirm={voiceInput.stop}
-                    onCancel={voiceInput.cancel}
+                <ComposerDictationPrimaryAction
+                  state={voiceInput.state}
+                  presentation={voicePresentation}
+                  isAvailable={voiceInput.isAvailable}
+                  onStart={voiceInput.start}
+                  onConfirm={voiceInput.stop}
+                  onCancel={voiceInput.cancel}
+                />
+                {showStopAction ? (
+                  <ComposerActionButton
+                    accessibilityLabel="Stop agent"
+                    icon="stop.fill"
+                    variant="danger"
+                    onPress={props.onStopThread}
                   />
-                  {showStopAction ? (
-                    <ComposerActionButton
-                      accessibilityLabel="Stop agent"
-                      icon="stop.fill"
-                      variant="danger"
-                      onPress={props.onStopThread}
-                    />
-                  ) : voicePresentation.showsSend ? (
-                    <SendActionButton
-                      accessibilityLabel={sendBlockedReason ?? sendLabel}
-                      presentation={sendPresentation}
-                      disabled={!canSend}
-                      onSend={handleSend}
-                    />
-                  ) : null}
-                </View>
+                ) : voicePresentation.showsSend ? (
+                  <SendActionButton
+                    accessibilityLabel={sendBlockedReason ?? sendLabel}
+                    presentation={sendPresentation}
+                    disabled={!canSend}
+                    onSend={handleSend}
+                  />
+                ) : null}
               </ComposerToolbarRow>
             </ComposerDictationToolbar>
           </Animated.View>
