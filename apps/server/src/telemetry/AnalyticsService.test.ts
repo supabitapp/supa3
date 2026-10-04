@@ -197,7 +197,7 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
       assert.equal(batchRequests.length, 3);
       assert.equal(
         batchRequests.every(
-          (request) => request.body.api_key === "phc_mpkbs8jxUDhRkrsvAPZEpzVxykW3Ce2HEPGPrfhgSrLC",
+          (request) => request.body.api_key === "phc_mpkbs8jxUDhRkrsvAPZEpzVxykW3Ce2HEPGPrfhgSrLC", // gitleaks:allow
         ),
         true,
       );

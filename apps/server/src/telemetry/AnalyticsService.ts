@@ -68,7 +68,7 @@ export function retryDelayMs(failures: number, random: number): number {
 
 const TelemetryEnvConfig = Config.all({
   posthogKey: Config.String("SUPACODE_POSTHOG_KEY").pipe(
-    Config.withDefault("phc_mpkbs8jxUDhRkrsvAPZEpzVxykW3Ce2HEPGPrfhgSrLC"),
+    Config.withDefault("phc_mpkbs8jxUDhRkrsvAPZEpzVxykW3Ce2HEPGPrfhgSrLC"), // gitleaks:allow
   ),
   posthogHost: Config.String("SUPACODE_POSTHOG_HOST").pipe(
     Config.withDefault("https://us.i.posthog.com"),
