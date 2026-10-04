@@ -1,5 +1,5 @@
 import { ChevronRightIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   decodeThirdPartyLicenseManifest,
@@ -195,11 +195,12 @@ export function OpenSourceLicensesPanel() {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [openEntryKey, setOpenEntryKey] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
+  const requestRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    requestRef.current?.abort();
     const controller = new AbortController();
-    setState({ status: "loading" });
+    requestRef.current = controller;
     void loadLicenseManifest(controller.signal).then(
       (manifest) => setState({ status: "ready", manifest }),
       (error: unknown) => {
@@ -210,15 +211,22 @@ export function OpenSourceLicensesPanel() {
         });
       },
     );
-    return () => controller.abort();
-  }, [requestVersion]);
+  }, []);
+
+  useEffect(() => {
+    load();
+    return () => requestRef.current?.abort();
+  }, [load]);
 
   const entries = state.status === "ready" ? state.manifest.entries : [];
   const filteredEntries = useMemo(
     () => filterThirdPartyLicenseEntries(entries, query),
     [entries, query],
   );
-  const retry = useCallback(() => setRequestVersion((value) => value + 1), []);
+  const retry = useCallback(() => {
+    setState({ status: "loading" });
+    load();
+  }, [load]);
 
   return (
     <SettingsPageContainer>

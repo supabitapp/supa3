@@ -1,6 +1,6 @@
 import { DownloadIcon, PlusIcon } from "lucide-react";
 import type { ChangeEvent, DragEvent, UIEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import {
   getCustomThemes,
@@ -143,6 +143,35 @@ function ThemeJsonEditor({
 /** What the import pipeline needs from a file; DOM File satisfies it. */
 type ImportableThemeFile = { name: string; size: number; text: () => Promise<string> };
 
+/** Copy of an already-installed theme under the source file's name when
+ *  that differs (Dracula Soft), else the next free "Name (1)". */
+function versionedCopy(theme: ThemeDefinition, preferredName?: string | null): ThemeDefinition {
+  if (preferredName && preferredName.toLowerCase() !== theme.label.toLowerCase()) {
+    const candidate = parseThemeFile({
+      version: THEME_FILE_VERSION,
+      name: preferredName.slice(0, 48),
+      appearance: theme.appearance,
+      colors: theme.colors,
+      ...(theme.variants ? { variants: theme.variants } : {}),
+      ...(theme.managed ? { managed: true } : {}),
+    });
+    if (!getCustomThemes().some((existing) => existing.id === candidate.id)) return candidate;
+  }
+  for (let copy = 1; copy < 100; copy += 1) {
+    const candidate = parseThemeFile({
+      version: THEME_FILE_VERSION,
+      name: `${theme.label.slice(0, 48 - ` (${copy})`.length)} (${copy})`,
+      appearance: theme.appearance,
+      colors: theme.colors,
+      ...(theme.variants ? { variants: theme.variants } : {}),
+      ...(theme.managed ? { managed: true } : {}),
+    });
+    if (getCustomThemes().some((existing) => existing.id === candidate.id)) continue;
+    return candidate;
+  }
+  throw new Error(`Too many copies of "${theme.label}".`);
+}
+
 export function ThemeImportDialog({
   open,
   onOpenChange,
@@ -166,17 +195,25 @@ export function ThemeImportDialog({
   const [conflicts, setConflicts] = useState<ReadonlyArray<ThemeDefinition> | null>(null);
   const importRequestRef = useRef(0);
 
-  useEffect(() => {
-    importRequestRef.current += 1;
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     // Reset on close too: a dialog dismissed mid-drag would otherwise reopen
     // still wearing the drop highlight.
     setIsDropTarget(false);
-    if (!open) return;
-    setJson("");
-    setFileName(null);
-    setError(null);
-    setIsReading(false);
-    setConflicts(null);
+    if (open) {
+      setJson("");
+      setFileName(null);
+      setError(null);
+      setIsReading(false);
+      setConflicts(null);
+    }
+  }
+  const requestOpenRef = useRef(open);
+  useLayoutEffect(() => {
+    if (requestOpenRef.current === open) return;
+    requestOpenRef.current = open;
+    importRequestRef.current += 1;
   }, [open]);
 
   const readThemeFile = useCallback(async (file: ImportableThemeFile) => {
@@ -213,7 +250,7 @@ export function ThemeImportDialog({
       setIsReading(true);
       const failures: string[] = [];
       const parsed: Array<{ theme: ThemeDefinition; sourceName: string }> = [];
-      try {
+      const importFiles = async () => {
         for (const file of files) {
           const oversized = describeOversizedThemeFile(file.size);
           if (oversized) {
@@ -256,9 +293,10 @@ export function ThemeImportDialog({
         } else if (installed.length > 0) {
           onOpenChange(false);
         }
-      } finally {
+      };
+      await importFiles().finally(() => {
         if (requestId === importRequestRef.current) setIsReading(false);
-      }
+      });
     },
     [onImportedMany, onOpenChange],
   );
@@ -310,38 +348,6 @@ export function ThemeImportDialog({
     },
     [readThemeFiles],
   );
-
-  /** Copy of an already-installed theme under the source file's name when
-   *  that differs (Dracula Soft), else the next free "Name (1)". */
-  const versionedCopy = (
-    theme: ThemeDefinition,
-    preferredName?: string | null,
-  ): ThemeDefinition => {
-    if (preferredName && preferredName.toLowerCase() !== theme.label.toLowerCase()) {
-      const candidate = parseThemeFile({
-        version: THEME_FILE_VERSION,
-        name: preferredName.slice(0, 48),
-        appearance: theme.appearance,
-        colors: theme.colors,
-        ...(theme.variants ? { variants: theme.variants } : {}),
-        ...(theme.managed ? { managed: true } : {}),
-      });
-      if (!getCustomThemes().some((existing) => existing.id === candidate.id)) return candidate;
-    }
-    for (let copy = 1; copy < 100; copy += 1) {
-      const candidate = parseThemeFile({
-        version: THEME_FILE_VERSION,
-        name: `${theme.label.slice(0, 48 - ` (${copy})`.length)} (${copy})`,
-        appearance: theme.appearance,
-        colors: theme.colors,
-        ...(theme.variants ? { variants: theme.variants } : {}),
-        ...(theme.managed ? { managed: true } : {}),
-      });
-      if (getCustomThemes().some((existing) => existing.id === candidate.id)) continue;
-      return candidate;
-    }
-    throw new Error(`Too many copies of "${theme.label}".`);
-  };
 
   const resolveConflicts = useCallback(
     (mode: "update" | "copy") => {

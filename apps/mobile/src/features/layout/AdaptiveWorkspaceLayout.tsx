@@ -17,6 +17,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -158,27 +159,32 @@ export function useRegisterWorkspaceInspector(render: (() => ReactNode) | undefi
   }, [navigation, render, route]);
 
   const wrappedRenderRef = useRef(wrappedRender);
-  wrappedRenderRef.current = wrappedRender;
+  useLayoutEffect(() => {
+    wrappedRenderRef.current = wrappedRender;
+  });
   const focusedRef = useRef(false);
   const deactivateRef = useRef<(() => void) | null>(null);
 
-  const syncRegistration = useCallback(() => {
-    if (!focusedRef.current || wrappedRenderRef.current === undefined) {
-      deactivateRef.current?.();
-      return;
-    }
-    deactivateRef.current = registerWorkspaceInspector(wrappedRenderRef.current);
-  }, [registerWorkspaceInspector]);
+  const syncRegistration = useCallback(
+    (inspectorRender: (() => ReactNode) | undefined) => {
+      if (!focusedRef.current || inspectorRender === undefined) {
+        deactivateRef.current?.();
+        return;
+      }
+      deactivateRef.current = registerWorkspaceInspector(inspectorRender);
+    },
+    [registerWorkspaceInspector],
+  );
 
   // Focus lifecycle. Blur/focus events fire even when the blurred subtree is
   // frozen (events are navigation-driven, renders are not).
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      syncRegistration();
+      syncRegistration(wrappedRenderRef.current);
       return () => {
         focusedRef.current = false;
-        syncRegistration();
+        syncRegistration(wrappedRenderRef.current);
       };
     }, [syncRegistration]),
   );
@@ -186,7 +192,7 @@ export function useRegisterWorkspaceInspector(render: (() => ReactNode) | undefi
   // Content changes while focused re-register in place.
   useEffect(() => {
     if (focusedRef.current) {
-      syncRegistration();
+      syncRegistration(wrappedRender);
     }
   }, [syncRegistration, wrappedRender]);
 
@@ -469,7 +475,7 @@ function AdaptiveWorkspaceLayoutContent(
   );
   useEffect(() => {
     const targetWidth = panes.primarySidebarVisible ? (layout.listPaneWidth ?? 0) : 0;
-    renderedSidebarWidth.value = withTiming(targetWidth, WORKSPACE_PANE_TIMING);
+    renderedSidebarWidth.set(withTiming(targetWidth, WORKSPACE_PANE_TIMING));
   }, [layout.listPaneWidth, panes.primarySidebarVisible, renderedSidebarWidth]);
   const sidebarAnimatedStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, renderedSidebarWidth.value / 80),

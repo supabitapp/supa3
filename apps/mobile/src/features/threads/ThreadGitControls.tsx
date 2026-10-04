@@ -114,7 +114,14 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   const navigation = useNavigation();
   const environmentId = props.environmentId;
   const threadId = props.threadId;
-  const { gitStatus, gitOperationLabel, onPull, onRunAction } = props;
+  const {
+    gitStatus,
+    gitOperationLabel,
+    onOpenFilesInspector,
+    onOpenGitInspector,
+    onPull,
+    onRunAction,
+  } = props;
 
   const currentBranchLabel = gitStatus?.refName ?? props.currentBranch ?? "Detached HEAD";
   const busy = gitOperationLabel !== null;
@@ -209,15 +216,15 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   }, [onPull, openExistingPr, quickAction, runActionWithPrompt]);
 
   const openFiles = useCallback(() => {
-    if (props.onOpenFilesInspector) {
-      props.onOpenFilesInspector();
+    if (onOpenFilesInspector) {
+      onOpenFilesInspector();
       return;
     }
     navigation.navigate("ThreadFiles", {
       environmentId: String(environmentId),
       threadId: String(threadId),
     });
-  }, [environmentId, props.onOpenFilesInspector, navigation, threadId]);
+  }, [environmentId, onOpenFilesInspector, navigation, threadId]);
 
   const openReview = useCallback(() => {
     navigation.navigate("ThreadReview", {
@@ -227,15 +234,15 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   }, [environmentId, navigation, threadId]);
 
   const openGitInspector = useCallback(() => {
-    if (props.onOpenGitInspector) {
-      props.onOpenGitInspector();
+    if (onOpenGitInspector) {
+      onOpenGitInspector();
       return;
     }
     navigation.navigate("GitOverview", {
       environmentId: String(environmentId),
       threadId: String(threadId),
     });
-  }, [environmentId, props.onOpenGitInspector, navigation, threadId]);
+  }, [environmentId, onOpenGitInspector, navigation, threadId]);
 
   return {
     currentBranchLabel,
@@ -252,6 +259,8 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
 
 function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGitHeaderActionItems {
   const model = useThreadGitControlModel(props);
+  const { onOpenTerminal, onRunProjectScript } = props;
+  const { runQuickAction } = model;
 
   return useMemo(
     () => ({
@@ -267,7 +276,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
               description: script.command,
               icon: { name: projectScriptMenuIcon(script.icon), type: "sfSymbol" as const },
               label: projectScriptMenuLabel(script),
-              onPress: () => void props.onRunProjectScript(script),
+              onPress: () => void onRunProjectScript(script),
               type: "action" as const,
             })),
             ...(props.projectScripts.length === 0
@@ -294,7 +303,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
                 .join(" · "),
               icon: { name: "terminal", type: "sfSymbol" as const },
               label: session.displayLabel,
-              onPress: () => props.onOpenTerminal(session.terminalId),
+              onPress: () => onOpenTerminal(session.terminalId),
               type: "action" as const,
             })),
             {
@@ -345,7 +354,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
               disabled: model.quickAction.disabled,
               icon: { name: model.quickActionIcon, type: "sfSymbol" },
               label: model.quickAction.label,
-              onPress: (): void => void model.runQuickAction(),
+              onPress: (): void => void runQuickAction(),
               type: "action",
             },
             {
@@ -392,14 +401,14 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
       model.quickAction.label,
       model.quickActionHint,
       model.quickActionIcon,
-      model.runQuickAction,
+      runQuickAction,
       props.canOpenFiles,
       props.canOpenTerminal,
       props.gitStatus,
       props.onMergeBack,
       props.onOpenNewTerminal,
-      props.onOpenTerminal,
-      props.onRunProjectScript,
+      onOpenTerminal,
+      onRunProjectScript,
       props.projectScripts,
       props.terminalSessions,
     ],

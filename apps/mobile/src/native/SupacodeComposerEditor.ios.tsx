@@ -142,7 +142,19 @@ export function ComposerEditor({
   // first controlled payload must be a non-echo so a restored draft (or a
   // recycled native view) is applied rather than skipped.
   const nativeEventSnapshotsRef = useRef<ComposerNativeEventSnapshot[]>([]);
-  const confirmedTokensRef = useRef(collectComposerInlineTokens(props.value));
+  const [confirmedTokens, setConfirmedTokens] = useState(() => ({
+    value: props.value,
+    tokens: collectComposerInlineTokens(props.value),
+  }));
+  const inlineTokens =
+    confirmedTokens.value === props.value
+      ? confirmedTokens.tokens
+      : collectComposerInlineTokens(props.value, {
+          preserveTrailingFrom: confirmedTokens.tokens,
+        });
+  if (inlineTokens !== confirmedTokens.tokens) {
+    setConfirmedTokens({ value: props.value, tokens: inlineTokens });
+  }
   const bodyText = useScaledTextRole("body");
   const theme = useUniwindTheme();
   const fontFamily = useFontFamily("regular");
@@ -163,12 +175,8 @@ export function ComposerEditor({
     [skills],
   );
   const tokensJson = useMemo(() => {
-    const tokens = collectComposerInlineTokens(props.value, {
-      preserveTrailingFrom: confirmedTokensRef.current,
-    });
-    confirmedTokensRef.current = tokens;
     return JSON.stringify(
-      composerContextEditorTokens(props.value, tokens).map((token) => {
+      composerContextEditorTokens(props.value, inlineTokens).map((token) => {
         const record =
           token.type === "context"
             ? props.context?.records.find((record) => record.contextId === token.contextId)
@@ -198,7 +206,7 @@ export function ComposerEditor({
         };
       }),
     );
-  }, [props.value, props.context, skillLabels]);
+  }, [inlineTokens, props.value, props.context, skillLabels]);
   // Every render resolves against the snapshot history, so a render whose
   // (value, selection) lags the acknowledged native state is stamped behind
   // the native revision and rejected by the editor instead of re-applying a
@@ -207,12 +215,14 @@ export function ComposerEditor({
     props.value,
     selection ?? null,
     mostRecentEventCount,
+    // oxlint-disable-next-line react/refs
     nativeEventSnapshotsRef.current,
   );
   const acknowledgesLatestNativeEvent = isComposerNativeEcho(
     props.value,
     selection ?? null,
     mostRecentEventCount,
+    // oxlint-disable-next-line react/refs
     nativeEventSnapshotsRef.current,
   );
   const isNativeEcho =
@@ -230,9 +240,12 @@ export function ComposerEditor({
       nativeEventSnapshotsRef.current,
       mostRecentEventCount,
     );
-  }, [acknowledgesLatestNativeEvent, mostRecentEventCount]);
+  }, [acknowledgesLatestNativeEvent, mostRecentEventCount, nativeEventSnapshotsRef]);
   const assumedValue = props.value;
+  const assumedControlledDocumentRef = useRef<string | null>(null);
   useEffect(() => {
+    if (assumedControlledDocumentRef.current === controlledDocumentJson) return;
+    assumedControlledDocumentRef.current = controlledDocumentJson;
     // A native event that arrived after this render was committed moves the
     // acknowledged revision forward; the editor rejects this payload, so the
     // snapshot history must not assume it applied.
@@ -242,7 +255,7 @@ export function ComposerEditor({
       controlledEventCount,
       assumedValue,
     );
-  }, [assumedValue, controlledEventCount, isNativeEcho, controlledDocumentJson]);
+  });
   const acceptNativeEvent = useCallback(
     (eventCount: number, value: string, nextSelection: ComposerEditorSelection) => {
       const acknowledgedEventCount = acknowledgeComposerNativeEvent(
@@ -260,7 +273,7 @@ export function ComposerEditor({
       });
       return acknowledgedEventCount;
     },
-    [],
+    [nativeEventSnapshotsRef],
   );
   const themeJson = JSON.stringify(createNativeComposerTheme(theme));
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};

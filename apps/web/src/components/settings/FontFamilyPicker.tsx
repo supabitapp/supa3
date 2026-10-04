@@ -1,6 +1,6 @@
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { CheckIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isMonospaceFamily, queryInstalledFontFamilies } from "../../appearanceFonts";
 import {
   Combobox,
@@ -126,10 +126,14 @@ export function FontFamilyPicker({
   // its open state never receives Base UI's entrance style baseline, so the
   // exit transition on close has no style delta, never fires transitionend,
   // and the popup lingers on screen forever.
-  useEffect(() => {
+  // The prop is only meaningful at mount - the control just swapped in
+  // under an active focus - so later changes are deliberately ignored.
+  const openIfRequestedAtMount = useEffectEvent(() => {
     if (initialOpen) setOpen(true);
-    // The prop is only meaningful at mount - the control just swapped in
-    // under an active focus - so later changes are deliberately ignored.
+  });
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    openIfRequestedAtMount();
   }, []);
   const listRef = useRef<LegendListRef | null>(null);
   const enumeration = useFontEnumeration();

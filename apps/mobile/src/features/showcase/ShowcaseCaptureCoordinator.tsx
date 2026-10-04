@@ -34,6 +34,7 @@ import {
   clearShowcaseRenderSignal,
   getShowcaseRenderSignal,
   isShowcaseNativeContentReady,
+  type ShowcaseRenderSignal,
   subscribeToShowcaseRenderSignal,
 } from "./showcaseRenderSignal";
 
@@ -52,6 +53,37 @@ function sceneFromPathname(pathname: string): ShowcaseScene | null {
   if (routePath.startsWith("/threads/")) return "thread";
   if (routePath === "/") return "threads";
   return null;
+}
+
+function settledShowcaseScene(input: {
+  readonly scene: ShowcaseScene | null;
+  readonly requestedScene: ShowcaseScene | null;
+  readonly hasFixture: boolean;
+  readonly orientationSettled: boolean;
+  readonly themeApplied: boolean;
+  readonly themeId: MobileThemeId;
+  readonly renderSignal: ShowcaseRenderSignal | null;
+}): ShowcaseScene | null {
+  if (
+    !SHOWCASE_ENABLED ||
+    input.scene === null ||
+    input.requestedScene === null ||
+    input.scene !== input.requestedScene ||
+    !input.hasFixture ||
+    // Never report a scene ready while the capture orientation is still
+    // being applied — a screenshot taken early has the wrong dimensions.
+    !input.orientationSettled ||
+    // Likewise for the palette: an early screenshot shows the default theme.
+    !input.themeApplied ||
+    !isShowcaseNativeContentReady({
+      scene: input.scene,
+      themeId: input.themeId,
+      renderSignal: input.renderSignal,
+    })
+  ) {
+    return null;
+  }
+  return input.scene;
 }
 
 export function ShowcaseCaptureCoordinator(props: { readonly pathname: string }) {
@@ -74,7 +106,10 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   const [requestedTheme, setRequestedTheme] = useState<MobileThemeId | null>(null);
   const [themeRequestSettled, setThemeRequestSettled] = useState(false);
   const [readyScene, setReadyScene] = useState<ShowcaseScene | null>(null);
-  const [orientationSettled, setOrientationSettled] = useState(false);
+  const [captureOrientation] = useState(() =>
+    SHOWCASE_ENABLED ? getNativeShowcaseOrientation() : null,
+  );
+  const [orientationSettled, setOrientationSettled] = useState(captureOrientation === null);
   const requestedSceneRef = useRef<ShowcaseScene | null>(null);
   const renderSignal = useSyncExternalStore(
     subscribeToShowcaseRenderSignal,
@@ -101,15 +136,10 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   }, [pairingUrls.length]);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || orientationSettled) return;
-    const orientation = getNativeShowcaseOrientation();
-    if (orientation === null) {
-      setOrientationSettled(true);
-      return;
-    }
+    if (!SHOWCASE_ENABLED || orientationSettled || captureOrientation === null) return;
 
     let cancelled = false;
-    void retryShowcaseOperation(async () => applyNativeShowcaseOrientation(orientation), {
+    void retryShowcaseOperation(async () => applyNativeShowcaseOrientation(captureOrientation), {
       isCancelled: () => cancelled,
     }).then((applied) => {
       if (!cancelled && applied) setOrientationSettled(true);
@@ -117,7 +147,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     return () => {
       cancelled = true;
     };
-  }, [orientationSettled]);
+  }, [captureOrientation, orientationSettled]);
 
   useEffect(() => {
     if (!SHOWCASE_ENABLED) return;
@@ -264,32 +294,37 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     );
   }, [hasFixture, navigation, requestedScene, scene, showcaseThread]);
 
+  const settledScene = settledShowcaseScene({
+    scene,
+    requestedScene,
+    hasFixture,
+    orientationSettled,
+    themeApplied,
+    themeId,
+    renderSignal,
+  });
+  if (settledScene === null && readyScene !== null) setReadyScene(null);
+
   useEffect(() => {
-    if (
-      !SHOWCASE_ENABLED ||
-      scene === null ||
-      requestedScene === null ||
-      scene !== requestedScene ||
-      !hasFixture ||
-      // Never report a scene ready while the capture orientation is still
-      // being applied — a screenshot taken early has the wrong dimensions.
-      !orientationSettled ||
-      // Likewise for the palette: an early screenshot shows the default theme.
-      !themeApplied ||
-      !isShowcaseNativeContentReady({ scene, themeId, renderSignal })
-    ) {
-      setReadyScene(null);
-      return;
-    }
-    if (scene === "terminal") Keyboard.dismiss();
+    const target = settledShowcaseScene({
+      scene,
+      requestedScene,
+      hasFixture,
+      orientationSettled,
+      themeApplied,
+      themeId,
+      renderSignal,
+    });
+    if (target === null) return;
+    if (target === "terminal") Keyboard.dismiss();
 
     let renderFrame: number | null = null;
     let readyFrame: number | null = null;
     const settleTimer = setTimeout(() => {
       renderFrame = requestAnimationFrame(() => {
         readyFrame = requestAnimationFrame(() => {
-          markNativeShowcaseReady(scene);
-          setReadyScene(scene);
+          markNativeShowcaseReady(target);
+          setReadyScene(target);
         });
       });
     }, 500);

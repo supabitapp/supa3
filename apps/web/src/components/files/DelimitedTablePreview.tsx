@@ -1,4 +1,5 @@
 import { parseDelimitedPreview } from "@supacode/shared/delimitedPreview";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { useMemo } from "react";
 
 import { FileSurfaceNotice } from "./fileSurfaceChrome";
@@ -29,9 +30,9 @@ export function DelimitedTablePreview(props: {
           {header ? (
             <thead className="sticky top-0 z-10">
               <tr>
-                {header.map((cell, columnIndex) => (
+                {withOccurrenceKeys(header, (cell) => cell).map(({ item: cell, key }) => (
                   <th
-                    key={columnIndex}
+                    key={key}
                     scope="col"
                     className="max-w-80 border-b border-border bg-muted/60 px-3 py-1.5 text-left align-bottom font-medium whitespace-pre-wrap break-words backdrop-blur"
                   >
@@ -42,11 +43,11 @@ export function DelimitedTablePreview(props: {
             </thead>
           ) : null}
           <tbody>
-            {body.map((row, rowIndex) => (
-              <tr key={rowIndex} className="even:bg-muted/30">
-                {row.map((cell, columnIndex) => (
+            {withOccurrenceKeys(body, (row) => row.join("\u0000")).map(({ item: row, key }) => (
+              <tr key={key} className="even:bg-muted/30">
+                {withOccurrenceKeys(row, (cell) => cell).map(({ item: cell, key: cellKey }) => (
                   <td
-                    key={columnIndex}
+                    key={cellKey}
                     className="max-w-80 border-b border-border/60 px-3 py-1.5 align-top whitespace-pre-wrap break-words tabular-nums"
                   >
                     {cell}

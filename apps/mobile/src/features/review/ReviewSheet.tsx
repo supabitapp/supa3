@@ -445,6 +445,14 @@ function ReviewFileNavigator({
   );
 }
 
+function RevealInspectorPane() {
+  const { showAuxiliaryPane } = useAdaptiveWorkspaceLayout();
+  useEffect(() => {
+    showAuxiliaryPane("inspector");
+  }, [showAuxiliaryPane]);
+  return null;
+}
+
 type ReviewSheetProps = StaticScreenProps<{
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -453,7 +461,7 @@ type ReviewSheetProps = StaticScreenProps<{
 export function ReviewSheet(props: ReviewSheetProps) {
   const { nativeReviewDiffStyle } = useAppearanceCodeSurface();
   useAdaptiveWorkspacePaneRole("inspector");
-  const { panes, showAuxiliaryPane } = useAdaptiveWorkspaceLayout();
+  const { panes } = useAdaptiveWorkspaceLayout();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { themeAppearance: selectedTheme } = useAppearancePreferences();
@@ -470,9 +478,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
   // in-flow AndroidScreenHeader, so it needs no inset either.)
   const topContentInset = 0;
 
-  useEffect(() => {
-    showAuxiliaryPane("inspector");
-  }, [environmentId, showAuxiliaryPane, threadId]);
   const {
     error,
     reviewSections,
@@ -518,11 +523,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const handlePullToRefresh = useCallback(async () => {
     setIsPullRefreshing(true);
-    try {
-      await refreshSelectedSection();
-    } finally {
-      setIsPullRefreshing(false);
-    }
+    await refreshSelectedSection().finally(() => setIsPullRefreshing(false));
   }, [refreshSelectedSection]);
   const reviewFileNavigatorRef = useRef<ReviewFileNavigatorHandle>(null);
   const reviewFiles = parsedDiff.kind === "files" ? parsedDiff.files : [];
@@ -558,9 +559,10 @@ export function ReviewSheet(props: ReviewSheetProps) {
     SHOWCASE_ENABLED && parsedDiff.kind === "files" && selectedSection
       ? `${reviewCache.threadKey}:${selectedSection.id}:${nativeBridge.tokensResetKey}:${nativeBridge.themeId}`
       : null;
+  const handleNativeBridgeDebug = nativeBridge.onDebug;
   const handleNativeDebug = useCallback(
     (event: NativeSyntheticEvent<Record<string, unknown>>) => {
-      nativeBridge.onDebug(event);
+      handleNativeBridgeDebug(event);
       if (
         showcaseReviewKey === null ||
         showcasedReviewDrawRef.current === showcaseReviewKey ||
@@ -571,7 +573,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
       showcasedReviewDrawRef.current = showcaseReviewKey;
       reportShowcaseSceneRendered({ scene: "review", themeId: nativeBridge.themeId });
     },
-    [nativeBridge.onDebug, nativeBridge.themeId, showcaseReviewKey],
+    [handleNativeBridgeDebug, nativeBridge.themeId, showcaseReviewKey],
   );
 
   const handleSelectFile = useCallback(
@@ -721,6 +723,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
 
   return (
     <>
+      <RevealInspectorPane key={`${environmentId}:${threadId}`} />
       <ReviewHeader
         environmentId={environmentId}
         threadId={threadId}

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Atom } from "effect/unstable/reactivity";
 
 import {
@@ -23,11 +23,20 @@ export const pendingThreadOrderAtom = Atom.make<PendingThreadOrder | null>(null)
 
 export function usePendingThreadOrder(nowMinute: string, snoozeWakeTick: number) {
   const pending = useAtomValue(pendingThreadOrderAtom);
+  const refreshedClockRef = useRef<{ nowMinute: string; snoozeWakeTick: number } | null>(null);
   // A timed wake can change section membership without a shell event. Use the
   // lists' existing clocks to retire that hold and re-enable their move menus.
   useEffect(() => {
+    const refreshedClock = refreshedClockRef.current;
+    if (
+      refreshedClock?.nowMinute === nowMinute &&
+      refreshedClock.snoozeWakeTick === snoozeWakeTick
+    ) {
+      return;
+    }
+    refreshedClockRef.current = { nowMinute, snoozeWakeTick };
     getPendingThreadOrder();
-  }, [nowMinute, snoozeWakeTick]);
+  });
   return pending;
 }
 

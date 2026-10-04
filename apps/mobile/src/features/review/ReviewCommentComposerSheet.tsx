@@ -34,6 +34,7 @@ import {
 } from "./shikiReviewHighlighter";
 
 const REVIEW_COMMENT_PREVIEW_MAX_LINES = 5;
+const NO_HIGHLIGHTED_LINES: Record<string, ReadonlyArray<ReviewHighlightedToken>> = {};
 
 type ReviewCommentComposerSheetProps = StaticScreenProps<{
   readonly environmentId: EnvironmentId;
@@ -50,9 +51,8 @@ export function ReviewCommentComposerSheet(props: ReviewCommentComposerSheetProp
   const { codeSurface } = useAppearanceCodeSurface();
   const { environmentId, threadId } = props.route.params;
   const [commentText, setCommentText] = useState("");
-  const [highlightedLinesById, setHighlightedLinesById] = useState<
-    Record<string, ReadonlyArray<ReviewHighlightedToken>>
-  >({});
+  const [highlightedLinesById, setHighlightedLinesById] =
+    useState<Record<string, ReadonlyArray<ReviewHighlightedToken>>>(NO_HIGHLIGHTED_LINES);
   const [attachments, setAttachments] = useState<ReadonlyArray<DraftComposerImageAttachment>>([]);
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
 
@@ -99,9 +99,12 @@ export function ReviewCommentComposerSheet(props: ReviewCommentComposerSheetProp
     })();
   });
 
+  if ((!target || selectedLines.length === 0) && highlightedLinesById !== NO_HIGHLIGHTED_LINES) {
+    setHighlightedLinesById(NO_HIGHLIGHTED_LINES);
+  }
+
   useEffect(() => {
     if (!target || selectedLines.length === 0) {
-      setHighlightedLinesById({});
       return;
     }
 

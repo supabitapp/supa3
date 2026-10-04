@@ -216,13 +216,15 @@ export function useCopyToClipboard<TContext = void>({
   const onErrorRef = React.useRef(onError);
   const targetRef = React.useRef(target);
   const timeoutRef = React.useRef(timeout);
-
-  onCopyRef.current = onCopy;
-  onErrorRef.current = onError;
   const extraFlavorsRef = React.useRef(extraFlavors);
-  targetRef.current = target;
-  timeoutRef.current = timeout;
-  extraFlavorsRef.current = extraFlavors;
+
+  React.useLayoutEffect(() => {
+    onCopyRef.current = onCopy;
+    onErrorRef.current = onError;
+    targetRef.current = target;
+    timeoutRef.current = timeout;
+    extraFlavorsRef.current = extraFlavors;
+  });
 
   const copyToClipboard = React.useCallback((value: string, ctx: TContext): void => {
     void writeTextToClipboard(value, targetRef.current, extraFlavorsRef.current).then(

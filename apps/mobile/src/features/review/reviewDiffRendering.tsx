@@ -31,6 +31,15 @@ export function changeBarTone(change: ReviewRenderableLineRow["change"]): string
   return "bg-border/50";
 }
 
+function withTokenOffsets(tokens: ReadonlyArray<ReviewHighlightedToken>) {
+  let offset = 0;
+  return tokens.map((token) => {
+    const start = offset;
+    offset += token.content.length;
+    return { token, start };
+  });
+}
+
 function diffHighlightColor(change: ReviewRenderableLineRow["change"]): string | undefined {
   if (change === "add") return "rgba(16, 185, 129, 0.24)";
   if (change === "delete") return "rgba(244, 63, 94, 0.24)";
@@ -102,43 +111,34 @@ export function DiffTokenText(props: {
         lineHeight,
       }}
     >
-      {(() => {
-        let offset = 0;
+      {withTokenOffsets(props.tokens).map(({ token, start }) => {
+        const fontWeight =
+          token.fontStyle !== null && (token.fontStyle & 2) === 2
+            ? ("700" as const)
+            : ("500" as const);
+        const fontStyle =
+          token.fontStyle !== null && (token.fontStyle & 1) === 1
+            ? ("italic" as const)
+            : ("normal" as const);
 
-        return props.tokens.map((token) => {
-          const start = offset;
-          offset += token.content.length;
-
-          const fontWeight =
-            token.fontStyle !== null && (token.fontStyle & 2) === 2
-              ? ("700" as const)
-              : ("500" as const);
-          const fontStyle =
-            token.fontStyle !== null && (token.fontStyle & 1) === 1
-              ? ("italic" as const)
-              : ("normal" as const);
-
-          return (
-            <NativeText
-              key={`${start}:${token.content.length}:${token.color ?? ""}:${token.fontStyle ?? ""}`}
-              selectable
-              style={{
-                color: token.color ?? undefined,
-                fontFamily: REVIEW_MONO_FONT_FAMILY,
-                fontWeight,
-                fontStyle,
-                backgroundColor:
-                  token.diffHighlight && props.change
-                    ? diffHighlightColor(props.change)
-                    : undefined,
-                borderRadius: token.diffHighlight ? 4 : undefined,
-              }}
-            >
-              {token.content.length > 0 ? renderVisibleWhitespace(token.content) : " "}
-            </NativeText>
-          );
-        });
-      })()}
+        return (
+          <NativeText
+            key={`${start}:${token.content.length}:${token.color ?? ""}:${token.fontStyle ?? ""}`}
+            selectable
+            style={{
+              color: token.color ?? undefined,
+              fontFamily: REVIEW_MONO_FONT_FAMILY,
+              fontWeight,
+              fontStyle,
+              backgroundColor:
+                token.diffHighlight && props.change ? diffHighlightColor(props.change) : undefined,
+              borderRadius: token.diffHighlight ? 4 : undefined,
+            }}
+          >
+            {token.content.length > 0 ? renderVisibleWhitespace(token.content) : " "}
+          </NativeText>
+        );
+      })}
     </NativeText>
   );
 }

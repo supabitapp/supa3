@@ -2,7 +2,7 @@ import {
   createElement,
   useEffect,
   useImperativeHandle,
-  useRef,
+  useState,
   type ComponentType,
   type Ref,
 } from "react";
@@ -183,7 +183,7 @@ export function isPendingNativeViewRegistration(error: unknown): boolean {
 }
 
 function useNativeReviewDiffPayload(
-  nativeRef: React.RefObject<NativeReviewDiffViewRef | null>,
+  nativeView: NativeReviewDiffViewRef | null,
   method: NativeReviewDiffPayloadMethod,
   payload: string | undefined,
 ) {
@@ -201,7 +201,7 @@ function useNativeReviewDiffPayload(
         return;
       }
 
-      const view = nativeRef.current;
+      const view = nativeView;
       const command = view?.[method];
       if (!view || !command) {
         if (attempts < NATIVE_REVIEW_DIFF_PAYLOAD_RETRY_FRAMES) {
@@ -235,7 +235,7 @@ function useNativeReviewDiffPayload(
         cancelAnimationFrame(frame);
       }
     };
-  }, [method, nativeRef, payload]);
+  }, [method, nativeView, payload]);
 }
 
 function getExpoViewConfig(moduleName: string) {
@@ -246,21 +246,21 @@ function getExpoViewConfig(moduleName: string) {
 
 function NativeReviewDiffView(props: NativeReviewDiffViewProps) {
   const { nativeViewRef, rowsJson, tokensJson, tokensPatchJson, ...nativeProps } = props;
-  const nativeRef = useRef<NativeReviewDiffViewRef>(null);
-  useNativeReviewDiffPayload(nativeRef, "setRowsJson", rowsJson);
-  useNativeReviewDiffPayload(nativeRef, "setTokensJson", tokensJson);
-  useNativeReviewDiffPayload(nativeRef, "setTokensPatchJson", tokensPatchJson);
+  const [nativeView, setNativeView] = useState<NativeReviewDiffViewRef | null>(null);
+  useNativeReviewDiffPayload(nativeView, "setRowsJson", rowsJson);
+  useNativeReviewDiffPayload(nativeView, "setTokensJson", tokensJson);
+  useNativeReviewDiffPayload(nativeView, "setTokensPatchJson", tokensPatchJson);
   useImperativeHandle(
     nativeViewRef,
     () => ({
       scrollToFile: async (fileId, animated = true) => {
-        await nativeRef.current?.scrollToFile(fileId, animated);
+        await nativeView?.scrollToFile(fileId, animated);
       },
       scrollToTop: async (animated = true) => {
-        await nativeRef.current?.scrollToTop(animated);
+        await nativeView?.scrollToTop(animated);
       },
     }),
-    [],
+    [nativeView],
   );
 
   const RawNativeView = cachedNativeReviewDiffRawView;
@@ -268,7 +268,7 @@ function NativeReviewDiffView(props: NativeReviewDiffViewProps) {
     return null;
   }
 
-  return createElement(RawNativeView, { ...nativeProps, ref: nativeRef });
+  return createElement(RawNativeView, { ...nativeProps, ref: setNativeView });
 }
 
 export function resolveNativeReviewDiffView(): ComponentType<NativeReviewDiffViewProps> | null {

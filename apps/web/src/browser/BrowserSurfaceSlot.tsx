@@ -23,7 +23,7 @@ export function BrowserSurfaceSlot(props: {
     fitSourceContent = false,
   } = props;
   const elementRef = useRef<HTMLDivElement | null>(null);
-  const presentationRef = useRef({ visible, cornerRadius, zIndex });
+  const presentationRef = useRef({ visible, cornerRadius, zIndex, layoutVersion });
   const updateRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
@@ -80,7 +80,7 @@ export function BrowserSurfaceSlot(props: {
   }, [fitSourceContent, tabId]);
 
   useLayoutEffect(() => {
-    presentationRef.current = { visible, cornerRadius, zIndex };
+    presentationRef.current = { visible, cornerRadius, zIndex, layoutVersion };
     updateRef.current?.();
   }, [cornerRadius, layoutVersion, visible, zIndex]);
 

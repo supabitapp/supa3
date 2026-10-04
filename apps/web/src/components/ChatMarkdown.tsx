@@ -2350,12 +2350,25 @@ function useChatMarkdownState({
   const markdownRef = useRef<HTMLDivElement>(null);
   const expandMedia = onImageExpand ?? setLocalMediaPreview;
   const mediaRequestId = useRef(0);
-  useEffect(() => {
+  const mediaScopeKey = JSON.stringify([
+    threadRef?.environmentId,
+    threadRef?.threadId,
+    explicitEnvironmentId,
+    cwd,
+    imageBaseDir,
+  ]);
+  const [renderedMediaScopeKey, setRenderedMediaScopeKey] = useState(mediaScopeKey);
+  if (renderedMediaScopeKey !== mediaScopeKey) {
+    setRenderedMediaScopeKey(mediaScopeKey);
     setLocalMediaPreview(null);
+  }
+  const activeMediaScopeKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeMediaScopeKeyRef.current = mediaScopeKey;
     return () => {
-      mediaRequestId.current += 1;
+      activeMediaScopeKeyRef.current = null;
     };
-  }, [threadRef?.environmentId, threadRef?.threadId, explicitEnvironmentId, cwd, imageBaseDir]);
+  }, [mediaScopeKey]);
   const createAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
     refresh: true,
@@ -2378,6 +2391,9 @@ function useChatMarkdownState({
   const openMarkdownMedia = useCallback(
     (source: string, resolvedFilePath?: string, clickedImage?: HTMLImageElement | null) => {
       const requestId = ++mediaRequestId.current;
+      const requestScopeKey = activeMediaScopeKeyRef.current;
+      const isCurrentRequest = () =>
+        mediaRequestId.current === requestId && activeMediaScopeKeyRef.current === requestScopeKey;
       void resolveMarkdownMediaPreview({
         source,
         resolvedFilePath,
@@ -2391,7 +2407,7 @@ function useChatMarkdownState({
           : undefined,
       }).then(
         (preview) => {
-          if (preview && mediaRequestId.current === requestId) {
+          if (preview && isCurrentRequest()) {
             const selected = preview.images[preview.index];
             expandMedia(
               selected && selected.type !== "video" && markdownRef.current
@@ -2401,7 +2417,7 @@ function useChatMarkdownState({
           }
         },
         (error: unknown) => {
-          if (mediaRequestId.current !== requestId) return;
+          if (!isCurrentRequest()) return;
           toastManager.add(
             stackedThreadToast({
               type: "error",

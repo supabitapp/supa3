@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "../../../../components/AppSymbol";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { View, type AccessibilityActionEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import type { ComponentProps } from "react";
 
@@ -24,6 +25,74 @@ function clampFraction(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+function createSliderGesture(input: {
+  readonly disabled: boolean | undefined;
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+  readonly value: number;
+  readonly progress: SharedValue<number>;
+  readonly trackWidth: SharedValue<number>;
+  readonly dragging: SharedValue<boolean>;
+  readonly commit: (next: number) => void;
+}) {
+  const { disabled, min, max, step, value, progress, trackWidth, dragging, commit } = input;
+  const snapValue = (raw: number): number => {
+    "worklet";
+    const stepped = Math.round((raw - min) / step) * step + min;
+    return Math.min(max, Math.max(min, stepped));
+  };
+  const fractionAt = (x: number): number => {
+    "worklet";
+    const usable = trackWidth.value - THUMB_SIZE;
+    if (usable <= 0) {
+      return 0;
+    }
+    return clampFraction((x - THUMB_SIZE / 2) / usable);
+  };
+  const valueAtFraction = (f: number): number => {
+    "worklet";
+    return snapValue(min + f * (max - min));
+  };
+  const fractionOfValue = (v: number): number => {
+    "worklet";
+    return clampFraction((v - min) / (max - min));
+  };
+
+  const pan = Gesture.Pan()
+    .enabled(!disabled)
+    .activeOffsetX([-8, 8])
+    .failOffsetY([-12, 12])
+    .onUpdate((event) => {
+      dragging.set(true);
+      const f = fractionAt(event.x);
+      progress.set(f);
+    })
+    .onFinalize((_event, success) => {
+      if (!dragging.value) {
+        return;
+      }
+      dragging.set(false);
+      if (!success) {
+        progress.set(withTiming(fractionOfValue(value), SNAP_ANIMATION));
+        return;
+      }
+      const next = valueAtFraction(progress.value);
+      progress.set(withTiming(fractionOfValue(next), SNAP_ANIMATION));
+      runOnJS(commit)(next);
+    });
+
+  const tap = Gesture.Tap()
+    .enabled(!disabled)
+    .onEnd((event) => {
+      const next = valueAtFraction(fractionAt(event.x));
+      progress.set(withTiming(fractionOfValue(next), SNAP_ANIMATION));
+      runOnJS(commit)(next);
+    });
+
+  return Gesture.Race(pan, tap);
+}
+
 export function FontSizeSliderRow(props: {
   readonly disabled?: boolean;
   readonly icon: SymbolName;
@@ -35,10 +104,7 @@ export function FontSizeSliderRow(props: {
   readonly value: number;
   readonly onChange: (value: number) => void;
 }) {
-  const latest = useRef(props);
-  latest.current = props;
-
-  const { min, max, step, value, disabled } = props;
+  const { min, max, step, value, disabled, onChange } = props;
   const fraction = (value - min) / (max - min);
 
   const progress = useSharedValue(clampFraction(fraction));
@@ -46,76 +112,37 @@ export function FontSizeSliderRow(props: {
   const dragging = useSharedValue(false);
 
   useEffect(() => {
-    if (!dragging.value) {
-      progress.value = withTiming(clampFraction(fraction), SNAP_ANIMATION);
+    if (!dragging.get()) {
+      progress.set(withTiming(clampFraction(fraction), SNAP_ANIMATION));
     }
   }, [dragging, fraction, progress]);
 
-  const commit = useCallback((next: number) => {
-    const current = latest.current;
-    if (current.disabled || next === current.value) {
-      return;
-    }
-    Haptics.selectionAsync().catch(() => undefined);
-    current.onChange(next);
-  }, []);
-
-  const gesture = useMemo(() => {
-    const snapValue = (raw: number): number => {
-      "worklet";
-      const stepped = Math.round((raw - min) / step) * step + min;
-      return Math.min(max, Math.max(min, stepped));
-    };
-    const fractionAt = (x: number): number => {
-      "worklet";
-      const usable = trackWidth.value - THUMB_SIZE;
-      if (usable <= 0) {
-        return 0;
+  const commit = useCallback(
+    (next: number) => {
+      if (disabled || next === value) {
+        return;
       }
-      return clampFraction((x - THUMB_SIZE / 2) / usable);
-    };
-    const valueAtFraction = (f: number): number => {
-      "worklet";
-      return snapValue(min + f * (max - min));
-    };
-    const fractionOfValue = (v: number): number => {
-      "worklet";
-      return clampFraction((v - min) / (max - min));
-    };
+      Haptics.selectionAsync().catch(() => undefined);
+      onChange(next);
+    },
+    [disabled, onChange, value],
+  );
 
-    const pan = Gesture.Pan()
-      .enabled(!disabled)
-      .activeOffsetX([-8, 8])
-      .failOffsetY([-12, 12])
-      .onUpdate((event) => {
-        dragging.value = true;
-        const f = fractionAt(event.x);
-        progress.value = f;
-      })
-      .onFinalize((_event, success) => {
-        if (!dragging.value) {
-          return;
-        }
-        dragging.value = false;
-        if (!success) {
-          progress.value = withTiming(fractionOfValue(value), SNAP_ANIMATION);
-          return;
-        }
-        const next = valueAtFraction(progress.value);
-        progress.value = withTiming(fractionOfValue(next), SNAP_ANIMATION);
-        runOnJS(commit)(next);
-      });
-
-    const tap = Gesture.Tap()
-      .enabled(!disabled)
-      .onEnd((event) => {
-        const next = valueAtFraction(fractionAt(event.x));
-        progress.value = withTiming(fractionOfValue(next), SNAP_ANIMATION);
-        runOnJS(commit)(next);
-      });
-
-    return Gesture.Race(pan, tap);
-  }, [commit, disabled, dragging, max, min, progress, step, trackWidth, value]);
+  const gesture = useMemo(
+    () =>
+      createSliderGesture({
+        disabled,
+        min,
+        max,
+        step,
+        value,
+        progress,
+        trackWidth,
+        dragging,
+        commit,
+      }),
+    [commit, disabled, dragging, max, min, progress, step, trackWidth, value],
+  );
 
   const fillStyle = useAnimatedStyle(() => ({
     width: THUMB_SIZE / 2 + progress.value * Math.max(0, trackWidth.value - THUMB_SIZE),
@@ -169,7 +196,7 @@ export function FontSizeSliderRow(props: {
             className="h-11 flex-1 justify-center"
             onAccessibilityAction={handleAccessibilityAction}
             onLayout={(event) => {
-              trackWidth.value = event.nativeEvent.layout.width;
+              trackWidth.set(event.nativeEvent.layout.width);
             }}
           >
             <View

@@ -4,6 +4,7 @@ import type {
   RunId,
   ThreadId,
 } from "@supacode/contracts";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { ExternalLinkIcon, GitBranchIcon, RotateCcwIcon } from "lucide-react";
 import { memo } from "react";
 
@@ -94,8 +95,11 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
           </div>
           {item.changes !== undefined && item.changes.length > 0 ? (
             <ul className="space-y-1 font-mono text-muted-foreground">
-              {item.changes.map((change, index) => (
-                <li key={`${change.operation}:${change.path}:${index}`}>
+              {withOccurrenceKeys(
+                item.changes,
+                (change) => `${change.operation}:${change.path}`,
+              ).map(({ item: change, key }) => (
+                <li key={key}>
                   {change.operation} {change.oldPath ? `${change.oldPath} → ` : ""}
                   {formatWorkspaceRelativePath(change.path, props.workspaceRoot)}
                   {change.fileType || change.mimeType

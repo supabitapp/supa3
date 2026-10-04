@@ -502,7 +502,7 @@ export function useThreadComposerState() {
     }
     savingQueuedEditRef.current = true;
     setIsSavingQueuedEdit(true);
-    try {
+    await (async () => {
       const capabilities = selectedEnvironmentRuntime?.serverConfig?.environment.capabilities;
       const prepared = await prepareTurnAttachments({
         environmentId: thread.environmentId,
@@ -538,10 +538,10 @@ export function useThreadComposerState() {
       }
       endQueuedRunEdit(threadKey, { deferAttachmentCleanup: true });
       scheduleUnusedComposerAttachmentCleanup(draft.attachments);
-    } finally {
+    })().finally(() => {
       savingQueuedEditRef.current = false;
       setIsSavingQueuedEdit(false);
-    }
+    });
   }, [editQueuedRun, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
   const onSendMessage = useCallback(
@@ -766,7 +766,7 @@ export function useThreadComposerState() {
     if (problems.length > 0) {
       Alert.alert("Could not attach photo or video", problems.join("\n\n"));
     }
-  }, [composerDrafts, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
+  }, [selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
   const onPickDraftFiles = useCallback(async () => {
     if (!selectedThreadShell) {
@@ -802,7 +802,7 @@ export function useThreadComposerState() {
     if (problems.length > 0) {
       Alert.alert("Could not attach file", problems.join("\n\n"));
     }
-  }, [composerDrafts, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
+  }, [selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
   const onPasteIntoDraft = useCallback(async () => {
     if (!selectedThreadShell) {
@@ -893,12 +893,7 @@ export function useThreadComposerState() {
         `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files per message.`,
       );
     }
-  }, [
-    composerDrafts,
-    reservePastedTextFileName,
-    selectedEnvironmentRuntime?.serverConfig,
-    selectedThreadShell,
-  ]);
+  }, [reservePastedTextFileName, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
   const onNativePasteImages = useCallback(
     async (uris: ReadonlyArray<string>) => {
@@ -925,7 +920,7 @@ export function useThreadComposerState() {
         });
       }
     },
-    [composerDrafts, selectedThreadShell],
+    [selectedThreadShell],
   );
 
   const onNativePasteText = useCallback(
@@ -969,12 +964,7 @@ export function useThreadComposerState() {
         );
       }
     },
-    [
-      composerDrafts,
-      reservePastedTextFileName,
-      selectedEnvironmentRuntime?.serverConfig,
-      selectedThreadShell,
-    ],
+    [reservePastedTextFileName, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell],
   );
 
   const onRemoveDraftImage = useCallback(

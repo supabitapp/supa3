@@ -1049,7 +1049,10 @@ export default function FilePreviewPanel({
     resourceKey: `file:${environmentId}:${cwd}:${relativePath ?? ""}`,
   });
 
+  const revealedCrumbPathRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (revealedCrumbPathRef.current === relativePath) return;
+    revealedCrumbPathRef.current = relativePath;
     const currentCrumb = breadcrumbRef.current?.querySelector<HTMLElement>(
       "[data-current-file-crumb='true']",
     );

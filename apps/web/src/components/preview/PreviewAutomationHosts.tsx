@@ -274,6 +274,17 @@ const raisePreviewAutomationHostError = (
   throw error;
 };
 
+function usePreviewAutomationRequestHandlerAtom(
+  handle: (request: PreviewAutomationRequest) => Promise<unknown>,
+) {
+  const [requestHandlerAtom] = useState(() => Atom.make({ handle }));
+  const setRequestHandler = useAtomSet(requestHandlerAtom);
+  useEffect(() => {
+    setRequestHandler({ handle });
+  }, [handle, setRequestHandler]);
+  return requestHandlerAtom;
+}
+
 export function PreviewAutomationHosts() {
   const { environments } = useEnvironments();
   if (!isElectron || !previewBridge?.automation) return null;
@@ -799,11 +810,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
     },
     [environmentId, listPreviews, open, registry, resize],
   );
-  const [requestHandlerAtom] = useState(() => Atom.make({ handle: handleRequest }));
-  const setRequestHandler = useAtomSet(requestHandlerAtom);
-  useEffect(() => {
-    setRequestHandler({ handle: handleRequest });
-  }, [handleRequest, setRequestHandler]);
+  const requestHandlerAtom = usePreviewAutomationRequestHandlerAtom(handleRequest);
 
   const automationRequestConsumerAtom = useMemo(
     () =>

@@ -126,16 +126,17 @@ function OpenContentSearchDialog(props: {
   const visibleMatches = useMemo(() => matches.slice(0, visibleCount), [matches, visibleCount]);
   const groups = useMemo(() => groupMatches(visibleMatches), [visibleMatches]);
 
-  useEffect(() => {
+  const [shownMatches, setShownMatches] = useState(matches);
+  if (shownMatches !== matches) {
+    setShownMatches(matches);
     setSelectedIndex(0);
     setVisibleCount(VISIBLE_MATCH_WINDOW);
-  }, [matches]);
+  } else if (selectedIndex >= visibleCount) {
+    setVisibleCount(selectedIndex + VISIBLE_MATCH_WINDOW);
+  }
 
   useEffect(() => {
-    if (selectedIndex >= visibleCount) {
-      setVisibleCount(selectedIndex + VISIBLE_MATCH_WINDOW);
-      return;
-    }
+    if (selectedIndex >= visibleCount) return;
     document
       .querySelector<HTMLElement>(`[data-content-search-result="${selectedIndex}"]`)
       ?.scrollIntoView({ block: "nearest" });

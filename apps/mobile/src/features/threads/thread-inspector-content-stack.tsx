@@ -53,14 +53,11 @@ export function ThreadInspectorContentStack(props: {
     () => new Set([props.mode]),
   );
 
-  useEffect(() => {
-    setMountedModes((current) => {
-      if (current.has(props.mode)) {
-        return current;
-      }
-      return new Set([...current, props.mode]);
-    });
+  if (!mountedModes.has(props.mode)) {
+    setMountedModes(new Set([...mountedModes, props.mode]));
+  }
 
+  useEffect(() => {
     if (props.mode === "route") {
       return;
     }

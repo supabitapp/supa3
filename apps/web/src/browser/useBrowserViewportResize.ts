@@ -4,6 +4,7 @@ import type { PreviewViewportSetting, PreviewViewportSize } from "@supacode/cont
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -44,7 +45,9 @@ export function useBrowserViewportResize(options: {
   const [dragViewport, setDragViewport] = useState<ViewportDrag | null>(null);
   const sourceViewportKey = browserViewportSettingKey(viewport);
   const sourceViewportKeyRef = useRef(sourceViewportKey);
-  sourceViewportKeyRef.current = sourceViewportKey;
+  useLayoutEffect(() => {
+    sourceViewportKeyRef.current = sourceViewportKey;
+  });
   const activeDrag = dragViewport?.sourceKey === sourceViewportKey ? dragViewport : null;
   const effectiveViewport = activeDrag
     ? ({

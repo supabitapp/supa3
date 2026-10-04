@@ -49,16 +49,33 @@ export function useNativeReviewDiffHighlighting(input: {
   });
   const visibleChunkIndexRef = useRef(0);
   const [tokensPatchJson, setTokensPatchJson] = useState(() => createEmptyTokenPatch(resetKey));
-  const [scheduler] = useState(() => createReviewDiffHighlightScheduler(setVisibleRange));
-
-  useEffect(() => {
-    scheduler.reset();
-    highlightedRowIdsRef.current = new Set();
-    visibleChunkIndexRef.current = 0;
+  const [highlightSession, setHighlightSession] = useState(() => ({
+    enabled,
+    resetKey,
+    rowCount: rows.length,
+    scheduler: createReviewDiffHighlightScheduler(setVisibleRange),
+  }));
+  if (
+    highlightSession.enabled !== enabled ||
+    highlightSession.resetKey !== resetKey ||
+    highlightSession.rowCount !== rows.length
+  ) {
+    setHighlightSession({
+      enabled,
+      resetKey,
+      rowCount: rows.length,
+      scheduler: createReviewDiffHighlightScheduler(setVisibleRange),
+    });
     setVisibleRange({ firstRowIndex: 0, lastRowIndex: 80 });
     setTokensPatchJson(createEmptyTokenPatch(resetKey));
+  }
+  const { scheduler } = highlightSession;
+
+  useEffect(() => {
+    highlightedRowIdsRef.current = new Set();
+    visibleChunkIndexRef.current = 0;
     return () => scheduler.cancel();
-  }, [enabled, resetKey, rows.length, scheduler]);
+  }, [scheduler]);
 
   useEffect(() => {
     if (!enabled || rows.length === 0) {

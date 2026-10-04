@@ -412,6 +412,7 @@ function ThreadSettingsSessionProvider(
     () => props.providerGroups.some((group) => group.models.some((model) => model.isLegacy)),
     [props.providerGroups],
   );
+  const { onSelectModel, onUpdateOptionSelections } = props;
   const commitPendingModel = useCallback(() => {
     if (pendingModel) {
       if (!canCommitPendingModel(pendingModel, props.providerGroups)) {
@@ -422,10 +423,10 @@ function ThreadSettingsSessionProvider(
         return false;
       }
       void Haptics.selectionAsync();
-      props.onSelectModel(pendingModel);
+      onSelectModel(pendingModel);
     }
     return true;
-  }, [pendingModel, props.onSelectModel, props.providerGroups]);
+  }, [pendingModel, onSelectModel, props.providerGroups]);
 
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
@@ -440,10 +441,10 @@ function ThreadSettingsSessionProvider(
           selection: { ...pendingModel.selection, options: next },
         });
       } else {
-        props.onUpdateOptionSelections(next);
+        onUpdateOptionSelections(next);
       }
     },
-    [displayedDescriptors, pendingModel, props.onUpdateOptionSelections],
+    [displayedDescriptors, pendingModel, onUpdateOptionSelections],
   );
 
   const toggleProvider = useCallback((providerKey: string) => {
@@ -582,10 +583,8 @@ function ThreadSettingsModelListRow(props: {
   readonly isLast: boolean;
 }) {
   const session = useThreadSettingsSession();
-  const onPress = useCallback(
-    () => session.pressModel(props.option),
-    [props.option, session.pressModel],
-  );
+  const { pressModel } = session;
+  const onPress = useCallback(() => pressModel(props.option), [props.option, pressModel]);
 
   return (
     <ModelRow
@@ -605,9 +604,10 @@ function ThreadSettingsProviderListHeader(props: {
   readonly provider: ThreadSettingsProviderCatalog;
 }) {
   const session = useThreadSettingsSession();
+  const { toggleProvider } = session;
   const onToggle = useCallback(
-    () => session.toggleProvider(props.provider.key),
-    [props.provider.key, session.toggleProvider],
+    () => toggleProvider(props.provider.key),
+    [props.provider.key, toggleProvider],
   );
 
   return (
@@ -626,6 +626,7 @@ function ThreadSettingsProviderListHeader(props: {
 function useThreadSettingsCatalogItems(
   session: ThreadSettingsSessionValue,
 ): ReadonlyArray<ThreadSettingsCatalogItem> {
+  const { isApplied, isDisplayed } = session;
   return useMemo(
     () =>
       session.providerGroups.flatMap((group) => {
@@ -642,9 +643,7 @@ function useThreadSettingsCatalogItems(
             ? group.models
             : group.models.filter(
                 (model) =>
-                  !model.isLegacy ||
-                  session.isDisplayed(model) ||
-                  session.favoriteKeys.has(model.key),
+                  !model.isLegacy || isDisplayed(model) || session.favoriteKeys.has(model.key),
               );
         const visibleModels = favoritesFirst(
           catalogModels.filter(
@@ -666,7 +665,7 @@ function useThreadSettingsCatalogItems(
         // Staging a model must not change disclosure state. The applied model
         // stays stable for the lifetime of this picker (Save closes it), so it
         // is safe to use as the initial selected-provider default.
-        const containsAppliedSelection = group.models.some(session.isApplied);
+        const containsAppliedSelection = group.models.some(isApplied);
         const isNarrowed = session.providerFilter !== null || session.searchQuery.trim().length > 0;
         const collapsible = !isNarrowed;
         const collapsed = providerSectionIsCollapsed({
@@ -700,8 +699,8 @@ function useThreadSettingsCatalogItems(
         ];
       }),
     [
-      session.isApplied,
-      session.isDisplayed,
+      isApplied,
+      isDisplayed,
       session.favoriteKeys,
       session.providerExpansionOverrides,
       session.providerFilter,

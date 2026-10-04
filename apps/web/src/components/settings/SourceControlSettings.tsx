@@ -2,7 +2,7 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { ChevronDownIcon } from "lucide-react";
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   BackgroundActivitySettings,
   SourceControlProviderKind,
@@ -279,15 +279,16 @@ function DiscoveryItemRow({
   const hasDetails = children !== undefined;
   const searchTargetId = useSettingsSearchTargetId();
 
-  useEffect(() => {
-    if (
-      (item.kind === "git" && searchTargetId === searchableSetting("git-fetch-interval").id) ||
-      (item.kind === "bitbucket" &&
-        searchTargetId === searchableSetting("bitbucket-credentials").id)
-    ) {
-      setIsExpanded(true);
-    }
-  }, [item.kind, searchTargetId]);
+  const [expandedForSearchTargetId, setExpandedForSearchTargetId] = useState<string | null>(null);
+  const searchTargetIdToExpand =
+    (item.kind === "git" && searchTargetId === searchableSetting("git-fetch-interval").id) ||
+    (item.kind === "bitbucket" && searchTargetId === searchableSetting("bitbucket-credentials").id)
+      ? searchTargetId
+      : null;
+  if (searchTargetIdToExpand !== expandedForSearchTargetId) {
+    setExpandedForSearchTargetId(searchTargetIdToExpand);
+    if (searchTargetIdToExpand !== null) setIsExpanded(true);
+  }
 
   return (
     <div

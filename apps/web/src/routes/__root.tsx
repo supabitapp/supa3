@@ -133,19 +133,7 @@ function RootRouteNotFoundView() {
   );
 }
 
-function RootRouteView() {
-  useEffect(() => installDesktopPasteAsText(window.desktopBridge, window), []);
-  const pathname = useLocation({ select: (location) => location.pathname });
-  const { authGateState } = Route.useRouteContext();
-  const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
-  const returningFromWelcomeRef = useRef(pathname === "/welcome");
-
-  useEffect(() => {
-    if (pathname === "/welcome") {
-      returningFromWelcomeRef.current = true;
-    }
-  }, [pathname]);
-
+function BrowserChromeThemeSync() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       syncBrowserChromeTheme();
@@ -153,12 +141,25 @@ function RootRouteView() {
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [pathname]);
+  }, []);
+  return null;
+}
+
+function RootRouteView() {
+  useEffect(() => installDesktopPasteAsText(window.desktopBridge, window), []);
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const { authGateState } = Route.useRouteContext();
+  const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
+  const [returningFromWelcome, setReturningFromWelcome] = useState(pathname === "/welcome");
+  if (pathname === "/welcome" && !returningFromWelcome) {
+    setReturningFromWelcome(true);
+  }
 
   if (pathname === "/pair") {
     return (
       <>
         <DocumentTitleSync />
+        <BrowserChromeThemeSync key={pathname} />
         <Outlet />
       </>
     );
@@ -171,6 +172,7 @@ function RootRouteView() {
       <ToastProvider>
         <AnchoredToastProvider>
           <DocumentTitleSync />
+          <BrowserChromeThemeSync key={pathname} />
           <ContrastAppearanceSync />
           <EnvironmentThemeSync />
           <GlassAppearanceSync />
@@ -191,6 +193,7 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <BrowserChromeThemeSync key={pathname} />
         <Outlet />
       </>
     );
@@ -212,6 +215,7 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
+        <BrowserChromeThemeSync key={pathname} />
         <ContrastAppearanceSync />
         <EnvironmentThemeSync />
         <GlassAppearanceSync />
@@ -235,7 +239,7 @@ function RootRouteView() {
           <ProjectCloneToastCoordinator />
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
-            <EventRouter skipInitialBootstrapNavigation={returningFromWelcomeRef.current} />
+            <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
           ) : null}
           {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
           {appShell}

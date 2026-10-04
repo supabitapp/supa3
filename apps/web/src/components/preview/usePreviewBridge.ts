@@ -93,8 +93,10 @@ export function usePreviewBridge(input: {
     lastReportedUrl.current = null;
     lastReportedKind.current = null;
     lastDesktopNavStatus.current = null;
-    return bridge.onStateChange(handleStateChange);
-  }, [bridge, runtimeTabId, stableThreadRef, tabId]);
+    return bridge.onStateChange((changedTabId, state) => {
+      if (changedTabId === runtimeTabId) handleStateChange(changedTabId, state);
+    });
+  }, [runtimeTabId]);
   useEffect(() => {
     if (!projectRef) return;
     flushPendingFaviconsForThread(stableThreadRef, projectRef, environmentHostname);

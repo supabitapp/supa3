@@ -16,7 +16,7 @@ import {
   usePreventRemove,
   type NavigationAction,
 } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
@@ -351,6 +351,7 @@ export function NewTaskDraftScreen(props: {
     };
   }, [navigation]);
   const settingsRoutePresentedRef = useRef(false);
+  const { onDismissed: onSettingsSheetDismissed } = settingsSheetPresentation;
   useEffect(() => {
     if (!settingsSheetPresentation.isVisible || settingsRoutePresentedRef.current) {
       return;
@@ -366,8 +367,8 @@ export function NewTaskDraftScreen(props: {
       }
 
       settingsRoutePresentedRef.current = false;
-      settingsSheetPresentation.onDismissed();
-    }, [settingsSheetPresentation.onDismissed]),
+      onSettingsSheetDismissed();
+    }, [onSettingsSheetDismissed]),
   );
   useEffect(
     () =>
@@ -400,15 +401,17 @@ export function NewTaskDraftScreen(props: {
   });
   const latestDraftKeyRef = useRef(flow.draftKey);
   const latestIncomingShareIdRef = useRef(props.incomingShareId);
-  latestDraftKeyRef.current = flow.draftKey;
-  latestIncomingShareIdRef.current = props.incomingShareId;
+  useLayoutEffect(() => {
+    latestDraftKeyRef.current = flow.draftKey;
+    latestIncomingShareIdRef.current = props.incomingShareId;
+  });
   const isImportingShare = importingShareKey !== null;
   const alertedUnavailableIncomingShareIdRef = useRef<string | null>(null);
   // The share this screen already moved into its draft. Sending clears the
   // draft (and its importedShareIds receipt) a frame before the screen leaves,
   // and the inbox entry is long gone by then; without this the re-render in
   // between reads as "shared content vanished" and alerts on every send.
-  const consumedIncomingShareIdRef = useRef<string | null>(null);
+  const [consumedIncomingShareId, setConsumedIncomingShareId] = useState<string | null>(null);
   const incomingShare = props.incomingShareId ? getShare(props.incomingShareId) : null;
   const requestedInitialProjectAvailable = Boolean(
     props.initialProjectRef?.environmentId &&
@@ -419,6 +422,22 @@ export function NewTaskDraftScreen(props: {
         project.id === props.initialProjectRef?.projectId,
     ),
   );
+  // Never fall through to the flow provider's temporary first-project
+  // default. Return to the picker with the share id intact so the user
+  // can choose an available destination.
+  const shouldReturnToProjectPicker = Boolean(
+    !props.pendingTaskId &&
+    !props.draftId &&
+    props.initialProjectRef?.environmentId &&
+    props.initialProjectRef.projectId &&
+    !requestedInitialProjectAvailable &&
+    projects.length > 0,
+  );
+  if (shouldReturnToProjectPicker && !isReturningToProjectPicker) {
+    setIsReturningToProjectPicker(true);
+  } else if (isReturningToProjectPicker && requestedInitialProjectAvailable) {
+    setIsReturningToProjectPicker(false);
+  }
   const isProjectPickerReturnActive =
     isReturningToProjectPicker && !requestedInitialProjectAvailable;
   const isIncomingShareAwaitingServerConfig = Boolean(
@@ -511,7 +530,7 @@ export function NewTaskDraftScreen(props: {
   }, [navigation, preventRemove, submitNavigationAction]);
   const hasImportedIncomingShare = Boolean(
     props.incomingShareId &&
-    (consumedIncomingShareIdRef.current === props.incomingShareId ||
+    (consumedIncomingShareId === props.incomingShareId ||
       (flow.draftKey &&
         getComposerDraftSnapshot(flow.draftKey).importedShareIds?.includes(props.incomingShareId))),
   );
@@ -532,11 +551,7 @@ export function NewTaskDraftScreen(props: {
     }
   }, [cancelledIncomingShareId, navigation, props.incomingShareId]);
   useEffect(() => {
-    if (!isReturningToProjectPicker) {
-      return;
-    }
-    if (requestedInitialProjectAvailable) {
-      setIsReturningToProjectPicker(false);
+    if (!isProjectPickerReturnActive) {
       return;
     }
     // Let usePreventRemove commit its disabled state before replacing this
@@ -547,12 +562,7 @@ export function NewTaskDraftScreen(props: {
       );
     });
     return () => cancelAnimationFrame(frame);
-  }, [
-    isReturningToProjectPicker,
-    navigation,
-    props.incomingShareId,
-    requestedInitialProjectAvailable,
-  ]);
+  }, [isProjectPickerReturnActive, navigation, props.incomingShareId]);
   useEffect(() => {
     if (!shareImportMountedRef.current) {
       startedShareImportKeyRef.current = null;
@@ -696,13 +706,6 @@ export function NewTaskDraftScreen(props: {
         setProject(directProject);
         return;
       }
-
-      if (projects.length > 0) {
-        // Never fall through to the flow provider's temporary first-project
-        // default. Return to the picker with the share id intact so the user
-        // can choose an available destination.
-        setIsReturningToProjectPicker(true);
-      }
       return;
     }
 
@@ -721,7 +724,6 @@ export function NewTaskDraftScreen(props: {
     projects,
     flow.draftKey,
     props.initialProjectRef,
-    props.incomingShareId,
     props.pendingTaskId,
     props.draftId,
     navigation,
@@ -730,6 +732,7 @@ export function NewTaskDraftScreen(props: {
     setProject,
   ]);
 
+  const { loadBranches } = flow;
   useEffect(() => {
     if (!selectedProject) {
       loadedBranchesProjectKeyRef.current = null;
@@ -740,8 +743,8 @@ export function NewTaskDraftScreen(props: {
       return;
     }
     loadedBranchesProjectKeyRef.current = projectKey;
-    flow.loadBranches();
-  }, [flow.loadBranches, selectedProject]);
+    loadBranches();
+  }, [loadBranches, selectedProject]);
 
   useEffect(() => {
     const shareId = props.incomingShareId;
@@ -772,7 +775,11 @@ export function NewTaskDraftScreen(props: {
     }
 
     if (!incomingShare) {
-      if (isIncomingShareUnavailable && alertedUnavailableIncomingShareIdRef.current !== shareId) {
+      if (
+        !isIncomingShareInboxLoading &&
+        !hasImportedIncomingShare &&
+        alertedUnavailableIncomingShareIdRef.current !== shareId
+      ) {
         alertedUnavailableIncomingShareIdRef.current = shareId;
         Alert.alert(
           "Shared content unavailable",
@@ -796,13 +803,13 @@ export function NewTaskDraftScreen(props: {
     const draftBackup =
       shareImportDraftBackupRef.current.get(importKey) ?? getComposerDraftSnapshot(draftKey);
     shareImportDraftBackupRef.current.set(importKey, draftBackup);
-    const importToken = Symbol(importKey);
+    const importToken = Symbol(`${importKey}#${shareImportAttempt}`);
     let didReserveShare = false;
     let didConsumeShare = false;
     let needsDraftRestore = false;
     activeShareImportTokenRef.current = importToken;
-    setImportingShareKey(importKey);
     void (async () => {
+      setImportingShareKey(importKey);
       await reserveShare(shareId, {
         environmentId: String(destinationProject.environmentId),
         projectId: String(destinationProject.id),
@@ -843,7 +850,7 @@ export function NewTaskDraftScreen(props: {
       }
       await consumeShare(shareId);
       didConsumeShare = true;
-      consumedIncomingShareIdRef.current = shareId;
+      setConsumedIncomingShareId(shareId);
       // The consumed inbox draft was the last owner of files that never made
       // it into the composer draft (unsupported server, oversize, limit
       // skips). Release them before any early return: an unmount or a
@@ -970,7 +977,6 @@ export function NewTaskDraftScreen(props: {
     hasImportedIncomingShare,
     incomingShare,
     isIncomingShareInboxLoading,
-    isIncomingShareUnavailable,
     props.incomingShareId,
     props.initialProjectRef?.environmentId,
     props.initialProjectRef?.projectId,

@@ -105,12 +105,10 @@ export function ThemeSearchSection({
   // already-shown results without clearing a fresh install error.
   const prevSearchKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    requestRef.current?.abort();
-    requestRef.current = null;
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) {
-      lastSearchKeyRef.current = null;
-      prevSearchKeyRef.current = null;
       setQuery("");
       setSortBy("downloadCount");
       setResults(null);
@@ -118,6 +116,15 @@ export function ThemeSearchSection({
       setIsSearching(false);
       setInstallingId(null);
       setPendingUpdate(null);
+    }
+  }
+
+  useEffect(() => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    if (open) {
+      lastSearchKeyRef.current = null;
+      prevSearchKeyRef.current = null;
     }
     return () => {
       requestRef.current?.abort();
@@ -160,14 +167,20 @@ export function ThemeSearchSection({
 
   const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
 
+  const [clearedFor, setClearedFor] = useState({ query, installingId });
+  if (clearedFor.query !== query || clearedFor.installingId !== installingId) {
+    setClearedFor({ query, installingId });
+    if (!query.trim() && installingId === null) {
+      setResults(null);
+      setError(null);
+      setIsSearching(false);
+    }
+  }
   useEffect(() => {
     if (query.trim() || installingId !== null) return;
     requestRef.current?.abort();
     requestRef.current = null;
     lastSearchKeyRef.current = null;
-    setResults(null);
-    setError(null);
-    setIsSearching(false);
   }, [query, installingId]);
 
   useEffect(() => {
@@ -180,6 +193,7 @@ export function ThemeSearchSection({
       lastSearchKeyRef.current = null;
       requestRef.current?.abort();
       requestRef.current = null;
+      // oxlint-disable-next-line react/set-state-in-effect
       setResults(null);
       setError(null);
       setIsSearching(false);
@@ -204,13 +218,11 @@ export function ThemeSearchSection({
       return;
     }
     void runSearch(debouncedQuery);
-    // `sortBy` is deliberately not a direct dependency: the guards above read
-    // the current value from the fresh render closure. An install finishing
-    // reruns the search only when the query or sort changed while it was in
-    // flight (checked via lastSearchKeyRef, recorded only once a search
-    // succeeds), so the install error the user needs to see is preserved
-    // across that rerun.
-  }, [open, query, debouncedQuery, installingId, runSearch]);
+    // An install finishing reruns the search only when the query or sort
+    // changed while it was in flight (checked via lastSearchKeyRef, recorded
+    // only once a search succeeds), so the install error the user needs to
+    // see is preserved across that rerun.
+  }, [open, query, debouncedQuery, sortBy, installingId, runSearch]);
 
   const handleSortChange = useCallback((value: OpenVsxThemeSort | null) => {
     const nextSort = SORT_OPTIONS.find((option) => option.value === value)?.value;

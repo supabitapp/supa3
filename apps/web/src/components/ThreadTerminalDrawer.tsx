@@ -453,13 +453,36 @@ export function TerminalViewport({
     status: terminalStatus,
     version: terminalVersion,
   });
-  const latestSessionRef = useRef(previousSessionRef.current);
-  latestSessionRef.current = {
+  const latestSessionRef = useRef({
     output: terminalOutput,
     error: terminalError,
     status: terminalStatus,
     version: terminalVersion,
-  };
+  });
+  useLayoutEffect(() => {
+    latestSessionRef.current = {
+      output: terminalOutput,
+      error: terminalError,
+      status: terminalStatus,
+      version: terminalVersion,
+    };
+  });
+  const openTerminalLink = useEffectEvent(
+    (url: string, fallbackToBrowser: () => void, forceBrowser: boolean) =>
+      openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser, forceBrowser }),
+  );
+  const terminalIdentity = useMemo(
+    () => ({ environmentId, threadId, terminalId, cwd, worktreePath, runtimeEnvKey }),
+    [cwd, environmentId, runtimeEnvKey, terminalId, threadId, worktreePath],
+  );
+  const focusRequest = useMemo(
+    () => ({ id: focusRequestId, autoFocus, visible }),
+    [autoFocus, focusRequestId, visible],
+  );
+  const fitRequest = useMemo(
+    () => ({ environmentId, threadId, terminalId, drawerHeight, resizeEpoch }),
+    [drawerHeight, environmentId, resizeEpoch, terminalId, threadId],
+  );
 
   useEffect(() => {
     keybindingsRef.current = keybindings;
@@ -591,7 +614,7 @@ export function TerminalViewport({
           position,
           clipboardText: selectionText,
           selection: {
-            terminalId,
+            terminalId: terminalIdentity.terminalId,
             terminalLabel: readTerminalLabel(),
             lineStart,
             lineEnd,
@@ -797,24 +820,20 @@ export function TerminalViewport({
               );
             });
           };
-          void openTerminalLinkInPreview({
-            url: text,
-            threadRef,
-            openPreview,
-            fallbackToBrowser,
-            forceBrowser: event.metaKey || event.ctrlKey,
-          }).catch((error: unknown) => {
-            toastManager.add(
-              stackedThreadToast({
-                type: "error",
-                title: "Unable to open link",
-                description: error instanceof Error ? error.message : "An error occurred.",
-              }),
-            );
-          });
+          void openTerminalLink(text, fallbackToBrowser, event.metaKey || event.ctrlKey).catch(
+            (error: unknown) => {
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Unable to open link",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            },
+          );
           return;
         }
-        const target = resolvePathLinkTarget(text, cwd);
+        const target = resolvePathLinkTarget(text, terminalIdentity.cwd);
         void (async () => {
           const result = await openTerminalPath(target);
           if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
@@ -920,7 +939,7 @@ export function TerminalViewport({
       teardown?.();
       if (hadFocus && mount.isConnected) mount.focus({ preventScroll: true });
     };
-  }, [cwd, environmentId, runtimeEnvKey, terminalId, threadId, worktreePath]);
+  }, [terminalIdentity]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -954,13 +973,16 @@ export function TerminalViewport({
   }, [terminalOutput, terminalError, terminalStatus, terminalVersion]);
 
   useEffect(() => {
-    if (!autoFocus || !visible) return;
+    if (!focusRequest.autoFocus || !focusRequest.visible) return;
     // Claim focus when requested, then hand it to the terminal once ready only
     // if the user has not focused something else in the meantime.
     (terminalRef.current ?? containerRef.current)?.focus();
-  }, [autoFocus, focusRequestId, visible]);
+  }, [focusRequest]);
 
+  const fittedRequestRef = useRef<typeof fitRequest | null>(null);
   useEffect(() => {
+    if (fittedRequestRef.current === fitRequest) return;
+    fittedRequestRef.current = fitRequest;
     const terminal = terminalRef.current;
     if (!terminal || !visibleRef.current) return;
     const wasAtBottom = terminal.isAtBottom();
@@ -976,7 +998,7 @@ export function TerminalViewport({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [drawerHeight, environmentId, resizeEpoch, terminalId, threadId]);
+  }, [fitRequest]);
   return (
     <div
       ref={containerRef}
@@ -1309,9 +1331,13 @@ export default function ThreadTerminalDrawer({
     onHeightChangeRef.current(clampedHeight);
   }, []);
 
+  const heightBaseline = useMemo(
+    () => ({ threadId, height: controlledDrawerHeight }),
+    [controlledDrawerHeight, threadId],
+  );
   useEffect(() => {
-    lastSyncedHeightRef.current = controlledDrawerHeight;
-  }, [controlledDrawerHeight, threadId]);
+    lastSyncedHeightRef.current = heightBaseline.height;
+  }, [heightBaseline]);
 
   const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -1383,12 +1409,11 @@ export default function ThreadTerminalDrawer({
     };
   }, [syncHeight, visible]);
 
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-    setResizeEpoch((value) => value + 1);
-  }, [visible]);
+  const [resizeEpochVisible, setResizeEpochVisible] = useState(false);
+  if (resizeEpochVisible !== visible) {
+    setResizeEpochVisible(visible);
+    if (visible) setResizeEpoch((value) => value + 1);
+  }
 
   useEffect(() => {
     return () => {

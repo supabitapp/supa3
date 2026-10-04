@@ -316,12 +316,14 @@ export function ComposerSurface(props: {
   const animatedBorderRadius = useSharedValue(targetBorderRadius);
   const shouldAnimate = props.animateLayout !== false && Platform.OS !== "android";
   useLayoutEffect(() => {
-    animatedBorderRadius.value = shouldAnimate
-      ? withTiming(targetBorderRadius, {
-          duration: COMPOSER_TRANSITION_DURATION_MS,
-          reduceMotion: ReduceMotion.System,
-        })
-      : targetBorderRadius;
+    animatedBorderRadius.set(
+      shouldAnimate
+        ? withTiming(targetBorderRadius, {
+            duration: COMPOSER_TRANSITION_DURATION_MS,
+            reduceMotion: ReduceMotion.System,
+          })
+        : targetBorderRadius,
+    );
   }, [animatedBorderRadius, shouldAnimate, targetBorderRadius]);
   const animatedShapeStyle = useAnimatedStyle(() => ({
     borderRadius: animatedBorderRadius.value,
@@ -366,6 +368,10 @@ export function ComposerSurface(props: {
       </Animated.View>
     </Animated.View>
   );
+}
+
+function focusComposerEditor(editorRef: RefObject<ComposerEditorHandle | null>) {
+  editorRef.current?.focus();
 }
 
 export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposerProps) {
@@ -558,7 +564,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     setPreviewVideo(null);
     if (wasExpandedBeforePreviewRef.current) {
       setTimeout(() => {
-        if (navigation.isFocused()) inputRef.current?.focus();
+        if (navigation.isFocused()) focusComposerEditor(inputRef);
       }, 100);
     }
   }, [inputRef, navigation]);
@@ -602,11 +608,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
       if (inFlightThreadIdsRef.current.has(threadKey)) return;
       inFlightThreadIdsRef.current.add(threadKey);
-      try {
-        await onSendMessage(followUp);
-      } finally {
+      await onSendMessage(followUp).finally(() => {
         inFlightThreadIdsRef.current.delete(threadKey);
-      }
+      });
     },
     [
       props.draftMessage,
@@ -616,9 +620,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       usageLimitsOffered,
       onSendMessage,
       props.environmentId,
-      props.environmentLabel,
       props.selectedThread.id,
-      props.selectedThread.title,
       voiceInput.blocksSubmission,
     ],
   );
@@ -649,6 +651,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [currentModelOption?.capabilities, currentModelSelection.options],
   );
   const settingsOwnerId = composerOwnerKey;
+  const onUpdateModelSelection = props.onUpdateModelSelection;
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
       ownerId: settingsOwnerId,
@@ -658,7 +661,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       selectedModel: currentModelSelection,
       reportedModelSelection: props.reportedModelSelection,
       onSelectModel: (option) =>
-        props.onUpdateModelSelection(withRememberedModelOptions(option.selection)),
+        onUpdateModelSelection(withRememberedModelOptions(option.selection)),
       optionDescriptors: providerOptionDescriptors,
       onUpdateOptionSelections: (options) => {
         rememberModelOptions(
@@ -666,32 +669,36 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           currentModelSelection.model,
           options ?? [],
         );
-        props.onUpdateModelSelection({ ...currentModelSelection, options });
+        onUpdateModelSelection({ ...currentModelSelection, options });
       },
       runtimeMode: currentRuntimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
     }),
     [
       currentModelSelection,
+      props.environmentId,
       props.reportedModelSelection,
       currentRuntimeMode,
-      props.onUpdateModelSelection,
+      onUpdateModelSelection,
       props.onUpdateRuntimeMode,
       providerOptionDescriptors,
       settingsOwnerId,
       threadProviderGroups,
     ],
   );
+  const { clear: clearSettingsRoute, present: presentSettingsRoute } = settingsRoutePresentation;
+  const { onDismissed: onSettingsSheetDismissed, open: openSettingsSheet } =
+    settingsSheetPresentation;
   const openSettings = useCallback(() => {
-    settingsRoutePresentation.present(settingsRouteSession);
-    settingsSheetPresentation.open();
-  }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.open]);
+    presentSettingsRoute(settingsRouteSession);
+    openSettingsSheet();
+  }, [openSettingsSheet, presentSettingsRoute, settingsRouteSession]);
 
   useEffect(() => {
     if (settingsSheetPresentation.isActive) {
-      settingsRoutePresentation.present(settingsRouteSession);
+      presentSettingsRoute(settingsRouteSession);
     }
-  }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.isActive]);
+  }, [presentSettingsRoute, settingsRouteSession, settingsSheetPresentation.isActive]);
 
   useEffect(() => {
     if (!settingsSheetPresentation.isVisible || settingsRoutePresentedRef.current) {
@@ -709,9 +716,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       }
 
       settingsRoutePresentedRef.current = false;
-      settingsSheetPresentation.onDismissed();
-      settingsRoutePresentation.clear(settingsOwnerId);
-    }, [settingsOwnerId, settingsRoutePresentation.clear, settingsSheetPresentation.onDismissed]),
+      onSettingsSheetDismissed();
+      clearSettingsRoute(settingsOwnerId);
+    }, [clearSettingsRoute, onSettingsSheetDismissed, settingsOwnerId]),
   );
 
   useEffect(

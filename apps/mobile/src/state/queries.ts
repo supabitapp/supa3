@@ -267,18 +267,19 @@ export function usePaginatedBranches(target: VcsRefTarget) {
       appAtomRegistry.refresh(firstPage);
     }
   }, [pageAtoms, targetKey]);
+  const nextCursor = data?.nextCursor;
   const loadNext = useCallback(() => {
-    if (targetKey === null || data?.nextCursor === null || data?.nextCursor === undefined) {
+    if (targetKey === null || nextCursor === null || nextCursor === undefined) {
       return;
     }
     setPagination((current) => {
       const currentCursors =
         current.targetKey === targetKey ? current.cursors : INITIAL_BRANCH_CURSORS;
-      return currentCursors.includes(data.nextCursor!)
+      return currentCursors.includes(nextCursor)
         ? { targetKey, cursors: currentCursors }
-        : { targetKey, cursors: [...currentCursors, data.nextCursor!] };
+        : { targetKey, cursors: [...currentCursors, nextCursor] };
     });
-  }, [data?.nextCursor, targetKey]);
+  }, [nextCursor, targetKey]);
 
   return {
     data,
@@ -325,15 +326,17 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
 }
 
 export function useCheckpointDiff(target: CheckpointDiffTarget) {
+  const { environmentId, threadId, fromTurnCount, toTurnCount, ignoreWhitespace } = target;
   const targets = useMemo(
-    () => buildCheckpointDiffTargets(target),
-    [
-      target.environmentId,
-      target.fromTurnCount,
-      target.ignoreWhitespace,
-      target.threadId,
-      target.toTurnCount,
-    ],
+    () =>
+      buildCheckpointDiffTargets({
+        environmentId,
+        threadId,
+        fromTurnCount,
+        toTurnCount,
+        ignoreWhitespace,
+      }),
+    [environmentId, fromTurnCount, ignoreWhitespace, threadId, toTurnCount],
   );
   const fullThread = useEnvironmentQuery(
     targets.fullThread === null

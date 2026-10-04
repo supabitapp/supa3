@@ -2,7 +2,15 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { effectiveSnoozed } from "@supacode/client-runtime/state/thread-settled";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Animated, FlatList, Modal, Pressable, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -77,8 +85,7 @@ function ArrangementRow(props: {
   );
 }
 
-/** Native pan recognition wins over list scrolling only inside the handle. */
-function DragHandle(props: {
+type DragHandleProps = {
   title: string;
   disabled: boolean;
   row: Row;
@@ -90,22 +97,31 @@ function DragHandle(props: {
   onSectionMove: (section: "pinned" | "active" | "settled") => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
-}) {
+};
+
+function createDragHandlePan(latest: RefObject<DragHandleProps>, disabled: boolean) {
+  return Gesture.Pan()
+    .enabled(!disabled)
+    .minDistance(0)
+    .shouldCancelWhenOutside(false)
+    .runOnJS(true)
+    .onStart(() => latest.current.onStart(latest.current.row))
+    .onUpdate((event) => latest.current.onMove(event.translationY))
+    .onEnd((event) => latest.current.onMove(event.translationY))
+    .onFinalize((_, success) => latest.current.onEnd(!success));
+}
+
+function useDragHandlePan(latest: RefObject<DragHandleProps>, disabled: boolean) {
+  return useMemo(() => createDragHandlePan(latest, disabled), [disabled, latest]);
+}
+
+/** Native pan recognition wins over list scrolling only inside the handle. */
+function DragHandle(props: DragHandleProps) {
   const latest = useRef(props);
-  latest.current = props;
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(!props.disabled)
-        .minDistance(0)
-        .shouldCancelWhenOutside(false)
-        .runOnJS(true)
-        .onStart(() => latest.current.onStart(latest.current.row))
-        .onUpdate((event) => latest.current.onMove(event.translationY))
-        .onEnd((event) => latest.current.onMove(event.translationY))
-        .onFinalize((_, success) => latest.current.onEnd(!success)),
-    [props.disabled],
-  );
+  useLayoutEffect(() => {
+    latest.current = props;
+  });
+  const gesture = useDragHandlePan(latest, props.disabled);
   return (
     <GestureDetector gesture={gesture}>
       <View
@@ -241,9 +257,11 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const drag = useRef<Drag | null>(null);
   const frame = useRef<number | null>(null);
   const [preview, setPreview] = useState<Drag | null>(null);
-  const translateY = useRef(new Animated.Value(0)).current;
+  const [translateY] = useState(() => new Animated.Value(0));
   const latest = useRef({ rows, planners, moveThread });
-  latest.current = { rows, planners, moveThread };
+  useLayoutEffect(() => {
+    latest.current = { rows, planners, moveThread };
+  });
 
   function stop() {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -254,8 +272,16 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const orderVersion = rows
     .map((row) => `${row.key}:${row.thread?.pinOrderKey}:${row.thread?.activeOrderKey}`)
     .join("|");
+  const [stoppedOrderVersion, setStoppedOrderVersion] = useState(orderVersion);
+  if (stoppedOrderVersion !== orderVersion) {
+    setStoppedOrderVersion(orderVersion);
+    setPreview(null);
+  }
   useEffect(() => {
-    stop();
+    if (drag.current?.orderVersion === orderVersion) return;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    drag.current = null;
   }, [orderVersion]);
   useEffect(
     () => () => {

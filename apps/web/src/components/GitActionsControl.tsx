@@ -670,8 +670,6 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
     })();
   }, [
     canSubmitPublishRepository,
-    props.environmentId,
-    props.gitCwd,
     publishProtocol,
     publishProvider,
     publishRemoteName,
@@ -1103,8 +1101,6 @@ export default function GitActionsControl({
   );
   const vcsActionState = useAtomValue(vcsActionManager.stateAtom(sourceControlScope));
   const visibleInlineSuccess = inlineSuccess?.scopeKey === successScopeKey ? inlineSuccess : null;
-  let runGitActionWithToast: (input: RunGitActionWithToastInput) => Promise<void>;
-
   useEffect(() => {
     if (!inlineSuccess) return;
     const timeoutId = window.setTimeout(() => {
@@ -1294,16 +1290,19 @@ export default function GitActionsControl({
     };
   }, [activeEnvironmentId, gitCwd, refreshVcsStatus]);
 
-  runGitActionWithToast = useEffectEvent(
-    async ({
-      action,
-      commitMessage,
-      onConfirmed,
-      skipDefaultBranchPrompt = false,
-      statusOverride,
-      featureBranch = false,
-      filePaths,
-    }: RunGitActionWithToastInput) => {
+  const runGitActionWithToastEvent = useEffectEvent(
+    async (
+      {
+        action,
+        commitMessage,
+        onConfirmed,
+        skipDefaultBranchPrompt = false,
+        statusOverride,
+        featureBranch = false,
+        filePaths,
+      }: RunGitActionWithToastInput,
+      rerunGitActionWithToast: (input: RunGitActionWithToastInput) => Promise<void>,
+    ) => {
       const actionStatus = statusOverride ?? gitStatusForActions;
       const actionBranch = actionStatus?.refName ?? null;
       const actionIsDefaultBranch = featureBranch ? false : isDefaultRef;
@@ -1399,7 +1398,7 @@ export default function GitActionsControl({
           children: toastCta.label,
           onClick: () => {
             closeResultToast();
-            void runGitActionWithToast({
+            void rerunGitActionWithToast({
               action: toastCta.action.kind,
             });
           },
@@ -1444,6 +1443,9 @@ export default function GitActionsControl({
       }
     },
   );
+  function runGitActionWithToast(input: RunGitActionWithToastInput): Promise<void> {
+    return runGitActionWithToastEvent(input, runGitActionWithToast);
+  }
 
   const continuePendingDefaultBranchAction = () => {
     if (!pendingDefaultBranchAction) return;

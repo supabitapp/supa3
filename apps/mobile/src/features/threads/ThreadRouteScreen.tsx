@@ -12,7 +12,15 @@ import {
   useNavigation,
   type StaticScreenProps,
 } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import * as Option from "effect/Option";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -336,6 +344,13 @@ function ThreadRouteContent(
   } = useThreadSelection();
   const selectedThreadDetailState = props.selectedThreadDetailState;
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
+  const mergeBackTargetThreadId = resolveMergeBackTargetThreadId(selectedThreadDetail);
+  const mergeBackRun =
+    selectedThreadDetail === null ? null : resolveLatestMergeBackRun(selectedThreadDetail);
+  const selectedThreadDetailWorktreePath = selectedThreadDetail?.thread.worktreePath ?? null;
+  const selectedThreadDetailHasPreparingRun =
+    selectedThreadDetail?.runs.some((run) => run.status === "preparing") ?? false;
+  const setupMessage = selectedThreadDetail?.messages.find((message) => message.role === "user");
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const composer = useThreadComposerState();
   const gitState = useSelectedThreadGitState();
@@ -368,9 +383,6 @@ function ThreadRouteContent(
   }, [loadEarlierHistory, selectedThread, selectedThreadDetailState.history]);
   const navigation = useNavigation();
   const mergeBack = useAtomCommand(threadEnvironment.mergeBack, "merge thread back");
-  const mergeBackTargetThreadId = resolveMergeBackTargetThreadId(selectedThreadDetail);
-  const mergeBackRun =
-    selectedThreadDetail === null ? null : resolveLatestMergeBackRun(selectedThreadDetail);
   const mergeBackBusyRef = useRef(false);
   const handleMergeBack = useCallback(async () => {
     if (
@@ -382,7 +394,7 @@ function ThreadRouteContent(
       return;
     }
     mergeBackBusyRef.current = true;
-    try {
+    const mergeAndOpenTarget = async () => {
       const result = await mergeBack({
         environmentId: selectedThread.environmentId,
         input: {
@@ -397,9 +409,10 @@ function ThreadRouteContent(
         environmentId: selectedThread.environmentId,
         threadId: mergeBackTargetThreadId,
       });
-    } finally {
+    };
+    await mergeAndOpenTarget().finally(() => {
       mergeBackBusyRef.current = false;
-    }
+    });
   }, [mergeBack, mergeBackRun, mergeBackTargetThreadId, navigation, selectedThread]);
   const params = props.route.params;
   const environmentIdRaw = firstRouteParam(params.environmentId);
@@ -436,7 +449,15 @@ function ThreadRouteContent(
     toggleAuxiliaryPane,
   ]);
 
-  useEffect(() => {
+  const [inspectorSelectionSource, setInspectorSelectionSource] = useState({
+    renderInspector: props.renderInspector,
+    routeThreadIdentity,
+  });
+  if (
+    inspectorSelectionSource.renderInspector !== props.renderInspector ||
+    inspectorSelectionSource.routeThreadIdentity !== routeThreadIdentity
+  ) {
+    setInspectorSelectionSource({ renderInspector: props.renderInspector, routeThreadIdentity });
     setInspectorSelection((current) => {
       if (props.renderInspector === undefined) {
         if (current === null || current.mode === "route") {
@@ -451,7 +472,7 @@ function ThreadRouteContent(
 
       return { ...current, routeThreadIdentity };
     });
-  }, [props.renderInspector, routeThreadIdentity]);
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -511,7 +532,6 @@ function ThreadRouteContent(
       }),
     [knownTerminalSessions, selectedThreadProject?.workspaceRoot],
   );
-  const selectedThreadDetailWorktreePath = selectedThreadDetail?.thread.worktreePath ?? null;
   const handleReconnectEnvironment = useCallback(() => {
     if (!environmentId) {
       return;
@@ -573,11 +593,13 @@ function ThreadRouteContent(
     openFilesInspector: handleOpenFilesInspector,
     toggleAuxiliaryPane,
   });
-  inspectorToggleActionRef.current = {
-    inspectorMode,
-    openFilesInspector: handleOpenFilesInspector,
-    toggleAuxiliaryPane,
-  };
+  useLayoutEffect(() => {
+    inspectorToggleActionRef.current = {
+      inspectorMode,
+      openFilesInspector: handleOpenFilesInspector,
+      toggleAuxiliaryPane,
+    };
+  });
   const handleToggleInspector = useCallback(() => {
     const action = inspectorToggleActionRef.current;
     if (action.inspectorMode === null) {
@@ -639,9 +661,10 @@ function ThreadRouteContent(
       selectedThreadProject?.title,
     ],
   );
+  const { renderInspector } = props;
   const RouteInspector = useCallback(
-    () => props.renderInspector?.(inspectorHeaderInset),
-    [inspectorHeaderInset, props.renderInspector],
+    () => renderInspector?.(inspectorHeaderInset),
+    [inspectorHeaderInset, renderInspector],
   );
   const renderInspectorStack = useCallback(
     () =>
@@ -884,7 +907,7 @@ function ThreadRouteContent(
   const awaitingBootstrapTurn =
     worktreeSetup !== null
       ? worktreeSetup.phase === "running" && !worktreeSetupAgentStarted(worktreeSetup)
-      : (selectedThreadDetail?.runs.some((run) => run.status === "preparing") ?? false);
+      : selectedThreadDetailHasPreparingRun;
   const cancelWorktreeSetup = useAtomCommand(vcsEnvironment.cancelWorktreeSetup);
   const handleCancelWorktreeSetup = useCallback(() => {
     if (!selectedThread) return;
@@ -895,12 +918,11 @@ function ThreadRouteContent(
   }, [cancelWorktreeSetup, selectedThread]);
   const startLocalThread = useAtomCommand(threadEnvironment.startTurn, "work locally");
   const localResendBusy = useRef(false);
-  const setupMessage = selectedThreadDetail?.messages.find((message) => message.role === "user");
   const handleWorkLocally = useCallback(async () => {
     if (!selectedThread || !selectedThreadProject || !setupMessage || localResendBusy.current)
       return;
     localResendBusy.current = true;
-    try {
+    const cancelSetupAndStartLocally = async () => {
       const result = await cancelWorktreeSetup({
         environmentId: selectedThread.environmentId,
         input: { threadId: selectedThread.id },
@@ -935,9 +957,10 @@ function ThreadRouteContent(
           threadId: metadata.threadId,
         }),
       );
-    } finally {
+    };
+    await cancelSetupAndStartLocally().finally(() => {
       localResendBusy.current = false;
-    }
+    });
   }, [
     cancelWorktreeSetup,
     navigation,

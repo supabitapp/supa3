@@ -1,5 +1,5 @@
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, Animated, Platform, Pressable, View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
@@ -33,12 +33,10 @@ function useDelayedConnectionStatus(): WorkspaceConnectionStatusPresentation | n
   const presentation = workspaceConnectionStatusPresentation(state);
   const hasStatus = presentation !== null;
   const [visible, setVisible] = useState(false);
+  if (!hasStatus && visible) setVisible(false);
 
   useEffect(() => {
-    if (!hasStatus) {
-      setVisible(false);
-      return;
-    }
+    if (!hasStatus) return;
     const timer = setTimeout(() => setVisible(true), STATUS_SHOW_DELAY_MS);
     return () => clearTimeout(timer);
   }, [hasStatus]);
@@ -57,7 +55,7 @@ function StatusFadeIn(props: {
   readonly grow?: boolean;
   readonly maxWidth?: number;
 }) {
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [opacity] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     const animation = Animated.timing(opacity, {

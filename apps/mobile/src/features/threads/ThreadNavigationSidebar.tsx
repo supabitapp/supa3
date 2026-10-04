@@ -12,7 +12,7 @@ import {
 import { LegendList } from "@legendapp/list/react-native";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { LayoutChangeEvent, TextInputInstance } from "react-native";
 import { Platform, StyleSheet, TextInput, View } from "react-native";
 import { GestureDetector, useNativeGesture } from "react-native-gesture-handler";
@@ -81,6 +81,29 @@ type SidebarListItem =
   | { readonly type: "v2-show-more"; readonly key: string; readonly hiddenCount: number };
 
 const SIDEBAR_STICKY_HEADER_HEIGHT = 106;
+
+function currentMinute() {
+  return new Date().toISOString().slice(0, 16);
+}
+
+function createMinuteClock() {
+  let minute = currentMinute();
+  return {
+    getSnapshot: () => minute,
+    subscribe: (onChange: () => void) => {
+      const refresh = () => {
+        const next = currentMinute();
+        if (next === minute) return;
+        minute = next;
+        onChange();
+      };
+      // Refresh immediately because the mount-time value can be hours old.
+      refresh();
+      const id = setInterval(refresh, 60_000);
+      return () => clearInterval(id);
+    },
+  };
+}
 
 interface ThreadNavigationSidebarProps {
   readonly width: number;
@@ -243,14 +266,12 @@ function ThreadNavigationSidebarPane(
         : (projectScopes.find((scope) => scope.key === selectedProjectKey) ?? null),
     [projectScopes, selectedProjectKey],
   );
-  useEffect(() => {
-    if (
-      selectedProjectKey !== null &&
-      !projectFilterOptions.some((project) => project.key === selectedProjectKey)
-    ) {
-      setSelectedProjectKey(null);
-    }
-  }, [projectFilterOptions, selectedProjectKey]);
+  if (
+    selectedProjectKey !== null &&
+    !projectFilterOptions.some((project) => project.key === selectedProjectKey)
+  ) {
+    setSelectedProjectKey(null);
+  }
   const selectedProjectRefs = useMemo(
     () =>
       selectedProjectScope === null
@@ -278,9 +299,9 @@ function ThreadNavigationSidebarPane(
     THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   );
   const settledResetKey = `${options.selectedEnvironmentId ?? "all"}:${selectedProjectKey ?? "all"}:${props.searchQuery.trim()}`;
-  const lastSettledResetKeyRef = useRef(settledResetKey);
-  if (lastSettledResetKeyRef.current !== settledResetKey) {
-    lastSettledResetKeyRef.current = settledResetKey;
+  const [lastSettledResetKey, setLastSettledResetKey] = useState(settledResetKey);
+  if (lastSettledResetKey !== settledResetKey) {
+    setLastSettledResetKey(settledResetKey);
     setSettledVisibleCount(THREAD_LIST_V2_SETTLED_INITIAL_COUNT);
   }
   const showMoreSettled = useCallback(
@@ -295,17 +316,20 @@ function ThreadNavigationSidebarPane(
     toggleSnoozedShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the pane stays open.
-  const [nowMinute, setNowMinute] = useState(() => new Date().toISOString().slice(0, 16));
+  const [minuteClock] = useState(createMinuteClock);
+  const nowMinute = useSyncExternalStore(minuteClock.subscribe, minuteClock.getSnapshot);
   // Snooze wake times are second-precise; a counter bumped exactly at the
   // next wake boundary re-runs the partition with a fresh clock so a woken
   // thread reappears immediately instead of on the next minute tick.
   const [snoozeWakeTick, bumpSnoozeWakeTick] = useState(0);
-  useEffect(() => {
-    // Refresh immediately because the mount-time value can be hours old.
-    setNowMinute(new Date().toISOString().slice(0, 16));
-    const id = setInterval(() => setNowMinute(new Date().toISOString().slice(0, 16)), 60_000);
-    return () => clearInterval(id);
-  }, []);
+  const [listClock, setListClock] = useState(() => ({
+    nowMinute,
+    snoozeWakeTick,
+    now: new Date().toISOString(),
+  }));
+  if (listClock.nowMinute !== nowMinute || listClock.snoozeWakeTick !== snoozeWakeTick) {
+    setListClock({ nowMinute, snoozeWakeTick, now: new Date().toISOString() });
+  }
   // Threads on servers without the settlement capability never classify as
   // settled (the user could neither un-settle nor pin them).
   const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
@@ -337,7 +361,7 @@ function ThreadNavigationSidebarPane(
           threads,
           section,
           pendingOrder,
-          now: new Date().toISOString(),
+          now: listClock.now,
           settlementEnvironmentIds,
           snoozeEnvironmentIds,
           queuedThreadKeys,
@@ -352,8 +376,7 @@ function ThreadNavigationSidebarPane(
     queuedThreadKeys,
     settlementEnvironmentIds,
     snoozeEnvironmentIds,
-    nowMinute,
-    snoozeWakeTick,
+    listClock.now,
   ]);
   const threadListV2Layout = useMemo(() => {
     return buildThreadListV2Items({
@@ -367,7 +390,7 @@ function ThreadNavigationSidebarPane(
       snoozeEnvironmentIds,
       queuedThreadKeys,
       settledLimit: settledVisibleCount,
-      now: new Date().toISOString(),
+      now: listClock.now,
       snoozedShelfExpanded,
       settledShelfExpanded,
       selectedThreadKey: props.selectedThreadKey ?? null,
@@ -375,8 +398,7 @@ function ThreadNavigationSidebarPane(
   }, [
     pendingOrder,
     queuedThreadKeys,
-    nowMinute,
-    snoozeWakeTick,
+    listClock.now,
     snoozedShelfExpanded,
     settledShelfExpanded,
     props.selectedThreadKey,
@@ -397,7 +419,7 @@ function ThreadNavigationSidebarPane(
     const wakeAtMs = Date.parse(nextSnoozeWakeAt);
     if (Number.isNaN(wakeAtMs)) return;
     const delayMs = Math.min(Math.max(0, wakeAtMs - Date.now()) + 50, 2_147_483_647);
-    const id = setTimeout(() => bumpSnoozeWakeTick((tick) => tick + 1), delayMs);
+    const id = setTimeout(() => bumpSnoozeWakeTick(snoozeWakeTick + 1), delayMs);
     return () => clearTimeout(id);
     // snoozeWakeTick must re-arm the timer even when nextSnoozeWakeAt is
     // unchanged: after a clamped fire (wake beyond the 32-bit setTimeout
@@ -559,12 +581,13 @@ function ThreadNavigationSidebarPane(
       openSwipeableRef.current = null;
     }
   }, []);
+  const { onSelectThread } = props;
   const handleSelectThread = useCallback(
     (thread: EnvironmentThreadShell) => {
-      props.onSelectThread(thread);
+      onSelectThread(thread);
       openSwipeableRef.current?.close();
     },
-    [props.onSelectThread],
+    [onSelectThread],
   );
   const handleScrollBeginDrag = useCallback(() => {
     openSwipeableRef.current?.close();
@@ -610,23 +633,24 @@ function ThreadNavigationSidebarPane(
     },
     [],
   );
+  const { nativeChrome, onRequestVisibility, visible } = props;
   const focusSearch = useCallback(() => {
     if (Platform.OS === "android") return false;
     const focus = () => {
-      if (props.nativeChrome) {
+      if (nativeChrome) {
         searchBarRef.current?.focus();
         return;
       }
       searchInputRef.current?.focus();
     };
-    if (!props.visible) {
-      props.onRequestVisibility();
+    if (!visible) {
+      onRequestVisibility();
       setTimeout(focus, 240);
     } else {
       focus();
     }
     return true;
-  }, [props.nativeChrome, props.onRequestVisibility, props.visible]);
+  }, [nativeChrome, onRequestVisibility, visible]);
   useHardwareKeyboardCommand("focusSearch", focusSearch);
   const renderListItem = useCallback(
     ({ item }: { readonly item: SidebarListItem }) => {

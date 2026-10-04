@@ -3,7 +3,8 @@ import { useNavigation, type StaticScreenProps } from "@react-navigation/native"
 import type { MenuAction } from "@react-native-menu/menu";
 import { EnvironmentId } from "@supacode/contracts";
 import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Platform, ScrollView, View } from "react-native";
 
 import { AndroidHeaderIconButton, AndroidScreenHeader } from "../../components/AndroidScreenHeader";
@@ -94,30 +95,34 @@ function AttachmentDocumentBody(props: {
             ) : null}
             <ScrollView horizontal>
               <View>
-                {table.rows.map((row, rowIndex) => (
-                  <View
-                    key={rowIndex}
-                    className={rowIndex === 0 ? "flex-row bg-subtle" : "flex-row"}
-                  >
-                    {row.map((cell, columnIndex) => (
-                      <View
-                        key={columnIndex}
-                        className="w-48 border-r border-b border-border px-3 py-2"
-                      >
-                        <Text
-                          selectable
-                          className={
-                            rowIndex === 0
-                              ? "text-sm font-supacode-semibold text-foreground"
-                              : "text-sm text-foreground"
-                          }
-                        >
-                          {cell}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
+                {withOccurrenceKeys(table.rows, (row) => row.join("\t")).map(
+                  ({ item: row, key: rowKey }, rowIndex) => (
+                    <View
+                      key={rowKey}
+                      className={rowIndex === 0 ? "flex-row bg-subtle" : "flex-row"}
+                    >
+                      {withOccurrenceKeys(row, (cell) => cell).map(
+                        ({ item: cell, key: cellKey }) => (
+                          <View
+                            key={cellKey}
+                            className="w-48 border-r border-b border-border px-3 py-2"
+                          >
+                            <Text
+                              selectable
+                              className={
+                                rowIndex === 0
+                                  ? "text-sm font-supacode-semibold text-foreground"
+                                  : "text-sm text-foreground"
+                              }
+                            >
+                              {cell}
+                            </Text>
+                          </View>
+                        ),
+                      )}
+                    </View>
+                  ),
+                )}
               </View>
             </ScrollView>
           </ScrollView>
@@ -163,15 +168,21 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
   const iconColor = useUniwindTheme()["--color-icon"];
   const isAndroid = Platform.OS === "android";
   const params = props.route.params;
-  const environmentId = params.environmentId ? EnvironmentId.make(params.environmentId) : null;
+  const environmentId = useMemo(
+    () => (params.environmentId ? EnvironmentId.make(params.environmentId) : null),
+    [params.environmentId],
+  );
   const sizeBytes = Number.parseInt(params.sizeBytes, 10) || 0;
   const draftKey = params.draftKey ?? null;
   const draft = useComposerDraft(draftKey);
-  const draftAttachment = draftKey
-    ? draft.attachments.find((entry) => entry.id === params.attachmentId)
-    : undefined;
-  const localAttachment =
-    draftAttachment && isFileBackedComposerAttachment(draftAttachment) ? draftAttachment : null;
+  const localAttachment = useMemo(() => {
+    const draftAttachment = draftKey
+      ? draft.attachments.find((entry) => entry.id === params.attachmentId)
+      : undefined;
+    return draftAttachment && isFileBackedComposerAttachment(draftAttachment)
+      ? draftAttachment
+      : null;
+  }, [draftKey, draft.attachments, params.attachmentId]);
   const document = useAttachmentDocument({
     name: params.name,
     mimeType: params.mimeType,
@@ -193,11 +204,10 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
     if (navigation.canGoBack()) navigation.goBack();
   }, [navigation]);
   const { uri, resource } = document;
-  useEffect(() => {
-    if (nativeViewer !== "pending" || !uri) return;
+  if (nativeViewer === "pending" && uri) {
     setNativeViewer("open");
     setNativeOpen(true);
-  }, [nativeViewer, uri]);
+  }
   // The viewer mints its own fresh URL from the resource, so a link that expired while this
   // screen sat in the background is never handed to Quick Look or ACTION_VIEW.
   const nativeSource = useMemo<FilePreviewSource | null>(() => {
@@ -207,6 +217,10 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
     if (environmentId) return { ...base, environmentId, resource };
     return uri ? { ...base, uri } : null;
   }, [environmentId, localAttachment, nativeKind, params.mimeType, params.name, resource, uri]);
+  const openNativeViewer = useCallback(() => {
+    setNativeViewer((current) => (current === null ? null : "open"));
+    setNativeOpen(true);
+  }, []);
   const handleNativeOpenError = useCallback((error: unknown) => {
     pendingNativeError.current = nativeViewerErrorMessage(error);
   }, []);
@@ -405,10 +419,7 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
         environmentId={environmentId}
         nativeViewer={nativeViewer}
         nativeError={nativeError}
-        onOpenNative={() => {
-          setNativeViewer((current) => (current === null ? null : "open"));
-          setNativeOpen(true);
-        }}
+        onOpenNative={openNativeViewer}
       />
       {nativeOpen && nativeSource ? (
         <FilePreviewModal

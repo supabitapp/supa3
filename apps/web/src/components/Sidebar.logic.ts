@@ -77,17 +77,15 @@ export function useSidebarRowSubscriptionLease(isActive: boolean): {
 } {
   const [row, setRow] = React.useState<HTMLElement | null>(null);
   const [isNearViewport, setIsNearViewport] = React.useState(isActive);
+  if (
+    !isNearViewport &&
+    (isActive || (row !== null && typeof IntersectionObserver === "undefined"))
+  ) {
+    setIsNearViewport(true);
+  }
 
   React.useEffect(() => {
-    if (isActive) {
-      setIsNearViewport(true);
-      return;
-    }
-    if (row === null) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setIsNearViewport(true);
-      return;
-    }
+    if (isActive || row === null || typeof IntersectionObserver === "undefined") return;
 
     const scrollRoot = row.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
     const observer = new IntersectionObserver(
@@ -111,12 +109,15 @@ export function useSidebarRowSubscriptionLease(isActive: boolean): {
 // blanks its badge. The value is bound to `key`, so a different worktree or
 // linked pull request cannot reuse the previous one.
 export function useRetainedValue<T>(key: string | null, value: T | null): T | null {
-  const retained = React.useRef<{ readonly key: string; readonly value: T } | null>(null);
-  if (key !== null && value !== null) {
-    retained.current = { key, value };
+  const [retained, setRetained] = React.useState<{
+    readonly key: string;
+    readonly value: T;
+  } | null>(null);
+  if (key !== null && value !== null && (retained?.key !== key || retained.value !== value)) {
+    setRetained({ key, value });
   }
   if (value !== null) return value;
-  return key !== null && retained.current?.key === key ? retained.current.value : null;
+  return key !== null && retained?.key === key ? retained.value : null;
 }
 
 // Sidebar.motion handles ordinary section changes. Sortable transforms own

@@ -1,5 +1,5 @@
 import type { AssetResource, EnvironmentId } from "@supacode/contracts";
-import { createContext, useContext, useEffect, useId, useState } from "react";
+import { createContext, useContext, useId, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -52,13 +52,17 @@ export function ThreadMarkdownImageView(props: {
   const [decodedSize, setDecodedSize] = useState<{ width: number; height: number } | null>(null);
   const [failedUri, setFailedUri] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [decodedSourceKey, setDecodedSourceKey] = useState(props.sourceKey);
+  if (decodedSourceKey !== props.sourceKey) {
+    setDecodedSourceKey(props.sourceKey);
     setDecodedSize(null);
-  }, [props.sourceKey]);
+  }
 
-  useEffect(() => {
+  const [failedUriSource, setFailedUriSource] = useState(props.uri);
+  if (failedUriSource !== props.uri) {
+    setFailedUriSource(props.uri);
     setFailedUri(null);
-  }, [props.uri]);
+  }
 
   // The decoded size is what the platform actually drew, so it wins over the
   // server's header hint once it exists.

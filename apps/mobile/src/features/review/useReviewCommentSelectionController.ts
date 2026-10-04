@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import * as Arr from "effect/Array";
@@ -102,16 +102,31 @@ export function useReviewCommentSelectionController(input: {
     selectedSection?.title,
   ]);
 
-  useEffect(() => {
-    clearReviewCommentTarget();
+  const selectedSectionId = selectedSection?.id;
+  const [selectionSectionId, setSelectionSectionId] = useState(selectedSectionId);
+  if (selectionSectionId !== selectedSectionId) {
+    setSelectionSectionId(selectedSectionId);
     setPendingNativeCommentSelection(null);
-  }, [selectedSection?.id]);
-
+  }
+  const clearedTargetSection = useRef<{ readonly sectionId: string | undefined } | null>(null);
   useEffect(() => {
+    if (
+      clearedTargetSection.current !== null &&
+      clearedTargetSection.current.sectionId === selectedSectionId
+    ) {
+      return;
+    }
+    clearedTargetSection.current = { sectionId: selectedSectionId };
+    clearReviewCommentTarget();
+  });
+
+  const [previousCommentTarget, setPreviousCommentTarget] = useState(activeCommentTarget);
+  if (previousCommentTarget !== activeCommentTarget) {
+    setPreviousCommentTarget(activeCommentTarget);
     if (activeCommentTarget === null) {
       setPendingNativeCommentSelection(null);
     }
-  }, [activeCommentTarget]);
+  }
 
   const onPressLine = useCallback(
     (

@@ -148,19 +148,17 @@ export function NativeStackScreenOptions(props: {
   const latestOptionFunctionsRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const optionFunctionWrappersRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const normalizedOptions = useMemo(() => normalizeScreenOptions(props.options), [props.options]);
-  const stableOptions = normalizedOptions
-    ? (stabilizeOptionFunctions(
-        normalizedOptions,
-        "options",
-        latestOptionFunctionsRef.current,
-        optionFunctionWrappersRef.current,
-      ) as NativeStackNavigationOptions)
-    : undefined;
 
   useLayoutEffect(() => {
-    if (!navigation || !stableOptions) {
+    if (!navigation || !normalizedOptions) {
       return;
     }
+    const stableOptions = stabilizeOptionFunctions(
+      normalizedOptions,
+      "options",
+      latestOptionFunctionsRef.current,
+      optionFunctionWrappersRef.current,
+    ) as NativeStackNavigationOptions;
     const signature = optionsSignature([stableOptions, props.optionsVersion]);
     // Avoid re-entering navigation state when semantically equal options are
     // reapplied every layout (common when callers pass unstable object literals).
@@ -169,7 +167,7 @@ export function NativeStackScreenOptions(props: {
     }
     lastAppliedOptionsSignatureRef.current = signature;
     navigation.setOptions(stableOptions);
-  }, [navigation, props.optionsVersion, stableOptions]);
+  }, [navigation, normalizedOptions, props.optionsVersion]);
 
   useEffect(() => {
     if (!navigation || !props.listeners) {

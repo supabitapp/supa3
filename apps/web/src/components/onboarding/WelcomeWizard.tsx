@@ -895,15 +895,53 @@ function AgentInstallTerminal({
     "preparing" | "ready" | "openFailed" | "writeFailed"
   >("preparing");
   const terminalReady = setupState === "ready" || setupState === "writeFailed";
+  const setupRequest = useMemo(
+    () => ({
+      attempt: setupAttempt,
+      closeTerminal,
+      command,
+      cwd,
+      environmentId,
+      openTerminal,
+      providerInstanceId,
+      terminalId,
+      writeTerminal,
+    }),
+    [
+      closeTerminal,
+      command,
+      cwd,
+      environmentId,
+      openTerminal,
+      providerInstanceId,
+      setupAttempt,
+      terminalId,
+      writeTerminal,
+    ],
+  );
+  const [preparingSetupRequest, setPreparingSetupRequest] = useState(setupRequest);
+  if (preparingSetupRequest !== setupRequest) {
+    setPreparingSetupRequest(setupRequest);
+    setSetupState("preparing");
+  }
 
   // Keep each setup generation distinct. In Strict Mode, a canceled open can
   // finish after the replacement setup starts; it must not close or pre-type
   // into the replacement session that shares this terminal id.
   useEffect(() => {
+    const {
+      closeTerminal,
+      command,
+      cwd,
+      environmentId,
+      openTerminal,
+      providerInstanceId,
+      terminalId,
+      writeTerminal,
+    } = setupRequest;
     const generation = setupGenerationRef.current + 1;
     setupGenerationRef.current = generation;
     activeSetupGenerationRef.current = generation;
-    setSetupState("preparing");
 
     setupQueueRef.current = setupQueueRef.current.then(async () => {
       if (activeSetupGenerationRef.current !== generation) return;
@@ -946,17 +984,7 @@ function AgentInstallTerminal({
         });
       });
     };
-  }, [
-    closeTerminal,
-    command,
-    cwd,
-    environmentId,
-    openTerminal,
-    providerInstanceId,
-    setupAttempt,
-    terminalId,
-    writeTerminal,
-  ]);
+  }, [setupRequest]);
 
   return (
     <div
@@ -1037,7 +1065,10 @@ function ImportStep({
   const [selectedPaths, setSelectedPaths] = useState<ReadonlySet<string> | null>(null);
   const importWarningRef = useRef("");
   const importedThreadCountRef = useRef(0);
-  const [landingProject, setLandingProject] = useState<ScopedProjectRef | null>(null);
+  const [landingRequest, setLandingRequest] = useState<{
+    readonly projectRef: ScopedProjectRef;
+  } | null>(null);
+  const handledLandingRequestRef = useRef<typeof landingRequest>(null);
   // Keep project creation attempts separate from completed history imports so both can retry.
   const importedProjectsRef = useRef(new Map<string, ScopedProjectRef>());
   const projectsWithImportedHistoryRef = useRef(new Map<string, ScopedProjectRef>());
@@ -1056,22 +1087,23 @@ function ImportStep({
   }, []);
 
   useEffect(() => {
+    if (landingRequest === null || handledLandingRequestRef.current === landingRequest) return;
+    const landingProject = landingRequest.projectRef;
     if (
-      landingProject !== null &&
       projects.some(
         (project) =>
           project.id === landingProject.projectId &&
           project.environmentId === landingProject.environmentId,
       )
     ) {
-      setLandingProject(null);
+      handledLandingRequestRef.current = landingRequest;
       void onDone(landingProject, importWarningRef.current, importedThreadCountRef.current).then(
         (completed) => {
           if (!completed) setIsImporting(false);
         },
       );
     }
-  }, [landingProject, onDone, projects, setIsImporting]);
+  }, [landingRequest, onDone, projects, setIsImporting]);
 
   const { available: candidates, recent } = useMemo(
     () =>
@@ -1103,7 +1135,7 @@ function ImportStep({
       return;
     }
     setIsImporting(true);
-    setLandingProject(projectRef);
+    setLandingRequest({ projectRef });
   };
 
   const runImport = async (selection: typeof candidates) => {

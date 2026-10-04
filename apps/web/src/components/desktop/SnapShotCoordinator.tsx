@@ -3,7 +3,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type ScopedThreadRef,
 } from "@supacode/contracts";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import {
   type DraftId,
@@ -216,7 +216,9 @@ export function SnapShotCoordinator() {
   const pendingAnimationStartsRef = useRef(new Set<string>());
 
   const currentTarget = routeThreadRef ?? routeDraftId;
-  if (currentTarget) lastTargetRef.current = currentTarget;
+  useLayoutEffect(() => {
+    if (currentTarget) lastTargetRef.current = currentTarget;
+  });
 
   const resolveTarget = useCallback(async (): Promise<CaptureTarget | null> => {
     const lastTarget = lastTargetRef.current;

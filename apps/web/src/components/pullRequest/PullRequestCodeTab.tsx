@@ -26,7 +26,16 @@ import {
 } from "lucide-react";
 import { useAtomRefresh } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
@@ -131,6 +140,56 @@ const REPLACE_FILE_COUNTS_CSS = `
 
 /** Nothing loaded yet, as one identity, so the memos below do not see a new array every render. */
 const NO_SLICES: ReadonlyArray<DiffSlice> = [];
+
+const parsedSliceCache = new WeakMap<DiffSlice, Map<string, RenderablePatch>>();
+
+const PullRequestFilesViewedContext = createContext<{
+  readonly filesViewed: ReturnType<typeof usePullRequestFilesViewed>;
+  readonly setFileViewed: (fileKey: string, path: string, viewed: boolean) => void;
+} | null>(null);
+
+function PullRequestFileViewedMetadata(props: {
+  readonly fileKey: string;
+  readonly path: string;
+  readonly stat: ReactNode;
+}) {
+  const viewedFiles = useContext(PullRequestFilesViewedContext);
+  if (!viewedFiles?.filesViewed.enabled) return props.stat;
+  const viewed = viewedFiles.filesViewed.isViewed(props.path);
+  const stale = viewedFiles.filesViewed.isStale(props.path);
+  return (
+    <span className="flex items-center gap-3">
+      {props.stat}
+      {/* The header itself folds the file, so the tick keeps its press to itself. The
+          attribute is what the header's capture listener looks for. */}
+      <label
+        data-viewed-toggle=""
+        className="flex cursor-pointer select-none items-center gap-1.5 text-2xs text-muted-foreground"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Checkbox
+          aria-label={stale ? "Changed" : "Viewed"}
+          checked={viewed}
+          onCheckedChange={(next) =>
+            viewedFiles.setFileViewed(props.fileKey, props.path, next === true)
+          }
+        />
+        {stale ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="text-warning-foreground" />}>
+              Changed
+            </TooltipTrigger>
+            <TooltipPopup side="bottom">
+              This file has been pushed to since you marked it viewed.
+            </TooltipPopup>
+          </Tooltip>
+        ) : (
+          "Viewed"
+        )}
+      </label>
+    </span>
+  );
+}
 
 /** A group while it is still gathering what belongs on its line. */
 interface MutableAnnotationGroup {
@@ -253,7 +312,6 @@ function PullRequestCodeTab({
     readonly cursor: string | null;
     readonly slices: ReadonlyArray<DiffSlice>;
   }>({ key: "", cursor: null, slices: NO_SLICES });
-  const parseCache = useRef(new Map<string, RenderablePatch>());
   const [viewer, setViewer] = useState<CodeViewHandle<ReviewAnnotationGroup> | null>(null);
 
   const referenceKey = pullRequestReviewKey(reference);
@@ -263,7 +321,9 @@ function PullRequestCodeTab({
   const scopeKey = commit === null ? referenceKey : `${referenceKey}@${commit}`;
   // The panel keeps this mounted across pull requests, so an open composer would otherwise
   // survive the switch and attach its comment to whichever one is on screen when it is sent.
-  useEffect(() => {
+  const [resetScopeKey, setResetScopeKey] = useState(scopeKey);
+  if (resetScopeKey !== scopeKey) {
+    setResetScopeKey(scopeKey);
     setDraft(null);
     setSelectedLines(null);
     setToggledFiles(new Set());
@@ -271,8 +331,7 @@ function PullRequestCodeTab({
     setVisibleCommitCount(COMMIT_PAGE_SIZE);
     setOrphansOpen(false);
     setSliceState({ key: scopeKey, cursor: null, slices: NO_SLICES });
-    parseCache.current.clear();
-  }, [scopeKey]);
+  }
 
   const loadedSlices = sliceState.key === scopeKey ? sliceState.slices : NO_SLICES;
   const cursor = sliceState.key === scopeKey ? sliceState.cursor : null;
@@ -288,9 +347,20 @@ function PullRequestCodeTab({
   );
   // Each answer is kept as its own slice. Concatenating the patches and re-parsing the growing
   // text would cost more with every slice, which is the wall the slicing exists to remove.
-  useEffect(() => {
-    const data = diffQuery.data;
-    if (data === null) return;
+  const diffData = diffQuery.data;
+  const [appliedDiffPage, setAppliedDiffPage] = useState<{
+    readonly data: typeof diffData;
+    readonly cursor: string | null;
+    readonly scopeKey: string;
+  } | null>(null);
+  if (
+    diffData !== null &&
+    (appliedDiffPage?.data !== diffData ||
+      appliedDiffPage.cursor !== cursor ||
+      appliedDiffPage.scopeKey !== scopeKey)
+  ) {
+    const data = diffData;
+    setAppliedDiffPage({ data, cursor, scopeKey });
     setSliceState((previous) => {
       const slices = previous.key === scopeKey ? previous.slices : NO_SLICES;
       const next = {
@@ -327,7 +397,7 @@ function PullRequestCodeTab({
       // after it go with the replacement: their cursors were positions in the old diff.
       return { key: scopeKey, cursor, slices: [...slices.slice(0, index), next] };
     });
-  }, [cursor, diffQuery.data, scopeKey]);
+  }
   // The refresh button rereads from the first page rather than the page the reader is on:
   // pages are positions in one snapshot of the diff, and a fresh snapshot starts over.
   const refreshFirstDiffPage = useAtomRefresh(
@@ -388,13 +458,17 @@ function PullRequestCodeTab({
         // The patch's own hash is part of the key: a refreshed page reuses its cursor, and a
         // key of position alone would keep handing back the parse of the patch it replaced.
         const cacheKey = `pull-request:${scopeKey}:${resolvedTheme}:${ignoreWhitespace}:${slice.cursor ?? "first"}:${fnv1a32(slice.patch)}`;
-        const cached = parseCache.current.get(cacheKey);
+        const sliceCache = parsedSliceCache.get(slice) ?? new Map<string, RenderablePatch>();
+        const cached = sliceCache.get(cacheKey);
         if (cached) return cached;
         const parsed = getRenderablePatch(slice.patch, cacheKey, {
           compactPartialHunkOffsets: true,
           ignoreWhitespace,
         });
-        if (parsed) parseCache.current.set(cacheKey, parsed);
+        if (parsed) {
+          sliceCache.set(cacheKey, parsed);
+          parsedSliceCache.set(slice, sliceCache);
+        }
         return parsed;
       }),
     [loadedSlices, resolvedTheme, scopeKey, ignoreWhitespace],
@@ -749,6 +823,7 @@ function PullRequestCodeTab({
   // function or object literal would be — invalidates that memo and recreates every portal on
   // screen on any tab re-render (a drag-selection, a keystroke in the draft, a review-store
   // update), which is the jank this file is otherwise clean of.
+  const refreshDiffQuery = diffQuery.refresh;
   const renderCodeViewFooter = useCallback(
     () =>
       // Only while something is still owed. A finished diff whose query fails on a later
@@ -762,7 +837,7 @@ function PullRequestCodeTab({
           {diffQuery.error !== null ? (
             <>
               <span>The rest of this diff could not be loaded.</span>
-              <Button size="xs" variant="outline" onClick={() => diffQuery.refresh()}>
+              <Button size="xs" variant="outline" onClick={() => refreshDiffQuery()}>
                 Retry
               </Button>
             </>
@@ -771,7 +846,7 @@ function PullRequestCodeTab({
           ) : null}
         </div>
       ),
-    [nextCursor, diffQuery.error, diffQuery.isPending, diffQuery.refresh],
+    [nextCursor, diffQuery.error, diffQuery.isPending, refreshDiffQuery],
   );
 
   const renderHeaderPrefix = useCallback(
@@ -802,13 +877,13 @@ function PullRequestCodeTab({
     [toggleFile],
   );
 
-  // Read through refs rather than closed over. The viewer memoizes each visible file's header
+  // Read through context rather than closed over. The viewer memoizes each visible file's header
   // portal on the callback below, so a fresh identity on every tick, and on every refresh of the
   // host's answer, would rebuild every header on screen.
-  const filesViewedRef = useRef(filesViewed);
-  filesViewedRef.current = filesViewed;
-  const setFileViewedRef = useRef(setFileViewed);
-  setFileViewedRef.current = setFileViewed;
+  const filesViewedContext = useMemo(
+    () => ({ filesViewed, setFileViewed }),
+    [filesViewed, setFileViewed],
+  );
 
   const renderHeaderMetadata = useCallback(
     (item: CodeViewItem<ReviewAnnotationGroup>) => {
@@ -831,40 +906,7 @@ function PullRequestCodeTab({
           className="font-mono text-2xs"
         />
       );
-      const viewedFiles = filesViewedRef.current;
-      if (!viewedFiles.enabled) return stat;
-      const viewed = viewedFiles.isViewed(path);
-      const stale = viewedFiles.isStale(path);
-      return (
-        <span className="flex items-center gap-3">
-          {stat}
-          {/* The header itself folds the file, so the tick keeps its press to itself. The
-              attribute is what the header's capture listener looks for. */}
-          <label
-            data-viewed-toggle=""
-            className="flex cursor-pointer select-none items-center gap-1.5 text-2xs text-muted-foreground"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Checkbox
-              aria-label={stale ? "Changed" : "Viewed"}
-              checked={viewed}
-              onCheckedChange={(next) => setFileViewedRef.current(item.id, path, next === true)}
-            />
-            {stale ? (
-              <Tooltip>
-                <TooltipTrigger render={<span className="text-warning-foreground" />}>
-                  Changed
-                </TooltipTrigger>
-                <TooltipPopup side="bottom">
-                  This file has been pushed to since you marked it viewed.
-                </TooltipPopup>
-              </Tooltip>
-            ) : (
-              "Viewed"
-            )}
-          </label>
-        </span>
-      );
+      return <PullRequestFileViewedMetadata fileKey={item.id} path={path} stat={stat} />;
     },
     [omittedFileStats],
   );
@@ -1501,26 +1543,28 @@ function PullRequestCodeTab({
           {/* The viewer virtualizes against the element it is told is scrolling and places its
               rows absolutely, so it has to own that element — the thread diff panel hands it the
               same one. Scrolling from a parent instead leaves it painting over its neighbours. */}
-          <StyledDiffCodeView<ReviewAnnotationGroup>
-            // Keep scrollbar space stable so file metadata and line numbers do not shift as a
-            // diff crosses the overflow boundary. The viewer is itself focusable for keyboard
-            // interaction, but its native host outline clips and competes with the focus
-            // indicators on its actual controls.
-            className="h-full overflow-auto [scrollbar-gutter:stable]"
-            viewerRef={setViewer}
-            items={items}
-            selectedLines={selectedLines}
-            onSelectedLinesChange={setSelectedLines}
-            options={diffViewOptions}
-            // The viewer owns the scroll container, so the sentinel that asks for the next slice
-            // has to live inside it — at the end of the files, where reaching it means the reader
-            // is running out of diff.
-            renderCodeViewFooter={renderCodeViewFooter}
-            renderHeaderPrefix={renderHeaderPrefix}
-            renderHeaderMetadata={renderHeaderMetadata}
-            renderAnnotation={renderAnnotation}
-            unsafeCSSExtra={REPLACE_FILE_COUNTS_CSS}
-          />
+          <PullRequestFilesViewedContext value={filesViewedContext}>
+            <StyledDiffCodeView<ReviewAnnotationGroup>
+              // Keep scrollbar space stable so file metadata and line numbers do not shift as a
+              // diff crosses the overflow boundary. The viewer is itself focusable for keyboard
+              // interaction, but its native host outline clips and competes with the focus
+              // indicators on its actual controls.
+              className="h-full overflow-auto [scrollbar-gutter:stable]"
+              viewerRef={setViewer}
+              items={items}
+              selectedLines={selectedLines}
+              onSelectedLinesChange={setSelectedLines}
+              options={diffViewOptions}
+              // The viewer owns the scroll container, so the sentinel that asks for the next slice
+              // has to live inside it — at the end of the files, where reaching it means the reader
+              // is running out of diff.
+              renderCodeViewFooter={renderCodeViewFooter}
+              renderHeaderPrefix={renderHeaderPrefix}
+              renderHeaderMetadata={renderHeaderMetadata}
+              renderAnnotation={renderAnnotation}
+              unsafeCSSExtra={REPLACE_FILE_COUNTS_CSS}
+            />
+          </PullRequestFilesViewedContext>
         </div>
         {fileTreeOpen ? (
           <aside className="flex w-[min(20rem,40%)] min-w-48 shrink-0 border-l border-border/60">

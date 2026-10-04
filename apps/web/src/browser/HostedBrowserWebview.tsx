@@ -152,7 +152,7 @@ export function HostedBrowserWebview(props: {
         recoveryTimeout = null;
         if (!disposed) {
           setRecoverySrc(latestUrlRef.current ?? initialSrc);
-          setWebviewGeneration((generation) => generation + 1);
+          setWebviewGeneration(webviewGeneration + 1);
         }
       }, recovery.delayMs);
     };
@@ -256,11 +256,13 @@ export function HostedBrowserWebview(props: {
     return () => window.cancelAnimationFrame(frameId);
   }, [syncContentPresentation]);
 
+  const viewportScrollKey = `${runtimeTabId}:${viewport._tag}:${viewportWidth}:${viewportHeight}`;
+  const scrolledViewportKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    wrapper.scrollTo({ left: 0, top: 0 });
-  }, [runtimeTabId, viewport._tag, viewportHeight, viewportWidth]);
+    if (scrolledViewportKeyRef.current === viewportScrollKey) return;
+    scrolledViewportKeyRef.current = viewportScrollKey;
+    wrapperRef.current?.scrollTo({ left: 0, top: 0 });
+  }, [viewportScrollKey]);
 
   if (!clientSettingsHydrated || !config) return null;
 

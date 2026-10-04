@@ -19,6 +19,7 @@ import type {
 import type { EnvironmentThreadSearchMatch } from "@supacode/client-runtime/state/thread-search";
 import type { EnvironmentMachineKind } from "@supacode/contracts";
 import { canSnooze, resolveSnoozePresets } from "@supacode/client-runtime/state/thread-settled";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import type { MenuAction } from "@react-native-menu/menu";
 import {
   memo,
@@ -740,7 +741,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   useEffect(() => {
     if (snoozeGateExpiryMs === null) return;
     const delayMs = Math.min(Math.max(0, snoozeGateExpiryMs - Date.now()) + 50, 2_147_483_647);
-    const id = setTimeout(() => bumpSnoozeGateTick((tick) => tick + 1), delayMs);
+    const id = setTimeout(() => bumpSnoozeGateTick(snoozeGateTick + 1), delayMs);
     return () => clearTimeout(id);
   }, [snoozeGateExpiryMs, snoozeGateTick]);
   const swipeActions = resolveThreadListV2SwipeActions({
@@ -750,9 +751,19 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     snoozable: canSnooze(thread, { now: new Date().toISOString() }),
     snoozed: snoozedRow,
   });
+  const [snoozePresetClock, setSnoozePresetClock] = useState(() => ({
+    minute: props.snoozePresetMinute,
+    now: new Date(),
+  }));
+  if (snoozePresetClock.minute !== props.snoozePresetMinute) {
+    setSnoozePresetClock({ minute: props.snoozePresetMinute, now: new Date() });
+  }
   const snoozePresets = useMemo(
-    () => (swipeActions.secondary === "snooze" ? resolveSnoozePresets(new Date()) : ([] as const)),
-    [props.snoozePresetMinute, swipeActions.secondary],
+    () =>
+      swipeActions.secondary === "snooze"
+        ? resolveSnoozePresets(snoozePresetClock.now)
+        : ([] as const),
+    [snoozePresetClock.now, swipeActions.secondary],
   );
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
@@ -801,7 +812,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       props.reorderSupported,
       props.pinningSupported,
       thread.pinnedAt,
-      variant,
     ],
   );
   // A submenu with the current option checked, matching web. This is a
@@ -1187,11 +1197,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           // handed-off thread shows where it has been. The current owner
           // keeps its account badge so same-driver instances stay distinct.
           <View className="flex-row items-center">
-            {providerDrivers.slice(0, -1).map((driver, index) => (
-              <View key={`${driver}:${index}`} className="-mr-1 opacity-30">
-                <ProviderIcon provider={driver} size={12} />
-              </View>
-            ))}
+            {withOccurrenceKeys(providerDrivers.slice(0, -1), (driver) => driver).map(
+              ({ item: driver, key }) => (
+                <View key={key} className="-mr-1 opacity-30">
+                  <ProviderIcon provider={driver} size={12} />
+                </View>
+              ),
+            )}
             <ProviderInstanceIcon
               iconUrl={providerIconUrl}
               provider={providerInstance.driverKind}

@@ -44,7 +44,7 @@ function IndexDraftLanding() {
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const startingRef = useRef(false);
-  const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
+  const [startFailed, setStartFailed] = useState(false);
 
   const mostRecentProject = useMemo(
     () =>
@@ -54,30 +54,35 @@ function IndexDraftLanding() {
     [bootstrapped, projects, threads],
   );
 
-  useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
+  const startDraft = (project: NonNullable<typeof mostRecentProject>) => {
+    if (startingRef.current) {
       return;
     }
     startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
+    void handleNewThread(scopeProjectRef(project.environmentId, project.id), {
       replace: true,
     }).catch(() => {
       startingRef.current = false;
-      setStartState((state) => ({ ...state, failed: true }));
+      setStartFailed(true);
     });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+  };
+
+  useEffect(() => {
+    if (mostRecentProject === null) {
+      return;
+    }
+    startDraft(mostRecentProject);
+  }, [mostRecentProject, startDraft]);
 
   if (!bootstrapped) {
     return null;
   }
   if (mostRecentProject !== null) {
-    return startState.failed ? (
+    return startFailed ? (
       <DraftStartError
         onRetry={() => {
-          setStartState((state) => ({
-            failed: false,
-            retryRequest: state.retryRequest + 1,
-          }));
+          setStartFailed(false);
+          startDraft(mostRecentProject);
         }}
       />
     ) : null;

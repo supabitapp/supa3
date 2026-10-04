@@ -2025,6 +2025,7 @@ export function ConnectionsSettings() {
     [desktopServerExposureState?.tailscaleServePort],
   );
 
+  const enabledTailscaleServePort = desktopServerExposureState?.tailscaleServePort;
   const handleConfirmTailscaleServeDisable = useCallback(async () => {
     if (!desktopBridge) return;
     setIsUpdatingTailscaleServe(true);
@@ -2032,7 +2033,7 @@ export function ConnectionsSettings() {
     try {
       await desktopBridge.setTailscaleServeEnabled({
         enabled: false,
-        port: desktopServerExposureState?.tailscaleServePort ?? DEFAULT_TAILSCALE_SERVE_PORT,
+        port: enabledTailscaleServePort ?? DEFAULT_TAILSCALE_SERVE_PORT,
       });
       refreshDesktopNetworkAccessState();
       setDisableTailscaleServeDialogOpen(false);
@@ -2049,7 +2050,7 @@ export function ConnectionsSettings() {
     } finally {
       setIsUpdatingTailscaleServe(false);
     }
-  }, [desktopBridge, desktopServerExposureState?.tailscaleServePort]);
+  }, [desktopBridge, enabledTailscaleServePort]);
 
   const handleStartTailscaleServeDisable = useCallback((_endpoint: AdvertisedEndpoint) => {
     setDisableTailscaleServeDialogOpen(true);

@@ -8,6 +8,7 @@ import type {
 } from "@supacode/contracts";
 import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
 import { videoMimeType } from "@supacode/shared/video";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { useState } from "react";
 import {
   Alert,
@@ -314,11 +315,11 @@ export function ComposerContextSheet(props: {
                       label="Requested changes"
                       value={record.styleChanges.join("\n")}
                     />
-                    {record.elements?.map((element, index) => (
-                      <View
-                        key={`${element.selector ?? element.tagName}:${index}`}
-                        className="gap-3"
-                      >
+                    {withOccurrenceKeys(
+                      record.elements ?? [],
+                      (element) => element.selector ?? element.tagName,
+                    ).map(({ item: element, key }) => (
+                      <View key={key} className="gap-3">
                         <ContextField
                           label="Element"
                           value={element.componentName ?? element.tagName}

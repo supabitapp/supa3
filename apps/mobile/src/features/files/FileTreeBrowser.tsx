@@ -1,6 +1,6 @@
 import type { ProjectEntry } from "@supacode/contracts";
 import { SymbolView } from "../../components/AppSymbol";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -137,7 +137,9 @@ export function FileTreeBrowser(props: {
   } = props;
   const controlledSelectedPathRef = useRef(controlledSelectedPath);
   const pendingSelectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  controlledSelectedPathRef.current = controlledSelectedPath;
+  useLayoutEffect(() => {
+    controlledSelectedPathRef.current = controlledSelectedPath;
+  });
 
   const selectedPath =
     pendingSelection?.selectedPathAtPress === controlledSelectedPath
@@ -154,22 +156,23 @@ export function FileTreeBrowser(props: {
     [expandedPaths, props.searchQuery, tree],
   );
 
-  useEffect(() => {
-    if (!controlledSelectedPath) {
-      return;
+  const [revealedSelectedPath, setRevealedSelectedPath] = useState<string | null>(null);
+  if (revealedSelectedPath !== controlledSelectedPath) {
+    setRevealedSelectedPath(controlledSelectedPath);
+    if (controlledSelectedPath) {
+      setExpandedPaths((current) => {
+        const ancestors = ancestorPaths(controlledSelectedPath);
+        if (ancestors.every((ancestor) => current.has(ancestor))) {
+          return current;
+        }
+        const next = new Set(current);
+        for (const ancestor of ancestors) {
+          next.add(ancestor);
+        }
+        return next;
+      });
     }
-    setExpandedPaths((current) => {
-      const ancestors = ancestorPaths(controlledSelectedPath);
-      if (ancestors.every((ancestor) => current.has(ancestor))) {
-        return current;
-      }
-      const next = new Set(current);
-      for (const ancestor of ancestors) {
-        next.add(ancestor);
-      }
-      return next;
-    });
-  }, [controlledSelectedPath]);
+  }
 
   useEffect(() => {
     for (const path of expandedPaths) onLoadDirectory(path);

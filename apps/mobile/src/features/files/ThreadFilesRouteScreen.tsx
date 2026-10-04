@@ -605,6 +605,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     draftCwd: threadId === null ? cwd : null,
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
+  const refreshAssetPreview = assetPreview.refresh;
   const mediaSource = useMemo<MediaActionsSource | undefined>(
     () =>
       environmentId !== null &&
@@ -718,6 +719,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   );
   useRegisterWorkspaceInspector(fileInspector.supported ? renderWorkspaceInspector : undefined);
 
+  const fileContents = fileData?.contents;
+  const fileContentsTruncated = fileData?.truncated;
   const fileMenuActions = useMemo(() => {
     if (relativePath === null) return [];
     const canToggleMode = canPreview && !isImageFile && !isVideoFile && !isAudioFile;
@@ -772,13 +775,13 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
           ]),
       // Selecting a long file by hand is painful on a phone, so copying the whole thing is
       // the action most readers actually want. The attachment screen already offers it.
-      fileData?.contents != null
+      fileContents != null
         ? ({
             id: "copy-contents",
-            title: fileData.truncated ? "Copy preview" : "Copy contents",
+            title: fileContentsTruncated ? "Copy preview" : "Copy contents",
             icon: "doc.on.doc",
             inline: false,
-            onPress: () => copyTextWithHaptic(fileData.contents),
+            onPress: () => copyTextWithHaptic(fileContents),
           } as const)
         : null,
       isPdfFile({ name: relativePath }) && previewUri !== null
@@ -812,7 +815,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             icon: "arrow.clockwise",
             inline: false,
             onPress: async () => {
-              if (isVideoFile || isAudioFile) await assetPreview.refresh();
+              if (isVideoFile || isAudioFile) await refreshAssetPreview();
               setPreviewRevision((current) => current + 1);
             },
           } as const)
@@ -822,7 +825,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     appearance.codeWordBreak,
     setCodeWordBreak,
     assetPreviewUri,
-    assetPreview.refresh,
+    refreshAssetPreview,
     previewUri,
     canPreview,
     isAudioFile,
@@ -833,8 +836,11 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     resolvedActiveMode,
     mediaSource,
     mediaActions.actions,
-    fileData?.contents,
-    fileData?.truncated,
+    fileContents,
+    fileContentsTruncated,
+    setFullScreenPreview,
+    setModeOverride,
+    setPreviewRevision,
   ]);
 
   const handleReturnToThread = useCallback(() => {

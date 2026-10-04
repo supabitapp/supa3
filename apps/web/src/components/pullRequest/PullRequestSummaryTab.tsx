@@ -15,6 +15,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 
 import { useAtomCommand } from "~/state/use-atom-command";
 import { pullRequestEnvironment } from "~/state/pullRequests";
@@ -870,50 +871,52 @@ export function PullRequestSummaryTab({
         ) : detail.checks.length === 0 ? (
           <p className="text-xs text-muted-foreground">No checks reported.</p>
         ) : (
-          detail.checks.map((check, index) => {
-            const finding = { kind: "check", check } as const;
-            const failing = check.status === "failure" || check.status === "cancelled";
-            return (
-              <div
-                // Position too: the host decides how many runs share a name, and a repeated
-                // key would be a rendering fault on top of whatever the list already says.
-                key={`${index}:${check.name}:${check.url ?? ""}`}
-                className="group flex items-center gap-2 rounded-md pr-1 hover:bg-accent/60"
-              >
-                <button
-                  type="button"
-                  disabled={!check.url}
-                  onClick={() => check.url && openCheck(check.url)}
-                  className={cn(
-                    "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 [&>svg]:mt-0.5",
-                    check.url ? "cursor-pointer" : "cursor-default",
-                  )}
+          withOccurrenceKeys(detail.checks, (check) => `${check.name}:${check.url ?? ""}`).map(
+            ({ item: check, key }) => {
+              const finding = { kind: "check", check } as const;
+              const failing = check.status === "failure" || check.status === "cancelled";
+              return (
+                <div
+                  // Counted among repeats too: the host decides how many runs share a name, and a
+                  // repeated key would be a rendering fault on top of whatever the list already says.
+                  key={key}
+                  className="group flex items-center gap-2 rounded-md pr-1 hover:bg-accent/60"
                 >
-                  <PullRequestCheckStatusIcon status={check.status} />
-                  <span className="min-w-0 flex-1 wrap-anywhere">{check.name}</span>
-                  <span className="shrink-0 text-muted-foreground">
-                    {pullRequestCheckStatusLabel(check)}
-                  </span>
-                </button>
-                {/* Only where there is something to fix. A passing check has no failure to
-                      reproduce, and the button would be an invitation to waste a thread. */}
-                {onFixFinding && failing ? (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className="shrink-0"
-                    disabled={pendingFinding !== null && pendingFinding !== undefined}
-                    onClick={() => onFixFinding(finding)}
+                  <button
+                    type="button"
+                    disabled={!check.url}
+                    onClick={() => check.url && openCheck(check.url)}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 [&>svg]:mt-0.5",
+                      check.url ? "cursor-pointer" : "cursor-default",
+                    )}
                   >
-                    <HammerIcon className="size-3" />
-                    {pendingFinding === pullRequestFindingKey(finding)
-                      ? "Preparing..."
-                      : fixCheckLabel}
-                  </Button>
-                ) : null}
-              </div>
-            );
-          })
+                    <PullRequestCheckStatusIcon status={check.status} />
+                    <span className="min-w-0 flex-1 wrap-anywhere">{check.name}</span>
+                    <span className="shrink-0 text-muted-foreground">
+                      {pullRequestCheckStatusLabel(check)}
+                    </span>
+                  </button>
+                  {/* Only where there is something to fix. A passing check has no failure to
+                      reproduce, and the button would be an invitation to waste a thread. */}
+                  {onFixFinding && failing ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="shrink-0"
+                      disabled={pendingFinding !== null && pendingFinding !== undefined}
+                      onClick={() => onFixFinding(finding)}
+                    >
+                      <HammerIcon className="size-3" />
+                      {pendingFinding === pullRequestFindingKey(finding)
+                        ? "Preparing..."
+                        : fixCheckLabel}
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            },
+          )
         )}
       </Section>
 

@@ -9,7 +9,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useState, type ReactElement } from "react";
 import { useEnvironmentThemeDefinitions } from "../../hooks/useEnvironmentTheme";
 import { readThemeHalvesRaw } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
@@ -445,9 +445,7 @@ function CustomThemeCollectionCard({
   const safeIndex = Math.min(variantIndex, themes.length - 1);
   const theme = themes[safeIndex];
 
-  useEffect(() => {
-    if (variantIndex !== safeIndex) setVariantIndex(safeIndex);
-  }, [safeIndex, variantIndex]);
+  if (variantIndex !== safeIndex) setVariantIndex(safeIndex);
 
   if (!theme) return null;
   const collectionLabel = theme.collection?.label ?? theme.label;

@@ -161,7 +161,8 @@ function BranchSelectionRow(props: {
   readonly onSelect: (branch: VcsRef) => void;
   readonly selected: boolean;
 }) {
-  const onPress = useCallback(() => props.onSelect(props.branch), [props.branch, props.onSelect]);
+  const { branch, onSelect } = props;
+  const onPress = useCallback(() => onSelect(branch), [branch, onSelect]);
 
   return (
     <View
@@ -183,7 +184,7 @@ function BranchSelectionRow(props: {
         onPress={onPress}
         selected={props.selected}
         subtitle={props.badge ? props.badge.toUpperCase() : undefined}
-        title={props.branch.name}
+        title={branch.name}
       />
     </View>
   );
@@ -312,14 +313,15 @@ export function NewTaskBranchPickerRouteScreen() {
   const selectingBranchNameRef = useRef<string | null>(null);
   const allowSelectionNavigationRef = useRef(false);
   const mountedRef = useRef(true);
+  const { selectBranch: selectFlowBranch, selectedProject, setBranchQuery, workspaceMode } = flow;
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      flow.setBranchQuery("");
+      setBranchQuery("");
     };
-  }, [flow.setBranchQuery]);
+  }, [setBranchQuery]);
 
   useEffect(
     () =>
@@ -339,13 +341,13 @@ export function NewTaskBranchPickerRouteScreen() {
       selectingBranchNameRef.current = branch.name;
       void Haptics.selectionAsync();
 
-      try {
-        if (!flow.selectedProject) return;
+      const checkoutAndSelect = async () => {
+        if (!selectedProject) return;
         setSwitchingBranchName(branch.name);
         const result = await checkoutNewTaskBranch({
           branch,
-          project: flow.selectedProject,
-          workspaceMode: flow.workspaceMode,
+          project: selectedProject,
+          workspaceMode,
           switchRef,
         });
         if (result._tag === "Failure") {
@@ -362,29 +364,24 @@ export function NewTaskBranchPickerRouteScreen() {
         // The checkout has already changed the repository. Persist the matching
         // draft selection even if the native sheet was dismissed while the
         // command was in flight; only visible-screen work is focus-gated below.
-        flow.selectBranch(result.value);
+        selectFlowBranch(result.value);
         if (!mountedRef.current || !navigation.isFocused()) {
           return;
         }
-        flow.setBranchQuery("");
+        setBranchQuery("");
         allowSelectionNavigationRef.current = true;
         navigation.goBack();
-      } finally {
+      };
+
+      await checkoutAndSelect().finally(() => {
         selectingBranchNameRef.current = null;
         allowSelectionNavigationRef.current = false;
         if (mountedRef.current) {
           setSwitchingBranchName(null);
         }
-      }
+      });
     },
-    [
-      flow.selectBranch,
-      flow.selectedProject,
-      flow.setBranchQuery,
-      flow.workspaceMode,
-      navigation,
-      switchRef,
-    ],
+    [navigation, selectFlowBranch, selectedProject, setBranchQuery, switchRef, workspaceMode],
   );
 
   return (

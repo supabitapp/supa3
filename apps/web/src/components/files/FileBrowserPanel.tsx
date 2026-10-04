@@ -7,7 +7,7 @@ import type { EnvironmentId, ProjectEntry } from "@supacode/contracts";
 import { FileTree, useFileTree, useFileTreeSearch, useFileTreeSelector } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@supacode/shared/composerTrigger";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
@@ -239,12 +239,11 @@ export default function FileBrowserPanel({
   });
 
   const treeModelRef = useRef<ReturnType<typeof useFileTree>["model"] | null>(null);
-  const dragMention = useMemo(
-    () =>
-      createFileTreeDragMentionController({
-        deselect: (path) => treeModelRef.current?.getItem(path)?.deselect(),
-      }),
-    [],
+  const deselectTreePath = useEffectEvent((path: string) => {
+    treeModelRef.current?.getItem(path)?.deselect();
+  });
+  const [dragMention] = useState(() =>
+    createFileTreeDragMentionController({ deselect: deselectTreePath }),
   );
   const { model } = useFileTree({
     composition: {

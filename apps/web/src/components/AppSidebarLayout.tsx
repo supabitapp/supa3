@@ -67,6 +67,42 @@ function readViewportWidth(): number {
   return window.innerWidth;
 }
 
+let windowFullscreenSnapshot: boolean | null = null;
+
+function isMacosDesktopWindow(): boolean {
+  return isElectron && isMacPlatform(navigator.platform);
+}
+
+function subscribeToWindowFullscreen(onChange: () => void): () => void {
+  const bridge = window.desktopBridge;
+  if (!isMacosDesktopWindow() || !bridge) return () => {};
+  const { getWindowFullscreenState, onWindowFullscreenStateChange } = bridge;
+  if (
+    typeof getWindowFullscreenState !== "function" ||
+    typeof onWindowFullscreenStateChange !== "function"
+  ) {
+    return () => {};
+  }
+  const unsubscribe = onWindowFullscreenStateChange((fullscreen) => {
+    windowFullscreenSnapshot = fullscreen;
+    onChange();
+  });
+  windowFullscreenSnapshot = getWindowFullscreenState();
+  onChange();
+  return unsubscribe;
+}
+
+function readWindowFullscreen(): boolean {
+  if (windowFullscreenSnapshot === null) {
+    const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
+    windowFullscreenSnapshot =
+      isMacosDesktopWindow() && typeof getWindowFullscreenState === "function"
+        ? getWindowFullscreenState()
+        : false;
+  }
+  return windowFullscreenSnapshot;
+}
+
 function readInitialThreadSidebarWidth(): number {
   try {
     return resolveInitialThreadSidebarWidth(
@@ -228,7 +264,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
+  const isMacosDesktop = isMacosDesktopWindow();
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
   // Subscribed rather than read once: the clamp must track live window size,
   // and a clamped drag ends with an unchanged width, which skips the re-render
@@ -243,12 +279,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     }
     setSidebarWidth(resolveInitialThreadSidebarWidth(null, viewportWidth));
   };
-  const [isWindowFullscreen, setIsWindowFullscreen] = useState(() => {
-    const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
-    return isMacosDesktop && typeof getWindowFullscreenState === "function"
-      ? getWindowFullscreenState()
-      : false;
-  });
+  const isWindowFullscreen = useSyncExternalStore(
+    subscribeToWindowFullscreen,
+    readWindowFullscreen,
+  );
   const sidebarProviderStyle = {
     "--sidebar-width": `${sidebarWidth}px`,
     "--panel-animation-duration": `${panelAnimationDurationMs}ms`,
@@ -256,23 +290,6 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
       : {}),
   } as CSSProperties;
-
-  useEffect(() => {
-    if (!isMacosDesktop) return;
-    const bridge = window.desktopBridge;
-    if (!bridge) return;
-    const { getWindowFullscreenState, onWindowFullscreenStateChange } = bridge;
-    if (
-      typeof getWindowFullscreenState !== "function" ||
-      typeof onWindowFullscreenStateChange !== "function"
-    ) {
-      return;
-    }
-
-    const unsubscribe = onWindowFullscreenStateChange(setIsWindowFullscreen);
-    setIsWindowFullscreen(getWindowFullscreenState());
-    return unsubscribe;
-  }, [isMacosDesktop]);
 
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;

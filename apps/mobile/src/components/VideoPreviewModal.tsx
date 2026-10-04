@@ -1,6 +1,6 @@
 import { useIsFocused } from "@react-navigation/native";
 import { videoMimeType } from "@supacode/shared/video";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Keyboard, Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -58,14 +58,15 @@ function useLocalPlayback(source: LocalVideoPreviewSource): PlaybackState {
   const [error, setError] = useState<string | null>(null);
   // Only a different file needs a new lease; a metadata update on the same
   // draft must not dispose the file Android is still playing.
-  const attachmentRef = useRef(attachment);
-  attachmentRef.current = attachment;
-  const { id: attachmentId, fileUri } = attachment;
-  useEffect(() => {
+  const [leasedAttachment, setLeasedAttachment] = useState(attachment);
+  if (leasedAttachment.id !== attachment.id || leasedAttachment.fileUri !== attachment.fileUri) {
+    setLeasedAttachment(attachment);
     setUri(null);
     setError(null);
+  }
+  useEffect(() => {
     const controller = new AbortController();
-    const loading = loadLocalAttachmentPreview(attachmentRef.current, controller.signal);
+    const loading = loadLocalAttachmentPreview(leasedAttachment, controller.signal);
     void loading.then(
       (file) => {
         if (file === null) return;
@@ -85,7 +86,7 @@ function useLocalPlayback(source: LocalVideoPreviewSource): PlaybackState {
         () => undefined,
       );
     };
-  }, [attachmentId, fileUri]);
+  }, [leasedAttachment]);
   const mimeType = videoMimeType(attachment) ?? attachment.mimeType;
   return {
     uri,
@@ -205,11 +206,11 @@ export function VideoPreviewModal(props: {
   readonly onRequestClose: () => void;
 }) {
   const isFocused = useIsFocused();
-  const hasSource = props.source !== null;
+  const { source, onRequestClose } = props;
+  const hasSource = source !== null;
   useEffect(() => {
-    if (!isFocused && hasSource) props.onRequestClose();
-  }, [isFocused, hasSource, props.onRequestClose]);
-  const { source } = props;
+    if (!isFocused && hasSource) onRequestClose();
+  }, [isFocused, hasSource, onRequestClose]);
   if (source === null || !isFocused) return null;
   return source.type === "local" ? (
     <LocalPreviewModal

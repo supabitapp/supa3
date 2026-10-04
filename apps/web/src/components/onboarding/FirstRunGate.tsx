@@ -151,24 +151,21 @@ export function FirstRunGate({
         threadCount: threads.length,
       });
 
+  if (decision !== "wizard" && hydrated) {
+    const nextGateState = transitionFirstRunGateState(gateState, {
+      type: "evidence",
+      decision: nextDecision,
+    });
+    if (nextGateState !== gateState) setGateState(nextGateState);
+  }
+
   useEffect(() => {
     if (decision === "wizard" || !hydrated) return;
 
     if (persistCompletion && onboardingCompletedAt === null) {
       void completeOnboarding().catch(() => undefined);
     }
-
-    setGateState((state) =>
-      transitionFirstRunGateState(state, { type: "evidence", decision: nextDecision }),
-    );
-  }, [
-    completeOnboarding,
-    decision,
-    hydrated,
-    nextDecision,
-    onboardingCompletedAt,
-    persistCompletion,
-  ]);
+  }, [completeOnboarding, decision, hydrated, onboardingCompletedAt, persistCompletion]);
 
   // A stalled server read gets a recovery screen, but never mounts the app.
   // The timer starts after settings hydrate so slow local hydration does not

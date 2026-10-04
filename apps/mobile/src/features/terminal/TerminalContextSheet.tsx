@@ -5,6 +5,7 @@ import {
   type ThreadId,
 } from "@supacode/contracts";
 import { formatComposerContextReference } from "@supacode/shared/composerContextReferences";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -73,9 +74,9 @@ export function TerminalContextSheet(props: {
           Tap the first and last line to select a range.
         </Text>
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
-          {lines.map((line, index) => (
+          {withOccurrenceKeys(lines, (line) => line).map(({ item: line, key }, index) => (
             <Pressable
-              key={index}
+              key={key}
               accessibilityRole="button"
               accessibilityLabel={`Line ${index + 1}: ${line}`}
               accessibilityState={{ selected: index >= range.start && index <= range.end }}

@@ -26,7 +26,15 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { useAtomValue } from "@effect/atom-react";
 import { autoAnimate } from "@formkit/auto-animate";
-import React, { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  memo,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "~/lib/utils";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -662,16 +670,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const handleRenameInputClick = useCallback((event: React.MouseEvent<HTMLInputElement>) => {
     event.stopPropagation();
   }, []);
-  const handleConfirmArchiveRef = useCallback(
-    (element: HTMLButtonElement | null) => {
-      if (element) {
-        confirmArchiveButtonRefs.current.set(threadKey, element);
-      } else {
-        confirmArchiveButtonRefs.current.delete(threadKey);
-      }
-    },
-    [confirmArchiveButtonRefs, threadKey],
-  );
+  const handleConfirmArchiveRef = (element: HTMLButtonElement | null) => {
+    if (element) {
+      confirmArchiveButtonRefs.current.set(threadKey, element);
+    } else {
+      confirmArchiveButtonRefs.current.delete(threadKey);
+    }
+  };
   const stopPropagationOnPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -687,17 +692,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     },
     [attemptArchiveThread, clearConfirmingArchive, threadRef],
   );
-  const handleStartArchiveConfirmation = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setConfirmingArchiveThreadKey(threadKey);
-      requestAnimationFrame(() => {
-        confirmArchiveButtonRefs.current.get(threadKey)?.focus();
-      });
-    },
-    [confirmArchiveButtonRefs, setConfirmingArchiveThreadKey, threadKey],
-  );
+  const handleStartArchiveConfirmation = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setConfirmingArchiveThreadKey(threadKey);
+    requestAnimationFrame(() => {
+      confirmArchiveButtonRefs.current.get(threadKey)?.focus();
+    });
+  };
   const handleArchiveImmediateClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -1277,7 +1279,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   // dependency arrays (avoids invalidating every thread-row memo on each
   // thread-list change).
   const sidebarThreadByKeyRef = useRef(sidebarThreadByKey);
-  sidebarThreadByKeyRef.current = sidebarThreadByKey;
+  useLayoutEffect(() => {
+    sidebarThreadByKeyRef.current = sidebarThreadByKey;
+  });
   const projectThreads = sidebarThreads;
   const projectPreferenceKeys = useMemo(() => projectExpansionPreferenceKeys(project), [project]);
   const projectExpanded = useUiStateStore((state) =>

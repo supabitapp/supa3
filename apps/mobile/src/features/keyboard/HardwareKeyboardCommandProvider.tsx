@@ -37,6 +37,19 @@ const COPY_FEEDBACK_DISMISS_MS = 3_000;
 
 const CommandPaletteContext = createContext<ReactNode>(null);
 
+let registeredCommandsSnapshot: {
+  readonly version: number;
+  readonly commands: ReadonlySet<HardwareKeyboardCommand>;
+} | null = null;
+
+function getRegisteredCommandsSnapshot(): ReadonlySet<HardwareKeyboardCommand> {
+  const version = getHardwareKeyboardCommandRegistrationVersion();
+  if (registeredCommandsSnapshot === null || registeredCommandsSnapshot.version !== version) {
+    registeredCommandsSnapshot = { version, commands: getRegisteredHardwareKeyboardCommands() };
+  }
+  return registeredCommandsSnapshot.commands;
+}
+
 /** Render inside the workspace so palette actions share its navigation and pane state. */
 export function HardwareKeyboardCommandOverlay() {
   return use(CommandPaletteContext);
@@ -91,13 +104,13 @@ export function HardwareKeyboardCommandProvider({
     },
     [],
   );
-  const registrationVersion = useSyncExternalStore(
+  const registeredCommands = useSyncExternalStore(
     subscribeToHardwareKeyboardCommandRegistrations,
-    getHardwareKeyboardCommandRegistrationVersion,
-    getHardwareKeyboardCommandRegistrationVersion,
+    getRegisteredCommandsSnapshot,
+    getRegisteredCommandsSnapshot,
   );
   const enabledCommands = useMemo(() => {
-    const commands = new Set<HardwareKeyboardCommand>(getRegisteredHardwareKeyboardCommands());
+    const commands = new Set<HardwareKeyboardCommand>(registeredCommands);
     commands.add("newTask");
     commands.add("commandPalette");
     if (pathname !== "/" && !pathname.startsWith("/threads/")) {
@@ -113,7 +126,7 @@ export function HardwareKeyboardCommandProvider({
       if (pathname.split("/")[4] !== "terminal") commands.add("copyThreadReference");
     }
     return [...commands];
-  }, [activeThreadRef, pathname, registrationVersion, navigation]);
+  }, [activeThreadRef, pathname, registeredCommands, navigation]);
 
   const onCommand = useCallback(
     (command: HardwareKeyboardCommand) => {

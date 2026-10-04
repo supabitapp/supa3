@@ -129,7 +129,13 @@ export function DiffFileTree({
     model.setGitStatus(gitStatus);
   }, [directoryPaths, gitStatus, model, ordering, paths, positions]);
 
+  // The request carries `paths` so a file that arrives after it was asked for is still revealed.
+  const revealRequest = useMemo(
+    () => ({ selectedPath, revealRequestId, paths }),
+    [paths, revealRequestId, selectedPath],
+  );
   useEffect(() => {
+    const { selectedPath, revealRequestId } = revealRequest;
     if (selectedPath === null) {
       handledRevealRef.current = null;
       return;
@@ -160,8 +166,7 @@ export function DiffFileTree({
     queueMicrotask(() => {
       syncingSelectionRef.current = false;
     });
-    // `paths` is a dependency so a file that arrives after it was asked for is still revealed.
-  }, [model, paths, revealRequestId, selectedPath]);
+  }, [model, revealRequest]);
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col bg-background", className)}>

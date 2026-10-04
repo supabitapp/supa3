@@ -110,9 +110,10 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;
 
-  useEffect(() => {
-    setActiveResultIndex((index) => Math.min(index, Math.max(results.length - 1, 0)));
-  }, [results.length]);
+  const lastResultIndex = Math.max(results.length - 1, 0);
+  if (activeResultIndex > lastResultIndex) {
+    setActiveResultIndex(lastResultIndex);
+  }
 
   useEffect(() => {
     const result = results[activeResultIndex];

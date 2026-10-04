@@ -1,6 +1,6 @@
 "use client";
 
-import { scopedThreadKey } from "@supacode/client-runtime/environment";
+import { parseScopedThreadKey, scopedThreadKey } from "@supacode/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -109,10 +109,6 @@ export function PreviewView({
   const activeRecordingTabIds = useActiveBrowserRecordingTabIds();
   const pickActiveRef = useRef(false);
   const isMountedRef = useRef(true);
-  // Kept in sync so the title effect can depend on the stable thread key
-  // instead of the thread object, which is recreated on every update.
-  const threadRefRef = useRef(threadRef);
-  threadRefRef.current = threadRef;
   const previewState = useThreadPreviewState(threadRef);
   const recentHistoryEntries = useThreadRecentHistory(
     threadRef,
@@ -179,10 +175,11 @@ export function PreviewView({
   const latestHistoryUrl = recentHistoryEntries[0]?.url;
   const threadKey = scopedThreadKey(threadRef);
   useEffect(() => {
-    if (!navUrl || !navTitle || !latestHistoryUrl) return;
+    // The thread comes from threadKey because threadRef's identity churns on every thread update.
+    const titledThreadRef = parseScopedThreadKey(threadKey);
+    if (!navUrl || !navTitle || !latestHistoryUrl || !titledThreadRef) return;
     // Agent-driven pages only enrich an existing requested URL.
-    setTitleForThreadUrl(threadRefRef.current, navUrl, navTitle, environmentHostname);
-    // threadKey stands in for threadRef, whose identity churns on every thread update.
+    setTitleForThreadUrl(titledThreadRef, navUrl, navTitle, environmentHostname);
   }, [environmentHostname, latestHistoryUrl, navTitle, navUrl, threadKey]);
 
   const navigateToResolvedUrl = useCallback(
