@@ -28,7 +28,7 @@ const makeEnvironment = (path: Path.Path, overrides: Record<string, unknown> = {
     platform: "linux",
     isPackaged: true,
     isDevelopment: false,
-    displayName: "Supacode (Alpha)",
+    displayName: "Supacode",
     linuxDesktopEntryName: "com.supaterm.supacode.desktop",
     linuxWmClass: "supacode",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
@@ -260,7 +260,7 @@ describe("DesktopLinuxUrlHandler", () => {
     return Effect.gen(function* () {
       yield* runRegister(recorded, {
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-          displayName: "Supacode (Alpha)",
+          displayName: "Supacode",
           execTarget: "/home/alice/Applications/Supacode.AppImage",
           scheme: "supacode",
           iconPath: "/home/alice/.local/share/icons/com.supaterm.supacode.desktop.png",
@@ -289,7 +289,7 @@ describe("DesktopLinuxUrlHandler", () => {
       yield* runRegister(recorded, {
         iconSource: "/tmp/.mount_Supacode/resources/icon.png",
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-          displayName: "Supacode (Alpha)",
+          displayName: "Supacode",
           execTarget: "/home/alice/Applications/Supacode.AppImage",
           scheme: "supacode",
           iconPath,
