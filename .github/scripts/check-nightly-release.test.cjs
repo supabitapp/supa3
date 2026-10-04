@@ -139,48 +139,6 @@ test("skips unchanged commits after the gap", async () => {
   assert.equal(await shouldReleaseNightly(options), false);
 });
 
-test("publishes an annual calendar candidate even when its commit is unchanged", async () => {
-  const { options } = fixture({
-    comparisonStatus: "identical",
-    releases: [
-      nightly(7, {
-        tag_name: "v26.4.1-nightly.20261231.123",
-        published_at: "2026-12-31T12:00:00Z",
-      }),
-    ],
-  });
-  options.now = Date.parse("2027-01-01T00:00:00Z");
-  assert.equal(await shouldReleaseNightly(options), true);
-});
-
-test("annual rollover still observes the gap and rejects non-ancestor commits", async () => {
-  for (const comparisonStatus of ["behind", "diverged"]) {
-    const { options } = fixture({
-      comparisonStatus,
-      releases: [
-        nightly(7, {
-          tag_name: "v26.4.1-nightly.20261231.123",
-          published_at: "2026-12-31T12:00:00Z",
-        }),
-      ],
-    });
-    options.now = Date.parse("2027-01-01T00:00:00Z");
-    assert.equal(await shouldReleaseNightly(options), false);
-  }
-  const { options, calls } = fixture({
-    comparisonStatus: "identical",
-    releases: [
-      nightly(1, {
-        tag_name: "v26.4.1-nightly.20261231.123",
-        published_at: "2026-12-31T23:00:00Z",
-      }),
-    ],
-  });
-  options.now = Date.parse("2027-01-01T00:00:00Z");
-  assert.equal(await shouldReleaseNightly(options), false);
-  assert.equal(calls.length, 0);
-});
-
 test("uses publication time, not release order or the tagged commit date", async () => {
   const { options } = fixture({
     releases: [nightly(10), nightly(1), nightly(20, { tag_name: "nightly-v0.9.0" })],

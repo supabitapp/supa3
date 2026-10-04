@@ -78,20 +78,6 @@ describe("versionSkew", () => {
     expect(resolveVersionMismatch(APP_VERSION)).toBeNull();
   });
 
-  it("orders legacy, calendar feature, and annual releases numerically", () => {
-    branding.APP_VERSION = "26.0.0";
-    expect(resolveVersionMismatch("0.0.46")).toMatchObject({
-      clientVersion: "26.0.0",
-      serverVersion: "0.0.46",
-    });
-    expect(resolveVersionMismatch("26.0.0-nightly.20261004.123")).toBeNull();
-    branding.APP_VERSION = "26.10.0";
-    expect(resolveVersionMismatch("26.9.9")).not.toBeNull();
-    expect(resolveVersionMismatch("27.0.0")).toBeNull();
-    branding.APP_VERSION = "27.0.0";
-    expect(resolveVersionMismatch("26.10.0")).not.toBeNull();
-  });
-
   it("returns a mismatch when the server is behind the client", () => {
     expect(resolveVersionMismatch("0.0.33")).toEqual({
       clientVersion: "0.0.34",

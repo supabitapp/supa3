@@ -8,20 +8,6 @@ import {
 } from "./semver.ts";
 
 describe("semver helpers", () => {
-  it("orders calendar migration, feature counters, and annual rollover", () => {
-    const versions = [
-      "0.0.46",
-      "26.0.0-nightly.20261004.123",
-      "26.0.0",
-      "26.0.1",
-      "26.9.9",
-      "26.10.0",
-      "27.0.0",
-    ];
-    for (let index = 1; index < versions.length; index++) {
-      expect(compareSemverVersions(versions[index - 1]!, versions[index]!)).toBeLessThan(0);
-    }
-  });
   it("matches supported range groups", () => {
     const range = "^22.16 || ^23.11 || >=24.10";
 

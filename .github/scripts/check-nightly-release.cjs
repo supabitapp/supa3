@@ -70,24 +70,14 @@ async function shouldReleaseNightly({ github, context, core, now = Date.now() })
     basehead: `${lastNightly.tag_name}...${context.sha}`,
     per_page: 1,
   });
-  const calendarTag = /^(?:nightly-)?v(\d+)\.\d+\.\d+-nightly\.(\d{4})\d{4}\.\d+$/.exec(
-    lastNightly.tag_name,
-  );
-  const previousYear = calendarTag ? Number(calendarTag[1]) : undefined;
-  const calendarRollover =
-    calendarTag !== null &&
-    previousYear === Number(calendarTag[2]) - 2000 &&
-    previousYear < new Date(now).getUTCFullYear() - 2000;
-  if (comparison.status !== "ahead" && !(comparison.status === "identical" && calendarRollover)) {
+  if (comparison.status !== "ahead") {
     core.info(
       `Candidate commit is ${comparison.status} relative to ${lastNightly.tag_name}. Skipping.`,
     );
     return false;
   }
 
-  core.info(
-    `${calendarRollover ? "A new calendar year" : "New commits"} since ${lastNightly.tag_name}, and the six-hour gap has passed.`,
-  );
+  core.info(`New commits since ${lastNightly.tag_name}, and the six-hour gap has passed.`);
   return true;
 }
 

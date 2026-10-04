@@ -108,9 +108,6 @@ jobs:
       - name: Setup Mise
         if: steps.expo-token.outputs.present == 'true'
         uses: ./.github/actions/setup-mise
-      - name: Install release tooling
-        if: steps.version_app_token.outcome == 'success'
-        run: mise exec -- vp install --filter=@supacode/scripts...
       - name: Apply manual version override
         if: steps.version_app_token.outcome == 'success'
         env:
@@ -122,23 +119,18 @@ jobs:
             echo "Version overrides require dispatching this workflow from a branch; received $GITHUB_REF_TYPE '$GITHUB_REF_NAME'." >&2
             exit 1
           fi
+          if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "Version override must contain two or three dot-separated integers; received '$RELEASE_VERSION'." >&2
+            exit 1
+          fi
+
           node --input-type=module -e '
             import fs from "node:fs";
-            import * as Effect from "effect/Effect";
-            import * as DateTime from "effect/DateTime";
-            import { compareSemverVersions } from "./packages/shared/src/semver.ts";
-            import { validateCalendarReleaseVersion } from "./scripts/lib/release-version.ts";
-            const date = await Effect.runPromise(DateTime.now.pipe(Effect.map(now => DateTime.formatIsoDateUtc(now).replaceAll("-", ""))));
-            const version = await Effect.runPromise(validateCalendarReleaseVersion(process.env.RELEASE_VERSION, date));
             const path = "apps/mobile/app.config.ts";
             const source = fs.readFileSync(path, "utf8");
-            const currentVersion = source.match(/^  version: "([^"]+)"/m)?.[1];
-            if (!currentVersion || compareSemverVersions(version, currentVersion) < 0) {
-              throw new Error("The mobile release version must not downgrade the configured app version.");
-            }
             const next = source.replace(
               /^(  version: ")[^"]+(".*)$/m,
-              (_match, prefix, suffix) => prefix + version + suffix,
+              (_match, prefix, suffix) => prefix + process.env.RELEASE_VERSION + suffix,
             );
             if (next === source && !source.includes("  version: \"" + process.env.RELEASE_VERSION + "\"")) {
               throw new Error("Could not update app version");
@@ -252,18 +244,6 @@ jobs:
           compatible_count=$(eas build:list --platform "$MOBILE_PLATFORM" --build-profile production --status finished --fingerprint-hash "$MOBILE_FINGERPRINT" --limit 1 --json --non-interactive | jq 'length')
           echo "version_exists=$([[ "$version_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "compatible=$([[ "$compatible_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - name: Validate native release version
-        if: ${{ !matrix.legacy && (inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true')) }}
-        env:
-          RELEASE_VERSION: ${{ steps.config.outputs.version }}
-        run: |
-          node --input-type=module -e '
-            import * as Effect from "effect/Effect";
-            import * as DateTime from "effect/DateTime";
-            import { validateCalendarReleaseVersion } from "./scripts/lib/release-version.ts";
-            const date = await Effect.runPromise(DateTime.now.pipe(Effect.map(now => DateTime.formatIsoDateUtc(now).replaceAll("-", ""))));
-            await Effect.runPromise(validateCalendarReleaseVersion(process.env.RELEASE_VERSION, date));
-          '
       - id: build
         name: Compile and sign on Depot
         if: ${{ !matrix.legacy && (inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true')) }}

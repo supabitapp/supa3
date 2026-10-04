@@ -110,27 +110,6 @@ describe("environment maintenance access", () => {
 describe("environment release checks", () => {
   const signal = new AbortController().signal;
 
-  it("offers calendar releases to legacy hosts and preserves yearly channel ordering", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockImplementation(async () =>
-          Response.json([
-            { tag_name: "v27.0.0-preview.20270101.125" },
-            { tag_name: "v27.0.0-nightly.20270101.124" },
-            { tag_name: "v26.0.0" },
-          ]),
-        ),
-    );
-    expect(await findEnvironmentUpdate("0.0.46", signal)).toBe("26.0.0");
-    expect(await findEnvironmentUpdate("26.0.0", signal)).toBeNull();
-    expect(await findEnvironmentUpdate("26.4.0-nightly.20261231.123", signal)).toBe(
-      "27.0.0-nightly.20270101.124",
-    );
-    expect(await findEnvironmentUpdate("27.0.0", signal)).toBeNull();
-  });
-
   it("keeps stable hosts on stable releases and ignores drafts", async () => {
     vi.stubGlobal(
       "fetch",
