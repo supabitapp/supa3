@@ -116,9 +116,10 @@ GitLab calls these merge requests.
 GitHub, GitLab, and Azure DevOps support auto-merge while checks are outstanding. GitHub also
 supports approving waiting fork workflows and opening a revert pull request for a merged change.
 
-In the web and desktop apps, merging, closing, reverting, enabling auto-merge, approving workflows,
-and merging or rebasing a stack take two presses: the first turns the button into **Confirm**, the
-second runs it. Press Escape or click elsewhere to cancel.
+In the web and desktop apps, merging, closing (with or without a comment), reverting, updating a
+branch with a rebase, enabling auto-merge, approving workflows, and merging or rebasing a stack take
+two presses: the first turns the button into **Confirm**, the second runs it. Press Escape or click
+elsewhere to cancel.
 
 GitHub sharing is off by default. In Settings → Connections → GitHub sharing (Environments on mobile), choose
 **Read PRs** or **Read and act** for each environment you trust to share GitHub access.
