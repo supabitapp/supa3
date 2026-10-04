@@ -15,6 +15,7 @@ export function VideoAttachmentTile(props: {
   readonly thumbnailSource: string | DraftComposerFileAttachment | null;
   readonly actionsSource?: MediaActionsSource;
   readonly compact?: boolean;
+  readonly preservesKeyboard?: boolean;
   readonly onPress: (sourceIdentifier: string) => void;
   readonly disabled?: boolean;
   readonly className?: string;
@@ -41,7 +42,7 @@ export function VideoAttachmentTile(props: {
         mediaActions.actions.find(({ id }) => id === nativeEvent.actionName)?.run();
       }}
     >
-      <MediaActionsMenu media={mediaActions}>
+      <MediaActionsMenu media={mediaActions} preservesKeyboard={props.preservesKeyboard}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Play ${props.name}`}

@@ -322,6 +322,7 @@ function ComposerVideoAttachment(props: {
       sourceIdentifier={sourceIdentifier}
       thumbnailSource={attachment}
       compact={props.compact}
+      preservesKeyboard
       onPress={() => props.onPressVideo(attachment, sourceIdentifier)}
       actionsSource={actionsSource}
       style={style}

@@ -9,6 +9,8 @@ import { ControlPillMenu } from "./ControlPill";
 export function MediaActionsMenu(props: {
   readonly media: ReturnType<typeof useMediaActions>;
   readonly inModal?: boolean;
+  /** Long-press menus over a focused composer keep the keyboard up. */
+  readonly preservesKeyboard?: boolean;
   readonly children?: ReactElement<PressableProps>;
   readonly style?: StyleProp<ViewStyle>;
 }) {
@@ -21,6 +23,7 @@ export function MediaActionsMenu(props: {
       title={props.media.title}
       style={props.style}
       shouldOpenOnLongPress={props.children !== undefined}
+      preservesKeyboard={props.preservesKeyboard}
       actions={props.media.actions.map(({ id, title, disabled }) => ({
         id,
         title,
