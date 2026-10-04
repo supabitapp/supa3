@@ -336,6 +336,7 @@ import {
   getComposerProviderState,
 } from "./chat/composerProviderState";
 import { confirmTerminalClose, isTerminalCloseConfirmPending } from "../lib/terminalCloseConfirm";
+import { confirmRightPanelSurfacesClose } from "./rightPanelCloseConfirm";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import {
@@ -490,7 +491,6 @@ import {
 import type { ComposerDispatchMode } from "@supacode/client-runtime/state/composer-dispatch";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
-  agentControlledBrowserCloseConfirmation,
   branchMismatchKey,
   buildExpiredTerminalContextToastCopy,
   buildLocalDraftThread,
@@ -5956,27 +5956,6 @@ export default function ChatView(props: ChatViewProps) {
       storeCloseTerminal,
     ],
   );
-  const closeAfterAgentBrowserConfirmation = useCallback(
-    (surfaces: readonly RightPanelSurface[], closeSurfaces: () => void) => {
-      const message = agentControlledBrowserCloseConfirmation(
-        surfaces,
-        activePreviewState.desktopByTabId,
-      );
-      if (!message) {
-        closeSurfaces();
-        return;
-      }
-      const localApi = readLocalApi();
-      if (!localApi) return;
-      void localApi.dialogs.confirm(message, { variant: "destructive" }).then(
-        (confirmed) => {
-          if (confirmed) closeSurfaces();
-        },
-        () => undefined,
-      );
-    },
-    [activePreviewState.desktopByTabId],
-  );
   const syncActivePreviewSurface = useCallback(() => {
     if (!activeThreadRef) return;
     const nextActiveSurface = selectActiveRightPanelSurface(
@@ -5999,88 +5978,54 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeThreadRef, cleanupRightPanelSurfaces, syncActivePreviewSurface],
   );
-  const closeRightPanelSurface = useCallback(
-    (surface: RightPanelSurface) => {
+  const closeRightPanelSurfacesAfterConfirmation = useCallback(
+    (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
-      const finishClose = () => finishRightPanelSurfaceClose([surface]);
-      if (surface.kind === "preview") {
-        closeAfterAgentBrowserConfirmation([surface], finishClose);
-        return;
-      }
-      if (surface.kind !== "terminal") {
-        finishClose();
-        return;
-      }
-      const activeLabel =
-        activeTerminalLabelsById.get(surface.activeTerminalId) ??
-        getTerminalLabel(surface.activeTerminalId);
-      const otherTerminalIds = surface.terminalIds.filter(
-        (terminalId) => terminalId !== surface.activeTerminalId,
-      );
-      void confirmTerminalClose([
-        {
-          label: activeLabel,
-          hasRunningSubprocess:
-            activeTerminalHasRunningSubprocessById.get(surface.activeTerminalId) ?? false,
-        },
-        ...otherTerminalIds.map((terminalId) => {
-          return {
-            label: activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId),
-            hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-          };
-        }),
-      ]).then((confirmed) => {
-        if (confirmed) finishClose();
+      void confirmRightPanelSurfacesClose(surfaces, {
+        desktopByTabId: activePreviewState.desktopByTabId,
+        terminalLabelsById: activeTerminalLabelsById,
+        terminalHasRunningSubprocessById: activeTerminalHasRunningSubprocessById,
+      }).then((confirmed) => {
+        if (confirmed) finishRightPanelSurfaceClose(surfaces);
       });
     },
     [
       activeThreadRef,
+      activePreviewState.desktopByTabId,
       activeTerminalHasRunningSubprocessById,
       activeTerminalLabelsById,
-      closeAfterAgentBrowserConfirmation,
       finishRightPanelSurfaceClose,
     ],
+  );
+  const closeRightPanelSurface = useCallback(
+    (surface: RightPanelSurface) => {
+      if (surface.kind === "preview" || surface.kind === "terminal") {
+        closeRightPanelSurfacesAfterConfirmation([surface]);
+        return;
+      }
+      finishRightPanelSurfaceClose([surface]);
+    },
+    [closeRightPanelSurfacesAfterConfirmation, finishRightPanelSurfaceClose],
   );
   const closeOtherRightPanelSurfaces = useCallback(
     (surface: RightPanelSurface) => {
-      if (!activeThreadRef) return;
-      const surfaces = rightPanelState.surfaces.filter((entry) => entry.id !== surface.id);
-      const finishClose = () => finishRightPanelSurfaceClose(surfaces);
-      closeAfterAgentBrowserConfirmation(surfaces, finishClose);
+      closeRightPanelSurfacesAfterConfirmation(
+        rightPanelState.surfaces.filter((entry) => entry.id !== surface.id),
+      );
     },
-    [
-      activeThreadRef,
-      closeAfterAgentBrowserConfirmation,
-      finishRightPanelSurfaceClose,
-      rightPanelState.surfaces,
-    ],
+    [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces],
   );
   const closeRightPanelSurfacesToRight = useCallback(
     (surface: RightPanelSurface) => {
-      if (!activeThreadRef) return;
       const surfaceIndex = rightPanelState.surfaces.findIndex((entry) => entry.id === surface.id);
       if (surfaceIndex < 0) return;
-      const surfaces = rightPanelState.surfaces.slice(surfaceIndex + 1);
-      const finishClose = () => finishRightPanelSurfaceClose(surfaces);
-      closeAfterAgentBrowserConfirmation(surfaces, finishClose);
+      closeRightPanelSurfacesAfterConfirmation(rightPanelState.surfaces.slice(surfaceIndex + 1));
     },
-    [
-      activeThreadRef,
-      closeAfterAgentBrowserConfirmation,
-      finishRightPanelSurfaceClose,
-      rightPanelState.surfaces,
-    ],
+    [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces],
   );
   const closeAllRightPanelSurfaces = useCallback(() => {
-    if (!activeThreadRef) return;
-    const finishClose = () => finishRightPanelSurfaceClose(rightPanelState.surfaces);
-    closeAfterAgentBrowserConfirmation(rightPanelState.surfaces, finishClose);
-  }, [
-    activeThreadRef,
-    closeAfterAgentBrowserConfirmation,
-    finishRightPanelSurfaceClose,
-    rightPanelState.surfaces,
-  ]);
+    closeRightPanelSurfacesAfterConfirmation(rightPanelState.surfaces);
+  }, [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces]);
   const copyRightPanelFilePath = useCallback((relativePath: string) => {
     if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
       toastManager.add(
