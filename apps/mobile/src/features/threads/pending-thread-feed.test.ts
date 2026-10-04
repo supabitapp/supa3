@@ -6,8 +6,12 @@ import {
   MessageId,
   ThreadId,
 } from "@supacode/contracts";
+import { deriveThreadFeedPresentation } from "../../lib/threadActivity";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
-import { appendPendingThreadMessages } from "./pending-thread-feed";
+import {
+  appendPendingThreadMessages,
+  retainPendingCreationAttachments,
+} from "./pending-thread-feed";
 
 const pending = (id: string): QueuedThreadMessage => ({
   environmentId: EnvironmentId.make("env"),
@@ -36,6 +40,46 @@ describe("pending timeline messages", () => {
     if (entry?.type !== "message") throw new Error("Expected a pending message");
     expect(entry.message.text).toBe(text);
     expect(entry.message.context).toEqual(context);
+  });
+
+  it("retains local preview sources through presentation until creation is delivered", () => {
+    const attachment = {
+      id: "local-image",
+      type: "image" as const,
+      name: "photo.png",
+      mimeType: "image/png",
+      sizeBytes: 42,
+      previewUri: "file:///draft/photo.png",
+      fileUri: "file:///draft/photo.png",
+    };
+    const queued = { ...pending("creation"), attachments: [attachment] };
+    const optimistic = appendPendingThreadMessages([], [], [queued])[0]!;
+    const anchored = { ...optimistic, pendingMessage: undefined, draftAttachments: undefined };
+    const feed = retainPendingCreationAttachments([anchored], queued);
+    const presented = appendPendingThreadMessages(
+      deriveThreadFeedPresentation(feed, null, new Set()),
+      feed,
+      [],
+    );
+    expect(presented[0]?.draftAttachments).toEqual([attachment]);
+    expect(presented[0]?.pendingMessage).toBeUndefined();
+    expect(retainPendingCreationAttachments([anchored], null)[0]?.draftAttachments).toBeUndefined();
+    expect(anchored.draftAttachments).toBeUndefined();
+  });
+
+  it("keeps local preview sources on queued messages", () => {
+    const attachment = {
+      id: "local-pdf",
+      type: "file" as const,
+      name: "file.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 42,
+      fileUri: "file:///draft/file.pdf",
+    };
+    const queued = { ...pending("queued"), attachments: [attachment] };
+    expect(appendPendingThreadMessages([], [], [queued])[0]?.pendingMessage?.attachments).toEqual([
+      attachment,
+    ]);
   });
 
   it("keeps pending messages after newer agent activity in queue order", () => {

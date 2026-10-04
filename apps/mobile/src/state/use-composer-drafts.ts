@@ -1,3 +1,4 @@
+import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
 import { useAtomValue } from "@effect/atom-react";
 import {
   EnvironmentId as EnvironmentIdSchema,
@@ -768,7 +769,11 @@ function isComposerAttachmentFileReferenced(fileUri: string): boolean {
   const queuedMessages = Object.values(
     appAtomRegistry.get(threadOutboxManager.queuedMessagesByThreadKeyAtom),
   ).flat();
-  return [...drafts, ...queuedMessages].some((owner) =>
+  return [
+    ...drafts,
+    ...queuedMessages,
+    ...appAtomRegistry.get(acknowledgedThreadMessagesAtom),
+  ].some((owner) =>
     owner.attachments.some(
       (attachment) =>
         attachment.fileUri !== undefined &&

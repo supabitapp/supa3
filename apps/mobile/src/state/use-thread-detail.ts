@@ -1,5 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { PendingThreadRequests } from "@supacode/client-runtime/state/thread-requests";
+import { deriveReportedModelSelection } from "@supacode/client-runtime/state/thread-execution";
+import type { ThreadTurnSubagents } from "@supacode/client-runtime/state/thread-subagents";
 import type { EnvironmentThread } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId, OrchestrationV2ThreadProjection, ThreadId } from "@supacode/contracts";
 import { Atom } from "effect/unstable/reactivity";
@@ -52,6 +54,32 @@ export function useSelectedThreadProjection(): EnvironmentThread | null {
     environmentId: selectedThreadDetailRef?.environmentId ?? null,
     threadId: selectedThreadDetailRef?.threadId ?? null,
   });
+}
+
+const selectReportedModelSelection = (thread: EnvironmentThread | null) =>
+  thread === null ? null : deriveReportedModelSelection(thread.projection);
+const EMPTY_QUEUED_COUNT_ATOM = Atom.make(0);
+const EMPTY_TURN_SUBAGENTS_ATOM = Atom.make<ThreadTurnSubagents | null>(null);
+
+export function useSelectedThreadComposerMetadata() {
+  const { selectedThreadDetailRef } = useThreadSelection();
+  const reportedModelSelection = useAtomValue(
+    selectedThreadDetailRef === null
+      ? EMPTY_THREAD_PROJECTION_ATOM
+      : environmentThreadDetails.threadAtom(selectedThreadDetailRef),
+    selectReportedModelSelection,
+  );
+  const queuedCount = useAtomValue(
+    selectedThreadDetailRef === null
+      ? EMPTY_QUEUED_COUNT_ATOM
+      : environmentThreadDetails.queuedCountAtom(selectedThreadDetailRef),
+  );
+  const turnSubagents = useAtomValue(
+    selectedThreadDetailRef === null
+      ? EMPTY_TURN_SUBAGENTS_ATOM
+      : environmentThreadDetails.turnSubagentsAtom(selectedThreadDetailRef),
+  );
+  return { reportedModelSelection, queuedCount, turnSubagents };
 }
 
 export function useThreadVisibleTurnItems(

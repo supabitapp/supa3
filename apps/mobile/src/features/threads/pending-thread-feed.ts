@@ -1,10 +1,24 @@
+import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 
 export type PendingThreadFeedEntry = ThreadFeedEntry & {
   readonly pendingMessage?: QueuedThreadMessage;
   readonly acknowledged?: boolean;
+  readonly draftAttachments?: ReadonlyArray<DraftComposerAttachment>;
 };
+
+export function retainPendingCreationAttachments(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+  pendingMessage: QueuedThreadMessage | null,
+): ReadonlyArray<PendingThreadFeedEntry> {
+  if (!pendingMessage) return feed;
+  return feed.map((entry) =>
+    entry.type === "message" && entry.message.id === pendingMessage.messageId
+      ? { ...entry, draftAttachments: pendingMessage.attachments }
+      : entry,
+  );
+}
 
 /** Append the outbox after all presented activity, until the server echoes each message. */
 export function appendPendingThreadMessages(

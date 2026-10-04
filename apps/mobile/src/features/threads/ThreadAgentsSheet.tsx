@@ -26,7 +26,7 @@ const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Pl
 
 type AgentsTarget = { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
 
-export function useThreadTurnSubagents(target: AgentsTarget): ThreadTurnSubagents | null {
+function useThreadTurnSubagents(target: AgentsTarget): ThreadTurnSubagents | null {
   return useAtomValue(environmentThreadDetails.turnSubagentsAtom(target));
 }
 

@@ -51,7 +51,10 @@ import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { buildThreadFeed } from "../lib/threadActivity";
 import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
-import { appendPendingThreadMessages } from "../features/threads/pending-thread-feed";
+import {
+  appendPendingThreadMessages,
+  retainPendingCreationAttachments,
+} from "../features/threads/pending-thread-feed";
 import { threadAllowsProviderSwitch } from "./thread-provider-switching";
 import { appAtomRegistry } from "../state/atom-registry";
 import { pendingThreadCreationMessage } from "./pending-thread-creation";
@@ -177,6 +180,7 @@ export function useThreadComposerState() {
   const {
     selectedThread: selectedThreadShell,
     selectedThreadCreation,
+    selectedThreadDetailRef,
     selectedEnvironmentRuntime,
   } = useThreadSelection();
   const selectedThreadProjection = useSelectedThreadProjection();
@@ -261,11 +265,14 @@ export function useThreadComposerState() {
       !selectedThreadMessages?.some((message) => message.id === pendingCreationMessage.messageId)
         ? [pendingThreadCreationMessage(pendingCreationMessage)]
         : [];
-    const feed = buildThreadFeed(selectedThreadVisibleTurnItems, {
-      anchoredMessages: pendingCreation,
-      attempts: selectedThreadAttempts,
-      nodes: selectedThreadNodes,
-    });
+    const feed = retainPendingCreationAttachments(
+      buildThreadFeed(selectedThreadVisibleTurnItems, {
+        anchoredMessages: pendingCreation,
+        attempts: selectedThreadAttempts,
+        nodes: selectedThreadNodes,
+      }),
+      pendingCreation.length > 0 ? pendingCreationMessage : null,
+    );
     const pendingAcknowledgments = acknowledgedMessages.filter(
       (message) =>
         scopedThreadKey(message.environmentId, message.threadId) === selectedThreadKey &&
@@ -285,17 +292,6 @@ export function useThreadComposerState() {
     selectedThreadQueuedMessages,
     acknowledgedMessages,
   ]);
-  useEffect(() => {
-    const echoedIds = new Set(selectedThreadMessages?.map((message) => message.id));
-    if (acknowledgedMessages.some((message) => echoedIds.has(message.messageId))) {
-      appAtomRegistry.set(
-        acknowledgedThreadMessagesAtom,
-        appAtomRegistry
-          .get(acknowledgedThreadMessagesAtom)
-          .filter((message) => !echoedIds.has(message.messageId)),
-      );
-    }
-  }, [acknowledgedMessages, selectedThreadMessages]);
 
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const followUpBehavior = AsyncResult.isSuccess(preferencesResult)
@@ -304,12 +300,9 @@ export function useThreadComposerState() {
   // Steering needs a live provider turn the adapter can interrupt; the queue
   // workflow already derives that from the session's capabilities.
   const queueWorkflow = useAtomValue(
-    selectedThreadShell === null
+    selectedThreadDetailRef === null
       ? EMPTY_QUEUE_WORKFLOW_ATOM
-      : environmentThreadDetails.queueWorkflowAtom({
-          environmentId: selectedThreadShell.environmentId,
-          threadId: selectedThreadShell.id,
-        }),
+      : environmentThreadDetails.queueWorkflowAtom(selectedThreadDetailRef),
   );
   const canSteerActiveTurn = queueWorkflow?.canPromoteToSteer === true;
   const queuedRunEdit = useQueuedRunEdit(selectedThreadKey);
