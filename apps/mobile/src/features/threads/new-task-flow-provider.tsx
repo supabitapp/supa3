@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 import type {
@@ -292,7 +292,8 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // The new-task draft the composer is bound to. Null until a project is
   // chosen; each New Task entry mints its own, so a project can hold several.
   const [activeDraftKey, setActiveDraftKey] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmittingState] = useState(false);
+  const submittingRef = useRef(false);
   const [branchQuery, setBranchQuery] = useState("");
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [editingPendingTask, setEditingPendingTask] = useState<QueuedThreadMessage | null>(null);
@@ -304,7 +305,29 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // Unrelated accepted writes still beat the dismissed session's CAS.
   const editingRevisionRef = useRef(Promise.resolve(0));
 
+  const [switchingToEnvironmentId, setSwitchingToEnvironmentId] = useState<EnvironmentId | null>(
+    null,
+  );
+  const latestSwitchRef = useRef<{
+    readonly environmentId: EnvironmentId;
+    readonly draftKey: string | null;
+    readonly projectKey: string | null;
+  } | null>(null);
+  const cancelEnvironmentSwitch = useCallback(() => {
+    latestSwitchRef.current = null;
+    setSwitchingToEnvironmentId(null);
+  }, []);
+  const setSubmitting = useCallback(
+    (value: boolean) => {
+      if (value) cancelEnvironmentSwitch();
+      submittingRef.current = value;
+      setSubmittingState(value);
+    },
+    [cancelEnvironmentSwitch],
+  );
+
   const reset = useCallback(() => {
+    cancelEnvironmentSwitch();
     setSelectedEnvironmentId(null);
     setSelectedProjectKey(null);
     setActiveDraftKey(null);
@@ -321,7 +344,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       }
       releaseEditingQueuedMessage(editing.messageId);
     }
-  }, []);
+  }, [cancelEnvironmentSwitch, setSubmitting]);
 
   const projectsForEnvironment = useMemo(
     () =>
@@ -461,6 +484,20 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     : selectedProject
       ? activeDraftKey
       : null;
+  const draftProjectKey = selectedProject
+    ? scopedProjectKey(selectedProject.environmentId, selectedProject.id)
+    : null;
+  // A request belongs to the draft/project that started it, including when
+  // catalog changes or unmounting replace that owner without a user action.
+  useLayoutEffect(
+    () => () => {
+      const request = latestSwitchRef.current;
+      if (request?.draftKey === selectedProjectDraftKey && request.projectKey === draftProjectKey) {
+        cancelEnvironmentSwitch();
+      }
+    },
+    [cancelEnvironmentSwitch, selectedProjectDraftKey, draftProjectKey],
+  );
   // selectedProject can resolve without setProject ever running (the
   // environment's first project is the fallback, and the draft screen skips
   // setProject when the route's project already matches it). The composer
@@ -769,11 +806,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
 
   const setProject = useCallback(
     (project: EnvironmentProject) => {
+      cancelEnvironmentSwitch();
       carryDraftContentTo(project);
       setSelectedEnvironmentId(project.environmentId);
       setSelectedProjectKey(scopedProjectKey(project.environmentId, project.id));
     },
-    [carryDraftContentTo],
+    [cancelEnvironmentSwitch, carryDraftContentTo],
   );
 
   const openDraft = useCallback(
@@ -793,16 +831,18 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       if (!projectLoaded) {
         return false;
       }
+      cancelEnvironmentSwitch();
       setActiveDraftKey(draftKey);
       setSelectedEnvironmentId(stamp.environmentId);
       setSelectedProjectKey(scopedProjectKey(stamp.environmentId, stamp.projectId));
       return true;
     },
-    [projects],
+    [cancelEnvironmentSwitch, projects],
   );
 
   const selectEnvironment = useCallback(
     (environmentId: EnvironmentId) => {
+      cancelEnvironmentSwitch();
       const match = resolveEnvironmentProjectMatch(
         projects.filter((project) => project.environmentId === environmentId),
         selectedProject,
@@ -813,27 +853,27 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       setSelectedEnvironmentId(environmentId);
       setSelectedProjectKey(match ? scopedProjectKey(match.environmentId, match.id) : null);
     },
-    [projects, selectedProject, carryDraftContentTo],
+    [cancelEnvironmentSwitch, projects, selectedProject, carryDraftContentTo],
   );
 
   const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
-  const [switchingToEnvironmentId, setSwitchingToEnvironmentId] = useState<EnvironmentId | null>(
-    null,
-  );
   // The latest switch wins: a slower, earlier one must not retarget the draft.
-  const latestSwitchRef = useRef<object | null>(null);
   const switchEnvironment = useCallback(
     async (environmentId: EnvironmentId): Promise<boolean> => {
+      if (submittingRef.current) return false;
       if (environmentId === selectedEnvironmentId) {
-        latestSwitchRef.current = null;
-        setSwitchingToEnvironmentId(null);
+        cancelEnvironmentSwitch();
         return true;
       }
       if (!isScratchDraft) {
         selectEnvironment(environmentId);
         return true;
       }
-      const request = {};
+      const request = {
+        environmentId,
+        draftKey: selectedProjectDraftKey,
+        projectKey: draftProjectKey,
+      };
       latestSwitchRef.current = request;
       setSwitchingToEnvironmentId(environmentId);
       try {
@@ -855,12 +895,18 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         return false;
       } finally {
         if (latestSwitchRef.current === request) {
-          latestSwitchRef.current = null;
-          setSwitchingToEnvironmentId(null);
+          cancelEnvironmentSwitch();
         }
       }
     },
-    [isScratchDraft, selectEnvironment, selectedEnvironmentId],
+    [
+      cancelEnvironmentSwitch,
+      isScratchDraft,
+      selectEnvironment,
+      selectedEnvironmentId,
+      selectedProjectDraftKey,
+      draftProjectKey,
+    ],
   );
 
   const setWorkspaceMode = useCallback(
@@ -1036,39 +1082,43 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     [selectedProjectDraftKey, selectedProviderStatus],
   );
 
-  const beginEditingPendingTask = useCallback((messageId: string): boolean => {
-    const message = findQueuedPendingTask(messageId);
-    if (!message?.creation) {
-      return false;
-    }
-    const draftKey = pendingTaskDraftKey(message.messageId);
-    // Only hydrate a fresh editing draft; reopening mid-edit keeps newer edits.
-    if (isComposerDraftEmpty(getComposerDraftSnapshot(draftKey))) {
-      setComposerDraftText(draftKey, message.text);
-      setComposerDraftContext(draftKey, message.context);
-      replaceComposerDraftAttachments(draftKey, message.attachments);
-      updateComposerDraftSettings(draftKey, {
-        modelSelection: message.modelSelection,
-        runtimeMode: message.runtimeMode,
-        interactionMode: message.interactionMode,
-        workspaceSelection: {
-          mode: message.creation.workspaceMode,
-          branch: message.creation.branch,
-          worktreePath: message.creation.worktreePath,
-          startFromOrigin: message.creation.startFromOrigin ?? false,
-        },
-      });
-    }
-    setSelectedEnvironmentId(message.environmentId);
-    setSelectedProjectKey(scopedProjectKey(message.environmentId, message.creation.projectId));
-    activeEditingMessageId = message.messageId;
-    editingPendingTaskRef.current = message;
-    editingRevisionRef.current = capturePendingTaskEditorWriteBaseline(message.messageId);
-    setEditingPendingTask(message);
-    // Hold the outbox drain off this task while it is open in the editor.
-    holdEditingQueuedMessage(message.messageId);
-    return true;
-  }, []);
+  const beginEditingPendingTask = useCallback(
+    (messageId: string): boolean => {
+      const message = findQueuedPendingTask(messageId);
+      if (!message?.creation) {
+        return false;
+      }
+      cancelEnvironmentSwitch();
+      const draftKey = pendingTaskDraftKey(message.messageId);
+      // Only hydrate a fresh editing draft; reopening mid-edit keeps newer edits.
+      if (isComposerDraftEmpty(getComposerDraftSnapshot(draftKey))) {
+        setComposerDraftText(draftKey, message.text);
+        setComposerDraftContext(draftKey, message.context);
+        replaceComposerDraftAttachments(draftKey, message.attachments);
+        updateComposerDraftSettings(draftKey, {
+          modelSelection: message.modelSelection,
+          runtimeMode: message.runtimeMode,
+          interactionMode: message.interactionMode,
+          workspaceSelection: {
+            mode: message.creation.workspaceMode,
+            branch: message.creation.branch,
+            worktreePath: message.creation.worktreePath,
+            startFromOrigin: message.creation.startFromOrigin ?? false,
+          },
+        });
+      }
+      setSelectedEnvironmentId(message.environmentId);
+      setSelectedProjectKey(scopedProjectKey(message.environmentId, message.creation.projectId));
+      activeEditingMessageId = message.messageId;
+      editingPendingTaskRef.current = message;
+      editingRevisionRef.current = capturePendingTaskEditorWriteBaseline(message.messageId);
+      setEditingPendingTask(message);
+      // Hold the outbox drain off this task while it is open in the editor.
+      holdEditingQueuedMessage(message.messageId);
+      return true;
+    },
+    [cancelEnvironmentSwitch],
+  );
 
   const buildPendingTaskMessage = useCallback(
     (
@@ -1078,6 +1128,9 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         readonly useDefaultBranch?: boolean;
       },
     ): QueuedThreadMessage | null => {
+      // Read the request synchronously: a keyboard send can arrive before
+      // React has rendered the pending switch's disabled composer controls.
+      if (latestSwitchRef.current !== null) return null;
       if (!selectedProject || !selectedProjectDraftKey) {
         return null;
       }
@@ -1175,6 +1228,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   );
 
   const finishEditingPendingTask = useCallback(() => {
+    cancelEnvironmentSwitch();
     const editing = editingPendingTaskRef.current;
     editingPendingTaskRef.current = null;
     if (editing) {
@@ -1186,7 +1240,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       scheduleUnusedComposerAttachmentCleanup(editing.attachments);
     }
     setEditingPendingTask(null);
-  }, []);
+  }, [cancelEnvironmentSwitch]);
 
   // If the queued task disappears mid-edit (deleted from the list, or
   // delivered), end the editing session immediately without saving — a later
@@ -1267,8 +1321,9 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     };
   }, [buildPendingTaskMessage]);
   const cancelEditingPendingTask = useCallback(() => {
+    cancelEnvironmentSwitch();
     editingFlushRef.current?.();
-  }, []);
+  }, [cancelEnvironmentSwitch]);
   useEffect(
     () => () => {
       editingFlushRef.current?.();
@@ -1392,6 +1447,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       setPrompt,
       setRuntimeMode,
       setSelectedModelKey,
+      setSubmitting,
       setStartFromOrigin,
       setWorkspaceMode,
       startFromOrigin,

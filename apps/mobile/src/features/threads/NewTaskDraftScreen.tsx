@@ -457,8 +457,8 @@ export function NewTaskDraftScreen(props: {
   );
   const contextImports = useAtomValue(composerContextImportsAtom);
   const isImportingContext = flow.draftKey ? contextImports[flow.draftKey] === true : false;
-  const isComposerInteractionLocked =
-    isIncomingShareTransferPending || flow.submitting || isImportingContext;
+  const isComposerBusy = isIncomingShareTransferPending || flow.submitting || isImportingContext;
+  const isComposerInteractionLocked = isComposerBusy || flow.switchingToEnvironmentId !== null;
   const providerOptionDescriptors = useMemo(
     () =>
       resolveProviderOptionDescriptors({
@@ -471,13 +471,13 @@ export function NewTaskDraftScreen(props: {
   // progress is heading to so repeated presses keep advancing.
   const { environments, selectedEnvironmentId, switchEnvironment, switchingToEnvironmentId } = flow;
   const cycleEnvironment = useCallback(() => {
-    if (isComposerInteractionLocked) return true;
+    if (isComposerBusy) return true;
     const next = nextEnvironmentId(environments, switchingToEnvironmentId ?? selectedEnvironmentId);
     if (next !== null) void switchEnvironment(next);
     return true;
   }, [
     environments,
-    isComposerInteractionLocked,
+    isComposerBusy,
     selectedEnvironmentId,
     switchEnvironment,
     switchingToEnvironmentId,
@@ -1220,7 +1220,12 @@ export function NewTaskDraftScreen(props: {
   );
 
   async function handleStart(): Promise<void> {
-    if (voiceInput.blocksSubmission || pendingPastedTextAttachmentCountRef.current > 0) return;
+    if (
+      isComposerInteractionLocked ||
+      voiceInput.blocksSubmission ||
+      pendingPastedTextAttachmentCountRef.current > 0
+    )
+      return;
     const selectedProject = flow.selectedProject;
     const draftKey = flow.draftKey;
     if (!selectedProject || !draftKey) {
@@ -1372,7 +1377,7 @@ export function NewTaskDraftScreen(props: {
 
   const isAndroid = Platform.OS === "android";
   const canStart =
-    !isImportingContext &&
+    !isComposerInteractionLocked &&
     !cloneBlocksStart &&
     attachmentBlockReason === null &&
     !modelUnavailable &&
@@ -1381,7 +1386,6 @@ export function NewTaskDraftScreen(props: {
     flow.prompt.trim().length > 0 &&
     isIncomingShareReady &&
     !isImportingShare &&
-    !flow.submitting &&
     pendingPastedTextAttachmentCount === 0 &&
     !voiceInput.blocksSubmission;
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
