@@ -14,6 +14,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  Platform,
   Pressable,
   StatusBar,
   View,
@@ -263,7 +264,7 @@ function DevicePreviewScreen({
   ];
   return (
     <View className="flex-1" style={{ backgroundColor: themeVariables["--color-sheet-solid"] }}>
-      <StatusBar hidden animated />
+      {Platform.OS === "android" ? <StatusBar hidden animated /> : null}
       {preview && focused && foreground ? (
         <OpenDevicePreview
           key={`${preview.key}:${streamAttempt}`}
