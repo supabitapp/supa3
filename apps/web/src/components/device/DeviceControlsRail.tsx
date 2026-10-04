@@ -31,6 +31,7 @@ import {
   MenuRadioItemIndicator,
 } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import type { DeviceStreamHandle, DeviceViewControls } from "./DeviceStreamView";
 import type { DeviceControls } from "./useDeviceControls";
 
@@ -49,6 +50,7 @@ export function DeviceControlsRail(props: {
   onPowerOff: () => void;
 }) {
   const { view, handle, controls } = props;
+  const confirm = useInlineConfirm<"power-off">();
   const popupSide = "left";
   const settings = controls.detail?.settings;
   const inputDisabled = !handle?.inputConnected;
@@ -218,9 +220,9 @@ export function DeviceControlsRail(props: {
               Close device panel
             </MenuItem>
             <MenuSeparator />
-            <MenuItem variant="destructive" onClick={props.onPowerOff}>
+            <MenuItem variant="destructive" {...confirm.bind("power-off", props.onPowerOff)}>
               <Power />
-              Power off device
+              {confirm.armed === "power-off" ? "Confirm power off" : "Power off device"}
             </MenuItem>
           </MenuPopup>
         </Menu>

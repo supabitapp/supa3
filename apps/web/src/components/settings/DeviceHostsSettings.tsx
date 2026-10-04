@@ -5,6 +5,7 @@ import { Spinner } from "../ui/spinner";
 import type { EnvironmentId, SshDeviceHostConfig } from "@supacode/contracts";
 import { randomUUID } from "../../lib/utils";
 import { useState } from "react";
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { deviceEnvironment, useDeviceState } from "../../state/device";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -180,6 +181,7 @@ function DeviceHostList({
   const { state } = useDeviceState(environmentId);
   const retry = useAtomCommand(deviceEnvironment.list);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const confirm = useInlineConfirm<string>();
   return (
     <>
       {hosts.length === 0 ? (
@@ -292,8 +294,8 @@ function DeviceHostList({
                 >
                   Edit
                 </MenuItem>
-                <MenuItem variant="destructive" onClick={() => onRemove(host)}>
-                  Remove
+                <MenuItem variant="destructive" {...confirm.bind(host.id, () => onRemove(host))}>
+                  {confirm.armed === host.id ? "Confirm remove" : "Remove"}
                 </MenuItem>
               </MenuPopup>
             </Menu>
