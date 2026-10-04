@@ -40,7 +40,6 @@ export function appendPendingThreadMessages(
           id: pendingMessage.messageId,
           createdAt: pendingMessage.createdAt,
           pendingMessage,
-          draftAttachments: pendingMessage.attachments,
           message: {
             id: pendingMessage.messageId,
             role: "user",

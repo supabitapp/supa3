@@ -77,7 +77,7 @@ describe("pending timeline messages", () => {
       fileUri: "file:///draft/file.pdf",
     };
     const queued = { ...pending("queued"), attachments: [attachment] };
-    expect(appendPendingThreadMessages([], [], [queued])[0]?.draftAttachments).toEqual([
+    expect(appendPendingThreadMessages([], [], [queued])[0]?.pendingMessage?.attachments).toEqual([
       attachment,
     ]);
   });
