@@ -1,4 +1,9 @@
-import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@supacode/contracts";
+import type {
+  EnvironmentId,
+  ServerConfig,
+  ServerInstallation,
+  ServerSelfUpdateCapability,
+} from "@supacode/contracts";
 import type { ServerUpdateState } from "@supacode/client-runtime/state/server";
 import { compareSemverVersions, parseSemver } from "@supacode/shared/semver";
 import * as Schema from "effect/Schema";
@@ -115,8 +120,17 @@ export function supportsServerUpdateThreadContinuation(
 }
 
 /** The command to hand users whose server cannot update itself. */
-export function manualServerUpdateCommand(targetVersion: string): string {
-  return `npx supacode@${targetVersion}`;
+export function manualServerUpdateCommand(
+  targetVersion: string,
+  installation?: ServerInstallation,
+): string {
+  if (installation?.kind === "npm-global") {
+    const prefix = `'${installation.prefix.replaceAll("'", "'\\''")}'`;
+    return `npm install --global --prefix ${prefix} supacode@${targetVersion}`;
+  }
+  const runner =
+    installation?.kind === "pnpm-dlx" ? "pnpm dlx" : installation?.kind === "bunx" ? "bunx" : "npx";
+  return `${runner} supacode@${targetVersion}`;
 }
 
 export function serverUpdateGuidance(capability: ServerSelfUpdateCapability): string {

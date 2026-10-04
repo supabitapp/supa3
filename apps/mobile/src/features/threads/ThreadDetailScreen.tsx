@@ -130,6 +130,7 @@ import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
+import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 
 export interface ThreadDetailScreenProps {
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
@@ -302,6 +303,7 @@ const USER_INPUT_TOGGLE_TIMING = {
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const navigation = useNavigation();
+  const { session: voiceInputSession } = useGlobalVoiceInput();
   const { reportedModelSelection, queuedCount, turnSubagents } =
     useSelectedThreadComposerMetadata();
   const deviceState = useEnvironmentQuery(
@@ -472,11 +474,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
     if (pendingBackgroundWork !== null && contentPresentationKind === "ready") {
       return {
-        kind: "waiting",
+        kind: "background",
         label: pendingBackgroundWork.title,
         accessibilityLabel: `${pendingBackgroundWork.title}: ${pendingBackgroundWork.items
           .map((item) => item.label)
           .join(", ")}`,
+        waiting: pendingBackgroundWork.waiting,
       };
     }
     return null;
@@ -1186,7 +1189,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   >
                     <ComposerQueuedEditBanner
                       saving={props.isSavingQueuedEdit}
-                      onCancel={props.onCancelQueuedRunEdit}
+                      onCancel={() => {
+                        voiceInputSession.cancel(props.composerDraftKey);
+                        props.onCancelQueuedRunEdit();
+                      }}
                     />
                   </Animated.View>
                 ) : null}

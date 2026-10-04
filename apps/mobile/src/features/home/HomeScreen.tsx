@@ -1,6 +1,6 @@
+import { useThreadListV2Layout } from "../threads/use-thread-list-v2-layout";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import type { ThreadMoveDestination } from "../threads/threadOrder";
-import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
   type EnvironmentProject,
@@ -44,11 +44,10 @@ import {
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
+  ThreadListV2WorkingShelfHeader,
 } from "../threads/thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
 import {
-  buildThreadListV2Items,
-  getThreadListV2OrderedSection,
   buildThreadListV2ListItems,
   threadListV2ListItemsAreEqual,
   THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
@@ -469,8 +468,11 @@ export function HomeScreen(props: HomeScreenProps) {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
     snoozedShelfExpanded,
+    workingShelfEnabled,
+    workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
+    toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the list stays open.
   const [nowMinute, setNowMinute] = useState(() => new Date().toISOString().slice(0, 16));
@@ -510,72 +512,26 @@ export function HomeScreen(props: HomeScreenProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
-  // Up/down menu availability for every card, computed once per section per
-  // rebuild (see computeThreadMoveAvailability): per-thread planner calls made
-  // list construction quadratic, and this list rebuilds on every minute tick.
-  const threadMoveAvailability = useMemo(() => {
-    const sectionAvailability = (section: "pinned" | "active") =>
-      computeThreadMoveAvailability({
-        allThreads: props.threads,
-        section,
-        pendingOrder,
-        reorderableEnvironmentIds:
-          section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds,
-        ordered: getThreadListV2OrderedSection({
-          threads: props.threads,
-          section,
-          pendingOrder,
-          now: listClock.now,
-          settlementEnvironmentIds,
-          snoozeEnvironmentIds,
-          queuedThreadKeys,
-        }),
-      });
-    return new Map([...sectionAvailability("pinned"), ...sectionAvailability("active")]);
-  }, [
-    pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
-    props.threads,
+  const { threadMoveAvailability, threadListV2Layout } = useThreadListV2Layout({
+    threads: props.threads,
+    environmentId: props.selectedEnvironmentId,
+    projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
+    searchQuery: props.searchQuery,
+    matchedThreadKeys,
     pendingOrder,
-    queuedThreadKeys,
     settlementEnvironmentIds,
     snoozeEnvironmentIds,
-    listClock.now,
-  ]);
-  const threadListV2Layout = useMemo(() => {
-    // Settled threads are live shells; archived threads keep their original
-    // "hidden from lists" meaning.
-    return buildThreadListV2Items({
-      pendingOrder,
-      threads: props.threads.filter((thread) => thread.archivedAt === null),
-      environmentId: props.selectedEnvironmentId,
-      projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
-      searchQuery: props.searchQuery,
-      matchedThreadKeys,
-      settlementEnvironmentIds,
-      snoozeEnvironmentIds,
-      queuedThreadKeys,
-      settledLimit: settledVisibleCount,
-      now: listClock.now,
-      snoozedShelfExpanded,
-      settledShelfExpanded,
-      selectedThreadKey: null,
-    });
-  }, [
-    pendingOrder,
     queuedThreadKeys,
-    listClock.now,
+    settledLimit: settledVisibleCount,
+    now: listClock.now,
+    workingShelfEnabled,
+    workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
-    settledVisibleCount,
-    settlementEnvironmentIds,
-    snoozeEnvironmentIds,
-    props.searchQuery,
-    props.selectedEnvironmentId,
-    props.threads,
-    matchedThreadKeys,
-    v2ScopedProjectGroup,
-  ]);
+    selectedThreadKey: null,
+    pinReorderEnvironmentIds,
+    activeReorderEnvironmentIds,
+  });
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
   const nextSnoozeWakeAt = threadListV2Layout.nextSnoozeWakeAt;
@@ -615,6 +571,9 @@ export function HomeScreen(props: HomeScreenProps) {
       buildThreadListV2ListItems({
         items: threadListV2Layout.items,
         pendingTasks: v2PendingTasks,
+        workingCount: threadListV2Layout.workingCount,
+        workingShelfExpanded,
+        workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
         snoozedCount: threadListV2Layout.snoozedCount,
         snoozedShelfExpanded,
         snoozedShelfHeaderIndex: threadListV2Layout.snoozedShelfHeaderIndex,
@@ -637,6 +596,7 @@ export function HomeScreen(props: HomeScreenProps) {
       snoozeEnvironmentIds,
       threadListV2Layout,
       v2PendingTasks,
+      workingShelfExpanded,
     ],
   );
 
@@ -671,6 +631,16 @@ export function HomeScreen(props: HomeScreenProps) {
             onSwipeableClose={handleSwipeableClose}
             onSwipeableWillOpen={handleSwipeableWillOpen}
             activationKey={item.key}
+          />
+        );
+      }
+      if (item.type === "v2-working-shelf") {
+        return (
+          <ThreadListV2WorkingShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleWorkingShelf}
           />
         );
       }
@@ -742,7 +712,7 @@ export function HomeScreen(props: HomeScreenProps) {
           reorderSupported={
             item.item.pinned
               ? pinReorderEnvironmentIds.has(thread.environmentId)
-              : activeReorderEnvironmentIds.has(thread.environmentId)
+              : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
           }
           canMoveUp={item.canMoveUp}
           canMoveDown={item.canMoveDown}
@@ -794,8 +764,10 @@ export function HomeScreen(props: HomeScreenProps) {
       titleRegenerationEnvironmentIds,
       toggleSettledShelf,
       toggleSnoozedShelf,
+      toggleWorkingShelf,
       v2ProjectTitleByProjectKey,
       props.searchQuery,
+      workingShelfEnabled,
     ],
   );
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
@@ -812,6 +784,8 @@ export function HomeScreen(props: HomeScreenProps) {
       savedConnectionsById: props.savedConnectionsById,
       searchQuery: props.searchQuery,
       threadSearchMatchByKey,
+      // Rows read it for their reorder menu items.
+      workingShelfEnabled,
     }),
     [
       projectByKey,
@@ -820,6 +794,7 @@ export function HomeScreen(props: HomeScreenProps) {
       listEnvironments,
       threadSearchMatchByKey,
       v2ProjectTitleByProjectKey,
+      workingShelfEnabled,
     ],
   );
 
