@@ -91,11 +91,11 @@ describe("NativeMermaidBlock", () => {
     await press("Copy diagram");
     expect(copy).toHaveBeenLastCalledWith("[A] --> [B]");
     await act(() => vi.advanceTimersByTime(1200));
-    await press("Show Mermaid source");
+    await press("View Mermaid source");
     expect(displayedText()).toBe(source);
     await press("Copy Mermaid source");
     expect(copy).toHaveBeenLastCalledWith(source);
-    await press("Show diagram");
+    await press("View diagram");
     expect(displayedText()).toBe("[A] --> [B]");
     await render(source, renderer, { ...textStyle, codeColor: "white" });
     expect(renderer).toHaveBeenCalledTimes(1);
@@ -127,7 +127,7 @@ describe("NativeMermaidBlock", () => {
         : vi.fn().mockRejectedValue(new Error("invalid diagram"));
     await render("unsupported syntax", renderer);
     expect(displayedText()).toBe("unsupported syntax");
-    expect(root!.root.findAllByProps({ accessibilityLabel: "Show diagram" })).toHaveLength(0);
+    expect(root!.root.findAllByProps({ accessibilityLabel: "View diagram" })).toHaveLength(0);
     await press("Copy Mermaid source");
     expect(copy).toHaveBeenLastCalledWith("unsupported syntax");
   });

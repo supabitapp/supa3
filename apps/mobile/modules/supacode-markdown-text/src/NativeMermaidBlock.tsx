@@ -73,12 +73,12 @@ export function NativeMermaidBlock({
         {diagram !== null ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={showDiagram ? "Show Mermaid source" : "Show diagram"}
+            accessibilityLabel={showDiagram ? "View Mermaid source" : "View diagram"}
             onPress={() => setSourceSelected((selected) => !selected)}
             style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.52 : 1 })}
           >
             <Text style={{ color: textStyle.linkColor, fontSize }}>
-              {showDiagram ? "Source" : "Diagram"}
+              {showDiagram ? "View Source" : "View Diagram"}
             </Text>
           </Pressable>
         ) : null}
