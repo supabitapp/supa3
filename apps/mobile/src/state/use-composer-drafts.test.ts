@@ -1,3 +1,4 @@
+import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import {
   CommandId,
@@ -199,6 +200,7 @@ const DRAFT: ComposerDraft = {
 };
 
 afterEach(() => {
+  appAtomRegistry.set(acknowledgedThreadMessagesAtom, []);
   vi.useRealTimers();
   resetComposerDraftsLoadState();
   composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
@@ -976,6 +978,40 @@ describe("mobile composer drafts", () => {
     expect(composerAttachmentCleanupMocks.remove).not.toHaveBeenCalled();
 
     appAtomRegistry.set(threadOutboxManager.queuedMessagesByThreadKeyAtom, {});
+    await releaseUnusedComposerAttachmentFiles([image]);
+    expect(composerAttachmentCleanupMocks.remove).toHaveBeenCalledExactlyOnceWith(image.fileUri);
+  });
+
+  it("keeps acknowledged image bytes until the authoritative message replaces the local row", async () => {
+    const outboxLoad = vi.spyOn(threadOutboxManager, "load").mockResolvedValue(true);
+    onTestFinished(() => outboxLoad.mockRestore());
+    const image = {
+      id: "acknowledged-image",
+      type: "image" as const,
+      name: "photo.png",
+      mimeType: "image/png",
+      sizeBytes: 3,
+      fileUri: "file:///documents/local-attachments/acknowledged-photo.png",
+      previewUri: "file:///documents/local-attachments/acknowledged-photo.png",
+    };
+    appAtomRegistry.set(composerDraftsAtom, {});
+    appAtomRegistry.set(threadOutboxManager.queuedMessagesByThreadKeyAtom, {});
+    appAtomRegistry.set(acknowledgedThreadMessagesAtom, [
+      {
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: MessageId.make("acknowledged-image"),
+        commandId: CommandId.make("command-image"),
+        text: "look at this",
+        attachments: [image],
+        createdAt: "2026-08-31T12:00:00.000Z",
+      },
+    ]);
+
+    await releaseUnusedComposerAttachmentFiles([image]);
+    expect(composerAttachmentCleanupMocks.remove).not.toHaveBeenCalled();
+
+    appAtomRegistry.set(acknowledgedThreadMessagesAtom, []);
     await releaseUnusedComposerAttachmentFiles([image]);
     expect(composerAttachmentCleanupMocks.remove).toHaveBeenCalledExactlyOnceWith(image.fileUri);
   });
