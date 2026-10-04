@@ -56,17 +56,6 @@ vi.mock("../ui/tooltip", () => ({
     cloneElement(render, undefined, children),
   TooltipPopup: () => null,
 }));
-vi.mock("../ui/alert-dialog", () => ({
-  AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-    open ? <div role="alertdialog">{children}</div> : null,
-  AlertDialogPopup: ({ children }: { children: ReactNode }) => children,
-  AlertDialogHeader: ({ children }: { children: ReactNode }) => children,
-  AlertDialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-  AlertDialogDescription: ({ children }: { children: ReactNode }) => children,
-  AlertDialogFooter: ({ children }: { children: ReactNode }) => children,
-  AlertDialogClose: () => null,
-}));
-
 import { ThreadDetailsPrRow } from "./ThreadDetailsPrRow";
 
 let renderer: ReactTestRenderer;
@@ -75,49 +64,74 @@ afterEach(() => {
   vi.unstubAllGlobals();
   state.status = "success";
   state.extraStatus = null;
+  state.perform.mockClear();
 });
+
+const renderRow = () => (
+  <ThreadDetailsPrRow
+    environmentId={EnvironmentId.make("environment")}
+    pr={null}
+    number={1}
+    status={null}
+    project={null}
+    label="Test PR"
+    openAriaLabel="Open PR"
+    onOpen={vi.fn()}
+  />
+);
+
+const clickMerge = (timeStamp: number) =>
+  act(() => {
+    renderer.root
+      .findAllByType("button")
+      .find((button) => button.findAll((node) => node.children.includes("Merge")).length > 0)!
+      .props.onClick({ timeStamp });
+  });
+
+const armed = () =>
+  renderer.root.findAll(
+    (node) => node.children.includes("Confirm") && node.props["aria-hidden"] !== true,
+  ).length > 0;
+
+const stubWindow = () =>
+  vi.stubGlobal("window", Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
 
 it("requires a new merge click after passing checks become pending and pass again", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const render = () => (
-    <ThreadDetailsPrRow
-      environmentId={EnvironmentId.make("environment")}
-      pr={null}
-      number={1}
-      status={null}
-      project={null}
-      label="Test PR"
-      openAriaLabel="Open PR"
-      onOpen={vi.fn()}
-    />
-  );
-  const clickMerge = () =>
-    act(() => {
-      renderer.root
-        .findAllByType("button")
-        .find((button) => button.children.includes("Merge"))!
-        .props.onClick();
-    });
-  const dialogs = () => renderer.root.findAllByProps({ role: "alertdialog" });
-
+  stubWindow();
   act(() => {
-    renderer = create(render());
+    renderer = create(renderRow());
   });
-  clickMerge();
-  expect(dialogs()).toHaveLength(1);
+  clickMerge(0);
+  expect(armed()).toBe(true);
   act(() => {
     state.status = "pending";
-    renderer.update(render());
+    renderer.update(renderRow());
   });
-  expect(dialogs()).toHaveLength(0);
   act(() => {
     state.status = "success";
-    renderer.update(render());
+    renderer.update(renderRow());
   });
-  expect(dialogs()).toHaveLength(0);
-  clickMerge();
-  expect(dialogs()).toHaveLength(1);
+  expect(armed()).toBe(false);
+  clickMerge(1_000);
+  expect(armed()).toBe(true);
   expect(state.perform).not.toHaveBeenCalled();
+});
+
+it("merges only on a deliberate second click", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  stubWindow();
+  act(() => {
+    renderer = create(renderRow());
+  });
+  clickMerge(0);
+  clickMerge(150);
+  clickMerge(300);
+  expect(state.perform).not.toHaveBeenCalled();
+  expect(armed()).toBe(true);
+  clickMerge(900);
+  expect(state.perform).toHaveBeenCalledExactlyOnceWith("merge", "merge");
+  expect(armed()).toBe(false);
 });
 
 it.each<[PullRequestCheck["status"], PullRequestCheck["status"], string]>([

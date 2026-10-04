@@ -19,8 +19,9 @@ import type { EnvironmentProject } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId, ProjectId, PullRequestRef } from "@supacode/contracts";
 import { sourceControlRepositorySelector } from "@supacode/shared/sourceControl";
 import { ArrowUpRightIcon, FileDiffIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { usePullRequestChecksRefresh } from "~/hooks/usePullRequestChecksRefresh";
 import { cn } from "~/lib/utils";
@@ -54,16 +55,7 @@ import {
   type PrStatusIndicator,
   type ThreadPr,
 } from "../ThreadStatusIndicators";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "../ui/alert-dialog";
-import { Button } from "../ui/button";
+import { InlineConfirmLabel } from "../InlineConfirm";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -153,12 +145,9 @@ export function ThreadDetailsPrRow({
     },
   });
   const { handoff, startHandoff } = usePullRequestHandoffs({ environmentId, detail });
-  const [confirmingMerge, setConfirmingMerge] = useState(false);
+  const confirm = useInlineConfirm<"merge">();
 
   const rowAction = resolveThreadPanelPullRequestAction(detail);
-  if (confirmingMerge && rowAction !== "merge") {
-    setConfirmingMerge(false);
-  }
   const conflicting = isPullRequestConflicting(detail);
   const checksState = detail === null ? "none" : classifyPullRequestChecks(detail.checks);
   const checksRollup = detail === null ? null : pullRequestChecksState(detail.checks);
@@ -300,7 +289,7 @@ export function ThreadDetailsPrRow({
           destructive: true,
           suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
           tooltip: "Check the branch out and resolve the conflicts in a new thread",
-          onClick: startResolveConflicts,
+          controlProps: { onClick: startResolveConflicts },
         }
       : rowAction === "ready"
         ? {
@@ -310,7 +299,7 @@ export function ThreadDetailsPrRow({
             destructive: false,
             suffix: null,
             tooltip: "Mark this pull request as ready for review",
-            onClick: () => void perform("ready"),
+            controlProps: { onClick: () => void perform("ready") },
           }
         : rowAction === "fix"
           ? {
@@ -320,17 +309,29 @@ export function ThreadDetailsPrRow({
               destructive: true,
               suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
               tooltip: "Fix the failing checks in a new thread",
-              onClick: startFixChecks,
+              controlProps: { onClick: startFixChecks },
             }
           : rowAction === "merge"
             ? {
-                label: "Merge",
+                label: (
+                  <InlineConfirmLabel
+                    armed={confirm.armed === "merge"}
+                    idle="Merge"
+                    confirm="Confirm"
+                  />
+                ),
                 pendingLabel: "Merging...",
                 pending: actionPending,
                 destructive: false,
                 suffix: null,
-                tooltip: `Merge this pull request (${selectedMergeMethod})`,
-                onClick: () => setConfirmingMerge(true),
+                tooltip:
+                  confirm.armed === "merge"
+                    ? `Click again to merge #${number} into ${detail?.baseBranch} (${selectedMergeMethod})`
+                    : `Merge this pull request (${selectedMergeMethod})`,
+                controlProps: confirm.bind(
+                  "merge",
+                  () => void perform("merge", selectedMergeMethod),
+                ),
               }
             : null;
 
@@ -386,7 +387,7 @@ export function ThreadDetailsPrRow({
                       part="action"
                       tone={trailingAction.destructive ? "destructive" : "default"}
                       disabled={actionPending || handoff !== null}
-                      onClick={trailingAction.onClick}
+                      {...trailingAction.controlProps}
                     />
                   }
                 >
@@ -417,33 +418,6 @@ export function ThreadDetailsPrRow({
           {rowTooltip}
         </Tooltip>
       )}
-      {rowAction === "merge" ? (
-        <AlertDialog open={confirmingMerge} onOpenChange={(open) => setConfirmingMerge(open)}>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Merge pull request?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This merges #{number} using {selectedMergeMethod}.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="outline" size="sm" />}>
-                Cancel
-              </AlertDialogClose>
-              <Button
-                size="sm"
-                disabled={actionPending}
-                onClick={() => {
-                  setConfirmingMerge(false);
-                  void perform("merge", selectedMergeMethod);
-                }}
-              >
-                Merge
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
-      ) : null}
     </>
   );
 }

@@ -84,15 +84,6 @@ vi.mock("../ui/menu", () => ({
   MenuSeparator: () => null,
   MenuShortcut: () => null,
 }));
-vi.mock("../ui/alert-dialog", () => ({
-  AlertDialog: () => null,
-  AlertDialogPopup: Wrapper,
-  AlertDialogHeader: Wrapper,
-  AlertDialogTitle: Wrapper,
-  AlertDialogDescription: Wrapper,
-  AlertDialogFooter: Wrapper,
-  AlertDialogClose: Wrapper,
-}));
 vi.mock("./PullRequestMarkdown", () => ({
   PullRequestMarkdownContext: Wrapper,
   PullRequestMarkdown: () => null,
