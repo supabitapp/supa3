@@ -15,3 +15,6 @@ RELEASE_APP_PRIVATE_KEY = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym
 
 [profiles.cloudflare.secrets]
 CLOUDFLARE_API_TOKEN = { provider = "op", value = "Cloudflare Hosting/CLOUDFLARE_API_TOKEN" }
+
+[profiles.mobile.secrets]
+EXPO_TOKEN = { provider = "op", value = "t2yimao5k2nhpryu5bc7omrqiq/EXPO_TOKEN" }

@@ -220,7 +220,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.SUPACODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: "https://u.expo.dev/43107a7e-1d06-490b-bfc6-be228b285ee2",
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -399,10 +399,10 @@ const config: ExpoConfig = {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: "43107a7e-1d06-490b-bfc6-be228b285ee2",
     },
   },
-  owner: "pingdotgg",
+  owner: "supabitapp",
 };
 
 export default config;

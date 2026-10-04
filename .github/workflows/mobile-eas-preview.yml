@@ -1,4 +1,4 @@
-name: Mobile EAS Preview
+name: Mobile Preview
 
 on:
   pull_request:
@@ -6,84 +6,152 @@ on:
 
 jobs:
   preview:
-    name: EAS Preview
+    name: Mobile preview ${{ matrix.platform }}
     if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.author_association == 'OWNER' &&
       contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment') &&
       (github.event.action != 'labeled' || github.event.label.name == '🚀 Mobile Continuous Deployment')
-    runs-on: depot-ubuntu-24.04-8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ios
+            runner: depot-macos-26
+          - platform: android
+            runner: depot-ubuntu-24.04-8
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     concurrency:
-      group: mobile-eas-preview-${{ github.event.pull_request.number }}
+      group: mobile-eas-preview-${{ github.event.pull_request.number }}-${{ matrix.platform }}
       cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: write
+      deployments: write
     env:
       APP_VARIANT: preview
       NODE_OPTIONS: --max-old-space-size=8192
       MOBILE_VERSION_POLICY: fingerprint
+      MOBILE_PLATFORM: ${{ matrix.platform }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - id: expo-token
         name: Check for EXPO_TOKEN
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -n "$EXPO_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "EXPO_TOKEN is not available; skipping EAS preview."
+            echo "EXPO_TOKEN is not available; skipping mobile preview."
           fi
-
-      - name: Checkout
+      - uses: actions/checkout@v6
         if: steps.expo-token.outputs.present == 'true'
-        uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          # No sparse-checkout here: it makes actions/checkout fetch with
-          # --filter=blob:none, and eas-cli archives the project via
-          # `git clone --depth 1 file://<workspace>`, which fails (exit 128)
-          # when the partial clone can't serve the unfetched blobs.
-
-      - name: Setup Mise
+      - uses: ./.github/actions/setup-mobile-release
         if: steps.expo-token.outputs.present == 'true'
-        uses: ./.github/actions/setup-mise
-      - name: Install workspace dependencies
-        if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- vp install --filter=@supacode/mobile...
-      - name: Expose pnpm
-        if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- pnpm --version
-
-      - name: Setup EAS
-        if: steps.expo-token.outputs.present == 'true'
-        uses: expo/expo-github-action@v8
         with:
-          # eas-cli 22 renamed `project` to `app` in build JSON, and
-          # continuous-deploy-fingerprint still reads `build.project.ownerAccount`.
-          # Unpin once https://github.com/expo/expo-github-action/issues/358 is fixed.
-          eas-version: 21.8.0
           token: ${{ secrets.EXPO_TOKEN }}
-          # npm, not pnpm: this only installs eas-cli into the action's own
-          # tool dir, and pnpm 11 hard-fails that install on dtrace-provider's
-          # ignored build script (no allowBuilds config outside the repo).
-          packager: npm
-
-      - name: Pull preview environment variables
+          environment: preview
+      - id: config
+        name: Resolve native fingerprint and app version
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        run: |
+          version=$(npx expo config --json --type public | jq -er '.version')
+          fingerprint=$(eas fingerprint:generate --platform "$MOBILE_PLATFORM" --environment preview --json --non-interactive | sed -n '/^{/,$p' | jq -er '.hash')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+      - id: history
+        name: Find a compatible preview build
+        if: steps.expo-token.outputs.present == 'true'
+        uses: actions/github-script@v8
+        env:
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+        with:
+          script: |
+            const { findBuilds } = require('./.github/scripts/mobile-build-history.cjs');
+            const { compatibleBuild } = await findBuilds({
+              github, context, profile: 'preview:dev', platform: process.env.MOBILE_PLATFORM,
+              version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
+            });
+            core.setOutput('url', compatibleBuild?.url ?? '');
+      - id: build
+        name: Compile and sign on Depot
+        if: steps.expo-token.outputs.present == 'true' && steps.history.outputs.url == ''
+        uses: ./.github/actions/build-mobile
+        with:
+          platform: ${{ matrix.platform }}
+          profile: preview:dev
+      - name: Save signed preview binary
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-preview-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: ${{ steps.build.outputs.binary }}
+          if-no-files-found: error
+          retention-days: 14
+      - id: upload
+        name: Share the locally built preview
+        if: steps.build.outcome == 'success'
+        working-directory: apps/mobile
+        env:
+          MOBILE_BINARY: ${{ steps.build.outputs.binary }}
+          MOBILE_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
+        run: |
+          url=$(eas upload --platform "$MOBILE_PLATFORM" --build-path "$MOBILE_BINARY" --fingerprint "$MOBILE_FINGERPRINT" --json --non-interactive | jq -er '.url')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Record completed preview build
+        if: steps.upload.outcome == 'success'
+        uses: actions/github-script@v8
+        env:
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
+          MOBILE_BUILD_URL: ${{ steps.upload.outputs.url }}
+        with:
+          script: |
+            const { recordBuild } = require('./.github/scripts/mobile-build-history.cjs');
+            await recordBuild({
+              github, context, profile: 'preview:dev', platform: process.env.MOBILE_PLATFORM,
+              version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
+              sha: context.sha, url: process.env.MOBILE_BUILD_URL,
+            });
+      - id: update
+        name: Publish PR update
         if: steps.expo-token.outputs.present == 'true'
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas env:pull preview --non-interactive
-
-      - name: Deploy with fingerprint check
-        if: steps.expo-token.outputs.present == 'true'
-        uses: expo/expo-github-action/continuous-deploy-fingerprint@main
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BUILT_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+        run: |
+          if [ -n "$BUILT_FINGERPRINT" ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
+            echo "::error::Built preview fingerprint differs from the update fingerprint."
+            exit 1
+          fi
+          eas update --branch "pr-$PR_NUMBER" --environment preview --platform "$MOBILE_PLATFORM" \
+            --message "PR #$PR_NUMBER ($(git rev-parse --short=9 HEAD))" --json --non-interactive > "$RUNNER_TEMP/mobile-update.json"
+          group=$(jq -er '.[0].group' "$RUNNER_TEMP/mobile-update.json")
+          echo "group=$group" >> "$GITHUB_OUTPUT"
+      - name: Link preview on PR
+        if: steps.update.outcome == 'success'
+        uses: actions/github-script@v8
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MOBILE_BUILD_URL: ${{ steps.upload.outputs.url || steps.history.outputs.url }}
+          MOBILE_UPDATE_GROUP: ${{ steps.update.outputs.group }}
         with:
-          profile: preview:dev
-          branch: pr-${{ github.event.pull_request.number }}
-          platform: all
-          environment: preview
-          working-directory: apps/mobile
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const platform = process.env.MOBILE_PLATFORM;
+            const marker = `### Mobile preview: ${platform}`;
+            const body = `${marker}\n\n[Install the development build](${process.env.MOBILE_BUILD_URL}), then open the PR update from the [update page](https://expo.dev/accounts/supabitapp/projects/supacode/updates/${process.env.MOBILE_UPDATE_GROUP}).\n\nBuilt on Depot for ${context.sha}.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: context.issue.number, per_page: 100,
+            });
+            const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
