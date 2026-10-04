@@ -81,9 +81,11 @@ describe("model price writes", () => {
     });
     const retry = vi.fn(async () => ({ _tag: "Success" as const }));
     await writeUsagePrices({
-      targets: targets
-        .filter((entry) => results.get(entry.environmentId)?.status === "failed")
-        .map((entry) => ({ ...entry, unavailable: null })),
+      targets: targets.flatMap((entry) =>
+        results.get(entry.environmentId)?.status === "failed"
+          ? [{ ...entry, unavailable: null }]
+          : [],
+      ),
       changes: new Map(targets.map((target) => [target.environmentId, [change]])),
       write: retry,
       onResult: (id, result) => {

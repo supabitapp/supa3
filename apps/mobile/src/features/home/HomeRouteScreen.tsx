@@ -109,14 +109,12 @@ export function HomeRouteScreen() {
       })),
     [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
   );
-  useEffect(() => {
-    if (
-      selectedProjectKey !== null &&
-      !projectFilterOptions.some((project) => project.key === selectedProjectKey)
-    ) {
-      setSelectedProjectKey(null);
-    }
-  }, [projectFilterOptions, selectedProjectKey]);
+  if (
+    selectedProjectKey !== null &&
+    !projectFilterOptions.some((project) => project.key === selectedProjectKey)
+  ) {
+    setSelectedProjectKey(null);
+  }
 
   // In split layouts the persistent sidebar IS the thread list — Home becomes
   // an empty detail pane so selecting a thread never transitions layouts.

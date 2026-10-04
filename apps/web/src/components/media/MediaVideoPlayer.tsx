@@ -57,6 +57,9 @@ export function MediaVideoPlayer({
   const src = playbackSource?.src ?? latestSrc;
   const sourceRevision = playbackSource === null ? revision : playbackSource.revision;
   const failed = src !== null ? failedSrc === src : sourceFailed;
+  const mountedVideoKey = src !== null && !failed ? `${loadAttempt}:${src}` : null;
+  const preloadsMetadata =
+    preload === "metadata" || preloadedSrc === src || typeof IntersectionObserver === "undefined";
 
   // Re-signing must not reset the playhead. Changed files refresh once playback pauses.
   const refreshPausedRevision = useCallback(() => {
@@ -71,11 +74,7 @@ export function MediaVideoPlayer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || preload === "metadata" || preloadedSrc === src) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setPreloadedSrc(src);
-      return;
-    }
+    if (mountedVideoKey === null || !video || preloadsMetadata) return;
     let active = true;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -90,11 +89,11 @@ export function MediaVideoPlayer({
       active = false;
       observer.disconnect();
     };
-  }, [src, preload, preloadedSrc, failed, loadAttempt]);
+  }, [mountedVideoKey, preloadsMetadata, src]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (mountedVideoKey === null || !video) return;
     const pauseWhenHidden = () => {
       // Native fullscreen can hide the inline page while this video is still visible.
       const fullscreen =
@@ -111,7 +110,7 @@ export function MediaVideoPlayer({
       video.removeEventListener("webkitendfullscreen", pauseWhenHidden);
       video.pause();
     };
-  }, [src, failed, loadAttempt]);
+  }, [mountedVideoKey]);
 
   const retry = async () => {
     if (retrying) return;
@@ -174,7 +173,7 @@ export function MediaVideoPlayer({
           controls={!onOpen}
           muted={onOpen ? true : undefined}
           playsInline
-          preload={preload === "metadata" || preloadedSrc === src ? "metadata" : "none"}
+          preload={preloadsMetadata ? "metadata" : "none"}
           className={cn(
             "aspect-video max-h-full w-full bg-black object-contain",
             onOpen && "pointer-events-none",

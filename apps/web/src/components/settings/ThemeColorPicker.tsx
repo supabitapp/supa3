@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isThemeColor, themeColorToHex, type ThemeColorRole } from "../../themePalette";
 import { cn } from "../../lib/utils";
 import { hexToHsv, hsvToHex, type HsvColor } from "../../lib/color";
@@ -85,15 +85,14 @@ function ThemeColorPickerPanel({
   const [hsv, setHsv] = useState(() => hexToHsv(normalizedValue));
   const [hexDraft, setHexDraft] = useState(normalizedValue);
   const [rgbDraft, setRgbDraft] = useState(() => themeRgbValue(normalizedValue));
-  const isEditingTextRef = useRef(false);
-  const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
-  const currentRgb = themeRgbValue(currentColor);
-
-  useEffect(() => {
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [syncedValue, setSyncedValue] = useState(normalizedValue);
+  if (syncedValue !== normalizedValue) {
+    setSyncedValue(normalizedValue);
     // While a text field is focused, the incoming value may be the guided
     // editor's readability-adjusted echo of what is being typed; rewriting the
     // draft would fight the keystrokes. The swatch still tracks via hsv.
-    if (!isEditingTextRef.current) {
+    if (!isEditingText) {
       setHexDraft(normalizedValue);
       setRgbDraft(themeRgbValue(normalizedValue));
     }
@@ -104,13 +103,17 @@ function ThemeColorPickerPanel({
         ? current
         : hexToHsv(normalizedValue),
     );
-  }, [normalizedValue]);
+  }
+  const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
+  const currentRgb = themeRgbValue(currentColor);
 
   // Local state updates immediately for a smooth thumb; the parent commit
   // (which can regenerate a whole guided palette) is batched to one call per
   // animation frame.
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+  });
   const pendingCommitRef = useRef<string | null>(null);
   const commitFrameRef = useRef<number | null>(null);
   // The final drag frame must not be lost when the popover closes or the
@@ -205,13 +208,13 @@ function ThemeColorPickerPanel({
                 aria-label={`${label} picker hex value`}
                 className="h-8 min-w-0 flex-1 bg-transparent font-mono text-xs text-foreground outline-none"
                 onBlur={() => {
-                  isEditingTextRef.current = false;
+                  setIsEditingText(false);
                   setHexDraft(currentColor);
                   setRgbDraft(currentRgb);
                 }}
                 onChange={(event) => handleHexChange(event.currentTarget.value)}
                 onFocus={() => {
-                  isEditingTextRef.current = true;
+                  setIsEditingText(true);
                 }}
                 spellCheck={false}
                 value={hexDraft}
@@ -227,13 +230,13 @@ function ThemeColorPickerPanel({
                 aria-label={`${label} picker RGB value`}
                 className="h-8 min-w-0 flex-1 bg-transparent font-mono text-xs text-foreground outline-none"
                 onBlur={() => {
-                  isEditingTextRef.current = false;
+                  setIsEditingText(false);
                   setHexDraft(currentColor);
                   setRgbDraft(currentRgb);
                 }}
                 onChange={(event) => handleRgbChange(event.currentTarget.value)}
                 onFocus={() => {
-                  isEditingTextRef.current = true;
+                  setIsEditingText(true);
                 }}
                 spellCheck={false}
                 value={rgbDraft}

@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { ComponentType } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -248,15 +249,23 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
     <RefreshControl refreshing={isPullRefreshing} onRefresh={() => void handlePullToRefresh()} />
   ) : undefined;
 
+  const scrollTarget = useMemo(
+    () => (targetIndex === null ? null : { path: props.path, index: targetIndex }),
+    [props.path, targetIndex],
+  );
   useEffect(() => {
-    if (targetIndex === null) {
+    if (scrollTarget === null) {
       return;
     }
     const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: targetIndex, animated: false, viewPosition: 0.3 });
+      listRef.current?.scrollToIndex({
+        index: scrollTarget.index,
+        animated: false,
+        viewPosition: 0.3,
+      });
     });
     return () => cancelAnimationFrame(frame);
-  }, [props.path, targetIndex]);
+  }, [scrollTarget]);
 
   const renderLine = useCallback(
     ({ item, index }: { item: string; index: number }) => (
@@ -290,29 +299,31 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
       }}
     >
       {selectableTokens
-        ? lines.map((line, index) => {
+        ? withOccurrenceKeys(lines, (line) => line).map(({ item: line, key: lineKey }, index) => {
             const lineTokens = selectableTokens[index] ?? null;
             const body =
               lineTokens && lineTokens.length > 0
-                ? lineTokens.map((token, tokenIndex) => (
-                    <MarkdownTextPrimitive
-                      key={`${index}:${tokenIndex}`}
-                      style={{
-                        color: token.color ?? foreground,
-                        fontWeight:
-                          token.fontStyle !== null && (token.fontStyle & 2) === 2 ? "700" : "400",
-                        fontStyle:
-                          token.fontStyle !== null && (token.fontStyle & 1) === 1
-                            ? "italic"
-                            : "normal",
-                      }}
-                    >
-                      {token.content}
-                    </MarkdownTextPrimitive>
-                  ))
+                ? withOccurrenceKeys(lineTokens, (token) => token.content).map(
+                    ({ item: token, key }) => (
+                      <MarkdownTextPrimitive
+                        key={key}
+                        style={{
+                          color: token.color ?? foreground,
+                          fontWeight:
+                            token.fontStyle !== null && (token.fontStyle & 2) === 2 ? "700" : "400",
+                          fontStyle:
+                            token.fontStyle !== null && (token.fontStyle & 1) === 1
+                              ? "italic"
+                              : "normal",
+                        }}
+                      >
+                        {token.content}
+                      </MarkdownTextPrimitive>
+                    ),
+                  )
                 : line;
             return (
-              <MarkdownTextPrimitive key={index}>
+              <MarkdownTextPrimitive key={lineKey}>
                 {body}
                 {index < lines.length - 1 ? "\n" : ""}
               </MarkdownTextPrimitive>

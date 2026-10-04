@@ -70,15 +70,25 @@ export function useAttachmentDocument(input: {
   const [sharing, setSharing] = useState(false);
   const uri = input.attachment ? localUri : remoteUri;
   const attachment = input.attachment;
+  const [remoteSource, setRemoteSource] = useState({ attachment, refresh, revision });
+  if (
+    remoteSource.attachment !== attachment ||
+    remoteSource.refresh !== refresh ||
+    remoteSource.revision !== revision
+  ) {
+    setRemoteSource({ attachment, refresh, revision });
+    if (!attachment) {
+      setRemoteUri(null);
+      setError(null);
+    }
+  }
   useEffect(() => {
-    if (attachment) return;
+    if (remoteSource.attachment) return;
     let cancelled = false;
     // Await a fresh signed URL: cached links can expire while the client is suspended.
-    // oxlint-disable-next-line react/set-state-in-effect -- A new preview request clears its previous URL and error.
-    setRemoteUri(null);
-    setError(null);
     textReadUrl.current = null;
-    void refresh()
+    void remoteSource
+      .refresh()
       .then((url) => {
         if (cancelled) return;
         if (!url) throw new Error("Reconnect to this environment and try again.");
@@ -92,19 +102,24 @@ export function useAttachmentDocument(input: {
     return () => {
       cancelled = true;
     };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Retry must reauthorize the remote file.
-  }, [attachment, refresh, revision]);
+  }, [remoteSource]);
+  const [localSource, setLocalSource] = useState({ attachment, revision });
+  if (localSource.attachment !== attachment || localSource.revision !== revision) {
+    setLocalSource({ attachment, revision });
+    if (attachment) {
+      // A new attachment must not keep the previous file behind it: `share()` would otherwise
+      // send the old bytes under the new name if this load fails.
+      setLocalUri(null);
+      setContent(null);
+      setContentError(null);
+    }
+  }
   useEffect(() => {
-    if (!attachment) return;
-    // A new attachment must not keep the previous file behind it: `share()` would otherwise
-    // send the old bytes under the new name if this load fails.
-    // oxlint-disable-next-line react/set-state-in-effect -- A new attachment invalidates the last one.
-    setLocalUri(null);
-    setContent(null);
-    setContentError(null);
+    const localAttachment = localSource.attachment;
+    if (!localAttachment) return;
     const controller = new AbortController();
     let release: (() => void) | undefined;
-    void loadLocalAttachmentPreview(attachment, controller.signal)
+    void loadLocalAttachmentPreview(localAttachment, controller.signal)
       .then((file) => {
         if (!file) return;
         if (controller.signal.aborted) return file.dispose();
@@ -120,16 +135,26 @@ export function useAttachmentDocument(input: {
       controller.abort();
       release?.();
     };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Retry must reacquire a local file lease after a failed load.
-  }, [attachment, revision]);
+  }, [localSource]);
   const needsText = kind === "text" || kind === "markdown" || (kind === "html" && !rendered);
   const sizeBytes = input.sizeBytes;
+  const [textSource, setTextSource] = useState({ uri, needsText, revision, sizeBytes, refresh });
+  if (
+    textSource.uri !== uri ||
+    textSource.needsText !== needsText ||
+    textSource.revision !== revision ||
+    textSource.sizeBytes !== sizeBytes ||
+    textSource.refresh !== refresh
+  ) {
+    setTextSource({ uri, needsText, revision, sizeBytes, refresh });
+    if (uri && needsText) {
+      setContent(null);
+      setContentError(null);
+    }
+  }
   useEffect(() => {
     if (!uri || !needsText) return;
     const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- A new external resource must clear the previous response before loading.
-    setContent(null);
-    setContentError(null);
     const response = isLocalUri(uri)
       ? Promise.resolve().then(() => ({ ok: true, body: new File(uri).readableStream() }))
       : (async () => {

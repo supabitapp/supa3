@@ -333,6 +333,18 @@ export function ThemeEditorPanel({
     width: number;
     height: number;
   } | null>(null);
+  const clampPosition = (x: number, y: number, widthOverride?: number) => {
+    const panel = panelRef.current;
+    const margin = 8;
+    // The caller passes a width when it has just shrunk the panel: the DOM
+    // still reports the old one until React commits.
+    const width = widthOverride ?? panel?.offsetWidth ?? 0;
+    return {
+      x: Math.min(Math.max(x, margin), Math.max(margin, window.innerWidth - width - margin)),
+      // Keep at least the header on screen even when dragged far down.
+      y: Math.min(Math.max(y, margin), Math.max(margin, window.innerHeight - 48)),
+    };
+  };
   useEffect(() => {
     if (!open) return;
     // A panel sized wider than the window can no longer be clamped back into
@@ -366,16 +378,12 @@ export function ThemeEditorPanel({
     };
     window.addEventListener("resize", clamp);
     return () => window.removeEventListener("resize", clamp);
-  }, [isMinimized, open]);
+  }, [clampPosition, isMinimized, open]);
 
-  // The draft only reaches the live app once this open has been seeded;
-  // previewing in the seeding commit would paint the previous session's
-  // colors for a frame.
-  const [isDraftSeeded, setIsDraftSeeded] = useState(false);
-  const previousOpenRef = useRef(false);
-
-  useEffect(() => {
-    if (open && !previousOpenRef.current) {
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
       // Editing works on the theme itself; creating starts from the theme
       // that is currently in use, so tuning what you already run is an edit
       // away instead of a rebuild from the defaults.
@@ -412,11 +420,8 @@ export function ThemeEditorPanel({
       setUsageCount(null);
       setIsInspecting(false);
       setError(null);
-      setIsDraftSeeded(true);
     }
-    if (!open && isDraftSeeded) setIsDraftSeeded(false);
-    previousOpenRef.current = open;
-  }, [editingTheme, initialAppearance, isDraftSeeded, open, seedName, seedTheme]);
+  }
 
   // A name an installed theme already uses combines instead of failing:
   // creating adds the new palette to that theme, and renaming an existing
@@ -456,23 +461,27 @@ export function ThemeEditorPanel({
   // an explanation instead.
   const mergeTargetId = mergeTarget?.id ?? null;
   const takenAppearancesKey = takenAppearances.join(",");
-  useEffect(() => {
-    if (isEditing || mergeTargetId === null) return;
+  const appearanceFlipKey =
+    isEditing || mergeTargetId === null ? null : `${mergeTargetId}:${takenAppearancesKey}`;
+  const [flippedForKey, setFlippedForKey] = useState<string | null>(null);
+  if (flippedForKey !== appearanceFlipKey) {
+    setFlippedForKey(appearanceFlipKey);
     const taken = takenAppearancesKey.split(",").filter(Boolean) as ThemeAppearance[];
-    if (taken.length !== 1) return;
-    setActiveAppearance((current) => {
-      if (!taken.includes(current)) return current;
-      return taken[0] === "light" ? "dark" : "light";
-    });
-  }, [isEditing, mergeTargetId, takenAppearancesKey]);
+    if (appearanceFlipKey !== null && taken.length === 1) {
+      setActiveAppearance((current) => {
+        if (!taken.includes(current)) return current;
+        return taken[0] === "light" ? "dark" : "light";
+      });
+    }
+  }
 
   // The whole app wears the draft while the editor is open, so a role change
   // is judged on the real interface rather than a miniature. The stored theme
   // comes back when the editor closes, including on cancel.
   useEffect(() => {
-    if (!open || !isDraftSeeded) return;
+    if (!open) return;
     applyThemeColorPreview(colorsByAppearance[activeAppearance], activeAppearance);
-  }, [activeAppearance, colorsByAppearance, isDraftSeeded, open]);
+  }, [activeAppearance, colorsByAppearance, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -547,12 +556,10 @@ export function ThemeEditorPanel({
     : [];
   const selectedHighlightRolesKey = selectedHighlightRoles.join(",");
 
+  if ((!open || selectedRole === null) && usageCount !== null) setUsageCount(null);
   useEffect(() => {
     clearThemeInspectorHighlights();
-    if (!open || selectedRole === null) {
-      setUsageCount(null);
-      return;
-    }
+    if (!open || selectedRole === null) return;
     // Picking a new element needs the unobscured app, so suspend the existing
     // spotlight while the picker is armed.
     if (isInspecting) return;
@@ -1073,19 +1080,6 @@ export function ThemeEditorPanel({
         ))}
       </div>
     );
-  };
-
-  const clampPosition = (x: number, y: number, widthOverride?: number) => {
-    const panel = panelRef.current;
-    const margin = 8;
-    // The caller passes a width when it has just shrunk the panel: the DOM
-    // still reports the old one until React commits.
-    const width = widthOverride ?? panel?.offsetWidth ?? 0;
-    return {
-      x: Math.min(Math.max(x, margin), Math.max(margin, window.innerWidth - width - margin)),
-      // Keep at least the header on screen even when dragged far down.
-      y: Math.min(Math.max(y, margin), Math.max(margin, window.innerHeight - 48)),
-    };
   };
 
   const handleDragPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

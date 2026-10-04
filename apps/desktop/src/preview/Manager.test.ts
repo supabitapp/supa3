@@ -210,11 +210,7 @@ const {
 
 vi.mock("electron", () => ({
   BrowserWindow: browserWindowConstructor,
-  ClipboardItem: class {
-    constructor(data: Record<string, unknown>) {
-      clipboardItemConstructor(data);
-    }
-  },
+  ClipboardItem: clipboardItemConstructor,
   clipboard: {
     write: writeClipboard,
   },

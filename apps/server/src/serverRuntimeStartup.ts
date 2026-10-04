@@ -656,5 +656,3 @@ const make = (options?: StartupOptions) =>
 
 export const layerWithOptions = (options?: StartupOptions) =>
   Layer.effect(ServerRuntimeStartup, make(options));
-
-const layer = layerWithOptions();

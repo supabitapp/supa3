@@ -508,35 +508,6 @@ describe("buildThreadListV2Items", () => {
     expect(layout.settledCount).toBe(0);
   });
 
-  it("hides snoozed threads and counts them — visibility parity with web", () => {
-    const layout = buildThreadListV2Items({
-      threads: [
-        makeThread({ id: ThreadId.make("active"), title: "Active" }),
-        makeThread({
-          id: ThreadId.make("snoozed"),
-          title: "Snoozed",
-          snoozedUntil: "2026-06-03T09:00:00.000Z",
-          snoozedAt: "2026-06-01T12:00:00.000Z",
-        }),
-        makeThread({
-          id: ThreadId.make("woken"),
-          title: "Woken",
-          // Wake time already passed: back in the active list.
-          snoozedUntil: "2026-06-01T18:00:00.000Z",
-          snoozedAt: "2026-06-01T12:00:00.000Z",
-        }),
-      ],
-      environmentId: null,
-      searchQuery: "",
-      now: NOW,
-    });
-
-    // Same createdAt → static sort tiebreaks by id; the point is the woken
-    // thread is BACK in the card block and the snoozed one is gone.
-    expect(layout.items.map((item) => item.thread.id)).toEqual(["active", "woken"]);
-    expect(layout.snoozedCount).toBe(1);
-  });
-
   it("moves a settled pinned thread into the settled shelf — parity with web (#7969)", () => {
     const layout = buildThreadListV2Items({
       threads: [

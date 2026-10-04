@@ -544,10 +544,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   loadEarlier = null,
 }: MessagesTimelineProps) {
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
-  const rememberedPosition = useMemo(
-    () => readTimelinePosition(listIdentityKey),
-    [listIdentityKey],
-  );
+  const { rememberedPosition, workGroupViewState } = useMemo(() => {
+    const position = readTimelinePosition(listIdentityKey);
+    // Nested tool state shares the bounded thread-position cache.
+    const viewState: WorkGroupViewState = position?.disclosures?.workGroupState ?? {
+      scrollPositions: new Map(),
+      expandedEntries: new Set(),
+    };
+    return { rememberedPosition: position, workGroupViewState: viewState };
+  }, [listIdentityKey]);
   const [expandedRunIds, setExpandedRunIds] = useState<ReadonlySet<RunId>>(
     () => rememberedPosition?.disclosures?.runs ?? new Set(),
   );
@@ -562,18 +567,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
   const restoringThreadPosition = positionedThreadKey !== listIdentityKey;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const listIdentityRef = useRef(listIdentityKey);
-  const previousLatestRunRef = useRef(latestRun);
+  const [renderedListIdentityKey, setRenderedListIdentityKey] = useState(listIdentityKey);
+  const previousLatestRunRef = useRef({ listIdentityKey, latestRun });
   // The list stays mounted across thread switches. Its first end pins on the
   // new thread must snap, not glide, even if that thread is mid-turn.
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(null);
   let paintedExpandedRunIds = expandedRunIds;
   let paintedExpandedWorkGroupIds = expandedWorkGroupIds;
   let paintedExpandedAttemptIds = expandedAttemptIds;
-  if (listIdentityRef.current !== listIdentityKey) {
-    listIdentityRef.current = listIdentityKey;
+  if (renderedListIdentityKey !== listIdentityKey) {
+    setRenderedListIdentityKey(listIdentityKey);
     setPositionedThreadKey(null);
-    previousLatestRunRef.current = latestRun;
     setSettlingListIdentity(listIdentityKey);
     paintedExpandedRunIds = rememberedPosition?.disclosures?.runs ?? new Set();
     paintedExpandedWorkGroupIds = rememberedPosition?.disclosures?.workGroups ?? new Set();
@@ -587,15 +591,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const expandCitedRun = useCallback((runId: RunId) => {
     setExpandedRunIds((current) => (current.has(runId) ? current : new Set([...current, runId])));
   }, []);
-  // Nested tool state shares the bounded thread-position cache.
-  const workGroupViewState = useMemo<WorkGroupViewState>(
-    () =>
-      rememberedPosition?.disclosures?.workGroupState ?? {
-        scrollPositions: new Map(),
-        expandedEntries: new Set(),
-      },
-    [listIdentityKey, rememberedPosition],
-  );
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
   const [disclosureToggleSettling, setDisclosureToggleSettling] = useState(false);
   const disclosureAnchorKeyRef = useRef<string | null>(null);
@@ -709,9 +704,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   // place; the next turn (or a reload, since this is local state) folds it.
 
   useEffect(() => {
-    const previous = previousLatestRunRef.current;
-    previousLatestRunRef.current = latestRun;
-    if (!latestRun || previous?.runId === undefined) {
+    const previousSample = previousLatestRunRef.current;
+    previousLatestRunRef.current = { listIdentityKey, latestRun };
+    const previous = previousSample.latestRun;
+    if (
+      !latestRun ||
+      previousSample.listIdentityKey !== listIdentityKey ||
+      previous?.runId === undefined
+    ) {
       return;
     }
     if (latestRun.runId === previous.runId) {
@@ -732,17 +732,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       next.delete(previous.runId);
       return next;
     });
-  }, [latestRun]);
+  }, [latestRun, listIdentityKey]);
 
-  const rowsProjectionRef = useRef<{
-    readonly threadKey: string;
-    readonly workspaceRoot: string | undefined;
-    readonly projection: MessagesTimelineRowsProjection;
-  } | null>(null);
-  const rawRows = useMemo(() => {
-    const previous = rowsProjectionRef.current;
-    const projection = deriveMessagesTimelineRowsWithState(
-      {
+  const [projectRows] = useState(createMessagesTimelineRowsProjector);
+  const rawRows = useMemo(
+    () =>
+      projectRows(listIdentityKey, workspaceRoot, {
         timelineEntries,
         latestRun,
         runningRunId,
@@ -755,30 +750,25 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         turnDiffSummaries,
         supportsConversationRollback,
         worktreeSetup,
-      },
-      previous?.threadKey === listIdentityKey && previous.workspaceRoot === workspaceRoot
-        ? previous.projection
-        : null,
-    );
-    rowsProjectionRef.current = { threadKey: listIdentityKey, workspaceRoot, projection };
-    return projection.rows;
-  }, [
-    rowsProjectionRef,
-    listIdentityKey,
-    workspaceRoot,
-    timelineEntries,
-    latestRun,
-    runningRunId,
-    expandedRunIds,
-    expandedAttemptIds,
-    expandedWorkGroupIds,
-    isWorking,
-    runlessWorkActive,
-    activeTurnStartedAt,
-    turnDiffSummaries,
-    supportsConversationRollback,
-    worktreeSetup,
-  ]);
+      }),
+    [
+      projectRows,
+      listIdentityKey,
+      workspaceRoot,
+      timelineEntries,
+      latestRun,
+      runningRunId,
+      expandedRunIds,
+      expandedAttemptIds,
+      expandedWorkGroupIds,
+      isWorking,
+      runlessWorkActive,
+      activeTurnStartedAt,
+      turnDiffSummaries,
+      supportsConversationRollback,
+      worktreeSetup,
+    ],
+  );
   const rows = useStableRows(rawRows, listIdentityKey);
   // Run status/timestamps churn on every stream event; the shared row context
   // must not change with them or every timeline row re-renders per event.
@@ -793,14 +783,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       restoringThreadPosition && restoreRowIndex >= 0 ? { indices: [restoreRowIndex] } : undefined,
     [restoreRowIndex, restoringThreadPosition],
   );
+  if (restoringThreadPosition && rows.length > 0 && citationRequest !== null) {
+    setPositionedThreadKey(listIdentityKey);
+  }
   useLayoutEffect(() => {
-    if (!restoringThreadPosition || rows.length === 0) return;
+    if (!restoringThreadPosition || rows.length === 0 || citationRequest !== null) return;
     const list = listRef.current;
     if (!list) return;
-    if (citationRequest !== null) {
-      setPositionedThreadKey(listIdentityKey);
-      return;
-    }
     let cancelled = false;
     let settleFrame: number | null = null;
     const viewport: HTMLElement | null = list.getScrollableNode();
@@ -878,7 +867,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           });
           return;
         }
-        if (++stableFrames >= 2) {
+        stableFrames += 1;
+        if (stableFrames >= 2) {
           setPositionedThreadKey(listIdentityKey);
         } else {
           settleFrame = requestAnimationFrame(reconcile);
@@ -1007,6 +997,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   useLayoutEffect(() => {
     cancelContentOverflowFrame();
     onContentOverflowChange?.(measureContentOverflow());
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [cancelContentOverflowFrame, measureContentOverflow, onContentOverflowChange, rows.length]);
 
   const handleScroll = useCallback(() => {
@@ -1094,7 +1085,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   useEffect(() => {
     const frame = requestAnimationFrame(handleScroll);
     return () => cancelAnimationFrame(frame);
-  }, [handleScroll, rows.length]);
+  }, [handleScroll]);
 
   useEffect(() => {
     if (!timelineViewportElement) {
@@ -1128,6 +1119,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [timelineViewportElement, rows.length, reportContentOverflow, chatWidth]);
 
   const sharedState = useMemo<TimelineRowSharedState>(
@@ -1878,7 +1870,7 @@ function UserVideoAttachment({ file }: { readonly file: ChatFileAttachment }) {
       file.downloadable === false
         ? null
         : buildAttachmentVideoAsset(ctx.activeThreadEnvironmentId, file),
-    [ctx.activeThreadEnvironmentId, file.downloadable, file.id, file.mimeType, file.name],
+    [ctx.activeThreadEnvironmentId, file],
   );
   const resource = asset?.resource ?? null;
   const assetUrl = useAssetUrlState(ctx.activeThreadEnvironmentId, resource);
@@ -4455,53 +4447,76 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
  *  array is rebuilt on every projection event (status/timestamp churn), but
  *  the returned reference only changes when a run's identity-relevant fields
  *  (id, ordinal, instance, model) do — keeping TimelineRowCtx stable. */
-function useStableHandoffRuns(
-  runs: ReadonlyArray<HandoffTimelineRun>,
-): ReadonlyArray<HandoffTimelineRun> {
-  const prev = useRef<{
-    signature: string;
-    value: ReadonlyArray<HandoffTimelineRun>;
-  }>({ signature: "", value: EMPTY_TIMELINE_RUNS });
-  return useMemo(() => {
-    const signature = runs
+function createMessagesTimelineRowsProjector() {
+  let previous: {
+    readonly threadKey: string;
+    readonly workspaceRoot: string | undefined;
+    readonly projection: MessagesTimelineRowsProjection;
+  } | null = null;
+  return (
+    threadKey: string,
+    workspaceRoot: string | undefined,
+    input: MessagesTimelineRowsProjection["input"],
+  ): MessagesTimelineRow[] => {
+    const projection = deriveMessagesTimelineRowsWithState(
+      input,
+      previous?.threadKey === threadKey && previous.workspaceRoot === workspaceRoot
+        ? previous.projection
+        : null,
+    );
+    previous = { threadKey, workspaceRoot, projection };
+    return projection.rows;
+  };
+}
+
+function createHandoffRunsStabilizer() {
+  let signature = "";
+  let value: ReadonlyArray<HandoffTimelineRun> = EMPTY_TIMELINE_RUNS;
+  return (runs: ReadonlyArray<HandoffTimelineRun>): ReadonlyArray<HandoffTimelineRun> => {
+    const nextSignature = runs
       .map(
         (run) =>
           `${run.id}\0${run.providerInstanceId}\0${run.ordinal}\0${run.modelSelection.instanceId}\0${run.modelSelection.model}`,
       )
       .join("\n");
-    if (signature === prev.current.signature) {
-      return prev.current.value;
+    if (nextSignature !== signature) {
+      signature = nextSignature;
+      value = runs.map((run) => ({
+        id: run.id,
+        ordinal: run.ordinal,
+        providerInstanceId: run.providerInstanceId,
+        modelSelection: run.modelSelection,
+      }));
     }
-    const value = runs.map((run) => ({
-      id: run.id,
-      ordinal: run.ordinal,
-      providerInstanceId: run.providerInstanceId,
-      modelSelection: run.modelSelection,
-    }));
-    prev.current = { signature, value };
     return value;
-  }, [runs]);
+  };
+}
+
+function useStableHandoffRuns(
+  runs: ReadonlyArray<HandoffTimelineRun>,
+): ReadonlyArray<HandoffTimelineRun> {
+  const [stabilize] = useState(createHandoffRunsStabilizer);
+  return useMemo(() => stabilize(runs), [stabilize, runs]);
+}
+
+function createMessagesTimelineRowsStabilizer() {
+  let identity: string | null = null;
+  let state: StableMessagesTimelineRowsState = { byId: new Map(), result: [] };
+  return (rows: MessagesTimelineRow[], nextIdentity: string): MessagesTimelineRow[] => {
+    state = computeStableMessagesTimelineRows(
+      rows,
+      identity === nextIdentity ? state : { byId: new Map(), result: [] },
+    );
+    identity = nextIdentity;
+    return state.result;
+  };
 }
 
 /** Returns a structurally-shared copy of `rows`: for each row whose content
  *  hasn't changed since last call, the previous object reference is reused. */
 function useStableRows(rows: MessagesTimelineRow[], identity: string): MessagesTimelineRow[] {
-  const prevState = useRef<StableMessagesTimelineRowsState>({
-    byId: new Map<string, MessagesTimelineRow>(),
-    result: [],
-  });
-  const prevIdentity = useRef(identity);
-
-  return useMemo(() => {
-    const previous =
-      prevIdentity.current === identity
-        ? prevState.current
-        : { byId: new Map<string, MessagesTimelineRow>(), result: [] };
-    prevIdentity.current = identity;
-    const nextState = computeStableMessagesTimelineRows(rows, previous);
-    prevState.current = nextState;
-    return nextState.result;
-  }, [identity, rows]);
+  const [stabilize] = useState(createMessagesTimelineRowsStabilizer);
+  return useMemo(() => stabilize(rows, identity), [stabilize, rows, identity]);
 }
 
 // ---------------------------------------------------------------------------

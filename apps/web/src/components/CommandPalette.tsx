@@ -238,6 +238,12 @@ interface AddProjectEnvironmentOption {
   readonly status: string;
 }
 
+type AddProjectIntentPlan =
+  | { readonly kind: "connect" }
+  | { readonly kind: "environments" }
+  | { readonly kind: "sources"; readonly environmentId: EnvironmentId }
+  | { readonly kind: "unavailable"; readonly label: string | undefined };
+
 type AddProjectRemoteProviderKind = Extract<
   SourceControlProviderKind,
   "github" | "gitlab" | "forgejo" | "bitbucket" | "azure-devops"
@@ -452,10 +458,6 @@ function notifyThemeSaveFailure(): void {
       description: "Try again.",
     }),
   );
-}
-
-function projectFavicon(project: Project) {
-  return <ProjectFavicon project={project} className="size-4" />;
 }
 
 export function CommandPalette({ children }: { children: ReactNode }) {
@@ -1450,21 +1452,24 @@ function OpenCommandPaletteDialog(props: {
   );
   const recentThreadItems = allThreadItems.slice(0, RECENT_THREAD_LIMIT);
 
+  const pushPaletteViewState = useCallback((view: CommandPaletteView): void => {
+    setViewStack((previousViews) => [
+      ...previousViews,
+      {
+        addonIcon: view.addonIcon,
+        groups: view.groups,
+        ...(view.initialQuery ? { initialQuery: view.initialQuery } : {}),
+      },
+    ]);
+    setHighlightedItemValue(null);
+    setQuery(view.initialQuery ?? "");
+  }, []);
   const pushPaletteView = useCallback(
     (view: CommandPaletteView): void => {
       browseNavigation.invalidate();
-      setViewStack((previousViews) => [
-        ...previousViews,
-        {
-          addonIcon: view.addonIcon,
-          groups: view.groups,
-          ...(view.initialQuery ? { initialQuery: view.initialQuery } : {}),
-        },
-      ]);
-      setHighlightedItemValue(null);
-      setQuery(view.initialQuery ?? "");
+      pushPaletteViewState(view);
     },
-    [browseNavigation],
+    [browseNavigation, pushPaletteViewState],
   );
 
   function pushView(item: CommandPaletteSubmenuItem): void {
@@ -1799,66 +1804,120 @@ function OpenCommandPaletteDialog(props: {
     if (firstOption) startNewProject(firstOption.environmentId, null);
   };
 
-  useLayoutEffect(() => {
-    if (openIntent?.kind !== "search") return;
-    browseNavigation.invalidate();
-    cloneLookupGeneration.current += 1;
-    setIsRemoteProjectLookingUp(false);
-    setAddProjectCloneFlow(null);
-    setNewProjectFlow(null);
-    setViewStack([]);
-    setLinkedThreadSearch(openIntent);
-    setQuery(openIntent.query);
-    clearOpenIntent();
-  }, [browseNavigation, clearOpenIntent, openIntent]);
+  const [appliedOpenIntent, setAppliedOpenIntent] = useState<{
+    readonly intent: CommandPaletteOpenIntent;
+    readonly addProject: AddProjectIntentPlan | null;
+  } | null>(null);
+  if (
+    openIntent !== null &&
+    appliedOpenIntent?.intent !== openIntent &&
+    (openIntent.kind !== "new-thread-in" || projectThreadItems.length > 0)
+  ) {
+    let addProject: AddProjectIntentPlan | null = null;
+    if (openIntent.kind === "search") {
+      setIsRemoteProjectLookingUp(false);
+      setAddProjectCloneFlow(null);
+      setNewProjectFlow(null);
+      setViewStack([]);
+      setLinkedThreadSearch(openIntent);
+      setQuery(openIntent.query);
+    } else if (openIntent.kind === "add-project") {
+      if (addProjectEnvironmentOptions.length === 0) {
+        addProject = { kind: "connect" };
+      } else if (
+        addProjectEnvironmentOptions.length > 1 ||
+        defaultAddProjectEnvironmentId === null
+      ) {
+        addProject = { kind: "environments" };
+        pushPaletteViewState({
+          addonIcon: <FolderPlusIcon className={ADDON_ICON_CLASS} />,
+          groups: addProjectEnvironmentGroups,
+        });
+      } else {
+        const environment = environments.find(
+          (candidate) => candidate.environmentId === defaultAddProjectEnvironmentId,
+        );
+        if (canCreateProjectInEnvironment(environment?.connection.phase)) {
+          addProject = { kind: "sources", environmentId: defaultAddProjectEnvironmentId };
+          setAddProjectEnvironmentId(defaultAddProjectEnvironmentId);
+          setAddProjectCloneFlow(null);
+          pushPaletteViewState({
+            addonIcon: <FolderPlusIcon className={ADDON_ICON_CLASS} />,
+            groups: buildAddProjectSourceGroups(
+              defaultAddProjectEnvironmentId,
+              buildAddProjectRemoteSourceReadiness(
+                browseEnvironmentId === defaultAddProjectEnvironmentId
+                  ? sourceControlDiscovery.data
+                  : null,
+              ),
+            ),
+          });
+        } else {
+          addProject = { kind: "unavailable", label: environment?.label };
+        }
+      }
+    } else if (openIntent.kind === "new-thread-in") {
+      setAddProjectCloneFlow(null);
+      setNewProjectFlow(null);
+      setViewStack([]);
+      setQuery("");
+      const currentPrefix =
+        currentProjectEnvironmentId && currentProjectId
+          ? `new-thread-in:${currentProjectEnvironmentId}:${currentProjectId}`
+          : null;
+      const prioritized = currentPrefix
+        ? [
+            ...projectThreadItems.filter((item) => item.value === currentPrefix),
+            ...projectThreadItems.filter((item) => item.value !== currentPrefix),
+          ]
+        : projectThreadItems;
+      pushPaletteViewState({
+        addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
+        groups: [
+          {
+            value: "projects",
+            label: "Projects",
+            items: enumerateCommandPaletteItems(prioritized),
+          },
+        ],
+      });
+    } else {
+      setIsRemoteProjectLookingUp(false);
+      setAddProjectCloneFlow(null);
+      setNewProjectFlow(null);
+      setViewStack([]);
+      pushPaletteViewState({
+        addonIcon: <PaletteIcon className={ADDON_ICON_CLASS} />,
+        groups: [{ value: "themes", label: "Change theme", items: [] }],
+      });
+    }
+    setAppliedOpenIntent({ intent: openIntent, addProject });
+  }
 
   useLayoutEffect(() => {
-    if (openIntent?.kind !== "add-project") {
+    if (openIntent === null || appliedOpenIntent?.intent !== openIntent) return;
+    clearOpenIntent();
+    if (openIntent.kind === "search" || openIntent.kind === "change-theme") {
+      cloneLookupGeneration.current += 1;
+    }
+    const addProject = appliedOpenIntent.addProject;
+    if (addProject?.kind === "connect") {
+      setOpen(false);
+      void navigate({ to: "/settings/connections" });
       return;
     }
-    clearOpenIntent();
-    openAddProjectFlow();
-  }, [clearOpenIntent, openAddProjectFlow, openIntent]);
-
-  useLayoutEffect(() => {
-    if (openIntent?.kind !== "new-thread-in" || projectThreadItems.length === 0) {
+    if (addProject?.kind === "unavailable") {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Environment unavailable",
+          description: `${addProject.label ?? "The selected environment"} is not connected.`,
+        }),
+      );
       return;
     }
-    clearOpenIntent();
     browseNavigation.invalidate();
-    setAddProjectCloneFlow(null);
-    setNewProjectFlow(null);
-    setViewStack([]);
-    setQuery("");
-    const currentPrefix =
-      currentProjectEnvironmentId && currentProjectId
-        ? `new-thread-in:${currentProjectEnvironmentId}:${currentProjectId}`
-        : null;
-    const prioritized = currentPrefix
-      ? [
-          ...projectThreadItems.filter((item) => item.value === currentPrefix),
-          ...projectThreadItems.filter((item) => item.value !== currentPrefix),
-        ]
-      : projectThreadItems;
-    pushPaletteView({
-      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
-      groups: [
-        {
-          value: "projects",
-          label: "Projects",
-          items: enumerateCommandPaletteItems(prioritized),
-        },
-      ],
-    });
-  }, [
-    clearOpenIntent,
-    browseNavigation,
-    currentProjectEnvironmentId,
-    currentProjectId,
-    openIntent,
-    projectThreadItems,
-    pushPaletteView,
-  ]);
+  }, [appliedOpenIntent, browseNavigation, clearOpenIntent, navigate, openIntent, setOpen]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
@@ -2164,21 +2223,6 @@ function OpenCommandPaletteDialog(props: {
     ],
   };
   actionItems.push(changeAppearanceItem);
-
-  useLayoutEffect(() => {
-    if (openIntent?.kind !== "change-theme") return;
-    clearOpenIntent();
-    browseNavigation.invalidate();
-    cloneLookupGeneration.current += 1;
-    setIsRemoteProjectLookingUp(false);
-    setAddProjectCloneFlow(null);
-    setNewProjectFlow(null);
-    setViewStack([]);
-    pushPaletteView({
-      addonIcon: <PaletteIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: "themes", label: "Change theme", items: [] }],
-    });
-  }, [browseNavigation, clearOpenIntent, openIntent, pushPaletteView]);
 
   actionItems.push({
     kind: "action",

@@ -70,7 +70,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
   const tokenStart = tokenStartForCursor(text, cursor);
   const token = text.slice(tokenStart, cursor);
   if (token.startsWith("/")) {
-    if ([...text.slice(0, tokenStart)].every(isWhitespace)) {
+    if (Array.from(text.slice(0, tokenStart)).every(isWhitespace)) {
       return {
         kind: "slash-command",
         query: token.slice(1),

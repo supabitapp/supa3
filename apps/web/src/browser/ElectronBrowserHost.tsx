@@ -45,7 +45,7 @@ export function ElectronBrowserHost() {
     let lastSerializedTheme = "";
     const syncTheme = () => {
       const theme = readPreviewAnnotationTheme();
-      const serializedTheme = JSON.stringify(theme);
+      const serializedTheme = `${resolvedTheme}:${JSON.stringify(theme)}`;
       if (serializedTheme === lastSerializedTheme) return;
       lastSerializedTheme = serializedTheme;
       void preview.setAnnotationTheme(theme).catch(() => {

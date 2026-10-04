@@ -32,9 +32,7 @@ describe("diffFileTreeEntries", () => {
       { path: "README.md", status: "modified" },
     ]);
   });
-});
 
-describe("diffFileTreeEntries", () => {
   it("folds a file-to-symlink type change into one modified entry", () => {
     expect(
       diffFileTreeEntries([

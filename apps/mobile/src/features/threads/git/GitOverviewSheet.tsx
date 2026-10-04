@@ -213,7 +213,7 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
       }
       return undefined;
     },
-    [gitStatus.data, menuItems],
+    [gitStatus.data],
   );
 
   const behindCount = gitStatus.data?.behindCount ?? 0;
@@ -224,11 +224,9 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const handlePullRefresh = useCallback(async () => {
     setIsPullRefreshing(true);
-    try {
-      await gitActions.refreshSelectedThreadGitStatus();
-    } finally {
+    await gitActions.refreshSelectedThreadGitStatus().finally(() => {
       setIsPullRefreshing(false);
-    }
+    });
   }, [gitActions]);
 
   const content = (

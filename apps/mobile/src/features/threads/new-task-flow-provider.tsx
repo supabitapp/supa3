@@ -455,6 +455,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     if (activeDraftKey !== null || editingPendingTask !== null || selectedProject === null) {
       return;
     }
+    // oxlint-disable-next-line react/set-state-in-effect
     setActiveDraftKey(
       createNewTaskDraft({
         environmentId: selectedProject.environmentId,

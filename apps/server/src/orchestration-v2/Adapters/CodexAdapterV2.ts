@@ -1260,48 +1260,6 @@ export const makeCodexAppServerSpawnCommand = Effect.fn(
   });
 });
 
-const makeCodexAppServerClientFactoryCommandLayer = (
-  options: CodexClient.CodexAppServerClientOptions & {
-    readonly command: string;
-    readonly args?: ReadonlyArray<string>;
-    readonly cwd?: string;
-    readonly env?: NodeJS.ProcessEnv;
-  },
-): Layer.Layer<CodexAppServerClientFactory, never, ChildProcessSpawner.ChildProcessSpawner> =>
-  Layer.effect(
-    CodexAppServerClientFactory,
-    Effect.gen(function* () {
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      return CodexAppServerClientFactory.of({
-        open: (input) =>
-          Effect.gen(function* () {
-            const scope = yield* Scope.Scope;
-            const command = yield* makeCodexAppServerSpawnCommand({
-              command: options.command,
-              args: [...(options.args ?? [])],
-              ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-              ...(options.env === undefined ? {} : { env: options.env, extendEnv: true }),
-            });
-            const handle = yield* spawner.spawn(command).pipe(
-              Effect.provideService(Scope.Scope, scope),
-              Effect.mapError(
-                (cause) =>
-                  new ProviderAdapterOpenSessionError({
-                    driver: CODEX_PROVIDER,
-                    providerSessionId: input.providerSessionId,
-                    cause,
-                  }),
-              ),
-            );
-            const context = yield* Layer.build(CodexClient.layerChildProcess(handle, options));
-            return yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
-              Effect.provide(context),
-            );
-          }),
-      });
-    }),
-  );
-
 export function makeCodexAppServerProtocolLogger(input: {
   readonly nativeEventLogger: EventNdjsonLogger | undefined;
   readonly threadId: ThreadId;
@@ -1492,33 +1450,6 @@ export const CodexAdapterV2Driver: ProviderAdapterDriver<CodexSettings, CodexAda
   defaultConfig: (): CodexSettings => DEFAULT_CODEX_SETTINGS,
   create: createCodexAdapterV2,
 };
-
-const layer: Layer.Layer<
-  ProviderAdapterV2,
-  never,
-  CodexAppServerClientFactory | FileSystem.FileSystem | IdAllocatorV2 | ServerConfig
-> = Layer.effect(
-  ProviderAdapterV2,
-  Effect.gen(function* () {
-    const clientFactory = yield* CodexAppServerClientFactory;
-    const continuationRequests = yield* ProviderContinuationRequests;
-    const fileSystem = yield* FileSystem.FileSystem;
-    const hostEnvironment = yield* HostProcessEnvironment;
-    const idAllocator = yield* IdAllocatorV2;
-    const serverConfig = yield* ServerConfig;
-
-    return makeCodexAdapterV2({
-      instanceId: CODEX_DEFAULT_INSTANCE_ID,
-      settings: DEFAULT_CODEX_SETTINGS,
-      environment: hostEnvironment,
-      clientFactory,
-      fileSystem,
-      idAllocator,
-      serverConfig,
-      continuationRequests,
-    });
-  }),
-);
 
 export interface CodexAdapterV2Options {
   readonly instanceId: ProviderInstanceId;

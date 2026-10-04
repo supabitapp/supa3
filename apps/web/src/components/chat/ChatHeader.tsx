@@ -139,19 +139,22 @@ export const ChatHeader = memo(function ChatHeader({
     onStartRename: startRename,
   });
   const titleButtonRef = useRef<HTMLButtonElement | null>(null);
-  const titleMenuTimerRef = useRef<number | null>(null);
+  const titleMenuTimerRef = useRef<{
+    readonly threadRef: typeof activeThreadRef;
+    readonly timeoutId: number;
+  } | null>(null);
   const cancelPendingTitleMenu = useCallback(() => {
     if (titleMenuTimerRef.current === null) return;
-    clearTimeout(titleMenuTimerRef.current);
+    clearTimeout(titleMenuTimerRef.current.timeoutId);
     titleMenuTimerRef.current = null;
   }, []);
   // Drop a pending menu-open when the thread changes or the header unmounts,
   // so it can never fire for a thread the user already left.
   useEffect(
     () => () => {
-      cancelPendingTitleMenu();
+      if (titleMenuTimerRef.current?.threadRef === activeThreadRef) cancelPendingTitleMenu();
     },
-    [activeThreadEnvironmentId, activeThreadId, cancelPendingTitleMenu],
+    [activeThreadRef, cancelPendingTitleMenu],
   );
   const openTitleMenuNow = useCallback(() => {
     cancelPendingTitleMenu();
@@ -174,12 +177,15 @@ export const ChatHeader = memo(function ChatHeader({
       // Stay pending long enough for dblclick to cancel the open before the
       // native menu appears and swallows the second click.
       cancelPendingTitleMenu();
-      titleMenuTimerRef.current = window.setTimeout(() => {
-        titleMenuTimerRef.current = null;
-        openTitleMenuNow();
-      }, TITLE_MENU_OPEN_DELAY_MS);
+      titleMenuTimerRef.current = {
+        threadRef: activeThreadRef,
+        timeoutId: window.setTimeout(() => {
+          titleMenuTimerRef.current = null;
+          openTitleMenuNow();
+        }, TITLE_MENU_OPEN_DELAY_MS),
+      };
     },
-    [cancelPendingTitleMenu, openTitleMenuNow],
+    [activeThreadRef, cancelPendingTitleMenu, openTitleMenuNow],
   );
   const handleTitleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {

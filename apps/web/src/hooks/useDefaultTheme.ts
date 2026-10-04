@@ -82,7 +82,10 @@ export function useDefaultThemeAdoption(): void {
   useEffect(() => {
     if (typeof window === "undefined" || environmentId === null) return;
     const storageKey = `${APPLIED_DEFAULT_THEME_STORAGE_PREFIX}${environmentId}`;
-    const definition = getThemeDefinition(defaultTheme);
+    const definition =
+      getThemeDefinition(defaultTheme) ??
+      environmentThemes.find((theme) => theme.id === defaultTheme) ??
+      null;
     const generation = defaultThemeToApply({
       environmentId,
       defaultTheme,

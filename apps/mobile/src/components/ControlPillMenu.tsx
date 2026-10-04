@@ -41,6 +41,16 @@ const ThemedMenuView = withUniwind(
   },
 );
 
+type LongPressMenuChildProps = Pick<PressableProps, "onTouchStart" | "onPress">;
+type LongPressMenuChildElement = ReactElement<LongPressMenuChildProps>;
+
+function LongPressMenuChild({
+  child,
+  ...handlers
+}: LongPressMenuChildProps & { readonly child: LongPressMenuChildElement }) {
+  return cloneElement(child, handlers);
+}
+
 export function ControlPillMenu(props: ControlPillMenuProps) {
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
@@ -48,35 +58,38 @@ export function ControlPillMenu(props: ControlPillMenuProps) {
   const pendingPress = useRef<(() => void) | null>(null);
 
   const { className: _className, ...menuProps } = props;
-  let children = menuProps.children;
+  let children = props.children;
   if (props.shouldOpenOnLongPress && isValidElement(children)) {
-    const child = children as ReactElement<Pick<PressableProps, "onTouchStart" | "onPress">>;
-    children = cloneElement(child, {
-      onTouchStart: (event) => {
-        // Reset for a new touch, not onPressIn, which also fires when a
-        // finger moves out of the row and back during the same gesture.
-        menuPress.current.isPreparing = false;
-        menuPress.current.suppressPress = menuPress.current.isOpen;
-        pendingPress.current = null;
-        child.props.onTouchStart?.(event);
-      },
-      onPress: (event) => {
-        // Accessibility clicks have no touch identifier and must not inherit
-        // cancellation from a previous physical gesture.
-        const isTouch = typeof event.nativeEvent.identifier === "number";
-        if (isTouch ? menuPress.current.suppressPress : menuPress.current.isOpen) {
-          return;
-        }
-        if (isTouch && menuPress.current.isPreparing) {
-          // A release can arrive between native menu preparation and display.
-          // Let UIKit's display/cancel callback decide this press's outcome.
-          event.persist();
-          pendingPress.current = () => child.props.onPress?.(event);
-          return;
-        }
-        child.props.onPress?.(event);
-      },
-    });
+    const child = children as LongPressMenuChildElement;
+    children = (
+      <LongPressMenuChild
+        child={child}
+        onTouchStart={(event) => {
+          // Reset for a new touch, not onPressIn, which also fires when a
+          // finger moves out of the row and back during the same gesture.
+          menuPress.current.isPreparing = false;
+          menuPress.current.suppressPress = menuPress.current.isOpen;
+          pendingPress.current = null;
+          child.props.onTouchStart?.(event);
+        }}
+        onPress={(event) => {
+          // Accessibility clicks have no touch identifier and must not inherit
+          // cancellation from a previous physical gesture.
+          const isTouch = typeof event.nativeEvent.identifier === "number";
+          if (isTouch ? menuPress.current.suppressPress : menuPress.current.isOpen) {
+            return;
+          }
+          if (isTouch && menuPress.current.isPreparing) {
+            // A release can arrive between native menu preparation and display.
+            // Let UIKit's display/cancel callback decide this press's outcome.
+            event.persist();
+            pendingPress.current = () => child.props.onPress?.(event);
+            return;
+          }
+          child.props.onPress?.(event);
+        }}
+      />
+    );
     menuProps.onMenuInteractionStart = () => {
       menuPress.current.isPreparing = true;
       props.onMenuInteractionStart?.();

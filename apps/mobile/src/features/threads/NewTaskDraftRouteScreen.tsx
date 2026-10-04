@@ -82,13 +82,10 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
     if (!needsPreparation || !initialProjectRef.branch || waitingForProject) return;
     const branchName = initialProjectRef.branch;
     let active = true;
-    setPendingCheckouts((count) => count + 1);
     // Serialize replacements: ignoring a stale result cannot undo its Git mutation.
     checkoutTail.current = checkoutTail.current.then(async () => {
-      if (!active) {
-        setPendingCheckouts((count) => count - 1);
-        return;
-      }
+      if (!active) return;
+      setPendingCheckouts((count) => count + 1);
       const result = await checkoutNewTaskBranch({
         // A thread's branch is historical; only switchRef can establish that
         // the shared project checkout now matches it.

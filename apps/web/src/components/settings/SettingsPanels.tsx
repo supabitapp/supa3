@@ -4,7 +4,7 @@ import { NotificationSettings } from "./NotificationSettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   type BackgroundActivityProfile,
   type DesktopUpdateChannel,
@@ -654,62 +654,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     [
       isTextGenerationModelDirty,
       isBackgroundActivityDirty,
-      settings.browserDefaultViewport,
-      settings.browserDefaultZoomFactor,
-      settings.browserDefaultAppearance,
-      settings.browserRecordingFrameRate,
-      settings.browserRecordingShowKeyPresses,
-      settings.browserRecordingShowMousePresses,
-      settings.browserLinkTarget,
-      settings.browserAutoShowFloatingPreview,
-      settings.appearanceContrast,
-      settings.diffColorScheme,
-      settings.chatWidth,
-      settings.enableAgentBrowserAccess,
-      settings.confirmQuit,
-      settings.confirmThreadArchive,
-      settings.confirmThreadDelete,
-      settings.confirmThreadUnpin,
-      settings.composerCollapseOnScroll,
-      settings.composerRichTextEnabled,
-      settings.sendShortcut,
-      settings.followUpBehavior,
-      settings.addProjectBaseDirectory,
-      settings.defaultThreadEnvMode,
-      settings.newWorktreesStartFromOrigin,
-      settings.diffFilesCollapsed,
-      settings.diffIgnoreWhitespace,
-      settings.diffLayout,
-      settings.proactivePanelsEnabled,
-      settings.environmentIdentificationMode,
-      settings.contextWindowMeterEnabled,
-      settings.fontFamilyCode,
-      settings.fontFamilyComposer,
-      settings.fontFamilySans,
-      settings.fontFamilyTerminal,
-      settings.fontSizeCode,
-      settings.fontSizeInterface,
-      settings.fontSizePrompt,
-      settings.fontSizeTerminal,
-      settings.glassOpacity,
-      settings.panelAnimationDurationMs,
-      settings.responseStreamingMode,
-      settings.persistComposerContextStrip,
-      settings.enableProviderUpdateChecks,
-      settings.continueThreadsAfterServerUpdate,
-      settings.sidebarAutoSettleAfterDays,
-      settings.sidebarAutoSettleOnMerge,
-      settings.autoResumeLimitedThreads,
-      settings.snoozeLimitedThreads,
-      settings.sidebarProjectGroupingMode,
-      settings.sidebarProjectSortOrder,
-      settings.sidebarWorkingShelfEnabled,
-      settings.sidebarThreadPreviewCount,
-      settings.showSkillsInSlashMenu,
-      settings.timestampFormat,
-      settings.notificationMode,
-      settings.inAppNotificationsEnabled,
-      settings.wordWrap,
+      settings,
       followSystem,
       theme,
       themeHalves,
@@ -853,7 +798,6 @@ export function useSettingsRestore(onRestored?: () => void) {
     setTheme,
     setThemeHalf,
     theme,
-    themeHalves,
     updateSettings,
   ]);
 
@@ -1865,18 +1809,23 @@ function FontFamilySettingsRow({
   const [draft, setDraft] = useState(value);
   const [draftSettled, setDraftSettled] = useState(true);
   const commitTimerRef = useRef<number | null>(null);
-  const lastValueRef = useRef(value);
-  if (lastValueRef.current !== value) {
-    // The committed value changed externally (hydration, reset, picker
-    // selection); adopt it and drop any pending commit of a stale draft.
-    lastValueRef.current = value;
+  // The committed value changed externally (hydration, reset, picker
+  // selection); adopt it and drop any pending commit of a stale draft.
+  const [lastValue, setLastValue] = useState(value);
+  if (lastValue !== value) {
+    setLastValue(value);
+    setDraft(value);
+    setDraftSettled(true);
+  }
+  const timerValueRef = useRef(value);
+  useLayoutEffect(() => {
+    if (timerValueRef.current === value) return;
+    timerValueRef.current = value;
     if (commitTimerRef.current !== null) {
       window.clearTimeout(commitTimerRef.current);
       commitTimerRef.current = null;
     }
-    setDraft(value);
-    setDraftSettled(true);
-  }
+  }, [value]);
   useEffect(
     () => () => {
       if (commitTimerRef.current !== null) window.clearTimeout(commitTimerRef.current);
@@ -1921,7 +1870,7 @@ function FontFamilySettingsRow({
   // runs font discovery. Where the engine can enumerate, the control then
   // upgrades to the picker - popped open when the swap happens under focus,
   // so the interaction continues without a second click.
-  const inputFocusedRef = useRef(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const familyControl =
     fontEnumeration.status === "granted" ? (
       <FontFamilyPicker
@@ -1929,7 +1878,7 @@ function FontFamilySettingsRow({
         defaultFamily={defaultFamily}
         selectedFamily={trimmed}
         requireMonospace={requireMonospace}
-        initialOpen={inputFocusedRef.current}
+        initialOpen={inputFocused}
         onSelect={onValueChange}
       />
     ) : (
@@ -1942,11 +1891,11 @@ function FontFamilySettingsRow({
         className="min-w-0 flex-1"
         maxLength={200}
         onFocus={() => {
-          inputFocusedRef.current = true;
+          setInputFocused(true);
           discoverInstalledFonts();
         }}
         onBlur={() => {
-          inputFocusedRef.current = false;
+          setInputFocused(false);
           flushDraft();
         }}
         onChange={(event) => {
@@ -2034,9 +1983,11 @@ function AutoSettleDaysInput({
   // Local draft so the field can be emptied mid-edit; the setting only moves
   // on valid input and snaps back to the persisted value on blur.
   const [draft, setDraft] = useState(String(value));
-  useEffect(() => {
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
     setDraft(String(value));
-  }, [value]);
+  }
 
   return (
     <Input

@@ -151,13 +151,10 @@ function ProjectFaviconImage(props: {
     () => createProjectFaviconRequest(props.cacheKey, props.faviconUrl),
     [props.cacheKey, props.faviconUrl],
   );
-  const [activeFaviconRequest, setActiveFaviconRequest] = useState<typeof faviconRequest>(null);
   useLayoutEffect(() => {
     if (faviconRequest === null) return;
 
-    const endRequest = beginProjectFaviconRequest(faviconRequest);
-    setActiveFaviconRequest(faviconRequest);
-    return endRequest;
+    return beginProjectFaviconRequest(faviconRequest);
   }, [faviconRequest]);
 
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(() =>
@@ -166,7 +163,7 @@ function ProjectFaviconImage(props: {
       : "loading",
   );
 
-  const requestIsActive = faviconRequest !== null && activeFaviconRequest === faviconRequest;
+  const requestIsActive = faviconRequest !== null;
   const showImage = requestIsActive && status === "loaded";
 
   return (

@@ -1031,7 +1031,7 @@ describe("label candidate decoding", () => {
   });
 });
 
-describe("review thread decoding", () => {
+describe("review conversation decoding", () => {
   const threadsJson = (
     nodes: ReadonlyArray<Record<string, unknown>>,
     pullRequest: Record<string, unknown> = {},

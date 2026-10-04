@@ -214,7 +214,7 @@ export function ProviderModelsSection({
   // `models` list, so the row can only be scrolled to after that render.
   useEffect(() => {
     const slug = scrollToSlugRef.current;
-    if (slug === null) return;
+    if (slug === null || !displayModels.some((model) => model.slug === slug)) return;
     const row = listRef.current?.querySelector<HTMLElement>(
       `[data-model-slug="${CSS.escape(slug)}"]`,
     );

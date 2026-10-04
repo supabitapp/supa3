@@ -659,8 +659,8 @@ export function useTheme() {
 
   // Keep DOM in sync on mount/change
   useEffect(() => {
-    applyTheme(theme);
-  }, [snapshot.appearanceMode, theme]);
+    applyTheme(snapshot.theme);
+  }, [snapshot]);
 
   return {
     theme,

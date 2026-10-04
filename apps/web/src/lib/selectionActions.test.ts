@@ -10,7 +10,7 @@ function createSelectionSurface({ interactiveActions = false } = {}) {
   const frames = new Map<number, FrameRequestCallback>();
   let frameId = 0;
   const view = Object.assign(new EventTarget(), {
-    setTimeout: (callback: () => void, delay: number) => setTimeout(callback, delay),
+    setTimeout: (callback: () => void, delay: number) => globalThis.setTimeout(callback, delay),
     clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       frames.set(++frameId, callback);

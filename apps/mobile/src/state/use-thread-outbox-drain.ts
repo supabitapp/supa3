@@ -1330,6 +1330,7 @@ export function useThreadOutboxDrain(): void {
     editingQueuedMessageIds,
     projects,
     queuedMessagesByThreadKey,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     retryTick,
     restoreQueuedMessage,
     scheduleQueuedMessageRetry,

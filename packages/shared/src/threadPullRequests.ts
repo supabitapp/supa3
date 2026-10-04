@@ -7,6 +7,7 @@ import type {
 } from "@supacode/contracts";
 
 import { pullRequestHostOf } from "@supacode/contracts";
+import * as Arr from "effect/Array";
 import { parseChangeRequestUrl } from "./changeRequestUrl.ts";
 import { canonicalRepositoryKey, sourceControlRepositorySelector } from "./sourceControl.ts";
 
@@ -119,10 +120,8 @@ export function resolveThreadCurrentPullRequest(
   if (open.length === 1) return { kind: "single", link: open[0]! };
   const chains = resolveThreadPullRequestChains(visible);
   if (open.length > 1) {
-    // `.reverse()` on a copy, not `.toReversed()`: this runs on Hermes, which has no ES2023
-    // array methods, and a TypeError here is fatal on every mobile launch that renders a stack.
     const openChains = chains
-      .map((chain) => [...chain.layers].reverse().filter(isOpen))
+      .map((chain) => Arr.reverse(chain.layers).filter(isOpen))
       .filter((layers) => layers.length > 0)
       .sort(
         (left, right) =>

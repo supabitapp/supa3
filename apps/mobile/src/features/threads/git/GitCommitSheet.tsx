@@ -1,5 +1,5 @@
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -48,7 +48,10 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
   const [excludedFiles, setExcludedFiles] = useState<ReadonlySet<string>>(new Set());
   const [isEditingFiles, setIsEditingFiles] = useState(false);
 
-  const selectedFiles = allFiles.filter((file) => !excludedFiles.has(file.path));
+  const selectedFiles = useMemo(
+    () => allFiles.filter((file) => !excludedFiles.has(file.path)),
+    [allFiles, excludedFiles],
+  );
   const allSelected = excludedFiles.size === 0;
   const noneSelected = selectedFiles.length === 0;
   const selectedInsertions = selectedFiles.reduce((sum, file) => sum + file.insertions, 0);

@@ -1,4 +1,5 @@
 import type { DiffsHighlighter } from "@pierre/diffs";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { toHtml } from "hast-util-to-html";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { cloneElement, isValidElement, memo, type DOMAttributes } from "react";
@@ -38,10 +39,9 @@ export function HighlightedCodeLines({ root }: { root: HighlightedRoot }) {
     cloneElement(
       elementShell(code),
       undefined,
-      code.children.map((node, index) => (
+      withOccurrenceKeys(code.children, (node) => node.type).map(({ item: node, key }) => (
         // A line's position is stable as tokens and new lines are appended.
-        // oxlint-disable-next-line react/no-array-index-key
-        <HighlightedLine key={index} node={node} />
+        <HighlightedLine key={key} node={node} />
       )),
     ),
   );

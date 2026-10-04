@@ -3,7 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@supacode/contracts";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Platform, Pressable, ScrollView, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import ReanimatedSwipeable, {
@@ -577,7 +577,7 @@ function QueueAttachmentThumbnail(props: {
   );
 }
 
-function QueueDragHandle(props: {
+type QueueDragHandleProps = {
   disabled: boolean;
   title: string;
   canMoveUp: boolean;
@@ -586,23 +586,29 @@ function QueueDragHandle(props: {
   onStart: () => void;
   onMove: (y: number) => void;
   onEnd: (y: number, success: boolean) => void;
-}) {
+};
+
+function createQueueDragPan(latest: RefObject<QueueDragHandleProps>, disabled: boolean) {
+  return Gesture.Pan()
+    .enabled(!disabled)
+    .minDistance(0)
+    .shouldCancelWhenOutside(false)
+    .runOnJS(true)
+    .onStart(() => latest.current.onStart())
+    .onUpdate((event) => latest.current.onMove(event.translationY))
+    .onFinalize((event, success) => latest.current.onEnd(event.translationY, success));
+}
+
+function useQueueDragPan(latest: RefObject<QueueDragHandleProps>, disabled: boolean) {
+  return useMemo(() => createQueueDragPan(latest, disabled), [disabled, latest]);
+}
+
+function QueueDragHandle(props: QueueDragHandleProps) {
   const latest = useRef(props);
   useLayoutEffect(() => {
     latest.current = props;
   });
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(!props.disabled)
-        .minDistance(0)
-        .shouldCancelWhenOutside(false)
-        .runOnJS(true)
-        .onStart(() => latest.current.onStart())
-        .onUpdate((event) => latest.current.onMove(event.translationY))
-        .onFinalize((event, success) => latest.current.onEnd(event.translationY, success)),
-    [props.disabled],
-  );
+  const gesture = useQueueDragPan(latest, props.disabled);
   return (
     <GestureDetector gesture={gesture}>
       <View

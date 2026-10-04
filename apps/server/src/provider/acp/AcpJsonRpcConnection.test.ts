@@ -708,7 +708,7 @@ describe("AcpSessionRuntime", () => {
       yield* runtime.start();
 
       expect(
-        requestEvents.filter((event) => event.status === "started").map((event) => event.method),
+        requestEvents.flatMap((event) => (event.status === "started" ? [event.method] : [])),
       ).toEqual(["initialize", "session/new"]);
     }).pipe(
       Effect.provide(
@@ -739,7 +739,7 @@ describe("AcpSessionRuntime", () => {
       const started = yield* runtime.start();
       expect(started.sessionId).toBe("mock-session-1");
       expect(
-        requestEvents.filter((event) => event.status === "started").map((event) => event.method),
+        requestEvents.flatMap((event) => (event.status === "started" ? [event.method] : [])),
       ).toEqual(["initialize", "session/new", "authenticate", "session/new"]);
       expect(
         requestEvents.filter(
@@ -786,7 +786,7 @@ describe("AcpSessionRuntime", () => {
       expect(Result.isFailure(result)).toBe(true);
       expect(advertisedAuthMethodName).toBe("Mock agent authentication");
       expect(
-        requestEvents.filter((event) => event.status === "started").map((event) => event.method),
+        requestEvents.flatMap((event) => (event.status === "started" ? [event.method] : [])),
       ).toEqual(["initialize", "session/new"]);
     }).pipe(
       Effect.provide(
@@ -1289,7 +1289,7 @@ describe("AcpSessionRuntime", () => {
         )?.payload,
       ).toMatchObject({ sessionId: "mock-session-1-fork" });
       expect(
-        requestEvents.filter((event) => event.status === "started").map((event) => event.method),
+        requestEvents.flatMap((event) => (event.status === "started" ? [event.method] : [])),
       ).toEqual(
         expect.arrayContaining([
           "session/list",
@@ -1331,7 +1331,7 @@ describe("AcpSessionRuntime", () => {
 
       expect(listed.sessions).toHaveLength(1);
       expect(
-        requestEvents.filter((event) => event.status === "started").map((event) => event.method),
+        requestEvents.flatMap((event) => (event.status === "started" ? [event.method] : [])),
       ).toEqual(["initialize", "session/list"]);
     }).pipe(
       Effect.provide(

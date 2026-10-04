@@ -31,6 +31,12 @@ export function useSidebarThreadNavigation() {
       }),
     [isMobile, router, setOpenMobile],
   );
-  useEffect(() => () => navigation.cancel(), [location, navigation]);
+  useEffect(() => () => navigation.cancel(), [navigation]);
+  useEffect(
+    () => () => {
+      if (router.state.location !== location) navigation.cancel();
+    },
+    [location, navigation, router],
+  );
   return navigation.navigate;
 }

@@ -99,7 +99,7 @@ export function FloatingWorkingControl(props: {
   const separationProgress = useSharedValue(props.showScrollToEnd ? 1 : 0);
 
   useEffect(() => {
-    separationProgress.value = withTiming(props.showScrollToEnd ? 1 : 0, CONTROL_TIMING);
+    separationProgress.set(withTiming(props.showScrollToEnd ? 1 : 0, CONTROL_TIMING));
   }, [props.showScrollToEnd, separationProgress]);
 
   const lift = props.lift;
@@ -126,7 +126,7 @@ export function FloatingWorkingControl(props: {
     }
     const first = measuredWidthRef.current === null;
     measuredWidthRef.current = width;
-    capsuleWidth.value = first ? width : withTiming(width, CONTROL_TIMING);
+    capsuleWidth.set(first ? width : withTiming(width, CONTROL_TIMING));
   };
   // Forget the width while no label is shown so the next one appears at its
   // own size instead of animating from the previous label's.
@@ -135,7 +135,7 @@ export function FloatingWorkingControl(props: {
   useEffect(() => {
     if (!hasStatus) {
       measuredWidthRef.current = null;
-      capsuleWidth.value = null;
+      capsuleWidth.set(null);
     }
   }, [capsuleWidth, hasStatus]);
   const capsuleStyle = useAnimatedStyle(() => ({

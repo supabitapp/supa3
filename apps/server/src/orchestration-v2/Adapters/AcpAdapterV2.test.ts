@@ -1312,7 +1312,7 @@ describe("AcpAdapterV2", () => {
       );
       assert.isTrue(items.some((item) => item.type === "user_message" && item.text.length === 0));
       assert.equal(
-        items.filter((item) => item.type === "assistant_message").at(-1)?.text,
+        items.findLast((item) => item.type === "assistant_message")?.text,
         "authoritative answer",
       );
       assert.isTrue(
@@ -2940,7 +2940,7 @@ describe("AcpAdapterV2", () => {
           fileSystem,
           idAllocator,
           serverConfig,
-          selfInvocation: yield* resolveSelfInvocation(),
+          selfInvocation,
           // Production Grok runtimes are wrapped by the x.ai prompt runtime.
           makeRuntime: (input) =>
             makeMockRuntime({ childProcessSpawner, mockAgentPath, protocolEvents })(input).pipe(
@@ -2995,7 +2995,7 @@ describe("AcpAdapterV2", () => {
         fileSystem,
         idAllocator,
         serverConfig,
-        selfInvocation: yield* resolveSelfInvocation(),
+        selfInvocation,
         // Production Grok runtimes are wrapped by the x.ai prompt runtime.
         makeRuntime: (input) =>
           makeMockRuntime({ childProcessSpawner, mockAgentPath, protocolEvents })(input).pipe(

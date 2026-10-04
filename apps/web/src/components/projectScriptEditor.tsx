@@ -19,7 +19,6 @@ import {
 import React, {
   type FormEvent,
   type KeyboardEvent,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -186,20 +185,23 @@ export function ProjectScriptEditorDialog({
   );
 
   // Hydrate the form whenever a new request opens the dialog.
-  useEffect(() => {
-    if (!request) return;
-    setName(request.initial.name);
-    setCommand(request.initial.command);
-    setIcon(request.initial.icon);
-    setIconPickerOpen(false);
-    setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
-    setWaitForSetup(request.initial.waitForSetup);
-    setKeybinding(request.initial.keybinding ?? "");
-    setPreviewUrl(request.initial.previewUrl ?? "");
-    setAutoOpenPreview(request.initial.autoOpenPreview);
-    setValidationError(request.error ?? null);
-    setSavingRequest(null);
-  }, [request]);
+  const [hydratedRequest, setHydratedRequest] = useState<ProjectScriptEditorRequest | null>(null);
+  if (hydratedRequest !== request) {
+    setHydratedRequest(request);
+    if (request) {
+      setName(request.initial.name);
+      setCommand(request.initial.command);
+      setIcon(request.initial.icon);
+      setIconPickerOpen(false);
+      setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
+      setWaitForSetup(request.initial.waitForSetup);
+      setKeybinding(request.initial.keybinding ?? "");
+      setPreviewUrl(request.initial.previewUrl ?? "");
+      setAutoOpenPreview(request.initial.autoOpenPreview);
+      setValidationError(request.error ?? null);
+      setSavingRequest(null);
+    }
+  }
 
   const close = () => {
     pendingSubmissionRef.current = null;

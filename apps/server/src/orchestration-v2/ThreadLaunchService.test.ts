@@ -1810,8 +1810,9 @@ it.effect("shared intake preserves durable attachment bytes after a lost launch 
     );
     assert.isDefined(stored);
     assert.notEqual(stored.attachments[0]?.id, attachment.id);
+    assert.isDefined(stored.context);
     assert.equal(
-      (stored.context?.records[0] as { attachmentId: string }).attachmentId,
+      (stored.context.records[0] as { attachmentId: string }).attachmentId,
       stored.attachments[0]?.id,
     );
     const userItem = accepted.turnItems.find(

@@ -43,6 +43,13 @@ export function useAssistantCitationTarget({
     requestedPages: Set<string>;
     done: boolean;
   } | null>(null);
+  const requestKey = request?.key ?? null;
+  const [trackedRequestKey, setTrackedRequestKey] = useState(requestKey);
+  if (trackedRequestKey !== requestKey) {
+    setTrackedRequestKey(requestKey);
+    setReady(null);
+    if (requestKey === null) setFinishedKey(null);
+  }
 
   useEffect(() => {
     if (navigationRef.current && navigationRef.current.target.key !== request?.key) {
@@ -51,8 +58,6 @@ export function useAssistantCitationTarget({
     }
     if (!request) {
       navigationRef.current = null;
-      setReady(null);
-      setFinishedKey(null);
       return;
     }
     if (navigationRef.current?.target.key !== request.key) {
@@ -72,7 +77,6 @@ export function useAssistantCitationTarget({
         requestedPages: new Set(),
         done: false,
       };
-      setReady(null);
       onManualNavigation();
     }
     if (!viewport || historyLoading) return;

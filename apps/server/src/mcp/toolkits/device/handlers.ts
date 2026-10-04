@@ -211,9 +211,9 @@ const handlers = {
       const target =
         input.deviceId !== undefined
           ? { hostId: input.hostId ?? LOCAL_DEVICE_HOST_ID, deviceId: input.deviceId }
-          : sessions
-              .filter((session) => input.hostId === undefined || session.hostId === input.hostId)
-              .at(-1);
+          : sessions.findLast(
+              (session) => input.hostId === undefined || session.hostId === input.hostId,
+            );
       if (!target) {
         return yield* new DeviceToolUnavailableError({
           reason: "No device is open in this thread. Call device_open first.",

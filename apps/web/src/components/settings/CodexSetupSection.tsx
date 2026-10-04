@@ -286,11 +286,13 @@ function ManagedCodexSetup({
     awaitingProvider !== null &&
     !authenticated &&
     (auth?.phase === "succeeded" || awaitingProvider === "handoff");
-  useEffect(() => {
+  const [awaitSettledFor, setAwaitSettledFor] = useState({ authenticated, phase: auth?.phase });
+  if (awaitSettledFor.authenticated !== authenticated || awaitSettledFor.phase !== auth?.phase) {
+    setAwaitSettledFor({ authenticated, phase: auth?.phase });
     if (authenticated || auth?.phase === "failed" || auth?.phase === "cancelled") {
       setAwaitingProvider(null);
     }
-  }, [authenticated, auth?.phase]);
+  }
   useEffect(() => {
     if (awaitingProvider && auth?.phase === "succeeded") {
       void refreshProviders({ environmentId, input: { instanceId } });
@@ -370,21 +372,19 @@ function ManagedCodexSetup({
     importedAttempt.current = attemptId;
     void transferProfile(handoffQuery.data.profile);
   }, [handoff, handoffQuery.data, transferProfile]);
-  useEffect(() => {
-    if (!handoff) return;
-    if (
-      handoffQuery.error ||
+  if (
+    handoff &&
+    (handoffQuery.error ||
       (handoffQuery.data?.phase === "auth" &&
-        ["failed", "cancelled"].includes(handoffQuery.data.state.phase))
-    ) {
-      setError(
-        handoffQuery.data?.phase === "auth"
-          ? (handoffQuery.data.state.message ?? "ChatGPT sign-in could not finish. Try again.")
-          : "ChatGPT sign-in on the primary environment was interrupted. Try again.",
-      );
-      setHandoff(null);
-    }
-  }, [handoff, handoffQuery.data, handoffQuery.error]);
+        ["failed", "cancelled"].includes(handoffQuery.data.state.phase)))
+  ) {
+    setError(
+      handoffQuery.data?.phase === "auth"
+        ? (handoffQuery.data.state.message ?? "ChatGPT sign-in could not finish. Try again.")
+        : "ChatGPT sign-in on the primary environment was interrupted. Try again.",
+    );
+    setHandoff(null);
+  }
   const cancelSignIn = useCallback(() => {
     setAwaitingProvider(null);
     if (handoff) {
@@ -488,6 +488,7 @@ function ManagedCodexSetup({
       !provider?.setup?.canInstall
     )
       return;
+    // oxlint-disable-next-line react/set-state-in-effect
     setAutoStartHandled(true);
     onAutoStartConsumed();
     void setup();
@@ -516,8 +517,8 @@ function ManagedCodexSetup({
   const receivingCallback = useRef<string | null>(null);
   const flowId = auth?.flowId;
   const openPage = useCallback(
-    async (authorizationUrl: string) => {
-      try {
+    (authorizationUrl: string) => {
+      const open = async () => {
         const receive = window.desktopBridge?.receiveProviderAuthCallback;
         if (receive && clientCallback && flowId) {
           if (receivingCallback.current === authorizationUrl) {
@@ -534,11 +535,12 @@ function ManagedCodexSetup({
         } else {
           await ensureLocalApi().shell.openExternal(authorizationUrl);
         }
-      } catch {
+      };
+      return open().catch(() => {
         setError(
           "Could not finish sign-in on this computer. Try again or paste the redirect URL below.",
         );
-      }
+      });
     },
     [clientCallback, flowId, run, completeAuth, environmentId, instanceId],
   );

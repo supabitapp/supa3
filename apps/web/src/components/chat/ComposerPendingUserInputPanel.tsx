@@ -1,5 +1,5 @@
 import { type RuntimeRequestId } from "@supacode/contracts";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
   derivePendingUserInputProgress,
@@ -88,26 +88,16 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     onAdvanceRef.current = onAdvance;
   }, [onAdvance]);
 
-  useEffect(() => {
-    if (!activeQuestion || activeQuestion.multiSelect || !optimisticSingleSelect) {
-      return;
-    }
-    if (optimisticSingleSelect.questionId !== activeQuestion.id) {
-      setOptimisticSingleSelect(null);
-      return;
-    }
-    if (
-      progress.customAnswer.trim().length === 0 &&
-      progress.selectedOptionValues.includes(optimisticSingleSelect.optionValue)
-    ) {
-      setOptimisticSingleSelect(null);
-    }
-  }, [
-    activeQuestion,
-    optimisticSingleSelect,
-    progress.customAnswer,
-    progress.selectedOptionValues,
-  ]);
+  if (
+    activeQuestion &&
+    !activeQuestion.multiSelect &&
+    optimisticSingleSelect &&
+    (optimisticSingleSelect.questionId !== activeQuestion.id ||
+      (progress.customAnswer.trim().length === 0 &&
+        progress.selectedOptionValues.includes(optimisticSingleSelect.optionValue)))
+  ) {
+    setOptimisticSingleSelect(null);
+  }
 
   // Clear auto-advance timer on unmount
   useEffect(() => {
@@ -118,24 +108,21 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     };
   }, []);
 
-  const handleOptionSelection = useCallback(
-    (questionId: string, optionValue: string) => {
-      if (activeQuestion?.multiSelect) {
-        onToggleOption(questionId, optionValue);
-        return;
-      }
-      setOptimisticSingleSelect({ questionId, optionValue });
+  const handleOptionSelection = (questionId: string, optionValue: string) => {
+    if (activeQuestion?.multiSelect) {
       onToggleOption(questionId, optionValue);
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-      }
-      autoAdvanceTimerRef.current = window.setTimeout(() => {
-        autoAdvanceTimerRef.current = null;
-        onAdvanceRef.current();
-      }, 200);
-    },
-    [activeQuestion, onToggleOption],
-  );
+      return;
+    }
+    setOptimisticSingleSelect({ questionId, optionValue });
+    onToggleOption(questionId, optionValue);
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+    }
+    autoAdvanceTimerRef.current = window.setTimeout(() => {
+      autoAdvanceTimerRef.current = null;
+      onAdvanceRef.current();
+    }, 200);
+  };
 
   // Keyboard shortcut: number keys 1-9 select corresponding options when focus is
   // outside editable fields. Multi-select prompts toggle options in place; single-

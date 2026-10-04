@@ -304,7 +304,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
 
   // Signals that end a connected lease whatever its health: "reset" ends it
   // and restarts the retry ladder, "end" ends it, undefined keeps it.
-  const connectedLeaseEnd = Effect.fnUntraced(function* (next: SupervisorSignal) {
+  const connectedLeaseEnd = (next: SupervisorSignal) => {
     if (next._tag === "DisconnectRequested") {
       return "end" as const;
     }
@@ -318,7 +318,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
       return "reset" as const;
     }
     return undefined;
-  });
+  };
 
   // How long a signal waits for the live session to answer a probe, or
   // undefined when the signal does not question the connection.
@@ -360,7 +360,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     );
     for (;;) {
       const next = yield* takeSignal;
-      const end = yield* connectedLeaseEnd(next);
+      const end = connectedLeaseEnd(next);
       if (end !== undefined) {
         return end === "reset";
       }
@@ -397,7 +397,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
           yield* probeEvent.exit;
           break;
         }
-        const endDuringProbe = yield* connectedLeaseEnd(probeEvent.signal);
+        const endDuringProbe = connectedLeaseEnd(probeEvent.signal);
         if (endDuringProbe !== undefined) {
           yield* Fiber.interrupt(probe);
           return endDuringProbe === "reset";

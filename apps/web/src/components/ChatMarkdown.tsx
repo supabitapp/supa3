@@ -1337,23 +1337,25 @@ const MARKDOWN_LINK_FAVICON_CLASS_NAME = "block size-full shrink-0 select-none";
 const failedFaviconHosts = new Set<string>();
 
 /** Sites whose brand mark (drawn in `currentColor`) replaces the fetched favicon so it follows the theme. */
-function brandLinkIcon(host: string): typeof GitHubIcon | null {
+function brandLinkIcon(host: string) {
   const hostname = host.toLowerCase();
-  if (hostname === "github.com" || hostname.endsWith(".github.com")) return GitHubIcon;
+  if (hostname === "github.com" || hostname.endsWith(".github.com")) {
+    return <GitHubIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />;
+  }
   return null;
 }
 
 const MarkdownLinkFavicon = memo(function MarkdownLinkFavicon({ host }: { host: string }) {
   const [failedHost, setFailedHost] = useState<string | null>(null);
-  const BrandIcon = brandLinkIcon(host);
-  const faviconUrl = BrandIcon ? null : faviconUrlForOrigin(`https://${host}`);
+  const brandIcon = brandLinkIcon(host);
+  const faviconUrl = brandIcon ? null : faviconUrlForOrigin(`https://${host}`);
   return (
     <span
       className="ms-[0.25em] me-[0.2em] inline-flex size-[14px] [vertical-align:-0.125em]"
       aria-hidden
     >
-      {BrandIcon ? (
-        <BrandIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />
+      {brandIcon ? (
+        brandIcon
       ) : faviconUrl === null || failedHost === host || failedFaviconHosts.has(host) ? (
         <GlobeIcon className={MARKDOWN_LINK_FAVICON_CLASS_NAME} />
       ) : (
@@ -2348,12 +2350,25 @@ function useChatMarkdownState({
   const markdownRef = useRef<HTMLDivElement>(null);
   const expandMedia = onImageExpand ?? setLocalMediaPreview;
   const mediaRequestId = useRef(0);
-  useEffect(() => {
+  const mediaScopeKey = JSON.stringify([
+    threadRef?.environmentId,
+    threadRef?.threadId,
+    explicitEnvironmentId,
+    cwd,
+    imageBaseDir,
+  ]);
+  const [renderedMediaScopeKey, setRenderedMediaScopeKey] = useState(mediaScopeKey);
+  if (renderedMediaScopeKey !== mediaScopeKey) {
+    setRenderedMediaScopeKey(mediaScopeKey);
     setLocalMediaPreview(null);
+  }
+  const activeMediaScopeKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeMediaScopeKeyRef.current = mediaScopeKey;
     return () => {
-      mediaRequestId.current += 1;
+      activeMediaScopeKeyRef.current = null;
     };
-  }, [threadRef?.environmentId, threadRef?.threadId, explicitEnvironmentId, cwd, imageBaseDir]);
+  }, [mediaScopeKey]);
   const createAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
     refresh: true,
@@ -2376,6 +2391,9 @@ function useChatMarkdownState({
   const openMarkdownMedia = useCallback(
     (source: string, resolvedFilePath?: string, clickedImage?: HTMLImageElement | null) => {
       const requestId = ++mediaRequestId.current;
+      const requestScopeKey = activeMediaScopeKeyRef.current;
+      const isCurrentRequest = () =>
+        mediaRequestId.current === requestId && activeMediaScopeKeyRef.current === requestScopeKey;
       void resolveMarkdownMediaPreview({
         source,
         resolvedFilePath,
@@ -2389,7 +2407,7 @@ function useChatMarkdownState({
           : undefined,
       }).then(
         (preview) => {
-          if (preview && mediaRequestId.current === requestId) {
+          if (preview && isCurrentRequest()) {
             const selected = preview.images[preview.index];
             expandMedia(
               selected && selected.type !== "video" && markdownRef.current
@@ -2399,7 +2417,7 @@ function useChatMarkdownState({
           }
         },
         (error: unknown) => {
-          if (mediaRequestId.current !== requestId) return;
+          if (!isCurrentRequest()) return;
           toastManager.add(
             stackedThreadToast({
               type: "error",

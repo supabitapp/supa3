@@ -10,6 +10,7 @@ import {
   type TextProps,
   type ViewStyle,
 } from "react-native";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { setMarkdownSelectionHandleColor } from "./SupacodeMarkdownTextSelectionModule";
 import SupacodeMarkdownTextRunNativeComponent from "./SupacodeMarkdownTextRunNativeComponent";
 import SupacodeMarkdownTextNativeComponent from "./SupacodeMarkdownTextNativeComponent";
@@ -26,6 +27,9 @@ const textDefaults = {
 } satisfies TextProps;
 
 const useTextAncestorContext = () => React.useContext(TextAncestorContext);
+
+const childText = (child: React.ReactNode) =>
+  typeof child === "string" || typeof child === "number" ? child.toString() : "";
 
 /**
  * Event fired by `onSelectionChange`. `start`/`end` are 0-based UTF-16 indices
@@ -73,29 +77,27 @@ function MarkdownTextPrimitiveChild({
     () => [true, flattenedStyle],
     [flattenedStyle],
   );
-  let childPosition = 0;
-  const nativeChildren = React.Children.toArray(children).map((child) => {
-    const position = childPosition;
-    childPosition += 1;
+  const nativeChildren = withOccurrenceKeys(React.Children.toArray(children), childText).map(
+    ({ item: child, key }) => {
+      if (React.isValidElement(child)) {
+        return child;
+      }
+      if (typeof child !== "string" && typeof child !== "number") {
+        return null;
+      }
 
-    if (React.isValidElement(child)) {
-      return child;
-    }
-    if (typeof child !== "string" && typeof child !== "number") {
-      return null;
-    }
-
-    const text = child.toString();
-    return (
-      // @ts-expect-error The generated run props do not include inherited Text props.
-      <SupacodeMarkdownTextRunNativeComponent
-        key={`text-${position}-${text.length}-${text}`}
-        style={flattenedStyle}
-        text={text}
-        {...rest}
-      />
-    );
-  });
+      const text = child.toString();
+      return (
+        // @ts-expect-error The generated run props do not include inherited Text props.
+        <SupacodeMarkdownTextRunNativeComponent
+          key={`text-${key}`}
+          style={flattenedStyle}
+          text={text}
+          {...rest}
+        />
+      );
+    },
+  );
 
   if (!isAncestor) {
     // Press handlers are delivered by the text runs; the container never sees them.

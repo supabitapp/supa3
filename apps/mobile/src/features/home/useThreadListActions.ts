@@ -128,7 +128,7 @@ function useThreadActionExecutor(
 
       inFlightThreadKeys.current.add(key);
       selectionHaptic();
-      try {
+      const run = async () => {
         if (
           (action === "settle" || action === "unsettle") &&
           !environmentSupportsSettlement(thread.environmentId)
@@ -183,9 +183,10 @@ function useThreadActionExecutor(
         }
         onCompleted?.(action, thread);
         return true;
-      } finally {
+      };
+      return run().finally(() => {
         inFlightThreadKeys.current.delete(key);
-      }
+      });
     },
     [
       archiveMutation,
@@ -286,7 +287,7 @@ export function useThreadListActions(): {
         return false;
       }
       snoozeInFlightThreadKeys.current.add(key);
-      try {
+      const run = async () => {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
             "Could not snooze thread",
@@ -328,9 +329,10 @@ export function useThreadListActions(): {
           return false;
         }
         return true;
-      } finally {
+      };
+      return run().finally(() => {
         snoozeInFlightThreadKeys.current.delete(key);
-      }
+      });
     },
     [snoozeMutation],
   );
@@ -341,7 +343,7 @@ export function useThreadListActions(): {
         return false;
       }
       snoozeInFlightThreadKeys.current.add(key);
-      try {
+      const run = async () => {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
             "Could not wake thread",
@@ -371,9 +373,10 @@ export function useThreadListActions(): {
           return false;
         }
         return true;
-      } finally {
+      };
+      return run().finally(() => {
         snoozeInFlightThreadKeys.current.delete(key);
-      }
+      });
     },
     [unsnoozeMutation],
   );
@@ -496,7 +499,7 @@ export function useThreadListActions(): {
 
       titleRegenerationInFlightThreadKeys.current.add(key);
       selectionHaptic();
-      try {
+      const run = async () => {
         const result = await updateThreadMetadata({
           environmentId: thread.environmentId,
           input: { threadId: thread.id, regenerateTitle: true },
@@ -512,9 +515,10 @@ export function useThreadListActions(): {
           return false;
         }
         return true;
-      } finally {
+      };
+      return run().finally(() => {
         titleRegenerationInFlightThreadKeys.current.delete(key);
-      }
+      });
     },
     [updateThreadMetadata],
   );
@@ -588,11 +592,9 @@ export function useThreadListActions(): {
       if (section === "settled") {
         if (!environmentSupportsSettlement(thread.environmentId)) return false;
         appAtomRegistry.set(threadDropBusyAtom, true);
-        try {
-          return await settleThread(thread);
-        } finally {
+        return settleThread(thread).finally(() => {
           appAtomRegistry.set(threadDropBusyAtom, false);
-        }
+        });
       }
       const configs = appAtomRegistry.get(environmentServerConfigsAtom);
       const supportsReorder = (environmentId: EnvironmentThreadShell["environmentId"]) => {
@@ -663,7 +665,7 @@ export function useThreadListActions(): {
           );
       let succeeded = false;
       const reorder = section === "pinned" ? reorderPinnedMutation : reorderActiveMutation;
-      try {
+      const run = async () => {
         if (crossSection) {
           if (section === "pinned") {
             const orderKey = assignments.find(
@@ -713,10 +715,11 @@ export function useThreadListActions(): {
         succeeded = true;
         pending?.complete();
         return true;
-      } finally {
+      };
+      return run().finally(() => {
         if (!succeeded) pending?.cancel();
         appAtomRegistry.set(threadDropBusyAtom, false);
-      }
+      });
     },
     [
       settleThread,

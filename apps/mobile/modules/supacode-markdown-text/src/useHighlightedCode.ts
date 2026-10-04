@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { pendingCodeHighlight } from "./pendingCodeHighlight";
 import type {
@@ -98,19 +98,22 @@ export function useHighlightedCode(
     key,
     tokens: highlightedCodeCache.get(key) ?? null,
   }));
-  // Synchronous reads never touch state, so each append costs one render. The
-  // ref remembers the newest of them, and is cleared whenever an asynchronous
-  // result commits so `highlighted` is the baseline again from then on.
-  const latestRead = useRef<HighlightedCodeResult | null>(null);
+  // Synchronous reads are recorded while rendering, so each append still
+  // commits once. `latestRead` remembers the newest of them, and is cleared
+  // whenever an asynchronous result commits so `highlighted` is the baseline
+  // again from then on.
+  const [latestRead, setLatestRead] = useState<HighlightedCodeResult | null>(null);
+  if (ready && (latestRead?.tokens !== ready || latestRead.key !== key)) {
+    setLatestRead({ code, language, theme, key, tokens: ready });
+  }
 
   useEffect(() => {
     if (ready) {
-      latestRead.current = { code, language, theme, key, tokens: ready };
       return;
     }
     let active = true;
     const commit = (tokens: HighlightedCode | null) => {
-      latestRead.current = null;
+      setLatestRead(null);
       setHighlighted({ code, language, theme, key, tokens });
     };
     const cached = highlightedCodeCache.get(key);
@@ -139,8 +142,7 @@ export function useHighlightedCode(
   }, [code, highlightCode, key, language, theme, ready, session]);
 
   if (ready) return ready;
-  // oxlint-disable-next-line react/refs -- Written only after commit; a discarded render never advances it.
-  const baseline = latestRead.current ?? highlighted;
+  const baseline = latestRead ?? highlighted;
   if (baseline.key === key) return baseline.tokens;
   if (baseline.tokens && baseline.language === language && baseline.theme === theme) {
     return pendingCodeHighlight(baseline.code, code, baseline.tokens);

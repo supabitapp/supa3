@@ -61,7 +61,14 @@ export function ComposerEditor({
   const preferredEnterBehavior = AsyncResult.isSuccess(preferencesResult)
     ? preferencesResult.value.composerEnterBehavior
     : undefined;
-  const contextHistory = useMemo(() => createComposerDraftContextHistory(), [draftKey]);
+  const [contextHistoryEntry, setContextHistoryEntry] = useState(() => ({
+    draftKey,
+    history: createComposerDraftContextHistory(),
+  }));
+  if (contextHistoryEntry.draftKey !== draftKey) {
+    setContextHistoryEntry({ draftKey, history: createComposerDraftContextHistory() });
+  }
+  const contextHistory = contextHistoryEntry.history;
   useEffect(() => () => contextHistory.dispose(), [contextHistory]);
   const changeText = (text: string) => {
     const restored = contextHistory.restore(
@@ -77,11 +84,17 @@ export function ComposerEditor({
   const [selected, setSelected] = useState<{ source: string; start: number; end: number } | null>(
     null,
   );
-  const importRef = useRef<AbortController | null>(null);
+  const importRef = useRef<{
+    readonly draftKey: string;
+    readonly controller: AbortController;
+  } | null>(null);
   const [importing, setImporting] = useState(false);
   useEffect(
     () => () => {
-      importRef.current?.abort();
+      const pendingImport = importRef.current;
+      if (pendingImport !== null && pendingImport.draftKey === draftKey) {
+        pendingImport.controller.abort();
+      }
     },
     [draftKey],
   );
@@ -91,7 +104,7 @@ export function ComposerEditor({
     if (!draftKey || importRef.current || props.readOnly || props.editable === false) return;
     const insertion = { text: clipboard.value, ...clipboard.selection };
     const controller = new AbortController();
-    importRef.current = controller;
+    importRef.current = { draftKey, controller };
     setImporting(true);
     setComposerContextImporting(draftKey, true);
     try {

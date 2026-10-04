@@ -20,9 +20,12 @@ export function AnimatedHeight({
 
   useEffect(() => {
     if (!heightState.isClipping) return;
+    const clippedHeight = heightState.height;
     const timeoutId = window.setTimeout(() => {
       setHeightState((currentState) =>
-        currentState.isClipping ? { ...currentState, isClipping: false } : currentState,
+        currentState.isClipping && currentState.height === clippedHeight
+          ? { ...currentState, isClipping: false }
+          : currentState,
       );
     }, HEIGHT_TRANSITION_FALLBACK_MS);
     return () => window.clearTimeout(timeoutId);

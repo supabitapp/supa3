@@ -108,23 +108,25 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       return;
     }
     const coverage = Math.max(0, cardHeightRef.current - barHeightRef.current);
-    if (coverage === cardCoverage.value) {
+    if (coverage === cardCoverage.get()) {
       return;
     }
-    if (cardCoverage.value === 0) {
+    if (cardCoverage.get() === 0) {
       // First measurement lands while the list is doing its initial
       // end-pin (thread opened onto a pending request); animating it from
       // zero would move the end anchor out from under that scroll.
-      cardCoverage.value = coverage;
+      cardCoverage.set(coverage);
       return;
     }
     // Animated so a coverage change at rest (discrete max-height
     // corrections) glides the feed instead of stepping it; toggle timing is
     // owned by the host's progress values.
-    cardCoverage.value = withTiming(coverage, {
-      duration: USER_INPUT_TOGGLE_DURATION_MS,
-      easing: Easing.out(Easing.cubic),
-    });
+    cardCoverage.set(
+      withTiming(coverage, {
+        duration: USER_INPUT_TOGGLE_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+      }),
+    );
   }, [cardCoverage]);
   const handleBarLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -136,7 +138,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const handleCardLayout = useCallback(
     (event: LayoutChangeEvent) => {
       cardHeightRef.current = event.nativeEvent.layout.height;
-      cardHeight.value = event.nativeEvent.layout.height;
+      cardHeight.set(event.nativeEvent.layout.height);
       notifyCoverage();
     },
     [cardHeight, notifyCoverage],

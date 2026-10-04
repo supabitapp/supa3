@@ -15,7 +15,16 @@ import {
   WrapTextIcon,
   XIcon,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { useAssetUrlRefresh } from "~/assets/assetUrls";
 import ChatMarkdown from "~/components/ChatMarkdown";
@@ -40,6 +49,29 @@ const SourcePreview = lazy(() => import("./ReadOnlySourcePreview"));
 
 /** Signed asset URLs live for an hour; treat anything older than this as worth re-minting. */
 const STALE_URL_MS = 5 * 60_000;
+
+const objectUrlLeases = new Map<Blob, { readonly url: string; users: number }>();
+
+function leaseObjectUrl(blob: Blob, onChange: () => void): () => void {
+  let lease = objectUrlLeases.get(blob);
+  if (!lease) {
+    lease = { url: URL.createObjectURL(blob), users: 0 };
+    objectUrlLeases.set(blob, lease);
+    onChange();
+  }
+  const activeLease = lease;
+  activeLease.users += 1;
+  return () => {
+    activeLease.users -= 1;
+    if (activeLease.users > 0) return;
+    objectUrlLeases.delete(blob);
+    URL.revokeObjectURL(activeLease.url);
+  };
+}
+
+function readObjectUrl(blob: Blob | null | undefined): string | null {
+  return blob ? (objectUrlLeases.get(blob)?.url ?? null) : null;
+}
 
 /** Highlighted read-only source, loaded on demand so message rendering never waits on the highlighter. */
 export function ReadOnlySourcePreview(props: { name: string; text: string }) {
@@ -101,7 +133,12 @@ export function AttachmentFilePreview(props: {
   );
   const prepareDownload = useAssetUrlRefresh(props.asset?.environmentId ?? null, downloadResource);
   const [saving, setSaving] = useState(false);
-  const [localUrl, setLocalUrl] = useState<string | null>(null);
+  const localFile = props.file;
+  const subscribeToLocalUrl = useCallback(
+    (onChange: () => void) => (localFile ? leaseObjectUrl(localFile, onChange) : () => {}),
+    [localFile],
+  );
+  const localUrl = useSyncExternalStore(subscribeToLocalUrl, () => readObjectUrl(localFile));
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [rendered, setRendered] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -111,21 +148,28 @@ export function AttachmentFilePreview(props: {
   // fine while its bytes are not UTF-8, and switching back to the page must not stay stuck.
   const [contentError, setContentError] = useState<string | null>(null);
   const authorizedAt = useRef(0);
+  const [remoteUrlRequest, setRemoteUrlRequest] = useState({
+    file: props.file,
+    refresh,
+    revision,
+  });
+  if (
+    remoteUrlRequest.file !== props.file ||
+    remoteUrlRequest.refresh !== refresh ||
+    remoteUrlRequest.revision !== revision
+  ) {
+    setRemoteUrlRequest({ file: props.file, refresh, revision });
+    if (!props.file) {
+      setRemoteUrl(null);
+      setError(null);
+    }
+  }
   useEffect(() => {
-    if (!props.file) return;
-    const url = URL.createObjectURL(props.file);
-    // oxlint-disable-next-line react/set-state-in-effect -- Publish an object URL only after its cleanup is registered for this Blob.
-    setLocalUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [props.file]);
-  useEffect(() => {
-    if (props.file) return;
+    if (remoteUrlRequest.file) return;
     let cancelled = false;
     // Await a fresh signed URL: cached links can expire while the client is suspended.
-    // oxlint-disable-next-line react/set-state-in-effect -- A new preview request clears its previous URL and error.
-    setRemoteUrl(null);
-    setError(null);
-    void refresh()
+    void remoteUrlRequest
+      .refresh()
       .then((url) => {
         if (cancelled) return;
         if (!url) throw new Error("Reconnect to the environment and try again.");
@@ -139,16 +183,41 @@ export function AttachmentFilePreview(props: {
     return () => {
       cancelled = true;
     };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Retry must reauthorize the remote file.
-  }, [props.file, refresh, revision]);
+  }, [remoteUrlRequest]);
   const url = props.file ? localUrl : remoteUrl;
   const needsText = kind === "text" || kind === "markdown" || (kind === "html" && !rendered);
+  const [contentRequest, setContentRequest] = useState({
+    url,
+    needsText,
+    revision,
+    sizeBytes: props.sizeBytes,
+    file: props.file,
+    refresh,
+  });
+  if (
+    contentRequest.url !== url ||
+    contentRequest.needsText !== needsText ||
+    contentRequest.revision !== revision ||
+    contentRequest.sizeBytes !== props.sizeBytes ||
+    contentRequest.file !== props.file ||
+    contentRequest.refresh !== refresh
+  ) {
+    setContentRequest({
+      url,
+      needsText,
+      revision,
+      sizeBytes: props.sizeBytes,
+      file: props.file,
+      refresh,
+    });
+    if (needsText && url) {
+      setContent(null);
+      setContentError(null);
+    }
+  }
   useEffect(() => {
     if (!needsText || !url) return;
     const controller = new AbortController();
-    // oxlint-disable-next-line react/set-state-in-effect -- A new external resource must clear the previous response before loading.
-    setContent(null);
-    setContentError(null);
     const file = props.file;
     void (async () => {
       // A signed URL minted when the file opened may have expired by the time the user

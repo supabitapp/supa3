@@ -39,6 +39,7 @@ import {
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 const encodeGitCommandError = Schema.encodeEffect(Schema.fromJsonString(GitCommandError));
+const decodeReviewDiffPreviewInput = Schema.decodeEffect(ReviewDiffPreviewInput);
 
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
   prefix: "supacode-git-vcs-driver-test-",
@@ -1603,7 +1604,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const branch = preview.sources.find((source) => source.kind === "branch-range")!;
         for (const path of ["renamed.md", "[literal].txt", " leading.txt", "mode-only.sh"]) {
           const stat = branch.files!.find((file) => file.path === path)!;
-          const request = yield* Schema.decodeEffect(ReviewDiffPreviewInput)({
+          const request = yield* decodeReviewDiffPreviewInput({
             cwd,
             baseRef: initialBranch,
             file: { path, previousPath: stat.previousPath, sourceKind: "branch-range" },
@@ -2992,6 +2993,49 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
     );
   });
 
+  describe("commit context", () => {
+    it.effect("stages selected files and commits only those files", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "a.txt", "a\n");
+        yield* writeTextFile(cwd, "b.txt", "b\n");
+
+        const context = yield* driver.prepareCommitContext(cwd, ["a.txt"]);
+        assert.include(context?.stagedSummary ?? "", "a.txt");
+        assert.notInclude(context?.stagedSummary ?? "", "b.txt");
+
+        const commit = yield* driver.commit(cwd, "Add a", "");
+        assert.match(commit.commitSha, /^[a-f0-9]{40}$/);
+        assert.equal(yield* git(cwd, ["log", "-1", "--pretty=%s"]), "Add a");
+
+        const status = yield* git(cwd, ["status", "--porcelain"]);
+        assert.include(status, "?? b.txt");
+        assert.notInclude(status, "a.txt");
+      }),
+    );
+
+    it.effect("treats selected file paths literally", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "selected[1].txt", "literal\n");
+        yield* writeTextFile(cwd, "selected1.txt", "pattern match\n");
+
+        yield* driver.prepareCommitContext(cwd, ["selected[1].txt"]);
+
+        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "selected[1].txt");
+
+        const status = yield* git(cwd, ["status", "--porcelain"]);
+        assert.include(status, "?? selected1.txt");
+      }),
+    );
+  });
+
   describe("remote operations", () => {
     it.effect("explains a real fetch failure for a missing local remote", () =>
       Effect.gen(function* () {
@@ -3066,52 +3110,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(yield* git(cwd, ["remote"]), "octocat\norigin");
       }),
     );
-  });
 
-  describe("commit context", () => {
-    it.effect("stages selected files and commits only those files", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-
-        yield* writeTextFile(cwd, "a.txt", "a\n");
-        yield* writeTextFile(cwd, "b.txt", "b\n");
-
-        const context = yield* driver.prepareCommitContext(cwd, ["a.txt"]);
-        assert.include(context?.stagedSummary ?? "", "a.txt");
-        assert.notInclude(context?.stagedSummary ?? "", "b.txt");
-
-        const commit = yield* driver.commit(cwd, "Add a", "");
-        assert.match(commit.commitSha, /^[a-f0-9]{40}$/);
-        assert.equal(yield* git(cwd, ["log", "-1", "--pretty=%s"]), "Add a");
-
-        const status = yield* git(cwd, ["status", "--porcelain"]);
-        assert.include(status, "?? b.txt");
-        assert.notInclude(status, "a.txt");
-      }),
-    );
-
-    it.effect("treats selected file paths literally", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-
-        yield* writeTextFile(cwd, "selected[1].txt", "literal\n");
-        yield* writeTextFile(cwd, "selected1.txt", "pattern match\n");
-
-        yield* driver.prepareCommitContext(cwd, ["selected[1].txt"]);
-
-        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "selected[1].txt");
-
-        const status = yield* git(cwd, ["status", "--porcelain"]);
-        assert.include(status, "?? selected1.txt");
-      }),
-    );
-  });
-
-  describe("remote operations", () => {
     it.effect.each(["offline", "auth", "timeout"] as const)(
       "does not retry a scoped fetch after %s",
       (failure) =>

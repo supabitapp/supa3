@@ -33,6 +33,10 @@ import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.t
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
 const decodeServerSettingsJson = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
+const encodeModelSelectionJson = Schema.encodeEffect(Schema.fromJsonString(ModelSelection));
+const encodeProjectScriptsJson = Schema.encodeEffect(
+  Schema.fromJsonString(Schema.Array(ProjectScript)),
+);
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -1754,10 +1758,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         runOnWorktreeCreate: false,
       };
       const model = createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.5");
-      const modelJson = yield* Schema.encodeEffect(Schema.fromJsonString(ModelSelection))(model);
-      const scriptsJson = yield* Schema.encodeEffect(
-        Schema.fromJsonString(Schema.Array(ProjectScript)),
-      )([script]);
+      const modelJson = yield* encodeModelSelectionJson(model);
+      const scriptsJson = yield* encodeProjectScriptsJson([script]);
       for (const [projectId, modelColumn, envMode, autoPull, scripts] of [
         // The legacy project also carries aggregate scripts, but its stored
         // null override reset them; the fold must not bring them back.

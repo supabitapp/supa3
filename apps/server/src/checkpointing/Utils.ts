@@ -1,5 +1,5 @@
 import * as Encoding from "effect/Encoding";
-import { CheckpointRef, ProjectId, type ThreadId } from "@supacode/contracts";
+import { CheckpointRef, type ThreadId } from "@supacode/contracts";
 
 const CHECKPOINT_REFS_PREFIX = "refs/supacode/checkpoints";
 
@@ -7,22 +7,4 @@ export function checkpointRefForThreadTurn(threadId: ThreadId, turnCount: number
   return CheckpointRef.make(
     `${CHECKPOINT_REFS_PREFIX}/${Encoding.encodeBase64Url(threadId)}/turn/${turnCount}`,
   );
-}
-
-function resolveThreadWorkspaceCwd(input: {
-  readonly thread: {
-    readonly projectId: ProjectId;
-    readonly worktreePath: string | null;
-  };
-  readonly projects: ReadonlyArray<{
-    readonly id: ProjectId;
-    readonly workspaceRoot: string;
-  }>;
-}): string | undefined {
-  const worktreeCwd = input.thread.worktreePath ?? undefined;
-  if (worktreeCwd) {
-    return worktreeCwd;
-  }
-
-  return input.projects.find((project) => project.id === input.thread.projectId)?.workspaceRoot;
 }

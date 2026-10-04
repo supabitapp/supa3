@@ -798,9 +798,15 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     sidebarInstanceEntries,
   ]);
 
-  useLayoutEffect(() => {
+  const [scrollFadeItemKeys, setScrollFadeItemKeys] = useState<string[] | null>(null);
+  if (scrollFadeItemKeys !== filteredItemKeys) {
+    setScrollFadeItemKeys(filteredItemKeys);
     setShowTopScrollFade(false);
     setShowBottomScrollFade(filteredItemKeys.length > 5);
+  }
+
+  useLayoutEffect(() => {
+    if (filteredItemKeys.length === 0) return;
     let nestedFrame = 0;
     const frame = window.requestAnimationFrame(() => {
       updateModelListScrollFades();

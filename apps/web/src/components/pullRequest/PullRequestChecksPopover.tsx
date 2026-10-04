@@ -6,6 +6,7 @@ import type {
   PullRequestRef,
   ScopedThreadRef,
 } from "@supacode/contracts";
+import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -76,10 +77,10 @@ function ChecksBody({
     <>
       <ScrollArea className="max-h-64">
         <ul className="flex flex-col gap-1">
-          {/* Keyed by position as well as by name: the host is the one that decides how many runs
+          {/* Keyed by name and occurrence: the host is the one that decides how many runs
           share a name, and a repeated key is a rendering fault rather than a wrong list. */}
-          {visibleChecks.map((check, index) => (
-            <li key={`${index}:${check.name}`} className="flex items-center gap-2 text-xs">
+          {withOccurrenceKeys(visibleChecks, (check) => check.name).map(({ item: check, key }) => (
+            <li key={key} className="flex items-center gap-2 text-xs">
               <PullRequestCheckStatusIcon status={check.status} />
               <Tooltip>
                 <TooltipTrigger

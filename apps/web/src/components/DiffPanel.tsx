@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import * as Schema from "effect/Schema";
 import * as DateTime from "effect/DateTime";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCodeViewFileReveal } from "./diffs/useCodeViewFileReveal";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { useFileContextMenuHandler } from "../fileContextMenu";
@@ -329,7 +329,9 @@ export default function DiffPanel({
     });
   }, [activeThread, branchDiffPreview.data, getDiffFileContents, selectedGitSource, selectedRunId]);
   const loadDiffFilesRef = useRef(currentLoadDiffFiles);
-  loadDiffFilesRef.current = currentLoadDiffFiles;
+  useLayoutEffect(() => {
+    loadDiffFilesRef.current = currentLoadDiffFiles;
+  });
   const loadDiffFiles = useCallback<FileDiffContentsLoader>(async (fileDiff) => {
     const loader = loadDiffFilesRef.current;
     if (!loader) throw new Error("Diff file contents are unavailable for this selection.");
@@ -514,10 +516,21 @@ export default function DiffPanel({
     ? (codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath)?.fileKey ?? null)
     : null;
 
+  const selectedDiffFileScrollRequest = useMemo(
+    () =>
+      selectedDiffFileKey
+        ? {
+            fileKey: selectedDiffFileKey,
+            codeViewMountKey,
+            revealRequestId: selectedFileRevealRequestId,
+          }
+        : null,
+    [codeViewMountKey, selectedDiffFileKey, selectedFileRevealRequestId],
+  );
   useEffect(() => {
-    if (!selectedDiffFileKey || !codeView?.getInstance()) return;
-    codeView.scrollTo({ type: "item", id: selectedDiffFileKey, align: "start" });
-  }, [codeView, codeViewMountKey, selectedDiffFileKey, selectedFileRevealRequestId]);
+    if (!selectedDiffFileScrollRequest || !codeView?.getInstance()) return;
+    codeView.scrollTo({ type: "item", id: selectedDiffFileScrollRequest.fileKey, align: "start" });
+  }, [codeView, selectedDiffFileScrollRequest]);
 
   const treeRevealScope = useMemo(
     () => ({ collapseScopeKey, diffSelection }),

@@ -27,10 +27,7 @@ import { withOrchestrationProtocolHeader } from "./environmentHttpAuth.ts";
 import { fetchEnvironmentSessionState } from "./session.ts";
 import { fetchEnvironmentShellSnapshot } from "./shellSnapshotHttp.ts";
 import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
-import {
-  boundedThreadSnapshotLoaderLayer,
-  fetchEnvironmentBoundedThreadSnapshot,
-} from "./boundedThreadSnapshotHttp.ts";
+import { fetchEnvironmentBoundedThreadSnapshot } from "./boundedThreadSnapshotHttp.ts";
 import { fetchEnvironmentThreadHistoryPage } from "./threadHistoryHttp.ts";
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 

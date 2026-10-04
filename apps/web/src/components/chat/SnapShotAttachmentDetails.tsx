@@ -1,6 +1,6 @@
 import type { SnapShotSource } from "@supacode/contracts";
 import { ImageIcon, TextIcon } from "lucide-react";
-import { Suspense, use, useMemo, type CSSProperties } from "react";
+import { Suspense, use, useMemo, type CSSProperties, type ReactElement } from "react";
 
 import { useTheme } from "../../hooks/useTheme";
 import { resolveDiffThemeName } from "../../lib/diffRendering";
@@ -53,13 +53,14 @@ function HighlightedAccessibilityJson({
     [content, highlighter, theme],
   );
 
+  const renderedLines: ReactElement[] = [];
   let lineOffset = 0;
-  return lines.map((line) => {
+  for (const line of lines) {
     const lineContent = line.map((token) => token.content).join("");
     const lineKey = `${lineOffset}:${lineContent}`;
     const hasNextLine = lineOffset + lineContent.length < content.length;
     lineOffset += lineContent.length + 1;
-    return (
+    renderedLines.push(
       <span key={lineKey}>
         {line.map((token) => (
           <span key={`${token.offset}:${token.content}`} style={syntaxTokenStyle(token)}>
@@ -67,9 +68,10 @@ function HighlightedAccessibilityJson({
           </span>
         ))}
         {hasNextLine ? "\n" : null}
-      </span>
+      </span>,
     );
-  });
+  }
+  return renderedLines;
 }
 
 export function SnapShotAccessibilityData({

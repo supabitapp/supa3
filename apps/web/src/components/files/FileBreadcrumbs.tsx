@@ -2,7 +2,7 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import type { EnvironmentId } from "@supacode/contracts";
 import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { PierreEntryIcon } from "~/components/chat/PierreEntryIcon";
 import {
@@ -216,11 +216,18 @@ function BreadcrumbMenuContent(props: {
 function DirectoryBreadcrumb(props: FileBreadcrumbsProps & { readonly crumb: FileBreadcrumb }) {
   const [open, setOpen] = useState(false);
   const [directoryPath, setDirectoryPath] = useState(props.crumb.path);
-
-  useEffect(() => {
+  const [menuLocation, setMenuLocation] = useState({
+    crumbPath: props.crumb.path,
+    relativePath: props.relativePath,
+  });
+  if (
+    menuLocation.crumbPath !== props.crumb.path ||
+    menuLocation.relativePath !== props.relativePath
+  ) {
+    setMenuLocation({ crumbPath: props.crumb.path, relativePath: props.relativePath });
     setOpen(false);
     setDirectoryPath(props.crumb.path);
-  }, [props.crumb.path, props.relativePath]);
+  }
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);

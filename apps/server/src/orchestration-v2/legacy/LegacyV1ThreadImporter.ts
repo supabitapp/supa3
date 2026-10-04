@@ -123,6 +123,7 @@ const decodeModelSelection = Schema.decodeUnknownOption(ModelSelection);
 const decodeAttachments = Schema.decodeUnknownOption(Schema.Array(ChatAttachment));
 const decodePullRequests = Schema.decodeUnknownOption(Schema.Array(ThreadPullRequestLink));
 const decodeLinkedPullRequest = Schema.decodeUnknownOption(ThreadLinkedPullRequest);
+const decodeMessageContext = Schema.decodeUnknownSync(OrchestrationMessageContext);
 const decodeStoredThread = Schema.decodeUnknownOption(
   Schema.fromJsonString(OrchestrationV2AppThreadJson),
 );
@@ -259,9 +260,7 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
     text: row.text,
     ...(row.context_json
       ? {
-          context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-            parseJson(row.context_json),
-          ),
+          context: decodeMessageContext(parseJson(row.context_json)),
         }
       : {}),
     attachments,
@@ -297,9 +296,7 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           text: row.text,
           ...(row.context_json
             ? {
-                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-                  parseJson(row.context_json),
-                ),
+                context: decodeMessageContext(parseJson(row.context_json)),
               }
             : {}),
           attachments,
@@ -311,9 +308,7 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           text: row.text,
           ...(row.context_json
             ? {
-                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-                  parseJson(row.context_json),
-                ),
+                context: decodeMessageContext(parseJson(row.context_json)),
               }
             : {}),
           streaming: false,

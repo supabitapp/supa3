@@ -534,26 +534,23 @@ export function PullRequestDetailPanel({
   // A previously visited Code tab must not fetch diffs for every later PR while hidden.
   const mountedTabs =
     tabMountState.key === tabScopeKey ? tabMountState.tabs : new Set<DetailTab>([tab]);
-  useEffect(() => {
-    setTabMountState((previous) => {
-      if (previous.key !== tabScopeKey) return { key: tabScopeKey, tabs: new Set([tab]) };
-      if (previous.tabs.has(tab)) return previous;
-      return { key: tabScopeKey, tabs: new Set(previous.tabs).add(tab) };
-    });
-  }, [tab, tabScopeKey]);
-  const [chromeCondensed, setChromeCondensed] = useState(false);
+  if (tabMountState.key !== tabScopeKey) {
+    setTabMountState({ key: tabScopeKey, tabs: new Set([tab]) });
+  } else if (!tabMountState.tabs.has(tab)) {
+    setTabMountState({ key: tabScopeKey, tabs: new Set(tabMountState.tabs).add(tab) });
+  }
   // Each mounted tab remembers its own scroll chrome; short tabs cannot scroll to reopen it.
-  const chromeStateByTab = useRef<Partial<Record<DetailTab, boolean>>>({});
-  useEffect(() => {
-    setChromeCondensed(chromeStateByTab.current[tab] ?? false);
-  }, [tab]);
-  const condensed = chromeCondensed;
+  const [chromeStateByTab, setChromeStateByTab] = useState<Partial<Record<DetailTab, boolean>>>({});
+  const condensed = chromeStateByTab[tab] ?? false;
   const scrollerRef = useRef<HTMLElement | null>(null);
   const foldRef = useRef<HTMLDivElement | null>(null);
   const condensedRowRef = useRef<HTMLDivElement | null>(null);
   // Refund after the fold commits so the content under the reader does not jump with its height.
   const compensationRef = useRef<number | null>(null);
+  const compensatedCondensedRef = useRef(condensed);
   useLayoutEffect(() => {
+    if (compensatedCondensedRef.current === condensed) return;
+    compensatedCondensedRef.current = condensed;
     if (compensationRef.current === null) return;
     const scroller = scrollerRef.current;
     const delta = compensationRef.current;
@@ -597,39 +594,41 @@ export function PullRequestDetailPanel({
     pullRequestEnvironment.activity({ environmentId, input: reference }),
   );
   const turnRefresh = usePullRequestTurnRefresh(environmentId);
-  const [cachedDetail, setCachedDetail] = useState(() =>
-    readPullRequestDetailSnapshot(
+  const [cachedDetailState, setCachedDetailState] = useState(() => ({
+    key: tabScopeKey,
+    detail: readPullRequestDetailSnapshot(
       typeof window === "undefined" ? undefined : window.localStorage,
       environmentId,
       reference,
     ),
-  );
-  useEffect(() => {
-    setCachedDetail(
-      readPullRequestDetailSnapshot(
-        typeof window === "undefined" ? undefined : window.localStorage,
-        environmentId,
-        reference,
-      ),
-    );
-  }, [environmentId, pullRequestKey, reference.projectId, reference.repository, reference.number]);
-  useEffect(() => {
-    if (detailQuery.data === null) return;
+  }));
+  if (cachedDetailState.key !== tabScopeKey) {
+    setCachedDetailState({
+      key: tabScopeKey,
+      detail:
+        detailQuery.data ??
+        readPullRequestDetailSnapshot(
+          typeof window === "undefined" ? undefined : window.localStorage,
+          environmentId,
+          reference,
+        ),
+    });
+  } else if (detailQuery.data !== null && cachedDetailState.detail !== detailQuery.data) {
+    setCachedDetailState({ key: tabScopeKey, detail: detailQuery.data });
+  }
+  const cachedDetail = cachedDetailState.detail;
+  const writeDetailSnapshot = useEffectEvent((detail: NonNullable<typeof detailQuery.data>) => {
     writePullRequestDetailSnapshot(
       typeof window === "undefined" ? undefined : window.localStorage,
       environmentId,
       reference,
-      detailQuery.data,
+      detail,
     );
-    setCachedDetail(detailQuery.data);
-  }, [
-    detailQuery.data,
-    environmentId,
-    pullRequestKey,
-    reference.projectId,
-    reference.repository,
-    reference.number,
-  ]);
+  });
+  useEffect(() => {
+    if (detailQuery.data === null) return;
+    writeDetailSnapshot(detailQuery.data);
+  }, [detailQuery.data]);
   const resolvedCoreDetail = resolveDisplayedPullRequestDetail({
     live: detailQuery.data,
     cached: cachedDetail,
@@ -740,9 +739,19 @@ export function PullRequestDetailPanel({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
-  useEffect(() => {
-    if (detail?.autoMergeMethod !== undefined) setMergeMethod(detail.autoMergeMethod);
-  }, [detail?.autoMergeMethod, pullRequestKey]);
+  const autoMergeMethod = detail?.autoMergeMethod;
+  const [autoMergeMethodAppliedFor, setAutoMergeMethodAppliedFor] = useState<{
+    readonly pullRequestKey: string;
+    readonly method: typeof autoMergeMethod;
+  } | null>(null);
+  if (
+    autoMergeMethodAppliedFor === null ||
+    autoMergeMethodAppliedFor.pullRequestKey !== pullRequestKey ||
+    autoMergeMethodAppliedFor.method !== autoMergeMethod
+  ) {
+    setAutoMergeMethodAppliedFor({ pullRequestKey, method: autoMergeMethod });
+    if (autoMergeMethod !== undefined) setMergeMethod(autoMergeMethod);
+  }
   const repositoryUrl = detail === null ? null : changeRequestRepositoryUrl(detail.url);
   const markdownContext = useMemo(
     () => ({ repositoryUrl: detail?.provider === "github" ? repositoryUrl : null, threadRef }),
@@ -812,28 +821,43 @@ export function PullRequestDetailPanel({
   });
   const activityPending = activityQuery.isPending && activity === null;
   const activityError = activity === null ? activityQuery.error : null;
+  const refreshDetailQuery = detailQuery.refresh;
+  const refreshActivityQuery = activityQuery.refresh;
+  const refreshNativeStackQuery = nativeStackQuery.refresh;
   const refreshDetail = useCallback(() => {
-    detailQuery.refresh();
-    activityQuery.refresh();
-    nativeStackQuery.refresh();
-  }, [activityQuery.refresh, detailQuery.refresh, nativeStackQuery.refresh]);
+    refreshDetailQuery();
+    refreshActivityQuery();
+    refreshNativeStackQuery();
+  }, [refreshActivityQuery, refreshDetailQuery, refreshNativeStackQuery]);
   const [refreshToken, setRefreshToken] = useState(0);
-  const codeRefreshToken = refreshToken + (turnRefresh ?? 0);
-  const activityRevision = useRef<{ readonly key: string; readonly updatedAt: string } | null>(
-    null,
-  );
-  useEffect(() => {
-    if (!coreDetail) return;
+  const [activityRevision, setActivityRevision] = useState<{
+    readonly key: string;
+    readonly updatedAt: string;
+  } | null>(null);
+  const [revisionRefreshCount, setRevisionRefreshCount] = useState(0);
+  if (coreDetail) {
     const next = { key: tabScopeKey, updatedAt: coreDetail.updatedAt };
-    if (shouldRefreshPullRequestActivity(activityRevision.current, next)) {
+    if (shouldRefreshPullRequestActivity(activityRevision, next)) {
       // Let an existing read settle before revalidating the new revision. Interrupting a
       // mutation's activity refresh can leave SWR displaying its previous value.
-      if (activityQuery.isPending) return;
-      activityQuery.refresh();
-      setRefreshToken((token) => token + 1);
+      if (!activityQuery.isPending) {
+        setRevisionRefreshCount((count) => count + 1);
+        setActivityRevision(next);
+      }
+    } else if (
+      activityRevision === null ||
+      activityRevision.key !== next.key ||
+      activityRevision.updatedAt !== next.updatedAt
+    ) {
+      setActivityRevision(next);
     }
-    activityRevision.current = next;
-  }, [activityQuery.isPending, activityQuery.refresh, coreDetail, tabScopeKey]);
+  }
+  const refreshActivityForRevision = useEffectEvent(() => refreshActivityQuery());
+  useEffect(() => {
+    if (revisionRefreshCount === 0) return;
+    refreshActivityForRevision();
+  }, [revisionRefreshCount]);
+  const codeRefreshToken = refreshToken + revisionRefreshCount + (turnRefresh ?? 0);
   // Reuse activity and diff until core detail reports a changed revision. Keyed by
   // the pull request rather than by the panel, because this one panel shows a different pull
   // request every time it is opened.
@@ -854,13 +878,12 @@ export function PullRequestDetailPanel({
   const refreshing = isInvalidating || detailQuery.isPending;
   const refreshFromHost = useCallback(async () => {
     setIsInvalidating(true);
-    try {
+    const invalidateAndRefresh = async () => {
       await invalidate({ environmentId, input: { reference } });
       refreshDetail();
       setRefreshToken((token) => token + 1);
-    } finally {
-      setIsInvalidating(false);
-    }
+    };
+    await invalidateAndRefresh().finally(() => setIsInvalidating(false));
   }, [environmentId, invalidate, reference, refreshDetail]);
   // A refresh asked for by the page: the detail, and through the token below, the diff with it.
   const appliedForcedToken = useRef(forcedRefreshToken);
@@ -1447,9 +1470,7 @@ export function PullRequestDetailPanel({
   // The Code tab can be opened while the detail is still on its way, and the detail may then say
   // this host has no patch to show. The tab goes, so whoever was standing on it is moved back to
   // the summary rather than left looking at a panel that is no longer reachable.
-  useEffect(() => {
-    if (!visibleTabs.some((item) => item.value === tab)) setTab("summary");
-  }, [tab, visibleTabs]);
+  if (tab !== "summary" && !visibleTabs.some((item) => item.value === tab)) setTab("summary");
   // Two questions, both of which have to say yes: whether this host can do it at all, and
   // whether this account may. A reader with read access on someone else's project sees the pull
   // request and none of the buttons that would only ever be refused.
@@ -2696,7 +2717,8 @@ export function PullRequestDetailPanel({
           const scroller = event.target as HTMLElement;
           scrollerRef.current = scroller;
           const top = scroller.scrollTop;
-          setChromeCondensed((previous) => {
+          setChromeStateByTab((current) => {
+            const previous = current[tab] ?? false;
             let next = previous;
             const foldHeight = foldRef.current?.scrollHeight ?? 0;
             // The condensed row remains mounted, so refund only the height that actually leaves.
@@ -2712,8 +2734,7 @@ export function PullRequestDetailPanel({
               compensationRef.current = -chromeDelta;
               next = true;
             }
-            chromeStateByTab.current[tab] = next;
-            return next;
+            return next === previous ? current : { ...current, [tab]: next };
           });
         }}
       >

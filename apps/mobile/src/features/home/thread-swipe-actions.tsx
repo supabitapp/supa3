@@ -497,11 +497,18 @@ function ThreadSwipeableRow(props: ThreadSwipeableProps) {
           rightThreshold={actionsWidth * 0.42}
           simultaneousWith={props.simultaneousWith}
         >
-          {props.children(close)}
+          <SwipeableRowChildren render={props.children} close={close} />
         </ReanimatedSwipeable>
       </View>
     </Animated.View>
   );
+}
+
+function SwipeableRowChildren(props: {
+  readonly render: (close: () => void) => ReactNode;
+  readonly close: () => void;
+}) {
+  return props.render(props.close);
 }
 
 function SwipeActionButton(props: {

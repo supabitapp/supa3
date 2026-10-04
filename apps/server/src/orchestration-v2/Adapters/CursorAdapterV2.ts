@@ -34,7 +34,6 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
@@ -2630,33 +2629,3 @@ export const CursorAdapterV2Driver: ProviderAdapterDriver<
       ),
   ),
 };
-
-const layer: Layer.Layer<
-  ProviderAdapter.ProviderAdapterV2,
-  never,
-  | CursorAgentSdk.CursorAgentSdkRunner
-  | FileSystem.FileSystem
-  | Path.Path
-  | IdAllocator.IdAllocatorV2
-  | ServerConfig.ServerConfig
-> = Layer.effect(
-  ProviderAdapter.ProviderAdapterV2,
-  Effect.gen(function* () {
-    const hostEnvironment = yield* HostProcessEnvironment;
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const idAllocator = yield* IdAllocator.IdAllocatorV2;
-    const runner = yield* CursorAgentSdk.CursorAgentSdkRunner;
-    const serverConfig = yield* ServerConfig.ServerConfig;
-    return makeCursorAdapterV2({
-      instanceId: CURSOR_DEFAULT_INSTANCE_ID,
-      settings: DEFAULT_CURSOR_SETTINGS,
-      environment: hostEnvironment,
-      fileSystem,
-      path,
-      idAllocator,
-      runner,
-      serverConfig,
-    });
-  }),
-);

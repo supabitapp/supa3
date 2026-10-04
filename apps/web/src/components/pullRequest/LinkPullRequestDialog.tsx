@@ -153,11 +153,18 @@ function LinkPullRequestDialog({
   const linking = usePullRequestLinking(threadRef.environmentId);
   const [pending, setPending] = useState(false);
 
+  const [formOpen, setFormOpen] = useState(false);
+  if (formOpen !== open) {
+    setFormOpen(open);
+    if (open) {
+      setReference("");
+      setDirty(false);
+      setSubmitError(null);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
-    setReference("");
-    setDirty(false);
-    setSubmitError(null);
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [open]);

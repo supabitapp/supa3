@@ -26,7 +26,6 @@
 import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@supacode/shared/model";
 import {
-  defaultInstanceIdForDriver,
   PiSettings,
   ProviderDriverKind,
   type ChatAttachment,
@@ -52,7 +51,6 @@ import * as Option from "effect/Option";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
@@ -96,7 +94,6 @@ import { PI_FILE_CHANGE_TOOLS } from "./piSupacodeMcpExtensionSource.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
 const PI_DRIVER_KIND = PI_PROVIDER;
-const PI_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(PI_DRIVER_KIND);
 const DEFAULT_PI_SETTINGS = Schema.decodeSync(PiSettings)({});
 
 /**
@@ -2984,24 +2981,3 @@ export const PiAdapterV2Driver: ProviderAdapterDriver<PiSettings, PiAdapterV2Dri
       ),
   ),
 };
-
-const layer: Layer.Layer<ProviderAdapter.ProviderAdapterV2, never, PiAdapterV2DriverEnv> =
-  Layer.effect(
-    ProviderAdapter.ProviderAdapterV2,
-    Effect.gen(function* () {
-      const hostEnvironment = yield* HostProcessEnvironment;
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const fileSystem = yield* FileSystem.FileSystem;
-      const idAllocator = yield* IdAllocator.IdAllocatorV2;
-      const serverConfig = yield* ServerConfig.ServerConfig;
-      return makePiAdapterV2({
-        instanceId: PI_DEFAULT_INSTANCE_ID,
-        settings: DEFAULT_PI_SETTINGS,
-        environment: hostEnvironment,
-        spawner,
-        fileSystem,
-        idAllocator,
-        serverConfig,
-      });
-    }),
-  );

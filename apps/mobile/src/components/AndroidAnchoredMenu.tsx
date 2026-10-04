@@ -49,6 +49,13 @@ export type AndroidAnchoredMenuProps = {
   readonly children: ReactNode | ((open: () => void) => ReactNode);
 };
 
+function AnchorChildren(props: {
+  readonly render: (open: () => void) => ReactNode;
+  readonly open: () => void;
+}) {
+  return props.render(props.open);
+}
+
 /**
  * Adapts the app's MenuView actions to Material dropdowns on Android. Editor
  * menus render native Material rows in-window to retain keyboard focus; other
@@ -157,6 +164,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
   // unmounted for that first frame so the fade-in plays at the final position.
   const placeable = local !== null && rootHeight !== null;
 
+  const { onPressAction } = props;
   const onPressItem = useCallback(
     (action: MenuAction) => {
       if ((action.subactions?.length ?? 0) > 0) {
@@ -165,19 +173,19 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
       }
       close();
       if (action.id !== undefined) {
-        props.onPressAction?.({
+        onPressAction?.({
           nativeEvent: { event: action.id },
         } as Parameters<NonNullable<MenuComponentProps["onPressAction"]>>[0]);
       }
     },
-    [close, props.onPressAction],
+    [close, onPressAction],
   );
 
   return (
     <>
       {typeof props.children === "function" ? (
         <View ref={anchorRef} collapsable={false} className={props.className} style={props.style}>
-          {props.children(open)}
+          <AnchorChildren render={props.children} open={open} />
         </View>
       ) : (
         <Pressable

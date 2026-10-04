@@ -283,12 +283,10 @@ function ProjectDetail({
       if (savingFaviconRef.current) return;
       savingFaviconRef.current = true;
       setIsSavingFavicon(true);
-      try {
-        await updateAllMembers(input, "Failed to update project icon");
-      } finally {
+      await updateAllMembers(input, "Failed to update project icon").finally(() => {
         savingFaviconRef.current = false;
         setIsSavingFavicon(false);
-      }
+      });
     },
     [updateAllMembers],
   );

@@ -123,13 +123,23 @@ function SidebarUpdateControl() {
   const releaseNotesTriggerId = useId();
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
-  useEffect(() => {
+  const status = state?.status;
+  const [latchedFor, setLatchedFor] = useState<{
+    prefersReducedMotion: boolean;
+    status: typeof status;
+  } | null>(null);
+  if (
+    latchedFor === null ||
+    latchedFor.prefersReducedMotion !== prefersReducedMotion ||
+    latchedFor.status !== status
+  ) {
+    setLatchedFor({ prefersReducedMotion, status });
     if (prefersReducedMotion) {
       setIsCheckAnimationLatched(false);
-    } else if (state?.status === "checking") {
+    } else if (status === "checking") {
       setIsCheckAnimationLatched(true);
     }
-  }, [prefersReducedMotion, state?.status]);
+  }
 
   const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";

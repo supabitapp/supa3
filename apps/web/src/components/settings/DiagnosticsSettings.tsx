@@ -856,7 +856,7 @@ export function DiagnosticsSettingsPanel() {
         return;
       }
 
-      try {
+      const sendSignal = async () => {
         const result = await signalServerProcess({
           environmentId: targetEnvironmentId,
           input: { pid, startTimeMs: process.startTimeMs, signal },
@@ -893,9 +893,8 @@ export function DiagnosticsSettingsPanel() {
           return;
         }
         refreshProcesses();
-      } finally {
-        clearSignaling();
-      }
+      };
+      await sendSignal().finally(clearSignaling);
     },
     [refreshProcesses, signalServerProcess],
   );

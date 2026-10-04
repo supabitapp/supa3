@@ -274,9 +274,7 @@ it.effect(
         GH_DEBUG: "",
       });
       expect(
-        commands
-          .filter((command) => command.args[0] === "api")
-          .map((command) => command.env?.GH_TOKEN),
+        commands.flatMap((command) => (command.args[0] === "api" ? [command.env?.GH_TOKEN] : [])),
       ).toEqual(["broad-credential", "restricted-credential"]);
       expect(yield* cli.getRoutingIdentity(input)).toEqual({
         accountId: "123",

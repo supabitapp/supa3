@@ -67,9 +67,9 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
     };
   }, []);
 
-  useEffect(() => {
-    if (items.length < 2) setStackExpanded(false);
-  }, [items.length]);
+  if (items.length < 2 && stackExpanded) {
+    setStackExpanded(false);
+  }
 
   useLayoutEffect(() => {
     if (stackExpanded && pendingFocusRef.current === "notice") {

@@ -60,6 +60,16 @@ function captureSettingsError(title: string, error: unknown) {
   return { title, message: error instanceof Error ? error.message : "Try again." };
 }
 
+function readSnapShotState(
+  bridge: ReturnType<typeof getDesktopSnapShotBridge>,
+): Promise<DesktopSnapShotState | undefined> {
+  try {
+    return bridge ? bridge.getSnapShotState() : Promise.resolve(undefined);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 type ShortcutCheck =
   | { readonly status: "idle"; readonly availability: null }
   | { readonly status: "checking"; readonly availability: null }
@@ -105,18 +115,21 @@ export function SnapShotSettings() {
   const soundLabel =
     soundSelection === "off" ? "Off" : soundSelection === "soft-pop" ? "Whoosh (Default)" : "Click";
 
-  const refreshState = useCallback(async () => {
+  const refreshState = useCallback(() => {
     const requestId = ++stateRequestIdRef.current;
-    try {
-      if (bridge) {
-        const nextState = await bridge.getSnapShotState();
-        if (requestId === stateRequestIdRef.current) setState(nextState);
+    return readSnapShotState(bridge).then(
+      (nextState) => {
+        if (nextState !== undefined && requestId === stateRequestIdRef.current) {
+          setState(nextState);
+        }
         return nextState;
-      }
-    } catch (error) {
-      if (requestId === stateRequestIdRef.current)
-        setSetupError(captureSettingsError("Couldn't check capture setup", error));
-    }
+      },
+      (error: unknown) => {
+        if (requestId === stateRequestIdRef.current)
+          setSetupError(captureSettingsError("Couldn't check capture setup", error));
+        return undefined;
+      },
+    );
   }, [bridge]);
 
   const setup = useCallback(
@@ -151,14 +164,15 @@ export function SnapShotSettings() {
     [bridge, refreshState, setupBusy, state, wizard],
   );
 
+  const toastedSetupErrorRef = useRef<typeof setupError>(null);
   useEffect(() => {
-    if (!setupError || wizard) return;
+    if (!setupError || wizard || toastedSetupErrorRef.current === setupError) return;
+    toastedSetupErrorRef.current = setupError;
     toastManager.add({
       type: "error",
       title: setupError.title,
       description: setupError.message,
     });
-    setSetupError(null);
   }, [setupError, wizard]);
 
   useEffect(() => {
@@ -184,10 +198,17 @@ export function SnapShotSettings() {
     [bridge, refreshState],
   );
 
-  useEffect(() => {
-    shortcutCheckIdRef.current++;
+  const [shortcutBaseline, setShortcutBaseline] = useState(savedShortcut);
+  if (shortcutBaseline !== savedShortcut) {
+    setShortcutBaseline(savedShortcut);
     setCandidate(savedShortcut);
     setShortcutCheck({ status: "idle", availability: null });
+  }
+  const checkedShortcutBaselineRef = useRef(savedShortcut);
+  useEffect(() => {
+    if (checkedShortcutBaselineRef.current === savedShortcut) return;
+    checkedShortcutBaselineRef.current = savedShortcut;
+    shortcutCheckIdRef.current++;
   }, [savedShortcut]);
 
   const save = useCallback(

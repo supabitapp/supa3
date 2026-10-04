@@ -57,27 +57,36 @@ export function ConnectionsNewRouteScreen({
 
   const connectDisabled = isSubmitting || hostInput.trim().length === 0;
 
-  useEffect(() => {
-    const { host, code } = parsePairingUrl(connectionPairingUrl);
-    setHostInput(host);
-    setCodeInput(code);
-  }, [connectionPairingUrl]);
-
-  useEffect(() => {
-    if (routePairingUrl.length === 0) {
-      return;
+  const [syncedPairingUrls, setSyncedPairingUrls] = useState<{
+    readonly connection: string;
+    readonly route: string;
+  } | null>(null);
+  if (
+    syncedPairingUrls?.connection !== connectionPairingUrl ||
+    syncedPairingUrls.route !== routePairingUrl
+  ) {
+    setSyncedPairingUrls({ connection: connectionPairingUrl, route: routePairingUrl });
+    const prefillUrl =
+      syncedPairingUrls?.route !== routePairingUrl && routePairingUrl.length > 0
+        ? routePairingUrl
+        : syncedPairingUrls?.connection !== connectionPairingUrl
+          ? connectionPairingUrl
+          : null;
+    if (prefillUrl !== null) {
+      const { host, code } = parsePairingUrl(prefillUrl);
+      setHostInput(host);
+      setCodeInput(code);
     }
+  }
 
-    const { host, code } = parsePairingUrl(routePairingUrl);
-    setHostInput(host);
-    setCodeInput(code);
-  }, [routePairingUrl]);
-
-  useEffect(() => {
+  const [seenPairingConnectionError, setSeenPairingConnectionError] =
+    useState(pairingConnectionError);
+  if (seenPairingConnectionError !== pairingConnectionError) {
+    setSeenPairingConnectionError(pairingConnectionError);
     if (pairingConnectionError) {
       setIsSubmitting(false);
     }
-  }, [pairingConnectionError]);
+  }
 
   const handleHostChange = useCallback((value: string) => {
     setHostInput(value);
@@ -157,7 +166,7 @@ export function ConnectionsNewRouteScreen({
     async (pairingUrl: string, replaceWithHome: boolean) => {
       setIsSubmitting(true);
       onChangeConnectionPairingUrl(pairingUrl);
-      try {
+      const connect = async () => {
         const result = await onConnectPress(pairingUrl);
         if (AsyncResult.isSuccess(result)) {
           if (replaceWithHome || !navigation.canGoBack()) {
@@ -166,9 +175,8 @@ export function ConnectionsNewRouteScreen({
             navigation.goBack();
           }
         }
-      } finally {
-        setIsSubmitting(false);
-      }
+      };
+      await connect().finally(() => setIsSubmitting(false));
     },
     [navigation, onChangeConnectionPairingUrl, onConnectPress],
   );

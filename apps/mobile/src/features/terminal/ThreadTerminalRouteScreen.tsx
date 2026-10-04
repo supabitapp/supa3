@@ -317,6 +317,12 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     key: launchTargetKey,
     launch: launchTarget === null ? null : takePendingTerminalLaunch(launchTarget),
   }));
+  if (pendingLaunchEntry.key !== launchTargetKey) {
+    setPendingLaunchEntry({
+      key: launchTargetKey,
+      launch: launchTarget === null ? null : takePendingTerminalLaunch(launchTarget),
+    });
+  }
   const pendingLaunch =
     pendingLaunchEntry.key === launchTargetKey ? pendingLaunchEntry.launch : null;
   const hasResolvedPendingLaunch = pendingLaunchEntry.key === launchTargetKey;
@@ -327,6 +333,15 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       rows: DEFAULT_TERMINAL_ROWS,
     },
   }));
+  if (initialAttachGridEntry.key !== launchTargetKey) {
+    setInitialAttachGridEntry({
+      key: launchTargetKey,
+      size: cachedRouteGridSize ?? {
+        cols: DEFAULT_TERMINAL_COLS,
+        rows: DEFAULT_TERMINAL_ROWS,
+      },
+    });
+  }
   const initialAttachGridSize =
     initialAttachGridEntry.key === launchTargetKey ? initialAttachGridEntry.size : null;
   const [lastGridSize, setLastGridSize] = useState(
@@ -335,15 +350,40 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       rows: DEFAULT_TERMINAL_ROWS,
     },
   );
+  const [lastGridSizeRoute, setLastGridSizeRoute] = useState({
+    environmentId: routeEnvironmentId,
+    threadId: routeThreadId,
+    terminalId,
+  });
   const [keyboardFocusRequest, setKeyboardFocusRequest] = useState(0);
   const [isAccessoryDismissed, setIsAccessoryDismissed] = useState(false);
   const bufferReplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firstNonEmptyBufferLoggedRef = useRef(false);
+  const firstNonEmptyBufferLoggedKeyRef = useRef<string | null>(null);
   const lastBufferReplayKeyRef = useRef<string | null>(null);
   const sentInitialInputKeyRef = useRef<string | null>(null);
   const [readyBufferReplayKey, setReadyBufferReplayKey] = useState<string | null>(null);
   /** Default grid is always valid for attach; onResize refines cols/rows. Requiring a cached size blocked bootstrap for new terminal routes. */
   const [hasMeasuredSurface, setHasMeasuredSurface] = useState(true);
+  if (
+    lastGridSizeRoute.environmentId !== routeEnvironmentId ||
+    lastGridSizeRoute.threadId !== routeThreadId ||
+    lastGridSizeRoute.terminalId !== terminalId
+  ) {
+    setLastGridSizeRoute({
+      environmentId: routeEnvironmentId,
+      threadId: routeThreadId,
+      terminalId,
+    });
+    setLastGridSize(
+      cachedRouteGridSize ?? {
+        cols: DEFAULT_TERMINAL_COLS,
+        rows: DEFAULT_TERMINAL_ROWS,
+      },
+    );
+    if (routeEnvironmentId && routeThreadId) {
+      setHasMeasuredSurface(true);
+    }
+  }
   const [pendingModifierState, setPendingModifierState] = useState<{
     readonly terminalId: string;
     readonly value: PendingModifier | null;
@@ -355,8 +395,9 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     requestedTerminalId === null &&
     runningSession !== null &&
     runningSession.target.terminalId !== terminalId;
+  const selectedThreadWorkspaceRoot = selectedThreadProject?.workspaceRoot;
   const launchLocationCandidate = useMemo(() => {
-    if (!selectedThread || !selectedThreadProject?.workspaceRoot) {
+    if (!selectedThread || !selectedThreadWorkspaceRoot) {
       return null;
     }
     if (pendingLaunch) {
@@ -368,7 +409,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     return resolveTerminalOpenLocation({
       terminalLocation: activeKnownSession?.state.summary ?? null,
       activeSessionLocation: activeKnownSession?.state.summary ?? null,
-      workspaceRoot: selectedThreadProject.workspaceRoot,
+      workspaceRoot: selectedThreadWorkspaceRoot,
       threadShellWorktreePath: selectedThread.worktreePath ?? null,
       threadDetailWorktreePath: selectedThreadDetailWorktreePath,
     });
@@ -377,12 +418,21 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     pendingLaunch,
     selectedThread,
     selectedThreadDetailWorktreePath,
-    selectedThreadProject?.workspaceRoot,
+    selectedThreadWorkspaceRoot,
   ]);
   const [initialLaunchLocationEntry, setInitialLaunchLocationEntry] = useState(() => ({
     key: launchTargetKey,
     location: launchLocationCandidate,
   }));
+  if (
+    initialLaunchLocationEntry.key !== launchTargetKey ||
+    (initialLaunchLocationEntry.location === null && launchLocationCandidate !== null)
+  ) {
+    setInitialLaunchLocationEntry({
+      key: launchTargetKey,
+      location: launchLocationCandidate,
+    });
+  }
   const launchLocation =
     initialLaunchLocationEntry.key === launchTargetKey ? initialLaunchLocationEntry.location : null;
   const terminalAttachInput = useMemo(
@@ -537,16 +587,16 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   ]);
 
   useEffect(() => {
-    if (terminal.buffer.length === 0 || firstNonEmptyBufferLoggedRef.current) {
+    if (terminal.buffer.length === 0 || firstNonEmptyBufferLoggedKeyRef.current === terminalKey) {
       return;
     }
-    firstNonEmptyBufferLoggedRef.current = true;
+    firstNonEmptyBufferLoggedKeyRef.current = terminalKey;
     terminalDebugLog("session:first-nonempty-buffer", {
       terminalKey,
       length: terminal.buffer.length,
       preview: terminal.buffer.slice(0, 160),
     });
-  }, [terminal.buffer, terminal.buffer.length, terminalKey]);
+  }, [terminal.buffer, terminalKey]);
   const cwd = terminal.summary?.cwd ?? selectedThreadProject?.workspaceRoot ?? null;
   const serverConfigs = useServerConfigs();
   const hostOs =
@@ -649,50 +699,6 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   );
 
   useEffect(() => {
-    if (pendingLaunchEntry.key === launchTargetKey) {
-      return;
-    }
-    setPendingLaunchEntry({
-      key: launchTargetKey,
-      launch: launchTarget === null ? null : takePendingTerminalLaunch(launchTarget),
-    });
-  }, [launchTarget, launchTargetKey, pendingLaunchEntry.key]);
-
-  useEffect(() => {
-    if (initialAttachGridEntry.key === launchTargetKey) {
-      return;
-    }
-    setInitialAttachGridEntry({
-      key: launchTargetKey,
-      size: cachedRouteGridSize ?? {
-        cols: DEFAULT_TERMINAL_COLS,
-        rows: DEFAULT_TERMINAL_ROWS,
-      },
-    });
-  }, [cachedRouteGridSize, initialAttachGridEntry.key, launchTargetKey]);
-
-  useEffect(() => {
-    if (
-      initialLaunchLocationEntry.key === launchTargetKey &&
-      initialLaunchLocationEntry.location !== null
-    ) {
-      return;
-    }
-    if (initialLaunchLocationEntry.key === launchTargetKey && launchLocationCandidate === null) {
-      return;
-    }
-    setInitialLaunchLocationEntry({
-      key: launchTargetKey,
-      location: launchLocationCandidate,
-    });
-  }, [
-    initialLaunchLocationEntry.key,
-    initialLaunchLocationEntry.location,
-    launchLocationCandidate,
-    launchTargetKey,
-  ]);
-
-  useEffect(() => {
     if (!shouldRedirectToRunningTerminal || !selectedThread || !runningSession) {
       return;
     }
@@ -733,11 +739,6 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     writeTerminal,
   ]);
 
-  useEffect(() => {
-    firstNonEmptyBufferLoggedRef.current = false;
-    sentInitialInputKeyRef.current = null;
-  }, [terminalKey]);
-
   const clearBufferReplayTimer = useCallback(() => {
     if (bufferReplayTimerRef.current !== null) {
       clearTimeout(bufferReplayTimerRef.current);
@@ -771,28 +772,6 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
 
   useEffect(() => clearBufferReplayTimer, [clearBufferReplayTimer]);
 
-  useEffect(() => {
-    if (!routeEnvironmentId || !routeThreadId) {
-      setLastGridSize({
-        cols: DEFAULT_TERMINAL_COLS,
-        rows: DEFAULT_TERMINAL_ROWS,
-      });
-      return;
-    }
-
-    setLastGridSize(
-      getCachedTerminalGridSize({
-        environmentId: routeEnvironmentId,
-        threadId: routeThreadId,
-        terminalId,
-      }) ?? {
-        cols: DEFAULT_TERMINAL_COLS,
-        rows: DEFAULT_TERMINAL_ROWS,
-      },
-    );
-    setHasMeasuredSurface(true);
-  }, [routeEnvironmentId, routeThreadId, terminalId]);
-
   /** Resolves true once the pty accepted the write, false if it was skipped or rejected. */
   const writeInput = useCallback(
     async (data: string): Promise<boolean> => {
@@ -813,19 +792,16 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     [isRunning, selectedThread, terminalId, writeTerminal],
   );
 
-  const pasteSessionRef = useRef<ReturnType<typeof createTerminalPasteSession> | null>(null);
-  if (pasteSessionRef.current === null) {
-    pasteSessionRef.current = createTerminalPasteSession();
-  }
-  const pasteSession = pasteSessionRef.current;
+  const [pasteSession] = useState(createTerminalPasteSession);
+  const pasteTargetKey = isRunning ? `${terminalKey}:${terminal.lifecycleVersion}` : null;
 
   // Drop delayed clipboard reads whenever the route or attached pty changes.
   useEffect(() => {
-    pasteSession.reset(isRunning);
+    pasteSession.reset(pasteTargetKey !== null);
     return () => {
       pasteSession.reset(false);
     };
-  }, [isRunning, pasteSession, terminal.lifecycleVersion, terminalKey]);
+  }, [pasteSession, pasteTargetKey]);
 
   const pasteFromClipboard = useCallback(async () => {
     await pasteSession.paste({

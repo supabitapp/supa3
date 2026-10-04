@@ -478,7 +478,7 @@ describe("narrowing rows by the filters a host may not have applied", () => {
     }),
   ];
   const narrow = (filters: Parameters<typeof matchesPullRequestFilters>[1]) =>
-    rows.filter((row) => matchesPullRequestFilters(row, filters)).map((row) => row.number);
+    rows.flatMap((row) => (matchesPullRequestFilters(row, filters) ? [row.number] : []));
 
   it("keeps or drops drafts as asked", () => {
     expect(narrow({ draft: "only" })).toEqual([2]);
@@ -528,7 +528,7 @@ describe("narrowing rows by the filters a host may not have applied", () => {
       entry({ number: 12, labels: [{ name: "size:L", color: null }] }),
     ];
     const kept = (labels: ReadonlyArray<ReadonlyArray<string>>) =>
-      sized.filter((row) => matchesPullRequestFilters(row, { labels })).map((row) => row.number);
+      sized.flatMap((row) => (matchesPullRequestFilters(row, { labels }) ? [row.number] : []));
 
     expect(kept([["size:S", "size:XS"]])).toEqual([10, 11]);
     expect(kept([["size:XXL"]])).toEqual([]);

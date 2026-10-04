@@ -202,37 +202,41 @@ export function useComposerCommandMenu({
   /** Picking /usage-limits is the action itself; the draft keeps nothing of it. */
   readonly onUsageLimits?: () => void;
 }) {
-  const [selection, setSelection] = useState(() => composerSelectionAtEnd(draftMessage));
-  const previousOwnerKeyRef = useRef(ownerKey);
+  const [selection, setSelection] = useState(
+    () =>
+      (ownerKey ? readComposerDraftSelection(ownerKey, draftMessage) : null) ??
+      composerSelectionAtEnd(draftMessage),
+  );
+  const [selectionSource, setSelectionSource] = useState({ draftMessage, ownerKey });
   const onSelectionChange = useCallback((nextSelection: ComposerEditorSelection) => {
     setSelection(nextSelection);
   }, []);
-  useEffect(() => {
-    // An insert (attachment, terminal capture, review comment) rewrites the draft and records
-    // the caret that belongs after the new chip. Clamping alone would keep the old offset,
-    // which sits before it.
-    const inserted = ownerKey ? readComposerDraftSelection(ownerKey, draftMessage) : null;
-    if (inserted) {
-      setSelection((current) =>
-        current.start === inserted.start && current.end === inserted.end ? current : inserted,
-      );
-      return;
-    }
-    const end = draftMessage.length;
-    setSelection((current) => {
-      const start = Math.min(current.start, end);
-      const selectionEnd = Math.min(current.end, end);
-      if (start === current.start && selectionEnd === current.end) {
-        return current;
+  if (selectionSource.draftMessage !== draftMessage || selectionSource.ownerKey !== ownerKey) {
+    setSelectionSource({ draftMessage, ownerKey });
+    if (selectionSource.ownerKey !== ownerKey) {
+      setSelection(composerSelectionAtEnd(draftMessage));
+    } else {
+      // An insert (attachment, terminal capture, review comment) rewrites the draft and records
+      // the caret that belongs after the new chip. Clamping alone would keep the old offset,
+      // which sits before it.
+      const inserted = ownerKey ? readComposerDraftSelection(ownerKey, draftMessage) : null;
+      if (inserted) {
+        setSelection((current) =>
+          current.start === inserted.start && current.end === inserted.end ? current : inserted,
+        );
+      } else {
+        const end = draftMessage.length;
+        setSelection((current) => {
+          const start = Math.min(current.start, end);
+          const selectionEnd = Math.min(current.end, end);
+          if (start === current.start && selectionEnd === current.end) {
+            return current;
+          }
+          return { start, end: selectionEnd };
+        });
       }
-      return { start, end: selectionEnd };
-    });
-  }, [draftMessage, ownerKey]);
-  useEffect(() => {
-    if (previousOwnerKeyRef.current === ownerKey) return;
-    previousOwnerKeyRef.current = ownerKey;
-    setSelection(composerSelectionAtEnd(draftMessage));
-  }, [draftMessage, ownerKey]);
+    }
+  }
 
   const skills = useMemo(
     () =>
@@ -291,6 +295,7 @@ export function useComposerCommandMenu({
       }
     }, retryLater);
   }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     draftMessage,
     environmentId,
     hasWorkspaceSnapshot,

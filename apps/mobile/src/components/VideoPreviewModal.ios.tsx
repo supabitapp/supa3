@@ -50,10 +50,9 @@ function NativeVideoPreview(props: {
           : null
       : null;
 
+  if (playbackUrl === null && resolvedUrl !== null) setPlaybackUrl(resolvedUrl);
+
   useEffect(() => Keyboard.dismiss(), []);
-  useEffect(() => {
-    if (playbackUrl === null && resolvedUrl !== null) setPlaybackUrl(resolvedUrl);
-  }, [playbackUrl, resolvedUrl]);
   useEffect(() => {
     if (!loadError) return;
     Alert.alert("Could not open video", loadError);
@@ -70,7 +69,7 @@ function NativeVideoPreview(props: {
           ? await loadLocalAttachmentPreview(localAttachment, controller.signal)
           : null;
       if (localAttachment !== null && !file) return;
-      try {
+      const present = async () => {
         if (controller.signal.aborted) return;
         ready = true;
         await NativeControls.presentVideo(
@@ -80,10 +79,9 @@ function NativeVideoPreview(props: {
           identifier,
         );
         if (!controller.signal.aborted) onRequestClose();
-      } finally {
-        // Native completion follows dismissal, so local playback keeps its file lease.
-        file?.dispose();
-      }
+      };
+      // Native completion follows dismissal, so local playback keeps its file lease.
+      await present().finally(() => file?.dispose());
     })().catch((error: unknown) => {
       if (controller.signal.aborted) return;
       // AVKit gives no retry, so re-mint now; the cached URL may simply have expired.

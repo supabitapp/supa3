@@ -1,7 +1,6 @@
 import type { OrchestrationV2ThreadDetailSnapshot, ThreadId } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
 import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";

@@ -39,22 +39,23 @@ const CARD_CLASS =
   "mx-3 my-2 rounded-xl border border-border/70 bg-background p-3 text-sm shadow-sm";
 
 /** Sends a reply on ⌘/Ctrl+Enter and abandons it on Escape. */
-function submitKeys(input: {
-  readonly value: string;
-  readonly pending: boolean;
-  readonly onSubmit: () => void;
-  readonly onCancel?: (() => void) | undefined;
-}) {
-  return (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Escape" && input.onCancel) {
-      event.preventDefault();
-      input.onCancel();
-    }
-    if (isCommentSubmitShortcut(event, input.value, input.pending)) {
-      event.preventDefault();
-      input.onSubmit();
-    }
-  };
+function submitKeys(
+  event: React.KeyboardEvent<HTMLTextAreaElement>,
+  input: {
+    readonly value: string;
+    readonly pending: boolean;
+    readonly onSubmit: () => void;
+    readonly onCancel?: (() => void) | undefined;
+  },
+) {
+  if (event.key === "Escape" && input.onCancel) {
+    event.preventDefault();
+    input.onCancel();
+  }
+  if (isCommentSubmitShortcut(event, input.value, input.pending)) {
+    event.preventDefault();
+    input.onSubmit();
+  }
 }
 
 /** A comment waiting to be sent with the rest of the review. */
@@ -330,12 +331,14 @@ export function ReviewThreadCard({
                   placeholder="Reply"
                   aria-label="Reply to this conversation"
                   onChange={(event) => setReply(event.target.value)}
-                  onKeyDown={submitKeys({
-                    value: reply,
-                    pending,
-                    onSubmit: () => void send(),
-                    onCancel: () => setReplying(false),
-                  })}
+                  onKeyDown={(event) =>
+                    submitKeys(event, {
+                      value: reply,
+                      pending,
+                      onSubmit: () => void send(),
+                      onCancel: () => setReplying(false),
+                    })
+                  }
                 />
                 <div className="mt-2 flex justify-end gap-2">
                   <Button size="xs" variant="ghost" onClick={() => setReplying(false)}>

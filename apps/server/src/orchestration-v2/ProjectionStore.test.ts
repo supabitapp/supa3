@@ -1,6 +1,5 @@
 import { assert, it, vi } from "@effect/vitest";
 import {
-  EnvironmentId,
   EventId,
   CommandId,
   CheckpointId,

@@ -1,4 +1,5 @@
 import type { ComposerContextRecord, ElementContextDetails } from "@supacode/contracts";
+import * as Arr from "effect/Array";
 
 import { collectComposerContextReferences } from "./composerContextReferences.ts";
 
@@ -21,7 +22,7 @@ export function serializeLegacyContextMessage(input: {
   // trailing block, which is where the legacy format carried it.
   let text = input.text;
   const occurrences = collectComposerContextReferences(text);
-  for (const occurrence of [...occurrences].reverse()) {
+  for (const occurrence of Arr.reverse(occurrences)) {
     const record = recordsById.get(occurrence.contextId);
     if (!record) continue;
     used.add(occurrence.contextId);

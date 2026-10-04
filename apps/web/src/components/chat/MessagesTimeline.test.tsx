@@ -77,12 +77,6 @@ vi.mock("./MessagesTimeline.logic", async (importOriginal) => {
   };
 });
 
-beforeEach(() => {
-  activityTestState.subagentTooltips = false;
-  activityTestState.expanded = false;
-  activityTestState.expandedRuns = false;
-});
-
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
 
@@ -215,9 +209,8 @@ function matchMedia() {
 }
 
 let MessagesTimeline: typeof import("./MessagesTimeline").MessagesTimeline;
-let resolvePreviewAnnotationImage: typeof import("./MessagesTimeline").resolvePreviewAnnotationImage;
 
-const ElementStub = class ElementStub {};
+const ElementStub = class ElementStub extends EventTarget {};
 function stubDomGlobals() {
   const classList = {
     add: () => {},
@@ -254,10 +247,15 @@ function stubDomGlobals() {
   });
 }
 
-beforeEach(stubDomGlobals);
+beforeEach(() => {
+  activityTestState.subagentTooltips = false;
+  activityTestState.expanded = false;
+  activityTestState.expandedRuns = false;
+  stubDomGlobals();
+});
 beforeAll(async () => {
   stubDomGlobals();
-  ({ MessagesTimeline, resolvePreviewAnnotationImage } = await import("./MessagesTimeline"));
+  ({ MessagesTimeline } = await import("./MessagesTimeline"));
 }, 30_000);
 
 const ACTIVE_THREAD_ENVIRONMENT_ID = EnvironmentId.make("environment-local");

@@ -136,10 +136,12 @@ export function ThreadDisclosureChevron(props: {
   const rotation = useSharedValue(props.expanded ? expandedAngle : 0);
 
   useLayoutEffect(() => {
-    rotation.value = withTiming(props.expanded ? expandedAngle : 0, {
-      duration: THREAD_DISCLOSURE_TRANSITION_MS,
-      reduceMotion: ReduceMotion.System,
-    });
+    rotation.set(
+      withTiming(props.expanded ? expandedAngle : 0, {
+        duration: THREAD_DISCLOSURE_TRANSITION_MS,
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
   }, [expandedAngle, props.expanded, rotation]);
 
   const rotationStyle = useAnimatedStyle(() => ({
@@ -257,25 +259,27 @@ export function ShimmeringWorkContent(props: {
 
   useEffect(() => {
     cancelAnimation(progress);
-    progress.value = 0;
+    progress.set(0);
     if (contentWidth <= 0 || reducedMotion || !appIsActive || !screenIsFocused) return;
 
-    progress.value = withRepeat(
-      withSequence(
-        withTiming(1, {
-          duration: SHIMMER_SWEEP_MS,
-          easing: Easing.linear,
-          reduceMotion: ReduceMotion.Never,
-        }),
-        withDelay(
-          SHIMMER_PAUSE_MS,
-          withTiming(0, { duration: 0, reduceMotion: ReduceMotion.Never }),
+    progress.set(
+      withRepeat(
+        withSequence(
+          withTiming(1, {
+            duration: SHIMMER_SWEEP_MS,
+            easing: Easing.linear,
+            reduceMotion: ReduceMotion.Never,
+          }),
+          withDelay(
+            SHIMMER_PAUSE_MS,
+            withTiming(0, { duration: 0, reduceMotion: ReduceMotion.Never }),
+          ),
         ),
+        -1,
+        false,
+        undefined,
+        ReduceMotion.Never,
       ),
-      -1,
-      false,
-      undefined,
-      ReduceMotion.Never,
     );
     return () => cancelAnimation(progress);
   }, [appIsActive, contentWidth, progress, reducedMotion, screenIsFocused]);
@@ -669,13 +673,14 @@ function ThreadWorkGroupList(props: {
         : props.rowSizing.fixedRowHeight + (index < props.activities.length - 1 ? WORK_ROW_GAP : 0),
     [props.activities.length, props.expandedRows, props.rowSizing.fixedRowHeight],
   );
+  const { renderRow } = props;
   const renderItem = useCallback(
     ({ item, index }: { item: ThreadFeedActivity; index: number }) => (
       <View className={index < props.activities.length - 1 ? "pb-px" : undefined}>
-        {props.renderRow(item)}
+        {renderRow(item)}
       </View>
     ),
-    [props.activities.length, props.renderRow],
+    [props.activities.length, renderRow],
   );
 
   return (

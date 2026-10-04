@@ -5,11 +5,7 @@ import * as Exit from "effect/Exit";
 import * as Metric from "effect/Metric";
 import { dual } from "effect/Function";
 
-import {
-  compactMetricAttributes,
-  normalizeModelMetricLabel,
-  outcomeFromExit,
-} from "./Attributes.ts";
+import { compactMetricAttributes, outcomeFromExit } from "./Attributes.ts";
 
 export const rpcRequestsTotal = Metric.counter("supacode_rpc_requests_total", {
   description: "Total RPC requests handled by the websocket RPC server.",
@@ -18,13 +14,6 @@ export const rpcRequestsTotal = Metric.counter("supacode_rpc_requests_total", {
 export const rpcRequestDuration = Metric.timer("supacode_rpc_request_duration", {
   description: "RPC request handling duration.",
 });
-
-const orchestrationEventsProcessedTotal = Metric.counter(
-  "supacode_orchestration_events_processed_total",
-  {
-    description: "Total orchestration intent events processed by runtime reactors.",
-  },
-);
 
 export const orchestrationEffectClaimsTotal = Metric.counter(
   "supacode_orchestration_effect_claims_total",
@@ -40,22 +29,6 @@ export const orchestrationEffectQueueWait = Metric.timer(
       "Time from an orchestration effect's temporal availability until claim, including same-thread blocking.",
   },
 );
-
-const providerSessionsTotal = Metric.counter("supacode_provider_sessions_total", {
-  description: "Total provider session lifecycle operations.",
-});
-
-const providerTurnsTotal = Metric.counter("supacode_provider_turns_total", {
-  description: "Total provider turn lifecycle operations.",
-});
-
-const providerTurnDuration = Metric.timer("supacode_provider_turn_duration", {
-  description: "Provider turn request duration.",
-});
-
-const providerRuntimeEventsTotal = Metric.counter("supacode_provider_runtime_events_total", {
-  description: "Total canonical provider runtime events processed.",
-});
 
 export const gitCommandsTotal = Metric.counter("supacode_git_commands_total", {
   description: "Total git commands executed by the server runtime.",
@@ -141,22 +114,3 @@ export const withMetrics: {
   ): (effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
   <A, E, R>(effect: Effect.Effect<A, E, R>, options: WithMetricsOptions): Effect.Effect<A, E, R>;
 } = dual(2, withMetricsImpl);
-
-const providerMetricAttributes = (provider: string, extra?: Readonly<Record<string, unknown>>) =>
-  compactMetricAttributes({
-    provider,
-    ...extra,
-  });
-
-const providerTurnMetricAttributes = (input: {
-  readonly provider: string;
-  readonly model: string | null | undefined;
-  readonly extra?: Readonly<Record<string, unknown>>;
-}) => {
-  const modelFamily = normalizeModelMetricLabel(input.model);
-  return compactMetricAttributes({
-    provider: input.provider,
-    ...(modelFamily ? { modelFamily } : {}),
-    ...input.extra,
-  });
-};

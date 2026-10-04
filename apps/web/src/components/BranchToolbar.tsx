@@ -345,13 +345,18 @@ function labelTextWidth(label: HTMLElement, range: Range): number {
  */
 function useLabelsOverflow(element: HTMLDivElement | null): boolean {
   const [overflows, setOverflows] = useState(false);
-  const pendingLabelRectsRef = useRef<Map<HTMLElement, DOMRect> | null>(null);
+  const pendingLabelRectsRef = useRef<{
+    readonly overflows: boolean;
+    readonly rects: Map<HTMLElement, DOMRect>;
+  } | null>(null);
   const labelAnimationsRef = useRef(new Map<HTMLElement, Animation>());
-  // A render-synced mirror instead of useEffectEvent: the compiler memoizes
+  // A commit-synced mirror instead of useEffectEvent: the compiler memoizes
   // the event callback, which left observers reading the first render's null
   // element forever.
   const stateRef = useRef({ element, overflows });
-  stateRef.current = { element, overflows };
+  useLayoutEffect(() => {
+    stateRef.current = { element, overflows };
+  });
 
   const measure = useCallback(() => {
     const { element: current, overflows: compact } = stateRef.current;
@@ -415,18 +420,21 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       availableWidth: available,
     });
     if (nextOverflows !== compact) {
-      pendingLabelRectsRef.current = new Map(
-        Array.from(current.querySelectorAll<HTMLElement>(COMPOSER_CONTEXT_LABEL_SELECTOR)).map(
-          (label) => [label, label.getBoundingClientRect()],
+      pendingLabelRectsRef.current = {
+        overflows: nextOverflows,
+        rects: new Map(
+          Array.from(current.querySelectorAll<HTMLElement>(COMPOSER_CONTEXT_LABEL_SELECTOR)).map(
+            (label) => [label, label.getBoundingClientRect()],
+          ),
         ),
-      );
+      };
     }
     setOverflows(nextOverflows);
   }, []);
 
   useLayoutEffect(() => {
-    const previousRects = pendingLabelRectsRef.current;
-    if (!previousRects) return;
+    const pending = pendingLabelRectsRef.current;
+    if (pending?.overflows !== overflows) return;
     pendingLabelRectsRef.current = null;
 
     for (const animation of labelAnimationsRef.current.values()) {
@@ -436,7 +444,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    for (const [label, previousRect] of previousRects) {
+    for (const [label, previousRect] of pending.rects) {
       if (!label.isConnected) continue;
       const nextWidth = label.getBoundingClientRect().width;
       if (Math.abs(previousRect.width - nextWidth) < 0.5) continue;
