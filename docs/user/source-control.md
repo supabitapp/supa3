@@ -116,6 +116,10 @@ GitLab calls these merge requests.
 GitHub, GitLab, and Azure DevOps support auto-merge while checks are outstanding. GitHub also
 supports approving waiting fork workflows and opening a revert pull request for a merged change.
 
+In the web and desktop apps, merging, closing, reverting, enabling auto-merge, and approving
+workflows take two presses: the first turns the button into **Confirm**, the second runs it.
+Press Escape or click elsewhere to cancel.
+
 GitHub sharing is off by default. In Settings → Connections → GitHub sharing (Environments on mobile), choose
 **Read PRs** or **Read and act** for each environment you trust to share GitHub access.
 Enable both the original environment and the environment answering its requests on this client.
@@ -188,8 +192,9 @@ out from the matching organization and repository.
 
 The Pull Requests page shows each PR's position in its GitHub stack. Open the stack badge in a
 review to navigate its layers. **Merge stack** submits the selected pull request and every unmerged
-layer below it to GitHub together, respecting branch rules and merge queues. The confirmation shows
-the scope and merge strategy. GitHub rebases the remaining stack after merging.
+layer below it to GitHub together, respecting branch rules and merge queues. Before you confirm, it
+shows how many pull requests it merges and the merge strategy. GitHub rebases the remaining stack
+after merging.
 
 **Rebase stack** updates remote branches from bottom to top without changing your local checkout.
 It can rewrite history and restart checks. If a layer fails, earlier updates remain; resolve that
