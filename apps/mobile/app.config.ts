@@ -1,6 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
+import { MOBILE_OTA_MANIFEST_URL } from "../../scripts/lib/mobile-ota.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "preview" | "production";
@@ -220,7 +221,12 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.SUPACODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/43107a7e-1d06-490b-bfc6-be228b285ee2",
+    // Self-hosted: scripts/mobile-ota.ts publishes signed updates that this Worker serves.
+    url: MOBILE_OTA_MANIFEST_URL,
+    // EAS Build only sets the channel for EAS-hosted update URLs, so each variant sends its own.
+    requestHeaders: { "expo-channel-name": APP_VARIANT },
+    codeSigningCertificate: "./certs/certificate.pem",
+    codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },

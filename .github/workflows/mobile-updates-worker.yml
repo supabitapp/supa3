@@ -1,0 +1,34 @@
+name: Mobile Updates Worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/mobile/cloudflare/**
+      - scripts/lib/mobile-ota.ts
+      - .github/workflows/mobile-updates-worker.yml
+
+concurrency:
+  group: mobile-updates-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy mobile updates Worker
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Load hosting credentials
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: cloudflare
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Deploy Worker
+        run: vp dlx wrangler@4.147.0 deploy --config apps/mobile/cloudflare/updates.json

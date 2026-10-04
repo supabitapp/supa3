@@ -272,7 +272,7 @@ async function performAppUpdateCheck(
     setState("idle");
     return;
   }
-  // A rollback directive (`eas update:rollback`) arrives as isAvailable: false
+  // A rollback directive (`scripts/mobile-ota.ts rollback`) arrives as isAvailable: false
   // with isRollBackToEmbedded: true. The running OTA still has to be dropped.
   if (!check.value.isAvailable && !check.value.isRollBackToEmbedded) {
     setState("current");

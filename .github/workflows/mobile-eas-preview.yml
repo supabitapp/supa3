@@ -2,12 +2,13 @@ name: Mobile Preview
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled]
+    types: [opened, reopened, synchronize, labeled, closed]
 
 jobs:
   preview:
     name: Mobile preview ${{ matrix.platform }}
     if: |
+      github.event.action != 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (github.event.pull_request.author_association == 'OWNER' ||
         github.event.pull_request.author_association == 'MEMBER') &&
@@ -119,11 +120,21 @@ jobs:
               version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
               sha: context.sha, url: process.env.MOBILE_BUILD_URL,
             });
+      - id: ota_token
+        name: Mint update repository token
+        if: steps.expo-token.outputs.present == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: supacode-mobile-updates
       - id: update
         name: Publish PR update
         if: steps.expo-token.outputs.present == 'true'
-        working-directory: apps/mobile
         env:
+          GH_TOKEN: ${{ steps.ota_token.outputs.token }}
+          MOBILE_OTA_SIGNING_KEY: ${{ secrets.MOBILE_OTA_SIGNING_KEY }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BUILT_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
           MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
@@ -132,21 +143,19 @@ jobs:
             echo "::error::Built preview fingerprint differs from the update fingerprint."
             exit 1
           fi
-          eas update --branch "pr-$PR_NUMBER" --environment preview --platform "$MOBILE_PLATFORM" \
-            --message "PR #$PR_NUMBER ($(git rev-parse --short=9 HEAD))" --json --non-interactive > "$RUNNER_TEMP/mobile-update.json"
-          group=$(jq -er '.[0].group' "$RUNNER_TEMP/mobile-update.json")
-          echo "group=$group" >> "$GITHUB_OUTPUT"
+          node scripts/mobile-ota.ts publish --platform "$MOBILE_PLATFORM" --channel "pr-$PR_NUMBER" \
+            --runtime-version "$MOBILE_FINGERPRINT" --message "PR #$PR_NUMBER ($(git rev-parse --short=9 HEAD))"
       - name: Link preview on PR
         if: steps.update.outcome == 'success'
         uses: actions/github-script@v8
         env:
           MOBILE_BUILD_URL: ${{ steps.upload.outputs.url || steps.history.outputs.url }}
-          MOBILE_UPDATE_GROUP: ${{ steps.update.outputs.group }}
+          MOBILE_UPDATE_URL: https://updates.next.supacode.sh/open?channel=pr-${{ github.event.pull_request.number }}
         with:
           script: |
             const platform = process.env.MOBILE_PLATFORM;
             const marker = `### Mobile preview: ${platform}`;
-            const body = `${marker}\n\n[Install the development build](${process.env.MOBILE_BUILD_URL}), then open the PR update from the [update page](https://expo.dev/accounts/supabitapp/projects/supacode/updates/${process.env.MOBILE_UPDATE_GROUP}).\n\nBuilt on Depot for ${context.sha}.`;
+            const body = `${marker}\n\n[Install the development build](${process.env.MOBILE_BUILD_URL}), then [open the PR update](${process.env.MOBILE_UPDATE_URL}) on the same device.\n\nBuilt on Depot for ${context.sha}.`;
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo, issue_number: context.issue.number, per_page: 100,
             });
@@ -156,3 +165,33 @@ jobs:
             } else {
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
+
+  cleanup:
+    name: Delete mobile preview updates
+    if: |
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment')
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: ./.github/actions/setup-mise
+      - run: mise exec -- vp install --filter=@supacode/scripts...
+      - id: ota_token
+        name: Mint update repository token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: supacode-mobile-updates
+      - name: Delete the PR's update releases
+        env:
+          GH_TOKEN: ${{ steps.ota_token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/mobile-ota.ts delete-channel --channel "pr-$PR_NUMBER"

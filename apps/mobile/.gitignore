@@ -29,6 +29,8 @@ yarn-error.*
 # macOS
 .DS_Store
 *.pem
+# Public certificate expo-updates verifies OTA manifests with; its private key lives in CI secrets.
+!/certs/certificate.pem
 
 # local env files
 .env*.local

@@ -114,6 +114,17 @@ The `cloudflare` fnox profile reads `CLOUDFLARE_API_TOKEN` from the `Cloudflare 
 
 Same-repository pull requests labeled `preview:web` deploy to `preview-<number>.next.supacode.sh`. The `web-preview` GitHub environment supplies `OP_SERVICE_ACCOUNT_TOKEN` for those deployments. Open the URL posted on the pull request and pair a reachable server under Settings → Connections.
 
+## Mobile OTA updates
+
+Store builds take JavaScript updates through `expo-updates` from our own hosting, not EAS Update. `scripts/mobile-ota.ts` exports, signs, and uploads each update to the public `supabitapp/supacode-mobile-updates` repository, one release per channel, platform, and runtime version (the native fingerprint). The updates live outside this repository because desktop nightly auto-update reads this repository's release feed, and a burst of update releases would push nightlies out of it.
+
+expo-updates requires protocol headers that GitHub release downloads cannot carry, so the `updates.next.supacode.sh` Worker in `apps/mobile/cloudflare/` reads the release's `current.json` and answers in the protocol's format. Bundles and assets download straight from GitHub. `.github/workflows/mobile-updates-worker.yml` deploys the Worker with the `cloudflare` profile above.
+
+- Production publishes from **Mobile Production** on each mobile change to `main` that has a compatible store build. Pull requests labeled `🚀 Mobile Continuous Deployment` publish to `pr-<number>`; the PR comment links the update into the preview development build, and closing the PR deletes its releases.
+- To roll back, dispatch **Mobile Production** with `mode=rollback`. A blank `update_id` returns devices to the bundle embedded in their store build. An ID from the release's `update-<time>-<id>.json` files serves that update again under a new ID, because devices only move to newer updates.
+- The app accepts only manifests signed by the key behind `apps/mobile/certs/certificate.pem`. CI reads it from the `MOBILE_OTA_SIGNING_KEY` repository secret. Replacing the key needs a new certificate and store build, and binaries with the old certificate stop taking updates.
+- The workflows mint a Release App token scoped to the updates repository, so the App must stay installed there.
+
 ## Nightly builds
 
 - Workflow: `.github/workflows/release.yml`

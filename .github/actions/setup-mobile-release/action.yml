@@ -12,7 +12,7 @@ runs:
   steps:
     - uses: ./.github/actions/setup-mise
     - shell: bash
-      run: mise exec -- vp install --filter=@supacode/mobile...
+      run: mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts...
     - shell: bash
       run: mise exec -- pnpm --version
     - uses: expo/expo-github-action@v8

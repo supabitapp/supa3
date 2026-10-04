@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight / Google Play) or update (OTA)"
+        description: "build (+ auto-submit to TestFlight / Google Play), update (OTA), or rollback (OTA)"
         required: true
         type: choice
         default: build
         options:
           - build
           - update
+          - rollback
       profile:
         description: "Store build profile (v2-preview: TestFlight + Play closed track v2; build only)"
         required: true
@@ -34,6 +35,10 @@ on:
         type: string
       message:
         description: "OTA update message (mode=update only)"
+        required: false
+        type: string
+      update_id:
+        description: "Earlier OTA update to serve again (mode=rollback, single platform). Blank rolls back to the update embedded in the store build"
         required: false
         type: string
   push:
@@ -72,9 +77,15 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - name: Reject preview OTA updates
-        if: github.event_name == 'workflow_dispatch' && inputs.profile == 'v2-preview' && inputs.mode == 'update'
+        if: github.event_name == 'workflow_dispatch' && inputs.profile == 'v2-preview' && inputs.mode != 'build'
         run: |
           echo "::error::V2 previews use store builds only. Select mode=build."
+          exit 1
+
+      - name: Reject cross-platform update rollbacks
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback' && inputs.update_id != '' && inputs.platform == 'all'
+        run: |
+          echo "::error::Update IDs differ per platform. Select the platform the update was published for."
           exit 1
 
       - id: expo-token
@@ -158,23 +169,20 @@ jobs:
         if: steps.expo-token.outputs.present == 'true'
         env:
           MOBILE_PLATFORM: ${{ inputs.platform || 'all' }}
-          MOBILE_MODE: ${{ inputs.mode || 'auto' }}
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           node --input-type=module -e '
             import fs from "node:fs";
             const include = [
-              { platform: "ios", runner: "depot-macos-26", legacy: false },
-              { platform: "android", runner: "depot-ubuntu-24.04-8", legacy: false },
-              { platform: "ios", runner: "depot-ubuntu-24.04-8", legacy: true },
-            ].filter(({ platform, legacy }) =>
-              (process.env.MOBILE_PLATFORM === "all" || platform === process.env.MOBILE_PLATFORM) &&
-              (!legacy || process.env.MOBILE_MODE !== "build"));
+              { platform: "ios", runner: "depot-macos-26" },
+              { platform: "android", runner: "depot-ubuntu-24.04-8" },
+            ].filter(({ platform }) =>
+              process.env.MOBILE_PLATFORM === "all" || platform === process.env.MOBILE_PLATFORM);
             fs.appendFileSync(process.env.GITHUB_OUTPUT, "matrix=" + JSON.stringify({ include }) + "\n");
           '
 
   production:
-    name: Mobile ${{ matrix.platform }} ${{ matrix.legacy && 'existing binaries' || inputs.profile || 'production' }}
+    name: Mobile ${{ matrix.platform }} ${{ inputs.profile || 'production' }}
     needs: prepare
     if: needs.prepare.outputs.enabled == 'true'
     strategy:
@@ -246,7 +254,7 @@ jobs:
           echo "compatible=$([[ "$compatible_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - id: build
         name: Compile and sign on Depot
-        if: ${{ !matrix.legacy && (inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true')) }}
+        if: ${{ inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true') }}
         uses: ./.github/actions/build-mobile
         with:
           platform: ${{ matrix.platform }}
@@ -282,20 +290,48 @@ jobs:
               version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
               sha: process.env.MOBILE_SOURCE_SHA, url: process.env.MOBILE_ARTIFACT_URL,
             });
-      - name: Publish compatible OTA update
+      - id: ota
+        name: Check OTA compatibility
         if: env.MOBILE_PROFILE == 'production' && (github.event_name == 'push' || inputs.mode == 'update')
-        working-directory: apps/mobile
         env:
           MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
           BUILT_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
           DEPOT_COMPATIBLE: ${{ steps.history.outputs.compatible }}
           CLOUD_COMPATIBLE: ${{ steps.legacy.outputs.compatible }}
-          UPDATE_MESSAGE: ${{ inputs.message }}
         run: |
           if [ "$DEPOT_COMPATIBLE" != true ] && [ "$CLOUD_COMPATIBLE" != true ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
             echo "$MOBILE_PLATFORM: no completed build matches $MOBILE_FINGERPRINT; OTA skipped." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
+      - id: ota_token
+        name: Mint update repository token
+        if: steps.ota.outputs.publish == 'true' || inputs.mode == 'rollback'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: supacode-mobile-updates
+      - name: Publish compatible OTA update
+        if: steps.ota.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ steps.ota_token.outputs.token }}
+          MOBILE_OTA_SIGNING_KEY: ${{ secrets.MOBILE_OTA_SIGNING_KEY }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
+        run: |
           message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
-          eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
-            --message "$message" --non-interactive
+          node scripts/mobile-ota.ts publish --platform "$MOBILE_PLATFORM" --channel production \
+            --runtime-version "$MOBILE_FINGERPRINT" --message "$message"
+      - name: Roll back production OTA
+        if: inputs.mode == 'rollback'
+        env:
+          GH_TOKEN: ${{ steps.ota_token.outputs.token }}
+          MOBILE_OTA_SIGNING_KEY: ${{ secrets.MOBILE_OTA_SIGNING_KEY }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+          UPDATE_ID: ${{ inputs.update_id }}
+        run: |
+          node scripts/mobile-ota.ts rollback --platform "$MOBILE_PLATFORM" --channel production \
+            --runtime-version "$MOBILE_FINGERPRINT" ${UPDATE_ID:+--update-id "$UPDATE_ID"}
