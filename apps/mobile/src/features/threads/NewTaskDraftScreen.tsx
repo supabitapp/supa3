@@ -100,6 +100,7 @@ import {
   composerDraftsAtom,
   mergeComposerDraftContent,
   restoreComposerDraftSnapshot,
+  setStickyNewTaskProject,
   updateComposerDraftSettings,
   scheduleUnusedComposerAttachmentCleanup,
   type ComposerDraft,
@@ -724,6 +725,12 @@ export function NewTaskDraftScreen(props: {
           });
         }
         appliedInitialProjectKeyRef.current = directProjectKey;
+        // Recorded here too: when the route's project is already the
+        // provider's fallback selection, setProject below is skipped.
+        setStickyNewTaskProject({
+          environmentId: directProject.environmentId,
+          projectId: directProject.id,
+        });
         if (
           selectedProject?.environmentId === directProject.environmentId &&
           selectedProject.id === directProject.id

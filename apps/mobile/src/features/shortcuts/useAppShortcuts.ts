@@ -9,9 +9,11 @@ import {
   type RecentThreadShortcut,
 } from "../../persistence/imperative";
 import { useThreadShell } from "../../state/entities";
+import { useStartNewTask } from "../threads/use-start-new-task";
 import {
   activeThreadRef,
   buildShortcutActions,
+  NEW_TASK_SHORTCUT_ID,
   shortcutHref,
   withRecentThreadShortcut,
 } from "./appShortcuts";
@@ -29,28 +31,34 @@ export function useAppShortcuts(state: NavigationState): void {
 
 function useShortcutNavigation(): void {
   const linkTo = useLinkTo();
+  const startNewTask = useStartNewTask();
   const handledInitialAction = useRef(false);
 
   useEffect(() => {
+    // "New task" goes through the compose action so it opens the last project.
+    const open = (action: QuickActions.Action) => {
+      if (action.id === NEW_TASK_SHORTCUT_ID) {
+        startNewTask();
+        return;
+      }
+      const href = shortcutHref(action);
+      if (href !== null) {
+        linkTo(href);
+      }
+    };
     // Cold start: the tapped shortcut arrives as the launch action, before
     // any listener can fire. Navigating from here pushes the target over the
     // initial Home route, so back returns home instead of exiting the app.
     if (!handledInitialAction.current) {
       handledInitialAction.current = true;
-      const initialHref = QuickActions.initial ? shortcutHref(QuickActions.initial) : null;
-      if (initialHref !== null) {
-        linkTo(initialHref);
+      if (QuickActions.initial) {
+        open(QuickActions.initial);
       }
     }
 
-    const subscription = QuickActions.addListener((action) => {
-      const href = shortcutHref(action);
-      if (href !== null) {
-        linkTo(href);
-      }
-    });
+    const subscription = QuickActions.addListener(open);
     return () => subscription.remove();
-  }, [linkTo]);
+  }, [linkTo, startNewTask]);
 }
 
 function useRecentThreadShortcutSync(state: NavigationState): void {
