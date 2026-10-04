@@ -10,8 +10,8 @@ import {
 
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { cn } from "../../lib/utils";
-import { lastRunLabel, relativeLabel, scheduleLabel } from "../automations/automations.logic";
-import { useRelativeTimeTick } from "../settings/settingsLayout";
+import { useNowMinuteMs } from "../../hooks/useNowMinute";
+import { lastRunLabel, nextRunLabel, scheduleLabel } from "../automations/automations.logic";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -77,7 +77,7 @@ export function ThreadAutomationsPanel(props: {
   });
   const navigate = useNavigate();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
-  const now = useRelativeTimeTick(60_000);
+  const now = useNowMinuteMs();
 
   const boundTasks = (tasksQuery.data?.tasks ?? []).filter(
     (task) => task.threadId === props.threadId,
@@ -170,12 +170,7 @@ export function ThreadAutomationsPanel(props: {
                 {task.title}
               </span>
               <p className="truncate text-2xs text-muted-foreground">
-                {scheduleLabel(task.schedule)}
-                {task.enabled && task.nextRunAt !== null
-                  ? ` · next ${relativeLabel(task.nextRunAt, now)}`
-                  : task.enabled
-                    ? ""
-                    : " · paused"}
+                {scheduleLabel(task.schedule)} · {nextRunLabel(task, now)}
               </p>
             </div>
             <Tooltip>

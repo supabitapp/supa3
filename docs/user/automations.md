@@ -8,12 +8,12 @@ Automations send a prompt to an agent on a schedule. On web and desktop, open
 
 Select **New automation**, then choose the environment it runs on, its project,
 workspace, model, and prompt. An automation runs at fixed times or on an interval.
-Fixed times use the environment's time zone, which may differ from your device's,
-so the list marks them as environment time. A fixed-time run more than ten minutes
-late, for example while the environment was asleep, is skipped until its next time.
+Fixed times use the environment's time zone, which may differ from your device's.
+A fixed-time run more than ten minutes late, for example while the environment was
+asleep, is skipped until its next time.
 
-An automation an agent schedules from a thread posts back into that thread. Other
-automations start a new thread each run.
+Automations an agent schedules post back into the agent's thread by default.
+Other automations start a new thread each run.
 
 ## Manage automations
 

@@ -37,7 +37,6 @@ import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../settings/settingsLayout";
-import type { ResolvedSettingsScope } from "../settings/settingsScope";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -57,16 +56,16 @@ import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { ToggleGroup, Toggle } from "../ui/toggle-group";
 import {
-  matchesScheduledTaskScope,
+  inProjectFilter,
   scheduledTaskDefaultModel,
   taskToDraft,
+  WEEKDAY_LABELS,
   type DraftState,
   type WorkspaceMode,
 } from "./automations.logic";
 
 /** JS day-of-week (0 = Sunday) rendered Monday-first, matching how people read a week. */
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const WEEKDAY_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
 const WORKSPACE_MODE_LABELS: Record<WorkspaceMode, string> = {
@@ -99,23 +98,16 @@ const EMPTY_DRAFT: DraftState = {
 /** Labelled field: a caption sitting above its control. */
 function Field({
   label,
-  hint,
   htmlFor,
   children,
 }: {
   label: string;
-  hint?: string;
   htmlFor?: string;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-baseline justify-between" htmlFor={htmlFor}>
-        <span>{label}</span>
-        {hint ? (
-          <span className="font-normal text-2xs text-muted-foreground/80">{hint}</span>
-        ) : null}
-      </Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
   );
@@ -144,19 +136,19 @@ function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
 }
 
 /**
- * Creates or edits one automation. `scope` narrows the projects it offers, so
- * a project-filtered page creates into that project by default.
+ * Creates or edits one automation. `projectKeys` narrows the projects it
+ * offers, so a project-filtered page creates into that project by default.
  */
 export function AutomationEditorDialog({
   initialEnvironmentId,
   task,
-  scope,
+  projectKeys,
   connectedEnvironments,
   onClose,
 }: {
   readonly initialEnvironmentId: EnvironmentId;
   readonly task: ScheduledTask | null;
-  readonly scope: ResolvedSettingsScope;
+  readonly projectKeys: ReadonlySet<string> | null;
   readonly connectedEnvironments: readonly EnvironmentPresentation[];
   readonly onClose: () => void;
 }) {
@@ -173,9 +165,9 @@ export function AutomationEditorDialog({
       allProjects.filter(
         (project) =>
           project.environmentId === environmentId &&
-          matchesScheduledTaskScope(scope, environmentId, project.id),
+          inProjectFilter(projectKeys, environmentId, project.id),
       ),
-    [allProjects, environmentId, scope],
+    [allProjects, environmentId, projectKeys],
   );
   const settings = useEnvironmentSettings(environmentId);
   const providers =

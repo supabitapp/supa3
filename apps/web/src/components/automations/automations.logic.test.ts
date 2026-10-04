@@ -9,19 +9,20 @@ import {
 } from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type {
-  SidebarProjectGroupMember,
-  SidebarProjectSnapshot,
+import {
+  projectGroupMemberKeys,
+  type SidebarProjectGroupMember,
+  type SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
-import { resolveSettingsScope, type SettingsScopeSearch } from "../settings/settingsScope";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
+  inProjectFilter,
   lastRunLabel,
+  nextRunLabel,
   relativeLabel,
   scheduleLabel,
   scheduledTaskDefaultModel,
-  matchesScheduledTaskScope,
   taskToDraft,
   validateAutomationsSearch,
 } from "./automations.logic";
@@ -89,50 +90,24 @@ const tasks = [first, second, third, other, sameIdElsewhere].map((project, index
   projectId: project.id,
 }));
 
-describe("scheduled task settings scope", () => {
-  it.each<{ search: SettingsScopeSearch; expected: string[] }>([
-    { search: {}, expected: ["task-0", "task-1", "task-2", "task-3", "task-4"] },
-    { search: { machine: laptopId }, expected: ["task-0", "task-1"] },
-    { search: { project: "supacode" }, expected: ["task-0", "task-1", "task-2"] },
-    { search: { project: "supacode", machine: serverId }, expected: ["task-2"] },
-    { search: { project: "supacode", checkout: second.physicalProjectKey }, expected: ["task-1"] },
-    { search: { project: "missing" }, expected: [] },
-    { search: { machine: "removed" }, expected: [] },
-    { search: { project: "supacode", checkout: "removed" }, expected: [] },
-    { search: { project: "other", machine: laptopId }, expected: [] },
-  ])("lists only matching tasks for $search", ({ search, expected }) => {
-    const scope = resolveSettingsScope(search, groups, environments);
+describe("automations project filter", () => {
+  it("matches every checkout of a grouped project across environments", () => {
+    const keys = projectGroupMemberKeys(groups[0]!);
     expect(
       tasks.flatMap((task) =>
-        matchesScheduledTaskScope(scope, task.environmentId, task.projectId) ? [task.id] : [],
+        inProjectFilter(keys, task.environmentId, task.projectId) ? [task.id] : [],
       ),
-    ).toEqual(expected);
+    ).toEqual(["task-0", "task-1", "task-2"]);
   });
 
-  it("keeps tasks with removed projects manageable at environment scope", () => {
-    const removedProject = ProjectId.make("removed");
-    expect(
-      matchesScheduledTaskScope(
-        resolveSettingsScope({}, groups, environments),
-        laptopId,
-        removedProject,
-      ),
-    ).toBe(true);
-    expect(
-      matchesScheduledTaskScope(
-        resolveSettingsScope({ project: "supacode" }, groups, environments),
-        laptopId,
-        removedProject,
-      ),
-    ).toBe(false);
+  it("does not match an unrelated environment's project that shares an ID", () => {
+    const keys = projectGroupMemberKeys(groups[0]!);
+    expect(inProjectFilter(keys, laptopId, first.id)).toBe(true);
+    expect(inProjectFilter(keys, serverId, sameIdElsewhere.id)).toBe(false);
   });
 
-  it("does not offer an unrelated environment's same-ID project when creating a task", () => {
-    const scope = resolveSettingsScope({ project: "supacode" }, groups, environments);
-    const serverProjects = [third, other, sameIdElsewhere];
-    expect(
-      serverProjects.filter((project) => matchesScheduledTaskScope(scope, serverId, project.id)),
-    ).toEqual([third]);
+  it("keeps tasks of removed projects when no project is selected", () => {
+    expect(inProjectFilter(null, laptopId, ProjectId.make("removed"))).toBe(true);
   });
 });
 
@@ -285,7 +260,6 @@ describe("automation labels", () => {
   });
 
   it.each([
-    [null, "Not scheduled"],
     [at(30_000), "in under a minute"],
     [at(5 * 60_000), "in 5m"],
     [at(3 * 3_600_000), "in 3h"],
@@ -296,6 +270,12 @@ describe("automation labels", () => {
     expect(relativeLabel(value, now)).toBe(expected);
   });
 
+  it("says when the next run is, or why there is none", () => {
+    expect(nextRunLabel({ enabled: true, nextRunAt: at(5 * 60_000) }, now)).toBe("Next run in 5m");
+    expect(nextRunLabel({ enabled: true, nextRunAt: null }, now)).toBe("Not scheduled");
+    expect(nextRunLabel({ enabled: false, nextRunAt: null }, now)).toBe("Paused");
+  });
+
   it("describes delivery, not agent completion", () => {
     expect(lastRunLabel({ lastRunStatus: "never", lastRunAt: null }, now)).toBeNull();
     expect(lastRunLabel({ lastRunStatus: "running", lastRunAt: at(0) }, now)).toBe("Sending…");
@@ -304,6 +284,10 @@ describe("automation labels", () => {
     );
     expect(lastRunLabel({ lastRunStatus: "failed", lastRunAt: at(-60_000) }, now)).toBe(
       "Couldn't send",
+    );
+    // A run that lands between clock ticks has a timestamp after `now`.
+    expect(lastRunLabel({ lastRunStatus: "succeeded", lastRunAt: at(20_000) }, now)).toBe(
+      "Sent just now",
     );
   });
 });

@@ -9,7 +9,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId, ScheduledTask, ScheduledTaskId } from "@supacode/contracts";
 import { resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
@@ -19,8 +19,9 @@ import {
 } from "@supacode/client-runtime/state/runtime";
 
 import { isElectron } from "../../env";
+import { useNowMinuteMs } from "../../hooks/useNowMinute";
 import { ensureLocalApi } from "../../localApi";
-import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
+import { projectGroupMemberKeys, type SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -39,9 +40,7 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { selectScopedSettingsEnvironments } from "../settings/scopedSettings";
-import { SettingsRow, SettingsSection, useRelativeTimeTick } from "../settings/settingsLayout";
-import { resolveSettingsScope, type ResolvedSettingsScope } from "../settings/settingsScope";
+import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { Badge } from "../ui/badge";
 import { Button, InlineButton } from "../ui/button";
@@ -59,13 +58,9 @@ import { SidebarInset } from "../ui/sidebar";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AutomationEditorDialog } from "./AutomationEditorDialog";
-import {
-  lastRunLabel,
-  matchesScheduledTaskScope,
-  relativeLabel,
-  scheduleLabel,
-  type AutomationsSearch,
-} from "./automations.logic";
+import { inProjectFilter, lastRunLabel, nextRunLabel, scheduleLabel } from "./automations.logic";
+
+const route = getRouteApi("/_chat/automations");
 
 const ALL_PROJECTS = "";
 
@@ -80,34 +75,39 @@ function statusVariant(status: ScheduledTask["lastRunStatus"]) {
  * Every environment's scheduled tasks in one list. The optional project filter
  * narrows both the list and the projects a new automation can target.
  */
-export function AutomationsPage({
-  search,
-  onProjectChange,
-  onTaskLinkClosed,
-}: {
-  readonly search: AutomationsSearch;
-  readonly onProjectChange: (project: string | undefined) => void;
-  readonly onTaskLinkClosed: () => void;
-}) {
+export function AutomationsPage() {
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
   const groups = useSettingsProjectGroups();
   const { environments: availableEnvironments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const scope = useMemo(
-    () => resolveSettingsScope({ project: search.project }, groups, availableEnvironments),
-    [availableEnvironments, groups, search.project],
+  const filteredGroup = groups.find((group) => group.projectKey === search.project) ?? null;
+  const filteredProjectMissing = search.project !== undefined && filteredGroup === null;
+  const projectKeys = useMemo(
+    () => (filteredGroup ? projectGroupMemberKeys(filteredGroup) : null),
+    [filteredGroup],
   );
-  const { environments, connectedEnvironments, environment } = selectScopedSettingsEnvironments(
-    scope,
-    availableEnvironments,
-    primaryEnvironmentId,
+  // A filtered project's environments; none when the project is gone.
+  const environments = availableEnvironments.filter(
+    (environment) =>
+      search.project === undefined ||
+      filteredGroup?.memberProjectRefs.some(
+        (ref) => ref.environmentId === environment.environmentId,
+      ) === true,
   );
+  const connectedEnvironments = environments.filter(
+    (environment) =>
+      environment.connection.phase === "connected" && environment.serverConfig !== null,
+  );
+  const defaultEnvironment =
+    connectedEnvironments.find(
+      (environment) => environment.environmentId === primaryEnvironmentId,
+    ) ?? connectedEnvironments[0];
   const projectNameByKey = useMemo(
     () =>
       new Map(
         groups.flatMap((group) =>
-          group.memberProjects.map(
-            (member) => [`${member.environmentId}:${member.id}`, group.displayName] as const,
-          ),
+          [...projectGroupMemberKeys(group)].map((key) => [key, group.displayName] as const),
         ),
       ),
     [groups],
@@ -120,11 +120,15 @@ export function AutomationsPage({
     setEditor({ environmentId, task });
   }, []);
   const hasTaskLink = search.environmentId !== undefined || search.taskId !== undefined;
-  const closeEditor = useCallback(() => {
+  const closeEditor = () => {
     setEditor(null);
-    if (hasTaskLink) onTaskLinkClosed();
-  }, [hasTaskLink, onTaskLinkClosed]);
-  const linkEnvironmentId = search.environmentId ?? environment?.environmentId;
+    if (!hasTaskLink) return;
+    void navigate({
+      search: (previous) => (previous.project === undefined ? {} : { project: previous.project }),
+      replace: true,
+    });
+  };
+  const linkEnvironmentId = search.environmentId ?? defaultEnvironment?.environmentId;
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
@@ -139,16 +143,19 @@ export function AutomationsPage({
               <AutomationProjectFilter
                 groups={groups}
                 value={search.project}
-                onChange={onProjectChange}
+                onChange={(project) =>
+                  void navigate({ search: project === undefined ? {} : { project } })
+                }
               />
             </WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
           <Button
             size="xs"
             variant="outline"
-            disabled={!environment}
+            disabled={!defaultEnvironment}
             onClick={() =>
-              environment && setEditor({ environmentId: environment.environmentId, task: null })
+              defaultEnvironment &&
+              setEditor({ environmentId: defaultEnvironment.environmentId, task: null })
             }
           >
             <PlusIcon />
@@ -158,8 +165,8 @@ export function AutomationsPage({
 
         <div className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto">
           <WorkspacePageContainer className="gap-8">
-            {scope.kind === "unavailable" ? (
-              <p className="text-sm text-muted-foreground">{scope.message}</p>
+            {filteredProjectMissing ? (
+              <p className="text-sm text-muted-foreground">This project is no longer available.</p>
             ) : environments.length === 0 ? (
               <Empty>
                 <EmptyHeader>
@@ -175,7 +182,7 @@ export function AutomationsPage({
                 <AutomationEnvironmentSection
                   key={`${entry.environmentId}:${search.taskId ?? ""}`}
                   environment={entry}
-                  scope={scope}
+                  projectKeys={projectKeys}
                   showEnvironmentHeading={environments.length > 1}
                   projectNameByKey={projectNameByKey}
                   taskId={linkEnvironmentId === entry.environmentId ? search.taskId : undefined}
@@ -191,7 +198,7 @@ export function AutomationsPage({
           key={`${editor.environmentId}:${editor.task?.id ?? "new"}`}
           initialEnvironmentId={editor.environmentId}
           task={editor.task}
-          scope={scope}
+          projectKeys={projectKeys}
           connectedEnvironments={connectedEnvironments}
           onClose={closeEditor}
         />
@@ -245,14 +252,14 @@ function AutomationProjectFilter({
 
 function AutomationEnvironmentSection({
   environment,
-  scope,
+  projectKeys,
   showEnvironmentHeading,
   projectNameByKey,
   taskId,
   onEdit,
 }: {
   readonly environment: EnvironmentPresentation;
-  readonly scope: ResolvedSettingsScope;
+  readonly projectKeys: ReadonlySet<string> | null;
   readonly showEnvironmentHeading: boolean;
   readonly projectNameByKey: ReadonlyMap<string, string>;
   readonly taskId?: ScheduledTaskId | undefined;
@@ -269,7 +276,7 @@ function AutomationEnvironmentSection({
       : null,
   );
   const tasks = tasksQuery.data?.tasks.filter((task) =>
-    matchesScheduledTaskScope(scope, environment.environmentId, task.projectId),
+    inProjectFilter(projectKeys, environment.environmentId, task.projectId),
   );
   const linkedTask = tasks?.find((task) => task.id === taskId);
   const openedLink = useRef(false);
@@ -279,7 +286,7 @@ function AutomationEnvironmentSection({
       onEdit(environment.environmentId, linkedTask);
     }
   }, [environment.environmentId, linkedTask, onEdit]);
-  const now = useRelativeTimeTick(60_000);
+  const now = useNowMinuteMs();
   return (
     <SettingsSection
       title={environment.label}
@@ -406,11 +413,7 @@ function AutomationRow({
               projectName ?? "Project removed",
               target,
               scheduleLabel(task.schedule),
-              task.enabled
-                ? task.nextRunAt
-                  ? `Next run ${relativeLabel(task.nextRunAt, now)}`
-                  : "Not scheduled"
-                : "Paused",
+              nextRunLabel(task, now),
             ].join(" · ")}
           </span>
           {lastRun ? <Badge variant={statusVariant(task.lastRunStatus)}>{lastRun}</Badge> : null}

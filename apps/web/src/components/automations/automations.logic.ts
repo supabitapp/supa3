@@ -1,3 +1,4 @@
+import { scopedProjectKey, scopeProjectRef } from "@supacode/client-runtime/environment";
 import {
   EnvironmentId,
   type ProjectId,
@@ -9,28 +10,29 @@ import {
   type ProviderInteractionMode,
   type ServerSettings,
 } from "@supacode/contracts";
+import { redirect } from "@tanstack/react-router";
 
 import {
   resolveProjectSettings,
   type LegacyProjectSettingsFields,
 } from "@supacode/shared/projectSettings";
 import type { ProviderInstanceEntry } from "../../providerInstances";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
 
-import type { ResolvedSettingsScope } from "../settings/settingsScope";
-
-/** Project IDs belong to an environment, including when a grouped project spans machines. */
-export function matchesScheduledTaskScope(
-  scope: ResolvedSettingsScope,
+/**
+ * `projectKeys` holds the filtered project group's checkouts (see
+ * `projectGroupMemberKeys`); null is every project. Project IDs are local to
+ * an environment, so a match needs both.
+ */
+export function inProjectFilter(
+  projectKeys: ReadonlySet<string> | null,
   environmentId: EnvironmentId,
   projectId: ProjectId,
 ): boolean {
-  if (scope.kind === "unavailable" || !scope.environmentIds.includes(environmentId)) return false;
-  if (scope.kind === "project" || scope.kind === "checkout") {
-    return scope.members.some(
-      (member) => member.environmentId === environmentId && member.id === projectId,
-    );
-  }
-  return true;
+  return (
+    projectKeys === null ||
+    projectKeys.has(scopedProjectKey(scopeProjectRef(environmentId, projectId)))
+  );
 }
 
 /**
@@ -56,7 +58,20 @@ export function validateAutomationsSearch(raw: Record<string, unknown>): Automat
   };
 }
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+/**
+ * Scheduled tasks moved from Settings to Automations. Old links keep their
+ * project filter and task; settings machine and checkout scopes have no
+ * equivalent there.
+ */
+export function redirectScheduledTasksToAutomations({
+  search,
+}: {
+  readonly search: Record<string, unknown>;
+}): never {
+  throw redirect({ to: "/automations", search: validateAutomationsSearch(search), replace: true });
+}
+
+export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 /** Fixed times run on the environment's clock, which may not be this device's. */
 export function scheduleLabel(schedule: ScheduledTaskSchedule): string {
@@ -76,25 +91,24 @@ export function scheduleLabel(schedule: ScheduledTaskSchedule): string {
   return `${days} at ${schedule.timeOfDay} (environment time)`;
 }
 
-/** "in 5m" for upcoming runs, "5m ago" for past ones. */
-export function relativeLabel(value: string | null, now: number): string {
-  const time = value ? new Date(value).getTime() : Number.NaN;
-  if (Number.isNaN(time)) return "Not scheduled";
-  const diffMs = time - now;
-  if (diffMs <= 0) {
-    const minutes = Math.floor(-diffMs / 60_000);
-    if (minutes < 1) return "just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  }
+/** "in 5m" for upcoming instants, "5m ago" for past ones. */
+export function relativeLabel(value: string, now: number): string {
+  const diffMs = Date.parse(value) - now;
+  if (!(diffMs > 0)) return formatRelativeTimeLabel(value, now);
   const minutes = Math.ceil(diffMs / 60_000);
   if (minutes < 2) return "in under a minute";
   if (minutes < 60) return `in ${minutes}m`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `in ${hours}h`;
   return `in ${Math.round(hours / 24)}d`;
+}
+
+export function nextRunLabel(
+  task: Pick<ScheduledTask, "enabled" | "nextRunAt">,
+  now: number,
+): string {
+  if (!task.enabled) return "Paused";
+  return task.nextRunAt ? `Next run ${relativeLabel(task.nextRunAt, now)}` : "Not scheduled";
 }
 
 /**
@@ -113,7 +127,8 @@ export function lastRunLabel(
     case "failed":
       return "Couldn't send";
     case "succeeded":
-      return task.lastRunAt ? `Sent ${relativeLabel(task.lastRunAt, now)}` : "Sent";
+      // Past-only: a run that finished after the last clock tick reads "just now".
+      return task.lastRunAt ? `Sent ${formatRelativeTimeLabel(task.lastRunAt, now)}` : "Sent";
   }
 }
 

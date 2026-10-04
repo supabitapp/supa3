@@ -11,7 +11,10 @@ import { describe, expect, it } from "vite-plus/test";
 import { resolveSettingsScope } from "./settingsScope";
 import { retainSettingsScope, validateSettingsRouteSearch } from "./settingsScopeNavigation";
 
-import { validateAutomationsSearch } from "../automations/automations.logic";
+import {
+  redirectScheduledTasksToAutomations,
+  validateAutomationsSearch,
+} from "../automations/automations.logic";
 
 const checkoutSearch = {
   project: "repository:supacode",
@@ -52,13 +55,7 @@ function createSettingsRouter(initialEntry = "/settings/general") {
     getParentRoute: () => settings,
     path: "scheduled-tasks",
     validateSearch: validateAutomationsSearch,
-    beforeLoad: ({ search }) => {
-      throw redirect({
-        to: "/automations",
-        search: validateAutomationsSearch(search),
-        replace: true,
-      });
-    },
+    beforeLoad: redirectScheduledTasksToAutomations,
   });
   const automations = createRoute({
     getParentRoute: () => root,

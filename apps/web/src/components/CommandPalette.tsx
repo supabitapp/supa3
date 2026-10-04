@@ -451,6 +451,19 @@ function overlayModeForCommand(command: string | null): SearchOverlayMode | null
     : null;
 }
 
+// Shortcuts that open a page work from anywhere, so the palette, which is
+// mounted over every route, handles them.
+const PAGE_BY_COMMAND = {
+  "usage.open": "/usage",
+  "automations.open": "/automations",
+} as const;
+
+function pageForCommand(command: string | null) {
+  return command !== null && command in PAGE_BY_COMMAND
+    ? PAGE_BY_COMMAND[command as keyof typeof PAGE_BY_COMMAND]
+    : null;
+}
+
 const APPEARANCE_OPTIONS = [
   { mode: "system", label: "System", icon: MonitorIcon },
   { mode: "light", label: "Light", icon: SunIcon },
@@ -561,18 +574,12 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         });
         return;
       }
-      if (command === "usage.open") {
+      const page = pageForCommand(command);
+      if (page !== null) {
         event.preventDefault();
         event.stopPropagation();
         setOpen(false);
-        void navigate({ to: "/usage" });
-        return;
-      }
-      if (command === "automations.open") {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        void navigate({ to: "/automations" });
+        void navigate({ to: page });
         return;
       }
       const mode = overlayModeForCommand(command);

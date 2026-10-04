@@ -118,6 +118,7 @@ import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import {
   buildSidebarProjectSnapshots,
+  projectGroupMemberKeys,
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
@@ -127,10 +128,9 @@ import {
   useThreadSelectionStore,
 } from "../threadSelectionStore";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
-import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -192,7 +192,6 @@ import {
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
-  shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
   shouldRecedeSidebarThread,
   resolveWorkingStartedAt,
@@ -2298,7 +2297,7 @@ export default function Sidebar() {
       );
     },
   });
-  const newThreadContext = useHandleNewThread();
+  const handleNewThread = useNewThreadHandler();
   const openAddProjectCommandPalette = useCallback(
     () => openCommandPalette({ open: "add-project" }),
     [],
@@ -2478,14 +2477,7 @@ export default function Sidebar() {
     [projectGroups, projectScopeKey],
   );
   const scopedProjectKeys = useMemo(
-    () =>
-      scopedProjectGroup === null
-        ? null
-        : new Set(
-            scopedProjectGroup.memberProjectRefs.map(
-              (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
-            ),
-          ),
+    () => (scopedProjectGroup === null ? null : projectGroupMemberKeys(scopedProjectGroup)),
     [scopedProjectGroup],
   );
   // A persisted scope whose project is gone falls back to all projects, but
@@ -2878,7 +2870,7 @@ export default function Sidebar() {
   const threadByKeyRef = useRef(threadByKey);
   // handleNewThread is inherently unstable (depends on the projects list);
   // a ref keeps it out of attemptSettle's dependency array.
-  const handleNewThreadRef = useRef(newThreadContext.handleNewThread);
+  const handleNewThreadRef = useRef(handleNewThread);
   const settledThreadKeys = useMemo(
     () =>
       new Set(
@@ -2902,7 +2894,7 @@ export default function Sidebar() {
   useLayoutEffect(() => {
     orderedThreadKeysRef.current = orderedThreadKeys;
     threadByKeyRef.current = threadByKey;
-    handleNewThreadRef.current = newThreadContext.handleNewThread;
+    handleNewThreadRef.current = handleNewThread;
     settledThreadKeysRef.current = settledThreadKeys;
     snoozedThreadKeysRef.current = snoozedThreadKeys;
   });
@@ -4591,59 +4583,6 @@ export default function Sidebar() {
     updateThreadJumpHintsVisibility(shouldShowJumpHintsNow);
   }, [shouldShowJumpHintsNow, updateThreadJumpHintsVisibility]);
 
-  // New thread defaults to the project you're in (active thread's project,
-  // falling back to the top project) — same resolution the command palette
-  // uses. The command palette already offers a "New thread in..." submenu
-  // for multi-project setups.
-  const handleNewThreadClick = useCallback(
-    (event?: ReactMouseEvent) => {
-      // One project: nothing to pick, create immediately. Shift+click creates
-      // directly in the current project even with several projects, skipping
-      // the palette picker.
-      if (shouldCreateNewThreadInCurrentProject(event?.shiftKey ?? false, projectGroups.length)) {
-        if (isMobile) setOpenMobile(false);
-        void startNewThreadFromContext({
-          activeDraftThread: newThreadContext.activeDraftThread,
-          activeThread: newThreadContext.activeThread ?? undefined,
-          defaultProjectRef: newThreadContext.defaultProjectRef,
-          handleNewThread: newThreadContext.handleNewThread,
-        });
-        return;
-      }
-      if (isMobile) setOpenMobile(false);
-      openCommandPalette({ open: "new-thread-in" });
-    },
-    [isMobile, newThreadContext, projectGroups.length, setOpenMobile],
-  );
-
-  // The button mirrors chat.new: in multi-project setups both route through
-  // the command palette's "New thread in..." picker, and in single-project
-  // setups both create immediately. In multi-project setups the label is only
-  // the picker's shortcut: falling back to chat.newLocal would advertise the
-  // same shortcut for both the picker and direct create. In single-project
-  // setups both commands create directly, so chat.newLocal is a valid
-  // fallback. The second tooltip line (multi-project only) advertises
-  // shift+click and its keyboard twin chat.newLocal for direct create.
-  const newThreadShortcutLabel =
-    shortcutLabelForCommand(keybindings, "chat.new") ??
-    (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
-  const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
-  const newThreadLabel = newThreadShortcutLabel
-    ? `New thread (${newThreadShortcutLabel})`
-    : "New thread";
-  // Shift+click only matters once there is more than one project to pick.
-  const newThreadTooltip =
-    projectGroups.length > 1 ? (
-      <span className="flex flex-col gap-0.5">
-        <span>{newThreadLabel}</span>
-        <span className="text-muted-foreground">
-          New thread in current project: Shift+click
-          {newThreadInProjectShortcutLabel ? ` (${newThreadInProjectShortcutLabel})` : ""}
-        </span>
-      </span>
-    ) : newThreadShortcutLabel ? (
-      newThreadLabel
-    ) : null;
   return (
     <>
       <ThreadContextDragGhost />
@@ -4655,11 +4594,7 @@ export default function Sidebar() {
           // header and would otherwise paint across its rows.
           <SidebarGroup className="z-[1]">
             <div className="flex flex-col gap-2">
-              <SidebarPrimaryNavigation
-                onNewThread={handleNewThreadClick}
-                newThreadDisabled={projects.length === 0}
-                newThreadTooltip={newThreadTooltip}
-              />
+              <SidebarPrimaryNavigation projectGroupCount={projectGroups.length} />
               {projectGroups.length > 0 ? (
                 <SidebarThreadHeader
                   rowRef={threadHeaderRef}

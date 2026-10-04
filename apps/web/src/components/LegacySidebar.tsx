@@ -123,8 +123,7 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { useHandleNewThread, useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -2888,7 +2887,6 @@ interface SidebarProjectsContentProps {
   routeThreadKey: string | null;
   openPullRequestsInRightPanel: boolean;
   newThreadShortcutLabel: string | null;
-  onNewThreadFromContext: () => void;
   threadJumpLabelByKey: ReadonlyMap<string, string>;
   attachThreadListAutoAnimateRef: (node: HTMLElement | null) => void;
   expandThreadListForProject: (projectKey: string) => void;
@@ -2932,7 +2930,6 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     routeThreadKey,
     openPullRequestsInRightPanel,
     newThreadShortcutLabel,
-    onNewThreadFromContext,
     threadJumpLabelByKey,
     attachThreadListAutoAnimateRef,
     expandThreadListForProject,
@@ -2969,13 +2966,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         // Lifted above the stage backdrop, whose fade bleeds below the
         // header and would otherwise paint across its rows.
         <SidebarGroup className="z-[1]">
-          <SidebarPrimaryNavigation
-            onNewThread={onNewThreadFromContext}
-            newThreadDisabled={projectsLength === 0}
-            newThreadTooltip={
-              newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : null
-            }
-          />
+          <SidebarPrimaryNavigation projectGroupCount={sortedProjects.length} />
         </SidebarGroup>
       }
     >
@@ -3133,20 +3124,7 @@ export default function LegacySidebar() {
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const updateSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
-  const newThreadContext = useHandleNewThread();
   const { archiveThread, deleteThread, markThreadUnread } = useThreadActions();
-  const { isMobile, setOpenMobile } = useSidebar();
-  // The legacy sidebar keeps chat.new's immediate create in the current
-  // project instead of routing through the palette's project picker.
-  const handleNewThreadFromContext = useCallback(() => {
-    if (isMobile) setOpenMobile(false);
-    void startNewThreadFromContext({
-      activeDraftThread: newThreadContext.activeDraftThread,
-      activeThread: newThreadContext.activeThread ?? undefined,
-      defaultProjectRef: newThreadContext.defaultProjectRef,
-      handleNewThread: newThreadContext.handleNewThread,
-    });
-  }, [isMobile, newThreadContext, setOpenMobile]);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -3786,7 +3764,6 @@ export default function LegacySidebar() {
         routeThreadKey={routeThreadKey}
         openPullRequestsInRightPanel={routeThreadRef !== null}
         newThreadShortcutLabel={newThreadShortcutLabel}
-        onNewThreadFromContext={handleNewThreadFromContext}
         threadJumpLabelByKey={visibleThreadJumpLabelByKey}
         attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
         expandThreadListForProject={expandThreadListForProject}
