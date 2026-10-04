@@ -43,6 +43,7 @@ const makeElectronAppLayer = (calls: ElectronAppCalls) =>
     metadata: Effect.die("unexpected metadata read"),
     name: Effect.succeed("Supacode"),
     systemLocale: Effect.succeed("en-US"),
+    environmentMachineIcons: Effect.succeed({}),
     whenReady: Effect.void,
     quit: Effect.void,
     requestSingleInstanceLock: Effect.succeed(true),
