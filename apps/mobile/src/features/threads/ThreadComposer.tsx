@@ -1130,6 +1130,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                           label={currentModelOption?.label ?? currentModelSelection.model}
                           maxWidth="100%"
                           onPress={openSettings}
+                          showChevron={false}
                         />
                       </View>
                       <ComposerReasoningControl

@@ -1757,6 +1757,7 @@ export function NewTaskDraftScreen(props: {
                         label={flow.selectedModelOption?.label ?? "Choose model"}
                         maxWidth="100%"
                         onPress={settingsSheetPresentation.open}
+                        showChevron={false}
                       />
                     </View>
                     <ComposerReasoningControl
