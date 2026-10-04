@@ -21,6 +21,16 @@ export function resolveProviderOptionDescriptors(input: {
   });
 }
 
+export function getReasoningOptionDescriptor(descriptors: ReadonlyArray<ProviderOptionDescriptor>) {
+  return (
+    descriptors.find(
+      (descriptor) =>
+        descriptor.type === "select" &&
+        ["reasoningEffort", "effort", "variant", "thinking"].includes(descriptor.id),
+    ) ?? descriptors.find((descriptor) => descriptor.id === "thinking")
+  );
+}
+
 /**
  * Applies one option change (by descriptor id) and returns the full selection
  * list to store on the model selection, or null when the change doesn't match

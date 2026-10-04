@@ -90,6 +90,7 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
+import { ComposerReasoningControl } from "../../components/ComposerReasoningControl";
 import { ControlPillMenu } from "../../components/ControlPill";
 import type { ActiveTurnComposerAction } from "@supacode/client-runtime/state/composer-dispatch";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
@@ -1124,6 +1125,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                           onPress={openSettings}
                         />
                       </View>
+                      <ComposerReasoningControl
+                        descriptors={providerOptionDescriptors}
+                        selectedModel={currentModelSelection}
+                        reportedModelSelection={props.reportedModelSelection}
+                        onChange={settingsRouteSession.onUpdateOptionSelections}
+                      />
                       <ComposerSpeedToggle
                         provider={currentModelOption?.providerDriver}
                         descriptors={providerOptionDescriptors}
