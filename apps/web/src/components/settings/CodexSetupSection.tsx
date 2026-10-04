@@ -946,7 +946,15 @@ function ManagedCodexSetup({
                   size="sm"
                   variant="ghost"
                   disabled={unavailable || busy}
-                  onClick={() => void run(() => logoutAuth(target))}
+                  onClick={() => {
+                    void ensureLocalApi()
+                      .dialogs.confirm(
+                        `Disconnect ${displayName || provider?.displayName || "Codex"} from ChatGPT? This stops running threads that use this sign-in. Thread history is kept.`,
+                      )
+                      .then((confirmed) => {
+                        if (confirmed) void run(() => logoutAuth(target));
+                      });
+                  }}
                 >
                   Disconnect
                 </Button>

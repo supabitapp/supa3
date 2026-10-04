@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { isValidElement, type ReactElement } from "react";
 import {
   EnvironmentId,
   ProjectId,
@@ -39,6 +39,9 @@ vi.mock("react", async (importOriginal) => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
   return {
     ...actual,
+    useEffect: () => undefined,
+    useId: () => "acp-section",
+    useRef: reactHookHarness.useRef,
     useState: reactHookHarness.useState,
   };
 });
@@ -134,6 +137,17 @@ function findByAriaLabel(
   return found!;
 }
 
+function pressInlineConfirm(idle: string, timeStamp: number) {
+  const button = visitElements(
+    render(),
+    (element) =>
+      isValidElement<{ idle?: unknown }>(element.props.children) &&
+      element.props.children.props.idle === idle,
+  );
+  expect(button).not.toBeNull();
+  (button!.props.onClick as (event: { timeStamp: number }) => void)({ timeStamp });
+}
+
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -215,24 +229,37 @@ describe("AcpSessionManagementSection", () => {
     expect(findByLabel(render(), "Imported")).not.toBeNull();
   });
 
-  it("logs out the provider instance through the owning environment", async () => {
+  it("logs out the provider instance through the owning environment after confirmation", async () => {
     const tree = render();
     (findByLabel(tree, "Log out").props.onClick as (() => void) | undefined)?.();
     await flushPromises();
 
+    expect(dialogs.confirm).toHaveBeenCalledOnce();
     expect(commands.logout).toHaveBeenCalledWith({
       environmentId,
       input: { instanceId },
     });
   });
 
-  it("deletes unimported native sessions after destructive confirmation", async () => {
-    (findByLabel(render(), "List sessions").props.onClick as (() => void) | undefined)?.();
-    await flushPromises();
-    (findByLabel(render(), "Delete").props.onClick as (() => void) | undefined)?.();
+  it("keeps the sign-in when log out is declined", async () => {
+    dialogs.confirm.mockResolvedValueOnce(false);
+    (findByLabel(render(), "Log out").props.onClick as (() => void) | undefined)?.();
     await flushPromises();
 
-    expect(dialogs.confirm).toHaveBeenCalledOnce();
+    expect(commands.logout).not.toHaveBeenCalled();
+  });
+
+  it("deletes unimported native sessions only on a second press", async () => {
+    (findByLabel(render(), "List sessions").props.onClick as (() => void) | undefined)?.();
+    await flushPromises();
+    pressInlineConfirm("Delete", 0);
+    await flushPromises();
+    expect(commands.delete).not.toHaveBeenCalled();
+
+    pressInlineConfirm("Delete", 500);
+    await flushPromises();
+
+    expect(dialogs.confirm).not.toHaveBeenCalled();
     expect(commands.delete).toHaveBeenCalledWith({
       environmentId,
       input: { instanceId, projectId, sessionId: session.sessionId },
@@ -284,7 +311,10 @@ describe("AcpSessionManagementSection", () => {
       },
     });
 
-    (findByLabel(render(), "Disable").props.onClick as (() => void) | undefined)?.();
+    pressInlineConfirm("Disable", 0);
+    await flushPromises();
+    expect(commands.disableProvider).not.toHaveBeenCalled();
+    pressInlineConfirm("Disable", 500);
     await flushPromises();
     expect(commands.disableProvider).toHaveBeenCalledWith({
       environmentId,
