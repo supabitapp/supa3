@@ -1,35 +1,5 @@
-name: Mobile EAS Production
+name: Mobile Production
 
-# Production builds and OTA updates run from CI (Linux) — never from a laptop.
-# Under the fingerprint runtime-version policy the fingerprint must be computed
-# in the same OS/pnpm as the EAS build; a macOS `eas build` computes a different
-# fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
-# runner, with corepack pinning pnpm 10.24 in eas.json, local == build.
-#
-# Every merge to main that touches the mobile app reconciles, per platform:
-#   1. Store builds: if the latest production build's version differs from
-#      app.config.ts, cut a new build and submit it (TestFlight + Play internal
-#      track). Bumping `version` is therefore all it takes to
-#      start the next release train — the first build of a version enters
-#      external-TestFlight beta review immediately, and later builds of the
-#      same version auto-approve until that version is released. After App
-#      Store approval, Apple closes the release train and `version` must be
-#      bumped before another iOS build can be submitted. Releasing to the App
-#      Store stays a manual App Store Connect step.
-#   2. OTA: publish a production-channel update for each platform where at
-#      least one finished production build matches the current native
-#      fingerprint. Older binaries of the same major version with a matching
-#      fingerprint receive it too; the major version is part of the
-#      fingerprint (apps/mobile/fingerprint.config.js), so a new major never
-#      reaches the previous major's store binaries over the air. When native
-#      drift means no binary could install the update,
-#      it is skipped and flagged in the job summary instead of published
-#      into the void.
-# workflow_dispatch remains as a manual override for both modes (e.g. to
-# retry an errored build or force an OTA).
-# Manual v2-preview builds keep the production app identity and disable OTA.
-# They auto-submit to TestFlight and the Google Play closed testing track v2.
-# Select the v2 branch when dispatching a preview build.
 on:
   workflow_dispatch:
     inputs:
@@ -79,18 +49,22 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .github/workflows/mobile-eas-production.yml
+      - .github/actions/setup-mobile-release/**
+      - .github/actions/build-mobile/**
+      - .github/scripts/mobile-build-*.cjs
 
-# Serialize runs so OTAs publish in merge order. GitHub keeps at most one
-# queued run per group, so a burst of merges collapses into one run of the
-# newest commit — intermediate commits don't need their own OTA.
 concurrency:
   group: mobile-eas-production
   cancel-in-progress: false
 
 jobs:
-  production:
-    name: EAS ${{ inputs.profile || 'production' }} ${{ github.event_name == 'push' && 'auto' || inputs.mode }}
+  prepare:
+    name: Prepare mobile release
     runs-on: depot-ubuntu-24.04-8
+    outputs:
+      enabled: ${{ steps.expo-token.outputs.present }}
+      sha: ${{ steps.source.outputs.sha }}
+      matrix: ${{ steps.source.outputs.matrix }}
     permissions:
       contents: read
     env:
@@ -130,49 +104,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ steps.version_app_token.outputs.token || github.token }}
-          # No sparse-checkout here: it makes actions/checkout fetch with
-          # --filter=blob:none, and eas-cli archives the project via
-          # `git clone --depth 1 file://<workspace>`, which fails (exit 128)
-          # when the partial clone can't serve the unfetched blobs.
 
       - name: Setup Mise
         if: steps.expo-token.outputs.present == 'true'
         uses: ./.github/actions/setup-mise
-      - name: Install workspace dependencies
-        if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- vp install --filter=@supacode/mobile...
-      - name: Verify v2 preview source
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.profile == 'v2-preview'
-        run: |
-          node --input-type=module -e '
-            import * as environment from "./packages/contracts/src/environment.ts";
-            if (environment.ORCHESTRATION_PROTOCOL_VERSION !== 2) {
-              throw new Error("V2 previews require a v2 source branch. Select the v2 branch when running this workflow.");
-            }
-          '
-
-      - name: Expose pnpm
-        if: steps.expo-token.outputs.present == 'true'
-        run: mise exec -- pnpm --version
-
-      - name: Setup EAS
-        if: steps.expo-token.outputs.present == 'true'
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          # npm, not pnpm: this only installs eas-cli into the action's own
-          # tool dir, and pnpm 11 hard-fails that install on dtrace-provider's
-          # ignored build script (no allowBuilds config outside the repo).
-          packager: npm
-
-      - name: Pull production environment variables
-        if: steps.expo-token.outputs.present == 'true'
-        working-directory: apps/mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas env:pull production --non-interactive
-
       - name: Apply manual version override
         if: steps.version_app_token.outcome == 'success'
         env:
@@ -195,9 +130,9 @@ jobs:
             const source = fs.readFileSync(path, "utf8");
             const next = source.replace(
               /^(  version: ")[^"]+(".*)$/m,
-              `$1${process.env.RELEASE_VERSION}$2`,
+              (_match, prefix, suffix) => prefix + process.env.RELEASE_VERSION + suffix,
             );
-            if (next === source && !source.includes(`  version: "${process.env.RELEASE_VERSION}"`)) {
+            if (next === source && !source.includes("  version: \"" + process.env.RELEASE_VERSION + "\"")) {
               throw new Error("Could not update app version");
             }
             fs.writeFileSync(path, next);
@@ -218,98 +153,149 @@ jobs:
             -m "Co-authored-by: codex <codex@users.noreply.github.com>"
           git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
 
-      - name: Summarize manual build version
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
-        working-directory: apps/mobile
+      - id: source
+        name: Select build runners
+        if: steps.expo-token.outputs.present == 'true'
         env:
-          MOBILE_BUILD_PROFILE: ${{ inputs.profile || 'production' }}
+          MOBILE_PLATFORM: ${{ inputs.platform || 'all' }}
+          MOBILE_MODE: ${{ inputs.mode || 'auto' }}
         run: |
-          version="$(npx expo config --json --type public | jq -r '.version')"
-          {
-            echo "## Manual $MOBILE_BUILD_PROFILE build"
-            echo
-            echo "- App version: \`$version\`"
-            echo "- Platform: \`${{ inputs.platform }}\`"
-            echo
-            echo "> Apple closes an iOS release train after App Store approval. Before building iOS, confirm \`$version\` is newer than the approved App Store version."
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const include = [
+              { platform: "ios", runner: "depot-macos-26", legacy: false },
+              { platform: "android", runner: "depot-ubuntu-24.04-8", legacy: false },
+              { platform: "ios", runner: "depot-ubuntu-24.04-8", legacy: true },
+            ].filter(({ platform, legacy }) =>
+              (process.env.MOBILE_PLATFORM === "all" || platform === process.env.MOBILE_PLATFORM) &&
+              (!legacy || process.env.MOBILE_MODE !== "build"));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, "matrix=" + JSON.stringify({ include }) + "\n");
+          '
 
-      - name: Build and submit (manual)
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
-        working-directory: apps/mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          MOBILE_BUILD_PROFILE: ${{ inputs.profile || 'production' }}
-        run: eas build --platform ${{ inputs.platform }} --profile "$MOBILE_BUILD_PROFILE" --auto-submit --non-interactive --no-wait
-
-      - name: Publish OTA update (manual)
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'update'
-        working-directory: apps/mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  production:
+    name: Mobile ${{ matrix.platform }} ${{ matrix.legacy && 'existing binaries' || inputs.profile || 'production' }}
+    needs: prepare
+    if: needs.prepare.outputs.enabled == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      APP_VARIANT: production
+      NODE_OPTIONS: --max-old-space-size=8192
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      MOBILE_PLATFORM: ${{ matrix.platform }}
+      MOBILE_PROFILE: ${{ inputs.profile || 'production' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-mobile-release
+        with:
+          token: ${{ secrets.EXPO_TOKEN }}
+          environment: production
+      - name: Verify v2 preview source
+        if: inputs.profile == 'v2-preview'
         run: |
-          eas update \
-            --channel production \
-            --environment production \
-            --platform ${{ inputs.platform }} \
-            --message "${{ inputs.message || format('Production OTA ({0})', github.sha) }}" \
-            --non-interactive
-
-      # No --status filter on build:list: an in-queue/in-progress build must
-      # count as existing, or every merge during the build window would cut a
-      # duplicate. After an errored build, retry via workflow_dispatch
-      # mode=build — pushes won't re-trigger it until the app version changes.
-      - id: store_builds
-        name: Ensure store builds exist for the current app version
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
-        continue-on-error: true
+          node --input-type=module -e '
+            import * as environment from "./packages/contracts/src/environment.ts";
+            if (environment.ORCHESTRATION_PROTOCOL_VERSION !== 2) {
+              throw new Error("V2 previews require a v2 source branch.");
+            }
+          '
+      - id: config
+        name: Resolve native fingerprint and app version
+        working-directory: apps/mobile
+        run: |
+          version=$(npx expo config --json --type public | jq -er '.version')
+          fingerprint=$(eas fingerprint:generate --platform "$MOBILE_PLATFORM" --environment production --json --non-interactive | sed -n '/^{/,$p' | jq -er '.hash')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+      - id: history
+        name: Find completed Depot builds
+        uses: actions/github-script@v8
+        env:
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+        with:
+          script: |
+            const { findBuilds } = require('./.github/scripts/mobile-build-history.cjs');
+            const { versionBuild, compatibleBuild } = await findBuilds({
+              github, context, profile: process.env.MOBILE_PROFILE, platform: process.env.MOBILE_PLATFORM,
+              version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
+            });
+            core.setOutput('version_exists', Boolean(versionBuild));
+            core.setOutput('compatible', Boolean(compatibleBuild));
+      - id: legacy
+        name: Find existing cloud builds during migration
+        if: env.MOBILE_PROFILE == 'production' && (steps.history.outputs.version_exists != 'true' || steps.history.outputs.compatible != 'true')
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
         run: |
-          failed=0
-          version="$(npx expo config --json --type public | jq -r '.version')"
-          for platform in ios android; do
-            latest="$(eas build:list --platform "$platform" --build-profile production --limit 1 --json --non-interactive | jq -r '.[0].appVersion // "none"')"
-            if [ "$latest" = "$version" ]; then
-              echo "$platform: production build for $version already exists (or is in progress)"
-              continue
-            fi
-            echo "$platform: latest production build is $latest, app.config.ts says $version — building"
-            if eas build --platform "$platform" --profile production --auto-submit --non-interactive --no-wait; then
-              echo ":building_construction: $platform: scheduled production build and submission for $version" >> "$GITHUB_STEP_SUMMARY"
-            else
-              failed=1
-              echo ":x: $platform: production build or submission failed for $version" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          exit "$failed"
-
-      - name: Publish fingerprint-gated OTA
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
+          version_count=$(eas build:list --platform "$MOBILE_PLATFORM" --build-profile production --app-version "$MOBILE_VERSION" --status finished --limit 1 --json --non-interactive | jq 'length')
+          compatible_count=$(eas build:list --platform "$MOBILE_PLATFORM" --build-profile production --status finished --fingerprint-hash "$MOBILE_FINGERPRINT" --limit 1 --json --non-interactive | jq 'length')
+          echo "version_exists=$([[ "$version_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "compatible=$([[ "$compatible_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - id: build
+        name: Compile and sign on Depot
+        if: ${{ !matrix.legacy && (inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true')) }}
+        uses: ./.github/actions/build-mobile
+        with:
+          platform: ${{ matrix.platform }}
+          profile: ${{ env.MOBILE_PROFILE }}
+      - id: artifact
+        name: Save signed binary
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-${{ env.MOBILE_PROFILE }}-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: ${{ steps.build.outputs.binary }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Submit signed binary to stores
+        if: steps.build.outcome == 'success'
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MOBILE_BINARY: ${{ steps.build.outputs.binary }}
+        run: eas submit --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" --path "$MOBILE_BINARY" --non-interactive --wait
+      - name: Record completed store build
+        if: steps.build.outcome == 'success'
+        uses: actions/github-script@v8
+        env:
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
+          MOBILE_SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+          MOBILE_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        with:
+          script: |
+            const { recordBuild } = require('./.github/scripts/mobile-build-history.cjs');
+            await recordBuild({
+              github, context, profile: process.env.MOBILE_PROFILE, platform: process.env.MOBILE_PLATFORM,
+              version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
+              sha: process.env.MOBILE_SOURCE_SHA, url: process.env.MOBILE_ARTIFACT_URL,
+            });
+      - name: Publish compatible OTA update
+        if: env.MOBILE_PROFILE == 'production' && (github.event_name == 'push' || inputs.mode == 'update')
+        working-directory: apps/mobile
+        env:
+          MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
+          BUILT_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
+          DEPOT_COMPATIBLE: ${{ steps.history.outputs.compatible }}
+          CLOUD_COMPATIBLE: ${{ steps.legacy.outputs.compatible }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
         run: |
-          message="$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))"
-          for platform in ios android; do
-            # eas-cli prints an environment-loaded notice to stdout before the
-            # JSON even with --json, so discard everything before the document.
-            hash="$(eas fingerprint:generate --platform "$platform" --environment production --json --non-interactive | sed -n '/^{/,$p' | jq -er '.hash | select(type == "string" and length > 0)')"
-            matching="$(eas build:list --platform "$platform" --build-profile production --status finished --fingerprint-hash "$hash" --limit 1 --json --non-interactive | jq 'length')"
-            if [ "$matching" -gt 0 ]; then
-              eas update \
-                --channel production \
-                --environment production \
-                --platform "$platform" \
-                --message "$message" \
-                --non-interactive
-              echo ":white_check_mark: $platform: OTA published to production (fingerprint \`$hash\`)" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo ":warning: $platform: no finished production build matches fingerprint \`$hash\` — OTA skipped; JS changes reach $platform only once a matching build ships" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-      - name: Propagate store build failure
-        if: steps.store_builds.outcome == 'failure'
-        run: exit 1
+          if [ "$DEPOT_COMPATIBLE" != true ] && [ "$CLOUD_COMPATIBLE" != true ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
+            echo "$MOBILE_PLATFORM: no completed build matches $MOBILE_FINGERPRINT; OTA skipped." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
+          eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
+            --message "$message" --non-interactive
