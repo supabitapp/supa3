@@ -3,6 +3,11 @@ import { useEffect, useId, useRef, useState } from "react";
 
 const TARGET_ATTRIBUTE = "data-inline-confirm";
 
+const schedule = (ms: number, run: () => void) => {
+  const timeout = window.setTimeout(run, ms);
+  return () => window.clearTimeout(timeout);
+};
+
 type PressEvent = {
   readonly timeStamp: number;
   readonly preventBaseUIHandler?: () => void;
@@ -11,7 +16,7 @@ type PressEvent = {
 export function useInlineConfirm<Key extends string>() {
   const scope = useId();
   const [armed, setArmed] = useState<Key | null>(null);
-  const [confirm] = useState(() => createInlineConfirm<Key>(setArmed));
+  const [confirm] = useState(() => createInlineConfirm<Key>(setArmed, schedule));
   const detachRefs = useRef(new Map<Key, () => () => void>());
 
   useEffect(() => () => confirm.disarm(), [confirm]);

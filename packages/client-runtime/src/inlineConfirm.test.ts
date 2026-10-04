@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   createInlineConfirm,
@@ -8,18 +8,25 @@ import {
 
 function track() {
   const changes: Array<string | null> = [];
-  const confirm = createInlineConfirm<"remove" | "retry">((armed) => changes.push(armed));
-  return { changes, confirm };
+  const timers = new Set<{ readonly ms: number; readonly run: () => void }>();
+  const confirm = createInlineConfirm<"remove" | "retry">(
+    (armed) => changes.push(armed),
+    (ms, run) => {
+      const timer = { ms, run };
+      timers.add(timer);
+      return () => timers.delete(timer);
+    },
+  );
+  const expire = () => {
+    for (const timer of timers) {
+      timers.delete(timer);
+      timer.run();
+    }
+  };
+  return { changes, confirm, timers, expire };
 }
 
 describe("createInlineConfirm", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it("confirms only a second press of the same key after the guard", () => {
     const { changes, confirm } = track();
     expect(confirm.press("remove", 1_000)).toBe(false);
@@ -40,20 +47,19 @@ describe("createInlineConfirm", () => {
     expect(changes).toEqual(["remove", "retry", null]);
   });
 
-  it("disarms after the timeout, restarted by each new arming", () => {
-    const { changes, confirm } = track();
+  it("disarms on the timeout, which each new arming replaces", () => {
+    const { changes, confirm, timers, expire } = track();
     confirm.press("remove", 0);
-    vi.advanceTimersByTime(INLINE_CONFIRM_TIMEOUT_MS - 1);
     confirm.press("retry", 0);
-    vi.advanceTimersByTime(INLINE_CONFIRM_TIMEOUT_MS - 1);
-    expect(changes).toEqual(["remove", "retry"]);
-    vi.advanceTimersByTime(1);
+    expect([...timers].map((timer) => timer.ms)).toEqual([INLINE_CONFIRM_TIMEOUT_MS]);
+    expire();
     expect(changes).toEqual(["remove", "retry", null]);
-    expect(confirm.press("retry", INLINE_CONFIRM_TIMEOUT_MS * 2)).toBe(false);
+    expect(timers.size).toBe(0);
+    expect(confirm.press("retry", INLINE_CONFIRM_TIMEOUT_MS)).toBe(false);
   });
 
   it("disarms on request, or only when the given key is the armed one", () => {
-    const { changes, confirm } = track();
+    const { changes, confirm, timers } = track();
     confirm.disarm();
     confirm.press("remove", 0);
     confirm.disarm("retry");
@@ -62,8 +68,6 @@ describe("createInlineConfirm", () => {
     confirm.press("retry", 0);
     confirm.disarm();
     expect(changes).toEqual(["remove", null, "retry", null]);
-    vi.runAllTimers();
-    expect(changes.at(-1)).toBeNull();
-    expect(changes).toHaveLength(4);
+    expect(timers.size).toBe(0);
   });
 });

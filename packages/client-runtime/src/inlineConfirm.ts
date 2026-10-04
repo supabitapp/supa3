@@ -1,6 +1,8 @@
 export const INLINE_CONFIRM_GUARD_MS = 400;
 export const INLINE_CONFIRM_TIMEOUT_MS = 5000;
 
+export type InlineConfirmSchedule = (ms: number, run: () => void) => () => void;
+
 export interface InlineConfirm<Key extends string> {
   readonly press: (key: Key, at: number) => boolean;
   readonly disarm: (key?: Key) => void;
@@ -8,14 +10,16 @@ export interface InlineConfirm<Key extends string> {
 
 export function createInlineConfirm<Key extends string>(
   onChange: (armed: Key | null) => void,
+  schedule: InlineConfirmSchedule,
 ): InlineConfirm<Key> {
   let armed: Key | null = null;
   let armedAt = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancelTimeout: (() => void) | undefined;
 
   const set = (next: Key | null) => {
-    clearTimeout(timer);
-    timer = next === null ? undefined : setTimeout(() => set(null), INLINE_CONFIRM_TIMEOUT_MS);
+    cancelTimeout?.();
+    cancelTimeout =
+      next === null ? undefined : schedule(INLINE_CONFIRM_TIMEOUT_MS, () => set(null));
     armed = next;
     onChange(next);
   };

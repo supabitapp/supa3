@@ -3,7 +3,8 @@ import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
-import { AccountLimits, ResetCredits } from "../usage/UsageLimitsSection";
+import { ResetCredits } from "../usage/ResetCredits";
+import { AccountLimits } from "../usage/UsageLimitsSection";
 
 const DRIVER_LABEL: Partial<Record<string, string>> = { codex: "Codex", claudeAgent: "Claude" };
 

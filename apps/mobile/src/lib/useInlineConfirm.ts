@@ -6,13 +6,18 @@ import { AccessibilityInfo, AppState, type GestureResponderEvent } from "react-n
 const ARMED_HINT = "Tap again to confirm";
 const touchListeners = new Set<(touch: object) => void>();
 
+const schedule = (ms: number, run: () => void) => {
+  const timeout = setTimeout(run, ms);
+  return () => clearTimeout(timeout);
+};
+
 export function disarmInlineConfirmsOnTouch(event: GestureResponderEvent) {
   for (const listener of touchListeners) listener(event.nativeEvent);
 }
 
 export function useInlineConfirm<Key extends string>() {
   const [armed, setArmed] = useState<Key | null>(null);
-  const [confirm] = useState(() => createInlineConfirm<Key>(setArmed));
+  const [confirm] = useState(() => createInlineConfirm<Key>(setArmed, schedule));
   const touched = useRef<{ readonly key: Key; readonly touch: object } | null>(null);
   const navigation = useContext(NavigationContext);
 
