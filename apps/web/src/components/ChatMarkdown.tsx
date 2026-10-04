@@ -980,9 +980,6 @@ function MarkdownCodeBlock({
   theme,
   onRunShellCommand,
   isStreaming,
-  leadingActions,
-  canWrap = true,
-  diagram = false,
   children,
 }: {
   code: string;
@@ -991,10 +988,6 @@ function MarkdownCodeBlock({
   theme: "light" | "dark";
   onRunShellCommand?: ((command: string) => void) | undefined;
   isStreaming: boolean;
-  leadingActions?: ReactNode;
-  canWrap?: boolean;
-  /** Renders content instead of code, with actions below it like tables. */
-  diagram?: boolean;
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
@@ -1052,37 +1045,6 @@ function MarkdownCodeBlock({
     [],
   );
 
-  const copyButton = (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost-muted"
-            size="icon-xs"
-            onClick={handleCopy}
-            aria-label={copyLabel}
-          />
-        }
-      >
-        <MorphIcon className="size-3" icon={copied ? Check : Copy} />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{copyLabel}</TooltipPopup>
-    </Tooltip>
-  );
-
-  if (diagram) {
-    return (
-      <div className="my-[0.65rem]" data-language={language}>
-        {children}
-        <div className="mt-0.5 flex items-center justify-between select-none">
-          {leadingActions}
-          {copyButton}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className="chat-markdown-codeblock my-[0.65rem] overflow-hidden rounded-lg border border-border/70 bg-secondary leading-snug dark:border-transparent dark:bg-input/32"
@@ -1098,26 +1060,23 @@ function MarkdownCodeBlock({
           />
         </span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
-          {leadingActions}
-          {canWrap ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant={wrapped ? "secondary" : "ghost-muted"}
-                    size="icon-xs"
-                    aria-pressed={wrapped}
-                    onClick={() => setWrapped((value) => !value)}
-                    aria-label={wrapLabel}
-                  />
-                }
-              >
-                <WrapTextIcon className="size-3" />
-              </TooltipTrigger>
-              <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
-            </Tooltip>
-          ) : null}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant={wrapped ? "secondary" : "ghost-muted"}
+                  size="icon-xs"
+                  aria-pressed={wrapped}
+                  onClick={() => setWrapped((value) => !value)}
+                  aria-label={wrapLabel}
+                />
+              }
+            >
+              <WrapTextIcon className="size-3" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
+          </Tooltip>
           {canRun ? (
             <Tooltip>
               <TooltipTrigger
@@ -1136,7 +1095,22 @@ function MarkdownCodeBlock({
               <TooltipPopup side="top">Run in terminal</TooltipPopup>
             </Tooltip>
           ) : null}
-          {copyButton}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost-muted"
+                  size="icon-xs"
+                  onClick={handleCopy}
+                  aria-label={copyLabel}
+                />
+              }
+            >
+              <MorphIcon className="size-3" icon={copied ? Check : Copy} />
+            </TooltipTrigger>
+            <TooltipPopup side="top">{copyLabel}</TooltipPopup>
+          </Tooltip>
         </span>
       </div>
       {children}
