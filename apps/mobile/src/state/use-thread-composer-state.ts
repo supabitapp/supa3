@@ -51,7 +51,10 @@ import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { buildThreadFeed } from "../lib/threadActivity";
 import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
-import { appendPendingThreadMessages } from "../features/threads/pending-thread-feed";
+import {
+  appendPendingThreadMessages,
+  retainPendingCreationAttachments,
+} from "../features/threads/pending-thread-feed";
 import { threadAllowsProviderSwitch } from "./thread-provider-switching";
 import { appAtomRegistry } from "../state/atom-registry";
 import { pendingThreadCreationMessage } from "./pending-thread-creation";
@@ -261,11 +264,14 @@ export function useThreadComposerState() {
       !selectedThreadMessages?.some((message) => message.id === pendingCreationMessage.messageId)
         ? [pendingThreadCreationMessage(pendingCreationMessage)]
         : [];
-    const feed = buildThreadFeed(selectedThreadVisibleTurnItems, {
-      anchoredMessages: pendingCreation,
-      attempts: selectedThreadAttempts,
-      nodes: selectedThreadNodes,
-    });
+    const feed = retainPendingCreationAttachments(
+      buildThreadFeed(selectedThreadVisibleTurnItems, {
+        anchoredMessages: pendingCreation,
+        attempts: selectedThreadAttempts,
+        nodes: selectedThreadNodes,
+      }),
+      pendingCreation.length > 0 ? pendingCreationMessage : null,
+    );
     const pendingAcknowledgments = acknowledgedMessages.filter(
       (message) =>
         scopedThreadKey(message.environmentId, message.threadId) === selectedThreadKey &&
