@@ -31,6 +31,31 @@ const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   failed: "bg-destructive",
 };
 
+/** The automation icon with a last-run status dot, labelled for hover and screen readers. */
+function AutomationStatusIcon({ task, now }: { task: ScheduledTask; now: number }) {
+  const label = lastRunLabel(task, now) ?? "Not run yet";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="relative inline-flex size-4 shrink-0 items-center justify-center" />
+        }
+      >
+        <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+        <span
+          className={cn(
+            "absolute -right-1 -top-1 size-1.5 rounded-full",
+            STATUS_DOT_CLASS[task.lastRunStatus],
+          )}
+          aria-hidden
+        />
+        <span className="sr-only">{label}</span>
+      </TooltipTrigger>
+      <TooltipPopup>{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /**
  * Thread details panel section listing the automations (scheduled tasks) bound
  * to this thread. Fed by the live scheduled-task subscription, so run status
@@ -139,24 +164,7 @@ export function ThreadAutomationsPanel(props: {
               THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
             )}
           >
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="relative inline-flex size-4 shrink-0 items-center justify-center" />
-                }
-              >
-                <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
-                <span
-                  className={cn(
-                    "absolute -right-1 -top-1 size-1.5 rounded-full",
-                    STATUS_DOT_CLASS[task.lastRunStatus],
-                  )}
-                  aria-hidden
-                />
-                <span className="sr-only">{lastRunLabel(task, now) ?? "Not run yet"}</span>
-              </TooltipTrigger>
-              <TooltipPopup>{lastRunLabel(task, now) ?? "Not run yet"}</TooltipPopup>
-            </Tooltip>
+            <AutomationStatusIcon task={task} now={now} />
             <div className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-foreground/80">
                 {task.title}
