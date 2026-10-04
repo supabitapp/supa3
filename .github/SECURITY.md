@@ -5,5 +5,5 @@ Report security vulnerabilities affecting Supacode or Supacode-operated infrastr
 do not disclose them publicly until we have had a reasonable opportunity to investigate and
 remediate them.
 
-See the [full security policy](https://supacode.sh/security-policy) for reporting details, scope,
+See the [full security policy](https://next.supacode.sh/security-policy) for reporting details, scope,
 and safe harbor terms for good-faith research.

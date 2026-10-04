@@ -1,4 +1,4 @@
-const DEFAULT_MARKETING_SITE_URL = "https://supacode.sh";
+const DEFAULT_MARKETING_SITE_URL = "https://next.supacode.sh";
 
 function resolveMarketingSiteUrl(override: string | undefined): URL {
   try {

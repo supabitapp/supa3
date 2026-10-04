@@ -3,7 +3,3 @@ reviews:
   review_status: false
   auto_review:
     enabled: true
-  path_filters:
-    # Vendored read-only reference checkout of upstream Effect
-    # (see scripts/lib/reference-repos.ts). Nothing imports from it.
-    - "!.repos/**"

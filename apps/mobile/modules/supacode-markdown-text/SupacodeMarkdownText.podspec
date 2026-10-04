@@ -8,7 +8,7 @@ Pod::Spec.new do |s|
   s.version = package["version"]
   s.summary = "Native selectable markdown renderer for Supacode mobile."
   s.description = "Fabric-backed attributed text and markdown rendering primitives owned by Supacode."
-  s.homepage = "https://supacode.sh"
+  s.homepage = "https://next.supacode.sh"
   s.license = { :type => "MIT", :file => "LICENSE" }
   s.author = { "Supacode" => "hello@supacode.sh" }
   s.platforms = { :ios => min_ios_version_supported }

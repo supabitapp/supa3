@@ -14,7 +14,7 @@ describe("buildSupacodeProjectFileJsonSchema", () => {
     const schema = buildSupacodeProjectFileJsonSchema();
 
     expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(schema.$id).toBe("https://supacode.sh/schema/supacode.json");
+    expect(schema.$id).toBe("https://next.supacode.sh/schema/supacode.json");
     expect(schema.type).toBe("object");
     expect(schema.additionalProperties).toBe(false);
   });

@@ -9,7 +9,7 @@ import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.t
 export const SUPACODE_PROJECT_FILE_NAME = "supacode.json";
 
 /** Public URL of the published JSON Schema for {@link SupacodeProjectFile}. */
-export const SUPACODE_PROJECT_FILE_SCHEMA_URL = "https://supacode.sh/schema/supacode.json";
+export const SUPACODE_PROJECT_FILE_SCHEMA_URL = "https://next.supacode.sh/schema/supacode.json";
 
 const SUPACODE_PROJECT_FILE_PATH_MAX_LENGTH = 512;
 const SUPACODE_PROJECT_FILE_MAX_SCRIPTS = 50;

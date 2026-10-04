@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import registeredThemeNames from "../../generated-uniwind-theme-names.json";
 import {
   createMobileThemeRuntimeOperations,
   getMobileUniwindThemeName,
@@ -28,8 +29,11 @@ describe("mobileThemeRuntime", () => {
       (operation) => operation.kind === "update-text-variables",
     );
 
-    expect(variableOperations).toHaveLength(12);
-    expect(variableOperations.at(-1)?.themeName).toBe("iris-dark");
+    expect(variableOperations.map((operation) => operation.themeName)).toEqual([
+      "light",
+      "dark",
+      ...registeredThemeNames,
+    ]);
     expect(operations.at(-1)).toEqual({
       kind: "set-appearance-mode",
       appearance: "light",
@@ -68,12 +72,12 @@ describe("mobileThemeRuntime", () => {
       baseFontSize: 18,
     });
 
-    expect(operations).toHaveLength(12);
     expect(operations.every((operation) => operation.kind === "update-text-variables")).toBe(true);
-    expect(operations.at(-1)).toMatchObject({
-      kind: "update-text-variables",
-      themeName: "iris-dark",
-    });
+    expect(
+      operations
+        .filter((operation) => operation.kind === "update-text-variables")
+        .map((operation) => operation.themeName),
+    ).toEqual(["light", "dark", ...registeredThemeNames]);
   });
 
   it("does no native work when persistence echoes an already-applied state", () => {

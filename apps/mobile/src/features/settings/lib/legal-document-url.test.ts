@@ -4,17 +4,17 @@ import { isLegalDocumentUrl } from "./legal-document-url";
 
 describe("isLegalDocumentUrl", () => {
   it.each([
-    "https://supacode.sh/legal",
-    "https://supacode.sh/legal/",
-    "https://supacode.sh/privacy-policy?source=app",
-    "https://supacode.sh/terms-of-service#updates",
-    "https://supacode.sh/security-policy",
+    "https://next.supacode.sh/legal",
+    "https://next.supacode.sh/legal/",
+    "https://next.supacode.sh/privacy-policy?source=app",
+    "https://next.supacode.sh/terms-of-service#updates",
+    "https://next.supacode.sh/security-policy",
   ])("allows a configured legal document: %s", (url) => {
     expect(isLegalDocumentUrl(url)).toBe(true);
   });
 
   it.each([
-    "https://supacode.sh/download",
+    "https://next.supacode.sh/download",
     "https://example.com/legal",
     "javascript:alert(1)",
     "not-a-url",

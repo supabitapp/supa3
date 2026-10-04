@@ -121,6 +121,20 @@
               chrome: "oklch(0.225975 0.031062 293.741)",
             },
           },
+          zenbones: {
+            light: {
+              background: "oklch(0.948141 0.003511 39.483)",
+              foreground: "oklch(0.32609 0.017207 234.391)",
+              accent: "oklch(0.479743 0.082277 236.952)",
+              chrome: "oklch(0.948141 0.003511 39.483)",
+            },
+            dark: {
+              background: "oklch(0.216115 0.006126 56.043)",
+              foreground: "oklch(0.793146 0.01314 236.676)",
+              accent: "oklch(0.659049 0.083617 239.667)",
+              chrome: "oklch(0.216115 0.006126 56.043)",
+            },
+          },
         };
         // Keep the built-in mode list in sync with the runtime so the selected
         // Supacode Chat palette is visible before React has mounted.
@@ -134,11 +148,7 @@
           "system",
           "light",
           "dark",
-          "supacode-chat",
-          "grove",
-          "ocean",
-          "ember",
-          "iris",
+          ...Object.keys(BUILT_IN_THEME_PALETTES),
         ];
         // Update every theme-color meta so any element another layer added
         // carries the resolved color too.

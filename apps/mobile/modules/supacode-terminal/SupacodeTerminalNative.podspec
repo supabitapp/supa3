@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   s.version = package['version']
   s.summary = 'Native terminal surface for Supacode mobile.'
   s.description = 'Native terminal surface bridge used by the Supacode React Native app.'
-  s.homepage = 'https://supacode.sh'
+  s.homepage = 'https://next.supacode.sh'
   s.license = { :type => 'UNLICENSED' }
   s.author = { 'Supacode' => 'hello@supacode.sh' }
   s.platforms = { :ios => '16.1' }

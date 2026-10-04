@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary        = 'Native UIKit controls for Supacode mobile.'
   s.description    = 'UIKit-backed controls that match native iOS navigation chrome.'
   s.author         = 'Supacode'
-  s.homepage       = 'https://supacode.sh'
+  s.homepage       = 'https://next.supacode.sh'
   s.platforms      = {
     :ios => '18.0',
   }

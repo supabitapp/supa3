@@ -1,0 +1,17 @@
+[providers.op]
+type = "1password"
+vault = "qrxswyobht724hlbc6fhnom4pe"
+
+[profiles.apple.secrets]
+CSC_LINK = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/CSC_LINK" }
+CSC_KEY_PASSWORD = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/CSC_KEY_PASSWORD" }
+APPLE_API_KEY = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_KEY" }
+APPLE_API_KEY_ID = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_KEY_ID" }
+APPLE_API_ISSUER = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_ISSUER" }
+
+[profiles.release-app.secrets]
+RELEASE_APP_ID = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_ID" }
+RELEASE_APP_PRIVATE_KEY = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_PRIVATE_KEY" }
+
+[profiles.cloudflare.secrets]
+CLOUDFLARE_API_TOKEN = { provider = "op", value = "Cloudflare Hosting/CLOUDFLARE_API_TOKEN" }

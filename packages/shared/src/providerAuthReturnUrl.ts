@@ -8,7 +8,7 @@ export function providerAuthReturnUrl(value: string | undefined): string | undef
     const desktop = ["supacode:", "supacode-dev:"].includes(url.protocol) && url.host === "app";
     const web =
       ["http:", "https:"].includes(url.protocol) &&
-      (isLoopbackHost(url.hostname) || url.origin === "https://app.supacode.sh");
+      (isLoopbackHost(url.hostname) || url.origin === "https://app.next.supacode.sh");
     if (
       url.username ||
       url.password ||
