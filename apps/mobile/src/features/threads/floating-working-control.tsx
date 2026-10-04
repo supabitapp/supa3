@@ -17,6 +17,7 @@ import Animated, {
   ReduceMotion,
   type SharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -45,6 +46,10 @@ const CONTROL_TIMING = {
   reduceMotion: ReduceMotion.System,
 } as const;
 const CONTROL_SEPARATION = (16 + CONTROL_HEIGHT) / 2;
+// Stepping aside for the composer's command popover answers a keystroke, so
+// it leaves quickly and returns at the same pace as the control's own entrance.
+const HIDE_TIMING = { ...CONTROL_TIMING, duration: 120 } as const;
+const SHOW_TIMING = { ...CONTROL_TIMING, duration: 180 } as const;
 // Both rows share the same centered anchor, so the outgoing one clears fast and
 // the incoming one waits for it to be mostly gone before it starts to show.
 const LABEL_ENTERING = FadeIn.duration(160).delay(80).reduceMotion(ReduceMotion.System);
@@ -75,6 +80,8 @@ export function FloatingWorkingControl(props: {
   readonly onOpenQueue: () => void;
   /** Extra distance to rise above the anchor, e.g. an overlay card's coverage. */
   readonly lift?: SharedValue<number>;
+  /** Fades out and passes touches through, e.g. while a popover covers its slot. */
+  readonly hidden?: boolean;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const [overlayWidth, setOverlayWidth] = useState(windowWidth);
@@ -109,8 +116,23 @@ export function FloatingWorkingControl(props: {
   const arrowTransformStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -CONTROL_SEPARATION * (1 - separationProgress.value) }],
   }));
+  const hidden = props.hidden === true;
+  const visibilityTiming = hidden ? HIDE_TIMING : SHOW_TIMING;
+  const visibility = useSharedValue(hidden ? 0 : 1);
+  useEffect(() => {
+    visibility.set(withTiming(hidden ? 0 : 1, visibilityTiming));
+  }, [hidden, visibility, visibilityTiming]);
+  const visibilityStyle = useAnimatedStyle(() => ({ opacity: visibility.value }));
+  // UIKit drops a glass effect faded through an ancestor's opacity, so native
+  // glass dematerializes itself and only the content inside it fades.
+  const reduceMotion = useReducedMotion();
+  const glassEffectStyle = {
+    style: hidden ? "none" : "regular",
+    animate: !reduceMotion,
+    animationDuration: visibilityTiming.duration / 1000,
+  } as const;
   const arrowContentStyle = useAnimatedStyle(() => ({
-    opacity: separationProgress.value,
+    opacity: separationProgress.value * visibility.value,
   }));
 
   // Animate an in-flow sizer so native glass receives real layout updates.
@@ -182,7 +204,10 @@ export function FloatingWorkingControl(props: {
     ) : null;
 
   const capsuleContent = (
-    <View className="flex-row items-center">
+    <Animated.View
+      className="flex-row items-center"
+      style={NATIVE_LIQUID_GLASS_SUPPORTED ? visibilityStyle : undefined}
+    >
       {statusContent}
       {props.devicePreview !== null ? (
         <View
@@ -231,12 +256,14 @@ export function FloatingWorkingControl(props: {
           </Text>
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
 
   return (
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={hidden ? "none" : "box-none"}
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
       className="absolute left-0 right-0 z-20 items-center"
       style={[{ top: -CONTROL_OVERLAY_OFFSET }, liftStyle]}
       onLayout={(event) => setOverlayWidth(event.nativeEvent.layout.width)}
@@ -251,7 +278,7 @@ export function FloatingWorkingControl(props: {
         >
           <AnimatedGlassView
             colorScheme={props.colorScheme}
-            glassEffectStyle="regular"
+            glassEffectStyle={glassEffectStyle}
             isInteractive={capsuleInteractive}
             pointerEvents={capsuleInteractive ? "box-none" : "none"}
             className="h-11 items-center justify-center overflow-hidden rounded-full"
@@ -262,7 +289,7 @@ export function FloatingWorkingControl(props: {
 
           <AnimatedGlassView
             colorScheme={props.colorScheme}
-            glassEffectStyle="regular"
+            glassEffectStyle={glassEffectStyle}
             isInteractive
             pointerEvents={props.showScrollToEnd ? "auto" : "none"}
             accessibilityElementsHidden={!props.showScrollToEnd}
@@ -280,7 +307,7 @@ export function FloatingWorkingControl(props: {
           <Animated.View
             pointerEvents={capsuleInteractive ? "box-none" : "none"}
             className="h-11 items-center justify-center overflow-hidden rounded-full border border-border bg-glass-fallback shadow-md shadow-black/10"
-            style={capsuleStyle}
+            style={[capsuleStyle, visibilityStyle]}
           >
             {capsuleContent}
           </Animated.View>
@@ -304,20 +331,24 @@ export function FloatingWorkingControl(props: {
       ) : NATIVE_LIQUID_GLASS_SUPPORTED ? (
         <UniwindGlassView
           colorScheme={props.colorScheme}
-          glassEffectStyle="regular"
+          glassEffectStyle={glassEffectStyle}
           isInteractive
           className="h-11 w-11 items-center justify-center overflow-hidden rounded-full"
         >
-          <ScrollToEndButton onPress={props.onScrollToEnd} />
+          <Animated.View style={visibilityStyle}>
+            <ScrollToEndButton onPress={props.onScrollToEnd} />
+          </Animated.View>
         </UniwindGlassView>
       ) : (
-        <ControlPill
-          accessibilityLabel="Scroll to end"
-          activateOnPressIn
-          className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
-          icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
-          onPress={props.onScrollToEnd}
-        />
+        <Animated.View style={visibilityStyle}>
+          <ControlPill
+            accessibilityLabel="Scroll to end"
+            activateOnPressIn
+            className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
+            icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
+            onPress={props.onScrollToEnd}
+          />
+        </Animated.View>
       )}
     </Animated.View>
   );

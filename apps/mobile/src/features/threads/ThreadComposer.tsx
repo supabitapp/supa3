@@ -198,6 +198,8 @@ export interface ThreadComposerProps {
   readonly onExpandedChange?: (expanded: boolean) => void;
   /** Fires on editor focus/blur; hosts use it to vet stale keyboard state. */
   readonly onEditorFocusChange?: (focused: boolean) => void;
+  /** Fires when the command popover opens or closes; hosts clear chrome it would overlap. */
+  readonly onCommandMenuOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -552,6 +554,21 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     onExpandedChange?.(isExpanded);
   }, [isExpanded, onExpandedChange]);
 
+  const commandMenuTrigger =
+    !voiceInput.isBusy &&
+    composerMenu.trigger &&
+    (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request")
+      ? composerMenu.trigger
+      : null;
+  const isCommandMenuOpen = commandMenuTrigger !== null;
+  const { onCommandMenuOpenChange } = props;
+  // Report closed on unmount too, so the host never keeps its chrome hidden.
+  useEffect(() => {
+    if (!isCommandMenuOpen) return;
+    onCommandMenuOpenChange?.(true);
+    return () => onCommandMenuOpenChange?.(false);
+  }, [isCommandMenuOpen, onCommandMenuOpenChange]);
+
   const onPressPreview = useCallback(
     (source: FilePreviewSource) => {
       wasExpandedBeforePreviewRef.current = isFocused;
@@ -759,13 +776,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         className="relative w-full self-center"
         style={{ maxWidth: props.contentMaxWidth }}
       >
-        {!voiceInput.isBusy &&
-        composerMenu.trigger &&
-        (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request") ? (
+        {commandMenuTrigger ? (
           <View className="absolute inset-x-0 bottom-full z-10 mb-2">
             <ComposerCommandPopover
               items={composerMenu.items}
-              triggerKind={composerMenu.trigger.kind}
+              triggerKind={commandMenuTrigger.kind}
               isLoading={composerMenu.isLoading}
               error={composerMenu.error}
               onSelect={composerMenu.onSelect}
