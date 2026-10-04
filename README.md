@@ -2,7 +2,11 @@
 
 The next version of supacode, a command center for ur coding agents
 
-## Installation
+## Desktop app
+
+Download at https://next.supacode.sh
+
+## Command line
 
 ```
 curl -fsSL https://next.supacode.sh/install.sh | sh
