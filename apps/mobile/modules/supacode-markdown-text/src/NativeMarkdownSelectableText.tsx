@@ -17,7 +17,7 @@ import { markdownFileIconSource, markdownIconAssetUri } from "./markdownFileIcon
 import { markdownLinkIconSource } from "./markdownLinkIcons";
 import { resolveMarkdownFileIcon, resolveMarkdownLinkIcon } from "./markdownLinks";
 import type { NativeMarkdownTextRun } from "./nativeMarkdownText";
-import { nativeMarkdownContextCopyRanges } from "./nativeMarkdownText";
+import { nativeMarkdownContextCopyRanges, contextChipPresentation } from "./nativeMarkdownContext";
 import type {
   MarkdownFileContextMenu,
   NativeMarkdownTextStyle,
@@ -27,7 +27,6 @@ import {
   renderAndroidContextChip,
 } from "./SupacodeMarkdownTextSelectionModule";
 import { parseComposerContextHref } from "@supacode/shared/composerContextReferences";
-import { contextChipPresentation } from "./nativeMarkdownText";
 
 export const MarkdownContextClipboardContext = createContext("");
 
