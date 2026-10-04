@@ -202,7 +202,7 @@ index 6a2a205f95c1001f3fdf6fb835815fa7c4c02c16..4f42b64349966fb1438f72439cec8256
 +
  }
 diff --git a/ios/Shared/MenuViewImplementation.swift b/ios/Shared/MenuViewImplementation.swift
-index 5c4e0da4292b15d3a27b5ea1555f11452a470815..32bcd55674831f838e94eebc6db5b3904953e07b 100644
+index 5c4e0da4292b15d3a27b5ea1555f11452a470815..5723f8a5cb3dcd590a1bd79395da9897907b0d8a 100644
 --- a/ios/Shared/MenuViewImplementation.swift
 +++ b/ios/Shared/MenuViewImplementation.swift
 @@ -42,6 +42,12 @@ public class MenuViewImplementation: UIButton {
@@ -218,7 +218,21 @@ index 5c4e0da4292b15d3a27b5ea1555f11452a470815..32bcd55674831f838e94eebc6db5b390
      private var _themeVariant: String?
      @objc public var themeVariant: NSString? {
          didSet {
-@@ -60,17 +66,46 @@ public class MenuViewImplementation: UIButton {
+@@ -52,25 +58,58 @@ public class MenuViewImplementation: UIButton {
+ 
+     @objc public var hitSlop: UIEdgeInsets = .zero
+ 
++    // Presents the rich context menu (lift preview and system haptic).
++    // UIControl's built-in contextMenuInteraction always presents a compact
++    // menu with neither, but keeps the keyboard up.
++    private lazy var richContextMenuInteraction = UIContextMenuInteraction(delegate: self)
++
+     override init(frame: CGRect) {
+         super.init(frame: frame)
+-        let interaction = UIContextMenuInteraction(delegate: self)
+-        self.addInteraction(interaction)
++        self.addInteraction(richContextMenuInteraction)
+         self.setup()
      }
     
      public override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
@@ -267,7 +281,7 @@ index 5c4e0da4292b15d3a27b5ea1555f11452a470815..32bcd55674831f838e94eebc6db5b390
      func setup () {
          let menu = UIMenu(title: _title,
              identifier: nil,
-@@ -86,8 +121,111 @@ public class MenuViewImplementation: UIButton {
+@@ -86,8 +125,100 @@ public class MenuViewImplementation: UIButton {
              }
          }
  
@@ -289,8 +303,7 @@ index 5c4e0da4292b15d3a27b5ea1555f11452a470815..32bcd55674831f838e94eebc6db5b390
 +        // the hosting component view, which would swallow their taps (e.g. a
 +        // row Pressable wrapped by MenuView). The context-menu interaction is
 +        // hosted by the superview instead (see updateLongPressInteraction) so
-+        // long-press and pointer secondary-click still present the menu, with
-+        // the wrapped content as the zoom preview.
++        // long-press and pointer secondary-click still present the menu.
 +        self.isUserInteractionEnabled = !shouldOpenOnLongPress
 +        self.updateLongPressInteraction()
 +    }
@@ -347,39 +360,29 @@ index 5c4e0da4292b15d3a27b5ea1555f11452a470815..32bcd55674831f838e94eebc6db5b390
 +    }
 +
 +    private func updateLongPressInteraction() {
-+        if shouldOpenOnLongPress, let host = self.superview {
-+            let builtin = self.contextMenuInteraction
-+            if let existing = longPressInteraction, existing.view === host,
-+               (existing === builtin) == preservesKeyboard {
-+                return
-+            }
-+            releaseLongPressInteraction()
-+            // UIControl's built-in interaction always presents a compact menu
-+            // that preserves the keyboard, with no lift, blur or haptic. A
-+            // separate view interaction presents the rich context menu (system
-+            // lift preview and haptic) and temporarily hides the keyboard.
-+            guard let interaction = preservesKeyboard
-+                ? builtin
-+                : UIContextMenuInteraction(delegate: self) else { return }
-+            host.addInteraction(interaction)
-+            longPressInteraction = interaction
++        let host = shouldOpenOnLongPress ? self.superview : nil
++        let wanted = host == nil ? nil : longPressCandidate
++        if longPressInteraction === wanted, wanted?.view === host {
 +            return
 +        }
-+        releaseLongPressInteraction()
++        if let hosted = longPressInteraction {
++            // Both candidates belong to the button; hand the hosted one back.
++            hosted.view?.removeInteraction(hosted)
++            self.addInteraction(hosted)
++        }
++        longPressInteraction = wanted
++        if let wanted, let host {
++            wanted.view?.removeInteraction(wanted)
++            host.addInteraction(wanted)
++        }
 +    }
 +
-+    private func releaseLongPressInteraction() {
-+        guard let existing = longPressInteraction else { return }
-+        existing.view?.removeInteraction(existing)
-+        // Hand the built-in interaction back so tap mode keeps presenting.
-+        if existing === self.contextMenuInteraction {
-+            self.addInteraction(existing)
-+        }
-+        longPressInteraction = nil
++    private var longPressCandidate: UIContextMenuInteraction? {
++        preservesKeyboard ? self.contextMenuInteraction : richContextMenuInteraction
      }
  
      public override func reactSetFrame(_ frame: CGRect) {
-@@ -124,4 +262,8 @@ public class MenuViewImplementation: UIButton {
+@@ -124,4 +255,8 @@ public class MenuViewImplementation: UIButton {
      @objc func sendMenuOpen() {
          // NO-OP (should be overriden by parent)
      }
