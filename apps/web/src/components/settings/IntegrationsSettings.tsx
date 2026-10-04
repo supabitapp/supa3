@@ -912,7 +912,7 @@ function ClearBrowserProfileDataItem({
         {armed ? "Confirm clear" : "Clear cookies and cache"}
       </MenuItem>
       {armed ? (
-        <p className="px-2 py-1 text-xs text-muted-foreground">
+        <p className="px-2 py-1 text-xs text-balance text-muted-foreground contain-inline-size">
           Signs you out of every site in this profile.
         </p>
       ) : null}

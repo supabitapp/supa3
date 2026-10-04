@@ -221,6 +221,11 @@ export function PreviewMoreMenu({
           >
             {confirm.armed === "cookies" ? "Confirm clear" : "Clear cookies"}
           </MenuItem>
+          {confirm.armed === "cookies" ? (
+            <p className="px-2 py-1 text-xs text-balance text-muted-foreground contain-inline-size">
+              Signs you out of every site in this profile.
+            </p>
+          ) : null}
           <MenuItem
             {...confirm.bind(
               "cache",
@@ -229,11 +234,6 @@ export function PreviewMoreMenu({
           >
             {confirm.armed === "cache" ? "Confirm clear" : "Clear cache"}
           </MenuItem>
-          {confirm.armed === "cookies" ? (
-            <p className="max-w-64 px-2 py-1 text-xs text-muted-foreground">
-              Signs you out of every site in this profile.
-            </p>
-          ) : null}
         </MenuGroup>
       </MenuPopup>
     </Menu>
