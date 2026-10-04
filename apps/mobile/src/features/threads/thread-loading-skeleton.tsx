@@ -21,8 +21,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { useEffect, useId } from "react";
-import { StyleSheet, View, type DimensionValue, type LayoutChangeEvent } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
+import { useEffect, useId, useState } from "react";
+import {
+  AccessibilityInfo,
+  AppState,
+  StyleSheet,
+  View,
+  type DimensionValue,
+  type LayoutChangeEvent,
+} from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -30,20 +38,74 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withRepeat,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
-/** Plays one highlight sweep on its first layout, then rests until the conversation arrives. */
+/** One clock drives every placeholder and stops when the loading screen is inactive. */
+export function useThreadLoadingShimmer() {
+  const progress = useSharedValue(0);
+  const initialReducedMotion = useReducedMotion();
+  const [reduceMotion, setReduceMotion] = useState(initialReducedMotion);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === "active");
+  const screenIsFocused = useIsFocused();
+  const showShimmer = !reduceMotion && appIsActive && screenIsFocused;
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const motionSubscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReduceMotion,
+    );
+    const appSubscription = AppState.addEventListener("change", (state) => {
+      setAppIsActive(state === "active");
+    });
+    return () => {
+      mounted = false;
+      motionSubscription.remove();
+      appSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    progress.set(0);
+    if (!showShimmer) return;
+    // AccessibilityInfo gates the loop live; Reanimated's system preference is cached at startup.
+    progress.set(
+      withRepeat(
+        withTiming(1, {
+          duration: 1_200,
+          easing: Easing.linear,
+          reduceMotion: ReduceMotion.Never,
+        }),
+        -1,
+        false,
+        undefined,
+        ReduceMotion.Never,
+      ),
+    );
+    return () => cancelAnimation(progress);
+  }, [progress, showShimmer]);
+
+  return { progress, showShimmer };
+}
+
+/** Renders a NativeMotion highlight using the loading feed's shared animation clock. */
 export function ThreadLoadingSkeleton(props: {
   readonly width?: DimensionValue;
   readonly height?: number;
   readonly radius?: number;
   readonly shimmerColor: string;
+  readonly progress: SharedValue<number>;
+  readonly showShimmer: boolean;
 }) {
-  const progress = useSharedValue(0);
+  const { progress } = props;
   const measuredWidth = useSharedValue(0);
-  const reduceMotion = useReducedMotion();
   const gradientId = `thread-skeleton-${useId().replaceAll(":", "")}`;
   const sweepStyle = useAnimatedStyle(() => ({
     opacity: measuredWidth.value > 0 ? 1 : 0,
@@ -51,20 +113,8 @@ export function ThreadLoadingSkeleton(props: {
   }));
 
   const onLayout = (event: LayoutChangeEvent) => {
-    if (reduceMotion) return;
-    const firstLayout = measuredWidth.get() === 0;
     measuredWidth.set(event.nativeEvent.layout.width);
-    if (firstLayout && event.nativeEvent.layout.width > 0) {
-      progress.set(
-        withTiming(1, {
-          duration: 280,
-          easing: Easing.linear,
-          reduceMotion: ReduceMotion.System,
-        }),
-      );
-    }
   };
-  useEffect(() => () => cancelAnimation(progress), [progress]);
 
   return (
     <View
@@ -76,7 +126,7 @@ export function ThreadLoadingSkeleton(props: {
         borderRadius: props.radius ?? 6,
       }}
     >
-      {!reduceMotion ? (
+      {props.showShimmer ? (
         <Animated.View style={[StyleSheet.absoluteFill, sweepStyle]}>
           <Svg width="100%" height="100%">
             <Defs>
