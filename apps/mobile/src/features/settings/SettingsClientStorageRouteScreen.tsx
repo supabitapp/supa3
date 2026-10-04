@@ -32,6 +32,7 @@ export function SettingsClientStorageRouteScreen() {
   const isClearing = clearResult.waiting;
   const confirm = useInlineConfirm<"all" | `environment:${string}`>();
   const summary = AsyncResult.isSuccess(summaryResult) ? summaryResult.value : null;
+  const clearAllLabel = summary ? `Clear ${formatBytes(summary.payloadBytes)}` : "Clear caches";
   const environmentSummaries = useMemo(
     () =>
       [...(summary?.environments ?? [])].sort((left, right) => {
@@ -128,13 +129,7 @@ export function SettingsClientStorageRouteScreen() {
           <SettingsSection title="Actions">
             <SettingsActionRow
               icon="trash"
-              label={
-                confirm.armed === "all"
-                  ? "Confirm clearing all caches"
-                  : summary
-                    ? `Clear ${formatBytes(summary.payloadBytes)}`
-                    : "Clear caches"
-              }
+              label={confirm.armed === "all" ? "Confirm clearing all caches" : clearAllLabel}
               tone="danger"
               disabled={isClearing || !summary || summary.recordCount === 0}
               loading={isClearing}
