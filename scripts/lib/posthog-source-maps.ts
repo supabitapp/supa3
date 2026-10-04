@@ -7,18 +7,14 @@ import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as NodeTimersPromises from "node:timers/promises";
 
 export async function sourceMapFiles(directory: string): Promise<string[]> {
-  const files = await NodeFSP.readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    files.map(async (file) => {
-      const filename = NodePath.join(directory, file.name);
-      return file.isDirectory()
-        ? sourceMapFiles(filename)
-        : file.name.endsWith(".map")
-          ? [filename]
-          : [];
-    }),
-  );
-  return nested.flat();
+  const files = await NodeFSP.readdir(directory, { withFileTypes: true, recursive: true });
+  const maps: string[] = [];
+  for (const file of files) {
+    if (!file.isDirectory() && file.name.endsWith(".map")) {
+      maps.push(NodePath.join(file.parentPath, file.name));
+    }
+  }
+  return maps;
 }
 
 /** Release uploads fail closed; credentials exist only in the fnox child process. */

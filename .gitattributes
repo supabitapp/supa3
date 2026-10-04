@@ -3,3 +3,6 @@
 # Batch files need CRLF for cmd.exe to parse them reliably.
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Keep generated dependency changes collapsed in GitHub reviews.
+pnpm-lock.yaml linguist-generated=true
