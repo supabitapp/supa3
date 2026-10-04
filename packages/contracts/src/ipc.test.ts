@@ -1,7 +1,19 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { DesktopEnvironmentBootstrapSchema } from "./ipc.ts";
+import { DesktopAppBrandingSchema, DesktopEnvironmentBootstrapSchema } from "./ipc.ts";
+
+describe("DesktopAppBrandingSchema", () => {
+  const decode = Schema.decodeUnknownSync(DesktopAppBrandingSchema);
+
+  it("preserves the absent stage for stable desktop branding", () => {
+    expect(decode({ baseName: "Supacode", stageLabel: null, displayName: "Supacode" })).toEqual({
+      baseName: "Supacode",
+      stageLabel: null,
+      displayName: "Supacode",
+    });
+  });
+});
 
 describe("DesktopEnvironmentBootstrapSchema", () => {
   const decode = Schema.decodeUnknownSync(DesktopEnvironmentBootstrapSchema);

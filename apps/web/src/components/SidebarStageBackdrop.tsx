@@ -13,26 +13,26 @@ export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
 export function resolveSidebarStageBackdropVariant(
-  stageLabel: string,
+  stageLabel: string | null,
   enabled = true,
 ): SidebarStageBackdropVariant | null {
   if (!enabled) return null;
-  const normalized = stageLabel.trim().toLowerCase();
+  const normalized = stageLabel?.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
   return null;
 }
 
 export function resolveEnvironmentIdentificationPillLabel(
-  stageLabel: string,
+  stageLabel: string | null,
 ): EnvironmentIdentificationPillLabel | null {
-  const normalized = stageLabel.trim().toLowerCase();
+  const normalized = stageLabel?.trim().toLowerCase();
   if (normalized === "dev") return "Dev";
   if (normalized === "nightly") return "Nightly";
   return null;
 }
 
-export function useEnvironmentStageLabel(): string {
+export function useEnvironmentStageLabel(): string | null {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
 
