@@ -73,9 +73,10 @@ function PopoverPopup({
         anchor={anchor}
         collisionAvoidance={collisionAvoidance}
         className={cn(
-          "z-[130] h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-transform data-instant:transition-none",
-          variant === "panel" &&
-            "w-[min(var(--thread-details-panel-width),var(--anchor-width))] transition-none",
+          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-transform data-instant:transition-none",
+          variant === "panel"
+            ? "z-(--z-sheet) w-[min(var(--thread-details-panel-width),var(--anchor-width))] transition-none"
+            : "z-[130]",
         )}
         data-slot="popover-positioner"
         side={side}
@@ -88,6 +89,7 @@ function PopoverPopup({
             tooltipStyle &&
               "w-fit text-balance rounded-md text-xs shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
             !tooltipStyle &&
+              variant !== "panel" &&
               "shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
             width !== "auto" && ["max-w-[calc(100vw-2rem)]", popoverPopupWidthClassName[width]],
             variant === "panel" &&
@@ -131,16 +133,6 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   );
 }
 
-function PopoverDescription({ className, ...props }: PopoverPrimitive.Description.Props) {
-  return (
-    <PopoverPrimitive.Description
-      className={cn("text-muted-foreground text-xs", className)}
-      data-slot="popover-description"
-      {...props}
-    />
-  );
-}
-
 export {
   PopoverCreateHandle,
   Popover,
@@ -148,6 +140,5 @@ export {
   PopoverPopup,
   PopoverPopup as PopoverContent,
   PopoverTitle,
-  PopoverDescription,
   PopoverClose,
 };

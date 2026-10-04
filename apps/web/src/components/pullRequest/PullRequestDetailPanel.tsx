@@ -21,6 +21,7 @@ import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
   BookOpenIcon,
+  CheckIcon,
   CircleDotIcon,
   CopyIcon,
   ChevronDownIcon,
@@ -56,6 +57,7 @@ import {
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
 import {
   resolveShortcutCommand,
@@ -161,7 +163,7 @@ import {
   type PickableEnvironment,
 } from "./pullRequestProjectAssignment.logic";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
-import { PullRequestConfirmPopover } from "./PullRequestConfirmPopover";
+import { InlineConfirmLabel } from "../InlineConfirmLabel";
 import {
   PullRequestActorLabel,
   PullRequestDiffStat,
@@ -571,15 +573,15 @@ export function PullRequestDetailPanel({
   const setMergeMethod = (method: PullRequestMergeMethod) => {
     setMergeMethodSelection({ pullRequestKey, method });
   };
-  const [confirmation, setConfirmation] = useState<{
-    readonly open: boolean;
-    readonly action: "merge" | "close" | "enable-auto-merge" | "revert" | "approve-workflows";
-    readonly anchor: Element | null;
-  }>({ open: false, action: "merge", anchor: null });
-  const moreActionsTriggerRef = useRef<HTMLButtonElement>(null);
-  const confirmFromMenu = (action: (typeof confirmation)["action"]) =>
-    setConfirmation({ open: true, action, anchor: moreActionsTriggerRef.current });
-  const confirmAction = confirmation.action;
+  const confirm = useInlineConfirm<
+    | "merge"
+    | "enable-auto-merge"
+    | "approve-workflows"
+    | "menu-merge"
+    | "menu-enable-auto-merge"
+    | "close"
+    | "revert"
+  >();
   // Which handoff is preparing, keyed so a per-finding button can say "Preparing..." on itself
   // alone. One at a time whatever the key: they all check the same pull request out.
   const [handoff, setHandoff] = useState<string | null>(null);
@@ -1928,31 +1930,46 @@ export function PullRequestDetailPanel({
                           size="xs"
                           variant="default"
                           disabled={actionPending}
+                          {...confirm.target("enable-auto-merge")}
                           onClick={(event) =>
-                            setConfirmation({
-                              open: true,
-                              action: "enable-auto-merge",
-                              anchor: event.currentTarget,
+                            confirm.press("enable-auto-merge", event, () => {
+                              void perform("enable-auto-merge", selectedMergeMethod);
                             })
                           }
                           aria-label={
                             pendingAction === "enable-auto-merge"
                               ? "Enabling..."
-                              : pendingAutoMergeLabel
+                              : confirm.armed === "enable-auto-merge"
+                                ? "Confirm auto-merge"
+                                : pendingAutoMergeLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          {confirm.armed === "enable-auto-merge" ? (
+                            <CheckIcon aria-hidden className="size-3.5" />
+                          ) : (
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          )}
                           <span className="@max-[30rem]/pr-header:hidden">
-                            {pendingAction === "enable-auto-merge"
-                              ? "Enabling..."
-                              : pendingAutoMergeLabel}
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "enable-auto-merge"}
+                              idle={
+                                pendingAction === "enable-auto-merge"
+                                  ? "Enabling..."
+                                  : pendingAutoMergeLabel
+                              }
+                              confirm="Confirm auto-merge"
+                            />
                           </span>
                         </Button>
                       </span>
                     }
                   />
                   <TooltipPopup side="top">
-                    {pendingAction === "enable-auto-merge" ? "Enabling..." : pendingAutoMergeLabel}
+                    {pendingAction === "enable-auto-merge"
+                      ? "Enabling..."
+                      : confirm.armed === "enable-auto-merge"
+                        ? `Click again to enable auto-merge. The host may merge #${reference.number} right away.`
+                        : pendingAutoMergeLabel}
                   </TooltipPopup>
                 </Tooltip>
               ) : primaryAction === "auto-merge-armed" ? (
@@ -1984,27 +2001,44 @@ export function PullRequestDetailPanel({
                           size="xs"
                           variant="default"
                           disabled={actionPending}
+                          {...confirm.target("merge")}
                           onClick={(event) =>
-                            setConfirmation({
-                              open: true,
-                              action: "merge",
-                              anchor: event.currentTarget,
+                            confirm.press("merge", event, () => {
+                              void perform("merge", selectedMergeMethod);
                             })
                           }
                           aria-label={
-                            pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
+                            pendingAction === "merge"
+                              ? "Merging..."
+                              : confirm.armed === "merge"
+                                ? "Confirm merge"
+                                : selectedMergeMethodLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          {confirm.armed === "merge" ? (
+                            <CheckIcon aria-hidden className="size-3.5" />
+                          ) : (
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          )}
                           <span className="@max-[30rem]/pr-header:hidden">
-                            {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "merge"}
+                              idle={
+                                pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
+                              }
+                              confirm="Confirm merge"
+                            />
                           </span>
                         </Button>
                       </span>
                     }
                   />
                   <TooltipPopup side="top">
-                    {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
+                    {pendingAction === "merge"
+                      ? "Merging..."
+                      : confirm.armed === "merge"
+                        ? `Click again to ${selectedMergeMethodLabel.toLowerCase()} #${reference.number} into ${detail.baseBranch}`
+                        : selectedMergeMethodLabel}
                   </TooltipPopup>
                 </Tooltip>
               ) : (primaryAction === "merged" || primaryAction === "closed") &&
@@ -2016,14 +2050,17 @@ export function PullRequestDetailPanel({
                   </span>
                 </Badge>
               ) : null}
-              <Menu>
+              <Menu
+                onOpenChange={(open) => {
+                  if (!open) confirm.disarm();
+                }}
+              >
                 <Tooltip>
                   <TooltipTrigger
                     render={
                       <MenuTrigger
                         render={
                           <Button
-                            ref={moreActionsTriggerRef}
                             aria-label={
                               refreshing ? "Refreshing pull request" : "More pull request actions"
                             }
@@ -2115,9 +2152,18 @@ export function PullRequestDetailPanel({
                         </MenuItem>
                       ) : null}
                       {showsMergeNow ? (
-                        <MenuItem disabled={actionPending} onClick={() => confirmFromMenu("merge")}>
+                        <MenuItem
+                          {...confirm.target("menu-merge")}
+                          disabled={actionPending}
+                          closeOnClick={confirm.armed === "menu-merge"}
+                          onClick={(event) =>
+                            confirm.press("menu-merge", event, () => {
+                              void perform("merge", selectedMergeMethod);
+                            })
+                          }
+                        >
                           <PullRequestGlyph.merged className="size-3.5" />
-                          Merge now
+                          {confirm.armed === "menu-merge" ? "Confirm merge" : "Merge now"}
                         </MenuItem>
                       ) : null}
                       {/* The same merge, left with the host to carry out once its requirements
@@ -2133,11 +2179,19 @@ export function PullRequestDetailPanel({
                         </MenuItem>
                       ) : showsAutoMerge ? (
                         <MenuItem
+                          {...confirm.target("menu-enable-auto-merge")}
                           disabled={actionPending}
-                          onClick={() => confirmFromMenu("enable-auto-merge")}
+                          closeOnClick={confirm.armed === "menu-enable-auto-merge"}
+                          onClick={(event) =>
+                            confirm.press("menu-enable-auto-merge", event, () => {
+                              void perform("enable-auto-merge", selectedMergeMethod);
+                            })
+                          }
                         >
                           <PullRequestGlyph.merged className="size-3.5" />
-                          Enable auto-merge
+                          {confirm.armed === "menu-enable-auto-merge"
+                            ? "Confirm auto-merge"
+                            : "Enable auto-merge"}
                         </MenuItem>
                       ) : null}
                       {/* A preference for the merge action rather than a second action, so it
@@ -2210,12 +2264,18 @@ export function PullRequestDetailPanel({
                     <>
                       <MenuSeparator />
                       <MenuItem
+                        {...confirm.target("close")}
                         variant="destructive"
                         disabled={actionPending}
-                        onClick={() => confirmFromMenu("close")}
+                        closeOnClick={confirm.armed === "close"}
+                        onClick={(event) =>
+                          confirm.press("close", event, () => {
+                            void perform("close");
+                          })
+                        }
                       >
                         <PullRequestGlyph.closed className="size-3.5" />
-                        Close pull request
+                        {confirm.armed === "close" ? "Confirm close" : "Close pull request"}
                       </MenuItem>
                     </>
                   ) : detail.state === "closed" && can("reopen") ? (
@@ -2229,9 +2289,18 @@ export function PullRequestDetailPanel({
                   ) : detail.state === "merged" && can("revert") ? (
                     <>
                       <MenuSeparator />
-                      <MenuItem disabled={actionPending} onClick={() => confirmFromMenu("revert")}>
+                      <MenuItem
+                        {...confirm.target("revert")}
+                        disabled={actionPending}
+                        closeOnClick={confirm.armed === "revert"}
+                        onClick={(event) =>
+                          confirm.press("revert", event, () => {
+                            void perform("revert");
+                          })
+                        }
+                      >
                         <RotateCcwIcon className="size-3.5" />
-                        Revert changes
+                        {confirm.armed === "revert" ? "Confirm revert" : "Revert changes"}
                       </MenuItem>
                     </>
                   ) : null}
@@ -2588,25 +2657,34 @@ export function PullRequestDetailPanel({
                             size="xs"
                             variant="warning-outline"
                             disabled={actionPending}
+                            {...confirm.target("approve-workflows")}
                             onClick={(event) =>
-                              setConfirmation({
-                                open: true,
-                                action: "approve-workflows",
-                                anchor: event.currentTarget,
+                              confirm.press("approve-workflows", event, () => {
+                                void perform("approve-workflows");
                               })
                             }
                             aria-label={
                               pendingAction === "approve-workflows"
                                 ? "Approving..."
-                                : "Approve workflows to run"
+                                : confirm.armed === "approve-workflows"
+                                  ? "Confirm approval"
+                                  : "Approve workflows to run"
                             }
                           >
-                            <PlayIcon aria-hidden className="size-3.5" />
-                            <span>
-                              {pendingAction === "approve-workflows"
-                                ? "Approving..."
-                                : "Approve workflows to run"}
-                            </span>
+                            {confirm.armed === "approve-workflows" ? (
+                              <CheckIcon aria-hidden className="size-3.5" />
+                            ) : (
+                              <PlayIcon aria-hidden className="size-3.5" />
+                            )}
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "approve-workflows"}
+                              idle={
+                                pendingAction === "approve-workflows"
+                                  ? "Approving..."
+                                  : "Approve workflows to run"
+                              }
+                              confirm="Confirm approval"
+                            />
                           </Button>
                         </span>
                       }
@@ -2614,7 +2692,9 @@ export function PullRequestDetailPanel({
                     <TooltipPopup side="top">
                       {pendingAction === "approve-workflows"
                         ? "Approving..."
-                        : "Approve workflows to run"}
+                        : confirm.armed === "approve-workflows"
+                          ? `Click again to let ${workflowApprovalsRequired} ${workflowApprovalsRequired === 1 ? "workflow" : "workflows"} from #${reference.number} run. Review the code and workflow changes first.`
+                          : "Approve workflows to run"}
                     </TooltipPopup>
                   </Tooltip>
                 ) : (
@@ -2835,63 +2915,6 @@ export function PullRequestDetailPanel({
           />
         </div>
       ) : null}
-
-      <PullRequestConfirmPopover
-        open={confirmation.open}
-        anchor={confirmation.anchor}
-        onOpenChange={(open) => setConfirmation((current) => ({ ...current, open }))}
-        onOpenChangeComplete={(open) => {
-          if (!open) setConfirmation({ open: false, action: "merge", anchor: null });
-        }}
-        title={
-          confirmAction === "merge"
-            ? "Merge pull request?"
-            : confirmAction === "enable-auto-merge"
-              ? "Enable auto-merge?"
-              : confirmAction === "revert"
-                ? "Revert these changes?"
-                : confirmAction === "approve-workflows"
-                  ? "Approve workflows to run?"
-                  : "Close pull request?"
-        }
-        description={
-          confirmAction === "merge"
-            ? `This merges #${reference.number} using ${selectedMergeMethod}.`
-            : confirmAction === "enable-auto-merge"
-              ? // The host merges this as soon as it considers the pull request ready, which
-                // may be immediately — there is no telling from here whether anything is
-                // still outstanding.
-                `This merges #${reference.number} using ${selectedMergeMethod} as soon as the host considers it ready, which may be immediately.`
-              : confirmAction === "revert"
-                ? `This opens a new pull request that reverses the changes merged by #${reference.number}.`
-                : confirmAction === "approve-workflows"
-                  ? `This allows ${workflowApprovalsRequired} ${workflowApprovalsRequired === 1 ? "workflow" : "workflows"} from #${reference.number} to run. Review the code and workflow changes first.`
-                  : `This closes #${reference.number} without merging it.`
-        }
-        confirmLabel={
-          confirmAction === "merge"
-            ? selectedMergeMethodLabel
-            : confirmAction === "enable-auto-merge"
-              ? "Enable auto-merge"
-              : confirmAction === "revert"
-                ? "Create revert PR"
-                : confirmAction === "approve-workflows"
-                  ? "Approve and run"
-                  : "Close"
-        }
-        destructive={confirmAction === "close"}
-        pending={actionPending}
-        onConfirm={() => {
-          const action = confirmAction;
-          setConfirmation((current) => ({ ...current, open: false }));
-          if (action === "merge") void perform("merge", selectedMergeMethod);
-          if (action === "enable-auto-merge")
-            void perform("enable-auto-merge", selectedMergeMethod);
-          if (action === "revert") void perform("revert");
-          if (action === "approve-workflows") void perform("approve-workflows");
-          if (action === "close") void perform("close");
-        }}
-      />
     </div>
   );
 }

@@ -6,17 +6,17 @@ import type {
   PullRequestMergeMethod,
 } from "@supacode/contracts";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
-import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { CheckIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import { useState } from "react";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger, MenuItem, MenuGroup, MenuSeparator } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { PullRequestConfirmPopover } from "./PullRequestConfirmPopover";
+import { InlineConfirmLabel } from "../InlineConfirmLabel";
 import { PullRequestStackLayers } from "./PullRequestStackLayers";
 import { PullRequestStackHeader } from "./PullRequestStackHeader";
-import { PullRequestStackLayerContent } from "./PullRequestStackLayerContent";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestStackMenu({
@@ -43,13 +43,7 @@ export function PullRequestStackMenu({
   onActed: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmation, setConfirmation] = useState<"merge" | "update-branch" | null>(null);
-  const [confirmationAnchor, setConfirmationAnchor] = useState<Element | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const confirm = (action: "merge" | "update-branch", anchor: Element | null) => {
-    setConfirmationAnchor(anchor);
-    setConfirmation(action);
-  };
+  const confirm = useInlineConfirm<"merge" | "menu-merge" | "menu-rebase">();
   const [pending, setPending] = useState(false);
   const runAction = useAtomCommand(pullRequestEnvironment.runAction, { reportFailure: false });
   const top = stack.layers.at(-1);
@@ -71,14 +65,9 @@ export function PullRequestStackMenu({
     mergeLayers.length === 0 ||
     mergeLayers.some((layer) => layer.isDraft);
   const rebaseDisabled = pending || hasUnknownHead || hasClosed || unmerged.length === 0;
-  const run = async () => {
-    if (
-      pending ||
-      !confirmation ||
-      (confirmation === "merge" ? !canMerge || mergeDisabled : !canRebase || rebaseDisabled)
-    )
+  const run = async (action: "merge" | "update-branch") => {
+    if (pending || (action === "merge" ? !canMerge || mergeDisabled : !canRebase || rebaseDisabled))
       return;
-    const action = confirmation;
     const target = action === "merge" ? selectedLayer : top;
     if (!target?.headSha) return;
     const actionHeads = (action === "merge" ? mergeLayers : unmerged).flatMap((layer) =>
@@ -97,7 +86,6 @@ export function PullRequestStackMenu({
       },
     });
     setPending(false);
-    setConfirmation(null);
     onActed();
     if (result._tag === "Failure") {
       toastManager.add({
@@ -116,17 +104,22 @@ export function PullRequestStackMenu({
       });
     }
   };
-  const confirmationLayers = confirmation === "merge" ? mergeLayers : unmerged;
+  const mergeCountLabel = `${mergeLayers.length} ${mergeLayers.length === 1 ? "pull request" : "pull requests"}`;
   return (
     <>
-      <Menu open={open} onOpenChange={setOpen}>
+      <Menu
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) confirm.disarm();
+        }}
+      >
         <Tooltip>
           <TooltipTrigger
             render={
               <MenuTrigger
                 render={
                   <Button
-                    ref={triggerRef}
                     variant="ghost"
                     size="xs"
                     aria-label={`Stack ${stack.number}, layer ${position} of ${stack.layers.length}`}
@@ -167,21 +160,42 @@ export function PullRequestStackMenu({
               <MenuSeparator />
               {canMerge ? (
                 <MenuItem
+                  {...confirm.target("menu-merge")}
                   disabled={mergeDisabled}
-                  onClick={() => confirm("merge", triggerRef.current)}
+                  closeOnClick={confirm.armed === "menu-merge"}
+                  onClick={(event) =>
+                    confirm.press("menu-merge", event, () => {
+                      void run("merge");
+                    })
+                  }
                 >
                   <PullRequestGlyph.merged aria-hidden />
-                  Merge stack ({mergeLayers.length})
+                  {`${confirm.armed === "menu-merge" ? "Confirm merge" : "Merge stack"} (${mergeLayers.length})`}
                 </MenuItem>
               ) : null}
               {canRebase ? (
                 <MenuItem
+                  {...confirm.target("menu-rebase")}
                   disabled={rebaseDisabled}
-                  onClick={() => confirm("update-branch", triggerRef.current)}
+                  closeOnClick={confirm.armed === "menu-rebase"}
+                  onClick={(event) =>
+                    confirm.press("menu-rebase", event, () => {
+                      void run("update-branch");
+                    })
+                  }
                 >
                   <RefreshCwIcon aria-hidden />
-                  Rebase stack
+                  {confirm.armed === "menu-rebase" ? "Confirm rebase" : "Rebase stack"}
                 </MenuItem>
+              ) : null}
+              {confirm.armed === "menu-merge" ? (
+                <p className="px-2 py-1 text-xs text-muted-foreground">
+                  Merges {mergeCountLabel} into {stack.base} using {mergeMethod}.
+                </p>
+              ) : confirm.armed === "menu-rebase" ? (
+                <p className="px-2 py-1 text-xs text-muted-foreground">
+                  Rewrites each branch onto {stack.base}, bottom to top. Checks may restart.
+                </p>
               ) : null}
               {mergeHasClosed || mergeLayers.some((layer) => layer.isDraft) ? (
                 <p className="px-2 py-1 text-xs text-muted-foreground">
@@ -198,57 +212,37 @@ export function PullRequestStackMenu({
             render={
               <span className="inline-flex">
                 <Button
+                  {...confirm.target("merge")}
                   variant="default"
                   size="xs"
                   disabled={mergeDisabled}
-                  onClick={(event) => confirm("merge", event.currentTarget)}
+                  onClick={(event) =>
+                    confirm.press("merge", event, () => {
+                      void run("merge");
+                    })
+                  }
                 >
-                  <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                  Merge stack
+                  {confirm.armed === "merge" ? (
+                    <CheckIcon aria-hidden className="size-3.5" />
+                  ) : (
+                    <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                  )}
+                  <InlineConfirmLabel
+                    armed={confirm.armed === "merge"}
+                    idle={pending ? "Working…" : "Merge stack"}
+                    confirm="Confirm merge"
+                  />
                 </Button>
               </span>
             }
           />
           <TooltipPopup>
-            Merge stack through #{reference.number} into {stack.base} ({mergeLayers.length}{" "}
-            {mergeLayers.length === 1 ? "pull request" : "pull requests"})
+            {confirm.armed === "merge"
+              ? `Click again to merge ${mergeCountLabel} into ${stack.base} using ${mergeMethod}`
+              : `Merge stack through #${reference.number} into ${stack.base} (${mergeCountLabel})`}
           </TooltipPopup>
         </Tooltip>
       ) : null}
-      <PullRequestConfirmPopover
-        open={confirmation !== null}
-        anchor={confirmationAnchor}
-        onOpenChange={(value) => {
-          if (!value && !pending) setConfirmation(null);
-        }}
-        title={
-          confirmation === "merge"
-            ? `Merge ${mergeLayers.length} pull requests?`
-            : `Rebase ${unmerged.length} pull requests?`
-        }
-        description={
-          confirmation === "merge"
-            ? `Merge #${reference.number} and its unmerged layers below into ${stack.base} using ${mergeMethod}. GitHub checks their rules before merging or queueing them and rebases the remaining stack after merging.`
-            : `Rebase the remote branches from bottom to top onto ${stack.base}. This rewrites branch history and may restart checks. If a layer fails, earlier updates remain.`
-        }
-        confirmLabel={
-          pending ? "Working…" : confirmation === "merge" ? "Merge stack" : "Rebase stack"
-        }
-        pending={pending}
-        width="md"
-        onConfirm={() => void run()}
-      >
-        <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
-          {confirmationLayers.map((layer) => (
-            <li
-              key={layer.number}
-              className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2"
-            >
-              <PullRequestStackLayerContent layer={layer} compact />
-            </li>
-          ))}
-        </ul>
-      </PullRequestConfirmPopover>
     </>
   );
 }

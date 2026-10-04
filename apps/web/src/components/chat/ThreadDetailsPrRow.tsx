@@ -19,8 +19,9 @@ import type { EnvironmentProject } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId, ProjectId, PullRequestRef } from "@supacode/contracts";
 import { sourceControlRepositorySelector } from "@supacode/shared/sourceControl";
 import { ArrowUpRightIcon, FileDiffIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { usePullRequestChecksRefresh } from "~/hooks/usePullRequestChecksRefresh";
 import { cn } from "~/lib/utils";
@@ -39,7 +40,6 @@ import {
   resolveThreadPanelPullRequestAction,
 } from "../pullRequest/pullRequestDetail.logic";
 import { PullRequestChecksPopover } from "../pullRequest/PullRequestChecksPopover";
-import { PullRequestConfirmPopover } from "../pullRequest/PullRequestConfirmPopover";
 import {
   pullRequestChecksState,
   PullRequestCheckStatusIcon,
@@ -55,6 +55,7 @@ import {
   type PrStatusIndicator,
   type ThreadPr,
 } from "../ThreadStatusIndicators";
+import { InlineConfirmLabel } from "../InlineConfirmLabel";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -144,14 +145,11 @@ export function ThreadDetailsPrRow({
     },
   });
   const { handoff, startHandoff } = usePullRequestHandoffs({ environmentId, detail });
-  const [mergeConfirmation, setMergeConfirmation] = useState<{
-    readonly open: boolean;
-    readonly anchor: Element | null;
-  }>({ open: false, anchor: null });
+  const confirm = useInlineConfirm<"merge">();
 
   const rowAction = resolveThreadPanelPullRequestAction(detail);
-  if (mergeConfirmation.open && rowAction !== "merge") {
-    setMergeConfirmation((current) => ({ ...current, open: false }));
+  if (confirm.armed !== null && rowAction !== "merge") {
+    confirm.disarm();
   }
   const conflicting = isPullRequestConflicting(detail);
   const checksState = detail === null ? "none" : classifyPullRequestChecks(detail.checks);
@@ -318,14 +316,26 @@ export function ThreadDetailsPrRow({
             }
           : rowAction === "merge"
             ? {
-                label: "Merge",
+                label: (
+                  <InlineConfirmLabel
+                    armed={confirm.armed === "merge"}
+                    idle="Merge"
+                    confirm="Confirm"
+                  />
+                ),
                 pendingLabel: "Merging...",
                 pending: actionPending,
                 destructive: false,
                 suffix: null,
-                tooltip: `Merge this pull request (${selectedMergeMethod})`,
+                tooltip:
+                  confirm.armed === "merge"
+                    ? `Click again to merge #${number} into ${detail?.baseBranch} (${selectedMergeMethod})`
+                    : `Merge this pull request (${selectedMergeMethod})`,
+                confirmTarget: confirm.target("merge"),
                 onClick: (event: ReactMouseEvent<HTMLElement>) =>
-                  setMergeConfirmation({ open: true, anchor: event.currentTarget }),
+                  confirm.press("merge", event, () => {
+                    void perform("merge", selectedMergeMethod);
+                  }),
               }
             : null;
 
@@ -381,6 +391,7 @@ export function ThreadDetailsPrRow({
                       part="action"
                       tone={trailingAction.destructive ? "destructive" : "default"}
                       disabled={actionPending || handoff !== null}
+                      {...("confirmTarget" in trailingAction ? trailingAction.confirmTarget : {})}
                       onClick={trailingAction.onClick}
                     />
                   }
@@ -412,19 +423,6 @@ export function ThreadDetailsPrRow({
           {rowTooltip}
         </Tooltip>
       )}
-      <PullRequestConfirmPopover
-        open={mergeConfirmation.open}
-        anchor={mergeConfirmation.anchor}
-        onOpenChange={(open) => setMergeConfirmation((current) => ({ ...current, open }))}
-        title="Merge pull request?"
-        description={`This merges #${number} using ${selectedMergeMethod}.`}
-        confirmLabel="Merge"
-        pending={actionPending}
-        onConfirm={() => {
-          setMergeConfirmation((current) => ({ ...current, open: false }));
-          void perform("merge", selectedMergeMethod);
-        }}
-      />
     </>
   );
 }
