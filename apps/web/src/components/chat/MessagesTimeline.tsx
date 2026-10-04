@@ -73,7 +73,6 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { shallow } from "zustand/vanilla/shallow";
 import {
   LegendList,
   type LegendListRef,
@@ -735,41 +734,41 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, [latestRun, listIdentityKey]);
 
-  const rowsInput: MessagesTimelineRowsProjection["input"] = {
-    timelineEntries,
-    latestRun,
-    runningRunId,
-    expandedRunIds,
-    expandedAttemptIds,
-    expandedWorkGroupIds,
-    isWorking,
-    runlessWorkActive,
-    activeTurnStartedAt,
-    turnDiffSummaries,
-    supportsConversationRollback,
-    worktreeSetup,
-  };
-  const [rowsProjection, setRowsProjection] = useState(() => ({
-    threadKey: listIdentityKey,
-    workspaceRoot,
-    input: rowsInput,
-    projection: deriveMessagesTimelineRowsWithState(rowsInput),
-  }));
-  const reusableRowsProjection =
-    rowsProjection.threadKey === listIdentityKey && rowsProjection.workspaceRoot === workspaceRoot
-      ? rowsProjection
-      : null;
-  let rawRows: MessagesTimelineRow[];
-  if (reusableRowsProjection !== null && shallow(reusableRowsProjection.input, rowsInput)) {
-    rawRows = reusableRowsProjection.projection.rows;
-  } else {
-    const projection = deriveMessagesTimelineRowsWithState(
-      rowsInput,
-      reusableRowsProjection?.projection ?? null,
-    );
-    setRowsProjection({ threadKey: listIdentityKey, workspaceRoot, input: rowsInput, projection });
-    rawRows = projection.rows;
-  }
+  const [projectRows] = useState(createMessagesTimelineRowsProjector);
+  const rawRows = useMemo(
+    () =>
+      projectRows(listIdentityKey, workspaceRoot, {
+        timelineEntries,
+        latestRun,
+        runningRunId,
+        expandedRunIds,
+        expandedAttemptIds,
+        expandedWorkGroupIds,
+        isWorking,
+        runlessWorkActive,
+        activeTurnStartedAt,
+        turnDiffSummaries,
+        supportsConversationRollback,
+        worktreeSetup,
+      }),
+    [
+      projectRows,
+      listIdentityKey,
+      workspaceRoot,
+      timelineEntries,
+      latestRun,
+      runningRunId,
+      expandedRunIds,
+      expandedAttemptIds,
+      expandedWorkGroupIds,
+      isWorking,
+      runlessWorkActive,
+      activeTurnStartedAt,
+      turnDiffSummaries,
+      supportsConversationRollback,
+      worktreeSetup,
+    ],
+  );
   const rows = useStableRows(rawRows, listIdentityKey);
   // Run status/timestamps churn on every stream event; the shared row context
   // must not change with them or every timeline row re-renders per event.
@@ -868,7 +867,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           });
           return;
         }
-        if (++stableFrames >= 2) {
+        stableFrames += 1;
+        if (stableFrames >= 2) {
           setPositionedThreadKey(listIdentityKey);
         } else {
           settleFrame = requestAnimationFrame(reconcile);
@@ -4447,62 +4447,76 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
  *  array is rebuilt on every projection event (status/timestamp churn), but
  *  the returned reference only changes when a run's identity-relevant fields
  *  (id, ordinal, instance, model) do — keeping TimelineRowCtx stable. */
+function createMessagesTimelineRowsProjector() {
+  let previous: {
+    readonly threadKey: string;
+    readonly workspaceRoot: string | undefined;
+    readonly projection: MessagesTimelineRowsProjection;
+  } | null = null;
+  return (
+    threadKey: string,
+    workspaceRoot: string | undefined,
+    input: MessagesTimelineRowsProjection["input"],
+  ): MessagesTimelineRow[] => {
+    const projection = deriveMessagesTimelineRowsWithState(
+      input,
+      previous?.threadKey === threadKey && previous.workspaceRoot === workspaceRoot
+        ? previous.projection
+        : null,
+    );
+    previous = { threadKey, workspaceRoot, projection };
+    return projection.rows;
+  };
+}
+
+function createHandoffRunsStabilizer() {
+  let signature = "";
+  let value: ReadonlyArray<HandoffTimelineRun> = EMPTY_TIMELINE_RUNS;
+  return (runs: ReadonlyArray<HandoffTimelineRun>): ReadonlyArray<HandoffTimelineRun> => {
+    const nextSignature = runs
+      .map(
+        (run) =>
+          `${run.id}\0${run.providerInstanceId}\0${run.ordinal}\0${run.modelSelection.instanceId}\0${run.modelSelection.model}`,
+      )
+      .join("\n");
+    if (nextSignature !== signature) {
+      signature = nextSignature;
+      value = runs.map((run) => ({
+        id: run.id,
+        ordinal: run.ordinal,
+        providerInstanceId: run.providerInstanceId,
+        modelSelection: run.modelSelection,
+      }));
+    }
+    return value;
+  };
+}
+
 function useStableHandoffRuns(
   runs: ReadonlyArray<HandoffTimelineRun>,
 ): ReadonlyArray<HandoffTimelineRun> {
-  const signature = runs
-    .map(
-      (run) =>
-        `${run.id}\0${run.providerInstanceId}\0${run.ordinal}\0${run.modelSelection.instanceId}\0${run.modelSelection.model}`,
-    )
-    .join("\n");
-  const [stable, setStable] = useState<{
-    signature: string;
-    value: ReadonlyArray<HandoffTimelineRun>;
-  }>(() => ({
-    signature,
-    value: signature === "" ? EMPTY_TIMELINE_RUNS : projectHandoffTimelineRuns(runs),
-  }));
-  if (signature === stable.signature) {
-    return stable.value;
-  }
-  const value = projectHandoffTimelineRuns(runs);
-  setStable({ signature, value });
-  return value;
+  const [stabilize] = useState(createHandoffRunsStabilizer);
+  return useMemo(() => stabilize(runs), [stabilize, runs]);
 }
 
-function projectHandoffTimelineRuns(
-  runs: ReadonlyArray<HandoffTimelineRun>,
-): ReadonlyArray<HandoffTimelineRun> {
-  return runs.map((run) => ({
-    id: run.id,
-    ordinal: run.ordinal,
-    providerInstanceId: run.providerInstanceId,
-    modelSelection: run.modelSelection,
-  }));
+function createMessagesTimelineRowsStabilizer() {
+  let identity: string | null = null;
+  let state: StableMessagesTimelineRowsState = { byId: new Map(), result: [] };
+  return (rows: MessagesTimelineRow[], nextIdentity: string): MessagesTimelineRow[] => {
+    state = computeStableMessagesTimelineRows(
+      rows,
+      identity === nextIdentity ? state : { byId: new Map(), result: [] },
+    );
+    identity = nextIdentity;
+    return state.result;
+  };
 }
 
 /** Returns a structurally-shared copy of `rows`: for each row whose content
  *  hasn't changed since last call, the previous object reference is reused. */
 function useStableRows(rows: MessagesTimelineRow[], identity: string): MessagesTimelineRow[] {
-  const [stable, setStable] = useState(() => ({
-    rows,
-    identity,
-    state: computeStableMessagesTimelineRows(rows, emptyStableMessagesTimelineRowsState()),
-  }));
-  if (stable.rows === rows && stable.identity === identity) {
-    return stable.state.result;
-  }
-  const state = computeStableMessagesTimelineRows(
-    rows,
-    stable.identity === identity ? stable.state : emptyStableMessagesTimelineRowsState(),
-  );
-  setStable({ rows, identity, state });
-  return state.result;
-}
-
-function emptyStableMessagesTimelineRowsState(): StableMessagesTimelineRowsState {
-  return { byId: new Map<string, MessagesTimelineRow>(), result: [] };
+  const [stabilize] = useState(createMessagesTimelineRowsStabilizer);
+  return useMemo(() => stabilize(rows, identity), [stabilize, rows, identity]);
 }
 
 // ---------------------------------------------------------------------------

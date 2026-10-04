@@ -1144,16 +1144,36 @@ const extendReplacementRangeForTrailingSpace = (
   return text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
 };
 
-function useInputsChanged(inputs: ReadonlyArray<unknown>): boolean {
-  const [previous, setPrevious] = useState<ReadonlyArray<unknown> | null>(null);
-  if (
-    previous !== null &&
+function sameInputs(previous: ReadonlyArray<unknown>, inputs: ReadonlyArray<unknown>): boolean {
+  return (
     previous.length === inputs.length &&
     previous.every((value, index) => Object.is(value, inputs[index]))
-  ) {
+  );
+}
+
+function useInputsChanged(inputs: ReadonlyArray<unknown>): boolean {
+  const [previous, setPrevious] = useState<ReadonlyArray<unknown> | null>(null);
+  if (previous !== null && sameInputs(previous, inputs)) {
     return false;
   }
   setPrevious(inputs);
+  return true;
+}
+
+function useInputsChangedWhileActive(active: boolean, inputs: ReadonlyArray<unknown>): boolean {
+  const [tracked, setTracked] = useState<ReadonlyArray<unknown> | null>(null);
+  if (!active) {
+    if (tracked !== null) setTracked(null);
+    return false;
+  }
+  if (tracked === null) {
+    setTracked(inputs);
+    return false;
+  }
+  if (sameInputs(tracked, inputs)) {
+    return false;
+  }
+  setTracked(inputs);
   return true;
 }
 
@@ -3171,12 +3191,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         fail("The original attachment is no longer available.");
         return;
       }
-      let blob: Blob;
-      try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        blob = await response.blob();
-      } catch {
+      const blob = await fetch(url, { signal: AbortSignal.timeout(60_000) })
+        .then((response) => (response.ok ? response.blob() : null))
+        .catch(() => null);
+      if (!blob) {
         fail("Downloading it from the source failed.");
         return;
       }
@@ -3370,9 +3388,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   useEffect(() => {
     promptRef.current = prompt;
   }, [prompt, promptRef]);
-  const promptChanged = useInputsChanged([prompt]);
-  if (promptChanged) {
-    setComposerCursor((existing) => clampCollapsedComposerCursor(prompt, existing));
+  const clampedComposerCursor = clampCollapsedComposerCursor(prompt, composerCursor);
+  if (clampedComposerCursor !== composerCursor) {
+    setComposerCursor(clampedComposerCursor);
   }
 
   if (composerSubmissionError !== null) {
@@ -3382,7 +3400,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
   }
 
-  const providerInputChanged = useInputsChanged([
+  const providerInputChanged = useInputsChangedWhileActive(providerInputSubmissionError !== null, [
     composerPreviewAnnotations,
     composerReviewComments,
     composerTerminalContexts,
@@ -3391,7 +3409,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedPromptEffort,
     selectedProvider,
   ]);
-  if (providerInputChanged && providerInputSubmissionError !== null) {
+  if (providerInputChanged) {
     setProviderInputSubmissionError(null);
   }
 
@@ -3574,22 +3592,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         const stagedAttachmentById = new Map<string, PersistedComposerImageAttachment>();
         await Promise.all(
           composerImages.map(async (image) => {
-            try {
-              const dataUrl = await readFileAsDataUrl(image.file);
-              stagedAttachmentById.set(image.id, {
-                id: image.id,
-                name: image.name,
-                mimeType: image.mimeType,
-                sizeBytes: image.sizeBytes,
-                dataUrl,
-                ...(image.source ? { source: image.source } : {}),
-              });
-            } catch {
+            const dataUrl = await readFileAsDataUrl(image.file).catch(() => null);
+            if (dataUrl === null) {
               const existingPersisted = existingPersistedById.get(image.id);
               if (existingPersisted) {
                 stagedAttachmentById.set(image.id, existingPersisted);
               }
+              return;
             }
+            stagedAttachmentById.set(image.id, {
+              id: image.id,
+              name: image.name,
+              mimeType: image.mimeType,
+              sizeBytes: image.sizeBytes,
+              dataUrl,
+              ...(image.source ? { source: image.source } : {}),
+            });
           }),
         );
         const serialized = Array.from(stagedAttachmentById.values());
@@ -5620,7 +5638,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // the two popovers never stack in the same layer, and when the user
   // resumes typing (the menu is a transient picker, not a panel).
   const composerMenuOpenChanged = useInputsChanged([composerMenuOpen]);
-  if (isStashMenuOpen && ((composerMenuOpenChanged && composerMenuOpen) || promptChanged)) {
+  const promptChangedWhileStashOpen = useInputsChangedWhileActive(isStashMenuOpen, [prompt]);
+  if (
+    isStashMenuOpen &&
+    ((composerMenuOpenChanged && composerMenuOpen) || promptChangedWhileStashOpen)
+  ) {
     setIsStashMenuOpen(false);
   }
 
@@ -5841,7 +5863,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
     if (questionAttachmentTarget)
       changeQuestionAttachmentPreparation(questionAttachmentTarget, acceptedImages.length);
-    try {
+    const compressAndStoreImages = async () => {
       const nextImages: ComposerImageAttachment[] = [];
       let compressionError: string | null = null;
       for (const file of acceptedImages) {
@@ -5885,10 +5907,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             : [],
       );
       const storedImages = nextImages.filter((image) => storedImageIds.has(image.id));
-      if (storedImages.length > 0 && imageAttachmentsGetChips) {
-        insertedAny =
-          insertAttachmentReferences(storedImages.map(imageContextReference)) || insertedAny;
-      }
+      const insertedImageReferences =
+        storedImages.length > 0 &&
+        imageAttachmentsGetChips &&
+        insertAttachmentReferences(storedImages.map(imageContextReference));
       // Only failures are reported here. Success must not pass `null`: by
       // now other work (a failed send, an overlapping paste) may have set a
       // thread error this call knows nothing about, and clearing it would
@@ -5896,7 +5918,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       if (compressionError !== null) {
         setThreadError(threadId, compressionError);
       }
-    } finally {
+      return insertedImageReferences || insertedAny;
+    };
+    return compressAndStoreImages().finally(() => {
       if (questionAttachmentTarget)
         changeQuestionAttachmentPreparation(questionAttachmentTarget, -acceptedImages.length);
       const remaining =
@@ -5906,8 +5930,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       } else {
         pendingImageCompressionsRef.current.delete(attachmentTargetKey);
       }
-    }
-    return insertedAny;
+    });
   };
 
   /**
@@ -5916,6 +5939,63 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
    * Images skip this when they land with no prose and the editor takes input:
    * the shelf thumbnail is enough.
    */
+  const insertComposerText = useCallback(
+    (
+      text: string,
+      position: "cursor" | "end",
+      options?: {
+        ensureLeadingBoundary?: boolean;
+        citationCommentAnchor?: AssistantCitationSourceAnchor;
+        clipboardData?: DataTransfer;
+      },
+    ): boolean => {
+      if (
+        text.length === 0 ||
+        isConnecting ||
+        isComposerApprovalState ||
+        pendingUserInputs.length > 0 ||
+        projectSelectionRequired ||
+        (options?.citationCommentAnchor && !composerEditorRef.current)
+      ) {
+        return false;
+      }
+      if (options?.clipboardData) {
+        text = importPastedComposerText(options.clipboardData, importContextFragment);
+      }
+      const prompt = promptRef.current;
+      const cursor = position === "cursor" ? readComposerSnapshot().expandedCursor : prompt.length;
+      const needsLeadingSpace =
+        (options?.ensureLeadingBoundary ?? false) &&
+        cursor > 0 &&
+        !/\s/.test(prompt[cursor - 1] ?? "");
+      const rangeEnd = extendReplacementRangeForTrailingSpace(prompt, cursor, text);
+      return applyPromptReplacement(
+        cursor,
+        rangeEnd,
+        needsLeadingSpace ? ` ${text}` : text,
+        options?.citationCommentAnchor
+          ? {
+              citationComment: {
+                start: cursor + (needsLeadingSpace ? 1 : 0),
+                sourceAnchor: options.citationCommentAnchor,
+              },
+              focusEditorAfterReplace: false,
+            }
+          : undefined,
+      );
+    },
+    [
+      applyPromptReplacement,
+      isComposerApprovalState,
+      isConnecting,
+      pendingUserInputs.length,
+      projectSelectionRequired,
+      promptRef,
+      readComposerSnapshot,
+      importContextFragment,
+    ],
+  );
+
   const insertAttachmentReferences = (
     references: ReadonlyArray<ComposerContextReference>,
     selection?: { start: number; end: number },
@@ -6071,63 +6151,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event.preventDefault();
     event.stopPropagation();
   };
-
-  const insertComposerText = useCallback(
-    (
-      text: string,
-      position: "cursor" | "end",
-      options?: {
-        ensureLeadingBoundary?: boolean;
-        citationCommentAnchor?: AssistantCitationSourceAnchor;
-        clipboardData?: DataTransfer;
-      },
-    ): boolean => {
-      if (
-        text.length === 0 ||
-        isConnecting ||
-        isComposerApprovalState ||
-        pendingUserInputs.length > 0 ||
-        projectSelectionRequired ||
-        (options?.citationCommentAnchor && !composerEditorRef.current)
-      ) {
-        return false;
-      }
-      if (options?.clipboardData) {
-        text = importPastedComposerText(options.clipboardData, importContextFragment);
-      }
-      const prompt = promptRef.current;
-      const cursor = position === "cursor" ? readComposerSnapshot().expandedCursor : prompt.length;
-      const needsLeadingSpace =
-        (options?.ensureLeadingBoundary ?? false) &&
-        cursor > 0 &&
-        !/\s/.test(prompt[cursor - 1] ?? "");
-      const rangeEnd = extendReplacementRangeForTrailingSpace(prompt, cursor, text);
-      return applyPromptReplacement(
-        cursor,
-        rangeEnd,
-        needsLeadingSpace ? ` ${text}` : text,
-        options?.citationCommentAnchor
-          ? {
-              citationComment: {
-                start: cursor + (needsLeadingSpace ? 1 : 0),
-                sourceAnchor: options.citationCommentAnchor,
-              },
-              focusEditorAfterReplace: false,
-            }
-          : undefined,
-      );
-    },
-    [
-      applyPromptReplacement,
-      isComposerApprovalState,
-      isConnecting,
-      pendingUserInputs.length,
-      projectSelectionRequired,
-      promptRef,
-      readComposerSnapshot,
-      importContextFragment,
-    ],
-  );
 
   const insertComposerTextAtEnd = useCallback<ChatComposerHandle["insertTextAtEnd"]>(
     (text, options) => {
