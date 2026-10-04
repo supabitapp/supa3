@@ -55,7 +55,7 @@ import {
   type PrStatusIndicator,
   type ThreadPr,
 } from "../ThreadStatusIndicators";
-import { InlineConfirmLabel } from "../InlineConfirmLabel";
+import { InlineConfirmLabel } from "../InlineConfirm";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,

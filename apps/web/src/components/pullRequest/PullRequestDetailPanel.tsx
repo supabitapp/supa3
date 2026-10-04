@@ -21,7 +21,6 @@ import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
   BookOpenIcon,
-  CheckIcon,
   CircleDotIcon,
   CopyIcon,
   ChevronDownIcon,
@@ -163,7 +162,7 @@ import {
   type PickableEnvironment,
 } from "./pullRequestProjectAssignment.logic";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
-import { InlineConfirmLabel } from "../InlineConfirmLabel";
+import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import {
   PullRequestActorLabel,
   PullRequestDiffStat,
@@ -1944,11 +1943,9 @@ export function PullRequestDetailPanel({
                                 : pendingAutoMergeLabel
                           }
                         >
-                          {confirm.armed === "enable-auto-merge" ? (
-                            <CheckIcon aria-hidden className="size-3.5" />
-                          ) : (
+                          <InlineConfirmIcon armed={confirm.armed === "enable-auto-merge"}>
                             <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                          )}
+                          </InlineConfirmIcon>
                           <span className="@max-[30rem]/pr-header:hidden">
                             <InlineConfirmLabel
                               armed={confirm.armed === "enable-auto-merge"}
@@ -2015,11 +2012,9 @@ export function PullRequestDetailPanel({
                                 : selectedMergeMethodLabel
                           }
                         >
-                          {confirm.armed === "merge" ? (
-                            <CheckIcon aria-hidden className="size-3.5" />
-                          ) : (
+                          <InlineConfirmIcon armed={confirm.armed === "merge"}>
                             <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                          )}
+                          </InlineConfirmIcon>
                           <span className="@max-[30rem]/pr-header:hidden">
                             <InlineConfirmLabel
                               armed={confirm.armed === "merge"}
@@ -2671,11 +2666,9 @@ export function PullRequestDetailPanel({
                                   : "Approve workflows to run"
                             }
                           >
-                            {confirm.armed === "approve-workflows" ? (
-                              <CheckIcon aria-hidden className="size-3.5" />
-                            ) : (
+                            <InlineConfirmIcon armed={confirm.armed === "approve-workflows"}>
                               <PlayIcon aria-hidden className="size-3.5" />
-                            )}
+                            </InlineConfirmIcon>
                             <InlineConfirmLabel
                               armed={confirm.armed === "approve-workflows"}
                               idle={

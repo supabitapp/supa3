@@ -6,7 +6,7 @@ import type {
   PullRequestMergeMethod,
 } from "@supacode/contracts";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
-import { CheckIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useState } from "react";
 import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -14,7 +14,7 @@ import { pullRequestEnvironment } from "~/state/pullRequests";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger, MenuItem, MenuGroup, MenuSeparator } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { InlineConfirmLabel } from "../InlineConfirmLabel";
+import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import { PullRequestStackLayers } from "./PullRequestStackLayers";
 import { PullRequestStackHeader } from "./PullRequestStackHeader";
 import { PullRequestGlyph } from "./pullRequestIcons";
@@ -222,11 +222,9 @@ export function PullRequestStackMenu({
                     })
                   }
                 >
-                  {confirm.armed === "merge" ? (
-                    <CheckIcon aria-hidden className="size-3.5" />
-                  ) : (
+                  <InlineConfirmIcon armed={confirm.armed === "merge"}>
                     <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                  )}
+                  </InlineConfirmIcon>
                   <InlineConfirmLabel
                     armed={confirm.armed === "merge"}
                     idle={pending ? "Working…" : "Merge stack"}
