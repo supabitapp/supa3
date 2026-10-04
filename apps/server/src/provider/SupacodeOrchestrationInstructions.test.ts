@@ -16,6 +16,11 @@ describe("Supacode orchestration provider instructions", () => {
     );
     assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
     assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
+    assert.include(SUPACODE_ORCHESTRATION_INSTRUCTIONS, "call `delegate_task` again");
+    assert.include(
+      SUPACODE_ORCHESTRATION_INSTRUCTIONS,
+      "Do not use `supacode_thread_send` on `childThreadId`",
+    );
   });
 
   it("documents structured schedules instead of JSON strings", () => {

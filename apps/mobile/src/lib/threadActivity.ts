@@ -7,6 +7,10 @@ import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/t
 import { formatSubagentDisplayTitle } from "@supacode/client-runtime/state/subagent-display";
 import { extractToolActivityPresentation } from "@supacode/client-runtime/work-log/tool-presentation";
 import {
+  turnItemHasDetail,
+  turnItemNeedsDetailFetch,
+} from "@supacode/client-runtime/work-log/item-detail";
+import {
   commandDisplayText,
   commandProgramName,
 } from "@supacode/client-runtime/work-log/command-label";
@@ -74,6 +78,8 @@ export interface ThreadFeedActivity {
   readonly summary: string;
   readonly detail: string | null;
   readonly canExpand: boolean;
+  /** Expanding fetches the withheld input and output with getTurnItem. */
+  readonly fetchesDetail: boolean;
   readonly getFullDetail: () => string | null;
   readonly getCopyText: () => string;
   readonly icon:
@@ -724,6 +730,23 @@ function toWorkLogEntry(
   }
 }
 
+/** Expanded detail for a row, from its wire item or the full item from getTurnItem. */
+export function formatItemFullDetail(
+  row: OrchestrationV2ProjectedTurnItem,
+  item: OrchestrationV2TurnItem,
+): string {
+  return JSON.stringify(
+    {
+      visibility: row.visibility,
+      sourceThreadId: row.sourceThreadId,
+      sourceItemId: row.sourceItemId,
+      item: toolItemForDisplay(item),
+    },
+    null,
+    2,
+  );
+}
+
 function toFeedActivity(
   row: OrchestrationV2ProjectedTurnItem,
   attemptId: RunAttemptId | null,
@@ -738,21 +761,9 @@ function toFeedActivity(
     item.type === "dynamic_tool" && toolGroupAction(workEntry) === "read"
       ? collectToolFilePaths(item)
       : null;
-  const getFullDetail = memoizeValue(() => {
-    if (readPaths) {
-      return readPaths.join("\n") || null;
-    }
-    return JSON.stringify(
-      {
-        visibility: row.visibility,
-        sourceThreadId: row.sourceThreadId,
-        sourceItemId: row.sourceItemId,
-        item: toolItemForDisplay(item),
-      },
-      null,
-      2,
-    );
-  });
+  const getFullDetail = memoizeValue(() =>
+    readPaths ? readPaths.join("\n") || null : formatItemFullDetail(row, item),
+  );
   const getCopyText = memoizeValue(() =>
     [summary, detail, getFullDetail()]
       .filter(
@@ -768,7 +779,13 @@ function toFeedActivity(
     attemptId,
     summary,
     detail,
-    canExpand: !(item.type === "error" && item.status === "failed") && (readPaths?.length ?? 1) > 0,
+    canExpand:
+      !(item.type === "error" && item.status === "failed") &&
+      (readPaths
+        ? readPaths.length > 0 || turnItemNeedsDetailFetch(item)
+        : turnItemHasDetail(item) || workEntry.questionAnswer !== undefined),
+    // Read rows show their paths, then the fetched file contents.
+    fetchesDetail: turnItemNeedsDetailFetch(item),
     getFullDetail,
     getCopyText,
     icon: workEntry.toolSurface ?? itemIcon(item),

@@ -10,7 +10,7 @@ import {
 } from "../shared.ts";
 import { CLAUDE_BACKGROUND_TASK_INTERRUPT_PROMPT } from "./input.ts";
 
-const BACKGROUND_TASK_ID = "bt3kw2qpn";
+const BACKGROUND_TASK_ID = "bsupacodekw2qpn";
 
 // Interrupting a turn tears down its CLI process, which kills the background
 // task it started. The roster must clear with the interrupt, and no wake or
@@ -44,7 +44,7 @@ export function assertClaudeBackgroundTaskInterruptOutput(
     projection.turnItems.flatMap((item) =>
       item.type === "command_execution" ? [item.status] : [],
     ),
-    ["completed", "failed"],
-    "the background launch completed; the interrupted foreground command did not",
+    ["completed", "interrupted"],
+    "the background launch completed; the foreground command was interrupted",
   );
 }
