@@ -1,3 +1,4 @@
+import type { DraftComposerAttachment } from "../../lib/composerImages";
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
 import {
@@ -1753,6 +1754,7 @@ function renderFeedEntry(
                   text={renderedText}
                   environmentId={props.environmentId}
                   context={message.context}
+                  attachments={entry.draftAttachments ?? entry.pendingMessage?.attachments}
                   markdownStyles={styles}
                   reviewCommentColors={props.reviewCommentColors}
                   skills={props.skills}
@@ -1944,6 +1946,7 @@ type UserMessageContentProps = {
   readonly text: string;
   readonly environmentId: EnvironmentId;
   readonly context?: OrchestrationMessageContext;
+  readonly attachments?: ReadonlyArray<DraftComposerAttachment>;
   readonly markdownStyles: MarkdownStyleSet;
   readonly reviewCommentColors: ReviewCommentColors;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
@@ -2003,6 +2006,7 @@ function UserMessageContent(props: UserMessageContentProps) {
           label={selected.label}
           environmentId={props.environmentId}
           records={props.context?.records}
+          attachments={props.attachments}
           record={props.context?.records.find((record) => record.contextId === selected.contextId)}
           onClose={() => setSelected(null)}
         />
