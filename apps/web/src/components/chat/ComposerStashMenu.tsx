@@ -233,7 +233,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                         <XIcon className="size-3.5" />
                       </InlineConfirmIcon>
                     </TooltipTrigger>
-                    <TooltipPopup side="top">
+                    <TooltipPopup>
                       {confirm.armed === entry.id
                         ? "Click again to delete this stashed prompt"
                         : "Delete stashed prompt"}

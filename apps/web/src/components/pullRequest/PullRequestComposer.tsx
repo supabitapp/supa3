@@ -156,7 +156,7 @@ export function PullRequestComposer({
                     <Trash2Icon className="size-3.5" />
                   </InlineConfirmIcon>
                 </TooltipTrigger>
-                <TooltipPopup side="top">
+                <TooltipPopup>
                   {confirm.armed === "discard"
                     ? `Click again to discard ${pendingComments.length} pending line ${pendingComments.length === 1 ? "comment" : "comments"}`
                     : "Discard pending line comments"}
