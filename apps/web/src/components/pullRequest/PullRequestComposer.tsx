@@ -12,9 +12,12 @@ import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@supa
 import { MessageSquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
+import { InlineConfirmIcon } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Popover, PopoverClose, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popover";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestCommentForm } from "./PullRequestCommentForm";
 import { PullRequestReviewForm } from "./PullRequestReviewForm";
 import {
@@ -50,6 +53,7 @@ export function PullRequestComposer({
   const reviewRef = useRef<HTMLTextAreaElement>(null);
   const pendingComments = usePendingReviewComments(reference);
   const clearComments = usePullRequestReviewStore((store) => store.clear);
+  const confirm = useInlineConfirm<"discard">();
   // A summary typed but not sent is review work too, and it outlives the popover. Selected as a
   // boolean rather than the text, so typing one does not re-render the composer per keystroke.
   const reviewKey = pullRequestReviewKey(reference);
@@ -131,16 +135,32 @@ export function PullRequestComposer({
           )}
           <div className="flex items-center gap-1">
             {mode === "review" && pendingComments.length > 0 ? (
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label="Discard pending line comments"
-                title="Discard pending line comments"
-                disabled={reviewPending}
-                onClick={() => clearComments(reviewKey)}
-              >
-                <Trash2Icon className="size-3.5" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={
+                        confirm.armed === "discard"
+                          ? "Confirm discard"
+                          : "Discard pending line comments"
+                      }
+                      disabled={reviewPending}
+                      {...confirm.bind("discard", () => clearComments(reviewKey))}
+                    />
+                  }
+                >
+                  <InlineConfirmIcon armed={confirm.armed === "discard"}>
+                    <Trash2Icon className="size-3.5" />
+                  </InlineConfirmIcon>
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {confirm.armed === "discard"
+                    ? `Click again to discard ${pendingComments.length === 1 ? "the pending line comment" : `all ${pendingComments.length} pending line comments`}`
+                    : "Discard pending line comments"}
+                </TooltipPopup>
+              </Tooltip>
             ) : null}
             <PopoverClose
               render={<Button size="icon-xs" variant="ghost" />}

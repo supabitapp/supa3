@@ -1,10 +1,13 @@
-import { BookmarkIcon, FileIcon, FileTextIcon } from "lucide-react";
+import { BookmarkIcon, FileIcon, FileTextIcon, XIcon } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { assistantCitationsToPlainText } from "@supacode/shared/assistantCitations";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import { type PromptStashEntry } from "../../promptStashStore";
+import { InlineConfirmIcon } from "../InlineConfirm";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ComposerBanner } from "./ComposerBanner";
 
 const SNIPPET_MAX_CHARS = 90;
@@ -45,6 +48,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   const { entries, stashShortcutLabel, onRestore, onDelete, onClose } = props;
   const drawerRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(entries[0]?.id ?? null);
+  const confirm = useInlineConfirm<string>();
 
   const highlightedEntry = entries.find((entry) => entry.id === highlightedId) ?? entries[0];
 
@@ -67,6 +71,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (confirm.armed !== null) return;
         event.preventDefault();
         event.stopPropagation();
         onClose();
@@ -110,7 +115,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [entries, highlightedEntry, onClose, onDelete, onRestore]);
+  }, [confirm.armed, entries, highlightedEntry, onClose, onDelete, onRestore]);
 
   return (
     <ComposerBanner.Root ref={drawerRef} data-composer-stash-drawer="true">
@@ -210,12 +215,29 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   >
                     {formatRelativeTimeLabel(entry.createdAt)}
                   </time>
-                  <ComposerBanner.Dismiss
-                    className="z-10"
-                    aria-label="Delete stashed prompt"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => onDelete(entry)}
-                  />
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <ComposerBanner.Dismiss
+                          className="z-10"
+                          aria-label={
+                            confirm.armed === entry.id ? "Confirm delete" : "Delete stashed prompt"
+                          }
+                          onPointerDown={(event) => event.preventDefault()}
+                          {...confirm.bind(entry.id, () => onDelete(entry))}
+                        />
+                      }
+                    >
+                      <InlineConfirmIcon armed={confirm.armed === entry.id}>
+                        <XIcon className="size-3.5" />
+                      </InlineConfirmIcon>
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">
+                      {confirm.armed === entry.id
+                        ? "Click again to delete this stashed prompt"
+                        : "Delete stashed prompt"}
+                    </TooltipPopup>
+                  </Tooltip>
                 </ComposerBanner.Actions>
               </ComposerBanner.Row>
             ))
