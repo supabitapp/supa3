@@ -1,6 +1,6 @@
+import { useThreadListV2Layout } from "./use-thread-list-v2-layout";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { computeThreadMoveAvailability } from "./threadOrder";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -65,12 +65,9 @@ import {
 } from "./thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "./thread-provider-instance";
 import {
-  buildThreadListV2Items,
-  getThreadListV2OrderedSection,
   buildThreadListV2ListItems,
   isThreadListV2ListItem,
   threadListV2ListItemsAreEqual,
-  threadListInboxReturns,
   THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
   type ThreadListV2ListItem,
@@ -351,82 +348,26 @@ function ThreadNavigationSidebarPane(
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
-  // Up/down menu availability for every card, computed once per section per
-  // rebuild (see computeThreadMoveAvailability): per-thread planner calls made
-  // list construction quadratic, and this list rebuilds on every minute tick.
-  const threadMoveAvailability = useMemo(() => {
-    const sectionAvailability = (section: "pinned" | "active") =>
-      computeThreadMoveAvailability({
-        allThreads: threads,
-        section,
-        pendingOrder,
-        reorderableEnvironmentIds:
-          section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds,
-        ordered: getThreadListV2OrderedSection({
-          threads,
-          section,
-          pendingOrder,
-          now: listClock.now,
-          settlementEnvironmentIds,
-          snoozeEnvironmentIds,
-          queuedThreadKeys,
-        }),
-      });
-    // The Working beta orders the inbox by time, so only pins can move.
-    return new Map([
-      ...sectionAvailability("pinned"),
-      ...(workingShelfEnabled ? [] : sectionAvailability("active")),
-    ]);
-  }, [
-    workingShelfEnabled,
-    pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
+  const { threadMoveAvailability, threadListV2Layout } = useThreadListV2Layout({
     threads,
+    environmentId: options.selectedEnvironmentId,
+    projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,
+    searchQuery: props.searchQuery,
+    matchedThreadKeys,
     pendingOrder,
-    queuedThreadKeys,
     settlementEnvironmentIds,
     snoozeEnvironmentIds,
-    listClock.now,
-  ]);
-  const threadListV2Layout = useMemo(() => {
-    threadListInboxReturns.observe(workingShelfEnabled ? threads : null);
-    return buildThreadListV2Items({
-      pendingOrder,
-      threads: threads.filter((thread) => thread.archivedAt === null),
-      environmentId: options.selectedEnvironmentId,
-      projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,
-      searchQuery: props.searchQuery,
-      matchedThreadKeys,
-      settlementEnvironmentIds,
-      snoozeEnvironmentIds,
-      queuedThreadKeys,
-      settledLimit: settledVisibleCount,
-      now: listClock.now,
-      workingShelfEnabled,
-      workingShelfExpanded,
-      inboxReturnAt: threadListInboxReturns.returnedAt,
-      snoozedShelfExpanded,
-      settledShelfExpanded,
-      selectedThreadKey: props.selectedThreadKey ?? null,
-    });
-  }, [
+    queuedThreadKeys,
+    settledLimit: settledVisibleCount,
+    now: listClock.now,
     workingShelfEnabled,
     workingShelfExpanded,
-    pendingOrder,
-    queuedThreadKeys,
-    listClock.now,
     snoozedShelfExpanded,
     settledShelfExpanded,
-    props.selectedThreadKey,
-    options.selectedEnvironmentId,
-    props.searchQuery,
-    matchedThreadKeys,
-    settledVisibleCount,
-    settlementEnvironmentIds,
-    snoozeEnvironmentIds,
-    threads,
-    selectedProjectScope,
-  ]);
+    selectedThreadKey: props.selectedThreadKey ?? null,
+    pinReorderEnvironmentIds,
+    activeReorderEnvironmentIds,
+  });
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
   const nextSnoozeWakeAt = threadListV2Layout.nextSnoozeWakeAt;
