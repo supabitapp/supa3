@@ -49,8 +49,11 @@ export function useInlineConfirm<Key extends string>() {
 
   return {
     armed,
-    press,
     disarm: () => setArmed(null),
-    target: (key: Key) => ({ "data-inline-confirm": `${scope}:${key}` }),
+    bind: (key: Key, run: () => void) => ({
+      "data-inline-confirm": `${scope}:${key}`,
+      onClick: (event: { readonly detail: number; readonly timeStamp: number }) =>
+        press(key, event, run),
+    }),
   };
 }

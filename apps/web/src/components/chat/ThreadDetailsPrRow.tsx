@@ -292,7 +292,7 @@ export function ThreadDetailsPrRow({
           destructive: true,
           suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
           tooltip: "Check the branch out and resolve the conflicts in a new thread",
-          onClick: startResolveConflicts,
+          controlProps: { onClick: startResolveConflicts },
         }
       : rowAction === "ready"
         ? {
@@ -302,7 +302,7 @@ export function ThreadDetailsPrRow({
             destructive: false,
             suffix: null,
             tooltip: "Mark this pull request as ready for review",
-            onClick: () => void perform("ready"),
+            controlProps: { onClick: () => void perform("ready") },
           }
         : rowAction === "fix"
           ? {
@@ -312,7 +312,7 @@ export function ThreadDetailsPrRow({
               destructive: true,
               suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
               tooltip: "Fix the failing checks in a new thread",
-              onClick: startFixChecks,
+              controlProps: { onClick: startFixChecks },
             }
           : rowAction === "merge"
             ? {
@@ -331,11 +331,10 @@ export function ThreadDetailsPrRow({
                   confirm.armed === "merge"
                     ? `Click again to merge #${number} into ${detail?.baseBranch} (${selectedMergeMethod})`
                     : `Merge this pull request (${selectedMergeMethod})`,
-                confirmTarget: confirm.target("merge"),
-                onClick: (event: ReactMouseEvent<HTMLElement>) =>
-                  confirm.press("merge", event, () => {
-                    void perform("merge", selectedMergeMethod);
-                  }),
+                controlProps: confirm.bind(
+                  "merge",
+                  () => void perform("merge", selectedMergeMethod),
+                ),
               }
             : null;
 
@@ -391,8 +390,7 @@ export function ThreadDetailsPrRow({
                       part="action"
                       tone={trailingAction.destructive ? "destructive" : "default"}
                       disabled={actionPending || handoff !== null}
-                      {...("confirmTarget" in trailingAction ? trailingAction.confirmTarget : {})}
-                      onClick={trailingAction.onClick}
+                      {...trailingAction.controlProps}
                     />
                   }
                 >

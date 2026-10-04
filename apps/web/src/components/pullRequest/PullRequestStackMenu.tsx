@@ -160,14 +160,9 @@ export function PullRequestStackMenu({
               <MenuSeparator />
               {canMerge ? (
                 <MenuItem
-                  {...confirm.target("menu-merge")}
+                  {...confirm.bind("menu-merge", () => void run("merge"))}
                   disabled={mergeDisabled}
                   closeOnClick={confirm.armed === "menu-merge"}
-                  onClick={(event) =>
-                    confirm.press("menu-merge", event, () => {
-                      void run("merge");
-                    })
-                  }
                 >
                   <PullRequestGlyph.merged aria-hidden />
                   {`${confirm.armed === "menu-merge" ? "Confirm merge" : "Merge stack"} (${mergeLayers.length})`}
@@ -175,14 +170,9 @@ export function PullRequestStackMenu({
               ) : null}
               {canRebase ? (
                 <MenuItem
-                  {...confirm.target("menu-rebase")}
+                  {...confirm.bind("menu-rebase", () => void run("update-branch"))}
                   disabled={rebaseDisabled}
                   closeOnClick={confirm.armed === "menu-rebase"}
-                  onClick={(event) =>
-                    confirm.press("menu-rebase", event, () => {
-                      void run("update-branch");
-                    })
-                  }
                 >
                   <RefreshCwIcon aria-hidden />
                   {confirm.armed === "menu-rebase" ? "Confirm rebase" : "Rebase stack"}
@@ -212,15 +202,10 @@ export function PullRequestStackMenu({
             render={
               <span className="inline-flex">
                 <Button
-                  {...confirm.target("merge")}
+                  {...confirm.bind("merge", () => void run("merge"))}
                   variant="default"
                   size="xs"
                   disabled={mergeDisabled}
-                  onClick={(event) =>
-                    confirm.press("merge", event, () => {
-                      void run("merge");
-                    })
-                  }
                 >
                   <InlineConfirmIcon armed={confirm.armed === "merge"}>
                     <PullRequestGlyph.merged aria-hidden className="size-3.5" />
