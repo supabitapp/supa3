@@ -1,5 +1,6 @@
 {
   "$schema": "https://next.supacode.sh/schema/supacode.json",
+  "defaultThreadEnvMode": "worktree",
   "iconPath": "assets/dev/blueprint-web-apple-touch-180.png",
   "scripts": [
     {
