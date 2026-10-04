@@ -399,7 +399,7 @@ const config: ExpoConfig = {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: "43107a7e-1d06-490b-bfc6-be228b285ee2",
     },
   },
   owner: "supabitapp",
