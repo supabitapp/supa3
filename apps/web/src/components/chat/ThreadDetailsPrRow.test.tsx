@@ -80,12 +80,12 @@ const renderRow = () => (
   />
 );
 
-const clickMerge = (event: { detail?: number; timeStamp: number }) =>
+const clickMerge = (timeStamp: number) =>
   act(() => {
     renderer.root
       .findAllByType("button")
       .find((button) => button.findAll((node) => node.children.includes("Merge")).length > 0)!
-      .props.onClick({ currentTarget: null, detail: 1, ...event });
+      .props.onClick({ timeStamp });
   });
 
 const armed = () =>
@@ -102,7 +102,7 @@ it("requires a new merge click after passing checks become pending and pass agai
   act(() => {
     renderer = create(renderRow());
   });
-  clickMerge({ timeStamp: 0 });
+  clickMerge(0);
   expect(armed()).toBe(true);
   act(() => {
     state.status = "pending";
@@ -113,7 +113,7 @@ it("requires a new merge click after passing checks become pending and pass agai
     renderer.update(renderRow());
   });
   expect(armed()).toBe(false);
-  clickMerge({ timeStamp: 1_000 });
+  clickMerge(1_000);
   expect(armed()).toBe(true);
   expect(state.perform).not.toHaveBeenCalled();
 });
@@ -124,12 +124,12 @@ it("merges only on a deliberate second click", () => {
   act(() => {
     renderer = create(renderRow());
   });
-  clickMerge({ timeStamp: 0 });
-  clickMerge({ timeStamp: 150, detail: 2 });
-  clickMerge({ timeStamp: 300 });
+  clickMerge(0);
+  clickMerge(150);
+  clickMerge(300);
   expect(state.perform).not.toHaveBeenCalled();
   expect(armed()).toBe(true);
-  clickMerge({ timeStamp: 900 });
+  clickMerge(900);
   expect(state.perform).toHaveBeenCalledExactlyOnceWith("merge", "merge");
   expect(armed()).toBe(false);
 });

@@ -107,13 +107,7 @@ export function PullRequestStackMenu({
   const mergeCountLabel = `${mergeLayers.length} ${mergeLayers.length === 1 ? "pull request" : "pull requests"}`;
   return (
     <>
-      <Menu
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) confirm.disarm();
-        }}
-      >
+      <Menu open={open} onOpenChange={setOpen}>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -162,7 +156,6 @@ export function PullRequestStackMenu({
                 <MenuItem
                   {...confirm.bind("menu-merge", () => void run("merge"))}
                   disabled={mergeDisabled}
-                  closeOnClick={confirm.armed === "menu-merge"}
                 >
                   <PullRequestGlyph.merged aria-hidden />
                   {`${confirm.armed === "menu-merge" ? "Confirm merge" : "Merge stack"} (${mergeLayers.length})`}
@@ -172,7 +165,6 @@ export function PullRequestStackMenu({
                 <MenuItem
                   {...confirm.bind("menu-rebase", () => void run("update-branch"))}
                   disabled={rebaseDisabled}
-                  closeOnClick={confirm.armed === "menu-rebase"}
                 >
                   <RefreshCwIcon aria-hidden />
                   {confirm.armed === "menu-rebase" ? "Confirm rebase" : "Rebase stack"}

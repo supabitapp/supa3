@@ -1933,7 +1933,6 @@ export function PullRequestDetailPanel({
                             "enable-auto-merge",
                             () => void perform("enable-auto-merge", selectedMergeMethod),
                           )}
-
                           aria-label={
                             pendingAction === "enable-auto-merge"
                               ? "Enabling..."
@@ -2001,7 +2000,6 @@ export function PullRequestDetailPanel({
                             "merge",
                             () => void perform("merge", selectedMergeMethod),
                           )}
-
                           aria-label={
                             pendingAction === "merge"
                               ? "Merging..."
@@ -2043,11 +2041,7 @@ export function PullRequestDetailPanel({
                   </span>
                 </Badge>
               ) : null}
-              <Menu
-                onOpenChange={(open) => {
-                  if (!open) confirm.disarm();
-                }}
-              >
+              <Menu>
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -2151,7 +2145,6 @@ export function PullRequestDetailPanel({
                             () => void perform("merge", selectedMergeMethod),
                           )}
                           disabled={actionPending}
-                          closeOnClick={confirm.armed === "menu-merge"}
                         >
                           <PullRequestGlyph.merged className="size-3.5" />
                           {confirm.armed === "menu-merge" ? "Confirm merge" : "Merge now"}
@@ -2175,7 +2168,6 @@ export function PullRequestDetailPanel({
                             () => void perform("enable-auto-merge", selectedMergeMethod),
                           )}
                           disabled={actionPending}
-                          closeOnClick={confirm.armed === "menu-enable-auto-merge"}
                         >
                           <PullRequestGlyph.merged className="size-3.5" />
                           {confirm.armed === "menu-enable-auto-merge"
@@ -2256,7 +2248,6 @@ export function PullRequestDetailPanel({
                         {...confirm.bind("close", () => void perform("close"))}
                         variant="destructive"
                         disabled={actionPending}
-                        closeOnClick={confirm.armed === "close"}
                       >
                         <PullRequestGlyph.closed className="size-3.5" />
                         {confirm.armed === "close" ? "Confirm close" : "Close pull request"}
@@ -2276,7 +2267,6 @@ export function PullRequestDetailPanel({
                       <MenuItem
                         {...confirm.bind("revert", () => void perform("revert"))}
                         disabled={actionPending}
-                        closeOnClick={confirm.armed === "revert"}
                       >
                         <RotateCcwIcon className="size-3.5" />
                         {confirm.armed === "revert" ? "Confirm revert" : "Revert changes"}
@@ -2640,7 +2630,6 @@ export function PullRequestDetailPanel({
                               "approve-workflows",
                               () => void perform("approve-workflows"),
                             )}
-
                             aria-label={
                               pendingAction === "approve-workflows"
                                 ? "Approving..."
