@@ -131,6 +131,16 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   );
 }
 
+function PopoverDescription({ className, ...props }: PopoverPrimitive.Description.Props) {
+  return (
+    <PopoverPrimitive.Description
+      className={cn("text-muted-foreground text-xs", className)}
+      data-slot="popover-description"
+      {...props}
+    />
+  );
+}
+
 export {
   PopoverCreateHandle,
   Popover,
@@ -138,5 +148,6 @@ export {
   PopoverPopup,
   PopoverPopup as PopoverContent,
   PopoverTitle,
+  PopoverDescription,
   PopoverClose,
 };

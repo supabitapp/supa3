@@ -7,21 +7,13 @@ import type {
 } from "@supacode/contracts";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
 import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger, MenuItem, MenuGroup, MenuSeparator } from "../ui/menu";
-import {
-  Dialog,
-  DialogPopup,
-  DialogTitle,
-  DialogDescription,
-  DialogHeader,
-  DialogPanel,
-  DialogFooter,
-} from "../ui/dialog";
 import { toastManager } from "../ui/toast";
+import { PullRequestConfirmPopover } from "./PullRequestConfirmPopover";
 import { PullRequestStackLayers } from "./PullRequestStackLayers";
 import { PullRequestStackHeader } from "./PullRequestStackHeader";
 import { PullRequestStackLayerContent } from "./PullRequestStackLayerContent";
@@ -52,6 +44,12 @@ export function PullRequestStackMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<"merge" | "update-branch" | null>(null);
+  const [confirmationAnchor, setConfirmationAnchor] = useState<Element | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const confirm = (action: "merge" | "update-branch", anchor: Element | null) => {
+    setConfirmationAnchor(anchor);
+    setConfirmation(action);
+  };
   const [pending, setPending] = useState(false);
   const runAction = useAtomCommand(pullRequestEnvironment.runAction, { reportFailure: false });
   const top = stack.layers.at(-1);
@@ -128,6 +126,7 @@ export function PullRequestStackMenu({
               <MenuTrigger
                 render={
                   <Button
+                    ref={triggerRef}
                     variant="ghost"
                     size="xs"
                     aria-label={`Stack ${stack.number}, layer ${position} of ${stack.layers.length}`}
@@ -167,7 +166,10 @@ export function PullRequestStackMenu({
             <>
               <MenuSeparator />
               {canMerge ? (
-                <MenuItem disabled={mergeDisabled} onClick={() => setConfirmation("merge")}>
+                <MenuItem
+                  disabled={mergeDisabled}
+                  onClick={() => confirm("merge", triggerRef.current)}
+                >
                   <PullRequestGlyph.merged aria-hidden />
                   Merge stack ({mergeLayers.length})
                 </MenuItem>
@@ -175,7 +177,7 @@ export function PullRequestStackMenu({
               {canRebase ? (
                 <MenuItem
                   disabled={rebaseDisabled}
-                  onClick={() => setConfirmation("update-branch")}
+                  onClick={() => confirm("update-branch", triggerRef.current)}
                 >
                   <RefreshCwIcon aria-hidden />
                   Rebase stack
@@ -199,7 +201,7 @@ export function PullRequestStackMenu({
                   variant="default"
                   size="xs"
                   disabled={mergeDisabled}
-                  onClick={() => setConfirmation("merge")}
+                  onClick={(event) => confirm("merge", event.currentTarget)}
                 >
                   <PullRequestGlyph.merged aria-hidden className="size-3.5" />
                   Merge stack
@@ -213,47 +215,40 @@ export function PullRequestStackMenu({
           </TooltipPopup>
         </Tooltip>
       ) : null}
-      <Dialog
+      <PullRequestConfirmPopover
         open={confirmation !== null}
+        anchor={confirmationAnchor}
         onOpenChange={(value) => {
           if (!value && !pending) setConfirmation(null);
         }}
+        title={
+          confirmation === "merge"
+            ? `Merge ${mergeLayers.length} pull requests?`
+            : `Rebase ${unmerged.length} pull requests?`
+        }
+        description={
+          confirmation === "merge"
+            ? `Merge #${reference.number} and its unmerged layers below into ${stack.base} using ${mergeMethod}. GitHub checks their rules before merging or queueing them and rebases the remaining stack after merging.`
+            : `Rebase the remote branches from bottom to top onto ${stack.base}. This rewrites branch history and may restart checks. If a layer fails, earlier updates remain.`
+        }
+        confirmLabel={
+          pending ? "Working…" : confirmation === "merge" ? "Merge stack" : "Rebase stack"
+        }
+        pending={pending}
+        width="md"
+        onConfirm={() => void run()}
       >
-        <DialogPopup className="max-w-md" showCloseButton={!pending}>
-          <DialogHeader>
-            <DialogTitle>
-              {confirmation === "merge"
-                ? `Merge ${mergeLayers.length} pull requests?`
-                : `Rebase ${unmerged.length} pull requests?`}
-            </DialogTitle>
-            <DialogDescription>
-              {confirmation === "merge"
-                ? `Merge #${reference.number} and its unmerged layers below into ${stack.base} using ${mergeMethod}. GitHub checks their rules before merging or queueing them and rebases the remaining stack after merging.`
-                : `Rebase the remote branches from bottom to top onto ${stack.base}. This rewrites branch history and may restart checks. If a layer fails, earlier updates remain.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
-              {confirmationLayers.map((layer) => (
-                <li
-                  key={layer.number}
-                  className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2"
-                >
-                  <PullRequestStackLayerContent layer={layer} compact />
-                </li>
-              ))}
-            </ul>
-          </DialogPanel>
-          <DialogFooter>
-            <Button variant="outline" disabled={pending} onClick={() => setConfirmation(null)}>
-              Cancel
-            </Button>
-            <Button disabled={pending} onClick={() => void run()}>
-              {pending ? "Working…" : confirmation === "merge" ? "Merge stack" : "Rebase stack"}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+        <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+          {confirmationLayers.map((layer) => (
+            <li
+              key={layer.number}
+              className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2"
+            >
+              <PullRequestStackLayerContent layer={layer} compact />
+            </li>
+          ))}
+        </ul>
+      </PullRequestConfirmPopover>
     </>
   );
 }

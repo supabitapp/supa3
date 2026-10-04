@@ -56,15 +56,8 @@ vi.mock("../ui/tooltip", () => ({
     cloneElement(render, undefined, children),
   TooltipPopup: () => null,
 }));
-vi.mock("../ui/alert-dialog", () => ({
-  AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-    open ? <div role="alertdialog">{children}</div> : null,
-  AlertDialogPopup: ({ children }: { children: ReactNode }) => children,
-  AlertDialogHeader: ({ children }: { children: ReactNode }) => children,
-  AlertDialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-  AlertDialogDescription: ({ children }: { children: ReactNode }) => children,
-  AlertDialogFooter: ({ children }: { children: ReactNode }) => children,
-  AlertDialogClose: () => null,
+vi.mock("../pullRequest/PullRequestConfirmPopover", () => ({
+  PullRequestConfirmPopover: ({ open }: { open: boolean }) => (open ? <div role="dialog" /> : null),
 }));
 
 import { ThreadDetailsPrRow } from "./ThreadDetailsPrRow";
@@ -96,27 +89,27 @@ it("requires a new merge click after passing checks become pending and pass agai
       renderer.root
         .findAllByType("button")
         .find((button) => button.children.includes("Merge"))!
-        .props.onClick();
+        .props.onClick({ currentTarget: null });
     });
-  const dialogs = () => renderer.root.findAllByProps({ role: "alertdialog" });
+  const confirmations = () => renderer.root.findAllByProps({ role: "dialog" });
 
   act(() => {
     renderer = create(render());
   });
   clickMerge();
-  expect(dialogs()).toHaveLength(1);
+  expect(confirmations()).toHaveLength(1);
   act(() => {
     state.status = "pending";
     renderer.update(render());
   });
-  expect(dialogs()).toHaveLength(0);
+  expect(confirmations()).toHaveLength(0);
   act(() => {
     state.status = "success";
     renderer.update(render());
   });
-  expect(dialogs()).toHaveLength(0);
+  expect(confirmations()).toHaveLength(0);
   clickMerge();
-  expect(dialogs()).toHaveLength(1);
+  expect(confirmations()).toHaveLength(1);
   expect(state.perform).not.toHaveBeenCalled();
 });
 
