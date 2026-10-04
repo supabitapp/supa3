@@ -4,12 +4,9 @@ import Constants from "expo-constants";
 import { PostHog } from "posthog-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import {
-  createExceptionLimiter,
-  exceptionProperties,
-  exceptionReportFromSdk,
-} from "@supacode/shared/errorTracking";
+import { createExceptionLimiter, exceptionReportFromSdk } from "@supacode/shared/errorTracking";
 import { mobilePreferencesAtom } from "../state/preferences";
+import { mobileExceptionProperties } from "./errorTrackingPayload";
 
 const release = process.env.EXPO_PUBLIC_POSTHOG_RELEASE ?? "";
 const allow = createExceptionLimiter();
@@ -49,7 +46,7 @@ function initialize() {
       return {
         ...event,
         properties: {
-          ...exceptionProperties(report),
+          ...mobileExceptionProperties(report, event.properties?.$exception_level),
           ...(event.properties?.distinct_id !== undefined
             ? { distinct_id: event.properties.distinct_id }
             : {}),
