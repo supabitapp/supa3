@@ -26,7 +26,7 @@ export function getReasoningOptionDescriptor(descriptors: ReadonlyArray<Provider
     descriptors.find(
       (descriptor) =>
         descriptor.type === "select" &&
-        ["reasoningEffort", "effort", "variant", "thinking"].includes(descriptor.id),
+        ["reasoningEffort", "effort", "reasoning", "variant", "thinking"].includes(descriptor.id),
     ) ?? descriptors.find((descriptor) => descriptor.id === "thinking")
   );
 }

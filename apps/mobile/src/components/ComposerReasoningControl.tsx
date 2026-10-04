@@ -47,13 +47,9 @@ export function ComposerReasoningControl(props: {
     props.reportedModelSelection,
   );
   const label =
-    descriptor.type === "boolean"
-      ? (choices.find((choice) => choice.value === currentValue)?.label ?? "Default")
-      : (getProviderOptionCurrentLabel(
-          descriptor,
-          props.selectedModel,
-          props.reportedModelSelection,
-        ) ?? "Default");
+    choices.find((choice) => choice.value === currentValue)?.label ??
+    getProviderOptionCurrentLabel(descriptor, props.selectedModel, props.reportedModelSelection) ??
+    "Default";
   const accessibilityLabel = `${descriptor.label}: ${label}`;
   const control = (
     <ComposerInlineControl

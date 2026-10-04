@@ -34,7 +34,7 @@ const CODEX_CAPABILITIES = {
 } as const satisfies ModelCapabilities;
 
 describe("mobile provider options", () => {
-  it.each(["reasoningEffort", "effort", "variant", "thinking"])(
+  it.each(["reasoningEffort", "effort", "reasoning", "variant", "thinking"])(
     "finds the %s reasoning option without selecting other model settings",
     (id) => {
       const reasoning = { ...CODEX_CAPABILITIES.optionDescriptors[0], id };
