@@ -208,10 +208,6 @@ export interface Dependencies extends FileRevisionsDependencies {
   ) => Effect.Effect<string | null, PullRequestError>;
 }
 
-// A plain factory rather than a `Context.Service` (against the preference in
-// `.repos/effect-smol/LLMS.md`): the held revisions, refresh set, and write gates are only correct
-// at one instance per service, and a layer provided at two points would give two of each behind
-// one epoch counter.
 export const make = (dependencies: Dependencies) => {
   const { filesViewedStore, requireProject, requiredViewerOf, toPullRequestError } = dependencies;
   const { fileRevisionsOf } = makeFileRevisions(dependencies);
