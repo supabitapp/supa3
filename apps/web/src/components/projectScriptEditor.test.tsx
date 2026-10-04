@@ -13,16 +13,6 @@ vi.mock("./ui/dialog", () => ({
   DialogPopup: "section",
   DialogTitle: "h2",
 }));
-vi.mock("./ui/alert-dialog", () => ({
-  AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-    open ? children : null,
-  AlertDialogClose: "button",
-  AlertDialogDescription: "p",
-  AlertDialogFooter: "footer",
-  AlertDialogHeader: "header",
-  AlertDialogPopup: "section",
-  AlertDialogTitle: "h2",
-}));
 vi.mock("./ui/button", () => ({ Button: "button" }));
 vi.mock("./ui/input", () => ({ Input: "input" }));
 vi.mock("./ui/label", () => ({ Label: "label" }));
@@ -33,6 +23,11 @@ vi.mock("./ui/popover", () => ({
 }));
 vi.mock("./ui/switch", () => ({ Switch: "input" }));
 vi.mock("./ui/textarea", () => ({ Textarea: "textarea" }));
+vi.mock("./ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+  TooltipPopup: () => null,
+  TooltipTrigger: ({ render }: { render: ReactNode }) => render,
+}));
 
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,

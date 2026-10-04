@@ -19,20 +19,13 @@ import {
 import { GaugeIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { environmentPresentations } from "../../state/presentation";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "../ui/alert-dialog";
+import { InlineConfirmLabel } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
@@ -207,12 +200,10 @@ export function useResetCredit(
   input: ProviderConsumeResetCreditInput,
 ) {
   const consume = useAtomCommand(serverEnvironment.consumeResetCredit, { reportFailure: false });
-  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const redeem = async () => {
-    setConfirming(false);
     setBusy(true);
     setStatus(null);
     const result = await consume({ environmentId, input });
@@ -228,40 +219,37 @@ export function useResetCredit(
     );
   };
 
-  return { confirming, setConfirming, busy, status, redeem };
+  return { busy, status, redeem };
 }
 
-/**
- * The confirm for a redeem. Redeeming spends a credit the provider granted the
- * user, so it never fires on a bare click. Mount it outside any popover that
- * holds the button: dialogs stack under popovers, and closing the popover
- * would unmount a dialog rendered inside it.
- */
-export function ResetCreditDialog({
-  open,
-  onOpenChange,
-  onConfirm,
+export function ResetCreditButton({
+  busy,
+  onRedeem,
 }: {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-  readonly onConfirm: () => void;
+  readonly busy: boolean;
+  readonly onRedeem: () => void;
 }) {
+  const confirm = useInlineConfirm<"redeem">();
+  const armed = confirm.armed === "redeem";
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Use a reset credit?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This redeems one credit on your account and clears the current rate-limit windows. It
-            cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-          <Button onClick={onConfirm}>Use credit</Button>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button size="xs" variant="outline" disabled={busy} {...confirm.bind("redeem", onRedeem)}>
+            <InlineConfirmLabel
+              armed={armed}
+              idle={busy ? "Using…" : "Use reset"}
+              confirm="Confirm reset"
+            />
+          </Button>
+        }
+      />
+      <TooltipPopup>
+        {armed
+          ? "Click again to redeem one reset credit. It clears the current rate-limit windows and can’t be undone."
+          : "Redeem a reset credit to clear the current rate-limit windows"}
+      </TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -294,22 +282,15 @@ export function ResetCredits({
   readonly credits: ServerProviderResetCredits;
   readonly now: number;
 }) {
-  const { confirming, setConfirming, busy, status, redeem } = useResetCredit(environmentId, input);
+  const { busy, status, redeem } = useResetCredit(environmentId, input);
   if (credits.availableCount === 0 && status === null) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <span className="tabular-nums">{resetCreditsSummary(credits, now)}</span>
       {credits.availableCount > 0 ? (
-        <Button size="xs" variant="outline" disabled={busy} onClick={() => setConfirming(true)}>
-          {busy ? "Using…" : "Use reset"}
-        </Button>
+        <ResetCreditButton busy={busy} onRedeem={() => void redeem()} />
       ) : null}
       {status ? <span className="text-foreground">{status}</span> : null}
-      <ResetCreditDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        onConfirm={() => void redeem()}
-      />
     </div>
   );
 }

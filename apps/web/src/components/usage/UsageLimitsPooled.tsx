@@ -29,7 +29,7 @@ import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
   PaceIcon,
-  ResetCreditDialog,
+  ResetCreditButton,
   barColor,
   resetCreditsSummary,
   useResetCredit,
@@ -147,7 +147,7 @@ function SegmentPopover({
   readonly window: LimitPoolMember["window"];
   readonly reset: LimitPoolWindow["resets"][number] | undefined;
   readonly now: number;
-  /** Redeem state owned by the segment, since the confirm lives outside this popover. */
+  /** Redeem state owned by the segment, since the outcome shows after this popover closes. */
   readonly redeem: ReturnType<typeof useResetCredit> | null;
   readonly onRedeem: () => void;
 }) {
@@ -199,17 +199,9 @@ function SegmentPopover({
       </div>
       {credits && redeem ? (
         <div className="border-t border-border/60 pt-2.5 text-muted-foreground">
-          <span className="flex items-center gap-3">
+          <span className="flex items-center justify-between gap-3">
             <span className="tabular-nums">{resetCreditsSummary(credits, now, true)}</span>
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={redeem.busy}
-              className="ms-auto"
-              onClick={onRedeem}
-            >
-              {redeem.busy ? "Using…" : "Use reset"}
-            </Button>
+            <ResetCreditButton busy={redeem.busy} onRedeem={onRedeem} />
           </span>
         </div>
       ) : null}
@@ -219,8 +211,7 @@ function SegmentPopover({
 
 /**
  * One account's share of one pooled window: the segment, its popover, and the
- * reset confirm. The confirm is a sibling of the popover, not a child: dialogs
- * stack under popovers, and the popover closes as the confirm opens.
+ * outcome of a reset redeemed from it.
  */
 function PoolSegment({
   account,
@@ -421,16 +412,11 @@ function RedeemableSegmentPopup({
           redeem={redeem}
           onRedeem={() => {
             closePopover();
-            redeem.setConfirming(true);
+            void redeem.redeem();
           }}
         />
       </PopoverPopup>
-      <ResetCreditDialog
-        open={redeem.confirming}
-        onOpenChange={redeem.setConfirming}
-        onConfirm={() => void redeem.redeem()}
-      />
-      {/* The popover closed before the confirm, so the outcome needs a home outside it. */}
+      {/* The popover closes as the redeem starts, so the outcome needs a home outside it. */}
       {redeem.status ? (
         <span role="status" className="col-span-full text-xs text-muted-foreground">
           <AccountName account={account} className="font-medium text-foreground" /> {redeem.status}

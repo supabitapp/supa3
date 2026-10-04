@@ -16,7 +16,6 @@ import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
 import { cn } from "../../lib/utils";
-import { ensureLocalApi } from "../../localApi";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
 import { formatRelativeTimeLabel, getRelativeTimeState } from "../../timestampFormat";
 import { useEnvironmentQuery } from "../../state/query";
@@ -376,7 +375,7 @@ function ProcessDiagnosticsTable({
               </tr>
             ) : null}
             {visibleProcesses.map((process) => (
-              <tr key={process.pid} className="hover:bg-muted/20">
+              <tr key={`${process.pid}:${process.startTimeMs}`} className="hover:bg-muted/20">
                 <td className="px-4 py-2 align-middle sm:pl-5">
                   <ProcessNameCell
                     process={process}
@@ -408,6 +407,7 @@ function ProcessDiagnosticsTable({
                 </td>
                 <td className="p-2 align-middle sm:pr-4">
                   <ProcessSignalActions
+                    pid={process.pid}
                     disabled={signalingPid === process.pid}
                     onSignal={(signal) => onSignal(process.pid, signal)}
                   />
@@ -817,38 +817,6 @@ export function DiagnosticsSettingsPanel() {
         signalingPidRef.current = null;
         setSignalingPid(null);
       };
-      if (signal === "SIGKILL") {
-        let confirmed = false;
-        try {
-          confirmed = await ensureLocalApi().dialogs.confirm(
-            `Send SIGKILL to process ${pid}? This cannot be handled by the process.`,
-            { variant: "destructive" },
-          );
-        } catch (error) {
-          clearSignaling();
-          toastManager.add({
-            type: "error",
-            title: "Could not confirm signal",
-            description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
-          });
-          return;
-        }
-        if (!confirmed) {
-          clearSignaling();
-          return;
-        }
-      }
-      if (environmentIdRef.current !== targetEnvironmentId) {
-        clearSignaling();
-        return;
-      }
-      if (
-        processDataRef.current?.processes.find((entry) => entry.pid === pid)?.startTimeMs !==
-        process.startTimeMs
-      ) {
-        clearSignaling();
-        return;
-      }
 
       const sendSignal = async () => {
         const result = await signalServerProcess({

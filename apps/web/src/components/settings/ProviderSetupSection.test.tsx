@@ -337,7 +337,7 @@ describe("Antigravity setup", () => {
     ).toBe(1);
   });
 
-  it("removes an owned damaged runtime only after confirmation", async () => {
+  it("removes an owned damaged runtime from the selected environment", async () => {
     setup.auth = authState({ phase: "idle", flowId: null, authorizationUrl: null });
     setup.installation = {
       ...setup.installation!,
@@ -345,13 +345,12 @@ describe("Antigravity setup", () => {
       canRemove: true,
       installedVersion: null,
     };
-    const view = renderSetup();
-    click(view, "Remove downloaded runtime");
-    await flushPromises();
-    expect(setup.removeInstall).not.toHaveBeenCalled();
-
-    setup.confirm.mockResolvedValue(true);
-    click(view, "Remove downloaded runtime");
+    const remove = visitElements(
+      renderSetup(),
+      (element) => typeof element.props.onRemove === "function",
+    );
+    expect(remove?.props.disabled).toBe(false);
+    (remove?.props.onRemove as () => void)();
     await flushPromises();
     expect(setup.removeInstall).toHaveBeenCalledWith({ environmentId, input: { instanceId } });
   });
