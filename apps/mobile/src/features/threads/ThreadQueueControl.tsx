@@ -50,10 +50,6 @@ export function useThreadQueueWorkflow(target: QueueTarget) {
   return useAtomValue(environmentThreadDetails.queueWorkflowAtom(target));
 }
 
-export function useThreadQueuedCount(target: QueueTarget) {
-  return useAtomValue(environmentThreadDetails.queuedCountAtom(target));
-}
-
 export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   const target = route.params;
   const navigation = useNavigation();
