@@ -21,7 +21,7 @@ on:
           - stable
           - nightly
       version:
-        description: "Stable version override (for example 1.2.3). Defaults to the version the latest nightly previewed."
+        description: "Stable calendar version (for example 26.1.0). Must match the verified nightly; tag releases select an explicit commit."
         required: false
         type: string
 
@@ -55,6 +55,7 @@ jobs:
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
       nightly_version: ${{ steps.resolve.outputs.nightly_version }}
+      release_date: ${{ steps.resolve.outputs.release_date }}
       has_changes: ${{ steps.resolve.outputs.has_changes }}
     steps:
       - name: Checkout
@@ -85,8 +86,11 @@ jobs:
 
             await assertReleaseSource({ github, context, releaseChannel });
 
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
+            core.setOutput('release_date', run.run_started_at.slice(0, 10).replaceAll('-', ''));
+
             if (context.eventName === 'schedule') {
-              core.setOutput('has_changes', await shouldReleaseNightly({ github, context, core }));
+              core.setOutput('has_changes', await shouldReleaseNightly({ github, context, core, now: Date.parse(run.run_started_at) }));
               core.setOutput('ref', context.sha);
             } else if (context.eventName === 'workflow_dispatch' && dispatchChannel === 'stable') {
               const { tag, sha, version } = await resolveLatestNightlyCommit({ github, context, core });
@@ -138,23 +142,16 @@ jobs:
           DISPATCH_CHANNEL: ${{ github.event.inputs.channel }}
           DISPATCH_VERSION: ${{ github.event.inputs.version }}
           NIGHTLY_VERSION: ${{ needs.resolve_commit.outputs.nightly_version }}
-          NIGHTLY_DATE: ${{ github.run_started_at }}
+          RELEASE_DATE: ${{ needs.resolve_commit.outputs.release_date }}
           NIGHTLY_SHA: ${{ needs.resolve_commit.outputs.ref }}
           NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "schedule" || ( "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "nightly" ) ]]; then
-            nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
-
             node scripts/resolve-nightly-release.ts \
-              --date "$nightly_date" \
+              --date "$RELEASE_DATE" \
               --run-number "$NIGHTLY_RUN_NUMBER" \
               --sha "$NIGHTLY_SHA" \
               --github-output
-
-            echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "make_latest=false" >> "$GITHUB_OUTPUT"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "preview" ]]; then
             # Manual-only test train: exercises the whole release flow for a
             # commit end users must never receive. Never scheduled.
@@ -164,19 +161,12 @@ jobs:
             # its desktop builds carry no update feed, and no updater manifest
             # is attached to the release, so neither stable nor nightly
             # installs can ever be offered one.
-            nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
-
             node scripts/resolve-nightly-release.ts \
               --channel preview \
-              --date "$nightly_date" \
+              --date "$RELEASE_DATE" \
               --run-number "$NIGHTLY_RUN_NUMBER" \
               --sha "$NIGHTLY_SHA" \
               --github-output
-
-            echo "release_channel=preview" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=preview" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "make_latest=false" >> "$GITHUB_OUTPUT"
           else
             if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
               raw="${DISPATCH_VERSION:-$NIGHTLY_VERSION}"
@@ -188,25 +178,27 @@ jobs:
               raw="${GITHUB_REF_NAME}"
             fi
 
-            version="${raw#v}"
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Invalid release version: $raw" >&2
-              exit 1
+            candidate_args=()
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+              candidate_args=(--nightly-version "$NIGHTLY_VERSION")
             fi
-
-            echo "release_channel=stable" >> "$GITHUB_OUTPUT"
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-            echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=Supacode v$version" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
-            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-              echo "make_latest=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-              echo "make_latest=false" >> "$GITHUB_OUTPUT"
-            fi
+            node scripts/resolve-nightly-release.ts \
+              --channel stable --version "$raw" \
+              --date "$RELEASE_DATE" --sha "$NIGHTLY_SHA" \
+              --run-number "$NIGHTLY_RUN_NUMBER" \
+              "${candidate_args[@]}" --github-output
           fi
+
+      - name: Validate release publication
+        uses: actions/github-script@v8
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_CHANNEL: ${{ steps.release_meta.outputs.release_channel }}
+          RELEASE_SHA: ${{ needs.resolve_commit.outputs.ref }}
+        with:
+          script: |
+            const { assertReleaseVersionAvailable } = require('./.github/scripts/check-release-version.cjs');
+            await assertReleaseVersionAvailable({ github, context, version: process.env.RELEASE_VERSION, channel: process.env.RELEASE_CHANNEL, sha: process.env.RELEASE_SHA });
 
       - id: previous_tag
         name: Resolve previous release tag
@@ -540,6 +532,17 @@ jobs:
             echo "::error::npm publish --dry-run failed. Make sure the @supabitapp npm account owns the scope and that supacode and every @supabitapp/supacode-<platform> package has a trusted publisher registered for .github/workflows/release.yml (see docs/operations/release.md)." >&2
             exit 1
           fi
+
+      - name: Recheck release identity before publication
+        uses: actions/github-script@v8
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.preflight.outputs.release_channel }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.ref }}
+        with:
+          script: |
+            const { assertReleaseVersionAvailable } = require('./.github/scripts/check-release-version.cjs');
+            await assertReleaseVersionAvailable({ github, context, version: process.env.RELEASE_VERSION, channel: process.env.RELEASE_CHANNEL, sha: process.env.RELEASE_SHA });
 
       - name: Publish CLI packages
         run: node apps/server/scripts/cli.ts publish --packages-dir npm-packages --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --provenance --verbose
@@ -897,10 +900,10 @@ jobs:
       - name: Install workspace dependencies
         run: mise exec -- vp install --filter=@supacode/scripts... --filter=@supacode/oxlint-plugin-supacode...
       - id: update_versions
-        name: Update version strings
+        name: Prepare next stable target
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
-        run: node scripts/update-release-package-versions.ts "$RELEASE_VERSION" --github-output
+        run: node scripts/update-release-package-versions.ts "$RELEASE_VERSION" --prepare-next-stable --github-output
 
       - name: Format package.json files
         if: steps.update_versions.outputs.changed == 'true'
@@ -925,7 +928,7 @@ jobs:
           git config user.email "${{ steps.app_bot.outputs.email }}"
 
           git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json pnpm-lock.yaml
-          git commit -m "chore(release): prepare $RELEASE_TAG"
+          git commit -m "chore(release): prepare next target after $RELEASE_TAG"
           git push origin HEAD:main
 
   announce_discord:

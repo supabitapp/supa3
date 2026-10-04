@@ -12,6 +12,8 @@ import * as Schema from "effect/Schema";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { fromJsonStringPretty } from "@supacode/shared/schemaJson";
 
+import { prepareNextReleaseTarget } from "./lib/release-version.ts";
+
 export class ReleasePackageManifestError extends Schema.TaggedError<ReleasePackageManifestError>()(
   "ReleasePackageManifestError",
   {
@@ -55,24 +57,33 @@ export const releasePackageFiles = [
 
 interface UpdateReleasePackageVersionsOptions {
   readonly rootDir?: string | undefined;
+  readonly prepareNextStable?: boolean;
+}
+
+export class ReleasePackageVersionMismatchError extends Schema.TaggedError<ReleasePackageVersionMismatchError>()(
+  "ReleasePackageVersionMismatchError",
+  { versions: Schema.Record(Schema.String, Schema.String) },
+) {
+  override get message(): string {
+    return "Release package versions disagree. Align server, desktop, web, and contracts before releasing.";
+  }
 }
 
 const PackageJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
 const PackageJsonPrettyJson = fromJsonStringPretty(PackageJsonSchema);
 const decodePackageJson = Schema.decodeUnknownEffect(PackageJsonPrettyJson);
 const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
+const decodePackageVersion = Schema.decodeUnknownEffect(Schema.NonEmptyString);
 
-export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersions")(function* (
-  version: string,
-  options: UpdateReleasePackageVersionsOptions = {},
+const readReleasePackageManifests = Effect.fn("readReleasePackageManifests")(function* (
+  rootDir: string | undefined,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const rootDir = path.resolve(options.rootDir ?? process.cwd());
-  let changed = false;
-
+  const workspaceRoot = path.resolve(rootDir ?? process.cwd());
+  const manifests = [];
   for (const relativePath of releasePackageFiles) {
-    const filePath = path.join(rootDir, relativePath);
+    const filePath = path.join(workspaceRoot, relativePath);
     const packageJsonText = yield* fs.readFileString(filePath).pipe(
       Effect.mapError(
         (cause) =>
@@ -93,11 +104,57 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
           }),
       ),
     );
-    if (packageJson.version === version) {
+    manifests.push({ filePath, packageJson });
+  }
+  return manifests;
+});
+
+const alignedReleaseVersion = Effect.fnUntraced(function* (
+  manifests: ReadonlyArray<{
+    readonly filePath: string;
+    readonly packageJson: Record<string, unknown>;
+  }>,
+) {
+  const versions: Record<string, string> = {};
+  for (const { filePath, packageJson } of manifests) {
+    versions[filePath] = yield* decodePackageVersion(packageJson.version).pipe(
+      Effect.mapError(
+        (cause) => new ReleasePackageManifestError({ operation: "decode", filePath, cause }),
+      ),
+    );
+  }
+  const [version = ""] = Object.values(versions);
+  if (Object.values(versions).some((value) => value !== version)) {
+    return yield* new ReleasePackageVersionMismatchError({ versions });
+  }
+  return version;
+});
+
+export const readReleasePackageVersion = Effect.fn("readReleasePackageVersion")(function* (
+  rootDir: string | undefined,
+) {
+  return yield* alignedReleaseVersion(yield* readReleasePackageManifests(rootDir));
+});
+
+export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersions")(function* (
+  version: string,
+  options: UpdateReleasePackageVersionsOptions = {},
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifests = yield* readReleasePackageManifests(options.rootDir);
+  const targetVersion = options.prepareNextStable
+    ? yield* prepareNextReleaseTarget(yield* alignedReleaseVersion(manifests), version)
+    : version;
+  let changed = false;
+  for (const { filePath, packageJson } of manifests) {
+    if (packageJson.version === targetVersion) {
       continue;
     }
 
-    const packageJsonString = yield* encodePackageJson({ ...packageJson, version }).pipe(
+    const packageJsonString = yield* encodePackageJson({
+      ...packageJson,
+      version: targetVersion,
+    }).pipe(
       Effect.mapError(
         (cause) =>
           new ReleasePackageManifestError({
@@ -158,10 +215,17 @@ export const updateReleasePackageVersionsCommand = Command.make(
       Flag.withDescription("Append changed=<boolean> to GITHUB_OUTPUT."),
       Flag.withDefault(false),
     ),
+    prepareNextStable: Flag.Boolean("prepare-next-stable").pipe(
+      Flag.withDescription(
+        "Prepare the next patch after this stable release, preserving a higher target on main.",
+      ),
+      Flag.withDefault(false),
+    ),
   },
-  ({ version, root, githubOutput }) =>
+  ({ version, root, githubOutput, prepareNextStable }) =>
     updateReleasePackageVersions(version, {
       rootDir: Option.getOrUndefined(root),
+      prepareNextStable,
     }).pipe(
       Effect.tap(({ changed }) =>
         changed

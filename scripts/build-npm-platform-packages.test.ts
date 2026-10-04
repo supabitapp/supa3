@@ -13,7 +13,7 @@ import {
   NpmPackagesArchivesMissingError,
 } from "./build-npm-platform-packages.ts";
 
-const VERSION = "1.2.3";
+const VERSION = "26.0.0";
 const decodeManifest = Schema.decodeEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );

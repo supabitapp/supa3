@@ -8,53 +8,62 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 
 import {
-  readDesktopBaseVersion,
-  resolveNightlyBaseVersion,
-  resolveNightlyReleaseMetadata,
-  resolveNightlyTargetVersion,
-  writeNightlyReleaseOutput,
+  readPreparedReleaseVersion,
+  resolveReleaseMetadata,
+  resolveStableReleaseMetadata,
+  writeReleaseMetadataOutput,
 } from "./resolve-nightly-release.ts";
 
-it("strips prerelease and build metadata when deriving the nightly base version", () => {
-  assert.equal(resolveNightlyBaseVersion("0.0.17"), "0.0.17");
-  assert.equal(resolveNightlyBaseVersion("9.9.9-smoke.0"), "9.9.9");
-  assert.equal(resolveNightlyBaseVersion("1.2.3-beta.4+build.9"), "1.2.3");
-});
-
-it.effect("bumps the patch version before deriving nightly prerelease versions", () =>
+it.effect("promotes a matching calendar nightly or explicit tag", () =>
   Effect.gen(function* () {
-    assert.equal(yield* resolveNightlyTargetVersion("0.0.17"), "0.0.18");
-    assert.equal(yield* resolveNightlyTargetVersion("9.9.9-smoke.0"), "9.9.10");
-    assert.equal(yield* resolveNightlyTargetVersion("1.2.3-beta.4+build.9"), "1.2.4");
+    const metadata = yield* resolveStableReleaseMetadata(
+      "26.1.0",
+      "20261004",
+      "abcdef1234567890",
+      "26.1.0",
+    );
+    assert.equal(metadata.version, "26.1.0");
+    assert.equal(metadata.tag, "v26.1.0");
+    assert.equal(
+      (yield* resolveStableReleaseMetadata("v26.0.0", "20261004", "abcdef1234567890", undefined))
+        .version,
+      "26.0.0",
+    );
   }),
 );
 
-it.effect("reports the invalid desktop package version", () =>
+it.effect("rejects a mismatched candidate and December promotion during January", () =>
   Effect.gen(function* () {
-    const error = yield* resolveNightlyTargetVersion("nightly").pipe(Effect.flip);
-
-    assert.equal(error._tag, "InvalidDesktopPackageVersionError");
-    assert.equal(error.version, "nightly");
-    assert.equal(error.message, "Invalid desktop package version 'nightly'.");
+    const mismatch = yield* resolveStableReleaseMetadata(
+      "26.1.0",
+      "20261004",
+      "abcdef1234567890",
+      "26.0.1",
+    ).pipe(Effect.flip);
+    assert.include(mismatch.message, "verified nightly previews 26.0.1");
+    const rollover = yield* resolveStableReleaseMetadata(
+      "27.0.0",
+      "20270101",
+      "abcdef1234567890",
+      "26.0.1",
+    ).pipe(Effect.flip);
+    assert.include(rollover.message, "Expected release year 27");
   }),
 );
 
 it("derives nightly metadata including the short commit sha in the release name", () => {
-  assert.deepStrictEqual(
-    resolveNightlyReleaseMetadata("9.9.10", "20260413", 321, "abcdef1234567890"),
-    {
-      baseVersion: "9.9.10",
-      version: "9.9.10-nightly.20260413.321",
-      tag: "v9.9.10-nightly.20260413.321",
-      name: "Supacode Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
-      shortSha: "abcdef123456",
-    },
-  );
+  assert.deepStrictEqual(resolveReleaseMetadata("9.9.10", "20260413", 321, "abcdef1234567890"), {
+    baseVersion: "9.9.10",
+    version: "9.9.10-nightly.20260413.321",
+    tag: "v9.9.10-nightly.20260413.321",
+    name: "Supacode Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
+    shortSha: "abcdef123456",
+  });
 });
 
 it("derives preview metadata under its own prerelease identifier", () => {
   assert.deepStrictEqual(
-    resolveNightlyReleaseMetadata("9.9.10", "20260413", 321, "abcdef1234567890", "preview"),
+    resolveReleaseMetadata("9.9.10", "20260413", 321, "abcdef1234567890", "preview"),
     {
       baseVersion: "9.9.10",
       version: "9.9.10-preview.20260413.321",
@@ -66,11 +75,11 @@ it("derives preview metadata under its own prerelease identifier", () => {
 });
 
 it.effect("preserves the GITHUB_OUTPUT configuration cause", () => {
-  const metadata = resolveNightlyReleaseMetadata("1.2.4", "20260620", 42, "abcdef1234567890");
+  const metadata = resolveReleaseMetadata("1.2.4", "20260620", 42, "abcdef1234567890");
   const configCause = new ConfigProvider.SourceError({ message: "environment unavailable" });
 
   return Effect.gen(function* () {
-    const configError = yield* writeNightlyReleaseOutput(metadata, true).pipe(
+    const configError = yield* writeReleaseMetadataOutput(metadata, true).pipe(
       Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})),
       Effect.provideService(
         ConfigProvider.ConfigProvider,
@@ -79,7 +88,7 @@ it.effect("preserves the GITHUB_OUTPUT configuration cause", () => {
       Effect.flip,
     );
 
-    if (configError._tag !== "NightlyReleaseGitHubOutputConfigError") {
+    if (configError._tag !== "ReleaseMetadataGitHubOutputConfigError") {
       return assert.fail(`Unexpected error: ${configError._tag}`);
     }
     assert.instanceOf(configError.cause, Config.ConfigError);
@@ -88,46 +97,46 @@ it.effect("preserves the GITHUB_OUTPUT configuration cause", () => {
   });
 });
 
-it.layer(NodeServices.layer)("readDesktopBaseVersion", (it) => {
-  it.effect("preserves desktop package read context and its platform cause", () =>
+it.layer(NodeServices.layer)("readPreparedReleaseVersion", (it) => {
+  it.effect("preserves release package read context and its platform cause", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "resolve-nightly-release-read-",
       });
-      const packageJsonPath = path.join(rootDir, "apps/desktop/package.json");
+      const packageJsonPath = path.join(rootDir, "apps/server/package.json");
 
-      const error = yield* readDesktopBaseVersion(rootDir).pipe(Effect.flip);
+      const error = yield* readPreparedReleaseVersion(rootDir).pipe(Effect.flip);
 
-      if (error._tag !== "NightlyReleaseDesktopPackageError") {
+      if (error._tag !== "ReleasePackageManifestError") {
         return assert.fail(`Unexpected error: ${error._tag}`);
       }
       assert.equal(error.operation, "read");
-      assert.equal(error.packageJsonPath, packageJsonPath);
+      assert.equal(error.filePath, packageJsonPath);
       assert.instanceOf(error.cause, PlatformError.PlatformError);
       assert.notInclude(error.message, String((error.cause as Error).message));
     }),
   );
 
-  it.effect("preserves desktop package decode context and its schema cause", () =>
+  it.effect("preserves release package decode context and its schema cause", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "resolve-nightly-release-decode-",
       });
-      const packageJsonPath = path.join(rootDir, "apps/desktop/package.json");
+      const packageJsonPath = path.join(rootDir, "apps/server/package.json");
       yield* fs.makeDirectory(path.dirname(packageJsonPath), { recursive: true });
       yield* fs.writeFileString(packageJsonPath, "{");
 
-      const error = yield* readDesktopBaseVersion(rootDir).pipe(Effect.flip);
+      const error = yield* readPreparedReleaseVersion(rootDir).pipe(Effect.flip);
 
-      if (error._tag !== "NightlyReleaseDesktopPackageError") {
+      if (error._tag !== "ReleasePackageManifestError") {
         return assert.fail(`Unexpected error: ${error._tag}`);
       }
       assert.equal(error.operation, "decode");
-      assert.equal(error.packageJsonPath, packageJsonPath);
+      assert.equal(error.filePath, packageJsonPath);
       assert.ok(error.cause !== undefined);
       assert.notInclude(error.message, String((error.cause as Error).message));
     }),

@@ -15,6 +15,33 @@ import {
 
 const encoder = new TextEncoder();
 
+it.effect("keeps release notes continuous across calendar migration and year rollover", () =>
+  Effect.gen(function* () {
+    assert.equal(
+      yield* resolvePreviousReleaseTag("stable", "v26.0.0", [
+        "v0.0.46",
+        "v26.0.0-nightly.20261004.123",
+      ]),
+      "v0.0.46",
+    );
+    assert.equal(
+      yield* resolvePreviousReleaseTag("stable", "v27.0.0", [
+        "v26.9.0",
+        "v26.10.0",
+        "v27.0.0-preview.20270101.124",
+      ]),
+      "v26.10.0",
+    );
+    assert.equal(
+      yield* resolvePreviousReleaseTag("nightly", "v27.0.0-nightly.20270101.124", [
+        "v26.10.1-nightly.20261231.123",
+        "v27.0.0-preview.20270101.125",
+      ]),
+      "v26.10.1-nightly.20261231.123",
+    );
+  }),
+);
+
 function mockHandle(options: {
   readonly exitCode: number;
   readonly stdout?: string;

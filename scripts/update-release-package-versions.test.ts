@@ -19,6 +19,7 @@ import {
   releasePackageFiles,
   updateReleasePackageVersions,
   updateReleasePackageVersionsCommand,
+  readReleasePackageVersion,
 } from "./update-release-package-versions.ts";
 
 const ScriptTestLayer = Layer.mergeAll(NodeServices.layer, TestConsole.layer);
@@ -73,6 +74,68 @@ const captureLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   });
 
 it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
+  it.effect("prepares the next calendar patch and is idempotent", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const rootDir = yield* fs.makeTempDirectoryScoped({ prefix: "calendar-next-patch-" });
+      yield* writePackageJsonFixtures(rootDir, "26.0.0");
+      assert.deepStrictEqual(
+        yield* updateReleasePackageVersions("26.0.0", { rootDir, prepareNextStable: true }),
+        { changed: true },
+      );
+      assert.equal(yield* readReleasePackageVersion(rootDir), "26.0.1");
+      assert.deepStrictEqual(
+        yield* updateReleasePackageVersions("26.0.0", { rootDir, prepareNextStable: true }),
+        { changed: false },
+      );
+    }),
+  );
+
+  it.effect("preserves a higher target prepared while stable was publishing", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const rootDir = yield* fs.makeTempDirectoryScoped({ prefix: "calendar-next-minor-" });
+      for (const version of ["26.1.0", "27.0.0"]) {
+        yield* writePackageJsonFixtures(rootDir, version);
+        assert.deepStrictEqual(
+          yield* updateReleasePackageVersions("26.0.0", { rootDir, prepareNextStable: true }),
+          { changed: false },
+        );
+        assert.equal(yield* readReleasePackageVersion(rootDir), version);
+      }
+    }),
+  );
+
+  it.effect("rejects inconsistent manifests before finalization writes anything", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const rootDir = yield* fs.makeTempDirectoryScoped({ prefix: "calendar-mismatch-" });
+      yield* writePackageJsonFixtures(rootDir, "26.0.0");
+      yield* fs.writeFileString(
+        path.join(rootDir, "apps/desktop/package.json"),
+        '{"version":"26.1.0"}',
+      );
+      const before = yield* readReleaseVersions(rootDir);
+      const error = yield* updateReleasePackageVersions("26.0.0", {
+        rootDir,
+        prepareNextStable: true,
+      }).pipe(Effect.flip);
+      assert.equal(error._tag, "ReleasePackageVersionMismatchError");
+      assert.deepStrictEqual(yield* readReleaseVersions(rootDir), before);
+    }),
+  );
+
+  it.effect("supports next-target preparation through the CLI", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const rootDir = yield* fs.makeTempDirectoryScoped({ prefix: "calendar-next-cli-" });
+      yield* writePackageJsonFixtures(rootDir, "26.0.0");
+      yield* runCli(["26.0.0", "--root", rootDir, "--prepare-next-stable"]);
+      assert.equal(yield* readReleasePackageVersion(rootDir), "26.0.1");
+    }),
+  );
+
   it.effect("updates all release package versions under the provided root", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -145,6 +208,8 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         rootDir: baseDir,
       }).pipe(Effect.flip);
 
+      if (error._tag !== "ReleasePackageManifestError")
+        return assert.fail(`Unexpected error: ${error._tag}`);
       assert.equal(error.operation, "decode");
       assert.equal(error.filePath, filePath);
       assert.isTrue(Schema.isSchemaError(error.cause));
@@ -168,6 +233,8 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         rootDir: baseDir,
       }).pipe(Effect.flip, Effect.ensuring(fs.chmod(filePath, 0o600).pipe(Effect.orDie)));
 
+      if (error._tag !== "ReleasePackageManifestError")
+        return assert.fail(`Unexpected error: ${error._tag}`);
       assert.equal(error.operation, "write");
       assert.equal(error.filePath, filePath);
       assert.instanceOf(error.cause, PlatformError.PlatformError);

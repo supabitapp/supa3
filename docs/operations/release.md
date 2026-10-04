@@ -4,6 +4,46 @@
 
 This document covers the unified release workflow for stable and nightly desktop releases.
 
+## Calendar versions
+
+Supacode uses `YY.MINOR.PATCH`, with the actual UTC release year minus 2000 as `YY`.
+The first calendar release is `26.0.0`. Feature releases increment minor and reset patch;
+fixes increment patch. For example, `26.1.0` can be followed by `26.1.1`.
+The first release in 2027 is `27.0.0`. The numbers do not define wire compatibility;
+the orchestration and service launcher protocols remain separate.
+
+The aligned server, desktop, web, and contracts manifests hold the **next stable target**.
+Nightlies preview that target directly. After publishing `26.0.0`, finalization prepares
+`26.0.1` on main and preserves any higher feature target already prepared there.
+Prepare a feature release before building its nightly candidate:
+
+```sh
+node scripts/update-release-package-versions.ts 26.1.0
+```
+
+Commit the aligned manifests, then verify their nightly before promotion. When the UTC year
+changes, release tooling selects the new year's `YY.0.0`, including from an unchanged commit.
+A December nightly cannot be promoted during January; verify a current-year nightly first.
+Release validation runs before building and again before the first package publication.
+A build that crosses the year boundary must restart with the current-year target.
+
+Public versions must advance beyond the highest published stable. Existing GitHub releases,
+conflicting tags, and any already-published npm platform package reject the release before
+publication. Recover a partially published release with a fresh version; published versions
+must retain their original bytes. Tag releases need the calendar release tooling on their
+tagged commit, including backports.
+
+Mobile uses the same calendar convention with independent minor and patch counters in
+`apps/mobile/app.config.ts`. EAS retains its increasing native build numbers across years.
+Production native builds require a current-year marketing version; compatible OTA updates
+can continue serving older binaries. The stored generation in
+[`fingerprint.config.js`](../../apps/mobile/fingerprint.config.js) separates OTA distribution
+groups independently of the calendar year. Advance it only when users must install a new
+store binary. The first calendar generation requires new binaries and isolates legacy 2.x
+apps; maintaining their OTAs requires a branch with their original fingerprint configuration.
+Changes merged to main can automatically build and submit mobile binaries, so coordinate
+the version change with the store release window.
+
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`
@@ -18,8 +58,8 @@ This document covers the unified release workflow for stable and nightly desktop
 - A manual stable release builds the commit of the latest published nightly, not `main` HEAD.
   Nightly is the release candidate: verify the nightly, then promote it. Merges to `main` keep
   landing while you verify and never leak into the stable build.
-  - The version defaults to the one the nightly previewed (`0.0.39-nightly.*` ships as `0.0.39`).
-    Pass the `version` input to override it, for example for a minor bump.
+  - The version defaults to the one the nightly previewed (`26.1.0-nightly.*` ships as `26.1.0`).
+    The `version` input must match that verified nightly's core. Prepare minor targets before building their nightlies.
   - The stable tag is created on the nightly's commit when the GitHub Release is published.
   - Pushing a `vX.Y.Z` tag by hand still works and builds exactly the tagged commit. Use it when
     the commit to ship is not the latest nightly, such as a cherry-picked fix on a release branch.
@@ -31,8 +71,8 @@ This document covers the unified release workflow for stable and nightly desktop
   - Linux `x64` and `arm64` AppImage and `.deb`, from one electron-builder run. The `.deb` updates in the app through electron-updater, which installs it with `dpkg`.
   - Windows `x64` and `arm64` NSIS installer
 - Publishes one GitHub Release with all produced files.
-  - Stable tags with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
-  - Only plain stable `X.Y.Z` releases are marked as the repository's latest release.
+  - Stable tags require a plain current-year `YY.MINOR.PATCH`. Use the preview channel for test releases.
+  - Stable releases are marked as the repository's latest release.
   - Nightly runs are always GitHub prereleases and never marked latest.
   - Automatically generated release notes are pinned to the previous tag in the same channel, so stable compares to the previous stable tag and nightly compares to the previous nightly tag.
 - Includes Electron auto-update metadata (for example `latest*.yml`, `nightly*.yml`, and `*.blockmap`) in release assets.
@@ -112,7 +152,7 @@ Same-repository pull requests labeled `preview:web` deploy to `preview-<number>.
 - Triggers:
   - scheduled check every 30 minutes
   - manual `workflow_dispatch` with `channel=nightly`
-- Automatic nightlies require new commits and at least six hours since the last nightly was published, including manual nightlies.
+- Automatic nightlies require new commits or an annual calendar rollover, plus at least six hours since the last nightly was published, including manual nightlies.
 - Manual nightlies bypass the time and change checks. Nightly runs remain serialized. Scheduled runs wait for an active nightly to finish, then check the publication gap before building.
 - Runs the same desktop quality gates and artifact matrix as the tagged release flow.
 - Publishes a GitHub prerelease only:
@@ -120,7 +160,7 @@ Same-repository pull requests labeled `preview:web` deploy to `preview-<number>.
   - `nightly-v...` is accepted only as a legacy previous-nightly tag
   - release name includes the short commit SHA
   - `make_latest` is always `false`
-- Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
+- Uses the prepared stable target as the nightly base. For example, `26.1.0` produces `26.1.0-nightly.*`.
 - Publishes Electron auto-update metadata to the dedicated `nightly` updater channel, so desktop users can opt into that track independently from stable.
 - Publishes the CLI npm packages (`supacode` and `@supabitapp/supacode-<platform>-<arch>`) to the `nightly` npm dist-tag using the same nightly version.
 - Does not commit version bumps back to `main`.
@@ -248,10 +288,10 @@ Checklist:
 
 ## 1) Release validation and unsigned builds
 
-There is no dry-run tag path. Pushing any accepted non-nightly tag, including
-`v0.0.0-test.1`, classifies the run as the stable channel. It publishes `supacode` with npm dist-tag
+There is no dry-run tag path. Pushing an accepted plain current-year release tag
+classifies the run as the stable channel. It publishes `supacode` with npm dist-tag
 `latest`, creates a real GitHub Release, aliases the hosted app to `latest.app.next.supacode.sh` and
-`app.next.supacode.sh`, and can commit a version bump to `main` in the finalize job. Do not push a test tag
+`app.next.supacode.sh`, and can prepare the next stable target on `main` in the finalize job. Do not push a test tag
 to validate the workflow.
 
 The workflow has no non-publishing `workflow_dispatch` mode. Use normal CI or local quality gates to
@@ -323,8 +363,8 @@ Checklist:
 
 1. Pick the latest nightly and verify it: run the smoke test above against its artifacts and
    check the nightly channel for regressions.
-2. Dispatch the Release workflow with `channel=stable`. Leave `version` empty unless the version
-   should differ from the one the nightly previewed.
+2. Dispatch the Release workflow with `channel=stable`. Leave `version` empty to use the nightly's core,
+   or enter that same version explicitly.
 3. Confirm the `Resolve release commit` notice names the nightly tag and commit you verified. If a
    newer nightly published in between, the run builds that one instead.
 4. Verify workflow steps:
