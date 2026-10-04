@@ -1,4 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off - bundler hooks run outside the application runtime.
 import "vite-plus/test/config";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import { uploadSourceMaps } from "../../scripts/lib/posthog-source-maps.ts";
 import { defineConfig, mergeConfig } from "vite-plus";
 
 import baseConfig from "../../vite.config.ts";
@@ -20,9 +24,10 @@ import {
 export { shouldBundleCliDependency };
 
 // `build:exe` wraps the same bundle in a Node single-executable. tsdown's exe
-// step refuses multi-chunk output and counts the sourcemap as a chunk, and the
+// step refuses multi-chunk output; the release plugin emits maps separately. The
 // executable needs a host Node that supports `--build-sea` (25.7+), so this is
 // a separate mode rather than a second entry in the default build.
+const mappedExecutable = process.env.SUPACODE_ERROR_TRACKING_RELEASE !== undefined;
 const packExecutable = process.env.SUPACODE_PACK_EXE === "1";
 // `<platform>-<arch>` in nodejs.org naming (darwin-x64, linux-arm64, win-x64).
 // When set, tsdown injects the bundle into a downloaded Node of that target
@@ -69,11 +74,38 @@ export default mergeConfig(
       },
     },
     pack: {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       // The executable embeds one entry; the history worker becomes a hidden
       // subcommand there instead of a sibling script.
       entry: packExecutable ? ["src/bin.ts"] : ["src/bin.ts", "src/claude-history-worker.ts"],
       outDir: packExecutable ? "dist-exe" : "dist",
-      sourcemap: !packExecutable,
+      sourcemap: !packExecutable || mappedExecutable,
+      plugins:
+        packExecutable && mappedExecutable
+          ? [
+              {
+                name: "supacode-executable-error-symbols",
+                async generateBundle(options, bundle) {
+                  // tsdown counts map assets as executable chunks. Emit maps separately
+                  // so it still sees one chunk, then inject the file before SEA embeds it.
+                  for (const [filename, output] of Object.entries(bundle)) {
+                    if (output.type !== "asset" || !filename.endsWith(".map")) continue;
+                    const target = NodePath.resolve(options.dir ?? "dist-exe", filename);
+                    await NodeFSP.mkdir(NodePath.dirname(target), { recursive: true });
+                    await NodeFSP.writeFile(target, output.source);
+                    delete bundle[filename];
+                  }
+                },
+                async writeBundle(options) {
+                  await uploadSourceMaps(NodePath.resolve(options.dir ?? "dist-exe"));
+                },
+              },
+            ]
+          : [],
       clean: true,
       ...(packExecutable
         ? {

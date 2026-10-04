@@ -1,3 +1,5 @@
+import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { Switch } from "../ui/switch";
 import { ProcessSignalActions } from "./ProcessSignalActions";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
@@ -712,6 +714,8 @@ function DiagnosticsRefreshButton({
 }
 
 export function DiagnosticsSettingsPanel() {
+  const errorReportingEnabled = useClientSettings((settings) => settings.errorReportingEnabled);
+  const updateClientSettings = useUpdateClientSettings();
   const { environment } = useSettingsScope();
   // The boundary only mounts this page when the selection resolves to one
   // connected environment, so the representative is the one to inspect.
@@ -908,6 +912,23 @@ export function DiagnosticsSettingsPanel() {
 
   return (
     <SettingsPageContainer width="expanded" className="gap-10">
+      <SettingsSection title="Error reporting">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p>Send anonymous error reports</p>
+            <p className="text-sm text-muted-foreground">
+              Helps us fix failures. No messages, file contents, or session recordings.
+            </p>
+          </div>
+          <Switch
+            aria-label="Send anonymous error reports"
+            checked={errorReportingEnabled}
+            onCheckedChange={(checked) => {
+              void updateClientSettings({ errorReportingEnabled: checked });
+            }}
+          />
+        </div>
+      </SettingsSection>
       <ResourceTelemetryDiagnostics environmentId={environmentId} />
 
       <SettingsSection

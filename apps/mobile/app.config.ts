@@ -245,6 +245,7 @@ const config: ExpoConfig = {
         "Allow Supacode to connect to Supacode servers on your local network or tailnet.",
       NSPhotoLibraryAddUsageDescription: "Allow Supacode to save images to your photo library.",
       ITSAppUsesNonExemptEncryption: false,
+      "com.posthog.posthog.CAPTURE_PUSH_NOTIFICATION_OPENED": false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
       // Simulator menu scripting needs), and iPadOS ignores programmatic
@@ -282,6 +283,10 @@ const config: ExpoConfig = {
     favicon: variant.assets.appIcon,
   },
   plugins: [
+    [
+      "posthog-react-native/expo",
+      { uploadNativeSymbols: true, dotenvFile: ".posthog-build.env", releaseMode: "symbol-set" },
+    ],
     "expo-asset",
     [
       "expo-font",

@@ -1,0 +1,7 @@
+name: Setup error symbol tools
+description: Install pinned fnox, vault CLI, and PostHog CLI
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: mise install github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 npm:@posthog/cli@0.18.9

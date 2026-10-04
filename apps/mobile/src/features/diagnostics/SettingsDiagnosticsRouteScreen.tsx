@@ -1,3 +1,7 @@
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
@@ -43,6 +47,8 @@ function appIdentity() {
  */
 export function SettingsDiagnosticsRouteScreen() {
   const insets = useSafeAreaInsets();
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const updatePreferences = useAtomSet(updateMobilePreferencesAtom);
   const [state, setState] = useState<CrashLogState>(() =>
     Updates.isEnabled ? { status: "loading" } : { status: "unavailable" },
   );
@@ -82,6 +88,19 @@ export function SettingsDiagnosticsRouteScreen() {
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-4 pb-[18px]"
       >
+        <SettingsSection title="Error reporting">
+          <SettingsSwitchRow
+            icon="stethoscope"
+            label="Send anonymous error reports"
+            subtitle="Helps us fix failures. No messages, file contents, or session recordings."
+            disabled={!AsyncResult.isSuccess(preferences)}
+            value={
+              !AsyncResult.isSuccess(preferences) ||
+              preferences.value.errorReportingEnabled !== false
+            }
+            onValueChange={(errorReportingEnabled) => updatePreferences({ errorReportingEnabled })}
+          />
+        </SettingsSection>
         <SettingsSection title="Startup crashes">
           {state.status === "loading" ? (
             <View className="items-center gap-3 px-6 py-8">

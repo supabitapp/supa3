@@ -33,7 +33,7 @@ export function createMobilePreferencesState(
         Effect.flatMap((store) => store.load),
         Effect.catch((error) =>
           Effect.logWarning("Could not load mobile preferences.", error).pipe(
-            Effect.as<MobilePreferences.Preferences>({}),
+            Effect.as<MobilePreferences.Preferences>({ errorReportingEnabled: false }),
           ),
         ),
       ),

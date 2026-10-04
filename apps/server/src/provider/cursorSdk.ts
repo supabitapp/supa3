@@ -1,3 +1,4 @@
+import { fatalRejections } from "../telemetry/fatalRejections.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off -- Installed before the SDK loads, outside an Effect runtime. stderr must match Node's default unhandled-rejection print.
 import * as NodeModule from "node:module";
 
@@ -55,6 +56,12 @@ function installCursorShellSpawnGuard(): void {
     // Another handler registered besides this one owns the decision.
     if (process.listenerCount("unhandledRejection") > 1) {
       return;
+    }
+    // Notify the telemetry monitor without adding another rejection listener.
+    try {
+      fatalRejections.emit("rejection", reason);
+    } catch {
+      /* Preserve the existing fatal exit. */
     }
     console.error(reason);
     process.exit(1);

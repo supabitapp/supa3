@@ -1,5 +1,6 @@
 import {
   DesktopHostTelemetryMessage,
+  type DesktopExceptionReport,
   type DesktopHostTelemetrySnapshot,
   type DesktopTelemetryControlMessage,
   type DesktopTelemetryCancelDesktopUpdate,
@@ -60,6 +61,7 @@ interface HostPowerIntervals {
 export class DesktopTelemetryPublisher extends Context.Service<
   DesktopTelemetryPublisher,
   {
+    readonly reportException: (report: DesktopExceptionReport) => Effect.Effect<void>;
     readonly latest: Effect.Effect<Option.Option<DesktopHostTelemetrySnapshot>>;
     readonly changes: Stream.Stream<DesktopHostTelemetrySnapshot>;
     readonly encoded: Stream.Stream<Uint8Array>;
@@ -161,6 +163,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     thermalState: yield* powerMonitor.getCurrentThermalState,
     speedLimitPercent: Option.none(),
   };
+  const exceptionReports = yield* PubSub.dropping<DesktopExceptionReport>(20);
   const powerState = yield* Ref.make(initialPowerState);
   const hostPowerIntervals = yield* Ref.make<HostPowerIntervals>({
     active: DEFAULT_HOST_POWER_ACTIVE_INTERVAL,
@@ -398,7 +401,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
       type: "desktopTelemetryHello",
       electronPid: process.pid,
     } as const),
-    Stream.merge(snapshots, updateReports),
+    Stream.merge(Stream.merge(snapshots, updateReports), Stream.fromPubSub(exceptionReports)),
   ).pipe(Stream.map((message) => textEncoder.encode(`${encodeMessage(message)}\n`)));
 
   const publishUpdateReport: DesktopTelemetryPublisher["Service"]["publishUpdateReport"] = (
@@ -410,6 +413,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     );
 
   return DesktopTelemetryPublisher.of({
+    reportException: (report) => PubSub.publish(exceptionReports, report).pipe(Effect.asVoid),
     latest: Ref.get(latest),
     changes: Stream.fromPubSub(changes),
     encoded,

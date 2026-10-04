@@ -1,3 +1,4 @@
+import { ExceptionReport } from "./errorTracking.ts";
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -306,7 +307,15 @@ export const DesktopUpdateStatusReport = Schema.Struct({
 });
 export type DesktopUpdateStatusReport = typeof DesktopUpdateStatusReport.Type;
 
+export const DesktopExceptionReport = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("desktopException"),
+  report: ExceptionReport,
+});
+export type DesktopExceptionReport = typeof DesktopExceptionReport.Type;
+
 export const DesktopHostTelemetryMessage = Schema.Union([
+  DesktopExceptionReport,
   DesktopHostTelemetryHello,
   DesktopHostTelemetrySnapshot,
   DesktopUpdateStatusReport,

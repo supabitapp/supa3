@@ -1,3 +1,4 @@
+import * as ErrorTracking from "../telemetry/ErrorTracking.ts";
 import { CommandId } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -670,6 +671,9 @@ export const layerWithOptions = (
             }).pipe(Effect.onError((cause) => recoverPostSuccessSettlement(effect, cause)));
           }
 
+          const errorTracking = yield* Effect.serviceOption(ErrorTracking.ErrorTracking);
+          if (Option.isSome(errorTracking))
+            yield* errorTracking.value.captureCause(exit.cause, "effect-worker");
           const error = Cause.pretty(exit.cause);
           const nonRetryable = isNonRetryableProviderTurnControlFailure(effect.request.type, error);
           yield* Effect.logWarning("Orchestration effect execution failed", {

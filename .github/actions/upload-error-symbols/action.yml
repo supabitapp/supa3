@@ -1,0 +1,29 @@
+name: Upload error symbols
+description: Inject and upload release source maps with a process-scoped vault credential
+inputs:
+  directories:
+    description: Build directories, one per line
+    required: true
+  service-account-token:
+    description: Supacode CI vault read credential
+    required: true
+  namespace:
+    description: Release namespace
+    default: supacode
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-posthog
+    - shell: bash
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.service-account-token }}
+        POSTHOG_CLI_PROJECT_ID: "645568"
+        POSTHOG_CLI_HOST: https://us.posthog.com
+        ERROR_SYMBOL_DIRECTORIES: ${{ inputs.directories }}
+        ERROR_SYMBOL_NAMESPACE: ${{ inputs.namespace }}
+      run: |
+        SUPACODE_ERROR_TRACKING_RELEASE=$(git rev-parse HEAD)
+        export SUPACODE_ERROR_TRACKING_RELEASE
+        mise exec github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 npm:@posthog/cli@0.18.9 -- \
+        fnox --config .github/fnox.toml --profile posthog --no-defaults --non-interactive --no-daemon --if-missing error \
+        exec -- node .github/scripts/upload-error-symbols.ts

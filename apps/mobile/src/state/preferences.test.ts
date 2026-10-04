@@ -200,7 +200,7 @@ describe("mobile preferences state", () => {
     }),
   );
 
-  it.effect("falls back to empty preferences when secure storage cannot be read", () =>
+  it.effect("disables error reporting when secure storage cannot be read", () =>
     Effect.gen(function* () {
       const state = makePreferencesState({
         load: Effect.fail(
@@ -217,7 +217,7 @@ describe("mobile preferences state", () => {
         yield* AtomRegistry.getResult(registry, state.preferencesAtom, {
           suspendOnWaiting: true,
         }),
-      ).toEqual({});
+      ).toEqual({ errorReportingEnabled: false });
 
       unmount();
       registry.dispose();

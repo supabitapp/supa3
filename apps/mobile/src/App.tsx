@@ -1,3 +1,4 @@
+import { ErrorTrackingCoordinator } from "./lib/errorTracking";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -68,6 +69,7 @@ function AppContent() {
 
   return (
     <>
+      <ErrorTrackingCoordinator />
       <SplashScreenCoordinator />
       <SubscriptionUsageCoordinator />
       <GestureHandlerRootView className="flex-1">

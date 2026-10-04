@@ -94,6 +94,24 @@ Credential lookup failures stop the job. The finalize job uses the App credentia
 GitHub Release publication uses the repository-scoped workflow token so it has a rate-limit quota
 independent from the shared Release App installation.
 
+## Error symbols
+
+The `posthog` fnox profile resolves the password field of `PostHog Error Tracking` in the
+`Supacode CI` vault. The credential is restricted to the supabit organization with
+`error_tracking:write` and `organization:read`. Project ID `645568` and host
+`https://us.posthog.com` are public configuration. Upload steps use a process-scoped credential;
+they do not export it to later steps or app bundles.
+
+Release CI injects and uploads JavaScript maps before desktop packaging and hosted web deployment.
+The single-executable build uploads its map before SEA embeds the injected bundle. Mobile native
+builds upload Hermes maps and native symbols; production OTA jobs export one platform, upload its
+maps, then publish those bytes. Upload failures stop the affected release. Local mobile release
+builds without upload credentials require `POSTHOG_CLI_DRY_RUN=true`.
+
+When replacing the credential, update the vault item. When upgrading PostHog's native SDK, verify
+the exception filter and symbol uploads against both mobile platforms. Native dependency changes
+require new store binaries before compatible OTA updates can reach those installations.
+
 ## Cloudflare hosting
 
 Cloudflare Workers serves the marketing site and hosted web client. The agent server continues to run on users' machines. Hosting configuration lives in `apps/marketing/wrangler.json` and `apps/web/cloudflare/`.

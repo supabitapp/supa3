@@ -1,3 +1,4 @@
+import { installClientErrorTracking, reportClientException } from "./lib/errorTracking";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
@@ -15,6 +16,8 @@ import { AppRoot } from "./AppRoot";
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
 
 prepareProviderAuthDelivery();
+const disposeErrorTracking = installClientErrorTracking();
+if (import.meta.hot) import.meta.hot.dispose(disposeErrorTracking);
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();
@@ -51,7 +54,14 @@ export const startup = router
     // that fetched every chunk it asked for.
     if (reloadScheduled) return;
     if (!chunkLoadFailed) clearChunkReloadGuard();
-    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement, {
+      onCaughtError: (error) => {
+        void reportClientException(error, "react");
+      },
+      onUncaughtError: (error) => {
+        void reportClientException(error, "react");
+      },
+    }).render(
       <React.StrictMode>
         <AppRoot router={router} />
       </React.StrictMode>,

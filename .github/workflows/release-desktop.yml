@@ -394,6 +394,9 @@ jobs:
       # injects into the runner's own Node: tsdown's cross-target download path
       # runs `tar` on a drive-letter path on Windows, which GNU tar reads as a
       # remote host, and a cross-built macOS binary cannot be smoke-tested.
+      - uses: ./.github/actions/setup-posthog
+        if: inputs.cli_archive
+
       - name: Build CLI single-executable
         if: inputs.cli_archive
         shell: bash
@@ -402,7 +405,15 @@ jobs:
           # the runner, and only exact versions have a dist directory. Keep in
           # step with SEA_NODE_VERSION in apps/server/vite.config.ts.
           VP_NODE_VERSION: "26.8.2"
-        run: node apps/server/scripts/cli.ts build-exe --verbose
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          POSTHOG_CLI_PROJECT_ID: "645568"
+          POSTHOG_CLI_HOST: https://us.posthog.com
+        run: |
+          SUPACODE_ERROR_TRACKING_RELEASE=$(git rev-parse HEAD)
+          export SUPACODE_ERROR_TRACKING_RELEASE
+          mise exec github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 npm:@posthog/cli@0.18.9 -- \
+            fnox --config .github/fnox.toml --profile posthog --no-defaults --non-interactive --no-daemon --if-missing error \
+            exec -- node apps/server/scripts/cli.ts build-exe --verbose
 
       - name: Import macOS signing certificate for the CLI archive
         if: inputs.cli_archive && inputs.platform == 'mac'

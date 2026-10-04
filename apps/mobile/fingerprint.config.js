@@ -14,5 +14,13 @@ if (!majorVersion) {
 }
 
 module.exports = {
-  extraSources: [{ type: "contents", id: "appMajorVersion", contents: majorVersion }],
+  extraSources: [
+    { type: "contents", id: "appMajorVersion", contents: majorVersion },
+    // Native privacy changes need a new binary before an OTA can use them.
+    {
+      type: "file",
+      filePath: "../../patches/@posthog__react-native-plugin@2.12.4.patch",
+      reasons: ["posthogNativePrivacy"],
+    },
+  ],
 };

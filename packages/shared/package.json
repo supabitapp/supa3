@@ -350,6 +350,10 @@
     "./codexAuthHandoff": {
       "types": "./src/codexAuthHandoff.ts",
       "import": "./src/codexAuthHandoff.ts"
+    },
+    "./errorTracking": {
+      "types": "./src/errorTracking.ts",
+      "import": "./src/errorTracking.ts"
     }
   },
   "scripts": {
@@ -358,6 +362,7 @@
   },
   "dependencies": {
     "@noble/hashes": "catalog:",
+    "@posthog/core": "1.55.3",
     "@supacode/contracts": "workspace:*",
     "effect": "catalog:",
     "yaml": "catalog:"

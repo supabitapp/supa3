@@ -174,6 +174,7 @@ jobs:
           '
 
   production:
+    environment: ${{ inputs.profile == 'v2-preview' && 'web-preview' || 'release' }}
     name: Mobile ${{ matrix.platform }} ${{ matrix.legacy && 'existing binaries' || inputs.profile || 'production' }}
     needs: prepare
     if: needs.prepare.outputs.enabled == 'true'
@@ -251,6 +252,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           profile: ${{ env.MOBILE_PROFILE }}
+          posthog-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
       - id: artifact
         name: Save signed binary
         if: steps.build.outcome == 'success'
@@ -282,6 +284,8 @@ jobs:
               version: process.env.MOBILE_VERSION, fingerprint: process.env.MOBILE_FINGERPRINT,
               sha: process.env.MOBILE_SOURCE_SHA, url: process.env.MOBILE_ARTIFACT_URL,
             });
+      - uses: ./.github/actions/setup-posthog
+        if: env.MOBILE_PROFILE == 'production' && (github.event_name == 'push' || inputs.mode == 'update')
       - name: Publish compatible OTA update
         if: env.MOBILE_PROFILE == 'production' && (github.event_name == 'push' || inputs.mode == 'update')
         working-directory: apps/mobile
@@ -291,11 +295,20 @@ jobs:
           DEPOT_COMPATIBLE: ${{ steps.history.outputs.compatible }}
           CLOUD_COMPATIBLE: ${{ steps.legacy.outputs.compatible }}
           UPDATE_MESSAGE: ${{ inputs.message }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          POSTHOG_CLI_PROJECT_ID: "645568"
+          POSTHOG_CLI_HOST: https://us.posthog.com
         run: |
           if [ "$DEPOT_COMPATIBLE" != true ] && [ "$CLOUD_COMPATIBLE" != true ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
             echo "$MOBILE_PLATFORM: no completed build matches $MOBILE_FINGERPRINT; OTA skipped." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
+          EXPO_PUBLIC_POSTHOG_RELEASE=$(git rev-parse HEAD)
+          export EXPO_PUBLIC_POSTHOG_RELEASE
+          pnpm exec expo export --platform "$MOBILE_PLATFORM" --source-maps --output-dir dist
+          mise exec github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 npm:@posthog/cli@0.18.9 -- \
+            fnox --config ../../.github/fnox.toml --profile posthog --no-defaults --non-interactive --no-daemon --if-missing error \
+            exec -- posthog-cli hermes upload --directory dist --release-name "supacode-mobile-$MOBILE_PLATFORM" --release-version "$EXPO_PUBLIC_POSTHOG_RELEASE" --release-mode symbol-set
           eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
-            --message "$message" --non-interactive
+            --input-dir dist --skip-bundler --message "$message" --non-interactive

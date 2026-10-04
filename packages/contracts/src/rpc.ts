@@ -1,3 +1,4 @@
+import { ExceptionReport } from "./errorTracking.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   ChatGptReconnectProfileInput,
@@ -425,6 +426,7 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   // Server meta
+  serverReportException: "server.reportException",
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
@@ -779,6 +781,12 @@ const WsServerLogoutAcpRegistryRpc = Rpc.make(WS_METHODS.serverLogoutAcpRegistry
   payload: AcpRegistryLogoutInput,
   success: AcpRegistryLogoutResult,
   error: Schema.Union([AcpRegistryOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsServerReportExceptionRpc = Rpc.make(WS_METHODS.serverReportException, {
+  payload: ExceptionReport,
+  success: Schema.Void,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerGetTraceDiagnosticsRpc = Rpc.make(WS_METHODS.serverGetTraceDiagnostics, {
@@ -1699,6 +1707,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerSetAcpRegistryProviderRpc,
   WsServerDisableAcpRegistryProviderRpc,
   WsServerLogoutAcpRegistryRpc,
+  WsServerReportExceptionRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetHostResourcesRpc,

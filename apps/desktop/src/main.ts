@@ -1,3 +1,4 @@
+import * as ErrorTracking from "./telemetry/ErrorTracking.ts";
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", (err: NodeJS.ErrnoException) => {
@@ -191,6 +192,7 @@ const desktopLocalEnvironmentAuthLayer = DesktopLocalEnvironmentAuth.layer.pipe(
 );
 
 const desktopApplicationLayer = Layer.mergeAll(
+  ErrorTracking.layer,
   DesktopLifecycle.layer,
   desktopAppActivationLayer,
   DesktopApplicationMenu.layer,

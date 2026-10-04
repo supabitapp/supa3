@@ -9,7 +9,8 @@
  * @module AnalyticsService
  */
 import { HostProcessArchitecture, HostProcessPlatform } from "@supacode/shared/hostProcess";
-import type { ClientOs } from "@supacode/contracts";
+import { deliverFatalException } from "./fatalDelivery.ts";
+import type { ExceptionReport, ClientOs } from "@supacode/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -90,6 +91,8 @@ export class AnalyticsService extends Context.Service<
       properties?: Readonly<Record<string, unknown>>,
     ) => Effect.Effect<void>;
 
+    readonly recordFatalException: (report: ExceptionReport) => Effect.Effect<void>;
+
     /** Flush all currently queued telemetry events. */
     readonly flush: Effect.Effect<void>;
   }
@@ -100,6 +103,7 @@ export class AnalyticsService extends Context.Service<
     AnalyticsService.of({
       record: () => Effect.void,
       flush: Effect.void,
+      recordFatalException: () => Effect.void,
     }),
   );
 }
@@ -138,6 +142,20 @@ export const make = Effect.gen(function* () {
   const clientType = serverConfig.mode === "desktop" ? "desktop-app" : "cli-web-client";
   const hostPlatform = yield* HostProcessPlatform;
   const hostArchitecture = yield* HostProcessArchitecture;
+
+  const serverProperties = {
+    $process_person_profile: false,
+    platform: hostPlatform,
+    wsl: Option.getOrUndefined(telemetryConfig.wslDistroName),
+    arch: hostArchitecture,
+    supacodeVersion: packageJson.version,
+    clientType,
+    serverOs: serverOsFromNodePlatform(hostPlatform),
+    serverArch: hostArchitecture,
+    serverWslDistro: Option.getOrUndefined(telemetryConfig.wslDistroName),
+    serverAppVersion: packageJson.version,
+    serverMode: serverConfig.mode,
+  };
 
   const enqueueBufferedEvent = (
     uuid: string,
@@ -184,17 +202,7 @@ export const make = Effect.gen(function* () {
         distinct_id: identifier,
         properties: {
           ...event.properties,
-          $process_person_profile: false,
-          platform: hostPlatform,
-          wsl: Option.getOrUndefined(telemetryConfig.wslDistroName),
-          arch: hostArchitecture,
-          supacodeVersion: packageJson.version,
-          clientType,
-          serverOs: serverOsFromNodePlatform(hostPlatform),
-          serverArch: hostArchitecture,
-          serverWslDistro: Option.getOrUndefined(telemetryConfig.wslDistroName),
-          serverAppVersion: packageJson.version,
-          serverMode: serverConfig.mode,
+          ...serverProperties,
         },
         timestamp: event.capturedAt,
       })),
@@ -282,7 +290,21 @@ export const make = Effect.gen(function* () {
 
   yield* Effect.addFinalizer(() => flush);
 
-  return AnalyticsService.of({ record, flush });
+  const recordFatalException = (report: ExceptionReport) =>
+    Effect.sync(() => {
+      if (!telemetryConfig.enabled || !identifier) return;
+      deliverFatalException({
+        report,
+        identifier,
+        key: telemetryConfig.posthogKey,
+        host: telemetryConfig.posthogHost,
+        properties: {
+          surface: "server",
+          ...serverProperties,
+        },
+      });
+    });
+  return AnalyticsService.of({ record, flush, recordFatalException });
 });
 
 export const layer = Layer.effect(AnalyticsService, make);

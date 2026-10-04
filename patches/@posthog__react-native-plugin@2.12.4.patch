@@ -1,0 +1,206 @@
+diff --git a/android/src/main/java/com/posthogreactnativeplugin/PosthogReactNativePluginModule.kt b/android/src/main/java/com/posthogreactnativeplugin/PosthogReactNativePluginModule.kt
+index c21d413aa8f23e2b46c7df5b23d766846bf35095..dfaa7c1b8fd28b4d6c9f42f3b0d01cf32cedff84 100644
+--- a/android/src/main/java/com/posthogreactnativeplugin/PosthogReactNativePluginModule.kt
++++ b/android/src/main/java/com/posthogreactnativeplugin/PosthogReactNativePluginModule.kt
+@@ -23,6 +23,7 @@ import com.posthog.android.PostHogAndroidConfig
+ import com.posthog.android.replay.PostHogReplayIntegration
+ import com.posthog.android.replay.PostHogScreenshotColorMode
+ import com.posthog.android.replay.PostHogSessionReplayConfig
++import com.posthog.internal.PostHogNetworkStatus
+ import com.posthog.internal.PostHogPreferences
+ import com.posthog.internal.PostHogPreferences.Companion.ANONYMOUS_ID
+ import com.posthog.internal.PostHogPreferences.Companion.DISTINCT_ID
+@@ -108,6 +109,9 @@ class PosthogReactNativePluginModule(
+     )
+   }
+ 
++  private var consentConfig: PostHogAndroidConfig? = null
++  private var closedForConsent = false
++
+   private fun setupNativeSdk(
+     method: String,
+     sessionId: String,
+@@ -172,7 +176,15 @@ class PosthogReactNativePluginModule(
+               // React Native rethrows fatal JS errors natively as JavascriptException.
+               // The JS layer already captured them, so drop the native duplicate.
+               errorTrackingConfig.ignoredExceptionTypes.add(JavascriptException::class.java)
+-              addBeforeSend { restoreJsFatalCaptureProperties(it) }
++              addBeforeSend { event ->
++                if (event.event != "\$exception") null else {
++                  restoreJsFatalCaptureProperties(event)
++                  val safe = supacodeExceptionProperties(event.properties ?: emptyMap())
++                  event.properties?.clear()
++                  event.properties?.putAll(safe)
++                  event
++                }
++              }
+ 
+               // Always apply the session replay configuration so that recording started later
+               // (e.g. startRecording or a linked feature flag) uses the right mode and masking;
+@@ -233,7 +245,15 @@ class PosthogReactNativePluginModule(
+                 sdkVersion = theSdkVersion
+               }
+             }
++          consentConfig = config
+           PostHogAndroid.setup(context, config)
++          val networkStatus = config.networkStatus
++          // close() flushes queued reports, so consent must also gate the queue's network check.
++          config.networkStatus = object : PostHogNetworkStatus {
++            override fun isConnected(): Boolean = !config.optOut && (networkStatus?.isConnected() ?: false)
++            override fun register(callback: () -> Unit) { networkStatus?.register(callback) }
++            override fun unregister() { networkStatus?.unregister() }
++          }
+ 
+           setIdentify(config.cachePreferences, distinctId, anonymousId)
+ 
+@@ -355,6 +375,15 @@ class PosthogReactNativePluginModule(
+     try {
+       if (optOut) {
+         PostHog.optOut()
++        // optOut alone leaves queued native exceptions eligible for flushing.
++        PostHog.close()
++        closedForConsent = true
++      } else if (closedForConsent) {
++        consentConfig?.let { config ->
++          config.optOut = false
++          PostHogAndroid.setup(reactApplicationContext, config)
++          closedForConsent = false
++        }
+       } else {
+         PostHog.optIn()
+       }
+@@ -835,3 +864,42 @@ internal fun applyScreenshotConfig(
+     "RGB_565" -> config.screenshotColorMode = PostHogScreenshotColorMode.RGB_565
+   }
+ }
++
++// Native captures bypass the JS before_send hook. Keep the same error-only privacy boundary.
++private fun supacodeExceptionProperties(properties: Map<String, Any>): Map<String, Any> {
++  val scalarKeys = setOf("\$exception_level", "\$lib", "\$lib_version", "\$app_version", "\$app_build", "\$os", "\$os_version", "\$release", "release", "operation")
++  val result = mutableMapOf<String, Any>("surface" to "mobile", "\$process_person_profile" to false, "\$is_identified" to false)
++  for (key in scalarKeys) {
++    val value = properties[key]
++    if (value is String && value.matches(Regex("^[a-zA-Z0-9._-]{1,128}$"))) result[key] = value
++    else if (value is Number) result[key] = value
++  }
++  result["\$geoip_disable"] = true
++  (properties["\$debug_images"] as? List<*>)?.take(50)?.mapNotNull { supacodeExceptionFields(it) }?.let { result["\$debug_images"] = it }
++  (properties["\$exception_list"] as? List<*>)?.take(5)?.mapNotNull { supacodeExceptionFields(it) }?.let { result["\$exception_list"] = it }
++  return result
++}
++
++private fun supacodeExceptionFields(value: Any?): Map<String, Any>? {
++  val fields = value as? Map<*, *> ?: return null
++  val objects = setOf("stacktrace", "mechanism")
++  val arrays = setOf("frames", "images", "debug_images")
++  val numbers = setOf("lineno", "colno", "image_size", "exception_id", "parent_id", "handled", "synthetic", "in_app")
++  val symbols = setOf("type", "platform", "function", "module", "chunk_id", "debug_id", "code_id", "map_id", "uuid", "instruction_addr", "symbol_addr", "image_addr", "image_vmaddr", "arch", "addr_mode")
++  val result = mutableMapOf<String, Any>()
++  for ((key, item) in fields) {
++    if (key !is String || item == null) continue
++    when {
++      key == "value" -> result[key] = "Exception message omitted"
++      key in objects -> supacodeExceptionFields(item)?.let { result[key] = it }
++      key in arrays -> (item as? List<*>)?.let { if (key == "frames") it.takeLast(50) else it.take(50) }?.mapNotNull { supacodeExceptionFields(it) }?.let { result[key] = it }
++      key in numbers && (item is Number || item is Boolean) -> result[key] = item
++      key in symbols && item is String && item.matches(Regex("^[a-zA-Z0-9_.$:<>() -]{1,128}$")) -> result[key] = item
++      key in setOf("filename", "code_file", "debug_file") && item is String -> {
++        val name = item.substringBefore('?').replace('\\', '/').substringAfterLast('/')
++        if (name.matches(Regex("^[a-zA-Z0-9_.-]+\\.(js|cjs|mjs|hbc|so|dylib|dSYM)$"))) result[key] = name
++      }
++    }
++  }
++  return result
++}
+diff --git a/ios/PosthogReactNativePlugin.swift b/ios/PosthogReactNativePlugin.swift
+index 1a383a1b4fbf098e7f0a815e0adf520597f62162..5f4a67772357c61dff1f6a736a8ff00cd1e2c924 100644
+--- a/ios/PosthogReactNativePlugin.swift
++++ b/ios/PosthogReactNativePlugin.swift
+@@ -113,6 +113,7 @@ private func declinePushIdentity(_ completion: (String?) -> Void, _ reason: Stri
+ @objc(PosthogReactNativePlugin)
+ public class PosthogReactNativePlugin: RCTEventEmitter {
+     private var config: PostHogConfig?
++    private var closedForConsent = false
+ 
+     private static let pushIdentityEvent = "PostHogPushIdentityRequest"
+ 
+@@ -266,6 +267,7 @@ public class PosthogReactNativePlugin: RCTEventEmitter {
+         // React Native rethrows fatal JS errors natively (RCTFatalException / ExceptionsManager).
+         // The JS layer already captured them, so drop the native duplicate.
+         config.setBeforeSend { event in
++            guard event.event == "$exception" else { return nil }
+             // The JS layer's own fatal capture is the event we want; only native re-reports
+             // of a crash JS already captured are duplicates. Matching the event name as well
+             // as the thread-local keeps anything else posthog-ios emits on this thread during
+@@ -280,6 +282,7 @@ public class PosthogReactNativePlugin: RCTEventEmitter {
+                 for (key, value) in jsProperties {
+                     event.properties[key] = value
+                 }
++                event.properties = supacodeExceptionProperties(event.properties)
+                 return event
+             }
+             if isReactNativeFatalJsError(event) {
+@@ -290,6 +293,7 @@ public class PosthogReactNativePlugin: RCTEventEmitter {
+             if event.event == "$push_notification_opened", let distinctId = setupWindow.pendingDistinctId {
+                 event.distinctId = distinctId
+             }
++            event.properties = supacodeExceptionProperties(event.properties)
+             return event
+         }
+ 
+@@ -515,6 +519,13 @@ public class PosthogReactNativePlugin: RCTEventEmitter {
+     ) {
+         if optOut {
+             PostHogSDK.shared.optOut()
++            // optOut alone leaves the native queue timer running.
++            PostHogSDK.shared.close()
++            closedForConsent = true
++        } else if closedForConsent, let config {
++            config.optOut = false
++            PostHogSDK.shared.setup(config)
++            closedForConsent = false
+         } else {
+             PostHogSDK.shared.optIn()
+         }
+@@ -661,3 +672,41 @@ public class PosthogReactNativePlugin: RCTEventEmitter {
+         resolve(nil)
+     }
+ }
++
++// Native captures bypass the JS before_send hook. Keep the same error-only privacy boundary.
++private func supacodeExceptionProperties(_ properties: [String: Any]) -> [String: Any] {
++    let scalarKeys: Set<String> = ["$exception_level", "$lib", "$lib_version", "$app_version", "$app_build", "$os", "$os_version", "$release", "release", "operation"]
++    var result: [String: Any] = ["surface": "mobile", "$process_person_profile": false, "$is_identified": false]
++    for key in scalarKeys {
++        if let value = properties[key] as? String, value.range(of: "^[a-zA-Z0-9._-]{1,128}$", options: .regularExpression) != nil { result[key] = value }
++        else if let value = properties[key] as? NSNumber { result[key] = value }
++    }
++    result["$geoip_disable"] = true
++    if let images = properties["$debug_images"] as? [[String: Any]] {
++        result["$debug_images"] = Array(images.prefix(50)).map { supacodeExceptionFields($0) }
++    }
++    if let exceptions = properties["$exception_list"] as? [[String: Any]] {
++        result["$exception_list"] = Array(exceptions.prefix(5)).map { supacodeExceptionFields($0) }
++    }
++    return result
++}
++
++private func supacodeExceptionFields(_ fields: [String: Any]) -> [String: Any] {
++    let objects: Set<String> = ["stacktrace", "mechanism"]
++    let arrays: Set<String> = ["frames", "images", "debug_images"]
++    let numbers: Set<String> = ["lineno", "colno", "image_size", "exception_id", "parent_id", "handled", "synthetic", "in_app"]
++    let symbols: Set<String> = ["type", "platform", "function", "module", "chunk_id", "debug_id", "code_id", "map_id", "uuid", "instruction_addr", "symbol_addr", "image_addr", "image_vmaddr", "arch", "addr_mode"]
++    var result: [String: Any] = [:]
++    for (key, value) in fields {
++        if key == "value" { result[key] = "Exception message omitted" }
++        else if objects.contains(key), let object = value as? [String: Any] { result[key] = supacodeExceptionFields(object) }
++        else if arrays.contains(key), let array = value as? [[String: Any]] { result[key] = Array(key == "frames" ? array.suffix(50) : array.prefix(50)).map { supacodeExceptionFields($0) } }
++        else if numbers.contains(key), value is NSNumber { result[key] = value }
++        else if symbols.contains(key), let text = value as? String, text.range(of: "^[a-zA-Z0-9_.$:<>() -]{1,128}$", options: .regularExpression) != nil { result[key] = text }
++        else if ["filename", "code_file", "debug_file"].contains(key), let text = value as? String {
++            let name = (text.components(separatedBy: "?").first ?? "").replacingOccurrences(of: "\\", with: "/").components(separatedBy: "/").last ?? ""
++            if name.range(of: "^[a-zA-Z0-9_.-]+\\.(js|cjs|mjs|hbc|so|dylib|dSYM)$", options: .regularExpression) != nil { result[key] = name }
++        }
++    }
++    return result
++}

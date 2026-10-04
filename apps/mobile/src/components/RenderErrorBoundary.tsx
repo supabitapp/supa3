@@ -1,3 +1,4 @@
+import { reportMobileException } from "../lib/errorTracking";
 import { Component, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 
@@ -62,6 +63,7 @@ export class RenderErrorBoundary extends Component<
   }
 
   override componentDidCatch(_error: unknown, info: { componentStack?: string }) {
+    reportMobileException(_error);
     this.setState({ componentStack: info.componentStack });
   }
 

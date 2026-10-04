@@ -93,6 +93,10 @@ const DESKTOP_BACKEND_ENV_NAMES = [
 // across the wsl.exe boundary without WSLENV. The dev-server URL travels as
 // the `--dev-url` CLI flag instead.
 const WSL_FORWARDED_ENV_NAMES = [
+  "SUPACODE_TELEMETRY_ENABLED",
+  "SUPACODE_ERROR_TRACKING_ENABLED",
+  "SUPACODE_POSTHOG_KEY",
+  "SUPACODE_POSTHOG_HOST",
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   // Otherwise the WSL server keeps exporting to endpoints from the bootstrap.

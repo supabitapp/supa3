@@ -1,3 +1,4 @@
+import * as ErrorTracking from "../telemetry/ErrorTracking.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 
@@ -524,6 +525,14 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
                 status: "healthy",
                 lastError: Option.none(),
               })),
+            ),
+          );
+        }
+
+        if (message.type === "desktopException") {
+          return Effect.serviceOption(ErrorTracking.ErrorTracking).pipe(
+            Effect.flatMap((errors) =>
+              Option.isSome(errors) ? errors.value.report(message.report, "desktop") : Effect.void,
             ),
           );
         }

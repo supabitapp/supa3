@@ -1,12 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { getDefaultConfig } = require("expo/metro-config");
+const { getPostHogExpoConfig } = require("posthog-react-native/metro");
 const { withUniwindConfig } = require("uniwind/metro");
 const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getPostHogExpoConfig(__dirname);
 const workspaceRoot = path.resolve(__dirname, "../..");
 const generatedLicenseModuleRoot = path.join(__dirname, ".generated", "third-party-licenses");
 const licenseGeneratorSource = path.join(

@@ -42,3 +42,6 @@ node_modules/
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
+
+# Ephemeral credential for local release symbol uploads.
+apps/mobile/.posthog-build.env

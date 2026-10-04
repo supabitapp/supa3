@@ -17,6 +17,7 @@ const PREFERENCES_KEY = "supacode.preferences";
 const PREFERENCES_FALLBACK_KEY = "supacode.preferences.fallback";
 
 export interface Preferences {
+  readonly errorReportingEnabled?: boolean;
   readonly themeId?: MobileThemeId;
   readonly lightThemeId?: MobileThemeId;
   readonly darkThemeId?: MobileThemeId;
@@ -89,6 +90,7 @@ export class MobilePreferencesStore extends Context.Service<
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    errorReportingEnabled?: boolean;
     themeId?: MobileThemeId;
     lightThemeId?: MobileThemeId;
     darkThemeId?: MobileThemeId;
@@ -109,6 +111,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
   } = {};
+  if (typeof parsed.errorReportingEnabled === "boolean")
+    preferences.errorReportingEnabled = parsed.errorReportingEnabled;
 
   if (
     typeof parsed.themeId === "string" &&

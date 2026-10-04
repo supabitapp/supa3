@@ -7,6 +7,9 @@ inputs:
   profile:
     description: Build profile from eas.json
     required: true
+  posthog-service-account-token:
+    description: Vault token for production symbol uploads
+    default: ""
 outputs:
   binary:
     description: Path to the signed binary
@@ -30,12 +33,15 @@ runs:
         xcodebuild -version
         command -v fastlane || brew install fastlane
         command -v pod || brew install cocoapods
+    - uses: ./.github/actions/setup-posthog
+      if: inputs.profile == 'production'
     - id: build
       shell: bash
       working-directory: apps/mobile
       env:
         MOBILE_PLATFORM: ${{ inputs.platform }}
         MOBILE_PROFILE: ${{ inputs.profile }}
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.posthog-service-account-token }}
       run: |
         extension=ipa
         if [ "$MOBILE_PLATFORM" = android ]; then
@@ -45,8 +51,17 @@ runs:
           fi
         fi
         binary="$RUNNER_TEMP/supacode-$MOBILE_PLATFORM.$extension"
-        eas build --local --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" \
-          --non-interactive --freeze-credentials --output "$binary"
+        if [ "$MOBILE_PROFILE" = production ]; then
+          export MOBILE_BINARY="$binary"
+          cd ../..
+          mise exec github:jdx/fnox@1.35.0 aqua:1password/cli@2.39.0 npm:@posthog/cli@0.18.9 -- \
+            fnox --config .github/fnox.toml --profile posthog --no-defaults --non-interactive --no-daemon --if-missing error \
+            exec -- node .github/scripts/build-mobile-error-symbols.mjs
+          cd apps/mobile
+        else
+          POSTHOG_CLI_DRY_RUN=true eas build --local --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" \
+            --non-interactive --freeze-credentials --output "$binary"
+        fi
         fingerprint=$(node ../../.github/scripts/mobile-build-fingerprint.cjs "$binary" "$MOBILE_PLATFORM")
         echo "binary=$binary" >> "$GITHUB_OUTPUT"
         echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"

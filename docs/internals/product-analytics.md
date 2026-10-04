@@ -1,6 +1,6 @@
 # Product analytics
 
-The server owns PostHog delivery, opt-out, and identity for every connected client.
+The server owns PostHog delivery, opt-out, and identity for connected product-use events.
 [Identity selection](../../apps/server/src/telemetry/Identify.ts) hashes an available
 provider account ID, falling back to an installation-scoped ID. This identity can
 span several clients; it does not identify a browser session. Clients do not load
@@ -54,3 +54,18 @@ Keep analytics payloads to product metadata and normalized measurements. Do not
 send prompts, authentication material, raw provider payloads, user-assigned device
 names, or conversation identifiers. Client metadata is best effort; invalid values
 must not reject a connection. PostHog person profiles remain disabled.
+
+## Error reporting boundary
+
+Web and desktop renderer errors use an authenticated report RPC. The shared
+[normalizer](../../packages/shared/src/errorTracking.ts) assigns source-map identities before
+removing messages, origins, paths, and source context. Delivery uses the connected environment's
+policy and identity. Expected typed failures and cancellation are excluded; server reporting
+captures Effect defects. Native desktop process failures use the host telemetry pipe, without
+minidump uploads.
+
+Mobile uses the native SDK directly so errors remain reportable without an environment connection.
+Its device preference is independent of server policy. The pinned native SDK patch enforces the
+same exception-only event boundary and strips messages and session metadata before native delivery.
+Preserve that filter when upgrading the SDK: the JavaScript hook cannot redact native crash events.
+See [collection controls](../user/telemetry.md).

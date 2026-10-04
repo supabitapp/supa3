@@ -59,6 +59,7 @@ function runRemoteUpdatesTest(
         encoded: Stream.empty,
         handleControlForSource: () => Effect.void,
         removeControlSource: () => Effect.void,
+        reportException: () => Effect.void,
         publishUpdateReport: (report) =>
           Effect.sync(() => {
             reports.push(report);

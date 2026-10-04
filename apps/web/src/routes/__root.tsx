@@ -1,3 +1,4 @@
+import { reportClientException } from "../lib/errorTracking";
 import { type ServerLifecycleWelcomePayload } from "@supacode/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@supacode/client-runtime/environment";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
@@ -375,6 +376,9 @@ function HostedStaticEnvironmentBootstrap() {
 }
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {
+  useEffect(() => {
+    void reportClientException(error, "router");
+  }, [error]);
   const router = useRouter();
   const message = errorMessage(error);
   // Router pathname rather than window.location: desktop uses hash history, where the window path is always "/".

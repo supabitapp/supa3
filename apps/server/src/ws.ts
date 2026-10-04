@@ -205,6 +205,7 @@ import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
+import * as ErrorTracking from "./telemetry/ErrorTracking.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -1099,6 +1100,7 @@ const makeWsRpcLayer = (
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const errors = yield* ErrorTracking.ErrorTracking;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Client-origin attribution (#7774): every thread/turn the connecting
       // client starts is credited to its surface + app version. Best-effort:
@@ -1560,7 +1562,10 @@ const makeWsRpcLayer = (
       ) =>
         instrumentRpcEffect(
           method,
-          authorizeEffect(requiredScopeForRpcMethod(method), effect),
+          authorizeEffect(
+            requiredScopeForRpcMethod(method),
+            effect.pipe(Effect.onError((cause) => errors.captureCause(cause, "rpc"))),
+          ),
           traceAttributes,
         );
       const observeRpcStream = <A, E, R>(
@@ -1570,7 +1575,10 @@ const makeWsRpcLayer = (
       ) =>
         instrumentRpcStream(
           method,
-          authorizeStream(requiredScopeForRpcMethod(method), stream),
+          authorizeStream(
+            requiredScopeForRpcMethod(method),
+            stream.pipe(Stream.onError((cause) => errors.captureCause(cause, "rpc"))),
+          ),
           traceAttributes,
         );
       const observeRpcStreamEffect = <A, StreamError, StreamContext, EffectError, EffectContext>(
@@ -1584,7 +1592,15 @@ const makeWsRpcLayer = (
       ) =>
         instrumentRpcStreamEffect(
           method,
-          authorizeEffect(requiredScopeForRpcMethod(method), effect),
+          authorizeEffect(
+            requiredScopeForRpcMethod(method),
+            effect.pipe(
+              Effect.onError((cause) => errors.captureCause(cause, "rpc")),
+              Effect.map((stream) =>
+                stream.pipe(Stream.onError((cause) => errors.captureCause(cause, "rpc"))),
+              ),
+            ),
+          ),
           traceAttributes,
         );
       const loadAuthAccessSnapshot = () =>
@@ -2010,6 +2026,11 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "scheduledTasks",
             "scheduled_task.id": input.id,
           }),
+        [WS_METHODS.serverReportException]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverReportException,
+            errors.report(input, String(clientAnalyticsProps.surface ?? "unknown")),
+          ),
         [WS_METHODS.serverProbe]: (_input) =>
           observeRpcEffect(WS_METHODS.serverProbe, Effect.succeed({}), {
             "rpc.aggregate": "server",

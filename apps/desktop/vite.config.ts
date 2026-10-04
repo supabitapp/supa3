@@ -41,6 +41,11 @@ export default defineConfig({
   },
   pack: [
     {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -57,6 +62,11 @@ export default defineConfig({
       ...(shouldLaunchElectronAfterPack ? { onSuccess: "node scripts/dev-electron.mjs" } : {}),
     },
     {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -77,6 +87,11 @@ export default defineConfig({
     },
     {
       // boot.cjs requires the other two at runtime, so all three stay separate files.
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -89,6 +104,11 @@ export default defineConfig({
       },
     },
     {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -97,6 +117,11 @@ export default defineConfig({
       entry: ["src/preload.ts"],
     },
     {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -108,6 +133,11 @@ export default defineConfig({
       },
     },
     {
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,
@@ -117,6 +147,11 @@ export default defineConfig({
     },
     {
       // Sandboxed preloads must be self-contained, without shared runtime chunks.
+      define: {
+        __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+          process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+        ),
+      },
       format: "cjs",
       outDir: "dist-electron",
       dts: false,

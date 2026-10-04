@@ -174,6 +174,9 @@ export default defineConfig(() => {
       ],
     },
     define: {
+      __SUPACODE_ERROR_TRACKING_RELEASE__: JSON.stringify(
+        process.env.SUPACODE_ERROR_TRACKING_RELEASE ?? "",
+      ),
       // In dev mode, tell the web app where the WebSocket server lives
       "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
       // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
