@@ -40,7 +40,9 @@ runs:
         extension=ipa
         if [ "$MOBILE_PLATFORM" = android ]; then
           extension=aab
-          if [ "$MOBILE_PROFILE" = preview:dev ]; then extension=apk; fi
+          if [ "$MOBILE_PROFILE" = preview:dev ]; then
+            extension=apk
+          fi
         fi
         binary="$RUNNER_TEMP/supacode-$MOBILE_PLATFORM.$extension"
         eas build --local --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" \

@@ -27,11 +27,14 @@ async function findBuilds({ github, context, profile, platform, version, fingerp
         payload.schema !== 1 ||
         payload.profile !== profile ||
         payload.platform !== platform
-      )
+      ) {
         continue;
+      }
       const matchesVersion = payload.version === version;
       const matchesFingerprint = payload.fingerprint === fingerprint;
-      if ((!matchesVersion || versionBuild) && (!matchesFingerprint || compatibleBuild)) continue;
+      const alreadyFoundVersion = !matchesVersion || versionBuild;
+      const alreadyFoundCompatible = !matchesFingerprint || compatibleBuild;
+      if (alreadyFoundVersion && alreadyFoundCompatible) continue;
       const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
         ...context.repo,
         deployment_id: deployment.id,
