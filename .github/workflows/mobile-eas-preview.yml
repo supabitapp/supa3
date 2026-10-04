@@ -9,6 +9,7 @@ jobs:
     name: Mobile preview ${{ matrix.platform }}
     if: |
       github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.author_association == 'OWNER' &&
       contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment') &&
       (github.event.action != 'labeled' || github.event.label.name == '🚀 Mobile Continuous Deployment')
     strategy:
@@ -144,7 +145,7 @@ jobs:
           script: |
             const platform = process.env.MOBILE_PLATFORM;
             const marker = `### Mobile preview: ${platform}`;
-            const body = `${marker}\n\n[Install the development build](${process.env.MOBILE_BUILD_URL}), then open the PR update from the [update page](https://expo.dev/accounts/pingdotgg/projects/supacode/updates/${process.env.MOBILE_UPDATE_GROUP}).\n\nBuilt on Depot for ${context.sha}.`;
+            const body = `${marker}\n\n[Install the development build](${process.env.MOBILE_BUILD_URL}), then open the PR update from the [update page](https://expo.dev/accounts/supabitapp/projects/supacode/updates/${process.env.MOBILE_UPDATE_GROUP}).\n\nBuilt on Depot for ${context.sha}.`;
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo, issue_number: context.issue.number, per_page: 100,
             });
