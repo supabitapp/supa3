@@ -349,8 +349,9 @@ describe("Antigravity setup", () => {
       renderSetup(),
       (element) => typeof element.props.onRemove === "function",
     );
-    expect(remove?.props.disabled).toBe(false);
-    (remove?.props.onRemove as () => void)();
+    if (!remove) throw new Error("Missing runtime remove button.");
+    expect(remove.props.disabled).toBe(false);
+    (remove.props.onRemove as () => void)();
     await flushPromises();
     expect(setup.removeInstall).toHaveBeenCalledWith({ environmentId, input: { instanceId } });
   });
