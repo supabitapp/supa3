@@ -1,40 +1,26 @@
 # Supacode
 
-Supacode runs coding agents on your computer and provides web, desktop, and mobile
-clients for controlling them locally or remotely.
+The next version of supacode, a command center for ur coding agents
 
-## Development
+## Installation
 
-The checkout requires Node.js 24 and Mise-managed project tools.
-
-### Install the development toolchain
-
-Install Mise using the instructions below, then run these commands from the repository root:
-
-#### macOS / Linux
-
-```bash
-curl https://mise.run | sh
+```
+curl -fsSL https://next.supacode.sh/install.sh | sh
 ```
 
-#### Windows
+on Windows
 
-```powershell
-winget install jdx.mise
+```
+irm https://next.supacode.sh/install.ps1 | iex
 ```
 
-```bash
-mise install --locked
-mise exec -- vp i
-mise exec -- vp run dev
-```
+Then run `supacode` to start the server and open the local web app. `supacode service install` keeps it running in the background, `supacode update` moves to a newer release
 
-Open the pairing URL printed by the dev runner. See the
-[development runbook](./docs/operations/development.md) for desktop builds,
-isolated state, and remote debugging, and the [mobile README](./apps/mobile/README.md)
-for native clients.
+To try it once without installing, run npx supacode@latest instead.
 
 ## Documentation
+
+The [documentation index](./docs/README.md) for all pages.
 
 - [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
@@ -45,10 +31,6 @@ for native clients.
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
 - [Background service](./docs/user/background-service.md)
-
-The [documentation index](./docs/README.md) includes provider guides and internal
-architecture notes. Report bugs in the
-[issue tracker](https://github.com/supabitapp/supacode-next/issues).
 
 ## Attribution
 
