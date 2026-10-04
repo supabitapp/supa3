@@ -74,12 +74,7 @@ import { VideoPreviewModal, type VideoPreviewSource } from "../../components/Vid
 import { GlassSurface } from "../../components/GlassSurface";
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
 import { fileRoutePathSegments } from "../files/filePath";
-import {
-  ComposerActionButton,
-  ComposerInlineControl,
-  ComposerToolbarRow,
-} from "../../components/ComposerToolbar";
-import { ProviderIcon } from "../../components/ProviderIcon";
+import { ComposerActionButton, ComposerToolbarRow } from "../../components/ComposerToolbar";
 import {
   composerStripAttachments,
   type DraftComposerAttachment,
@@ -94,7 +89,7 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
-import { ComposerReasoningControl } from "./ComposerReasoningControl";
+import { ComposerModelControl } from "./ComposerModelControl";
 import { ControlPillMenu } from "../../components/ControlPill";
 import type { ActiveTurnComposerAction } from "@supacode/client-runtime/state/composer-dispatch";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
@@ -1091,7 +1086,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 paddingBottom={0}
                 paddingHorizontal={0}
                 paddingTop={0}
-                style={{ gap: 0 }}
+                style={{ gap: 0, justifyContent: "space-between" }}
               >
                 <ComposerDictationCancelAction
                   presentation={voicePresentation}
@@ -1106,7 +1101,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     onDismissError={voiceInput.cancel}
                   />
                 ) : (
-                  <View className="min-w-0 flex-1 flex-row items-center justify-between">
+                  <>
                     <ComposerAttachmentButton
                       supportsFiles={Boolean(
                         props.serverConfig?.environment.capabilities.fileAttachments,
@@ -1114,64 +1109,48 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                       onPickMedia={props.onPickDraftMedia}
                       onPickFiles={props.onPickDraftFiles}
                     />
-                    <View className="min-w-0 shrink flex-row items-center">
-                      <View className="min-w-0 shrink">
-                        <ComposerInlineControl
-                          accessibilityLabel="Model and reasoning settings"
-                          emphasized
-                          renderIcon={(size) => (
-                            <ProviderIcon
-                              iconUrl={currentModelOption?.providerIconUrl}
-                              provider={currentModelOption?.providerDriver}
-                              size={size}
-                            />
-                          )}
-                          label={currentModelOption?.label ?? currentModelSelection.model}
-                          maxWidth="100%"
-                          onPress={openSettings}
-                        />
-                      </View>
-                      <ComposerReasoningControl
+                    <View className="min-w-0 shrink">
+                      <ComposerModelControl
                         descriptors={providerOptionDescriptors}
                         selectedModel={currentModelSelection}
                         reportedModelSelection={props.reportedModelSelection}
-                        onChange={settingsRouteSession.onUpdateOptionSelections}
-                      />
-                      <ComposerSpeedToggle
-                        provider={currentModelOption?.providerDriver}
-                        descriptors={providerOptionDescriptors}
-                        onChange={(options) =>
-                          props.onUpdateModelSelection({ ...currentModelSelection, options })
-                        }
+                        modelOption={currentModelOption}
+                        label={currentModelOption?.label ?? currentModelSelection.model}
+                        onPress={openSettings}
                       />
                     </View>
-                  </View>
+                    <ComposerSpeedToggle
+                      provider={currentModelOption?.providerDriver}
+                      descriptors={providerOptionDescriptors}
+                      onChange={(options) =>
+                        props.onUpdateModelSelection({ ...currentModelSelection, options })
+                      }
+                    />
+                  </>
                 )}
-                <View className="shrink-0 flex-row items-center">
-                  <ComposerDictationPrimaryAction
-                    state={voiceInput.state}
-                    presentation={voicePresentation}
-                    isAvailable={voiceInput.isAvailable}
-                    onStart={voiceInput.start}
-                    onConfirm={voiceInput.stop}
-                    onCancel={voiceInput.cancel}
+                <ComposerDictationPrimaryAction
+                  state={voiceInput.state}
+                  presentation={voicePresentation}
+                  isAvailable={voiceInput.isAvailable}
+                  onStart={voiceInput.start}
+                  onConfirm={voiceInput.stop}
+                  onCancel={voiceInput.cancel}
+                />
+                {showStopAction ? (
+                  <ComposerActionButton
+                    accessibilityLabel="Stop agent"
+                    icon="stop.fill"
+                    variant="danger"
+                    onPress={props.onStopThread}
                   />
-                  {showStopAction ? (
-                    <ComposerActionButton
-                      accessibilityLabel="Stop agent"
-                      icon="stop.fill"
-                      variant="danger"
-                      onPress={props.onStopThread}
-                    />
-                  ) : voicePresentation.showsSend ? (
-                    <SendActionButton
-                      accessibilityLabel={sendBlockedReason ?? sendLabel}
-                      presentation={sendPresentation}
-                      disabled={!canSend}
-                      onSend={handleSend}
-                    />
-                  ) : null}
-                </View>
+                ) : voicePresentation.showsSend ? (
+                  <SendActionButton
+                    accessibilityLabel={sendBlockedReason ?? sendLabel}
+                    presentation={sendPresentation}
+                    disabled={!canSend}
+                    onSend={handleSend}
+                  />
+                ) : null}
               </ComposerToolbarRow>
             </ComposerDictationToolbar>
           </Animated.View>
