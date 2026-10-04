@@ -400,12 +400,16 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   const isDraft = pendingTask.kind === "draft";
   const projectTitle = props.projectTitle ?? props.project?.title ?? pendingTask.projectTitle ?? "";
   const branch = pendingTask.branch;
+  const handleDelete = useCallback(
+    () => onDeletePendingTask(pendingTask),
+    [onDeletePendingTask, pendingTask],
+  );
 
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
-      if (nativeEvent.event === "delete") onDeletePendingTask(pendingTask);
+      if (nativeEvent.event === "delete") handleDelete();
     },
-    [onDeletePendingTask, pendingTask],
+    [handleDelete],
   );
 
   const rowContent = (
@@ -574,7 +578,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
           enableTrackpadSwipe
           fullSwipeAction="primary"
           fullSwipeWidth={props.fullSwipeWidth ?? windowWidth - 32}
-          onDelete={() => onDeletePendingTask(pendingTask)}
+          onDelete={handleDelete}
           onSwipeableClose={props.onSwipeableClose}
           onSwipeableWillOpen={props.onSwipeableWillOpen}
           primaryAction={{
@@ -582,7 +586,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
             icon: "trash",
             label: "Discard",
             tone: "danger",
-            onPress: () => onDeletePendingTask(pendingTask),
+            onPress: handleDelete,
           }}
           secondaryAction={null}
           resetKey={pendingTask.key}
