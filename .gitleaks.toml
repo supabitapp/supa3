@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public PostHog ingestion token for Supacode analytics"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^apps/server/src/telemetry/AnalyticsService(\.test)?\.ts$''']
+regexes = ['''^phc_mpkbs8jxUDhRkrsvAPZEpzVxykW3Ce2HEPGPrfhgSrLC$''']
