@@ -6,9 +6,7 @@ import { BaseSequencer, type TestSpecification } from "vite-plus/test/node";
 
 import shardWeights from "./shardWeights.json" with { type: "json" };
 
-// What a file costs beyond its recorded test time: CI spends about 0.2s per
-// server test file on imports and setup, which the recorded times leave out.
-const FILE_OVERHEAD_SECONDS = 0.25;
+const FILE_OVERHEAD_SECONDS = 0.5;
 
 const recordedSeconds: Readonly<Record<string, number>> = shardWeights;
 

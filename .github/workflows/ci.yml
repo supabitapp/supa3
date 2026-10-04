@@ -119,26 +119,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Blacksmith boots GitHub's Ubuntu runner image (gcc is usually present),
-      # but ACP process-tree live tests compile a small pthread fixture with `cc`
-      # and soft-skip when it is missing. Install build-essential so that path
-      # always runs in CI instead of silently no-oping.
-      - name: Install C toolchain for process-tree fixtures
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential
-          command -v cc
-
       - uses: ./.github/actions/setup-apt-mirrors
 
-      # The desktop tests compile the browser secret helper. The install runs in
-      # the background while Vite+ installs; the step before the tests waits for it.
-      - name: Start installing browser secret helper build libraries
+      - name: Start installing test build dependencies
         run: |
           sudo sed -i 's|http://|https://|g' /etc/apt/ci-ubuntu-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources
           (
             set +e
-            sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libsecret-1-dev pkg-config
             echo "$?" > "$RUNNER_TEMP/apt-status"
           ) > "$RUNNER_TEMP/apt.log" 2>&1 < /dev/null &
 
@@ -155,12 +143,14 @@ jobs:
       - name: Test release tooling
         run: node --test .github/scripts/check-nightly-release.test.cjs .github/scripts/mobile-build-history.test.cjs .github/scripts/mobile-build-fingerprint.test.cjs
 
-      - name: Finish installing browser secret helper build libraries
+      - name: Finish installing test build dependencies
         timeout-minutes: 5
         run: |
           until test -s "$RUNNER_TEMP/apt-status"; do sleep 1; done
           cat "$RUNNER_TEMP/apt.log"
-          exit "$(cat "$RUNNER_TEMP/apt-status")"
+          status="$(cat "$RUNNER_TEMP/apt-status")"
+          if test "$status" -ne 0; then exit "$status"; fi
+          command -v cc
 
       - name: Test
         run: vp run --parallel --concurrency-limit 4 --filter '!supacode' --filter '!@supacode/monorepo' --filter '!@supacode/web' test
@@ -241,17 +231,6 @@ jobs:
           path: ${{ runner.temp }}/thread-transfer-result.json
           if-no-files-found: ignore
           retention-days: 30
-
-  transfer-report:
-    name: Transfer report artifact
-    needs: test_server
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require transfer measurements
-        uses: actions/download-artifact@v8
-        with:
-          name: thread-transfer-results
-          path: ${{ runner.temp }}/thread-transfer
 
   # Split out of Check and Test: both paid ~7-9s to install a Rust toolchain
   # for checks that take under 3s, on the critical path of every PR.
@@ -411,7 +390,6 @@ jobs:
         test,
         test_web,
         test_server,
-        transfer-report,
         rust,
         mobile_native_changes,
         mobile_native_static_analysis,
@@ -429,3 +407,9 @@ jobs:
           echo "$RESULTS" | jq -e 'all(to_entries[];
             .value.result == "success"
             or (.key == "mobile_native_static_analysis" and .value.result == "skipped"))' > /dev/null
+
+      - name: Require transfer measurements
+        uses: actions/download-artifact@v8
+        with:
+          name: thread-transfer-results
+          path: ${{ runner.temp }}/thread-transfer
