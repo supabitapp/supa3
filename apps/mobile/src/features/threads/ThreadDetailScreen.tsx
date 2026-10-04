@@ -1,4 +1,4 @@
-import { useThreadReportedModelSelection } from "../../state/entities";
+import { useSelectedThreadComposerMetadata } from "../../state/use-thread-detail";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 import { useNavigation } from "@react-navigation/native";
 import type { WorktreeSetupCardProps } from "./worktree-setup-card";
@@ -127,9 +127,7 @@ import {
   ThreadComposer,
 } from "./ThreadComposer";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
-import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
-import { useThreadQueuedCount } from "./ThreadQueueControl";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
 
@@ -304,10 +302,8 @@ const USER_INPUT_TOGGLE_TIMING = {
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const navigation = useNavigation();
-  const reportedModelSelection = useThreadReportedModelSelection({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
+  const { reportedModelSelection, queuedCount, turnSubagents } =
+    useSelectedThreadComposerMetadata();
   const deviceState = useEnvironmentQuery(
     deviceEnvironment.state({ environmentId: props.environmentId, input: {} }),
   );
@@ -368,14 +364,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + 44;
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
-  const queuedCount = useThreadQueuedCount({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
-  const turnSubagents = useThreadTurnSubagents({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
   const agentsSegment = resolveSubagentPillSegment(turnSubagents);
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   // A provider-native subagent shows status instead of a composer.
