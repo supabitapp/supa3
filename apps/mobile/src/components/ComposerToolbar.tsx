@@ -30,6 +30,7 @@ const COMPOSER_TOOLBAR_SCROLL_EPSILON = 4;
 export function ComposerInlineControl(props: {
   readonly accessibilityHint?: string;
   readonly accessibilityLabel?: string;
+  readonly compact?: boolean;
   readonly disabled?: boolean;
   readonly emphasized?: boolean;
   readonly icon?: ComponentProps<typeof SymbolView>["name"];
@@ -51,7 +52,10 @@ export function ComposerInlineControl(props: {
       accessibilityState={
         props.static ? undefined : { disabled: props.disabled, selected: props.selected }
       }
-      className="h-11 flex-row items-center gap-2 rounded-xl px-2 active:bg-subtle"
+      className={cn(
+        "h-11 flex-row items-center rounded-xl active:bg-subtle",
+        props.compact ? "min-w-11 gap-1 px-1" : "gap-2 px-2",
+      )}
       disabled={props.disabled || props.static}
       onPress={props.onPress}
       style={{ maxWidth: props.maxWidth ?? 190, opacity: props.disabled ? 0.45 : 1 }}

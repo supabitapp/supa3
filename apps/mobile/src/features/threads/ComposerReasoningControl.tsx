@@ -58,6 +58,7 @@ export function ComposerReasoningControl(props: {
     <ComposerInlineControl
       accessibilityLabel={accessibilityLabel}
       accessibilityHint="Choose the reasoning level for this model"
+      compact
       disabled={props.disabled}
       label={label}
       maxWidth={110}
