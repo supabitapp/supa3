@@ -4,6 +4,7 @@ import * as NodeFS from "node:fs";
 
 const profiles = {
   cloudflare: ["CLOUDFLARE_API_TOKEN"],
+  mobile: ["EXPO_TOKEN"],
   apple: ["CSC_LINK", "CSC_KEY_PASSWORD", "APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"],
   "release-app": ["RELEASE_APP_ID", "RELEASE_APP_PRIVATE_KEY"],
 };
