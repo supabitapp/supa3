@@ -9,6 +9,8 @@ On web and desktop, a new thread keeps the current project and carries your mode
 and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
+On mobile, a new task opens in the project you last chose; tap the project in the
+draft to pick another.
 
 When you change a new thread's project, Supacode stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.

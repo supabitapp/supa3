@@ -117,6 +117,7 @@ vi.mock("../../state/use-composer-drafts", () => ({
     updateDraft(key, settings),
   useStickyComposerModelSelection: () => null,
   setStickyComposerModelSelection: () => {},
+  setStickyNewTaskProject: () => {},
   scheduleUnusedComposerAttachmentCleanup: () => {},
   clearComposerDraft: (key: string) => {
     const drafts = { ...appAtomRegistry.get(draftsAtom) };

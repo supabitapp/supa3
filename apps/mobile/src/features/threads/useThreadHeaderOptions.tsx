@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { AppNativeStackNavigationOptions } from "../../native/StackHeader";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
+import { useStartNewTask } from "./use-start-new-task";
 import {
   ThreadGitControls,
   useThreadGitCenterHeaderItems,
@@ -21,6 +22,7 @@ export function useThreadHeaderOptions(props: {
 }) {
   const navigation = useNavigation();
   const { layout, panes, togglePrimarySidebar } = useAdaptiveWorkspaceLayout();
+  const startNewTask = useStartNewTask();
   const threadCenterHeaderItems = useThreadGitCenterHeaderItems(props.gitControls);
   const compactRightHeaderItems = useThreadGitRightHeaderItems(props.gitControls);
   const splitLeftHeaderItems = useMemo<NativeHeaderItems>(
@@ -58,11 +60,11 @@ export function useThreadHeaderOptions(props: {
         accessibilityLabel: "New task",
         icon: { name: "square.and.pencil", type: "sfSymbol" as const },
         identifier: "thread-left-new-task",
-        onPress: () => navigation.navigate("NewTaskSheet", { screen: "NewTask" }),
+        onPress: startNewTask,
         type: "button" as const,
       }),
     ],
-    [panes.primarySidebarVisible, props.onReturnToThread, navigation, togglePrimarySidebar],
+    [panes.primarySidebarVisible, props.onReturnToThread, startNewTask, togglePrimarySidebar],
   );
   // Deep links / cold starts land with Thread as the ONLY route, where the
   // native back button does not render. Provide an explicit Home escape for

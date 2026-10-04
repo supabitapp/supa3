@@ -62,6 +62,7 @@ import {
   setComposerDraftText,
   setComposerDraftContext,
   setStickyComposerModelSelection,
+  setStickyNewTaskProject,
   updateComposerDraftSettings,
   useComposerDraft,
   useStickyComposerModelSelection,
@@ -808,6 +809,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     (project: EnvironmentProject) => {
       cancelEnvironmentSwitch();
       carryDraftContentTo(project);
+      setStickyNewTaskProject({ environmentId: project.environmentId, projectId: project.id });
       setSelectedEnvironmentId(project.environmentId);
       setSelectedProjectKey(scopedProjectKey(project.environmentId, project.id));
     },
@@ -849,6 +851,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       );
       if (match) {
         carryDraftContentTo(match);
+        setStickyNewTaskProject({ environmentId: match.environmentId, projectId: match.id });
       }
       setSelectedEnvironmentId(environmentId);
       setSelectedProjectKey(match ? scopedProjectKey(match.environmentId, match.id) : null);
