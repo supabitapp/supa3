@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
-import * as NodeEvents from "node:events";
+import { once } from "node:events";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -60,7 +60,7 @@ it.each([
         stdio: ["pipe", "ignore", "ignore"],
       },
     );
-    const exit = NodeEvents.once(agent, "exit");
+    const exit = once(agent, "exit");
     agent.stdin.end(
       `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/set_mode", params: setModeParams })}\n`,
     );
