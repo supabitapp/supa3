@@ -5,7 +5,8 @@ import type * as Stream from "effect/Stream";
 export type ConnectionWakeup =
   | "application-active"
   | "application-active-probe"
-  | "application-active-reconnect";
+  | "application-active-reconnect"
+  | "network-changed";
 
 // A long resume replaces the session, and the new session subscribes on its own.
 export function shouldResubscribeAfterWakeup(reason: ConnectionWakeup): boolean {

@@ -85,23 +85,65 @@ const connectivityLayer = Connectivity.layer({
   ),
 });
 
+interface NetworkInformationLike extends EventTarget {
+  readonly type?: string;
+}
+
+/**
+ * Wakes connections when the browser reports a different network type, such
+ * as a laptop moving from Wi-Fi to a phone hotspot. `change` also fires for
+ * bandwidth and latency estimates on the same network, so only a type change
+ * counts. Browsers without `navigator.connection.type` rely on the periodic
+ * route check instead.
+ */
+const networkPathChanges = Stream.callback<"network-changed">((queue) =>
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      const connection =
+        typeof navigator === "undefined"
+          ? undefined
+          : (navigator as Navigator & { readonly connection?: NetworkInformationLike }).connection;
+      if (connection?.type === undefined) return undefined;
+      let previous = connection.type;
+      const listener = () => {
+        const type = connection.type;
+        if (type === undefined || type === previous) return;
+        previous = type;
+        Queue.offerUnsafe(queue, "network-changed");
+      };
+      connection.addEventListener("change", listener);
+      return { connection, listener };
+    }),
+    (subscription) =>
+      Effect.sync(() =>
+        subscription?.connection.removeEventListener("change", subscription.listener),
+      ),
+  ).pipe(Effect.asVoid),
+);
+
 const wakeupsLayer = Wakeups.layer({
-  changes: Stream.callback<"application-active">((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const listener = () => {
-          if (document.visibilityState === "visible") {
-            Queue.offerUnsafe(queue, "application-active");
-          }
-        };
-        document.addEventListener("visibilitychange", listener);
-        return listener;
-      }),
-      (listener) =>
-        Effect.sync(() => {
-          document.removeEventListener("visibilitychange", listener);
-        }),
-    ).pipe(Effect.asVoid),
+  changes: Stream.mergeAll(
+    [
+      Stream.callback<"application-active">((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const listener = () => {
+              if (document.visibilityState === "visible") {
+                Queue.offerUnsafe(queue, "application-active");
+              }
+            };
+            document.addEventListener("visibilitychange", listener);
+            return listener;
+          }),
+          (listener) =>
+            Effect.sync(() => {
+              document.removeEventListener("visibilitychange", listener);
+            }),
+        ).pipe(Effect.asVoid),
+      ),
+      networkPathChanges,
+    ],
+    { concurrency: "unbounded" },
   ),
 });
 

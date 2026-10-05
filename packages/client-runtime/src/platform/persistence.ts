@@ -57,7 +57,7 @@ export class ConnectionRegistrationStore extends Context.Service<
       registration: ConnectionRegistration,
       routes?: ReadonlyArray<PersistedConnectionTarget>,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
-    readonly setRoutes?: (
+    readonly setRoutes: (
       environmentId: EnvironmentId,
       routes: ReadonlyArray<PersistedConnectionTarget>,
     ) => Effect.Effect<void, ConnectionPersistenceError>;

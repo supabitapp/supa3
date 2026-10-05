@@ -112,7 +112,7 @@ export class EnvironmentRegistry extends Context.Service<
       | EnvironmentNotRegisteredError
       | PlatformEnvironmentRemovalError
     >;
-    readonly removeRoute?: (
+    readonly removeRoute: (
       environmentId: EnvironmentId,
       routeId: string,
     ) => Effect.Effect<
@@ -122,7 +122,7 @@ export class EnvironmentRegistry extends Context.Service<
       | EnvironmentNotRegisteredError
       | PlatformEnvironmentRemovalError
     >;
-    readonly reorderRoutes?: (
+    readonly reorderRoutes: (
       environmentId: EnvironmentId,
       routeIds: ReadonlyArray<string>,
     ) => Effect.Effect<
@@ -524,11 +524,11 @@ export const make = Effect.gen(function* () {
           const route: ConnectionRoute = { target: registered.target, profile: registered.profile };
           const existing = connectionRoutes(previous);
           const sameAddress = findRouteToSameAddress(existing, route);
-          const routes = existing.filter(
-            (candidate) =>
-              candidate !== sameAddress ||
-              connectionRouteId(candidate.target) === connectionRouteId(route.target),
-          );
+          const routes =
+            sameAddress !== undefined &&
+            connectionRouteId(sameAddress.target) !== connectionRouteId(route.target)
+              ? routesAfterRemoving(existing, connectionRouteId(sameAddress.target))
+              : existing;
           const next = withRoutes(previous, upsertRoute(routes, route));
           if (next.addressesChanged) {
             yield* githubRoutingPermissions.forget(environmentId).pipe(
@@ -567,12 +567,6 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
-    }
-    if (registrations.setRoutes === undefined) {
-      return yield* new Persistence.ConnectionPersistenceError({
-        operation: "set-connection-routes",
-        message: "The connection platform cannot update route lists.",
-      });
     }
     yield* registrations.setRoutes(previous.target.environmentId, persistedRoutes(next.entry));
     yield* installEntryLocked(next.entry);
@@ -834,17 +828,16 @@ export const make = Effect.gen(function* () {
           const profile = Option.getOrNull(route.profile);
           if (profile !== null) yield* profiles.put(profile);
         }
-        if (registrations.setRoutes === undefined) return Option.none();
         yield* registrations.setRoutes(input.environmentId, persistedRoutes(next));
-        yield* SubscriptionRef.update(entries, (current) =>
-          new Map(current).set(input.environmentId, next),
-        );
         yield* SubscriptionRef.update(serviceScopes, (current) => {
           const lease = current.get(input.environmentId);
           return lease === undefined
             ? current
             : new Map(current).set(input.environmentId, { ...lease, entry: next });
         });
+        yield* SubscriptionRef.update(entries, (current) =>
+          new Map(current).set(input.environmentId, next),
+        );
         return Option.some(next);
       }),
     ).pipe(
@@ -958,21 +951,12 @@ export const make = Effect.gen(function* () {
         }
         // The supervisor only owns the RPC session. A managed SSH backend and
         // its tunnel outlive it, so switching off tears those down as well.
-        if (
-          !enabled &&
-          entry.target._tag === "SshConnectionTarget" &&
-          Option.isSome(entry.profile) &&
-          isSshConnectionProfile(entry.profile.value)
-        ) {
-          yield* ssh.disconnect(entry.profile.value.target).pipe(
-            Effect.tapError((error) =>
-              Effect.logWarning("Could not disconnect the switched-off SSH environment.", {
-                environmentId,
-                error,
-              }),
-            ),
-            Effect.ignore,
-          );
+        if (!enabled) {
+          for (const route of connectionRoutes(entry)) {
+            const profile = Option.getOrNull(route.profile);
+            if (profile?._tag !== "SshConnectionProfile") continue;
+            yield* ssh.disconnect(profile.target).pipe(Effect.ignore);
+          }
         }
       }),
     );

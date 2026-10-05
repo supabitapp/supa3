@@ -158,9 +158,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
     concurrency: serial,
     execute: (input: { readonly environmentId: EnvironmentIdType; readonly routeId: string }) =>
       EnvironmentRegistry.EnvironmentRegistry.pipe(
-        Effect.flatMap(
-          (registry) => registry.removeRoute?.(input.environmentId, input.routeId) ?? Effect.void,
-        ),
+        Effect.flatMap((registry) => registry.removeRoute(input.environmentId, input.routeId)),
       ),
   });
   const reorderRoutes = createRuntimeCommand(runtime, {
@@ -172,10 +170,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
       readonly routeIds: ReadonlyArray<string>;
     }) =>
       EnvironmentRegistry.EnvironmentRegistry.pipe(
-        Effect.flatMap(
-          (registry) =>
-            registry.reorderRoutes?.(input.environmentId, input.routeIds) ?? Effect.void,
-        ),
+        Effect.flatMap((registry) => registry.reorderRoutes(input.environmentId, input.routeIds)),
       ),
   });
 

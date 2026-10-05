@@ -32,7 +32,7 @@ import {
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
-import { connectionRoutes, routeEntry, sshTargetKey } from "./routes.ts";
+import { connectionRoutes, isLearned, routeEntry, sshTargetKey } from "./routes.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -167,7 +167,8 @@ const updateBearerConnection = Effect.fn(
     saved === undefined
       ? undefined
       : connectionRoutes(saved).find(
-          (candidate) => candidate.target._tag === "BearerConnectionTarget",
+          (candidate) =>
+            candidate.target._tag === "BearerConnectionTarget" && !isLearned(candidate),
         );
   const entry = saved === undefined || route === undefined ? saved : routeEntry(saved, route);
   const credential =

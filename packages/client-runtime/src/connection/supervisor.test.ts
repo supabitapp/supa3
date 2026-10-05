@@ -11,12 +11,17 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
 
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import type { ConnectionCatalogEntry } from "./catalog.ts";
+import {
+  BearerConnectionProfile,
+  type ConnectionCatalogEntry,
+  type ConnectionRoute,
+} from "./catalog.ts";
 import * as Connectivity from "./connectivity.ts";
 import * as ConnectionDriver from "./driver.ts";
 import {
   ConnectionBlockedError,
   ConnectionTransientError,
+  BearerConnectionTarget,
   PrimaryConnectionTarget,
   type ConnectionAttemptError,
   type ConnectionTarget,
@@ -39,6 +44,40 @@ const TARGET_ENTRY: ConnectionCatalogEntry = {
   target: TARGET,
   profile: Option.none(),
   enabled: true,
+};
+const LAN_TARGET = new BearerConnectionTarget({
+  environmentId: TARGET.environmentId,
+  label: TARGET.label,
+  connectionId: "lan",
+});
+const TAILNET_TARGET = new BearerConnectionTarget({
+  environmentId: TARGET.environmentId,
+  label: TARGET.label,
+  connectionId: "tailnet",
+});
+const LAN_ROUTE: ConnectionRoute = {
+  target: LAN_TARGET,
+  profile: Option.some(
+    new BearerConnectionProfile({
+      connectionId: "lan",
+      environmentId: TARGET.environmentId,
+      label: TARGET.label,
+      httpBaseUrl: "http://192.168.1.2:4389/",
+      wsBaseUrl: "ws://192.168.1.2:4389/",
+    }),
+  ),
+};
+const TAILNET_ROUTE: ConnectionRoute = {
+  target: TAILNET_TARGET,
+  profile: Option.some(
+    new BearerConnectionProfile({
+      connectionId: "tailnet",
+      environmentId: TARGET.environmentId,
+      label: TARGET.label,
+      httpBaseUrl: "http://100.100.1.2:4389/",
+      wsBaseUrl: "ws://100.100.1.2:4389/",
+    }),
+  ),
 };
 
 const PREPARED_CONNECTION: PreparedConnection = {
@@ -104,6 +143,7 @@ const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (options?:
   ) => Effect.Effect<PreparedConnection, ConnectionAttemptError>;
   readonly ready?: (attempt: number) => Effect.Effect<void, ConnectionAttemptError>;
   readonly probe?: (attempt: number) => Effect.Effect<void, ConnectionAttemptError>;
+  readonly checkRoute?: (route: ConnectionRoute) => Effect.Effect<ConnectionDriver.RouteCheck>;
 }) {
   const networkStatus = yield* SubscriptionRef.make<NetworkStatus>(
     options?.networkStatus ?? "online",
@@ -139,30 +179,35 @@ const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (options?:
     entry: ConnectionCatalogEntry,
     reportProgress: (progress: ConnectionDriver.ConnectionDriverProgress) => Effect.Effect<void>,
   ) {
-    const target = entry.target;
     yield* reportProgress({ stage: "preparing" });
-    const prepared = yield* prepare(target);
-    yield* reportProgress({ stage: "opening", prepared });
+    return yield* ConnectionDriver.connectOverRoutes(
+      entry,
+      (route) => options?.checkRoute?.(route) ?? Effect.succeed("unchecked"),
+      Effect.fnUntraced(function* (route) {
+        const prepared = { ...(yield* prepare(route.target)), target: route.target };
+        yield* reportProgress({ stage: "opening", prepared });
 
-    const attempt = yield* Ref.updateAndGet(sessionCount, (count) => count + 1);
-    const closed = yield* Deferred.make<never, ConnectionTransientError>();
-    yield* Ref.update(closedSessions, (sessions) => [...sessions, closed]);
+        const attempt = yield* Ref.updateAndGet(sessionCount, (count) => count + 1);
+        const closed = yield* Deferred.make<never, ConnectionTransientError>();
+        yield* Ref.update(closedSessions, (sessions) => [...sessions, closed]);
 
-    const session = yield* Effect.acquireRelease(
-      Effect.succeed({
-        client: TEST_RPC_CLIENT,
-        initialConfig: Effect.die(new Error("Initial config is not used by supervisor tests.")),
-        subscribeServerConfig: (input) => TEST_RPC_CLIENT.subscribeServerConfig(input),
-        ready: options?.ready?.(attempt) ?? Effect.void,
-        probe: options?.probe?.(attempt) ?? Effect.void,
-        closed: Deferred.await(closed),
-      } satisfies RpcSession.RpcSession),
-      () => Ref.update(releaseCount, (count) => count + 1),
+        const session = yield* Effect.acquireRelease(
+          Effect.succeed({
+            client: TEST_RPC_CLIENT,
+            initialConfig: Effect.die(new Error("Initial config is not used by supervisor tests.")),
+            subscribeServerConfig: (input) => TEST_RPC_CLIENT.subscribeServerConfig(input),
+            ready: options?.ready?.(attempt) ?? Effect.void,
+            probe: options?.probe?.(attempt) ?? Effect.void,
+            closed: Deferred.await(closed),
+          } satisfies RpcSession.RpcSession),
+          () => Ref.update(releaseCount, (count) => count + 1),
+        );
+
+        yield* reportProgress({ stage: "synchronizing", prepared });
+        yield* session.ready;
+        return { prepared, session } satisfies ConnectionDriver.EnvironmentConnectionLease;
+      }),
     );
-
-    yield* reportProgress({ stage: "synchronizing", prepared });
-    yield* session.ready;
-    return { prepared, session } satisfies ConnectionDriver.EnvironmentConnectionLease;
   });
 
   const dependencies = Layer.mergeAll(
@@ -183,7 +228,15 @@ const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (options?:
     ),
     Layer.succeed(
       ConnectionDriver.ConnectionDriver,
-      ConnectionDriver.ConnectionDriver.of({ connect }),
+      ConnectionDriver.ConnectionDriver.of({
+        connect,
+        checkRoute: (_entry, route) =>
+          options?.checkRoute?.(route) ?? Effect.succeed<ConnectionDriver.RouteCheck>("unchecked"),
+        preflight: (_entry, route) =>
+          (
+            options?.checkRoute?.(route) ?? Effect.succeed<ConnectionDriver.RouteCheck>("unchecked")
+          ).pipe(Effect.map((check) => check === "answered")),
+      }),
     ),
   );
 
@@ -1262,6 +1315,101 @@ describe("EnvironmentSupervisor", () => {
 
       expect(yield* Ref.get(harness.releaseCount)).toBe(1);
       expect(Option.isNone(yield* SubscriptionRef.get(supervisor.session))).toBe(true);
+    }),
+  );
+  it.effect.each(["application-active-probe", "network-changed", "periodic"] as const)(
+    "returns from Tailscale to LAN after %s",
+    (trigger) =>
+      Effect.gen(function* () {
+        const lanReachable = yield* Ref.make(false);
+        const harness = yield* makeHarness({
+          prepare: (_attempt, target) =>
+            target._tag === "BearerConnectionTarget" && target.connectionId === "lan"
+              ? Ref.get(lanReachable).pipe(
+                  Effect.flatMap((reachable) =>
+                    reachable
+                      ? Effect.succeed(PREPARED_CONNECTION)
+                      : Effect.fail(transient("LAN unavailable")),
+                  ),
+                )
+              : Effect.succeed(PREPARED_CONNECTION),
+          checkRoute: (route) =>
+            route.target._tag === "BearerConnectionTarget" && route.target.connectionId === "lan"
+              ? Ref.get(lanReachable).pipe(
+                  Effect.map((reachable) => (reachable ? "answered" : "silent")),
+                )
+              : Effect.succeed("answered"),
+        });
+        const entry: ConnectionCatalogEntry = {
+          target: LAN_ROUTE.target,
+          profile: LAN_ROUTE.profile,
+          alternateRoutes: [TAILNET_ROUTE],
+          enabled: true,
+        };
+        const supervisor = yield* EnvironmentSupervisor.make(entry).pipe(
+          Effect.provide(harness.dependencies),
+        );
+        yield* supervisor.connect;
+        yield* awaitState(supervisor.state, (state) => state.phase === "connected");
+        expect(Option.getOrThrow(yield* SubscriptionRef.get(supervisor.prepared)).target).toEqual(
+          TAILNET_TARGET,
+        );
+        yield* Ref.set(lanReachable, true);
+        if (trigger === "periodic") yield* TestClock.adjust("60 seconds");
+        else yield* harness.wake(trigger);
+        yield* awaitState(
+          supervisor.state,
+          (state) => state.generation >= 2 && state.phase === "connected",
+        );
+        expect(Option.getOrThrow(yield* SubscriptionRef.get(supervisor.prepared)).target).toEqual(
+          LAN_TARGET,
+        );
+      }),
+  );
+  it.effect("keeps the fallback connected while a failed preferred route cools down", () =>
+    Effect.gen(function* () {
+      const lanAnswers = yield* Ref.make(false);
+      const harness = yield* makeHarness({
+        checkRoute: (route) =>
+          route.target === LAN_TARGET
+            ? Ref.get(lanAnswers).pipe(Effect.map((answers) => (answers ? "answered" : "silent")))
+            : Effect.succeed("answered"),
+        prepare: (_attempt, target) =>
+          target === LAN_TARGET
+            ? Effect.fail(transient("LAN socket refused"))
+            : Effect.succeed(PREPARED_CONNECTION),
+      });
+      const entry: ConnectionCatalogEntry = {
+        ...LAN_ROUTE,
+        alternateRoutes: [TAILNET_ROUTE],
+        enabled: true,
+      };
+      const supervisor = yield* EnvironmentSupervisor.make(entry, { initiallyDesired: true }).pipe(
+        Effect.provide(harness.dependencies),
+      );
+      yield* awaitState(supervisor.state, (state) => state.phase === "connected");
+      yield* Ref.set(lanAnswers, true);
+      yield* TestClock.adjust("60 seconds");
+      yield* awaitState(
+        supervisor.state,
+        (state) => state.phase === "connected" && state.generation === 2,
+      );
+      expect(Option.getOrThrow(yield* SubscriptionRef.get(supervisor.prepared)).target).toEqual(
+        TAILNET_TARGET,
+      );
+      const prepares = yield* Ref.get(harness.prepareCount);
+      yield* TestClock.adjust("60 seconds");
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(harness.prepareCount)).toBe(prepares);
+      expect(yield* SubscriptionRef.get(supervisor.state)).toMatchObject({
+        phase: "connected",
+        generation: 2,
+      });
+      yield* TestClock.adjust("4 minutes");
+      yield* awaitState(
+        supervisor.state,
+        (state) => state.phase === "connected" && state.generation === 3,
+      );
     }),
   );
 });

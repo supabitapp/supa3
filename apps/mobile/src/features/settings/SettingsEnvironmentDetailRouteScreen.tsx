@@ -42,6 +42,7 @@ export function SettingsEnvironmentDetailRouteScreen({
 
 function EnvironmentDetail({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const connections = useRemoteConnections();
   const environment = connections.connectedEnvironments.find(
     (entry) => entry.environmentId === environmentId,
@@ -172,10 +173,10 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
               environmentId={environmentId}
               connected={connected}
               onAddRoute={() =>
-                navigation.navigate(
-                  "SettingsEnvironmentNew" as never,
-                  { routeFor: environmentId } as never,
-                )
+                navigation.navigate("SettingsSheet", {
+                  screen: "SettingsContent",
+                  params: { screen: "SettingsEnvironmentNew", params: { routeFor: environmentId } },
+                })
               }
             />
             {!connected ? (

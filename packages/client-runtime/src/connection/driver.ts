@@ -49,7 +49,7 @@ export class ConnectionDriver extends Context.Service<
       reportProgress: (progress: ConnectionDriverProgress) => Effect.Effect<void>,
     ) => Effect.Effect<EnvironmentConnectionLease, ConnectionAttemptError, Scope.Scope>;
     /** Whether a direct route answers as the entry's environment, without credentials. */
-    readonly checkRoute?: (
+    readonly checkRoute: (
       entry: ConnectionCatalogEntry,
       route: ConnectionRoute,
     ) => Effect.Effect<RouteCheck>;
@@ -58,7 +58,7 @@ export class ConnectionDriver extends Context.Service<
      * without opening a socket. Switching to a route that fails this would
      * drop a working connection for nothing.
      */
-    readonly preflight?: (
+    readonly preflight: (
       entry: ConnectionCatalogEntry,
       route: ConnectionRoute,
     ) => Effect.Effect<boolean>;
@@ -98,6 +98,16 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
   const attempt = Effect.fnUntraced(function* (route: ConnectionRoute) {
     const routeScope = yield* Scope.fork(attemptScope);
     const result = yield* connectRoute(route).pipe(
+      Effect.timeoutOrElse({
+        duration: "15 seconds",
+        orElse: () =>
+          Effect.fail(
+            new ConnectionTransientError({
+              reason: "timeout",
+              detail: `${route.target.label} did not respond during connection setup.`,
+            }),
+          ),
+      }),
       Scope.provide(routeScope),
       Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : Scope.close(routeScope, exit))),
       Effect.result,
