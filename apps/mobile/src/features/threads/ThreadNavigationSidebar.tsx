@@ -174,7 +174,6 @@ function ThreadNavigationSidebarPane(
     pinThread,
     unpinThread,
     setThreadAutoSettle,
-    moveThread,
     renameThread,
     regenerateThreadTitle,
   } = useThreadListActions();
@@ -348,7 +347,7 @@ function ThreadNavigationSidebarPane(
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
-  const { threadMoveAvailability, threadListV2Layout } = useThreadListV2Layout({
+  const { threadListV2Layout } = useThreadListV2Layout({
     threads,
     environmentId: options.selectedEnvironmentId,
     projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,
@@ -365,8 +364,6 @@ function ThreadNavigationSidebarPane(
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey: props.selectedThreadKey ?? null,
-    pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
   });
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
@@ -415,7 +412,6 @@ function ThreadNavigationSidebarPane(
       snoozeLabelNow: `${nowMinute}:00.000Z`,
       snoozeEnvironmentIds,
       queuedThreadKeys,
-      moveAvailability: threadMoveAvailability,
       shelfPreferencesLoading: !shelfPreferencesLoaded,
     });
     if (settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0) {
@@ -432,7 +428,6 @@ function ThreadNavigationSidebarPane(
     pendingTasks,
     props.searchQuery,
     queuedThreadKeys,
-    threadMoveAvailability,
     selectedProjectRefs,
     settledShelfExpanded,
     shelfPreferencesLoaded,
@@ -706,15 +701,12 @@ function ThreadNavigationSidebarPane(
                   ? pinReorderEnvironmentIds.has(thread.environmentId)
                   : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
               }
-              canMoveUp={item.canMoveUp}
-              canMoveDown={item.canMoveDown}
               onSnoozeThread={snoozeThread}
               onUnsnoozeThread={unsnoozeThread}
               onUnsettleThread={unsettleThread}
               onPinThread={pinThread}
               onUnpinThread={unpinThread}
               onSetThreadAutoSettle={setThreadAutoSettle}
-              onMoveThread={moveThread}
               onSwipeableClose={handleSwipeableClose}
               onSwipeableWillOpen={handleSwipeableWillOpen}
               simultaneousSwipeGesture={sidebarScrollGesture}
@@ -770,7 +762,6 @@ function ThreadNavigationSidebarPane(
       handleSwipeableClose,
       handleSwipeableWillOpen,
       machineByEnvironmentId,
-      moveThread,
       openPendingTask,
       pinReorderEnvironmentIds,
       pinThread,

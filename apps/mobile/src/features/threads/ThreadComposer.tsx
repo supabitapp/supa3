@@ -291,6 +291,7 @@ function SendActionButton(props: {
     <ControlPillMenu
       accessibilityLabel="Choose how to send this message"
       shouldOpenOnLongPress
+      preservesKeyboard
       actions={actions.map((action) => ({
         id: action,
         title: FOLLOW_UP_ACTION_LABEL[action],

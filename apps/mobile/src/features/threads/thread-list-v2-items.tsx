@@ -11,7 +11,6 @@ import { RowPressable } from "../../components/RowPressable";
 import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
-import type { ThreadMoveDestination } from "./threadOrder";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -689,14 +688,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly titleRegenerationSupported: boolean;
   /** Server supports reordering this card's section. */
   readonly reorderSupported?: boolean;
-  readonly onMoveThread?: (
-    thread: EnvironmentThreadShell,
-    direction: ThreadMoveDestination,
-  ) => void;
-  /** Position flags for the card's section so the menu disables the move that
-      would fall off the end of the list. */
-  readonly canMoveUp?: boolean;
-  readonly canMoveDown?: boolean;
   readonly onSwipeableWillOpen: (methods: SwipeableMethods) => void;
   readonly onSwipeableClose: (methods: SwipeableMethods) => void;
   /** List key checked against the Home swipe row activation. */
@@ -722,7 +713,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onPinThread,
     onUnpinThread,
     onSetThreadAutoSettle,
-    onMoveThread,
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
@@ -793,8 +783,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     (enabled: boolean) => onSetThreadAutoSettle(thread, enabled),
     [onSetThreadAutoSettle, thread],
   );
-  const handleMoveUp = useCallback(() => onMoveThread?.(thread, "up"), [onMoveThread, thread]);
-  const handleMoveDown = useCallback(() => onMoveThread?.(thread, "down"), [onMoveThread, thread]);
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe: the v2 primary action is the lifecycle transition. Un-settling a
@@ -848,21 +836,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const arrangementMenuItems = useMemo<MenuAction[]>(
     () => [
       ...(props.reorderSupported === true
-        ? [
-            { id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" },
-            {
-              id: "move-up",
-              title: "Move up",
-              image: "arrow.up",
-              attributes: { disabled: props.canMoveUp !== true },
-            } satisfies MenuAction,
-            {
-              id: "move-down",
-              title: "Move down",
-              image: "arrow.down",
-              attributes: { disabled: props.canMoveDown !== true },
-            } satisfies MenuAction,
-          ]
+        ? [{ id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" }]
         : []),
       ...(props.pinningSupported
         ? [
@@ -872,13 +846,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           ]
         : []),
     ],
-    [
-      props.canMoveDown,
-      props.canMoveUp,
-      props.reorderSupported,
-      props.pinningSupported,
-      thread.pinnedAt,
-    ],
+    [props.reorderSupported, props.pinningSupported, thread.pinnedAt],
   );
   // A submenu with the current option checked, matching web. This is a
   // per-thread setting, not a lifecycle verb.
@@ -948,9 +916,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const slimMenuActions = useMemo<MenuAction[]>(
     () => [
       SLIM_MENU_ACTIONS[0]!,
-      ...arrangementMenuItems.filter(
-        (action) => action.id !== "move-up" && action.id !== "move-down",
-      ),
+      ...arrangementMenuItems,
       ...titleMenuItems,
       ...autoSettleMenuItems,
       SLIM_MENU_ACTIONS[1]!,
@@ -986,8 +952,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "auto-settle:enabled") handleSetAutoSettle(true);
       if (nativeEvent.event === "auto-settle:disabled") handleSetAutoSettle(false);
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
-      if (nativeEvent.event === "move-up") handleMoveUp();
-      if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "rename") handleRename();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
@@ -1017,8 +981,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleDelete,
       handleRegenerateTitle,
       handleRename,
-      handleMoveDown,
-      handleMoveUp,
       handlePin,
       handleSettle,
       handleSnooze,

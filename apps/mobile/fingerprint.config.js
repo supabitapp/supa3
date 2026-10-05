@@ -13,6 +13,28 @@ if (!majorVersion) {
   throw new Error("fingerprint.config.js could not read the app version from app.config.ts");
 }
 
+// The fingerprint hashes native modules by name and version, so a pnpm patch
+// to their native code would leave the runtime version unchanged and ship as
+// an OTA to binaries that lack it. Hash every applied patch that touches
+// platform sources, C/C++, or codegen specs. JS-only patches ship in the
+// bundle and stay out.
+const repoRoot = path.join(__dirname, "../..");
+const workspaceConfig = fs.readFileSync(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+const appliedPatches = [...workspaceConfig.matchAll(/: (patches\/\S+\.patch)$/gm)].flatMap(
+  ([, patch]) => (patch ? [patch] : []),
+);
+const nativePath = /^(ios|android|cpp)\/|\.podspec$|(^|\/)Native\w*\.tsx?$|NativeComponent\.tsx?$/;
+const nativePatchSources = appliedPatches.flatMap((patch) => {
+  const contents = fs.readFileSync(path.join(repoRoot, patch), "utf8");
+  const touchesNative = [...contents.matchAll(/^diff --git a\/(\S+)/gm)].some(([, touched = ""]) =>
+    nativePath.test(touched),
+  );
+  return touchesNative ? [{ type: /** @type {const} */ ("contents"), id: patch, contents }] : [];
+});
+
 module.exports = {
-  extraSources: [{ type: "contents", id: "appMajorVersion", contents: majorVersion }],
+  extraSources: [
+    { type: "contents", id: "appMajorVersion", contents: majorVersion },
+    ...nativePatchSources,
+  ],
 };

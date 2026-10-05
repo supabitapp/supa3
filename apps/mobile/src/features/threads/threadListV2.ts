@@ -26,7 +26,6 @@ import {
 import type { EnvironmentId, ProjectId } from "@supacode/contracts";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
-import type { ThreadMoveAvailability } from "./threadOrder";
 
 import { relativeTime } from "../../lib/time";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
@@ -322,11 +321,6 @@ export interface ThreadListV2ThreadListItem {
       so an outbox write (which never touches the thread shell) reaches the
       row through recycled-list equality instead of leaving a stale icon. */
   readonly hasQueuedMessages: boolean;
-  /** Move up/down availability in the row's card section. Carried on the item
-      for the same reason: a reorder in flight (or its commit) changes menu
-      availability without changing any shell. */
-  readonly canMoveUp: boolean;
-  readonly canMoveDown: boolean;
 }
 
 export interface ThreadListV2PendingListItem {
@@ -415,9 +409,7 @@ export function threadListV2ListItemsAreEqual(
         previous.timeLabel === item.timeLabel &&
         previous.snoozePresetMinute === item.snoozePresetMinute &&
         previous.showTrailingDivider === item.showTrailingDivider &&
-        previous.hasQueuedMessages === item.hasQueuedMessages &&
-        previous.canMoveUp === item.canMoveUp &&
-        previous.canMoveDown === item.canMoveDown
+        previous.hasQueuedMessages === item.hasQueuedMessages
       );
     case "v2-pending":
       return (
@@ -499,12 +491,6 @@ export function buildThreadListV2ListItems(input: {
   /** Thread keys (`environmentId:threadId`) with a message waiting in the
       outbox; stamped onto the matching rows as `hasQueuedMessages`. */
   readonly queuedThreadKeys?: ReadonlySet<string>;
-  /** Menu availability for Move up/down, keyed by `environmentId:threadId`
-      (only consulted for card rows — slim menus omit the moves). Produced by
-      `computeThreadMoveAvailability` in one pass per section; a recycled cell
-      ignores the render closure, so the stamps ride on the item. Absent =
-      never available (tests). */
-  readonly moveAvailability?: ReadonlyMap<string, ThreadMoveAvailability>;
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
@@ -526,10 +512,6 @@ export function buildThreadListV2ListItems(input: {
       canSnooze(item.thread, { now: input.snoozeLabelNow })
         ? input.snoozeLabelNow
         : undefined;
-    const move =
-      item.variant === "card"
-        ? input.moveAvailability?.get(`${item.thread.environmentId}:${item.thread.id}`)
-        : undefined;
     return {
       type: "v2-thread",
       key: `v2-thread:${item.thread.environmentId}:${item.thread.id}`,
@@ -540,8 +522,6 @@ export function buildThreadListV2ListItems(input: {
       showTrailingDivider: false,
       hasQueuedMessages:
         input.queuedThreadKeys?.has(`${item.thread.environmentId}:${item.thread.id}`) === true,
-      canMoveUp: move?.canMoveUp === true,
-      canMoveDown: move?.canMoveDown === true,
     };
   });
   const pendingItems = input.pendingTasks.map((pendingTask, index): ThreadListV2ListItem => ({
