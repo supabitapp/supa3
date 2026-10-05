@@ -36,9 +36,8 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 
 interface VersionMismatchIssue {
-  readonly clientVersion: string;
   readonly serverVersion: string;
-  readonly serverLabel: string;
+  /** Targets this client's version, so `targetVersion` is the client version. */
   readonly update: Omit<ServerUpdateTarget, "continueThreadsAfterServerUpdate">;
   readonly updateState: ServerUpdateState;
 }
@@ -92,34 +91,37 @@ function VersionMismatchNotice({
   readonly issue: VersionMismatchIssue;
   readonly onDismiss: () => void;
 }) {
-  const { updateState } = issue;
+  const { serverVersion, update, updateState } = issue;
+  const updateRunning = updateState.status === "running";
   return (
     <div className="mx-1 mb-2 flex gap-2 rounded-xl border border-warning/30 bg-warning/6 p-3">
       <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium">Client and server versions differ</p>
         <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
-          Client {issue.clientVersion} · {issue.serverLabel} {issue.serverVersion}
+          Client {update.targetVersion} · {update.serverLabel} {serverVersion}
         </p>
         {updateState.status !== "idle" ? <ServerUpdateProgress state={updateState} /> : null}
-        {updateState.status !== "running" ? (
+        {updateRunning ? null : (
           <div className="mt-2">
             <ServerUpdateAction
-              {...issue.update}
+              {...update}
               label={updateState.status === "failed" ? "Retry update" : "Update server"}
               variant="warning-outline"
             />
           </div>
-        ) : null}
+        )}
       </div>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Dismiss version mismatch warning"
-        onClick={onDismiss}
-      >
-        <XIcon className="size-3.5" />
-      </Button>
+      {updateRunning ? null : (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Dismiss version mismatch warning"
+          onClick={onDismiss}
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      )}
     </div>
   );
 }
