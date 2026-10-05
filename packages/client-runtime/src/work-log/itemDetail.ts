@@ -216,7 +216,6 @@ export function turnItemHasDetail(item: OrchestrationV2TurnItem): boolean {
         (item.exitCode !== undefined && item.exitCode !== 0)
       );
     case "file_change":
-    case "checkpoint":
     case "fork":
     case "handoff":
       return true;

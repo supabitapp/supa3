@@ -5,10 +5,9 @@ import {
   ProviderSessionId,
   ProviderThreadId,
   ProviderTurnId,
-  RunAttemptId,
   RunId,
-  RuntimeRequestId,
   TurnItemId,
+  type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
@@ -21,8 +20,8 @@ const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
 const runId = RunId.make("run-1");
 const nodeId = NodeId.make("node-1");
 const itemId = TurnItemId.make("item-1");
-const requestId = RuntimeRequestId.make("request-1");
 const providerInstanceId = ProviderInstanceId.make("codex");
+const providerSessionId = ProviderSessionId.make("provider-session-1");
 const providerThreadId = ProviderThreadId.make("provider-thread-1");
 const providerTurnId = ProviderTurnId.make("provider-turn-1");
 
@@ -45,137 +44,50 @@ const commandItem: OrchestrationV2TurnItem = {
   input: "vp check",
 };
 
-describe("resolveV2ItemSupport", () => {
-  it("retains identity while linking a turn item to its execution and provider entities", () => {
-    const run = {
-      id: runId,
-      threadId: v2ThreadId,
-      ordinal: 1,
-      providerInstanceId,
-      modelSelection: { instanceId: providerInstanceId, model: "gpt-5.4" },
-      providerThreadId,
-      userMessageId: "message-1" as never,
-      rootNodeId: nodeId,
-      activeAttemptId: RunAttemptId.make("attempt-2"),
-      status: "running" as const,
-      requestedAt: now,
-      startedAt: now,
-      completedAt: null,
-      checkpointId: null,
-      contextHandoffId: null,
-    };
-    const attempts = [
-      {
-        id: RunAttemptId.make("attempt-1"),
-        runId,
-        attemptOrdinal: 1,
-        rootNodeId: nodeId,
-        providerInstanceId,
-        providerThreadId,
-        providerTurnId,
-        reason: "initial" as const,
-        status: "superseded" as const,
-        startedAt: now,
-        completedAt: now,
-      },
-      {
-        id: RunAttemptId.make("attempt-2"),
-        runId,
-        attemptOrdinal: 2,
-        rootNodeId: nodeId,
-        providerInstanceId,
-        providerThreadId,
-        providerTurnId,
-        reason: "steering_restart" as const,
-        status: "running" as const,
-        startedAt: now,
-        completedAt: null,
-      },
-    ];
-    const node = {
-      id: nodeId,
-      threadId: v2ThreadId,
-      runId,
-      parentNodeId: null,
-      rootNodeId: nodeId,
-      kind: "tool_call" as const,
-      status: "running" as const,
-      countsForRun: true,
-      providerThreadId,
-      providerTurnId,
-      nativeItemRef: null,
-      runtimeRequestId: requestId,
-      checkpointScopeId: null,
-      startedAt: now,
-      completedAt: null,
-    };
-    const providerThread = {
-      id: providerThreadId,
-      driver: ProviderDriverKind.make("codex"),
-      providerInstanceId,
-      providerSessionId: null,
-      appThreadId: v2ThreadId,
-      ownerNodeId: nodeId,
-      nativeThreadRef: null,
-      nativeConversationHeadRef: null,
-      status: "active" as const,
-      firstRunOrdinal: 1,
-      lastRunOrdinal: 1,
-      handoffIds: [],
-      forkedFrom: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const providerTurn = {
-      id: providerTurnId,
-      providerThreadId,
-      nodeId,
-      runAttemptId: attempts[1]!.id,
-      nativeTurnRef: null,
-      ordinal: 1,
-      status: "running" as const,
-      startedAt: now,
-      completedAt: null,
-    };
-    const runtimeRequest = {
-      id: requestId,
-      nodeId,
-      providerTurnId,
-      nativeRequestRef: null,
-      kind: "dynamic_tool_call" as const,
-      status: "pending" as const,
-      responseCapability: {
-        type: "live" as const,
-        providerSessionId: ProviderSessionId.make("session-1"),
-      },
-      createdAt: now,
-      resolvedAt: null,
-    };
-    const projection = {
-      ...v2Projection,
-      runs: [run],
-      attempts,
-      nodes: [node],
-      providerThreads: [providerThread],
-      providerTurns: [providerTurn],
-      runtimeRequests: [runtimeRequest],
-      turnItems: [commandItem],
-    };
+const providerThread: OrchestrationV2ThreadProjection["providerThreads"][number] = {
+  id: providerThreadId,
+  driver: ProviderDriverKind.make("codex"),
+  providerInstanceId,
+  providerSessionId,
+  appThreadId: v2ThreadId,
+  ownerNodeId: nodeId,
+  nativeThreadRef: null,
+  nativeConversationHeadRef: null,
+  status: "active",
+  firstRunOrdinal: 1,
+  lastRunOrdinal: 1,
+  handoffIds: [],
+  forkedFrom: null,
+  createdAt: now,
+  updatedAt: now,
+};
 
-    const support = resolveV2ItemSupport(projection, itemId);
-    expect(support.item).toBe(commandItem);
-    expect(support.run).toBe(run);
-    expect(support.attempts).toEqual(attempts);
-    expect(support.attempts[0]).toBe(attempts[0]);
-    expect(support.node).toBe(node);
-    expect(support.providerThread).toBe(providerThread);
-    expect(support.providerTurn).toBe(providerTurn);
-    expect(support.runtimeRequest).toBe(runtimeRequest);
+const providerSession = {
+  id: providerSessionId,
+} as unknown as OrchestrationV2ThreadProjection["providerSessions"][number];
+
+describe("resolveV2ItemSupport", () => {
+  it("links a turn item to its provider session through its provider thread", () => {
+    const support = resolveV2ItemSupport(
+      {
+        ...v2Projection,
+        providerThreads: [providerThread],
+        providerSessions: [providerSession],
+        turnItems: [commandItem],
+      },
+      itemId,
+    );
+
+    expect(support.providerSession).toBe(providerSession);
+    expect(support.contextHandoff).toBeNull();
+    expect(support.contextTransfer).toBeNull();
   });
 
   it("resolves synthetic items from the authoritative visible sequence", () => {
     const projection = {
       ...v2Projection,
+      providerThreads: [providerThread],
+      providerSessions: [providerSession],
       visibleTurnItems: [
         {
           position: 0,
@@ -186,19 +98,50 @@ describe("resolveV2ItemSupport", () => {
         },
       ],
     };
-    expect(resolveV2ItemSupport(projection, itemId).item).toBe(commandItem);
+
+    expect(resolveV2ItemSupport(projection, itemId).providerSession).toBe(providerSession);
+  });
+
+  it("links a handoff item to its context handoff and transfer", () => {
+    const contextHandoff = {
+      id: "handoff-1",
+      transferId: "transfer-1",
+    } as unknown as OrchestrationV2ThreadProjection["contextHandoffs"][number];
+    const contextTransfer = {
+      id: "transfer-1",
+    } as unknown as OrchestrationV2ThreadProjection["contextTransfers"][number];
+    const handoffItem = {
+      ...commandItem,
+      providerThreadId: null,
+      type: "handoff",
+      contextHandoffId: "handoff-1",
+    } as unknown as OrchestrationV2TurnItem;
+
+    const support = resolveV2ItemSupport(
+      {
+        ...v2Projection,
+        contextHandoffs: [contextHandoff],
+        contextTransfers: [contextTransfer],
+        turnItems: [handoffItem],
+      },
+      itemId,
+    );
+
+    expect(support.contextHandoff).toBe(contextHandoff);
+    expect(support.contextTransfer).toBe(contextTransfer);
+    expect(support.providerSession).toBeNull();
   });
 
   it("returns the stable empty support for unknown items", () => {
     expect(resolveV2ItemSupport(v2Projection, itemId)).toBe(EMPTY_V2_ITEM_SUPPORT);
   });
 
-  it("compares support structurally while retaining entity identity semantics", () => {
+  it("compares support by entity identity", () => {
     expect(v2ItemSupportEqual(EMPTY_V2_ITEM_SUPPORT, { ...EMPTY_V2_ITEM_SUPPORT })).toBe(true);
     expect(
       v2ItemSupportEqual(EMPTY_V2_ITEM_SUPPORT, {
         ...EMPTY_V2_ITEM_SUPPORT,
-        attempts: [{ id: "attempt" } as never],
+        providerSession,
       }),
     ).toBe(false);
   });
