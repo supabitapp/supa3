@@ -320,10 +320,6 @@ interface TimelineRowSharedState {
     readonly sourceThreadId: ThreadId;
     readonly runId: RunId;
   }) => Promise<void>;
-  onRollbackCheckpoint: (input: {
-    readonly checkpointId: string;
-    readonly scopeId: string;
-  }) => void;
   onToggleTurnFold: (runId: RunId) => void;
   onToggleAttemptFold: (attemptId: RunAttemptId) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
@@ -451,10 +447,6 @@ interface MessagesTimelineProps {
     readonly sourceThreadId: ThreadId;
     readonly runId: RunId;
   }) => Promise<void>;
-  onRollbackCheckpoint: (input: {
-    readonly checkpointId: string;
-    readonly scopeId: string;
-  }) => void;
   supportsConversationRollback: boolean;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
@@ -529,7 +521,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenThread,
   parentThreadLink = null,
   onForkFromRun,
-  onRollbackCheckpoint,
   supportsConversationRollback,
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
@@ -1165,7 +1156,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onOpenThread,
       onForkFromRun,
-      onRollbackCheckpoint,
       onToggleTurnFold,
       onToggleAttemptFold,
       onToggleWorkGroup,
@@ -1200,7 +1190,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onOpenThread,
       onForkFromRun,
-      onRollbackCheckpoint,
       onToggleTurnFold,
       onToggleAttemptFold,
       onToggleWorkGroup,
@@ -2871,7 +2860,6 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
               workspaceRoot={ctx.workspaceRoot}
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
-              onRollbackCheckpoint={ctx.onRollbackCheckpoint}
             />
           </div>
         </div>
@@ -2945,7 +2933,6 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
               workspaceRoot={ctx.workspaceRoot}
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
-              onRollbackCheckpoint={ctx.onRollbackCheckpoint}
             />
           </div>
         </div>
@@ -5373,7 +5360,6 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
               workspaceRoot={workspaceRoot}
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
-              onRollbackCheckpoint={ctx.onRollbackCheckpoint}
             />
           ) : (
             <>
