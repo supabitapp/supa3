@@ -25,6 +25,8 @@ import {
   getHardwareKeyboardCommandRegistrationVersion,
   getRegisteredHardwareKeyboardCommands,
   parseActiveThreadPath,
+  nativeHardwareKeyboardCommandsForPath,
+  requestThreadFindOnFocus,
   subscribeToHardwareKeyboardCommandRegistrations,
   type HardwareKeyboardCommand,
 } from "./hardwareKeyboardCommands";
@@ -112,7 +114,7 @@ export function HardwareKeyboardCommandProvider({
     getRegisteredCommandsSnapshot,
   );
   const enabledCommands = useMemo(() => {
-    const commands = new Set<HardwareKeyboardCommand>(registeredCommands);
+    const commands = nativeHardwareKeyboardCommandsForPath(registeredCommands, pathname);
     commands.add("newTask");
     commands.add("commandPalette");
     if (pathname !== "/" && !pathname.startsWith("/threads/")) {
@@ -137,6 +139,16 @@ export function HardwareKeyboardCommandProvider({
         return;
       }
       if (dispatchHardwareKeyboardCommand(command)) return;
+      if (command === "threadFind") {
+        const ref = parseActiveThreadPath(pathname);
+        if (ref === null) return;
+        requestThreadFindOnFocus(ref);
+        navigation.navigate("Thread", {
+          environmentId: String(ref.environmentId),
+          threadId: String(ref.threadId),
+        });
+        return;
+      }
 
       if (command === "copyThreadReference") {
         if (copyTarget === null) return;

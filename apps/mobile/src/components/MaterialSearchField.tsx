@@ -11,6 +11,8 @@ export function MaterialSearchField({
   placeholder,
   value,
   onChangeText,
+  onFocus,
+  onBlur,
 }: {
   readonly inputRef: RefObject<TextInputInstance | null>;
   readonly accessibilityLabel: string;
@@ -18,6 +20,8 @@ export function MaterialSearchField({
   readonly placeholder: string;
   readonly value: string;
   readonly onChangeText: (value: string) => void;
+  readonly onFocus?: () => void;
+  readonly onBlur?: () => void;
 }) {
   const { scale, mediumIconSize } = useAndroidControlSizing();
   return (
@@ -50,6 +54,8 @@ export function MaterialSearchField({
         style={{ paddingVertical: 7 * scale }}
         value={value}
         onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
       {value.length > 0 ? (
         <Pressable

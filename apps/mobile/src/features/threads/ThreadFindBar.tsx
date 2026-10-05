@@ -1,4 +1,8 @@
-import type { EnvironmentId, ThreadId } from "@supacode/contracts";
+import type {
+  EnvironmentId,
+  ThreadId,
+  OrchestrationThreadMessageSearchMatch,
+} from "@supacode/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, Pressable, View, type TextInputInstance } from "react-native";
 
@@ -9,6 +13,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
+import { useThreadFindProjection } from "./use-thread-find-projection";
 import { threadFindSnippetParts, type ThreadFindTarget } from "./thread-find-target";
 
 function FindAction(props: {
@@ -51,6 +56,22 @@ export function ThreadFindBar(props: {
   const offset = Math.floor(index / 50) * 50;
   const inputRef = useRef<TextInputInstance | null>(null);
   const loadAround = useAtomCommand(threadEnvironment.loadAroundHistory, { reportFailure: false });
+  const loadTarget = useCallback(
+    async (match: OrchestrationThreadMessageSearchMatch) => {
+      const result = await loadAround({
+        environmentId: props.environmentId,
+        input: {
+          threadId: props.threadId,
+          target: { itemId: match.itemId, threadId: match.threadId },
+        },
+      });
+      return result._tag === "Success"
+        ? result.value
+        : { _tag: "error" as const, message: "Could not show this match. Refresh to try again." };
+    },
+    [loadAround, props.environmentId, props.threadId],
+  );
+  const { loadProjection, invalidateProjection } = useThreadFindProjection(loadTarget);
   const atom = useMemo(
     () =>
       open && query.length > 0
@@ -87,11 +108,15 @@ export function ThreadFindBar(props: {
   }, [text]);
   const previousCompletion = useRef(props.completedAt);
   const { refresh } = search;
+  const refreshMatches = useCallback(() => {
+    invalidateProjection();
+    refresh();
+  }, [invalidateProjection, refresh]);
   useEffect(() => {
     if (previousCompletion.current === props.completedAt) return;
     previousCompletion.current = props.completedAt;
-    if (open && query.length > 0) refresh();
-  }, [open, props.completedAt, query, refresh]);
+    if (open && query.length > 0) refreshMatches();
+  }, [open, props.completedAt, query, refreshMatches]);
 
   useEffect(() => {
     if (!open || (match === null && !search.isPending && text.trim() === query))
@@ -99,28 +124,22 @@ export function ThreadFindBar(props: {
     if (!open || match === null || matchKey === null || search.isPending || text.trim() !== query)
       return;
     let cancelled = false;
-    void loadAround({
-      environmentId: props.environmentId,
-      input: {
-        threadId: props.threadId,
-        target: { itemId: match.itemId, threadId: match.threadId },
-      },
-    }).then((result) => {
+    void loadProjection(match).then((result) => {
       if (cancelled) return;
-      if (result._tag === "Success" && result.value._tag === "loaded") {
+      if (result._tag === "loaded") {
         setNavigation({ key: matchKey, error: null });
         onTargetChange({
           itemId: match.itemId,
           threadId: match.threadId,
           navigationKey: matchKey,
-          projection: result.value.projection,
+          projection: result.projection,
         });
       } else {
         setNavigation({
           key: matchKey,
           error:
-            result._tag === "Success" && result.value._tag === "error"
-              ? result.value.message
+            result._tag === "error"
+              ? result.message
               : "Could not show this match. Refresh to try again.",
         });
       }
@@ -128,24 +147,14 @@ export function ThreadFindBar(props: {
     return () => {
       cancelled = true;
     };
-  }, [
-    open,
-    match,
-    matchKey,
-    query,
-    text,
-    search.isPending,
-    props.environmentId,
-    props.threadId,
-    loadAround,
-    onTargetChange,
-  ]);
+  }, [open, match, matchKey, query, text, search.isPending, loadProjection, onTargetChange]);
 
   const close = useCallback(() => {
+    invalidateProjection();
     setClosedRequest(props.openRequest);
     onTargetChange(null);
     Keyboard.dismiss();
-  }, [onTargetChange, props.openRequest]);
+  }, [invalidateProjection, onTargetChange, props.openRequest]);
   const dismissFromKeyboard = useCallback(() => {
     if (!open) return false;
     close();
@@ -230,7 +239,7 @@ export function ThreadFindBar(props: {
           label="Refresh matches"
           icon="arrow.clockwise"
           disabled={pending || query.length === 0}
-          onPress={search.refresh}
+          onPress={refreshMatches}
         />
       </View>
     </View>

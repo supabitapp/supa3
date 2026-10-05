@@ -33,6 +33,8 @@ export function MaterialThreadListToolbar(props: {
   readonly sidebar?: boolean;
   readonly onLayout?: (event: LayoutChangeEvent) => void;
   readonly onRequestVisibility?: () => void;
+  readonly onSearchFocus?: () => void;
+  readonly onSearchBlur?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { fabSize } = useAndroidControlSizing();
@@ -71,6 +73,8 @@ export function MaterialThreadListToolbar(props: {
   const searchField = (
     <MaterialSearchField
       inputRef={searchRef}
+      onFocus={props.onSearchFocus}
+      onBlur={props.onSearchBlur}
       accessibilityLabel="Search threads"
       clearAccessibilityLabel="Clear search"
       placeholder="Search"

@@ -3,6 +3,8 @@ import {
   OrchestrationSearchThreadsInput,
   type OrchestrationSearchThreadsResult,
   type OrchestrationThreadSearchMatch,
+  type OrchestrationThreadMessageSearchMatch,
+  type OrchestrationV2ProjectedTurnItem,
 } from "@supacode/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -10,6 +12,30 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 export interface EnvironmentThreadSearchMatch extends OrchestrationThreadSearchMatch {
   readonly environmentId: EnvironmentId;
+}
+
+/** Reuse a search window only when its saved text still contains the server's exact excerpt. */
+export function threadSearchWindowContainsMatch(
+  items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+  match: Pick<
+    OrchestrationThreadMessageSearchMatch,
+    "threadId" | "itemId" | "snippet" | "snippetStart"
+  >,
+): boolean {
+  const row = items.find(
+    (item) => item.sourceThreadId === match.threadId && item.sourceItemId === match.itemId,
+  );
+  if (row === undefined) return false;
+  const text =
+    row.item.type === "user_message" || row.item.type === "assistant_message"
+      ? row.item.text
+      : row.item.type === "proposed_plan"
+        ? row.item.markdown
+        : null;
+  return (
+    text !== null &&
+    text.slice(match.snippetStart, match.snippetStart + match.snippet.length) === match.snippet
+  );
 }
 
 export interface ThreadSearchResultsState {

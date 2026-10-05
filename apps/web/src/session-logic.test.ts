@@ -1024,6 +1024,18 @@ describe("native provider presentation in the v2 timeline", () => {
     const next = deriveTimelineEntriesFromVisibleTurnItemsWithState(nextInput, previous);
     expect(next.entries).toEqual(deriveTimelineEntriesFromVisibleTurnItems(nextInput));
     expect(next.entries).toHaveLength(1);
+    const foundAnswer = deriveTimelineEntriesFromVisibleTurnItemsWithState(
+      { ...nextInput, revealMessageItemId: reply.id },
+      next,
+    );
+    expect(foundAnswer.entries.find((entry) => entry.kind === "message")).toMatchObject({
+      kind: "message",
+      projectedItem: { sourceItemId: reply.id },
+      message: { text: "Which color?\nBlue" },
+    });
+    expect(
+      deriveTimelineEntriesFromVisibleTurnItemsWithState(nextInput, foundAnswer).entries,
+    ).toEqual(next.entries);
     const replyFirst = { ...input, visibleTurnItems: [visible(reply)] };
     const replyProjection = deriveTimelineEntriesFromVisibleTurnItemsWithState(replyFirst);
     const questionAfterReply = {

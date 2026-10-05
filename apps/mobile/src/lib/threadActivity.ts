@@ -291,6 +291,7 @@ const presentedActivityGroupsCache = new WeakMap<
     readonly activeRunId: RunId | null;
     readonly isWorking: boolean;
     readonly activeTail: boolean;
+    readonly revealedActivityId: string | null;
     readonly rows: ReadonlyArray<ThreadFeedEntry>;
   }
 >();
@@ -1171,6 +1172,8 @@ export function deriveThreadFeedPresentation(
   activeWorkStartedAt: string | null = null,
   /** The live work is a provider-native subagent's runless root turn. */
   runlessWorkActive = false,
+  /** Reveal a find result as its own row while surrounding work stays folded. */
+  revealedActivityId: string | null = null,
 ): ThreadFeedEntry[] {
   const retainedFeed = feed.filter(
     (entry) =>
@@ -1258,6 +1261,7 @@ export function deriveThreadFeedPresentation(
         activeRunId,
         isWorking,
         isActiveTailGroup,
+        revealedActivityId,
       );
     }
   }
@@ -1324,6 +1328,7 @@ function appendPresentedFeedEntry(
   activeRunId: RunId | null,
   isWorking: boolean,
   activeTail: boolean,
+  revealedActivityId: string | null,
 ): void {
   if (entry.type !== "activity-group") {
     result.push(entry);
@@ -1345,13 +1350,22 @@ function appendPresentedFeedEntry(
     cached.activeRunId !== activeRunId ||
     cached.isWorking !== isWorking ||
     cached.activeTail !== activeTail ||
+    cached.revealedActivityId !== revealedActivityId ||
     cached.rows.some(
       (row) => row.type === "work-toggle" && expandedWorkGroupIds.has(row.groupId) !== row.expanded,
     )
   ) {
     const rows: ThreadFeedEntry[] = [];
-    appendActivityGroupRows(rows, entry, expandedWorkGroupIds, activeRunId, isWorking, activeTail);
-    cached = { activeRunId, isWorking, activeTail, rows };
+    appendActivityGroupRows(
+      rows,
+      entry,
+      expandedWorkGroupIds,
+      activeRunId,
+      isWorking,
+      activeTail,
+      revealedActivityId,
+    );
+    cached = { activeRunId, isWorking, activeTail, revealedActivityId, rows };
     presentedActivityGroupsCache.set(entry, cached);
   }
   for (const row of cached.rows) {
@@ -1366,12 +1380,17 @@ function appendActivityGroupRows(
   activeRunId: RunId | null,
   isWorking: boolean,
   activeTail: boolean,
+  revealedActivityId: string | null,
 ): void {
   const groupAnchorIdByActivityId = new Map<string, string>();
   let groupAnchorId: string | null = null;
   for (const activity of entry.activities) {
     const item = activity.projectedItem.item;
-    if (activity.prominent || (item.type === "error" && item.status === "failed")) {
+    if (
+      activity.prominent ||
+      activity.id === revealedActivityId ||
+      (item.type === "error" && item.status === "failed")
+    ) {
       groupAnchorId = null;
       continue;
     }
@@ -1390,11 +1409,12 @@ function appendActivityGroupRows(
   let groupableRun: ThreadFeedActivity[] = [];
   const flushGroupableRun = (isTrailingRun: boolean) => {
     if (groupableRun.length === 0) return;
+    const groupId = `work-group:${groupAnchorIdByActivityId.get(groupableRun[0]!.id) ?? groupableRun[0]!.id}`;
     appendToolGroupRows(
       result,
       entry,
       groupableRun,
-      `work-group:${groupAnchorIdByActivityId.get(groupableRun[0]!.id) ?? groupableRun[0]!.id}`,
+      groupId,
       expandedWorkGroupIds,
       activeRunId,
       isWorking,
@@ -1405,7 +1425,12 @@ function appendActivityGroupRows(
   for (const activity of activities) {
     const item = activity.projectedItem.item;
     const severeProviderError = item.type === "error" && item.status === "failed";
-    if (!activity.prominent && !severeProviderError && item.type !== "notification") {
+    if (
+      !activity.prominent &&
+      activity.id !== revealedActivityId &&
+      !severeProviderError &&
+      item.type !== "notification"
+    ) {
       groupableRun.push(activity);
       continue;
     }

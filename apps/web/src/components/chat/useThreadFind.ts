@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { onOpenThreadFind } from "../../threadFindBus";
+import { threadSearchWindowContainsMatch } from "@supacode/client-runtime/state/thread-search";
 import { toastManager } from "../ui/toast";
 import type { ThreadFindRequest } from "./useThreadFindTarget";
 
@@ -26,7 +27,7 @@ export function useThreadFind({
   readonly threadKey: string | null;
   readonly threadRef: ScopedThreadRef | null;
   readonly isServerThread: boolean;
-  readonly onManualNavigation: () => void;
+  readonly onManualNavigation: () => void | (() => void);
   readonly onOpen?: (() => void) | undefined;
   readonly onClose: () => void;
 }) {
@@ -41,6 +42,12 @@ export function useThreadFind({
     (ThreadFindRequest & { threadKey: string; projection: OrchestrationV2ThreadProjection }) | null
   >(null);
   const threadFindGenerationRef = useRef(0);
+  const restoreRecentViewRef = useRef<(() => void) | null>(null);
+  const loadedWindowRef = useRef<OrchestrationV2ThreadProjection | null>(null);
+  const invalidateWindow = useCallback(() => {
+    loadedWindowRef.current = null;
+    threadFindGenerationRef.current += 1;
+  }, []);
   const threadFindOpen = isServerThread && threadFind?.threadKey === threadKey;
   const openActiveThreadFind = useCallback(() => {
     if (!isServerThread || threadKey === null) return;
@@ -54,6 +61,9 @@ export function useThreadFind({
     threadFindGenerationRef.current += 1;
     setThreadFind(null);
     setThreadFindTarget(null);
+    restoreRecentViewRef.current?.();
+    restoreRecentViewRef.current = null;
+    loadedWindowRef.current = null;
     onClose();
   }, [onClose]);
   if (threadFind !== null && threadFind.threadKey !== threadKey) {
@@ -64,6 +74,8 @@ export function useThreadFind({
     if (threadKey === null) return;
     return () => {
       threadFindGenerationRef.current += 1;
+      restoreRecentViewRef.current = null;
+      loadedWindowRef.current = null;
     };
   }, [threadKey]);
   useEffect(
@@ -84,12 +96,19 @@ export function useThreadFind({
         setThreadFindTarget(null);
         return;
       }
-      onManualNavigation();
+      const restore = onManualNavigation();
+      if (restoreRecentViewRef.current === null)
+        restoreRecentViewRef.current = restore ?? (() => {});
       const request = {
         threadKey,
         key: JSON.stringify([threadKey, query, match.index, generation]),
         match,
       };
+      const loaded = loadedWindowRef.current;
+      if (loaded !== null && threadSearchWindowContainsMatch(loaded.visibleTurnItems, match)) {
+        setThreadFindTarget({ ...request, projection: loaded });
+        return;
+      }
       void loadAroundThreadHistory({
         environmentId: threadRef.environmentId,
         input: {
@@ -117,6 +136,7 @@ export function useThreadFind({
           return;
         }
         if (result.value._tag === "loaded") {
+          loadedWindowRef.current = result.value.projection;
           setThreadFindTarget({ ...request, projection: result.value.projection });
         } else {
           toastManager.add({
@@ -137,5 +157,6 @@ export function useThreadFind({
     open: openActiveThreadFind,
     close: closeActiveThreadFind,
     navigate: navigateThreadFind,
+    invalidateWindow,
   };
 }

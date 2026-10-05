@@ -36,7 +36,10 @@ import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import { useWorkspaceState } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
-import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
+import {
+  useHardwareKeyboardCommand,
+  useThreadFindFocusBlocker,
+} from "../keyboard/hardwareKeyboardCommands";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { useHomeListOptions } from "../home/home-list-options";
 import { buildHomeListFilterMenu } from "../home/home-list-filter-menu";
@@ -160,6 +163,7 @@ function ThreadNavigationSidebarPane(
   const threads = useNavigationThreadShells();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
+  const searchFocus = useThreadFindFocusBlocker(props.visible);
   const searchInputRef = useRef<TextInputInstance>(null);
   const searchBarRef = useRef<SearchBarCommands>(null);
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
@@ -865,6 +869,8 @@ function ThreadNavigationSidebarPane(
             }),
             headerSearchBarOptions: {
               ref: searchBarRef,
+              onFocus: searchFocus.onFocus,
+              onBlur: searchFocus.onBlur,
               autoCapitalize: "none",
               hideNavigationBar: false,
               // Keep the search bar pinned under the title — UIKit's default
@@ -989,6 +995,8 @@ function ThreadNavigationSidebarPane(
       {Platform.OS === "android" ? (
         <MaterialThreadListToolbar
           sidebar
+          onSearchFocus={searchFocus.onFocus}
+          onSearchBlur={searchFocus.onBlur}
           onLayout={handleStickyHeaderLayout}
           searchQuery={props.searchQuery}
           onSearchQueryChange={props.onSearchQueryChange}
@@ -1039,6 +1047,8 @@ function ThreadNavigationSidebarPane(
             <TextInput
               ref={searchInputRef}
               accessibilityLabel="Search threads"
+              onFocus={searchFocus.onFocus}
+              onBlur={searchFocus.onBlur}
               autoCapitalize="none"
               autoCorrect={false}
               clearButtonMode="while-editing"

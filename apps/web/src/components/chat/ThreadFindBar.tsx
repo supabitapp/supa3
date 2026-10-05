@@ -21,8 +21,9 @@ export function ThreadFindBar(props: {
   readonly settledRunId: string | null;
   readonly onNavigate: (match: OrchestrationThreadMessageSearchMatch | null, query: string) => void;
   readonly onClose: () => void;
+  readonly onInvalidate: () => void;
 }) {
-  const { focusRequest, onNavigate, settledRunId } = props;
+  const { focusRequest, onNavigate, settledRunId, onInvalidate } = props;
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState({ query: "", index: 0 });
   const normalizedQuery = query.trim();
@@ -43,11 +44,18 @@ export function ThreadFindBar(props: {
   const result = useEnvironmentQuery(atom);
   const previousSettledRun = useRef(settledRunId);
   const refresh = result.refresh;
+  const refreshResults = () => {
+    onInvalidate();
+    refresh();
+  };
   useEffect(() => {
     if (previousSettledRun.current === settledRunId) return;
     previousSettledRun.current = settledRunId;
-    if (settledRunId !== null) refresh();
-  }, [refresh, settledRunId]);
+    if (settledRunId !== null) {
+      onInvalidate();
+      refresh();
+    }
+  }, [onInvalidate, refresh, settledRunId]);
   const match = result.data?.matches.find((candidate) => candidate.index === index) ?? null;
   const inputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -133,7 +141,7 @@ export function ThreadFindBar(props: {
           size="icon-xs"
           aria-label="Refresh thread search"
           disabled={readyQuery.length === 0 || pending}
-          onClick={result.refresh}
+          onClick={refreshResults}
         >
           <RefreshCwIcon />
         </Button>

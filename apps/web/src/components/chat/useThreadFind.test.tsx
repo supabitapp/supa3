@@ -7,7 +7,8 @@ import {
 import { act } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { makeThreadProjectionFixture } from "../../test-fixtures";
+import { makeThreadProjectionFixture, makeStreamingTimelineFixture } from "../../test-fixtures";
+import { threadSearchWindowContainsMatch } from "@supacode/client-runtime/state/thread-search";
 import { useThreadFind } from "./useThreadFind";
 
 type LoadedWindow = {
@@ -17,7 +18,7 @@ type LoadedWindow = {
 const mocks = vi.hoisted(() => ({
   loadAround: vi.fn<() => Promise<LoadedWindow>>(),
   onClose: vi.fn(),
-  onManualNavigation: vi.fn(),
+  onManualNavigation: vi.fn<() => void | (() => void)>(),
 }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { loadAroundHistory: {} } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => mocks.loadAround }));
@@ -55,7 +56,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.loadAround.mockReset();
   mocks.onClose.mockClear();
-  mocks.onManualNavigation.mockClear();
+  mocks.onManualNavigation.mockReset();
   act(() => {
     renderer = create(
       <Probe
@@ -73,6 +74,57 @@ afterEach(() => {
 });
 
 describe("current-thread find history window", () => {
+  it("reuses an unloaded message window across typing and occurrences, and invalidates it on refresh", async () => {
+    const row = makeStreamingTimelineFixture("needle needle").visibleTurnItems.at(-1)!;
+    const projection = {
+      ...makeThreadProjectionFixture(),
+      visibleTurnItems: [{ ...row, sourceThreadId: match.threadId, sourceItemId: match.itemId }],
+    };
+    mocks.loadAround.mockResolvedValue({ _tag: "Success", value: { _tag: "loaded", projection } });
+    act(() => current.open());
+    await act(async () => current.navigate(match, "n"));
+    await act(async () => current.navigate(match, "ne"));
+    await act(async () =>
+      current.navigate(
+        { ...match, index: 1, start: 7, end: 13, snippet: "needle needle" },
+        "needle",
+      ),
+    );
+    expect(mocks.loadAround).toHaveBeenCalledTimes(1);
+    expect(current.request?.projection).toBe(projection);
+    act(() => current.invalidateWindow());
+    await act(async () => current.navigate(match, "needle"));
+    expect(mocks.loadAround).toHaveBeenCalledTimes(2);
+    expect(
+      threadSearchWindowContainsMatch(projection.visibleTurnItems, {
+        ...match,
+        snippet: "newer persisted text",
+      }),
+    ).toBe(false);
+    await act(async () => current.navigate({ ...match, snippet: "newer persisted text" }, "newer"));
+    expect(mocks.loadAround).toHaveBeenCalledTimes(3);
+  });
+  it("restores the original live-follow state after navigating between matches", async () => {
+    let following = true;
+    mocks.onManualNavigation.mockImplementation(() => {
+      const previous = following;
+      following = false;
+      return () => {
+        following = previous;
+      };
+    });
+    mocks.loadAround.mockResolvedValue({
+      _tag: "Success",
+      value: { _tag: "loaded", projection: makeThreadProjectionFixture() },
+    });
+    act(() => current.open());
+    await act(async () => current.navigate(match, "needle"));
+    expect(following).toBe(false);
+    await act(async () => current.navigate({ ...match, index: 1 }, "needle"));
+    act(() => current.close());
+    expect(following).toBe(true);
+    expect(current.request).toBeNull();
+  });
   it("shows the isolated result window and returns to recent history on close", async () => {
     const projection = makeThreadProjectionFixture();
     mocks.loadAround.mockResolvedValue({ _tag: "Success", value: { _tag: "loaded", projection } });
@@ -103,6 +155,25 @@ describe("current-thread find history window", () => {
       }),
     );
     expect(current.isOpen).toBe(false);
+    expect(current.request).toBeNull();
+  });
+
+  it("cannot refill the window cache with a load that started before refresh", async () => {
+    let finish!: (value: LoadedWindow) => void;
+    mocks.loadAround.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    act(() => current.open());
+    act(() => current.navigate(match, "needle"));
+    act(() => current.invalidateWindow());
+    await act(async () =>
+      finish({
+        _tag: "Success",
+        value: { _tag: "loaded", projection: makeThreadProjectionFixture() },
+      }),
+    );
     expect(current.request).toBeNull();
   });
 });

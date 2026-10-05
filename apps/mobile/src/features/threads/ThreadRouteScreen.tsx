@@ -5,11 +5,15 @@ import { worktreeSetupAgentStarted } from "@supacode/client-runtime/worktree-set
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ScreenHeaderButton } from "../../components/ScreenHeaderButton";
 import type { ScreenHeaderAction } from "../../components/ScreenHeader.types";
-import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
+import {
+  takeThreadFindOnFocus,
+  useHardwareKeyboardCommand,
+} from "../keyboard/hardwareKeyboardCommands";
 import { useThreadHeaderOptions } from "./useThreadHeaderOptions";
 import {
   StackActions,
   useFocusEffect,
+  useIsFocused,
   useNavigation,
   type StaticScreenProps,
 } from "@react-navigation/native";
@@ -360,7 +364,30 @@ function ThreadRouteContent(
       request: current.threadId === selectedFindThreadId ? current.request + 1 : 1,
     }));
   }, [selectedFindThreadId]);
-  useHardwareKeyboardCommand("threadFind", openFindInThread);
+  const routeFocused = useIsFocused();
+  useHardwareKeyboardCommand(
+    "threadFind",
+    openFindInThread,
+    routeFocused && props.renderInspector === undefined,
+  );
+  const selectedFindEnvironmentId = selectedThread?.environmentId ?? null;
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        props.renderInspector !== undefined ||
+        selectedFindEnvironmentId === null ||
+        selectedFindThreadId === null
+      )
+        return;
+      if (
+        takeThreadFindOnFocus({
+          environmentId: selectedFindEnvironmentId,
+          threadId: selectedFindThreadId,
+        })
+      )
+        openFindInThread();
+    }, [props.renderInspector, selectedFindEnvironmentId, selectedFindThreadId, openFindInThread]),
+  );
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const mergeBackTargetThreadId = resolveMergeBackTargetThreadId(selectedThreadDetail);
   const mergeBackRun =

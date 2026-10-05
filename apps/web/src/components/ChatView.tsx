@@ -7683,6 +7683,17 @@ export default function ChatView(props: ChatViewProps) {
   const revealFindChat = useCallback(() => {
     if (rightPanelMaximized) toggleRightPanelMaximized();
   }, [rightPanelMaximized, toggleRightPanelMaximized]);
+  const suspendTimelineForFind = useCallback(() => {
+    const wasFollowingLive = timelineScrollModeRef.current !== "free-scrolling";
+    cancelTimelineLiveFollowForUserNavigation();
+    return () => {
+      if (!wasFollowingLive) return;
+      isAtEndRef.current = true;
+      timelineScrollModeRef.current = "following-end";
+      liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
+      setTimelineLiveFollowEnabled(true);
+    };
+  }, [cancelTimelineLiveFollowForUserNavigation]);
   const {
     isOpen: threadFindOpen,
     focusRequest: threadFindFocusRequest,
@@ -7690,11 +7701,12 @@ export default function ChatView(props: ChatViewProps) {
     open: openActiveThreadFind,
     close: closeActiveThreadFind,
     navigate: navigateThreadFind,
+    invalidateWindow: invalidateThreadFindWindow,
   } = useThreadFind({
     threadKey: activeThreadKey,
     threadRef: activeThreadRef,
     isServerThread,
-    onManualNavigation: cancelTimelineLiveFollowForUserNavigation,
+    onManualNavigation: suspendTimelineForFind,
     onOpen: revealFindChat,
     onClose: focusComposer,
   });
@@ -7705,6 +7717,7 @@ export default function ChatView(props: ChatViewProps) {
         ? null
         : deriveTimelineEntriesFromVisibleTurnItems({
             visibleTurnItems: threadFindRequest.projection.visibleTurnItems,
+            revealMessageItemId: threadFindRequest.match.itemId,
             optimisticMessages: [],
             attachmentUrlById: timelineAttachmentUrlById,
             attempts: threadFindRequest.projection.attempts,
@@ -11111,6 +11124,7 @@ export default function ChatView(props: ChatViewProps) {
                   settledRunId={latestRunSettled ? (activeActivityRun?.runId ?? null) : null}
                   onNavigate={navigateThreadFind}
                   onClose={closeActiveThreadFind}
+                  onInvalidate={invalidateThreadFindWindow}
                 />
               ) : null}
               {/* Messages — LegendList handles virtualization and scrolling internally */}

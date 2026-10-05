@@ -10,7 +10,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
-import { isThreadFindTarget, type ThreadFindTarget } from "./thread-find-target";
+import { isThreadFindTarget, threadFindReveal, type ThreadFindTarget } from "./thread-find-target";
 import { resolveUserMessagePresentation } from "@supacode/client-runtime/user-message";
 import { repairMarkdownFileLinks } from "@supacode/client-runtime/repair-markdown-file-links";
 import { canForkProjectedAssistantItem } from "@supacode/client-runtime/state/thread-workflows";
@@ -2245,7 +2245,25 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     expandedWorkRows: {},
     expandedTurnIds: new Set(),
   });
-  const { copiedRowId, expandedWorkGroups, expandedWorkRows, expandedTurnIds } = interactionState;
+  const {
+    copiedRowId,
+    expandedWorkGroups,
+    expandedWorkRows: manuallyExpandedWorkRows,
+    expandedTurnIds,
+  } = interactionState;
+  const findReveal = useMemo(
+    () => threadFindReveal(props.feed, props.findTarget),
+    [props.feed, props.findTarget],
+  );
+  const findRunId = findReveal?.runId ?? null;
+  const findActivityId = findReveal?.activityId ?? null;
+  const expandedWorkRows = useMemo(
+    () =>
+      findActivityId === null
+        ? manuallyExpandedWorkRows
+        : { ...manuallyExpandedWorkRows, [findActivityId]: true },
+    [findActivityId, manuallyExpandedWorkRows],
+  );
   const [expandedFile, setExpandedFile] = useState<FilePreviewSource | null>(null);
   const [expandedVideo, setExpandedVideo] = useState<VideoPreviewSource | null>(null);
   const fileShareSourceIdentifier = useId();
@@ -2697,8 +2715,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     reportHeaderMaterialVisibility(false);
   }, [feedThreadKey, reportHeaderMaterialVisibility]);
 
-  const findMessage = props.feed.find((entry) => isThreadFindTarget(entry, props.findTarget));
-  const findRunId = findMessage?.type === "message" ? findMessage.message.runId : null;
   const presentedFeed = useMemo(
     () =>
       appendPendingThreadMessages(
@@ -2713,6 +2729,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           ),
           props.activeWorkStartedAt,
           props.runlessWorkActive ?? false,
+          findActivityId,
         ),
         props.feed,
         props.queuedMessages,
@@ -2720,6 +2737,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     [
       props.queuedMessages,
       findRunId,
+      findActivityId,
       expandedTurnIds,
       expandedWorkGroups,
       props.activeWorkStartedAt,

@@ -541,6 +541,7 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
  */
 export interface TimelineEntriesInput {
   readonly visibleTurnItems: ReadonlyArray<OrchestrationV2ProjectedTurnItem>;
+  readonly revealMessageItemId?: OrchestrationV2TurnItem["id"];
   readonly optimisticMessages: ReadonlyArray<ChatMessage>;
   readonly anchoredMessages?: ReadonlyArray<ChatMessage>;
   readonly attachmentUrlById?: ReadonlyMap<string, string>;
@@ -594,7 +595,12 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
     if (turnItemIsWorkspacePreparation(item)) continue;
     // Task progress belongs in the composer, not between conversation entries.
     if (item.type === "todo_list" || item.type === "checkpoint") continue;
-    if (item.type === "user_message" && foldedAnswerMessageIds.has(item.messageId)) continue;
+    if (
+      item.type === "user_message" &&
+      foldedAnswerMessageIds.has(item.messageId) &&
+      item.id !== input.revealMessageItemId
+    )
+      continue;
     const createdAt = projectedItemCreatedAt(row);
     const attempt = resolveAttempt(item);
     const attemptMetadata = attempt === undefined ? {} : { attempt };
@@ -871,7 +877,8 @@ function reuseTimelineEntries(
     !shallow(input.attachmentUrlById, before.attachmentUrlById) ||
     !shallow(input.attempts, before.attempts) ||
     !shallow(input.nodes, before.nodes) ||
-    !shallow(input.plans, before.plans)
+    !shallow(input.plans, before.plans) ||
+    input.revealMessageItemId !== before.revealMessageItemId
   ) {
     return null;
   }
