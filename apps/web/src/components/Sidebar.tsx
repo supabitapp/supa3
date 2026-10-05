@@ -711,28 +711,39 @@ const SIDEBAR_DRAG_DISTANCE = 6;
 
 type SidebarSweepAction = "settle" | "unsettle" | "unsnooze";
 
-// Zero-height markers reserve no label space at rest. During a drag the
-// sorting strategy opens 24px for a 16px label with 4px clearance on each side.
-const SIDEBAR_DRAG_LABEL_HEIGHT = 24;
+// Visible sections reserve a 16px label with 4px clearance on each side.
+// Empty pin targets open the same space only during a drag.
+const SIDEBAR_BOUNDARY_LABEL_HEIGHT = 24;
 
 function SidebarDragBoundary(props: {
   marker: "pinned-header" | "pinned-divider";
   label: string;
-  visible: boolean;
+  visibleAtRest: boolean;
+  dragging: boolean;
   isDropTarget: boolean;
 }) {
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className="pointer-events-none relative mx-0.5 -mb-px h-0"
+      className={cn(
+        "pointer-events-none relative mx-0.5",
+        props.visibleAtRest ? "h-6" : "-mb-px h-0",
+      )}
     >
-      {props.visible ? (
-        <div className="sidebar-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2">
+      {props.visibleAtRest || props.dragging ? (
+        <div
+          data-drag-reveal={props.dragging && !props.visibleAtRest ? "" : undefined}
+          className="sidebar-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2"
+        >
           <span
             className={cn(
               "shrink-0 text-xs font-medium",
-              props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
+              props.isDropTarget
+                ? "text-primary"
+                : props.dragging
+                  ? "text-sidebar-foreground/80"
+                  : "text-sidebar-muted-foreground/55",
             )}
           >
             {props.label}
@@ -741,7 +752,7 @@ function SidebarDragBoundary(props: {
             aria-hidden
             className={cn(
               "h-px flex-1",
-              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
+              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-border",
             )}
           />
         </div>
@@ -3535,7 +3546,7 @@ export default function Sidebar() {
         const listRect = list.getBoundingClientRect();
         const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
         dragLabelOffsetRef.current =
-          header.getBoundingClientRect().top - listRect.top + SIDEBAR_DRAG_LABEL_HEIGHT * scale;
+          header.getBoundingClientRect().top - listRect.top + SIDEBAR_BOUNDARY_LABEL_HEIGHT * scale;
       } else {
         dragLabelOffsetRef.current = 0;
       }
@@ -3696,7 +3707,7 @@ export default function Sidebar() {
       createSidebarSortingStrategy({
         items: sidebarListItems,
         enabled: !isContextDrag,
-        boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
+        boundaryLabelHeight: SIDEBAR_BOUNDARY_LABEL_HEIGHT,
         settledOrder: draggedSettledOrder,
         ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
         settledExpanded: settledShelfExpanded,
@@ -5009,7 +5020,8 @@ export default function Sidebar() {
                               key="pinned-header"
                               marker="pinned-header"
                               label="Pinned"
-                              visible={from !== null}
+                              visibleAtRest={pinnedThreads.length > 0}
+                              dragging={from !== null}
                               isDropTarget={dragTargetSection === "pinned"}
                             />,
                           );
@@ -5020,7 +5032,8 @@ export default function Sidebar() {
                               key="pinned-divider"
                               marker="pinned-divider"
                               label="Active"
-                              visible={from !== null}
+                              visibleAtRest={pinnedThreads.length > 0 && activeThreads.length > 0}
+                              dragging={from !== null}
                               isDropTarget={dragTargetSection === "active"}
                             />,
                           );

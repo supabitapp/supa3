@@ -334,6 +334,12 @@ export interface ThreadListV2PendingListItem {
   readonly showTrailingDivider: boolean;
 }
 
+export interface ThreadListV2SectionListItem {
+  readonly type: "v2-section";
+  readonly key: "v2-pinned-header" | "v2-active-header";
+  readonly label: "Pinned" | "Active";
+}
+
 export interface ThreadListV2WorkingShelfListItem {
   readonly type: "v2-working-shelf";
   readonly key: "v2-working-shelf";
@@ -367,6 +373,7 @@ export interface ThreadListV2SettledShelfListItem {
 export type ThreadListV2ListItem =
   | ThreadListV2ThreadListItem
   | ThreadListV2PendingListItem
+  | ThreadListV2SectionListItem
   | ThreadListV2WorkingShelfListItem
   | ThreadListV2SnoozedShelfListItem
   | ThreadListV2SettledShelfListItem;
@@ -379,6 +386,7 @@ export function isThreadListV2ListItem(value: {
   return (
     value.type === "v2-thread" ||
     value.type === "v2-pending" ||
+    value.type === "v2-section" ||
     value.type === "v2-working-shelf" ||
     value.type === "v2-snoozed-shelf" ||
     value.type === "v2-settled-shelf"
@@ -426,6 +434,10 @@ export function threadListV2ListItemsAreEqual(
         previous.expanded === item.expanded &&
         previous.disabled === item.disabled
       );
+    case "v2-section":
+      return (
+        previous.type === "v2-section" && previous.key === item.key && previous.label === item.label
+      );
     case "v2-snoozed-shelf":
       return (
         previous.type === "v2-snoozed-shelf" &&
@@ -466,7 +478,7 @@ function resolveThreadListV2ItemTimeLabel(
 }
 
 /**
- * Builds the shared mobile order: active → pending → working shelf (beta) →
+ * Builds the shared mobile order: pinned → active → pending → working shelf (beta) →
  * snoozed shelf → settled. Pending tasks are waiting rather than asking, and
  * busy or parked work remains reachable without competing with either the
  * inbox or settled history.
@@ -540,7 +552,17 @@ export function buildThreadListV2ListItems(input: {
   const snoozedEnd = settledShelfHeaderIndex ?? threadItems.length;
   const workingEnd = snoozedShelfHeaderIndex ?? snoozedEnd;
   const activeEnd = workingShelfHeaderIndex ?? workingEnd;
-  const result: ThreadListV2ListItem[] = [...threadItems.slice(0, activeEnd), ...pendingItems];
+  const pinnedCount = input.items.findIndex((item) => !item.pinned);
+  const pinnedEnd = pinnedCount < 0 ? input.items.length : pinnedCount;
+  const result: ThreadListV2ListItem[] = [];
+  if (pinnedEnd > 0) {
+    result.push({ type: "v2-section", key: "v2-pinned-header", label: "Pinned" });
+    result.push(...threadItems.slice(0, pinnedEnd));
+    if (activeEnd > pinnedEnd) {
+      result.push({ type: "v2-section", key: "v2-active-header", label: "Active" });
+    }
+  }
+  result.push(...threadItems.slice(pinnedEnd, activeEnd), ...pendingItems);
   const shelfDisabled = input.shelfPreferencesLoading === true;
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({

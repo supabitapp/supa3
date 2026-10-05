@@ -1650,6 +1650,137 @@ function itemsByThreadKey(items: ReadonlyArray<ThreadListV2ListItem>) {
   return byKey;
 }
 
+describe("buildThreadListV2ListItems pinned sections", () => {
+  const pinned = makeThread({
+    id: ThreadId.make("section-pin"),
+    title: "Pinned work",
+    pinnedAt: NOW,
+    pinOrderKey: "bb",
+    activeOrderKey: "bb",
+  });
+  const active = makeThread({
+    id: ThreadId.make("section-active"),
+    title: "Active work",
+    activeOrderKey: "dd",
+  });
+  const queued = makePendingTask("section-queued");
+  const build = (
+    threads: ReadonlyArray<EnvironmentThreadShell>,
+    options: Partial<Parameters<typeof buildThreadListV2Items>[0]> = {},
+    pendingTasks: ReadonlyArray<PendingNewTask> = [],
+  ) => {
+    const layout = buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      ...options,
+    });
+    return buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks,
+      workingCount: layout.workingCount,
+      workingShelfHeaderIndex: layout.workingShelfHeaderIndex,
+      snoozedCount: layout.snoozedCount,
+      snoozedShelfHeaderIndex: layout.snoozedShelfHeaderIndex,
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+      snoozeLabelNow: NOW,
+    });
+  };
+  const order = (items: ReadonlyArray<ThreadListV2ListItem>) =>
+    items.map((item) =>
+      item.type === "v2-thread"
+        ? item.item.thread.id
+        : item.type === "v2-section"
+          ? item.label
+          : item.type,
+    );
+
+  it("separates pins from active rows without a duplicate trailing hairline", () => {
+    const secondPin = { ...pinned, id: ThreadId.make("section-pin-2"), pinOrderKey: "zz" };
+    const items = build([active, pinned, secondPin], {}, [queued]);
+    expect(order(items)).toEqual([
+      "Pinned",
+      "section-pin",
+      "section-pin-2",
+      "Active",
+      "section-active",
+      "v2-pending",
+    ]);
+    const rows = items.filter((item) => item.type === "v2-thread");
+    expect(rows.map((item) => item.showTrailingDivider)).toEqual([true, false, false]);
+    expect(items.at(-1)).toMatchObject({ type: "v2-pending", showPendingDivider: true });
+  });
+
+  it("uses the existing shelf and pending separators when there are no active rows", () => {
+    const working = { ...active, runtime: runningRuntime() };
+    const settled = {
+      ...active,
+      id: ThreadId.make("section-settled"),
+      settledOverride: "settled" as const,
+      settledAt: NOW,
+    };
+    expect(
+      order(build([pinned, working, settled], { workingShelfEnabled: true }, [queued])),
+    ).toEqual([
+      "Pinned",
+      "section-pin",
+      "v2-pending",
+      "v2-working-shelf",
+      "v2-settled-shelf",
+      "section-settled",
+    ]);
+    expect(order(build([pinned]))).toEqual(["Pinned", "section-pin"]);
+  });
+
+  it("hides pin labels when filters hide the pinned rows", () => {
+    expect(order(build([pinned, active], { searchQuery: "Active" }))).toEqual(["section-active"]);
+    expect(order(build([pinned], { searchQuery: "missing" }))).toEqual([]);
+    expect(order(build([], {}, [queued]))).toEqual(["v2-pending"]);
+  });
+
+  it("removes the labels after the last pin is unpinned and refreshes its divider", () => {
+    const before = build([pinned, active]);
+    const after = build([{ ...pinned, pinnedAt: null }, active]);
+    expect(after.some((item) => item.type === "v2-section")).toBe(false);
+    const priorPin = before.find((item) => item.key === `v2-thread:${environmentId}:section-pin`)!;
+    const unpinned = after.find((item) => item.key === priorPin.key)!;
+    expect(priorPin.type === "v2-thread" && priorPin.showTrailingDivider).toBe(false);
+    expect(unpinned.type === "v2-thread" && unpinned.showTrailingDivider).toBe(true);
+    expect(threadListV2ListItemsAreEqual(priorPin, unpinned)).toBe(false);
+  });
+
+  it("excludes settled or snoozed pins, then restores the section on wake", () => {
+    const settled = { ...pinned, settledOverride: "settled" as const, settledAt: NOW };
+    const snoozed = { ...pinned, snoozedAt: NOW, snoozedUntil: isoAt(BASE_MS + MINUTE_MS) };
+    for (const thread of [settled, snoozed]) {
+      expect(build([thread, active]).some((item) => item.type === "v2-section")).toBe(false);
+    }
+    expect(order(build([snoozed, active], { now: isoAt(BASE_MS + MINUTE_MS) }))).toEqual([
+      "Pinned",
+      "section-pin",
+      "Active",
+      "section-active",
+    ]);
+  });
+
+  it("keeps section cells stable across rebuilds and updates recycled labels", () => {
+    const before = build([pinned, active]);
+    const after = build([pinned, active]);
+    const headers = before.filter((item) => item.type === "v2-section");
+    for (const header of headers) {
+      expect(
+        threadListV2ListItemsAreEqual(
+          header,
+          after.find((item) => item.key === header.key)!,
+        ),
+      ).toBe(true);
+    }
+    expect(threadListV2ListItemsAreEqual(headers[0]!, headers[1]!)).toBe(false);
+  });
+});
+
 describe("threadListV2ListItemsAreEqual", () => {
   const thread = makeThread({
     id: ThreadId.make("eq"),
@@ -1805,6 +1936,7 @@ describe("threadListV2ListItemsAreEqual", () => {
 
 describe("isThreadListV2ListItem", () => {
   it("narrows the v2 kinds and rejects the legacy discriminators", () => {
+    expect(isThreadListV2ListItem({ type: "v2-section" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-thread" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-pending" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-snoozed-shelf" })).toBe(true);

@@ -58,6 +58,7 @@ import { SidebarNavigationShell } from "./sidebar-navigation-shell";
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  ThreadListV2SectionDivider,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -713,6 +714,8 @@ function ThreadNavigationSidebarPane(
             />
           );
         }
+        case "v2-section":
+          return <ThreadListV2SectionDivider label={item.label} pane="sidebar" />;
         case "v2-working-shelf":
           return (
             <ThreadListV2WorkingShelfHeader

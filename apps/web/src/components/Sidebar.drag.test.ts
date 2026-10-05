@@ -32,15 +32,18 @@ function layout(
   over: string,
   scale = 1,
   cardHeight = 82,
+  boundaryHeights: { header: number; divider: number } = { header: 0, divider: 0 },
 ) {
   let top = 100;
   const rects = items.map((item) => {
     const height =
       item.kind === "thread"
         ? (item.section === "pinned" || item.section === "active" ? cardHeight : 36) * scale
-        : item.marker === "pinned-header" || item.marker === "pinned-divider"
-          ? 0
-          : (item.marker.endsWith("placeholder") ? 0 : 32) * scale;
+        : item.marker === "pinned-header"
+          ? boundaryHeights.header * scale
+          : item.marker === "pinned-divider"
+            ? boundaryHeights.divider * scale
+            : (item.marker.endsWith("placeholder") ? 0 : 32) * scale;
     const rect = { top, height, bottom: top + height, left: 0, right: 260, width: 260 };
     top += height + 1;
     return rect;
@@ -253,6 +256,66 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
+  it.each([1, 2])("keeps visible pinned labels in their measured space at scale %s", (scale) => {
+    const items = [
+      pinnedHeader,
+      thread("p", "pinned"),
+      divider,
+      thread("a1", "active"),
+      thread("a2", "active"),
+      settledHeader,
+      thread("s", "settled"),
+    ];
+    const strategy = createSidebarSortingStrategy({
+      items,
+      settledOrder: ["s"],
+      settledExpanded: true,
+      boundaryLabelHeight: 24,
+    });
+    const args = layout(items, "a2", "a1", scale, 82, { header: 24, divider: 24 });
+    const result = items.map((_, index) => strategy({ ...args, index }));
+    // Pickup adds no second gap above either section. Only the reordered
+    // neighbour moves, by one measured card plus the list's 1px gap.
+    for (const index of [0, 1, 2, 4, 5, 6]) expect(result[index]).toEqual(stationary);
+    expect(result[3]?.y).toBe(82 * scale + 1);
+  });
+
+  it("keeps a visible Pinned header while opening an empty Active target", () => {
+    const items = [
+      pinnedHeader,
+      thread("p", "pinned"),
+      divider,
+      marker("active-placeholder"),
+      settledHeader,
+      thread("s", "settled"),
+    ];
+    const strategy = createSidebarSortingStrategy({
+      items,
+      settledOrder: ["s"],
+      settledExpanded: true,
+      boundaryLabelHeight: 24,
+    });
+    const args = layout(items, "p", "p", 1, 82, { header: 24, divider: 0 });
+    expect(strategy({ ...args, index: 0 })).toEqual(stationary);
+    expect(strategy({ ...args, index: 2 })).toEqual(stationary);
+    expect(strategy({ ...args, index: 3 })?.y).toBe(24);
+    expect(strategy({ ...args, index: 4 })?.y).toBe(24 + 36);
+  });
+
+  it("preserves measured boundary height when the drag label needs less space", () => {
+    const items = [pinnedHeader, thread("p", "pinned"), divider, thread("a", "active")];
+    const strategy = createSidebarSortingStrategy({
+      items,
+      settledOrder: [],
+      settledExpanded: true,
+      boundaryLabelHeight: 16,
+    });
+    const args = layout(items, "a", "a", 1, 82, { header: 24, divider: 24 });
+    for (const [index] of items.entries()) {
+      expect(strategy({ ...args, index })).toEqual(stationary);
+    }
+  });
+
   it.each([
     ["a2", "a1"],
     ["p", "a1"],
