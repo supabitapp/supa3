@@ -1247,6 +1247,63 @@ describe("plus key parsing", () => {
 });
 
 describe("composer and pull request shortcuts", () => {
+  it.each(["MacIntel", "Win32", "Linux"])(
+    "opens pull requests on %s without taking terminal or browser shortcuts",
+    (platform) => {
+      const input = event({
+        key: platform === "MacIntel" ? "ø" : "o",
+        code: "KeyO",
+        metaKey: platform === "MacIntel",
+        ctrlKey: platform !== "MacIntel",
+        altKey: true,
+      });
+      assert.strictEqual(
+        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+        "pullRequest.openInBrowser",
+      );
+      for (const context of [{ terminalFocus: true }, { previewFocus: true }]) {
+        assert.isNull(
+          resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, { platform, context }),
+        );
+      }
+    },
+  );
+
+  it("keeps a remapped browser shortcut when merging older server bindings", () => {
+    const olderServerBindings = DEFAULT_RESOLVED_KEYBINDINGS.filter(
+      (binding) => binding.command !== "pullRequest.openInBrowser",
+    );
+    const bindings = mergeWithDefaultKeybindings([
+      ...olderServerBindings,
+      ...compileResolvedKeybindingsConfig([
+        { key: "mod+shift+9", command: "pullRequest.openInBrowser", when: "!terminalFocus" },
+      ]),
+    ]);
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "9", metaKey: true, shiftKey: true }), bindings, {
+        platform: "MacIntel",
+      }),
+      "pullRequest.openInBrowser",
+    );
+    assert.isNull(
+      resolveShortcutCommand(event({ key: "o", metaKey: true, altKey: true }), bindings, {
+        platform: "MacIntel",
+      }),
+    );
+    assert.strictEqual(
+      shortcutLabelForCommand(bindings, "pullRequest.openInBrowser", "MacIntel"),
+      "⇧⌘9",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "o", metaKey: true, altKey: true }),
+        mergeWithDefaultKeybindings(olderServerBindings),
+        { platform: "MacIntel" },
+      ),
+      "pullRequest.openInBrowser",
+    );
+  });
+
   it("fills missing number shortcuts without replacing the saved URL binding", () => {
     const olderServerBindings = DEFAULT_RESOLVED_KEYBINDINGS.filter(
       (binding) =>

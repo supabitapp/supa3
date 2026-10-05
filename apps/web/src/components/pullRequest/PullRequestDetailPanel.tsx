@@ -113,6 +113,7 @@ import { DiffPanelLoadingState } from "../DiffPanelShell";
 import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import type { PullRequestAgentSelectionInput } from "./PullRequestCodeTab";
 import { openOnHostLabel, showPullRequestLinkContextMenu } from "./pullRequestLinkContextMenu";
+import { useOpenPullRequestHostLink } from "./useOpenPullRequestHostLink";
 import { PullRequestMarkdownContext } from "./PullRequestMarkdown";
 import { PullRequestComposer } from "./PullRequestComposer";
 import { PullRequestSummaryTab } from "./PullRequestSummaryTab";
@@ -488,6 +489,7 @@ export function PullRequestDetailPanel({
    */
   onBack?: (() => void) | undefined;
 }) {
+  const openHostLink = useOpenPullRequestHostLink(threadRef);
   const environmentConfigs = useServerConfigs();
   const projects = useProjects();
   const project = projects.find(
@@ -724,6 +726,10 @@ export function PullRequestDetailPanel({
     [activity, coreDetail],
   );
   const handoffSummary = detail ?? sharedSummary;
+  const pullRequestBrowserUrl =
+    detail?.url ??
+    matchingListEntry?.url ??
+    gitHubPullRequestBrowserUrl(repositoryIdentity, reference.repository, reference.number);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { copyToClipboard: copyReference } = useCopyToClipboard<string>({
     target: "pull request reference",
@@ -735,18 +741,25 @@ export function PullRequestDetailPanel({
         description: error.message,
       }),
   });
-  const copyFromShortcut = useEffectEvent((event: KeyboardEvent) => {
+  const handlePanelShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (!shortcutsEnabled || event.defaultPrevented || isCommandPaletteOpen()) return;
     const command = resolveShortcutCommand(event, keybindings, {
       context: getShortcutContext(),
     });
+    if (command === "pullRequest.openInBrowser") {
+      if (!pullRequestBrowserUrl) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) void openHostLink(pullRequestBrowserUrl);
+      return;
+    }
     if (command !== "pullRequest.copyNumber") return;
     event.preventDefault();
     event.stopPropagation();
     if (!event.repeat) copyReference(`#${reference.number}`, "PR number");
   });
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => copyFromShortcut(event);
+    const onKeyDown = (event: KeyboardEvent) => handlePanelShortcut(event);
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
@@ -2210,9 +2223,12 @@ export function PullRequestDetailPanel({
                       ) : null}
                     </>
                   ) : null}
-                  <MenuItem onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}>
+                  <MenuItem onClick={(event) => void openHostLink(detail.url, { event })}>
                     <ArrowUpRightIcon className="size-3.5" />
                     {openOnHostLabel(detail.provider)}
+                    <MenuShortcut>
+                      {shortcutLabelForCommand(keybindings, "pullRequest.openInBrowser")}
+                    </MenuShortcut>
                   </MenuItem>
                   <MenuItem onClick={() => copyReference(detail.url, "PR link")}>
                     <LinkIcon className="size-3.5" />

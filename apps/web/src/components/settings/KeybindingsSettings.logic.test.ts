@@ -34,6 +34,7 @@ describe("KeybindingsSettings.logic", () => {
       "modelPicker.nextProvider",
       "thread.copyReference",
       "pullRequest.copyNumber",
+      "pullRequest.openInBrowser",
     ]) {
       expect(rows.find((row) => row.command === command)).toMatchObject({
         source: "Default",
@@ -47,6 +48,11 @@ describe("KeybindingsSettings.logic", () => {
         command: "thread.steerQueuedMessage",
         key: "mod+shift+enter",
       }),
+    );
+  });
+  it("finds the browser shortcut by its pull request label", () => {
+    expect(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "open in browser")).toContainEqual(
+      expect.objectContaining({ command: "pullRequest.openInBrowser", key: "mod+alt+o" }),
     );
   });
   it.each(["pu", "pull request", "copy link", "thread id"])(

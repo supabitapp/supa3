@@ -45,6 +45,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  ArrowUpRightIcon,
   CalendarClockIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
@@ -188,6 +189,7 @@ import { Checkbox } from "./ui/checkbox";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
+import { useOpenPullRequestHostLink } from "./pullRequest/useOpenPullRequestHostLink";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { searchSettings, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
@@ -768,6 +770,12 @@ function OpenCommandPaletteDialog(props: {
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
+  const openPullRequestHostLink = useOpenPullRequestHostLink(
+    pathname === "/pull-requests" ? null : referenceThreadRef,
+  );
+  const openActivePullRequestInBrowser = useCallback(async () => {
+    if (openPanelPullRequestUrl) await openPullRequestHostLink(openPanelPullRequestUrl);
+  }, [openPanelPullRequestUrl, openPullRequestHostLink]);
   const activeThreadServerConfig = useServerConfigs().get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
@@ -2004,6 +2012,19 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
+  if (openPanelPullRequestUrl) {
+    actionItems.push({
+      kind: "action",
+      value: "action:open-pull-request-in-browser",
+      searchTerms: ["open", "pull request", "merge request", "pr", "mr", "browser", "host"],
+      title: "Open pull request in browser",
+      description: openPanelPullRequestUrl,
+      icon: <ArrowUpRightIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "pullRequest.openInBrowser",
+      run: openActivePullRequestInBrowser,
+    });
+  }
+
   if (activeThreadReferenceCopyTarget !== null) {
     actionItems.push({
       kind: "action",
@@ -3138,6 +3159,13 @@ function OpenCommandPaletteDialog(props: {
       if (activeThreadReferenceCopyTarget === null) return;
       setOpen(false);
       void copyActiveThreadReference();
+      return;
+    }
+    if (command === "pullRequest.openInBrowser" && openPanelPullRequestUrl) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      if (!event.repeat) void openActivePullRequestInBrowser();
       return;
     }
 
