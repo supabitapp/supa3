@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
+import { isThreadFindTarget, type ThreadFindTarget } from "./thread-find-target";
 import { resolveUserMessagePresentation } from "@supacode/client-runtime/user-message";
 import { repairMarkdownFileLinks } from "@supacode/client-runtime/repair-markdown-file-links";
 import { canForkProjectedAssistantItem } from "@supacode/client-runtime/state/thread-workflows";
@@ -307,6 +308,8 @@ export interface ThreadFeedProps {
   readonly contentTopInset?: number;
   readonly contentBottomInset?: number;
   readonly historyControls?: ThreadFeedHistoryControls;
+  readonly findTarget?: ThreadFindTarget | null;
+  readonly findBarHeight?: number;
   readonly contentMaxWidth?: number;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
@@ -2527,6 +2530,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const listAppearanceData = useMemo(
     () => ({
       worktreeSetup: props.worktreeSetup,
+      findTarget: props.findTarget,
       setupWorkingStartedAt: props.setupWorkingStartedAt,
       dispatchingMessageId: props.dispatchingMessageId,
       unsettledTurnId,
@@ -2543,6 +2547,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     }),
     [
       props.worktreeSetup,
+      props.findTarget,
       props.setupWorkingStartedAt,
       props.dispatchingMessageId,
       unsettledTurnId,
@@ -2692,13 +2697,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     reportHeaderMaterialVisibility(false);
   }, [feedThreadKey, reportHeaderMaterialVisibility]);
 
+  const findMessage = props.feed.find((entry) => isThreadFindTarget(entry, props.findTarget));
+  const findRunId = findMessage?.type === "message" ? findMessage.message.runId : null;
   const presentedFeed = useMemo(
     () =>
       appendPendingThreadMessages(
         deriveThreadFeedPresentation(
           props.feed,
           props.latestRun,
-          expandedTurnIds,
+          findRunId === null ? expandedTurnIds : new Set([...expandedTurnIds, findRunId]),
           new Set(
             Object.entries(expandedWorkGroups)
               .filter(([, expanded]) => expanded)
@@ -2712,6 +2719,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       ),
     [
       props.queuedMessages,
+      findRunId,
       expandedTurnIds,
       expandedWorkGroups,
       props.activeWorkStartedAt,
@@ -2720,6 +2728,47 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.latestRun,
     ],
   );
+  const lastFindNavigationRef = useRef<string | null>(null);
+  const beforeFindViewRef = useRef<{ readonly offset: number; readonly follow: boolean } | null>(
+    null,
+  );
+  useEffect(() => {
+    const target = props.findTarget;
+    if (!target) {
+      lastFindNavigationRef.current = null;
+      const restore = beforeFindViewRef.current;
+      if (restore === null) return;
+      beforeFindViewRef.current = null;
+      setEndFollow(restore.follow);
+      const frame = requestAnimationFrame(() => {
+        if (restore.follow) listRef.current?.scrollToEnd({ animated: false });
+        else listRef.current?.scrollToOffset({ animated: false, offset: restore.offset });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    const index = presentedFeed.findIndex((entry) => isThreadFindTarget(entry, target));
+    const navigationKey = `${target.navigationKey}:${props.findBarHeight ?? 0}`;
+    if (index < 0 || lastFindNavigationRef.current === navigationKey) return;
+    if (beforeFindViewRef.current === null) {
+      beforeFindViewRef.current = {
+        offset: (listRef.current?.getState().scroll ?? 0) - (props.findBarHeight ?? 0),
+        follow: endFollowEnabledRef.current,
+      };
+    }
+    setEndFollow(false);
+    const frame = requestAnimationFrame(() => {
+      if (!listRef.current) return;
+      lastFindNavigationRef.current = navigationKey;
+      listRef.current.scrollToIndex({
+        index,
+        animated: false,
+        viewPosition: 0,
+        viewOffset: (props.findBarHeight ?? 0) + 12,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [presentedFeed, props.findTarget, props.findBarHeight, listRef, setEndFollow]);
+
   const setupAnchorIndex = presentedFeed.findIndex(
     (entry) => entry.type === "message" && entry.message.role === "user",
   );
@@ -3025,6 +3074,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       <Animated.View
         key={info.item.id}
         entering={disclosureToggleSettling ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION : undefined}
+        className={
+          isThreadFindTarget(info.item, props.findTarget)
+            ? "rounded-xl bg-thread-selected"
+            : undefined
+        }
       >
         <ThreadMediaVisibility>
           {renderFeedEntry(info, {
@@ -3073,6 +3127,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     ),
     [
       props.worktreeSetup,
+      props.findTarget,
       props.setupWorkingStartedAt,
       props.threadId,
       setupAnchorIndex,
@@ -3190,7 +3245,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             // Follow the measured end immediately. Animating toward an estimated
             // end races row measurement when a pending message is acknowledged.
             maintainScrollAtEnd={
-              disclosureToggleSettling || !endFollowEnabled
+              props.findTarget != null || disclosureToggleSettling || !endFollowEnabled
                 ? false
                 : {
                     animated: false,
@@ -3262,7 +3317,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               </>
             }
             contentContainerStyle={{
-              paddingTop: 12,
+              paddingTop: 12 + (props.findBarHeight ?? 0),
               paddingHorizontal: contentHorizontalPadding,
             }}
           />

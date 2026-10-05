@@ -61,6 +61,7 @@ const ACTION_ICONS: Record<string, AppSymbolName> = {
   terminal: "terminal",
   review: "arrow.triangle.pull",
   copyThreadReference: "link",
+  threadFind: "magnifyingglass",
 };
 
 function itemIcon(item: CommandPaletteItem): AppSymbolName {
@@ -285,6 +286,7 @@ export function CommandPalette(props: {
     }
     if (activeThreadRef) {
       const threadActions = [
+        ["threadFind", "Find in conversation", ["search", "chat", "messages"]],
         ["files", "Go to file", ["open", "files", "browse", "search"]],
         ["terminal", "Open terminal", ["shell", "console"]],
         ["review", "Review changes", ["diff", "git", "pull request"]],

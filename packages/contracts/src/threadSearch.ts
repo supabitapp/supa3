@@ -2,8 +2,10 @@ import * as Schema from "effect/Schema";
 
 import {
   IsoDateTime,
+  NonNegativeInt,
   ProjectId,
   ThreadId,
+  TurnItemId,
   TrimmedNonEmptyString,
   TrimmedString,
 } from "./baseSchemas.ts";
@@ -35,6 +37,44 @@ export type OrchestrationSearchThreadsResult = typeof OrchestrationSearchThreads
 
 export class OrchestrationSearchThreadsError extends Schema.TaggedError<OrchestrationSearchThreadsError>()(
   "OrchestrationSearchThreadsError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** Literal, case-insensitive occurrences in the current thread's visible history. */
+export const OrchestrationSearchThreadMessagesInput = Schema.Struct({
+  threadId: ThreadId,
+  query: TrimmedString.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
+  offset: Schema.optionalKey(NonNegativeInt),
+  limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 }))),
+});
+export type OrchestrationSearchThreadMessagesInput =
+  typeof OrchestrationSearchThreadMessagesInput.Type;
+
+export const OrchestrationThreadMessageSearchMatch = Schema.Struct({
+  index: NonNegativeInt,
+  threadId: ThreadId,
+  itemId: TurnItemId,
+  // UTF-16 offsets into the item's text (or a proposed plan's Markdown).
+  start: NonNegativeInt,
+  end: NonNegativeInt,
+  snippetStart: NonNegativeInt,
+  snippet: Schema.String.check(Schema.isMaxLength(240)),
+});
+export type OrchestrationThreadMessageSearchMatch =
+  typeof OrchestrationThreadMessageSearchMatch.Type;
+
+export const OrchestrationSearchThreadMessagesResult = Schema.Struct({
+  totalMatches: NonNegativeInt,
+  matches: Schema.Array(OrchestrationThreadMessageSearchMatch).check(Schema.isMaxLength(50)),
+});
+export type OrchestrationSearchThreadMessagesResult =
+  typeof OrchestrationSearchThreadMessagesResult.Type;
+
+export class OrchestrationSearchThreadMessagesError extends Schema.TaggedError<OrchestrationSearchThreadMessagesError>()(
+  "OrchestrationSearchThreadMessagesError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

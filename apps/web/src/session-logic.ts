@@ -129,6 +129,7 @@ export type TimelineEntry = (
       readonly kind: "proposed-plan";
       readonly createdAt: string;
       readonly proposedPlan: ProposedPlan;
+      readonly projectedItem?: OrchestrationV2ProjectedTurnItem;
     }
   | {
       readonly id: string;
@@ -673,6 +674,7 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         kind: "proposed-plan",
         createdAt,
         proposedPlan,
+        projectedItem: row,
         ...attemptMetadata,
       });
       continue;

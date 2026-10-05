@@ -14,6 +14,8 @@ import {
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
   type ChatAttachment,
+  type OrchestrationSearchThreadMessagesInput,
+  type OrchestrationSearchThreadMessagesResult,
   CommandId,
   isProviderNativeSubagentThread,
   MessageId,
@@ -260,6 +262,9 @@ export interface OrchestratorV2Shape {
   readonly dispatch: (
     command: OrchestrationV2ServerCommand,
   ) => Effect.Effect<OrchestratorV2DispatchResult, OrchestratorV2Error>;
+  readonly searchThreadMessages: (
+    input: OrchestrationSearchThreadMessagesInput,
+  ) => Effect.Effect<OrchestrationSearchThreadMessagesResult, OrchestratorProjectionError>;
   readonly getTimelinePage: (
     threadId: ThreadId,
     options: ProjectionTimelinePageOptions,
@@ -10064,6 +10069,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     recoverDelegatedTask,
     delegatedTaskResultPending,
     dispatch: dispatchWithReceipt,
+    searchThreadMessages: (input) =>
+      projectionStore
+        .searchThreadMessages(input)
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: input.threadId, cause }),
+          ),
+        ),
     getTimelinePage: (threadId, options) =>
       projectionStore
         .getTimelinePage(threadId, options)

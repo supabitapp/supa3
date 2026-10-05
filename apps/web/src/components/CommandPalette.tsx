@@ -17,6 +17,7 @@ import {
 } from "@supacode/client-runtime/operations/projects";
 import { connectionStatusText } from "@supacode/client-runtime/connection";
 import { threadSearchMatchKey } from "@supacode/client-runtime/state/thread-search";
+import { openThreadFind } from "../threadFindBus";
 import { resolveThreadReferenceCopyTarget } from "@supacode/shared/threadReference";
 import {
   canPreloadBrowsePath,
@@ -1951,6 +1952,17 @@ function OpenCommandPaletteDialog(props: {
   }, [appliedOpenIntent, browseNavigation, clearOpenIntent, navigate, openIntent, setOpen]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (activeThread !== null) {
+    actionItems.push({
+      kind: "action",
+      value: "action:find-in-thread",
+      searchTerms: ["find", "search", "chat", "messages", "current thread"],
+      title: "Find in current thread",
+      icon: <TextSearchIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "thread.find",
+      run: async () => openThreadFind(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+    });
+  }
 
   if (projects.length > 0) {
     const activeProjectTitle =

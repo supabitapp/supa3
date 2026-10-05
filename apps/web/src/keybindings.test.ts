@@ -1540,3 +1540,29 @@ describe("Usage shortcuts", () => {
     );
   });
 });
+
+describe("Find in thread shortcut", () => {
+  it.each(["Linux", "MacIntel"])("uses the primary modifier only in the chat on %s", (platform) => {
+    const shortcut = event({
+      key: "f",
+      ctrlKey: platform === "Linux",
+      metaKey: platform === "MacIntel",
+    });
+    assert.strictEqual(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { chatFocus: true },
+      }),
+      "thread.find",
+    );
+    for (const context of [
+      { chatFocus: false },
+      { chatFocus: true, terminalFocus: true },
+      { chatFocus: true, previewFocus: true },
+    ]) {
+      assert.isNull(
+        resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform, context }),
+      );
+    }
+  });
+});

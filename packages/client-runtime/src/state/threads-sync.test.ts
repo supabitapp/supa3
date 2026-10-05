@@ -3,6 +3,7 @@ import {
   EventId,
   MessageId,
   ORCHESTRATION_V2_WS_METHODS,
+  OrchestrationV2ThreadBoundedSnapshot,
   ThreadId,
   TurnItemId,
   type OrchestrationV2ThreadDetailSnapshot,
@@ -20,6 +21,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
@@ -45,6 +47,8 @@ import {
   type ThreadSnapshotLoadResult,
 } from "./threads.ts";
 import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
+
+const encodeBoundedSnapshot = Schema.encodeSync(OrchestrationV2ThreadBoundedSnapshot);
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -252,6 +256,8 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
   return {
     threadState,
     loadEarlier: () => historyController.loadEarlier(TARGET.environmentId, THREAD_ID),
+    loadAround: (target: ThreadHistoryController.ThreadHistoryTarget) =>
+      historyController.loadAround(TARGET.environmentId, THREAD_ID, target),
     inputs,
     observed,
     latest,
@@ -315,6 +321,130 @@ const deleted = (sequence = 3): OrchestrationV2ThreadStreamItem => {
 };
 
 describe("EnvironmentThreads", () => {
+  it.effect.each(["live-update", "snapshot-reset", "ancestor-target"] as const)(
+    "loads a bounded search target safely across a concurrent %s",
+    (concurrent) =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const response = yield* Deferred.make<OrchestrationV2ThreadBoundedSnapshot>();
+        const sourceThreadId =
+          concurrent === "ancestor-target" ? ThreadId.make("ancestor") : THREAD_ID;
+        const oldItem: OrchestrationV2TurnItem = {
+          id: TurnItemId.make("find-old-message"),
+          threadId: sourceThreadId,
+          runId: null,
+          nodeId: null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: 1,
+          status: "completed",
+          title: null,
+          startedAt: v2Projection.updatedAt,
+          completedAt: v2Projection.updatedAt,
+          updatedAt: v2Projection.updatedAt,
+          type: "assistant_message",
+          messageId: MessageId.make("find-old"),
+          text: "older matching text",
+          attachments: [],
+          streaming: false,
+        };
+        const recentItem: OrchestrationV2TurnItem = {
+          ...oldItem,
+          id: TurnItemId.make("find-recent-message"),
+          threadId: THREAD_ID,
+          messageId: MessageId.make("find-recent"),
+          ordinal: 10,
+          text: "recent text",
+        };
+        const projected = (item: OrchestrationV2TurnItem) => ({
+          position: 0,
+          visibility: item.threadId === THREAD_ID ? ("local" as const) : ("inherited" as const),
+          sourceThreadId: item.threadId,
+          sourceItemId: item.id,
+          item,
+        });
+        const recent = {
+          ...BASE_PROJECTION,
+          turnItems: [recentItem],
+          visibleTurnItems: [projected(recentItem)],
+        };
+        const h = yield* makeHarness({
+          cached: recent,
+          cachedHistory: {
+            historyCursor: "recent-cursor",
+            hasMoreHistory: true,
+            latestLocalTurnOrdinal: 10,
+          },
+          historyHttpClient: HttpClient.make((request, url) => {
+            expect(url.pathname).toBe(`/api/orchestration/threads/${THREAD_ID}/bounded`);
+            expect(url.searchParams.get("anchorItemId")).toBe(oldItem.id);
+            expect(url.searchParams.get("anchorThreadId")).toBe(sourceThreadId);
+            return Deferred.succeed(started, undefined).pipe(
+              Effect.andThen(Deferred.await(response)),
+              Effect.map((snapshot) =>
+                HttpClientResponse.fromWeb(request, Response.json(encodeBoundedSnapshot(snapshot))),
+              ),
+            );
+          }),
+        });
+        yield* awaitThreadState(h.observed, (state) => state.status === "live");
+        const loading = yield* h
+          .loadAround({ itemId: oldItem.id, threadId: sourceThreadId })
+          .pipe(Effect.forkScoped);
+        yield* Deferred.await(started);
+        if (concurrent !== "snapshot-reset") {
+          yield* Queue.offer(h.inputs, titleUpdated("Updated while searching", 8));
+          yield* awaitThreadState(
+            h.observed,
+            (state) => Option.getOrNull(state.data)?.thread.title === "Updated while searching",
+          );
+        } else {
+          yield* Queue.offer(
+            h.inputs,
+            snapshot({ ...recent, thread: { ...recent.thread, title: "New snapshot" } }, 9),
+          );
+          yield* awaitThreadState(
+            h.observed,
+            (state) => Option.getOrNull(state.data)?.thread.title === "New snapshot",
+          );
+        }
+        yield* Deferred.succeed(response, {
+          snapshotSequence: 7,
+          projection: {
+            ...BASE_PROJECTION,
+            turnItems: [oldItem],
+            visibleTurnItems: [projected(oldItem)],
+          },
+          historyCursor: "old-cursor",
+          hasMoreHistory: true,
+          latestLocalTurnOrdinal: 10,
+        });
+        const loaded = yield* Fiber.join(loading);
+        expect(loaded._tag).toBe(concurrent !== "snapshot-reset" ? "loaded" : "noop");
+        if (loaded._tag === "loaded") {
+          expect(loaded.projection.visibleTurnItems.map((row) => row.sourceItemId)).toEqual([
+            oldItem.id,
+          ]);
+        }
+        const state = yield* SubscriptionRef.get(h.threadState);
+        const data = Option.getOrThrow(state.data);
+        if (concurrent !== "snapshot-reset") {
+          expect(data.thread.title).toBe("Updated while searching");
+          expect(data.visibleTurnItems.map((row) => row.sourceItemId)).toEqual([recentItem.id]);
+          expect(state.history).toMatchObject({
+            historyCursor: "recent-cursor",
+            expanded: false,
+            latestLocalTurnOrdinal: 10,
+          });
+        } else {
+          expect(data.visibleTurnItems.map((row) => row.sourceItemId)).toEqual([recentItem.id]);
+          expect(state.history.expanded).toBe(false);
+        }
+      }),
+  );
+
   it.effect.each(["disk", "HTTP"] as const)(
     "does not rewrite an unchanged %s snapshot on navigation or warm return",
     (source) =>

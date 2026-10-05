@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import * as Schema from "effect/Schema";
 
 import {
+  EnvironmentHttpApi,
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
   EnvironmentOperationForbiddenError,
@@ -58,5 +60,22 @@ describe("environment HTTP errors", () => {
     errors.forEach((error, index) => {
       expect(error.message).toContain(details[index]);
     });
+  });
+});
+
+const boundedEndpoint = EnvironmentHttpApi.groups.orchestration.endpoints.threadBoundedSnapshot;
+const decodeBoundedQuery = Schema.decodeUnknownSync(
+  boundedEndpoint.query as (typeof boundedEndpoint)["~Query"],
+);
+
+describe("bounded thread snapshot query compatibility", () => {
+  it("accepts existing URLs without an anchor", () => {
+    expect(decodeBoundedQuery({})).toEqual({});
+  });
+
+  it("accepts a source thread and item for inherited search matches", () => {
+    expect(
+      decodeBoundedQuery({ anchorItemId: "item:ancestor", anchorThreadId: "thread:ancestor" }),
+    ).toEqual({ anchorItemId: "item:ancestor", anchorThreadId: "thread:ancestor" });
   });
 });

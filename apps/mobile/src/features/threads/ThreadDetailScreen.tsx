@@ -126,9 +126,12 @@ import {
   COMPOSER_TRANSITION_DURATION_MS,
   ThreadComposer,
 } from "./ThreadComposer";
+import { ThreadFindBar } from "./ThreadFindBar";
+import type { ThreadFindTarget } from "./thread-find-target";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { buildThreadFeed } from "../../lib/threadActivity";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 
@@ -172,6 +175,7 @@ export interface ThreadDetailScreenProps {
   readonly threadSyncStatus?: EnvironmentThreadStatus;
   /** Progressive history controls for oversized mobile thread opens. */
   readonly historyControls?: ThreadFeedHistoryControls;
+  readonly findRequest?: number;
   readonly activeThreadBusy: boolean;
   readonly canStopThread: boolean;
   /** Set while a queued message is open in the composer for editing. */
@@ -384,6 +388,25 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   });
   const composerOverlayRef = useRef<ViewInstance>(null);
   const listRef = useRef<LegendListRef>(null);
+  const [findTarget, setFindTarget] = useState<ThreadFindTarget | null>(null);
+  const [findBarHeight, setFindBarHeight] = useState(0);
+  const findFeed = useMemo(
+    () =>
+      findTarget === null
+        ? null
+        : buildThreadFeed(findTarget.projection.visibleTurnItems, {
+            attempts: findTarget.projection.attempts,
+            nodes: findTarget.projection.nodes,
+            revealMessageItemId: findTarget.itemId,
+          }),
+    [findTarget],
+  );
+  const [findThreadKey, setFindThreadKey] = useState(selectedThreadKey);
+  if (findThreadKey !== selectedThreadKey) {
+    setFindThreadKey(selectedThreadKey);
+    setFindTarget(null);
+    setFindBarHeight(0);
+  }
   const feedTouchStartRef = useRef<{ pageX: number; pageY: number } | null>(null);
   const selectedThreadKeyRef = useRef(selectedThreadKey);
   const lastScrolledSubmittedMessageIdRef = useRef<MessageId | null>(null);
@@ -673,7 +696,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
   const endFollowEnabledRef = useRef(true);
   useLayoutEffect(() => {
-    endFollowEnabledRef.current = endFollowEnabled;
+    endFollowEnabledRef.current = endFollowEnabled && findTarget === null;
   });
   const overlayRepinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousWorkingControlStateRef = useRef({
@@ -1024,7 +1047,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     });
   }, [freeze, scrollMessageToEnd]);
 
-  const showScrollToEndButton = contentPresentationKind === "ready" && !endFollowEnabled;
+  const showScrollToEndButton =
+    findTarget === null && contentPresentationKind === "ready" && !endFollowEnabled;
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
 
@@ -1061,6 +1085,18 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   return (
     <View className="flex-1">
       {showContent ? (
+        <ThreadFindBar
+          key={selectedThreadKey}
+          environmentId={props.environmentId}
+          threadId={props.selectedThread.id}
+          openRequest={props.findRequest ?? 0}
+          completedAt={props.selectedThread.latestRun?.completedAt ?? null}
+          topInset={props.usesAutomaticContentInsets ? navigationHeaderHeight : 0}
+          onTargetChange={setFindTarget}
+          onHeightChange={setFindBarHeight}
+        />
+      ) : null}
+      {showContent ? (
         <View
           style={{ flex: 1 }}
           onTouchStart={handleFeedTouchStart}
@@ -1091,10 +1127,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               environmentId={props.environmentId}
               threadId={props.selectedThread.id}
               workspaceRoot={props.threadCwd}
-              feed={props.selectedThreadFeed}
-              worktreeSetup={props.worktreeSetup}
-              setupWorkingStartedAt={props.setupWorkingStartedAt}
-              queuedMessages={props.queuedMessages}
+              feed={findFeed ?? props.selectedThreadFeed}
+              worktreeSetup={findTarget === null ? props.worktreeSetup : null}
+              setupWorkingStartedAt={findTarget === null ? props.setupWorkingStartedAt : null}
+              queuedMessages={findTarget === null ? props.queuedMessages : []}
               dispatchingMessageId={props.dispatchingMessageId}
               // A native subagent has no composer to edit a pending message in;
               // Cancel on the edit banner would discard it.
@@ -1102,13 +1138,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               contentPresentation={props.contentPresentation}
               agentLabel={agentLabel}
               threadTitle={props.selectedThread.title}
-              latestRun={props.activityRun}
-              activeWorkStartedAt={props.activeWorkStartedAt}
-              runlessWorkActive={props.runlessWorkActive ?? false}
+              latestRun={findTarget === null ? props.activityRun : null}
+              activeWorkStartedAt={findTarget === null ? props.activeWorkStartedAt : null}
+              runlessWorkActive={findTarget === null && (props.runlessWorkActive ?? false)}
               listRef={listRef}
               freeze={freeze}
-              anchorMessageId={anchorMessageId}
-              submittedMessageId={submittedMessageId}
+              anchorMessageId={findTarget === null ? anchorMessageId : null}
+              submittedMessageId={findTarget === null ? submittedMessageId : null}
               contentInsetEndAdjustment={combinedContentInsetEndAdjustment}
               contentTopInset={0}
               contentBottomInset={
@@ -1116,11 +1152,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 (showFloatingStatus ? FLOATING_WORKING_CONTROL_COVERAGE : 0)
               }
               contentMaxWidth={contentMaxWidth}
-              historyControls={props.historyControls}
+              historyControls={findTarget === null ? props.historyControls : undefined}
+              findTarget={findTarget}
+              findBarHeight={findBarHeight}
               layoutVariant={layoutVariant}
               usesAutomaticContentInsets={props.usesAutomaticContentInsets}
               onHeaderMaterialVisibilityChange={props.onHeaderMaterialVisibilityChange}
-              onEndFollowEnabledChange={setEndFollowEnabled}
+              onEndFollowEnabledChange={findTarget === null ? setEndFollowEnabled : undefined}
               skills={selectedProviderSkills}
               onUseArtifactTemplate={handleUseArtifactTemplate}
             />

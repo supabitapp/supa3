@@ -48,6 +48,7 @@ import {
   type AcpRegistryListSessionsInput,
   type AcpRegistrySetProviderInput,
   OrchestrationGetFullThreadDiffError,
+  OrchestrationSearchThreadMessagesError,
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_V2_WS_METHODS,
@@ -1893,6 +1894,20 @@ const makeWsRpcLayer = (
                 (cause) =>
                   new OrchestrationSearchThreadsError({
                     message: "Failed to search threads",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.searchThreadMessages]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_V2_WS_METHODS.searchThreadMessages,
+            threadManagement.searchThreadMessages(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationSearchThreadMessagesError({
+                    message: "Failed to search thread messages",
                     cause,
                   }),
               ),

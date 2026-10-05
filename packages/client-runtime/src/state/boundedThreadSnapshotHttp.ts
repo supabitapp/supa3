@@ -1,4 +1,4 @@
-import type { ThreadId } from "@supacode/contracts";
+import type { ThreadId, TurnItemId } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,6 +22,8 @@ export const fetchEnvironmentBoundedThreadSnapshot = Effect.fn(
   readonly prepared: PreparedConnection;
   readonly threadId: ThreadId;
   readonly timeoutMs?: number;
+  readonly anchorItemId?: TurnItemId;
+  readonly anchorThreadId?: ThreadId;
 }) {
   return yield* executeAuthenticatedEnvironmentHttpRequest({
     ...input,
@@ -32,6 +34,10 @@ export const fetchEnvironmentBoundedThreadSnapshot = Effect.fn(
     request: ({ client, headers }) =>
       client.threadBoundedSnapshot({
         params: { threadId: input.threadId },
+        query: {
+          ...(input.anchorItemId === undefined ? {} : { anchorItemId: input.anchorItemId }),
+          ...(input.anchorThreadId === undefined ? {} : { anchorThreadId: input.anchorThreadId }),
+        },
         headers: withOrchestrationProtocolHeader(headers),
       }),
   });

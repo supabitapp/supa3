@@ -33,7 +33,9 @@ public final class SupacodeKeyboardCommandsView: ExpoView {
     let isPad = UIDevice.current.userInterfaceIdiom == .pad
     var commands = [
       enabledCommand("newTask", input: "n", modifiers: .command, action: #selector(newTask), title: "New Task"),
-      enabledCommand("focusSearch", input: "f", modifiers: .command, action: #selector(focusSearch), title: "Find"),
+      enabledCommands.contains("threadFind")
+        ? enabledCommand("threadFind", input: "f", modifiers: .command, action: #selector(findInThread), title: "Find in Conversation")
+        : enabledCommand("focusSearch", input: "f", modifiers: .command, action: #selector(focusSearch), title: "Find"),
       isPad
         ? enabledCommand("commandPalette", input: "k", modifiers: .command, action: #selector(openCommandPalette), title: "Command Palette")
         : enabledCommand("focusSearch", input: "k", modifiers: .command, action: #selector(focusSearch), title: "Focus Search"),
@@ -144,6 +146,7 @@ public final class SupacodeKeyboardCommandsView: ExpoView {
     guard let input = sender.input else { return }
     emit("thread.jump.\(input)")
   }
+  @objc private func findInThread() { emit("threadFind") }
   @objc private func focusSearch() { emit("focusSearch") }
   @objc private func goBack() { emit("back") }
   @objc private func openFiles() { emit("files") }

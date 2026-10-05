@@ -96,6 +96,11 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
 
+export type LoadAroundThreadHistoryInput = {
+  readonly threadId: ThreadId;
+  readonly target: ThreadHistoryController.ThreadHistoryTarget;
+};
+
 export type LoadEarlierThreadHistoryInput = {
   readonly threadId: ThreadId;
 };
@@ -395,6 +400,25 @@ export function createThreadEnvironmentAtoms<R, E>(
         mode: "serial",
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input.threadId]),
       },
+    }),
+    loadAroundHistory: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:load-around-history",
+      execute: (input: LoadAroundThreadHistoryInput) =>
+        Effect.gen(function* () {
+          const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+          const controller = yield* Effect.serviceOption(
+            ThreadHistoryController.ThreadHistoryController,
+          );
+          return Option.isNone(controller)
+            ? ({ _tag: "noop" } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult)
+            : yield* controller.value.loadAround(
+                supervisor.target.environmentId,
+                input.threadId,
+                input.target,
+              );
+        }),
+      scheduler,
+      concurrency: { mode: "parallel" },
     }),
     uploadFeedback: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:upload-feedback",

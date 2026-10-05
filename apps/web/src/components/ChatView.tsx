@@ -181,6 +181,7 @@ import {
   derivePendingUserInputs,
   derivePhase,
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
+  deriveTimelineEntriesFromVisibleTurnItems,
   selectHandoffImageResources,
   type TimelineEntriesInput,
   type TimelineEntriesProjection,
@@ -436,6 +437,8 @@ import {
   resolveScrollToEndClearance,
 } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
+import { ThreadFindBar } from "./chat/ThreadFindBar";
+import { useThreadFind } from "./chat/useThreadFind";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { shouldShowOpenInPicker } from "./chat/OpenInPicker.logic";
 import { useOpenFavoriteEditorShortcut } from "./chat/OpenInPickerShortcut";
@@ -7677,8 +7680,54 @@ export default function ChatView(props: ChatViewProps) {
     terminalUiOpenByThreadRef.current[activeThreadKey] = current;
   }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen]);
 
+  const revealFindChat = useCallback(() => {
+    if (rightPanelMaximized) toggleRightPanelMaximized();
+  }, [rightPanelMaximized, toggleRightPanelMaximized]);
+  const {
+    isOpen: threadFindOpen,
+    focusRequest: threadFindFocusRequest,
+    request: threadFindRequest,
+    open: openActiveThreadFind,
+    close: closeActiveThreadFind,
+    navigate: navigateThreadFind,
+  } = useThreadFind({
+    threadKey: activeThreadKey,
+    threadRef: activeThreadRef,
+    isServerThread,
+    onManualNavigation: cancelTimelineLiveFollowForUserNavigation,
+    onOpen: revealFindChat,
+    onClose: focusComposer,
+  });
+
+  const threadFindEntries = useMemo(
+    () =>
+      threadFindRequest === null
+        ? null
+        : deriveTimelineEntriesFromVisibleTurnItems({
+            visibleTurnItems: threadFindRequest.projection.visibleTurnItems,
+            optimisticMessages: [],
+            attachmentUrlById: timelineAttachmentUrlById,
+            attempts: threadFindRequest.projection.attempts,
+            nodes: threadFindRequest.projection.nodes,
+            plans: threadFindRequest.projection.plans,
+          }),
+    [threadFindRequest, timelineAttachmentUrlById],
+  );
+  const onFindTimelineIsAtEndChange = useCallback(
+    (isAtEnd: boolean) => {
+      if (threadFindEntries === null) onIsAtEndChange(isAtEnd);
+    },
+    [onIsAtEndChange, threadFindEntries],
+  );
+
   const getShortcutContext = useCallback(
     (eventTarget: EventTarget | null = document.activeElement) => ({
+      chatFocus:
+        !rightPanelMaximized &&
+        (eventTarget === document.body ||
+          (eventTarget instanceof Element &&
+            eventTarget.closest("[data-chat-canvas], [data-thread-header]") !== null &&
+            eventTarget.closest('[role="dialog"], [role="alertdialog"]') === null)),
       terminalFocus: getTerminalFocusOwner() !== null,
       terminalOpen: Boolean(terminalUiState.terminalOpen),
       previewFocus: isPreviewFocused(),
@@ -7691,7 +7740,14 @@ export default function ChatView(props: ChatViewProps) {
       isWeb: !isElectron,
       isDesktop: isElectron,
     }),
-    [composerRef, previewPanelOpen, terminalUiState.terminalOpen, routeKind, phase],
+    [
+      composerRef,
+      previewPanelOpen,
+      terminalUiState.terminalOpen,
+      routeKind,
+      phase,
+      rightPanelMaximized,
+    ],
   );
 
   useEffect(() => {
@@ -7729,6 +7785,20 @@ export default function ChatView(props: ChatViewProps) {
         context: shortcutContext,
       });
       if (!command) return;
+
+      if (command === "thread.find") {
+        if (
+          !isServerThread ||
+          !shortcutContext.chatFocus ||
+          shortcutContext.terminalFocus ||
+          shortcutContext.previewFocus
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) openActiveThreadFind();
+        return;
+      }
 
       if (command === "thread.copyReference") {
         event.preventDefault();
@@ -7991,6 +8061,7 @@ export default function ChatView(props: ChatViewProps) {
     supportsSettlement,
     confirmAndUnpinThread,
     copyActiveThreadReference,
+    openActiveThreadFind,
     getShortcutContext,
     toggleRightPanel,
     toggleThreadPanel,
@@ -10963,6 +11034,7 @@ export default function ChatView(props: ChatViewProps) {
           {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
           {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
           <ChatHeader
+            onFindThread={openActiveThreadFind}
             activeThreadEnvironmentId={activeThread.environmentId}
             activeThreadId={activeThread.id}
             isServerThread={isServerThread}
@@ -11030,9 +11102,23 @@ export default function ChatView(props: ChatViewProps) {
             </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+              {threadFindOpen ? (
+                <ThreadFindBar
+                  key={activeThreadKey}
+                  environmentId={activeThread.environmentId}
+                  threadId={activeThread.id}
+                  focusRequest={threadFindFocusRequest}
+                  settledRunId={latestRunSettled ? (activeActivityRun?.runId ?? null) : null}
+                  onNavigate={navigateThreadFind}
+                  onClose={closeActiveThreadFind}
+                />
+              ) : null}
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
-                citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
+                findRequest={threadFindRequest}
+                citationRequest={
+                  threadFindEntries !== null || paintOnlyDisplayedTimeline ? null : citationRequest
+                }
                 citationHistoryLoading={threadDetailLoading}
                 {...(!paintOnlyDisplayedTimeline
                   ? {
@@ -11040,14 +11126,18 @@ export default function ChatView(props: ChatViewProps) {
                       ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
                     }
                   : {})}
-                isWorking={!paintOnlyDisplayedTimeline && isWorking}
-                runlessWorkActive={runlessWorkStartedAt !== null}
+                isWorking={threadFindEntries === null && !paintOnlyDisplayedTimeline && isWorking}
+                runlessWorkActive={threadFindEntries === null && runlessWorkStartedAt !== null}
                 activeTurnInProgress={
-                  !paintOnlyDisplayedTimeline && (isWorking || !latestRunSettled)
+                  threadFindEntries === null &&
+                  !paintOnlyDisplayedTimeline &&
+                  (isWorking || !latestRunSettled)
                 }
                 isCompacting={!paintOnlyDisplayedTimeline && isCompacting}
                 activeTurnStartedAt={paintOnlyDisplayedTimeline ? null : activeWorkStartedAt}
-                worktreeSetup={paintOnlyDisplayedTimeline ? null : worktreeSetup}
+                worktreeSetup={
+                  threadFindEntries !== null || paintOnlyDisplayedTimeline ? null : worktreeSetup
+                }
                 onCancelWorktreeSetup={onCancelWorktreeSetup}
                 {...(paintOnlyDisplayedTimeline
                   ? {}
@@ -11056,15 +11146,23 @@ export default function ChatView(props: ChatViewProps) {
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                 listRef={legendListRef}
-                timelineEntries={displayedTimeline.entries}
+                timelineEntries={threadFindEntries ?? displayedTimeline.entries}
                 providerStatuses={
                   environmentById.get(
                     displayedThreadRef?.environmentId ?? activeThread.environmentId,
                   )?.serverConfig?.providers ?? EMPTY_PROVIDERS
                 }
                 runs={paintOnlyDisplayedTimeline ? [] : (serverProjection?.runs ?? [])}
-                latestRun={paintOnlyDisplayedTimeline ? null : activeActivityRun}
-                runningRunId={paintOnlyDisplayedTimeline ? null : activeRunningTurnId}
+                latestRun={
+                  threadFindEntries !== null || paintOnlyDisplayedTimeline
+                    ? null
+                    : activeActivityRun
+                }
+                runningRunId={
+                  threadFindEntries !== null || paintOnlyDisplayedTimeline
+                    ? null
+                    : activeRunningTurnId
+                }
                 turnDiffSummaries={
                   paintOnlyDisplayedTimeline ? EMPTY_HELD_TURN_DIFF_SUMMARIES : turnDiffSummaries
                 }
@@ -11072,7 +11170,11 @@ export default function ChatView(props: ChatViewProps) {
                   displayedThreadRef?.environmentId ?? activeThread.environmentId
                 }
                 routeThreadKey={displayedTimelineKey}
-                displayThreadKey={displayedTimelineKey}
+                displayThreadKey={
+                  threadFindRequest
+                    ? `${activeThreadKey}:find:${threadFindRequest.match.threadId}:${threadFindRequest.match.itemId}`
+                    : displayedTimelineKey
+                }
                 onOpenTurnDiff={paintOnlyDisplayedTimeline ? noopHeldTurnDiff : onOpenTurnDiff}
                 onOpenThread={onOpenRelatedThread}
                 parentThreadLink={paintOnlyDisplayedTimeline ? null : parentThreadLink}
@@ -11109,25 +11211,35 @@ export default function ChatView(props: ChatViewProps) {
                     ? resolveProviderSkillsForCwd(activeProviderStatus, gitCwd)
                     : EMPTY_PROVIDER_SKILLS
                 }
-                anchorMessageId={paintOnlyDisplayedTimeline ? null : timelineAnchorMessageId}
+                anchorMessageId={
+                  threadFindEntries !== null || paintOnlyDisplayedTimeline
+                    ? null
+                    : timelineAnchorMessageId
+                }
                 onAnchorReady={onTimelineAnchorReady}
                 onAnchorSizeChanged={onTimelineAnchorSizeChanged}
                 contentInsetEndAdjustment={composerTimelineInset}
-                liveFollowEnabled={!paintOnlyDisplayedTimeline && timelineLiveFollowEnabled}
-                onIsAtEndChange={onIsAtEndChange}
+                liveFollowEnabled={
+                  threadFindEntries === null &&
+                  !paintOnlyDisplayedTimeline &&
+                  timelineLiveFollowEnabled
+                }
+                onIsAtEndChange={onFindTimelineIsAtEndChange}
                 onContentOverflowChange={setTimelineOverflows}
                 onToolOutputCollapsedAtEnd={onToolOutputCollapsedAtEnd}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 cancelPositionRestoreRef={cancelPositionRestoreRef}
                 hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
                 topFadeEnabled={!hasTimelineTopBanner}
-                {...(paintOnlyDisplayedTimeline || threadHistoryControls === undefined
+                {...(threadFindEntries !== null ||
+                paintOnlyDisplayedTimeline ||
+                threadHistoryControls === undefined
                   ? {}
                   : { historyControls: threadHistoryControls })}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
-              {showScrollToBottom && (
+              {threadFindEntries === null && showScrollToBottom && (
                 <div
                   className="chat-scroll-to-bottom pointer-events-none absolute z-30 flex justify-center py-1.5"
                   style={{ bottom: scrollToEndClearance + 4 }}

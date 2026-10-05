@@ -200,10 +200,20 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.threadBoundedSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
-          const snapshot = yield* loadThreadSnapshotWindow(args.params.threadId);
+          const snapshot = yield* loadThreadSnapshotWindow(
+            args.params.threadId,
+            args.query.anchorItemId,
+            args.query.anchorThreadId,
+          );
           const bounded = buildBoundedThreadProjection({
             projection: snapshot.projection,
             snapshotSequence: snapshot.snapshotSequence,
+            ...(args.query.anchorItemId === undefined
+              ? {}
+              : { anchorItemId: args.query.anchorItemId }),
+            ...(args.query.anchorThreadId === undefined
+              ? {}
+              : { anchorThreadId: args.query.anchorThreadId }),
           });
           return {
             snapshotSequence: snapshot.snapshotSequence,

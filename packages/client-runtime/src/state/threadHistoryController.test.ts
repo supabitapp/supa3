@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as ThreadHistoryController from "./threadHistoryController.ts";
+import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 
 const ENV = "env-history" as EnvironmentId;
 const THREAD = "thread-history" as ThreadId;
@@ -19,6 +20,7 @@ function handler(
     get calls() {
       return state.calls;
     },
+    loadAround: () => Effect.succeed({ _tag: "loaded", projection: v2Projection } as const),
     loadEarlier: () => {
       state.calls += 1;
       return Effect.succeed({

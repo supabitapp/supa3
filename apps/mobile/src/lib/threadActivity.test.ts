@@ -2084,6 +2084,35 @@ it("accepts ready attachment-only answers while preserving selected options", ()
   ).toBeNull();
 });
 
+it("reveals a found question answer that is normally folded into its request", () => {
+  const requestId = RuntimeRequestId.make("find-answer-request");
+  const answer = {
+    ...userMessage(),
+    id: TurnItemId.make("found-answer"),
+    messageId: MessageId.make(`async-answer:${requestId}`),
+    text: "Searchable answer",
+  };
+  const rows = [
+    projected(
+      {
+        ...base("find-answer-history", "2026-09-08T00:00:00.000Z", 0),
+        type: "user_input_request",
+        requestId,
+        questions: [],
+        questionAnswer: { requestId, answers: { q: answer.text }, attachmentsByQuestionId: {} },
+      },
+      0,
+    ),
+    projected(answer, 1),
+  ];
+  expect(buildThreadFeed(rows).some((entry) => entry.type === "message")).toBe(false);
+  expect(
+    buildThreadFeed(rows, { revealMessageItemId: answer.id }).find(
+      (entry) => entry.type === "message",
+    ),
+  ).toMatchObject({ message: { text: "Searchable answer" } });
+});
+
 it("makes attachment-only question answers expandable in the mobile feed", () => {
   const answer = {
     requestId: RuntimeRequestId.make("question-request"),

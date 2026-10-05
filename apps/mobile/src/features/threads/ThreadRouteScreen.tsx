@@ -5,6 +5,7 @@ import { worktreeSetupAgentStarted } from "@supacode/client-runtime/worktree-set
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ScreenHeaderButton } from "../../components/ScreenHeaderButton";
 import type { ScreenHeaderAction } from "../../components/ScreenHeader.types";
+import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
 import { useThreadHeaderOptions } from "./useThreadHeaderOptions";
 import {
   StackActions,
@@ -108,7 +109,13 @@ function ThreadHeader(
   const { onOpenTerminal, onMergeBack } = props.gitControls;
   const native = useThreadHeaderOptions(props);
   const androidHeaderActions = useMemo<ReadonlyArray<ScreenHeaderAction>>(() => {
-    const actions: ScreenHeaderAction[] = [];
+    const actions: ScreenHeaderAction[] = [
+      {
+        accessibilityLabel: "Find in conversation",
+        icon: "magnifyingglass",
+        onPress: props.onFindInThread,
+      },
+    ];
     if (props.onReturnToThread) {
       actions.push({
         accessibilityLabel: "Return to chat",
@@ -146,6 +153,7 @@ function ThreadHeader(
     }
     return actions;
   }, [
+    props.onFindInThread,
     props.inspectorMode,
     panes.auxiliaryPaneVisible,
     props.onOpenFilesInspector,
@@ -343,6 +351,16 @@ function ThreadRouteContent(
     selectedEnvironmentConnection,
   } = useThreadSelection();
   const selectedThreadDetailState = props.selectedThreadDetailState;
+  const [findState, setFindState] = useState({ threadId: selectedThread?.id ?? null, request: 0 });
+  const findRequest = findState.threadId === selectedThread?.id ? findState.request : 0;
+  const selectedFindThreadId = selectedThread?.id ?? null;
+  const openFindInThread = useCallback(() => {
+    setFindState((current) => ({
+      threadId: selectedFindThreadId,
+      request: current.threadId === selectedFindThreadId ? current.request + 1 : 1,
+    }));
+  }, [selectedFindThreadId]);
+  useHardwareKeyboardCommand("threadFind", openFindInThread);
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const mergeBackTargetThreadId = resolveMergeBackTargetThreadId(selectedThreadDetail);
   const mergeBackRun =
@@ -1063,6 +1081,7 @@ function ThreadRouteContent(
           connectionStateLabel={routeConnectionState}
           threadSyncStatus={selectedThreadDetailState.status}
           historyControls={historyControls}
+          findRequest={findRequest}
           activeThreadBusy={composer.activeThreadBusy}
           canStopThread={awaitingBootstrapTurn || composer.interruptibleRunId !== null}
           queuedRunEdit={composer.queuedRunEdit}
@@ -1114,6 +1133,7 @@ function ThreadRouteContent(
         headerColor={headerColor}
         usesNativeHeaderGlass={usesNativeHeaderGlass}
         gitControls={threadGitControlProps}
+        onFindInThread={openFindInThread}
         hasThreadCwd={selectedThreadCwd !== null}
         hasWorkspaceRoot={Boolean(selectedThreadProject?.workspaceRoot)}
         fileInspectorSupported={fileInspector.supported}

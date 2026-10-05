@@ -189,6 +189,7 @@ import {
   type AssistantCitationTarget,
 } from "./AssistantCitationSource";
 import { useAssistantCitationTarget, type CitationHistoryPage } from "./useAssistantCitationTarget";
+import { useThreadFindTarget, type ThreadFindRequest } from "./useThreadFindTarget";
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRowsWithState,
@@ -295,6 +296,7 @@ import {
 // ---------------------------------------------------------------------------
 
 interface TimelineRowSharedState {
+  findRowId: string | null;
   citationRequest: AssistantCitationTarget | null;
   listRef: React.RefObject<LegendListRef | null>;
   timestampFormat: TimestampFormat;
@@ -409,6 +411,7 @@ export interface MessagesTimelineHistoryControls {
 }
 
 interface MessagesTimelineProps {
+  findRequest?: ThreadFindRequest | null;
   citationRequest?: AssistantCitationRequest | null;
   citationHistoryLoading?: boolean;
   onCiteAssistantText?: (
@@ -495,6 +498,7 @@ interface MessagesTimelineProps {
 // ---------------------------------------------------------------------------
 
 export const MessagesTimeline = memo(function MessagesTimeline({
+  findRequest = null,
   citationRequest = null,
   citationHistoryLoading = false,
   onCiteAssistantText,
@@ -599,6 +603,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const openPullRequest = useOpenPrLink(citationThreadRef ?? undefined);
   const expandCitedRun = useCallback((runId: RunId) => {
     setExpandedRunIds((current) => (current.has(runId) ? current : new Set([...current, runId])));
+  }, []);
+  const expandFoundAttempt = useCallback((attemptId: RunAttemptId) => {
+    setExpandedAttemptIds((current) =>
+      current.has(attemptId) ? current : new Set([...current, attemptId]),
+    );
   }, []);
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
   const [disclosureToggleSettling, setDisclosureToggleSettling] = useState(false);
@@ -929,7 +938,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     onManualNavigation,
   });
   const [minimapHasPersistentGutter, setMinimapHasPersistentGutter] = useState(false);
-  const alwaysRender = citationAlwaysRender ?? restoringAlwaysRender;
+  const findTarget = useThreadFindTarget({
+    request: findRequest,
+    entries: timelineEntries,
+    rows,
+    listRef,
+    viewport: timelineViewportElement,
+    onExpandTurn: expandCitedRun,
+    onExpandAttempt: expandFoundAttempt,
+    onManualNavigation,
+  });
+  const alwaysRender = findTarget.alwaysRender ?? citationAlwaysRender ?? restoringAlwaysRender;
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
   const [minimapCurrentIndex, setMinimapCurrentIndex] = useState<number | null>(null);
   const handleAnchorReady = useCallback(
@@ -1133,6 +1152,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
+      findRowId: findTarget.rowId,
       citationRequest: readyCitationRequest,
       listRef,
       timestampFormat,
@@ -1169,6 +1189,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }),
     [
       readyCitationRequest,
+      findTarget.rowId,
       listRef,
       timestampFormat,
       routeThreadKey,
@@ -1327,9 +1348,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             getItemType={getItemType}
             renderItem={renderItem}
             estimatedItemSize={90}
-            initialScrollAtEnd={citationRequest === null && rememberedPosition?.atEnd !== false}
+            initialScrollAtEnd={
+              findRequest === null &&
+              citationRequest === null &&
+              rememberedPosition?.atEnd !== false
+            }
             // Legend needs a data refresh to mount new pins without a scroll event.
-            dataVersion={readyCitationRequest?.key ?? listIdentityKey}
+            dataVersion={findRequest?.key ?? readyCitationRequest?.key ?? listIdentityKey}
             {...(alwaysRender ? { alwaysRender } : {})}
             onLoad={onCitationListLoad}
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
@@ -1736,6 +1761,7 @@ type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["grouped
 type TimelineRow = MessagesTimelineRow;
 
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
+  const { findRowId } = use(TimelineRowCtx);
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";
   const isWorkLogRow =
@@ -1750,6 +1776,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
   return (
     <div
       className={cn(
+        findRowId === row.id && "rounded-md bg-primary/5 outline-1 outline-primary/40",
         // Commentary (non-terminal assistant) rows carry no metadata row, so
         // they sit closer to the work that follows them.
         isWorkLogRow || isSubagentGroup
@@ -1770,6 +1797,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
           : null,
       )}
       data-timeline-row-id={row.id}
+      data-thread-find-selected={findRowId === row.id || undefined}
       data-timeline-row-kind={row.kind}
       data-message-id={
         row.kind === "message" || row.kind === "assistant-meta" ? row.message.id : undefined
@@ -2232,6 +2260,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         ) : null}
         <div onCopyCapture={onBodyCopyCapture}>
           <CollapsibleUserMessageBody
+            forceExpanded={ctx.findRowId === row.id}
             text={resolvedContext.text}
             renderContextReference={renderContextReference}
             skills={ctx.skills}
@@ -4313,6 +4342,7 @@ function shouldCollapseUserMessage(text: string): boolean {
 }
 
 const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(props: {
+  forceExpanded?: boolean;
   text: string;
   renderContextReference: (reference: ChatMarkdownContextReference) => ReactNode;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
@@ -4322,7 +4352,8 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
   const [expanded, setExpanded] = useState(false);
   const hasVisibleBody = props.text.trim().length > 0;
   const canCollapse = hasVisibleBody && shouldCollapseUserMessage(props.text);
-  const isCollapsed = canCollapse && !expanded;
+  const isCollapsed = canCollapse && !expanded && !props.forceExpanded;
+  const showCollapseControl = canCollapse && !props.forceExpanded;
 
   return (
     <div>
@@ -4350,15 +4381,15 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
           />
         </div>
       ) : null}
-      {canCollapse || props.footer ? (
+      {showCollapseControl || props.footer ? (
         <div
           className={cn(
             "mt-1.5 flex items-center gap-2",
-            canCollapse && props.footer ? "justify-between" : "justify-end",
+            showCollapseControl && props.footer ? "justify-between" : "justify-end",
           )}
           data-user-message-footer="true"
         >
-          {canCollapse ? (
+          {showCollapseControl ? (
             <Button
               type="button"
               size="xs"

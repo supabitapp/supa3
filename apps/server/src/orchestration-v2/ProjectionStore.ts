@@ -6,6 +6,9 @@ import {
 } from "@supacode/shared/orchestrationV2ThreadError";
 import { threadPullRequestsOf } from "@supacode/shared/threadPullRequests";
 import type {
+  OrchestrationSearchThreadMessagesInput,
+  OrchestrationSearchThreadMessagesResult,
+  OrchestrationThreadMessageSearchMatch,
   OrchestrationV2AppThread,
   OrchestrationV2CheckpointScope,
   OrchestrationV2ExecutionNode,
@@ -71,10 +74,18 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import type * as Statement from "effect/unstable/sql/Statement";
 
 import {
+  createThreadMessageMatcher,
+  THREAD_MESSAGE_SEARCH_CHUNK_LENGTH,
+} from "./threadMessageSearch.ts";
+
+import {
   isThreadHistoryUserTurn,
   isThreadHistoryTurnStart,
   THREAD_HISTORY_MAX_RAW_TURNS,
 } from "./threadHistoryPaging.ts";
+
+const ThreadMessageSearchChunk = Schema.Struct({ bytes: Schema.Uint8Array });
+const decodeThreadMessageSearchChunk = Schema.decodeUnknownEffect(ThreadMessageSearchChunk);
 
 export class ProjectionStoreApplyEventError extends Schema.TaggedError<ProjectionStoreApplyEventError>()(
   "ProjectionStoreApplyEventError",
@@ -310,6 +321,9 @@ export interface ProjectionStoreV2Shape {
   readonly getThreadAttachmentIds: (
     threadId: ThreadId,
   ) => Effect.Effect<ReadonlyArray<string>, ProjectionStoreV2Error>;
+  readonly searchThreadMessages: (
+    input: OrchestrationSearchThreadMessagesInput,
+  ) => Effect.Effect<OrchestrationSearchThreadMessagesResult, ProjectionStoreV2Error>;
   readonly getTimelinePage: (
     threadId: ThreadId,
     options: ProjectionTimelinePageOptions,
@@ -4689,6 +4703,62 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         ),
       );
 
+    const searchThreadMessages: ProjectionStoreV2Shape["searchThreadMessages"] = Effect.fn(
+      "ProjectionStore.searchThreadMessages",
+    )(function* (input) {
+      return yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const index = yield* readTimelineIndex(input.threadId, new Set());
+            const matches: Array<OrchestrationThreadMessageSearchMatch> = [];
+            const offset = input.offset ?? 0;
+            const limit = input.limit ?? 50;
+            let totalMatches = 0;
+            for (const row of index.visible) {
+              if (
+                row.item.type !== "user_message" &&
+                row.item.type !== "assistant_message" &&
+                row.item.type !== "proposed_plan"
+              )
+                continue;
+              const appendChunk = createThreadMessageMatcher(input.query);
+              const path = row.item.type === "proposed_plan" ? "$.markdown" : "$.text";
+              const decoder = new TextDecoder();
+              let bytePosition = 1;
+              while (true) {
+                // Extract only searchable text, never hydrate attachments or tool output.
+                // Byte chunks preserve NUL characters and bound multibyte UTF-8 too.
+                const chunks = yield* sql<{ readonly bytes: unknown }>`
+                  SELECT CASE WHEN json_type(payload_json, ${path}) = 'text'
+                    THEN substr(cast(json_extract(payload_json, ${path}) AS BLOB),
+                      ${bytePosition}, ${THREAD_MESSAGE_SEARCH_CHUNK_LENGTH}) END AS bytes
+                  FROM orchestration_v2_projection_turn_items
+                  WHERE thread_id = ${row.sourceThreadId} AND turn_item_id = ${row.sourceItemId}
+                `;
+                const chunk = yield* decodeThreadMessageSearchChunk(chunks[0]);
+                const isLast = chunk.bytes.length < THREAD_MESSAGE_SEARCH_CHUNK_LENGTH;
+                const text = decoder.decode(chunk.bytes, { stream: !isLast });
+                for (const match of appendChunk(text, isLast)) {
+                  if (totalMatches >= offset && matches.length < limit)
+                    matches.push({
+                      ...match,
+                      index: totalMatches,
+                      threadId: row.sourceThreadId,
+                      itemId: row.sourceItemId,
+                    });
+                  totalMatches += 1;
+                }
+                if (isLast) break;
+                bytePosition += chunk.bytes.length;
+                yield* Effect.yieldNow;
+              }
+            }
+            return { totalMatches, matches };
+          }),
+        )
+        .pipe(Effect.mapError(controlReadError(input.threadId)));
+    });
+
     const getTimelinePage: ProjectionStoreV2Shape["getTimelinePage"] = (threadId, options) =>
       sql
         .withTransaction(
@@ -5567,6 +5637,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getThreadSnapshot,
       getThreadSnapshotWindow,
       getTimelinePage,
+      searchThreadMessages,
       getThreadAttachmentIds,
     } satisfies ProjectionStoreV2Shape;
   }),
@@ -6123,6 +6194,36 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
               })),
             ),
           ),
+        ),
+      searchThreadMessages: (input) =>
+        service.getThreadProjection(input.threadId).pipe(
+          Effect.map((projection) => {
+            const matches: Array<OrchestrationThreadMessageSearchMatch> = [];
+            const offset = input.offset ?? 0;
+            const limit = input.limit ?? 50;
+            let totalMatches = 0;
+            for (const row of projection.visibleTurnItems) {
+              const item = row.item;
+              if (
+                item.type !== "user_message" &&
+                item.type !== "assistant_message" &&
+                item.type !== "proposed_plan"
+              )
+                continue;
+              const text = item.type === "proposed_plan" ? item.markdown : item.text;
+              for (const match of createThreadMessageMatcher(input.query)(text, true)) {
+                if (totalMatches >= offset && matches.length < limit)
+                  matches.push({
+                    ...match,
+                    index: totalMatches,
+                    threadId: row.sourceThreadId,
+                    itemId: row.sourceItemId,
+                  });
+                totalMatches += 1;
+              }
+            }
+            return { totalMatches, matches };
+          }),
         ),
       getTimelinePage: (threadId, options) =>
         service.getThreadProjection(threadId).pipe(

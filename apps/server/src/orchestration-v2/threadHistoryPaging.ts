@@ -418,12 +418,28 @@ export function boundedTimelineEncodedBytes(input: {
 export function buildBoundedThreadProjection(input: {
   readonly projection: OrchestrationV2ThreadProjection;
   readonly snapshotSequence: number;
+  readonly anchorItemId?: TurnItemId;
+  readonly anchorThreadId?: ThreadId;
   readonly policy?: ThreadHistoryPagePolicy | undefined;
 }): BoundedProjectionResult {
   const policy = input.policy ?? THREAD_HISTORY_PAGE_POLICY;
   const threadId = input.projection.thread.id;
+  const anchorIndex =
+    input.anchorItemId === undefined
+      ? -1
+      : input.projection.visibleTurnItems.findIndex(
+          (row) =>
+            row.sourceItemId === input.anchorItemId &&
+            (input.anchorThreadId === undefined || row.sourceThreadId === input.anchorThreadId),
+        );
   const controlProjection = {
     ...input.projection,
+    // A fork marker can follow an inherited anchor. Make the requested item the
+    // newest row so the at-least-one rule retains it even when it exceeds budget.
+    visibleTurnItems:
+      anchorIndex < 0
+        ? input.projection.visibleTurnItems
+        : input.projection.visibleTurnItems.slice(0, anchorIndex + 1),
     plans: input.projection.plans.filter((plan) => plan.status === "active"),
     contextHandoffs: input.projection.contextHandoffs.filter(
       (handoff) => handoff.status === "pending" || handoff.status === "ready",

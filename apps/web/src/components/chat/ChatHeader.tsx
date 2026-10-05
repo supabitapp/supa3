@@ -5,7 +5,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -31,8 +31,10 @@ import {
   WorkspaceBreadcrumbText,
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
+import { Button } from "../ui/button";
 
 interface ChatHeaderProps {
+  onFindThread?: (() => void) | undefined;
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
@@ -66,6 +68,7 @@ export function resolveRenameCommit(input: {
 // opens immediately.
 const TITLE_MENU_OPEN_DELAY_MS = 500;
 export const ChatHeader = memo(function ChatHeader({
+  onFindThread,
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
@@ -241,6 +244,7 @@ export const ChatHeader = memo(function ChatHeader({
         rightPanelOpen ? "pr-10" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
+      data-thread-header
     >
       <WorkspaceBreadcrumb
         ariaLabel="Thread breadcrumb"
@@ -338,6 +342,23 @@ export const ChatHeader = memo(function ChatHeader({
           )}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {isServerThread && onFindThread ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost-muted"
+                size="icon-xs"
+                aria-label="Find in thread"
+                onClick={onFindThread}
+              />
+            }
+          >
+            <SearchIcon />
+          </TooltipTrigger>
+          <TooltipPopup>Find in thread</TooltipPopup>
+        </Tooltip>
+      ) : null}
     </div>
   );
 });

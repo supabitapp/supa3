@@ -39,6 +39,8 @@ class SupacodeKeyboardCommandsView(
       return null
     }
     return when {
+      event.keyCode == KeyEvent.KEYCODE_F && !event.isShiftPressed && !event.isAltPressed ->
+        "threadFind"
       event.keyCode == KeyEvent.KEYCODE_C && event.isShiftPressed && !event.isAltPressed ->
         "copyThreadReference"
       event.keyCode == KeyEvent.KEYCODE_H && event.isShiftPressed && !event.isAltPressed ->

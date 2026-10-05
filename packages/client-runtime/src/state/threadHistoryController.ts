@@ -1,4 +1,9 @@
-import type { EnvironmentId, ThreadId } from "@supacode/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationV2ThreadProjection,
+  ThreadId,
+  TurnItemId,
+} from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -12,8 +17,22 @@ export type ThreadHistoryLoadEarlierResult =
   | { readonly _tag: "busy" }
   | { readonly _tag: "error"; readonly message: string };
 
+export type ThreadHistoryTarget = {
+  readonly itemId: TurnItemId;
+  readonly threadId: ThreadId;
+};
+
+export type ThreadHistoryLoadAroundResult =
+  | { readonly _tag: "loaded"; readonly projection: OrchestrationV2ThreadProjection }
+  | { readonly _tag: "noop" }
+  | { readonly _tag: "busy" }
+  | { readonly _tag: "error"; readonly message: string };
+
 export type ThreadHistoryHandler = {
   readonly loadEarlier: () => Effect.Effect<ThreadHistoryLoadEarlierResult>;
+  readonly loadAround: (
+    target: ThreadHistoryTarget,
+  ) => Effect.Effect<ThreadHistoryLoadAroundResult>;
 };
 
 /**
@@ -43,6 +62,11 @@ export class ThreadHistoryController extends Context.Service<
       environmentId: EnvironmentId,
       threadId: ThreadId,
     ) => Effect.Effect<ThreadHistoryLoadEarlierResult>;
+    readonly loadAround: (
+      environmentId: EnvironmentId,
+      threadId: ThreadId,
+      target: ThreadHistoryTarget,
+    ) => Effect.Effect<ThreadHistoryLoadAroundResult>;
   }
 >()("@supacode/client-runtime/state/threadHistoryController") {}
 
@@ -86,6 +110,15 @@ export const layer: Layer.Layer<ThreadHistoryController> = Layer.effect(
               return Effect.succeed({ _tag: "noop" } satisfies ThreadHistoryLoadEarlierResult);
             }
             return handler.loadEarlier();
+          }),
+        ),
+      loadAround: (environmentId, threadId, target) =>
+        Ref.get(handlers).pipe(
+          Effect.flatMap((current) => {
+            const handler = current.get(threadKey({ environmentId, threadId }));
+            return handler === undefined
+              ? Effect.succeed({ _tag: "noop" } satisfies ThreadHistoryLoadAroundResult)
+              : handler.loadAround(target);
           }),
         ),
     });

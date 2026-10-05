@@ -32,6 +32,7 @@ import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection
 import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
 import { followStreamInEnvironment } from "./runtime.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
+import { fetchEnvironmentBoundedThreadSnapshot } from "./boundedThreadSnapshotHttp.ts";
 import { fetchEnvironmentThreadHistoryPage } from "./threadHistoryHttp.ts";
 import {
   applyHistoryPageMeta,
@@ -227,6 +228,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   if (resumeCache?.owner === owner) resumeCache.snapshot = committed;
   const awaitingCompletion = yield* Ref.make(false);
   const applyLock = yield* Semaphore.make(1);
+  const historyGeneration = yield* Ref.make(0);
   // Save only completed data/cursor updates. A canceled scope must not cache
   // a cursor whose event has not reached the data yet.
   const remember = Effect.gen(function* () {
@@ -408,6 +410,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
   const setDeleted = Effect.fn("EnvironmentThreadState.setDeleted")(function* () {
     yield* Ref.set(awaitingCompletion, false);
+    yield* Ref.update(historyGeneration, (generation) => generation + 1);
     yield* SubscriptionRef.set(state, {
       data: Option.none(),
       status: "deleted",
@@ -575,6 +578,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     }
 
     if (item.kind === "snapshot") {
+      yield* Ref.update(historyGeneration, (generation) => generation + 1);
       yield* SubscriptionRef.set(lastSequence, item.snapshotSequence);
       const hasProgressiveHistory =
         item.historyCursor !== undefined ||
@@ -773,10 +777,76 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     );
   });
 
+  const loadAround = Effect.fn("EnvironmentThreadState.loadAround")(function* (
+    target: ThreadHistoryController.ThreadHistoryTarget,
+  ) {
+    const current = yield* SubscriptionRef.get(state);
+    const hasTarget = (projection: OrchestrationV2ThreadProjection) =>
+      projection.visibleTurnItems.some(
+        (row) => row.sourceItemId === target.itemId && row.sourceThreadId === target.threadId,
+      );
+    if (current.status === "deleted" || Option.isNone(current.data)) {
+      return { _tag: "noop" } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+    }
+    if (hasTarget(current.data.value)) {
+      return {
+        _tag: "loaded",
+        projection: current.data.value,
+      } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+    }
+    const generation = yield* Ref.get(historyGeneration);
+    return yield* Effect.gen(function* () {
+      const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+      if (Option.isNone(prepared) || Option.isNone(httpClient)) {
+        return {
+          _tag: "error",
+          message: "Environment is not connected.",
+        } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+      }
+      const result = yield* fetchEnvironmentBoundedThreadSnapshot({
+        prepared: prepared.value,
+        threadId,
+        anchorItemId: target.itemId,
+        anchorThreadId: target.threadId,
+      }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient.value), Effect.result);
+      if (Result.isFailure(result)) {
+        return {
+          _tag: "error",
+          message: formatHistoryError(result.failure),
+        } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+      }
+      return yield* applyLock.withPermits(1)(
+        Effect.gen(function* () {
+          if (generation !== (yield* Ref.get(historyGeneration))) {
+            return { _tag: "noop" } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+          }
+          const latest = yield* SubscriptionRef.get(state);
+          if (latest.status === "deleted" || Option.isNone(latest.data)) {
+            return { _tag: "noop" } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult;
+          }
+          // Search windows are rendered separately from recent history. Merging
+          // disjoint windows would make unloaded turns look like adjacent messages.
+          const projection = result.success.projection;
+          return hasTarget(projection)
+            ? ({
+                _tag: "loaded",
+                projection,
+              } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult)
+            : ({
+                _tag: "error",
+                message: "This match is no longer in the conversation.",
+              } satisfies ThreadHistoryController.ThreadHistoryLoadAroundResult);
+        }),
+      );
+    });
+  });
+
   if (Option.isSome(historyController)) {
     const scope = yield* Scope.Scope;
     const registration = yield* historyController.value.register(environmentId, threadId, {
       loadEarlier: () => loadEarlier().pipe(Effect.forkIn(scope), Effect.flatMap(Fiber.join)),
+      loadAround: (target) =>
+        loadAround(target).pipe(Effect.forkIn(scope), Effect.flatMap(Fiber.join)),
     });
     yield* Effect.addFinalizer(() => historyController.value.unregister(registration));
   }
@@ -990,7 +1060,11 @@ export * from "./checkpointDiff.ts";
 export * from "./boundedThreadSnapshotHttp.ts";
 export * as ThreadHistoryController from "./threadHistoryController.ts";
 // Flat so consumers' inferred types can name it.
-export type { ThreadHistoryLoadEarlierResult } from "./threadHistoryController.ts";
+export type {
+  ThreadHistoryLoadEarlierResult,
+  ThreadHistoryLoadAroundResult,
+  ThreadHistoryTarget,
+} from "./threadHistoryController.ts";
 export * from "./threadHistoryMerge.ts";
 export * from "./threadSnapshotHttp.ts";
 export * from "./composerPathSearch.ts";
