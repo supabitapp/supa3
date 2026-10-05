@@ -318,12 +318,18 @@ function JumpHintBadge(props: { label: string }) {
 }
 
 // Only the time label subscribes to the shared minute clock.
-function SidebarRelativeTime({ timestamp }: { timestamp: string }) {
+function SidebarRelativeTime({
+  timestamp,
+  className,
+}: {
+  timestamp: string;
+  className?: string | undefined;
+}) {
   const nowMinute = useNowMinute();
   return (
     <time
       dateTime={timestamp}
-      className="w-8 shrink-0 text-right text-xs text-secondary-label tabular-nums"
+      className={cn("w-8 shrink-0 text-right text-xs text-secondary-label tabular-nums", className)}
     >
       {compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp, Date.parse(`${nowMinute}:00Z`)))}
     </time>
@@ -1646,6 +1652,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       />
     </span>
   ) : null;
+  // Jump hints sit over the row's trailing edge. Keep the status metadata's
+  // measured space, but remove it visually so the hint is easy to scan.
+  const jumpHintIndicatorsClassName = props.jumpLabel !== null ? "invisible" : undefined;
   // Same pen the new-thread draft rows lead with, so both kinds of unsent
   // work read the same way in the list.
   const draftIndicator = hasUnsentDraft ? (
@@ -1727,14 +1736,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {draftIndicator}
             {title}
             {pinIndicator}
-            {terminalStatusIcon}
+            <span className={cn("contents", jumpHintIndicatorsClassName)}>
+              {terminalStatusIcon}
+            </span>
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
                 Regenerating title
               </span>
             ) : null}
             {/* Keep PR badges and wake notifications visible when Unsettle replaces the time. */}
-            {prBadge}
+            <span className={cn("contents", jumpHintIndicatorsClassName)}>{prBadge}</span>
             {sortable?.isDragging ? (
               dragDestination
             ) : (
@@ -1750,6 +1761,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                     replaceSettledTimeOnHover &&
                       "group-any-hover/sidebar-row:opacity-0 group-focus-within/sidebar-row:opacity-0",
+                    jumpHintIndicatorsClassName,
                   )}
                 >
                   {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1939,7 +1951,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     <span className="size-5" />
                   )}
                 </span>
-                <SidebarRelativeTime timestamp={thread.latestUserMessageAt ?? thread.updatedAt} />
+                <SidebarRelativeTime
+                  timestamp={thread.latestUserMessageAt ?? thread.updatedAt}
+                  className={jumpHintIndicatorsClassName}
+                />
               </span>
             </div>
             {showDragDestination ? (
@@ -1977,46 +1992,48 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   <TooltipPopup>Discard draft</TooltipPopup>
                 </Tooltip>
               ) : null}
-              {terminalStatusIcon}
-              {prBadge}
-              {topStatus ? (
-                isWokeStatus ? (
-                  <button
-                    type="button"
-                    aria-label="Dismiss Woke notification"
-                    onClick={handleAcknowledgeWokeClick}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    className={cn(
-                      "inline-flex shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      topStatus.className,
-                    )}
-                  >
-                    <AlarmClockIcon aria-hidden className="size-3.5" />
-                    <span role="status" className="sr-only">
-                      {topStatus.label}
+              <span className={cn("contents", jumpHintIndicatorsClassName)}>
+                {terminalStatusIcon}
+                {prBadge}
+                {topStatus ? (
+                  isWokeStatus ? (
+                    <button
+                      type="button"
+                      aria-label="Dismiss Woke notification"
+                      onClick={handleAcknowledgeWokeClick}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      className={cn(
+                        "inline-flex shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        topStatus.className,
+                      )}
+                    >
+                      <AlarmClockIcon aria-hidden className="size-3.5" />
+                      <span role="status" className="sr-only">
+                        {topStatus.label}
+                      </span>
+                    </button>
+                  ) : (
+                    <span role="status" className={cn("inline-flex shrink-0", topStatus.className)}>
+                      <StatusIcon aria-hidden className="size-3.5" />
+                      <span className="sr-only">{topStatus.label}</span>
                     </span>
-                  </button>
-                ) : (
-                  <span role="status" className={cn("inline-flex shrink-0", topStatus.className)}>
-                    <StatusIcon aria-hidden className="size-3.5" />
-                    <span className="sr-only">{topStatus.label}</span>
-                  </span>
-                )
-              ) : null}
-              <span
-                aria-hidden
-                className="pointer-events-none inline-flex shrink-0 items-center gap-1"
-              >
-                {isRemote ? (
-                  <EnvironmentMachineIcon
-                    kind={props.environmentMachine}
-                    className="size-3.5 text-sidebar-muted-foreground/70"
-                  />
+                  )
                 ) : null}
-                <SidebarProviderStack
-                  thread={thread}
-                  providerEntryByInstanceId={props.providerEntryByInstanceId}
-                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none inline-flex shrink-0 items-center gap-1"
+                >
+                  {isRemote ? (
+                    <EnvironmentMachineIcon
+                      kind={props.environmentMachine}
+                      className="size-3.5 text-sidebar-muted-foreground/70"
+                    />
+                  ) : null}
+                  <SidebarProviderStack
+                    thread={thread}
+                    providerEntryByInstanceId={props.providerEntryByInstanceId}
+                  />
+                </span>
               </span>
             </div>
           </div>
