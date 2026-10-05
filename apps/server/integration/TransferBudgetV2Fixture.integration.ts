@@ -20,7 +20,9 @@ import {
 } from "./fixtures/transferBudget.ts";
 
 export const THREAD_ID = ThreadId.make("transfer-budget-thread");
-export function threadCreated(provider: ProviderDriverKind): OrchestrationV2DomainEvent {
+export function threadCreated(
+  provider: ProviderDriverKind,
+): Extract<OrchestrationV2DomainEvent, { readonly type: "thread.created" }> {
   const now = DateTime.makeUnsafe("2026-06-01T00:00:00Z");
   return {
     id: EventId.make("thread-created"),
@@ -53,6 +55,17 @@ export function threadCreated(provider: ProviderDriverKind): OrchestrationV2Doma
       lastVisitedAt: null,
       deletedAt: null,
     },
+  };
+}
+// Visited between the history and the measured turn.
+export function threadVisited(provider: ProviderDriverKind): OrchestrationV2DomainEvent {
+  const now = DateTime.makeUnsafe("2026-06-01T00:10:30Z");
+  return {
+    id: EventId.make("thread-visited"),
+    type: "thread.visited",
+    threadId: THREAD_ID,
+    occurredAt: now,
+    payload: { ...threadCreated(provider).payload, lastVisitedAt: now },
   };
 }
 export function turnEvents(

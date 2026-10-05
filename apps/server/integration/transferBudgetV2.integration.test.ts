@@ -19,6 +19,7 @@ import {
   OrchestrationV2GetThreadProjectionError,
   OrchestrationV2GetShellSnapshotError,
   ProviderDriverKind,
+  type OrchestrationV2DomainEvent,
   type OrchestrationV2ThreadStreamItem,
   type OrchestrationV2ShellStreamItem,
 } from "@supacode/contracts";
@@ -60,7 +61,12 @@ import {
   type TransferBudgetRun,
 } from "./TransferBudgetReport.integration.ts";
 import { TRANSFER_HISTORY_TURN_COUNT } from "./fixtures/transferBudget.ts";
-import { THREAD_ID, threadCreated, turnEvents } from "./TransferBudgetV2Fixture.integration.ts";
+import {
+  THREAD_ID,
+  threadCreated,
+  threadVisited,
+  turnEvents,
+} from "./TransferBudgetV2Fixture.integration.ts";
 
 const decodeThreadSnapshot = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.toCodecJson(OrchestrationV2ThreadDetailSnapshot)),
@@ -283,18 +289,27 @@ it.live(
             const sq = yield* subscribe(shell, "shell", sequence);
             const ttq = yield* subscribe(second, "thread", sequence);
             const ssq = yield* subscribe(second, "shell", sequence);
-            for (const queue of [tq, sq, ttq, ssq])
-              assert.equal(yield* synchronized(queue), "replay");
+            const queues = [tq, sq, ttq, ssq];
+            for (const queue of queues) assert.equal(yield* synchronized(queue), "replay");
+            const writeUntilDelivered = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
+              Effect.gen(function* () {
+                const last = (yield* sink.write({ events })).at(-1)!;
+                for (const queue of queues)
+                  yield* collectUntil(
+                    queue,
+                    (item) => "sequence" in item && item.sequence >= last.sequence,
+                  );
+              });
+            // The completion marker is sent before the live subscription attaches,
+            // so a turn written right after it can arrive through one-at-a-time
+            // catch-up replay and split into different frames. A warm-up event
+            // reaching every stream proves each one is live before the baseline.
+            yield* writeUntilDelivered([threadVisited(provider)]);
             const threadBefore = thread.recorder.totals();
             const shellBefore = shell.recorder.totals();
             const secondBefore = second.recorder.totals();
             const sqlBefore = counter.count();
-            const events = turnEvents(provider, TRANSFER_HISTORY_TURN_COUNT, true);
-            const stored = yield* sink.write({ events });
-            const last = stored.at(-1)!;
-            const terminal = (item: StreamItem) =>
-              "sequence" in item && item.sequence >= last.sequence;
-            for (const queue of [tq, sq, ttq, ssq]) yield* collectUntil(queue, terminal);
+            yield* writeUntilDelivered(turnEvents(provider, TRANSFER_HISTORY_TURN_COUNT, true));
             const measuredTurnWebSocket = difference(thread.recorder.totals(), threadBefore);
             const measuredTurnShellWebSocket = difference(shell.recorder.totals(), shellBefore);
             const measuredTurnSecondClientWebSocket = difference(
