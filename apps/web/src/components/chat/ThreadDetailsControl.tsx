@@ -1,11 +1,11 @@
 import { mergeProps } from "@base-ui/react/merge-props";
-import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { useRender } from "@base-ui/react/use-render";
 import type { ComponentProps } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
-import { ComposerSelectControl } from "./ComposerControl";
+import { ComboboxTrigger } from "../ui/combobox";
+import { ComposerControl } from "./ComposerControl";
 import {
   THREAD_DETAILS_PANEL_ROW_CLASS,
   THREAD_DETAILS_PANEL_SELECT_ROW_CLASS,
@@ -80,28 +80,29 @@ export function ThreadDetailsControl({
   return control;
 }
 
-export function ThreadDetailsSelectControl({
+/** Searchable context pickers share the same toolbar and panel density as selects. */
+export function ThreadDetailsComboboxControl({
   panel,
   children,
   className,
   ...props
-}: Omit<SelectPrimitive.Trigger.Props, "className"> & { panel: boolean; className?: string }) {
-  if (!panel) {
-    return (
-      <ComposerSelectControl {...props} size="xs" className={className}>
-        {children}
-      </ComposerSelectControl>
-    );
-  }
+}: Omit<ComponentProps<typeof ComboboxTrigger>, "className"> & {
+  panel: boolean;
+  className?: string;
+}) {
   return (
-    <SelectPrimitive.Trigger
+    <ComboboxTrigger
       {...props}
-      render={<ThreadDetailsControl part="select" className={className} />}
+      render={
+        panel ? (
+          <ThreadDetailsControl part="select" className={className} />
+        ) : (
+          <ComposerControl size="xs" className={className} />
+        )
+      }
     >
       {children}
-      <SelectPrimitive.Icon data-slot="select-icon">
-        <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
-      </SelectPrimitive.Icon>
-    </SelectPrimitive.Trigger>
+      <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
+    </ComboboxTrigger>
   );
 }

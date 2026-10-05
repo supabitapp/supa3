@@ -1,4 +1,4 @@
-import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
+import { ThreadDetailsComboboxControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import { memo, useMemo, type MouseEvent as ReactMouseEvent } from "react";
@@ -20,13 +20,13 @@ import {
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { PreviousWorktreeItemContent } from "./PreviousWorktreeItemContent";
 import {
-  Select,
-  SelectGroup,
-  SelectGroupLabel,
-  SelectItem,
-  SelectPopup,
-  SelectValue,
-} from "./ui/select";
+  Combobox,
+  ComboboxPopup,
+  ComboboxSearchInput,
+  ComboboxList,
+  ComboboxEmpty,
+  ComboboxItem,
+} from "./ui/combobox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
@@ -172,10 +172,14 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   }
 
   return (
-    <Select
-      modal={false}
-      value={effectiveEnvMode}
-      onValueChange={(value: string | null) => {
+    <Combobox
+      autoHighlight
+      itemToStringLabel={(item) => item.label}
+      itemToStringValue={(item) => item.value}
+      value={envModeItems.find((item) => item.value === effectiveEnvMode) ?? null}
+      onValueChange={(item) => {
+        if (!item) return;
+        const value = item.value;
         if (value === PREVIOUS_WORKTREE_SELECT_VALUE) {
           onUsePreviousWorktree?.();
           return;
@@ -187,7 +191,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
       <Tooltip>
         <TooltipTrigger
           render={
-            <ThreadDetailsSelectControl
+            <ThreadDetailsComboboxControl
               panel={displayMode === "panel"}
               className="min-w-0 shrink"
               aria-label="Workspace"
@@ -212,7 +216,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
             />
           )}
           <ComposerContextLabel displayMode={displayMode}>
-            <SelectValue />
+            {envModeItems.find((item) => item.value === effectiveEnvMode)?.label}
           </ComposerContextLabel>
           {displayMode === "panel" && selectWorkspaceKind ? (
             <span className="shrink-0 text-3xs font-normal text-muted-foreground/70">
@@ -227,8 +231,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
               : resolveCurrentWorkspaceLabel(activeWorktreePath))}
         </TooltipPopup>
       </Tooltip>
-      <SelectPopup
-        alignItemWithTrigger={false}
+      <ComboboxPopup
         {...(displayMode === "toolbar" ? composerFloatingLayerProps : {})}
         className={
           displayMode === "panel"
@@ -238,31 +241,27 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
               : undefined
         }
       >
-        <SelectGroup>
-          <SelectGroupLabel>Workspace</SelectGroupLabel>
-          <SelectItem value="local">
-            <span className="inline-flex items-center gap-1.5">
-              {activeWorktreePath ? (
-                <FolderGitIcon className="size-3" />
+        <ComboboxSearchInput
+          autoFocus
+          aria-label="Search workspaces"
+          placeholder="Search workspaces..."
+        />
+        <ComboboxEmpty>No matches found.</ComboboxEmpty>
+        <ComboboxList>
+          {(item: (typeof envModeItems)[number]) => (
+            <ComboboxItem key={item.value} value={item}>
+              {item.value === PREVIOUS_WORKTREE_SELECT_VALUE ? (
+                <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
               ) : (
-                <FolderIcon className="size-3" />
+                <>
+                  <FolderIcon className="size-3" />
+                  {item.label}
+                </>
               )}
-              {resolveCurrentWorkspaceLabel(activeWorktreePath)}
-            </span>
-          </SelectItem>
-          <SelectItem value="worktree">
-            <span className="inline-flex items-center gap-1.5">
-              <FolderGit2Icon className="size-3" />
-              {resolveEnvModeLabel("worktree")}
-            </span>
-          </SelectItem>
-          {showPreviousWorktree && previousWorktreeLabel ? (
-            <SelectItem value={PREVIOUS_WORKTREE_SELECT_VALUE}>
-              <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
-            </SelectItem>
-          ) : null}
-        </SelectGroup>
-      </SelectPopup>
-    </Select>
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxPopup>
+    </Combobox>
   );
 });

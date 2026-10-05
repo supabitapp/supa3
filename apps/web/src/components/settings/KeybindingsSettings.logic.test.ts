@@ -323,11 +323,11 @@ describe("KeybindingsSettings.logic", () => {
     expect(unknownWhenVariables(parsed.ok ? parsed.value : undefined)).toEqual(["terminalFoc"]);
   });
 
-  it("marks each default shortcut for multi-binding commands as default", () => {
+  it("marks the new-thread shortcuts as default", () => {
     const rows = buildKeybindingRows(
       [
         {
-          command: "chat.new",
+          command: "chat.newLocal",
           shortcut: {
             key: "n",
             modKey: true,

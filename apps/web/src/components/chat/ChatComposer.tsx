@@ -1264,6 +1264,7 @@ const supervisedRuntimeModeOption = {
   ...runtimeModeConfig["approval-required"],
 };
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
+  keybindings: ResolvedKeybindingsConfig;
   showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
@@ -1280,10 +1281,11 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
     props.runtimeModeOptions.find((option) => option.mode === props.runtimeMode) ??
     supervisedRuntimeModeOption;
   const RuntimeModeIcon = runtimeModeOption.icon;
+  const runtimeModeShortcut = shortcutLabelForCommand(props.keybindings, "composer.mode");
   const interactionModeTooltip =
     props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode"
-      : "Default mode — click to enter plan mode";
+      ? "Plan mode — click to return to normal build mode · ⇧Tab"
+      : "Default mode — click to enter plan mode · ⇧Tab";
 
   const interactionModeToggle = props.showInteractionModeToggle ? (
     <>
@@ -1372,7 +1374,10 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
             })}
           </SelectPopup>
         </Select>
-        <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
+        <TooltipPopup side="top">
+          {runtimeModeOption.description}
+          {runtimeModeShortcut ? ` · ${runtimeModeShortcut}` : ""}
+        </TooltipPopup>
       </Tooltip>
 
       {interactionModeToggle}
@@ -5441,6 +5446,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       id: "mode",
       content: (
         <ComposerFooterModeControls
+          keybindings={keybindings}
           showInteractionModeToggle={planModeUiEnabled}
           interactionMode={interactionMode}
           runtimeMode={compatibleRuntimeMode}
