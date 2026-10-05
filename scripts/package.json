@@ -9,14 +9,14 @@
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@electron/asar": "^4.3.0",
-    "@electron/osx-sign": "2.7.0",
+    "@electron/osx-sign": "2.7.1",
     "@supacode/contracts": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@supacode/tailscale": "workspace:*",
     "effect": "catalog:",
     "playwright-core": "1.60.0",
     "pngjs": "7.0.0",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
