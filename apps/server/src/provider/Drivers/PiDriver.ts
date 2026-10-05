@@ -6,6 +6,8 @@
  * Pi state (sessions, settings, extensions, auth) lives in the user's own
  * `~/.pi/agent`, so continuation identity uses the default instance grouping.
  */
+import * as NodeOS from "node:os";
+import { expandHomePath } from "../../pathExpansion.ts";
 import { PiSettings, ProviderDriverKind, type ServerProvider } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -181,6 +183,17 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
       );
 
       return {
+        skillInstallDirectory: pathService.join(
+          expandHomePath(
+            processEnv.PI_CODING_AGENT_DIR?.trim() ||
+              pathService.join(
+                processEnv.HOME || processEnv.USERPROFILE || NodeOS.homedir(),
+                ".pi",
+                "agent",
+              ),
+          ),
+          "skills",
+        ),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity,

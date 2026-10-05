@@ -367,6 +367,15 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
           );
 
       return {
+        skillInstallDirectory: pathService.join(
+          homeLayout.effectiveHomePath === undefined
+            ? processEnv.CODEX_HOME?.trim() ||
+                (processEnv.HOME || processEnv.USERPROFILE
+                  ? pathService.join(processEnv.HOME || processEnv.USERPROFILE!, ".codex")
+                  : homeLayout.sharedHomePath)
+            : homeLayout.sharedHomePath,
+          "skills",
+        ),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity,

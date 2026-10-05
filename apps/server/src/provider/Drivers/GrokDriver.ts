@@ -1,3 +1,4 @@
+import * as NodeOS from "node:os";
 import { GrokSettings, ProviderDriverKind } from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -218,6 +219,11 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
             ]).pipe(Effect.map(([machineSnapshot, skills]) => ({ ...machineSnapshot, skills })));
 
       return {
+        skillInstallDirectory: path.join(
+          processEnv.GROK_HOME?.trim() ||
+            path.join(processEnv.HOME || processEnv.USERPROFILE || NodeOS.homedir(), ".grok"),
+          "skills",
+        ),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity,

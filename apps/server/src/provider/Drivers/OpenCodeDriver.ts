@@ -12,6 +12,7 @@
  *
  * @module provider/Drivers/OpenCodeDriver
  */
+import * as NodeOS from "node:os";
 import { OpenCodeSettings, ProviderDriverKind } from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -483,6 +484,17 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       );
 
       return {
+        skillInstallDirectory: effectiveConfig.serverUrl
+          ? undefined
+          : pathService.join(
+              processEnv.XDG_CONFIG_HOME?.trim() ||
+                pathService.join(
+                  processEnv.HOME || processEnv.USERPROFILE || NodeOS.homedir(),
+                  ".config",
+                ),
+              "opencode",
+              "skills",
+            ),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity,

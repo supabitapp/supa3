@@ -6,6 +6,7 @@
  *
  * @module provider/Drivers/CursorDriver
  */
+import * as NodeOS from "node:os";
 import { CursorSettings, ProviderDriverKind, ProviderSetupError } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
@@ -256,6 +257,11 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
       );
 
       return {
+        skillInstallDirectory: path.join(
+          processEnv.HOME?.trim() || processEnv.USERPROFILE?.trim() || NodeOS.homedir(),
+          ".cursor",
+          "skills",
+        ),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity,
