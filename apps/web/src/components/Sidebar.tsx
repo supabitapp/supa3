@@ -1970,7 +1970,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 </span>
                 <span
                   className={cn(
-                    "pointer-events-none col-start-1 row-start-1 flex items-center justify-self-end opacity-0 transition-opacity group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 motion-reduce:transition-none",
+                    "pointer-events-none col-start-1 row-start-1 flex items-center gap-1.5 justify-self-end opacity-0 transition-opacity group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 motion-reduce:transition-none",
                     snoozeMenuOpen && "pointer-events-auto opacity-100",
                   )}
                 >
@@ -1997,7 +1997,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             aria-label="Settle thread"
                             onClick={handleSettleClick}
                             onPointerDown={handleActionPointerDown}
-                            className="inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-sm px-1.5 text-muted-foreground/65 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-sm text-muted-foreground/65 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                           />
                         }
                       >
