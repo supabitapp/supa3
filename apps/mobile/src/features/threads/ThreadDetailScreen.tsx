@@ -1,4 +1,4 @@
-import { useThreadReportedModelSelection } from "../../state/entities";
+import { useSelectedThreadComposerMetadata } from "../../state/use-thread-detail";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 import { useNavigation } from "@react-navigation/native";
 import type { WorktreeSetupCardProps } from "./worktree-setup-card";
@@ -127,11 +127,10 @@ import {
   ThreadComposer,
 } from "./ThreadComposer";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
-import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
-import { useThreadQueuedCount } from "./ThreadQueueControl";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
+import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 
 export interface ThreadDetailScreenProps {
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
@@ -304,10 +303,9 @@ const USER_INPUT_TOGGLE_TIMING = {
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const navigation = useNavigation();
-  const reportedModelSelection = useThreadReportedModelSelection({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
+  const { session: voiceInputSession } = useGlobalVoiceInput();
+  const { reportedModelSelection, queuedCount, turnSubagents } =
+    useSelectedThreadComposerMetadata();
   const deviceState = useEnvironmentQuery(
     deviceEnvironment.state({ environmentId: props.environmentId, input: {} }),
   );
@@ -368,14 +366,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + 44;
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
-  const queuedCount = useThreadQueuedCount({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
-  const turnSubagents = useThreadTurnSubagents({
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
-  });
   const agentsSegment = resolveSubagentPillSegment(turnSubagents);
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   // A provider-native subagent shows status instead of a composer.
@@ -398,6 +388,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const selectedThreadKeyRef = useRef(selectedThreadKey);
   const lastScrolledSubmittedMessageIdRef = useRef<MessageId | null>(null);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const handleComposerFocusChange = useCallback(
     (focused: boolean) => {
@@ -484,11 +475,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
     if (pendingBackgroundWork !== null && contentPresentationKind === "ready") {
       return {
-        kind: "waiting",
+        kind: "background",
         label: pendingBackgroundWork.title,
         accessibilityLabel: `${pendingBackgroundWork.title}: ${pendingBackgroundWork.items
           .map((item) => item.label)
           .join(", ")}`,
+        waiting: pendingBackgroundWork.waiting,
       };
     }
     return null;
@@ -1165,6 +1157,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 colorScheme={isDarkMode ? "dark" : "light"}
                 status={floatingStatus}
                 lift={floatingControlLift}
+                // The command popover opens over the pill's slot.
+                hidden={composerMenuOpen}
                 devicePreview={
                   devicePreviews.length > 0
                     ? { count: devicePreviews.length, onPress: openDevicePreview }
@@ -1198,7 +1192,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   >
                     <ComposerQueuedEditBanner
                       saving={props.isSavingQueuedEdit}
-                      onCancel={props.onCancelQueuedRunEdit}
+                      onCancel={() => {
+                        voiceInputSession.cancel(props.composerDraftKey);
+                        props.onCancelQueuedRunEdit();
+                      }}
                     />
                   </Animated.View>
                 ) : null}
@@ -1379,6 +1376,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                       onExpandedChange={setComposerExpanded}
                       onEditorFocusChange={handleComposerFocusChange}
+                      onCommandMenuOpenChange={setComposerMenuOpen}
                     />
                   </>
                 )}

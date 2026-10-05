@@ -39,6 +39,38 @@ const makeEnvironment = (
 ) =>
   DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(makeEnvironmentLayer(overrides, env)));
 
+describe("resolveDesktopAppBranding", () => {
+  it("does not label stable desktop builds", () => {
+    assert.deepEqual(
+      DesktopEnvironment.resolveDesktopAppBranding({
+        isDevelopment: false,
+        appVersion: "0.0.28",
+      }),
+      { baseName: "Supacode", stageLabel: null, displayName: "Supacode" },
+    );
+  });
+
+  it("keeps development desktop builds labeled", () => {
+    assert.deepEqual(
+      DesktopEnvironment.resolveDesktopAppBranding({
+        isDevelopment: true,
+        appVersion: "0.0.28",
+      }),
+      { baseName: "Supacode", stageLabel: "Dev", displayName: "Supacode (Dev)" },
+    );
+  });
+
+  it("keeps nightly desktop builds labeled", () => {
+    assert.deepEqual(
+      DesktopEnvironment.resolveDesktopAppBranding({
+        isDevelopment: false,
+        appVersion: "0.0.28-nightly.20260616.12",
+      }),
+      { baseName: "Supacode", stageLabel: "Nightly", displayName: "Supacode (Nightly)" },
+    );
+  });
+});
+
 describe("DesktopEnvironment", () => {
   it.effect("derives state paths and development identity inside Effect", () =>
     Effect.gen(function* () {

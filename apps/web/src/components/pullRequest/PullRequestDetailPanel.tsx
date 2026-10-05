@@ -6,7 +6,6 @@ import { scopedThreadKey, scopeProjectRef } from "@supacode/client-runtime/envir
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
 import {
   type EnvironmentId,
-  DEFAULT_SERVER_SETTINGS,
   type PullRequestAction,
   type PullRequestMergeMethod,
   type PullRequestListEntry,
@@ -15,7 +14,6 @@ import {
   resolveEnvironmentMachineKind,
   type ScopedThreadRef,
 } from "@supacode/contracts";
-import { resolveProjectSettings } from "@supacode/shared/projectSettings";
 import {
   ArrowDownUpIcon,
   ArrowLeftIcon,
@@ -56,6 +54,7 @@ import {
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
 import {
   resolveShortcutCommand,
@@ -63,20 +62,14 @@ import {
   type ShortcutMatchContext,
 } from "~/keybindings";
 import { primaryServerKeybindingsAtom } from "~/state/server";
-import { useClientSettings } from "~/hooks/useSettings";
-import {
-  deriveLogicalProjectKeyFromSettings,
-  derivePhysicalProjectKey,
-  selectProjectGroupingSettings,
-} from "~/logicalProject";
+import { usePullRequestDefaultMergeMethodResolver } from "./usePullRequestActions";
 import { changeRequestRepositoryUrl, gitHubPullRequestBrowserUrl } from "~/lib/openPullRequestLink";
 import { usePreparePullRequestThreadAction } from "~/lib/sourceControlActions";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
-import { buildPhysicalToLogicalProjectKeyMap } from "~/sidebarProjectGrouping";
 import { useProjects, useServerConfigs } from "~/state/entities";
-import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
+import { useEnvironments } from "~/state/environments";
 import { useEnvironmentQuery } from "~/state/query";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import {
@@ -93,15 +86,6 @@ import { vcsEnvironment } from "~/state/vcs";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { useUiStateStore } from "~/uiStateStore";
 
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "../ui/alert-dialog";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -144,6 +128,7 @@ import {
   handoffReviewComments,
   latestPullRequestReviewOutcomes,
   loadingPullRequestCheckoutCommand,
+  isPullRequestNotFound,
   isStackedPullRequestBase,
   pullRequestActionMenuHasGroup,
   pullRequestActionNeedsHostRefresh,
@@ -170,6 +155,7 @@ import {
   type PickableEnvironment,
 } from "./pullRequestProjectAssignment.logic";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
+import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import {
   PullRequestActorLabel,
   PullRequestDiffStat,
@@ -559,19 +545,14 @@ export function PullRequestDetailPanel({
   }, [condensed]);
   const lastSelectedMergeMethod = useUiStateStore((state) => state.pullRequestMergeMethod);
   const setLastSelectedMergeMethod = useUiStateStore((state) => state.setPullRequestMergeMethod);
-  // Server-side and per project, like every other project setting. The
-  // client-local per-project map from before still answers when the server
-  // has no value, so a choice made on an older release keeps applying until
-  // it is set (or reset) in Settings.
-  const legacyMergeMethodOverrides = useClientSettings(
-    (settings) => settings.pullRequestMergeMethodOverrides,
+  const resolveProjectDefaultMergeMethod = usePullRequestDefaultMergeMethodResolver(
+    environmentId,
+    reference.projectId,
   );
-  const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const projectDefaultMergeMethod =
-    resolveProjectSettings(
-      environmentConfigs.get(environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS,
-      reference.projectId,
-    ).settings.pullRequestMergeMethod ?? undefined;
+  const projectDefaultMergeMethod = useMemo(
+    () => resolveProjectDefaultMergeMethod(),
+    [resolveProjectDefaultMergeMethod],
+  );
   const [mergeMethodSelection, setMergeMethodSelection] = useState<{
     readonly pullRequestKey: string;
     readonly method: PullRequestMergeMethod;
@@ -579,11 +560,15 @@ export function PullRequestDetailPanel({
   const setMergeMethod = (method: PullRequestMergeMethod) => {
     setMergeMethodSelection({ pullRequestKey, method });
   };
-  const [confirmation, setConfirmation] = useState<{
-    readonly open: boolean;
-    readonly action: "merge" | "close" | "enable-auto-merge" | "revert" | "approve-workflows";
-  }>({ open: false, action: "merge" });
-  const confirmAction = confirmation.action;
+  const confirm = useInlineConfirm<
+    | "merge"
+    | "enable-auto-merge"
+    | "approve-workflows"
+    | "menu-merge"
+    | "menu-enable-auto-merge"
+    | "close"
+    | "revert"
+  >();
   // Which handoff is preparing, keyed so a per-finding button can say "Preparing..." on itself
   // alone. One at a time whatever the key: they all check the same pull request out.
   const [handoff, setHandoff] = useState<string | null>(null);
@@ -909,39 +894,12 @@ export function PullRequestDetailPanel({
   const [titleSaving, setTitleSaving] = useState(false);
   const newThread = useNewThreadHandler();
   const { environments } = useEnvironments();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const unavailableGitHubUrl = useMemo(() => {
     const identity = projects.find(
       (project) => project.id === reference.projectId && project.environmentId === environmentId,
     )?.repositoryIdentity;
     return gitHubPullRequestBrowserUrl(identity, reference.repository, reference.number);
   }, [environmentId, projects, reference.number, reference.projectId, reference.repository]);
-  // Project settings stored the override under the sidebar group's key, which a duplicate row
-  // borrows from its siblings, so the project alone does not always name the same key.
-  const legacyProjectDefaultMergeMethod = useMemo(() => {
-    if (projectDefaultMergeMethod !== undefined) return undefined;
-    const project = projects.find(
-      (candidate) =>
-        candidate.environmentId === environmentId && candidate.id === reference.projectId,
-    );
-    if (!project) return undefined;
-    const projectKey =
-      buildPhysicalToLogicalProjectKeyMap({
-        projects,
-        settings: projectGroupingSettings,
-        primaryEnvironmentId,
-      }).get(derivePhysicalProjectKey(project)) ??
-      deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings);
-    return legacyMergeMethodOverrides[projectKey];
-  }, [
-    environmentId,
-    legacyMergeMethodOverrides,
-    primaryEnvironmentId,
-    projectDefaultMergeMethod,
-    projectGroupingSettings,
-    projects,
-    reference.projectId,
-  ]);
   // Beside a thread there is nothing to pick: the hand-offs land in that thread's composer, and
   // the thread is already on one server's copy of the branch.
   const pickableEnvironments = useMemo(
@@ -1443,7 +1401,7 @@ export function PullRequestDetailPanel({
   const selectedMergeMethod = resolvePullRequestMergeMethod(
     allowedMergeMethods,
     currentMergeMethod,
-    projectDefaultMergeMethod ?? legacyProjectDefaultMergeMethod,
+    projectDefaultMergeMethod,
     lastSelectedMergeMethod,
   );
   const selectedMergeMethodLabel = PULL_REQUEST_MERGE_METHOD_LABELS[selectedMergeMethod];
@@ -1932,27 +1890,42 @@ export function PullRequestDetailPanel({
                           size="xs"
                           variant="default"
                           disabled={actionPending}
-                          onClick={() =>
-                            setConfirmation({ open: true, action: "enable-auto-merge" })
-                          }
+                          {...confirm.bind(
+                            "enable-auto-merge",
+                            () => void perform("enable-auto-merge", selectedMergeMethod),
+                          )}
                           aria-label={
                             pendingAction === "enable-auto-merge"
                               ? "Enabling..."
-                              : pendingAutoMergeLabel
+                              : confirm.armed === "enable-auto-merge"
+                                ? "Confirm auto-merge"
+                                : pendingAutoMergeLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          <InlineConfirmIcon armed={confirm.armed === "enable-auto-merge"}>
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          </InlineConfirmIcon>
                           <span className="@max-[30rem]/pr-header:hidden">
-                            {pendingAction === "enable-auto-merge"
-                              ? "Enabling..."
-                              : pendingAutoMergeLabel}
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "enable-auto-merge"}
+                              idle={
+                                pendingAction === "enable-auto-merge"
+                                  ? "Enabling..."
+                                  : pendingAutoMergeLabel
+                              }
+                              confirm="Confirm auto-merge"
+                            />
                           </span>
                         </Button>
                       </span>
                     }
                   />
                   <TooltipPopup side="top">
-                    {pendingAction === "enable-auto-merge" ? "Enabling..." : pendingAutoMergeLabel}
+                    {pendingAction === "enable-auto-merge"
+                      ? "Enabling..."
+                      : confirm.armed === "enable-auto-merge"
+                        ? `Click again to enable auto-merge. The host may merge #${reference.number} right away.`
+                        : pendingAutoMergeLabel}
                   </TooltipPopup>
                 </Tooltip>
               ) : primaryAction === "auto-merge-armed" ? (
@@ -1984,21 +1957,40 @@ export function PullRequestDetailPanel({
                           size="xs"
                           variant="default"
                           disabled={actionPending}
-                          onClick={() => setConfirmation({ open: true, action: "merge" })}
+                          {...confirm.bind(
+                            "merge",
+                            () => void perform("merge", selectedMergeMethod),
+                          )}
                           aria-label={
-                            pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
+                            pendingAction === "merge"
+                              ? "Merging..."
+                              : confirm.armed === "merge"
+                                ? "Confirm merge"
+                                : selectedMergeMethodLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          <InlineConfirmIcon armed={confirm.armed === "merge"}>
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          </InlineConfirmIcon>
                           <span className="@max-[30rem]/pr-header:hidden">
-                            {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "merge"}
+                              idle={
+                                pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
+                              }
+                              confirm="Confirm merge"
+                            />
                           </span>
                         </Button>
                       </span>
                     }
                   />
                   <TooltipPopup side="top">
-                    {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
+                    {pendingAction === "merge"
+                      ? "Merging..."
+                      : confirm.armed === "merge"
+                        ? `Click again to ${selectedMergeMethodLabel.toLowerCase()} #${reference.number} into ${detail.baseBranch}`
+                        : selectedMergeMethodLabel}
                   </TooltipPopup>
                 </Tooltip>
               ) : (primaryAction === "merged" || primaryAction === "closed") &&
@@ -2109,11 +2101,14 @@ export function PullRequestDetailPanel({
                       ) : null}
                       {showsMergeNow ? (
                         <MenuItem
+                          {...confirm.bind(
+                            "menu-merge",
+                            () => void perform("merge", selectedMergeMethod),
+                          )}
                           disabled={actionPending}
-                          onClick={() => setConfirmation({ open: true, action: "merge" })}
                         >
                           <PullRequestGlyph.merged className="size-3.5" />
-                          Merge now
+                          {confirm.armed === "menu-merge" ? "Confirm merge" : "Merge now"}
                         </MenuItem>
                       ) : null}
                       {/* The same merge, left with the host to carry out once its requirements
@@ -2129,13 +2124,16 @@ export function PullRequestDetailPanel({
                         </MenuItem>
                       ) : showsAutoMerge ? (
                         <MenuItem
+                          {...confirm.bind(
+                            "menu-enable-auto-merge",
+                            () => void perform("enable-auto-merge", selectedMergeMethod),
+                          )}
                           disabled={actionPending}
-                          onClick={() =>
-                            setConfirmation({ open: true, action: "enable-auto-merge" })
-                          }
                         >
                           <PullRequestGlyph.merged className="size-3.5" />
-                          Enable auto-merge
+                          {confirm.armed === "menu-enable-auto-merge"
+                            ? "Confirm auto-merge"
+                            : "Enable auto-merge"}
                         </MenuItem>
                       ) : null}
                       {/* A preference for the merge action rather than a second action, so it
@@ -2208,12 +2206,12 @@ export function PullRequestDetailPanel({
                     <>
                       <MenuSeparator />
                       <MenuItem
+                        {...confirm.bind("close", () => void perform("close"))}
                         variant="destructive"
                         disabled={actionPending}
-                        onClick={() => setConfirmation({ open: true, action: "close" })}
                       >
                         <PullRequestGlyph.closed className="size-3.5" />
-                        Close pull request
+                        {confirm.armed === "close" ? "Confirm close" : "Close pull request"}
                       </MenuItem>
                     </>
                   ) : detail.state === "closed" && can("reopen") ? (
@@ -2228,11 +2226,11 @@ export function PullRequestDetailPanel({
                     <>
                       <MenuSeparator />
                       <MenuItem
+                        {...confirm.bind("revert", () => void perform("revert"))}
                         disabled={actionPending}
-                        onClick={() => setConfirmation({ open: true, action: "revert" })}
                       >
                         <RotateCcwIcon className="size-3.5" />
-                        Revert changes
+                        {confirm.armed === "revert" ? "Confirm revert" : "Revert changes"}
                       </MenuItem>
                     </>
                   ) : null}
@@ -2589,21 +2587,30 @@ export function PullRequestDetailPanel({
                             size="xs"
                             variant="warning-outline"
                             disabled={actionPending}
-                            onClick={() =>
-                              setConfirmation({ open: true, action: "approve-workflows" })
-                            }
+                            {...confirm.bind(
+                              "approve-workflows",
+                              () => void perform("approve-workflows"),
+                            )}
                             aria-label={
                               pendingAction === "approve-workflows"
                                 ? "Approving..."
-                                : "Approve workflows to run"
+                                : confirm.armed === "approve-workflows"
+                                  ? "Confirm approval"
+                                  : "Approve workflows to run"
                             }
                           >
-                            <PlayIcon aria-hidden className="size-3.5" />
-                            <span>
-                              {pendingAction === "approve-workflows"
-                                ? "Approving..."
-                                : "Approve workflows to run"}
-                            </span>
+                            <InlineConfirmIcon armed={confirm.armed === "approve-workflows"}>
+                              <PlayIcon aria-hidden className="size-3.5" />
+                            </InlineConfirmIcon>
+                            <InlineConfirmLabel
+                              armed={confirm.armed === "approve-workflows"}
+                              idle={
+                                pendingAction === "approve-workflows"
+                                  ? "Approving..."
+                                  : "Approve workflows to run"
+                              }
+                              confirm="Confirm approval"
+                            />
                           </Button>
                         </span>
                       }
@@ -2611,7 +2618,9 @@ export function PullRequestDetailPanel({
                     <TooltipPopup side="top">
                       {pendingAction === "approve-workflows"
                         ? "Approving..."
-                        : "Approve workflows to run"}
+                        : confirm.armed === "approve-workflows"
+                          ? `Click again to let ${workflowApprovalsRequired} ${workflowApprovalsRequired === 1 ? "workflow" : "workflows"} from #${reference.number} run. Review the code and workflow changes first.`
+                          : "Approve workflows to run"}
                     </TooltipPopup>
                   </Tooltip>
                 ) : (
@@ -2740,7 +2749,13 @@ export function PullRequestDetailPanel({
       >
         {detailQuery.error && !detail ? (
           <PullRequestsUnavailableState
-            error={detailQuery.error}
+            {...(isPullRequestNotFound(detailQuery.failure)
+              ? {
+                  title: `Pull request #${reference.number} not found`,
+                  error:
+                    "It may be an issue rather than a pull request, or this account can't see it.",
+                }
+              : { error: detailQuery.error })}
             refreshing={detailQuery.isPending}
             onRetry={refreshDetail}
             {...(unavailableGitHubUrl ? { gitHubUrl: unavailableGitHubUrl } : {})}
@@ -2832,74 +2847,6 @@ export function PullRequestDetailPanel({
           />
         </div>
       ) : null}
-
-      <AlertDialog
-        open={confirmation.open}
-        onOpenChange={(open) => setConfirmation((current) => ({ ...current, open }))}
-        onOpenChangeComplete={(open) => {
-          if (!open) setConfirmation({ open: false, action: "merge" });
-        }}
-      >
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmAction === "merge"
-                ? "Merge pull request?"
-                : confirmAction === "enable-auto-merge"
-                  ? "Enable auto-merge?"
-                  : confirmAction === "revert"
-                    ? "Revert these changes?"
-                    : confirmAction === "approve-workflows"
-                      ? "Approve workflows to run?"
-                      : "Close pull request?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmAction === "merge"
-                ? `This merges #${reference.number} using ${selectedMergeMethod}.`
-                : confirmAction === "enable-auto-merge"
-                  ? // The host merges this as soon as it considers the pull request ready, which
-                    // may be immediately — there is no telling from here whether anything is
-                    // still outstanding.
-                    `This merges #${reference.number} using ${selectedMergeMethod} as soon as the host considers it ready, which may be immediately.`
-                  : confirmAction === "revert"
-                    ? `This opens a new pull request that reverses the changes merged by #${reference.number}.`
-                    : confirmAction === "approve-workflows"
-                      ? `This allows ${workflowApprovalsRequired} ${workflowApprovalsRequired === 1 ? "workflow" : "workflows"} from #${reference.number} to run. Review the code and workflow changes first.`
-                      : `This closes #${reference.number} without merging it.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" size="sm" />}>
-              Cancel
-            </AlertDialogClose>
-            <Button
-              size="sm"
-              variant={confirmAction === "close" ? "destructive" : "default"}
-              disabled={actionPending}
-              onClick={() => {
-                const action = confirmAction;
-                setConfirmation((current) => ({ ...current, open: false }));
-                if (action === "merge") void perform("merge", selectedMergeMethod);
-                if (action === "enable-auto-merge")
-                  void perform("enable-auto-merge", selectedMergeMethod);
-                if (action === "revert") void perform("revert");
-                if (action === "approve-workflows") void perform("approve-workflows");
-                if (action === "close") void perform("close");
-              }}
-            >
-              {confirmAction === "merge"
-                ? selectedMergeMethodLabel
-                : confirmAction === "enable-auto-merge"
-                  ? "Enable auto-merge"
-                  : confirmAction === "revert"
-                    ? "Create revert PR"
-                    : confirmAction === "approve-workflows"
-                      ? "Approve and run"
-                      : "Close"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
     </div>
   );
 }

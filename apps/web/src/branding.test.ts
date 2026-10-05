@@ -8,6 +8,7 @@ const originalWindow = globalThis.window;
 
 afterEach(() => {
   vi.resetModules();
+  vi.unstubAllEnvs();
 
   if (originalWindow === undefined) {
     Reflect.deleteProperty(globalThis, "window");
@@ -18,6 +19,48 @@ afterEach(() => {
 });
 
 describe("branding", () => {
+  it("does not label stable web builds", async () => {
+    vi.stubEnv("DEV", false);
+    vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "");
+
+    const branding = await import("./branding");
+
+    expect(branding.APP_STAGE_LABEL).toBeNull();
+    expect(branding.APP_DISPLAY_NAME).toBe("Supacode");
+  });
+
+  it("keeps development web builds labeled", async () => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "");
+
+    const branding = await import("./branding");
+
+    expect(branding.APP_STAGE_LABEL).toBe("Dev");
+    expect(branding.APP_DISPLAY_NAME).toBe("Supacode (Dev)");
+  });
+
+  it("preserves an absent desktop stage over the web build fallback", async () => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "nightly");
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        desktopBridge: {
+          getAppBranding: () => ({
+            baseName: "Supacode",
+            stageLabel: null,
+            displayName: "Supacode",
+          }),
+        },
+      },
+    });
+
+    const branding = await import("./branding");
+
+    expect(branding.APP_STAGE_LABEL).toBeNull();
+    expect(branding.APP_DISPLAY_NAME).toBe("Supacode");
+  });
+
   it("uses injected desktop branding when available", async () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -76,7 +119,7 @@ describe("branding logic", () => {
     expect(
       resolveServerBackedAppStageLabel({
         primaryServerVersion: "0.0.28-nightly.20260616.12",
-        fallbackStageLabel: "Alpha",
+        fallbackStageLabel: null,
       }),
     ).toBe("Nightly");
   });
@@ -85,8 +128,8 @@ describe("branding logic", () => {
     expect(
       resolveServerBackedAppDisplayName({
         baseName: "Supacode",
-        fallbackDisplayName: "Supacode (Alpha)",
-        fallbackStageLabel: "Alpha",
+        fallbackDisplayName: "Supacode",
+        fallbackStageLabel: null,
         primaryServerVersion: "0.0.28-nightly.20260616.12",
       }),
     ).toBe("Supacode (Nightly)");
@@ -96,21 +139,21 @@ describe("branding logic", () => {
     expect(
       resolveServerBackedAppDisplayName({
         baseName: "Supacode",
-        fallbackDisplayName: "Supacode (Alpha)",
-        fallbackStageLabel: "Alpha",
+        fallbackDisplayName: "Supacode",
+        fallbackStageLabel: null,
         primaryServerVersion: "0.0.27",
       }),
-    ).toBe("Supacode (Alpha)");
+    ).toBe("Supacode");
   });
 
   it("keeps the fallback display name for malformed nightly primary server versions", () => {
     expect(
       resolveServerBackedAppDisplayName({
         baseName: "Supacode",
-        fallbackDisplayName: "Supacode (Alpha)",
-        fallbackStageLabel: "Alpha",
+        fallbackDisplayName: "Supacode",
+        fallbackStageLabel: null,
         primaryServerVersion: "0.0.28-nightly.20260616",
       }),
-    ).toBe("Supacode (Alpha)");
+    ).toBe("Supacode");
   });
 });

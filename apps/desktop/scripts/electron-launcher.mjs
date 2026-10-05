@@ -15,7 +15,7 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "Supacode (Dev)" : "Supacode (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "Supacode (Dev)" : "Supacode";
 const APP_BUNDLE_ID = isDevelopment
   ? `com.supaterm.supacode.dev.${devBundleIdSuffix || "local"}`
   : "com.supaterm.supacode";

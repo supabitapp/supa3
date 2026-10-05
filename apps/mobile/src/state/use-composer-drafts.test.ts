@@ -1,3 +1,4 @@
+import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import {
   CommandId,
@@ -187,7 +188,9 @@ import {
   setComposerDraftAttachmentUpload,
   waitForComposerDraftsLoaded,
   setStickyComposerModelSelection,
+  setStickyNewTaskProject,
   stickyComposerModelSelectionAtom,
+  stickyNewTaskProjectAtom,
   undoComposerDraftMerge,
   undoComposerDraftMergeState,
 } from "./use-composer-drafts";
@@ -199,6 +202,7 @@ const DRAFT: ComposerDraft = {
 };
 
 afterEach(() => {
+  appAtomRegistry.set(acknowledgedThreadMessagesAtom, []);
   vi.useRealTimers();
   resetComposerDraftsLoadState();
   composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
@@ -211,6 +215,7 @@ afterEach(() => {
   composerDraftFileMocks.readImage.mockResolvedValue("YWJj");
   appAtomRegistry.set(composerDraftsAtom, {});
   appAtomRegistry.set(stickyComposerModelSelectionAtom, null);
+  appAtomRegistry.set(stickyNewTaskProjectAtom, null);
   appAtomRegistry.set(modelOptionMemoryAtom, {});
   appAtomRegistry.set(threadOutboxManager.queuedMessagesByThreadKeyAtom, {});
   composerAttachmentCleanupMocks.remove.mockClear();
@@ -980,6 +985,40 @@ describe("mobile composer drafts", () => {
     expect(composerAttachmentCleanupMocks.remove).toHaveBeenCalledExactlyOnceWith(image.fileUri);
   });
 
+  it("keeps acknowledged image bytes until the authoritative message replaces the local row", async () => {
+    const outboxLoad = vi.spyOn(threadOutboxManager, "load").mockResolvedValue(true);
+    onTestFinished(() => outboxLoad.mockRestore());
+    const image = {
+      id: "acknowledged-image",
+      type: "image" as const,
+      name: "photo.png",
+      mimeType: "image/png",
+      sizeBytes: 3,
+      fileUri: "file:///documents/local-attachments/acknowledged-photo.png",
+      previewUri: "file:///documents/local-attachments/acknowledged-photo.png",
+    };
+    appAtomRegistry.set(composerDraftsAtom, {});
+    appAtomRegistry.set(threadOutboxManager.queuedMessagesByThreadKeyAtom, {});
+    appAtomRegistry.set(acknowledgedThreadMessagesAtom, [
+      {
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: MessageId.make("acknowledged-image"),
+        commandId: CommandId.make("command-image"),
+        text: "look at this",
+        attachments: [image],
+        createdAt: "2026-08-31T12:00:00.000Z",
+      },
+    ]);
+
+    await releaseUnusedComposerAttachmentFiles([image]);
+    expect(composerAttachmentCleanupMocks.remove).not.toHaveBeenCalled();
+
+    appAtomRegistry.set(acknowledgedThreadMessagesAtom, []);
+    await releaseUnusedComposerAttachmentFiles([image]);
+    expect(composerAttachmentCleanupMocks.remove).toHaveBeenCalledExactlyOnceWith(image.fileUri);
+  });
+
   it("keeps an image through an inline read after its draft is removed", async () => {
     const { prepareTurnAttachments } =
       await vi.importActual<typeof import("../lib/attachmentUpload")>("../lib/attachmentUpload");
@@ -1648,6 +1687,7 @@ describe("mobile composer drafts", () => {
       drafts: { "environment-1:thread-1": DRAFT },
       modelOptionMemory: {},
       stickyModelSelection: null,
+      stickyNewTaskProject: null,
     });
   });
 
@@ -1766,6 +1806,25 @@ describe("mobile composer drafts", () => {
       instanceId: "codex",
       model: "gpt-5.6-sol",
     });
+  });
+
+  it("restores the sticky new-task project after a restart", async () => {
+    vi.useFakeTimers();
+    await waitForComposerDraftsLoaded();
+    const project = {
+      environmentId: EnvironmentId.make("environment-1"),
+      projectId: ProjectId.make("project-1"),
+    };
+    setStickyNewTaskProject(project);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(JSON.parse(composerDraftFileMocks.getDocument())).toMatchObject({
+      stickyNewTaskProject: project,
+    });
+
+    resetComposerDraftsLoadState();
+    appAtomRegistry.set(stickyNewTaskProjectAtom, null);
+    await waitForComposerDraftsLoaded();
+    expect(appAtomRegistry.get(stickyNewTaskProjectAtom)).toEqual(project);
   });
 
   it("decodes model option memory from the composer document", () => {

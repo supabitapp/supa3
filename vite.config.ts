@@ -186,6 +186,7 @@ export default defineConfig({
       "supacode/no-manual-effect-runtime-in-tests": "error",
       "supacode/no-native-title-tooltip": "error",
       "supacode/no-test-in-loop": "error",
+      "supacode/no-unscoped-has": "error",
       "supacode/namespace-node-imports": "error",
     },
     overrides: [

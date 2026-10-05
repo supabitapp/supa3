@@ -1,3 +1,5 @@
+import type { DesktopEnvironmentMachineIcons } from "@supacode/contracts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -50,6 +52,7 @@ export class ElectronApp extends Context.Service<
      * pinned to `en-US` however the machine is configured.
      */
     readonly systemLocale: Effect.Effect<string>;
+    readonly environmentMachineIcons: Effect.Effect<DesktopEnvironmentMachineIcons>;
     readonly whenReady: Effect.Effect<void, ElectronAppWhenReadyError>;
     readonly quit: Effect.Effect<void>;
     readonly requestSingleInstanceLock: Effect.Effect<boolean>;
@@ -98,6 +101,14 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
       }),
   ).pipe(Effect.asVoid);
 
+const readEnvironmentMachineSymbol = Effect.fn("desktop.readEnvironmentMachineSymbol")(
+  (name: string) =>
+    Effect.try(() => {
+      const image = Electron.nativeImage.createFromNamedImage(name, { pointSize: 32 });
+      return image.isEmpty() ? null : image.toDataURL();
+    }).pipe(Effect.orElseSucceed(() => null)),
+);
+
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = ElectronApp.of({
   metadata: Effect.gen(function* () {
@@ -131,6 +142,15 @@ export const make = ElectronApp.of({
   // (`en_GB`). `Intl` rejects those outright rather than normalizing them, so
   // the tag is normalized here rather than in the renderer that consumes it.
   systemLocale: Effect.sync(() => Electron.app.getSystemLocale().replace(/_/g, "-")),
+  environmentMachineIcons: Effect.gen(function* () {
+    if ((yield* HostProcessPlatform) !== "darwin") return {};
+    const mini = yield* readEnvironmentMachineSymbol("macmini");
+    const studio = yield* readEnvironmentMachineSymbol("macstudio");
+    return {
+      ...(mini === null ? {} : { "mac-mini": mini }),
+      ...(studio === null ? {} : { "mac-studio": studio }),
+    };
+  }),
   whenReady: Effect.gen(function* () {
     const isPackaged = Electron.app.isPackaged;
     yield* Effect.tryPromise({

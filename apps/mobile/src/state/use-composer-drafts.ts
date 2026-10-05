@@ -1,3 +1,4 @@
+import { acknowledgedThreadMessagesAtom } from "./acknowledged-thread-messages";
 import { useAtomValue } from "@effect/atom-react";
 import {
   EnvironmentId as EnvironmentIdSchema,
@@ -12,12 +13,14 @@ import {
   ProviderInteractionMode as ProviderInteractionModeSchema,
   ProviderOptionSelection as ProviderOptionSelectionSchema,
   RuntimeMode as RuntimeModeSchema,
+  ScopedProjectRef as ScopedProjectRefSchema,
   type EnvironmentId,
   type ModelSelection,
   type ProjectId,
   type ProviderInteractionMode,
   type ProviderOptionSelection,
   type RuntimeMode,
+  type ScopedProjectRef,
 } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 import { useEffect } from "react";
@@ -396,6 +399,7 @@ const PersistedComposerDraftsSchema = Schema.Struct({
   schemaVersion: Schema.Literal(COMPOSER_DRAFTS_SCHEMA_VERSION),
   drafts: Schema.Record(Schema.String, ComposerDraftSchema),
   stickyModelSelection: Schema.optional(ModelSelectionSchema),
+  stickyNewTaskProject: Schema.optional(ScopedProjectRefSchema),
   modelOptionMemory: Schema.optional(
     Schema.Record(
       Schema.String,
@@ -421,6 +425,12 @@ export const composerDraftsAtom = Atom.make<Record<string, ComposerDraft>>({}).p
 export const stickyComposerModelSelectionAtom = Atom.make<ModelSelection | null>(null).pipe(
   Atom.keepAlive,
   Atom.withLabel("mobile:sticky-composer-model-selection"),
+);
+
+/** The project the new-task flow last targeted; compose reopens it. */
+export const stickyNewTaskProjectAtom = Atom.make<ScopedProjectRef | null>(null).pipe(
+  Atom.keepAlive,
+  Atom.withLabel("mobile:sticky-new-task-project"),
 );
 
 export type ModelOptionMemoryState = Readonly<
@@ -595,6 +605,7 @@ export function migrateLegacyNewTaskDraft(
 export function decodePersistedComposerState(value: unknown): {
   readonly drafts: Record<string, ComposerDraft>;
   readonly stickyModelSelection: ModelSelection | null;
+  readonly stickyNewTaskProject: ScopedProjectRef | null;
   readonly modelOptionMemory: ModelOptionMemoryState;
 } {
   const parsed = decodePersistedComposerDraftsDocument(value);
@@ -633,6 +644,7 @@ export function decodePersistedComposerState(value: unknown): {
         .filter(([key]) => !isQueuedEditDraftKey(key)),
     ),
     stickyModelSelection: parsed.stickyModelSelection ?? null,
+    stickyNewTaskProject: parsed.stickyNewTaskProject ?? null,
     modelOptionMemory: parsed.modelOptionMemory ?? {},
   };
 }
@@ -654,6 +666,7 @@ async function loadPersistedComposerState(): Promise<
       return {
         drafts: {},
         stickyModelSelection: null,
+        stickyNewTaskProject: null,
         modelOptionMemory: {},
       };
     }
@@ -682,10 +695,12 @@ async function writePersistedComposerState(
     const nonEmptyDrafts = Object.fromEntries(
       Object.entries(drafts).filter(([, draft]) => !isEmptyDraft(draft)),
     );
+    const stickyNewTaskProject = appAtomRegistry.get(stickyNewTaskProjectAtom);
     const document = {
       schemaVersion: COMPOSER_DRAFTS_SCHEMA_VERSION,
       drafts: nonEmptyDrafts,
       ...(stickyModelSelection ? { stickyModelSelection } : {}),
+      ...(stickyNewTaskProject ? { stickyNewTaskProject } : {}),
       ...(Object.keys(appAtomRegistry.get(modelOptionMemoryAtom)).length > 0
         ? { modelOptionMemory: appAtomRegistry.get(modelOptionMemoryAtom) }
         : {}),
@@ -768,7 +783,11 @@ function isComposerAttachmentFileReferenced(fileUri: string): boolean {
   const queuedMessages = Object.values(
     appAtomRegistry.get(threadOutboxManager.queuedMessagesByThreadKeyAtom),
   ).flat();
-  return [...drafts, ...queuedMessages].some((owner) =>
+  return [
+    ...drafts,
+    ...queuedMessages,
+    ...appAtomRegistry.get(acknowledgedThreadMessagesAtom),
+  ].some((owner) =>
     owner.attachments.some(
       (attachment) =>
         attachment.fileUri !== undefined &&
@@ -969,6 +988,12 @@ export function ensureComposerDraftsLoaded(): void {
     ) {
       appAtomRegistry.set(stickyComposerModelSelectionAtom, persisted.stickyModelSelection);
     }
+    if (
+      persisted.stickyNewTaskProject !== null &&
+      appAtomRegistry.get(stickyNewTaskProjectAtom) === null
+    ) {
+      appAtomRegistry.set(stickyNewTaskProjectAtom, persisted.stickyNewTaskProject);
+    }
     if (Object.keys(persisted.modelOptionMemory).length > 0) {
       const current = appAtomRegistry.get(modelOptionMemoryAtom);
       appAtomRegistry.set(modelOptionMemoryAtom, {
@@ -1023,6 +1048,15 @@ function updateComposerDrafts(
 
 export function setStickyComposerModelSelection(modelSelection: ModelSelection): void {
   appAtomRegistry.set(stickyComposerModelSelectionAtom, modelSelection);
+  schedulePersistComposerState();
+}
+
+export function setStickyNewTaskProject(project: ScopedProjectRef): void {
+  const current = appAtomRegistry.get(stickyNewTaskProjectAtom);
+  if (current?.environmentId === project.environmentId && current.projectId === project.projectId) {
+    return;
+  }
+  appAtomRegistry.set(stickyNewTaskProjectAtom, project);
   schedulePersistComposerState();
 }
 

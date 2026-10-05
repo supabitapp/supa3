@@ -16,6 +16,7 @@ import {
   type PullRequestSummary,
   type ServerSettings as ContractServerSettings,
   type ServerSettingsPatch,
+  type ThreadPullRequestLink,
 } from "@supacode/contracts";
 import { applyServerSettingsPatch } from "@supacode/shared/serverSettings";
 import * as Crypto from "effect/Crypto";
@@ -46,7 +47,12 @@ function at(offsetMs: number): DateTime.Utc {
   return DateTime.makeUnsafe(NOW_MS + offsetMs);
 }
 
-function shell(overrides: Partial<OrchestrationV2ThreadShell> = {}): OrchestrationV2ThreadShell {
+type SettlementShell = OrchestrationV2ThreadShell &
+  Pick<ProjectionStore.ProjectionSettlementCandidate, "latestUserAuthoredMessageAt">;
+
+// A fixture's user message is one the user wrote unless the test sets
+// latestUserAuthoredMessageAt on its own.
+function shell(overrides: Partial<SettlementShell> = {}): SettlementShell {
   return {
     id: ThreadId.make("thread-1"),
     projectId: ProjectId.make("project-1"),
@@ -83,6 +89,7 @@ function shell(overrides: Partial<OrchestrationV2ThreadShell> = {}): Orchestrati
     latestRunStartedAt: null,
     latestRunCompletedAt: null,
     latestUserMessageAt: null,
+    latestUserAuthoredMessageAt: overrides.latestUserMessageAt ?? null,
     createdAt: at(-30 * DAY_MS),
     updatedAt: at(-10 * DAY_MS),
     archivedAt: null,
@@ -138,10 +145,23 @@ describe("isAutoSettlementCandidate", () => {
     ).toBe(false);
     expect(
       ThreadSettlementService.isAutoSettlementCandidate(
-        shell({ pendingBackgroundTasks: [{ label: "task" }] as never }),
+        shell({ pendingBackgroundTasks: [{ taskId: "review", kind: "subagent" }] }),
         NOW_MS,
       ),
     ).toBe(false);
+  });
+
+  it("settles a thread whose only background work is a command left running", () => {
+    expect(
+      ThreadSettlementService.isAutoSettlementCandidate(
+        shell({
+          pendingBackgroundTasks: [
+            { taskId: "dev", kind: "command", description: "vp run dev --share" },
+          ],
+        }),
+        NOW_MS,
+      ),
+    ).toBe(true);
   });
 
   it("keeps snoozed threads parked until they wake early on error or completion", () => {
@@ -292,6 +312,31 @@ describe("resolveAutoSettlementAt", () => {
     ).toEqual(shell().createdAt);
   });
 
+  it("settles on merge after agent-started runs, but not after the user writes again", () => {
+    // A background command stopped after the merge and its notification
+    // started a run. Only the user's own messages hold a merged thread open.
+    const woken = shell({
+      latestUserMessageAt: at(-30 * 60 * 1_000),
+      latestUserAuthoredMessageAt: at(-2 * 60 * 60 * 1_000),
+      latestRunRequestedAt: at(-30 * 60 * 1_000),
+      latestRunCompletedAt: at(-29 * 60 * 1_000),
+    });
+    const input = {
+      thread: woken,
+      pullRequest: { state: "merged" as const, mergedAt: DateTime.formatIso(at(-60 * 60 * 1_000)) },
+      nowMs: NOW_MS,
+      autoSettleAfterDays: null,
+      autoSettleOnMerge: true,
+    };
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input)).toEqual(at(-29 * 60 * 1_000));
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({
+        ...input,
+        thread: { ...woken, latestUserAuthoredMessageAt: at(-30 * 60 * 1_000) },
+      }),
+    ).toBeNull();
+  });
+
   it("settles inactive threads even when their pull request remains open", () => {
     const input = {
       thread: shell({ latestUserMessageAt: at(-30 * DAY_MS) }),
@@ -370,10 +415,7 @@ function makeProject(
   };
 }
 
-function makeThread(
-  id: string,
-  overrides: Partial<OrchestrationV2ThreadShell> = {},
-): OrchestrationV2ThreadShell {
+function makeThread(id: string, overrides: Partial<SettlementShell> = {}): SettlementShell {
   return shell({
     id: ThreadId.make(id),
     projectId: PROJECT_ID,
@@ -385,10 +427,14 @@ function makeThread(
   });
 }
 
+type SettlementSnapshot = Omit<OrchestrationV2ShellSnapshot, "threads"> & {
+  readonly threads: ReadonlyArray<SettlementShell>;
+};
+
 function makeSnapshot(
-  threads: ReadonlyArray<OrchestrationV2ThreadShell>,
+  threads: ReadonlyArray<SettlementShell>,
   projects: ReadonlyArray<OrchestrationProjectShell> = [makeProject()],
-): OrchestrationV2ShellSnapshot {
+): SettlementSnapshot {
   return {
     schemaVersion: 1,
     snapshotSequence: 1,
@@ -434,8 +480,30 @@ function makeBranchPullRequest(state: "open" | "closed" | "merged") {
   } satisfies GitManager.GitBranchPullRequest;
 }
 
+function makeMergedPullRequestLink(): ThreadPullRequestLink {
+  return {
+    host: "example.test",
+    repository: "owner/repository",
+    number: 42,
+    url: "https://example.test/owner/repository/pull/42",
+    source: "manual",
+    linkedAt: "2026-08-20T00:00:00.000Z",
+    snapshot: {
+      state: "merged",
+      title: "Pull request",
+      headBranch: "feature",
+      baseBranch: "main",
+      isDraft: false,
+      updatedAt: NOW,
+      syncedAt: NOW,
+      mergedAt: NOW,
+    },
+    stack: null,
+  };
+}
+
 interface HarnessOptions {
-  readonly snapshot: OrchestrationV2ShellSnapshot;
+  readonly snapshot: SettlementSnapshot;
   readonly settings?: ContractServerSettings;
   readonly branchPullRequest?: GitManager.GitManager["Service"]["branchPullRequest"];
   readonly pullRequestSummary?: PullRequestService.PullRequestService["Service"]["summary"];
@@ -615,27 +683,7 @@ describe("ThreadSettlementServiceV2 worker", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(NOW));
         const thread = makeThread("merged-link", {
-          pullRequests: [
-            {
-              host: "example.test",
-              repository: "owner/repository",
-              number: 42,
-              url: "https://example.test/owner/repository/pull/42",
-              source: "manual",
-              linkedAt: "2026-08-20T00:00:00.000Z",
-              snapshot: {
-                state: "merged",
-                title: "Pull request",
-                headBranch: "feature",
-                baseBranch: "main",
-                isDraft: false,
-                updatedAt: NOW,
-                syncedAt: NOW,
-                mergedAt: NOW,
-              },
-              stack: null,
-            },
-          ],
+          pullRequests: [makeMergedPullRequestLink()],
         });
         const fixture = yield* makeHarness({
           snapshot: makeSnapshot([thread]),
@@ -648,6 +696,38 @@ describe("ThreadSettlementServiceV2 worker", () => {
           expect((yield* Ref.get(fixture.commands)).map((command) => command.threadId)).toEqual([
             thread.id,
           ]);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("never settles a pinned thread, even after its pull request merges", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const pinnedAt = DateTime.makeUnsafe("2026-08-20T00:00:00.000Z");
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("pinned-merged-link", {
+              pinnedAt,
+              pullRequests: [makeMergedPullRequestLink()],
+            }),
+            makeThread("pinned-merged-branch", { pinnedAt, branch: "feature" }),
+            makeThread("unpinned-merged-link", { pullRequests: [makeMergedPullRequestLink()] }),
+          ]),
+          branchPullRequest: () => Effect.succeed(makeBranchPullRequest("merged")),
+          // Only the merge can settle these threads, so the branch lookup path is exercised.
+          settings: { ...DEFAULT_SERVER_SETTINGS, sidebarAutoSettleAfterDays: null },
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          expect((yield* Ref.get(fixture.commands)).map((command) => command.threadId)).toEqual([
+            ThreadId.make("unpinned-merged-link"),
+          ]);
+          // Pinned threads drop out before any source control lookup.
+          expect(yield* Ref.get(fixture.branchCalls)).toEqual([]);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),

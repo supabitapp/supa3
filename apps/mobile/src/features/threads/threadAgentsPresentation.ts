@@ -1,8 +1,8 @@
-import { formatSubagentDisplayTitle } from "@supacode/client-runtime/state/subagent-display";
 import {
-  isActiveSubagentStatus,
-  isTerminalSubagentStatus,
-} from "@supacode/client-runtime/state/subagentRuntime";
+  formatSubagentDisplayTitle,
+  subagentDetailPreview,
+} from "@supacode/client-runtime/state/subagent-display";
+import { isActiveSubagentStatus } from "@supacode/client-runtime/state/subagentRuntime";
 import type { OrchestrationV2Subagent } from "@supacode/contracts";
 
 const PROMPT_TITLE_LIMIT = 80;
@@ -64,13 +64,9 @@ export function resolveSubagentRowPresentation(
   >,
 ): SubagentRowPresentation {
   const live = isActiveSubagentStatus(subagent.status);
-  const progress = subagent.progress?.trim() ?? "";
-  const result = subagent.result?.trim() ?? "";
-  const settled = isTerminalSubagentStatus(subagent.status);
-  const detail = settled ? result || progress : progress || result;
   return {
     title: rowTitle(subagent),
-    detail: detail.length > 0 ? detail.replace(/\s+/gu, " ") : null,
+    detail: subagentDetailPreview(subagent),
     statusLabel: rowStatusLabel(subagent.status),
     tone: rowTone(subagent.status),
     live,

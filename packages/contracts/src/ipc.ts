@@ -90,7 +90,7 @@ export type DesktopUpdateStatus =
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
-export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
+export type DesktopAppStageLabel = "Dev" | "Nightly" | null;
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
@@ -105,7 +105,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
+export const DesktopAppStageLabelSchema = Schema.NullOr(Schema.Literals(["Dev", "Nightly"]));
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -118,6 +118,12 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   stageLabel: DesktopAppStageLabelSchema,
   displayName: Schema.String,
 });
+
+export const DesktopEnvironmentMachineIconsSchema = Schema.Struct({
+  "mac-mini": Schema.optionalKey(Schema.String),
+  "mac-studio": Schema.optionalKey(Schema.String),
+});
+export type DesktopEnvironmentMachineIcons = typeof DesktopEnvironmentMachineIconsSchema.Type;
 
 export const DesktopSnapShotMode = Schema.Literals(["direct", "portal", "unavailable"]);
 export type DesktopSnapShotMode = typeof DesktopSnapShotMode.Type;
@@ -1122,6 +1128,8 @@ export interface DesktopBridge {
   getPathForFile?: (file: File) => string;
   /** The desktop client's OS platform, read from Electron's preload process. */
   getClientPlatform?: () => string;
+  /** Native macOS symbol PNGs; missing symbols use the client's SVG fallback. */
+  getEnvironmentMachineIcons?: () => DesktopEnvironmentMachineIcons;
   setNotificationBadge?: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear?: (listener: () => void) => () => void;
   onTrackpadScrollEnd?: (listener: () => void) => () => void;

@@ -116,6 +116,10 @@ GitLab calls these merge requests.
 GitHub, GitLab, and Azure DevOps support auto-merge while checks are outstanding. GitHub also
 supports approving waiting fork workflows and opening a revert pull request for a merged change.
 
+In the web and desktop apps, merging, closing, reverting, enabling auto-merge, approving workflows,
+and merging or rebasing a stack take two presses: the first turns the button into **Confirm**, the
+second runs it. Press Escape or click elsewhere to cancel.
+
 GitHub sharing is off by default. In Settings → Connections → GitHub sharing (Environments on mobile), choose
 **Read PRs** or **Read and act** for each environment you trust to share GitHub access.
 Enable both the original environment and the environment answering its requests on this client.
@@ -181,6 +185,13 @@ closed reviews refresh periodically so reopening one on the host is detected. Me
 when requested. With **Auto-settle merged threads** enabled, a thread can settle after every linked
 review is terminal. An open or unsynced link keeps it active.
 
+Ask the agent to watch, monitor, or babysit a pull request and it calls `watch_pull_request`. While
+the thread is active, the server checks the pull request every minute and wakes the agent when a check
+fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict.
+Comments from your own account do not wake it. Watching ends when the pull request merges or closes,
+after 10 wakes in a row that bring only comments, or when the server cannot read the pull request for
+15 minutes. To start or stop it yourself, use the row menu in the **Linked pull requests** panel.
+
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
 out from the matching organization and repository.
 
@@ -188,8 +199,8 @@ out from the matching organization and repository.
 
 The Pull Requests page shows each PR's position in its GitHub stack. Open the stack badge in a
 review to navigate its layers. **Merge stack** submits the selected pull request and every unmerged
-layer below it to GitHub together, respecting branch rules and merge queues. The confirmation shows
-the scope and merge strategy. GitHub rebases the remaining stack after merging.
+layer below it to GitHub together, respecting branch rules and merge queues. Once armed, it shows how
+many pull requests it merges and the merge strategy. GitHub rebases the remaining stack after merging.
 
 **Rebase stack** updates remote branches from bottom to top without changing your local checkout.
 It can rewrite history and restart checks. If a layer fails, earlier updates remain; resolve that

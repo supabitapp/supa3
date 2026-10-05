@@ -1,11 +1,14 @@
 import type { EnvironmentMachineKind } from "@supacode/contracts";
 import { CloudIcon, LaptopIcon, MonitorIcon, ServerIcon, type LucideProps } from "lucide-react";
-import type { FunctionComponent, SVGProps } from "react";
+import { useId, type FunctionComponent, type SVGProps } from "react";
 import { LinuxIcon } from "./Icons";
 
-// Lucide has no Apple desktops, so these two are drawn to its grammar (24
-// unit grid, 2 unit stroke, round joins) and share its prop surface so callers
-// can swap freely.
+// Read once per renderer, not per icon: long environment lists do no native IPC work.
+const nativeMachineIcons =
+  typeof window === "undefined" ? {} : (window.desktopBridge?.getEnvironmentMachineIcons?.() ?? {});
+
+// SVG fallbacks follow Lucide's 24 unit grid and prop surface so every client
+// can draw Apple hardware even when native symbols are unavailable.
 function LucideLike(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -23,8 +26,26 @@ function LucideLike(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** An alpha mask lets the native glyph inherit the same tint as every other icon. */
+function NativeMachineIcon({ source, ...props }: SVGProps<SVGSVGElement> & { source: string }) {
+  const maskId = useId();
+  return (
+    <LucideLike {...props}>
+      <defs>
+        <mask id={maskId} style={{ maskType: "alpha" }}>
+          <image href={source} width="24" height="24" />
+        </mask>
+      </defs>
+      <rect width="24" height="24" fill="currentColor" stroke="none" mask={`url(#${maskId})`} />
+    </LucideLike>
+  );
+}
+
 /** A Mac mini: squat rounded slab with a front-edge LED. */
 function MacMiniIcon(props: SVGProps<SVGSVGElement>) {
+  if (nativeMachineIcons["mac-mini"]) {
+    return <NativeMachineIcon source={nativeMachineIcons["mac-mini"]} {...props} />;
+  }
   return (
     <LucideLike {...props}>
       <rect width="20" height="8" x="2" y="8" rx="2" />
@@ -35,6 +56,9 @@ function MacMiniIcon(props: SVGProps<SVGSVGElement>) {
 
 /** A Mac Studio: the same slab twice as tall, ports along the front foot. */
 function MacStudioIcon(props: SVGProps<SVGSVGElement>) {
+  if (nativeMachineIcons["mac-studio"]) {
+    return <NativeMachineIcon source={nativeMachineIcons["mac-studio"]} {...props} />;
+  }
   return (
     <LucideLike {...props}>
       <rect width="18" height="14" x="3" y="5" rx="2" />
@@ -59,8 +83,8 @@ export const ENVIRONMENT_MACHINE_KIND_LABELS: Record<EnvironmentMachineKind, str
   linux: "Linux/WSL",
   desktop: "Desktop",
   laptop: "Laptop",
-  "mac-mini": "Mini PC",
-  "mac-studio": "Workstation",
+  "mac-mini": "Mac mini",
+  "mac-studio": "Mac Studio",
 };
 
 export function environmentMachineIcon(

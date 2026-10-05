@@ -1,4 +1,4 @@
-import { ActivityIndicator, StatusBar, View } from "react-native";
+import { ActivityIndicator, Platform, StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 
@@ -15,7 +15,9 @@ export function LoadingScreen(props: {
 
   return (
     <View className="flex-1 bg-screen" style={{ paddingTop: insets.top }}>
-      <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />
+      {Platform.OS === "android" ? (
+        <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />
+      ) : null}
       <View className="flex-1 items-center justify-center gap-5 px-6">
         <BrandMark compact />
         {messagePlacement === "above-spinner" ? (

@@ -31,6 +31,7 @@ import { beginQueuedRunEdit, useQueuedRunEdit } from "../../state/queued-run-edi
 import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import {
+  REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL,
   buildCancelQueuedRunCommand,
   resolveQueueDragBeforeRunId,
   resolveQueueDropBeforeRunId,
@@ -48,10 +49,6 @@ type QueueRowLayout = { readonly id: RunId; readonly y?: number; readonly height
 
 export function useThreadQueueWorkflow(target: QueueTarget) {
   return useAtomValue(environmentThreadDetails.queueWorkflowAtom(target));
-}
-
-export function useThreadQueuedCount(target: QueueTarget) {
-  return useAtomValue(environmentThreadDetails.queuedCountAtom(target));
 }
 
 export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
@@ -511,13 +508,20 @@ function QueueRowSwipeable(props: {
         props.onRemove();
       }}
       renderRightActions={() => (
-        <View
-          className="items-center justify-center bg-danger"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL}
+          disabled={!props.enabled}
+          onPress={() => {
+            swipeableRef.current?.close();
+            props.onRemove();
+          }}
+          className="items-center justify-center bg-danger active:opacity-70 disabled:opacity-40"
           style={{ width: REMOVE_ACTION_WIDTH }}
         >
           <SymbolView name="trash" size={16} tintColorClassName="accent-danger-foreground" />
           <Text className="pt-1 text-2xs font-supacode-medium text-danger-foreground">Remove</Text>
-        </View>
+        </Pressable>
       )}
     >
       {props.children}

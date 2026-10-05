@@ -32,6 +32,7 @@ vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("env-1"),
 }));
 vi.mock("~/hooks/useSettings", () => ({
+  useEnvironmentSettings: () => undefined,
   useClientSettings: (select: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
     select(DEFAULT_CLIENT_SETTINGS),
 }));
@@ -82,15 +83,6 @@ vi.mock("../ui/menu", () => ({
   MenuRadioItem: "button",
   MenuSeparator: () => null,
   MenuShortcut: () => null,
-}));
-vi.mock("../ui/alert-dialog", () => ({
-  AlertDialog: () => null,
-  AlertDialogPopup: Wrapper,
-  AlertDialogHeader: Wrapper,
-  AlertDialogTitle: Wrapper,
-  AlertDialogDescription: Wrapper,
-  AlertDialogFooter: Wrapper,
-  AlertDialogClose: Wrapper,
 }));
 vi.mock("./PullRequestMarkdown", () => ({
   PullRequestMarkdownContext: Wrapper,
