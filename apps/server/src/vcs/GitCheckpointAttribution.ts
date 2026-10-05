@@ -85,7 +85,9 @@ const RAW_HEADER =
  * Reads NUL-delimited `--raw` records, followed by one `--numstat` record per
  * change when `withNumstat` is set, from a diff without rename detection.
  * Returns undefined for output it cannot fully account for, since a change
- * dropped here would vanish from the turn instead of being listed.
+ * dropped here would vanish from the turn instead of being listed. That
+ * includes paths that are not valid UTF-8: decoded with U+FFFD they no longer
+ * name the file, so a diff limited to them could not find it.
  */
 export function parseRawDiff(
   stdout: string,
@@ -100,7 +102,9 @@ export function parseRawDiff(
   while (records[index]?.startsWith(":") === true) {
     const header = records[index]!;
     const path = records[index + 1];
-    if (!RAW_HEADER.test(header) || !path || changes.has(path)) return undefined;
+    if (!RAW_HEADER.test(header) || !path || path.includes("\uFFFD") || changes.has(path)) {
+      return undefined;
+    }
     changes.set(path, {
       transition: header.slice(1, header.lastIndexOf(" ")),
       additions: 0,

@@ -22,6 +22,7 @@ import * as Semaphore from "effect/Semaphore";
 
 import { parseTurnDiffFilesFromNumstat } from "../checkpointing/Diffs.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
+import type { VcsCheckpointHead } from "../vcs/VcsDriver.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 
 const CHECKPOINT_REFS_PREFIX = "refs/supacode/orchestration-v2/checkpoints";
@@ -402,9 +403,12 @@ export const layer: Layer.Layer<
             scopeId: input.scope.id,
             ordinalWithinScope: Math.max(0, input.ordinalWithinScope - 1),
           });
-
-          if (!(yield* isGitCheckpointable(input.scope.cwd))) {
-            return makeCheckpoint({
+          const checkpointWith = (
+            status: OrchestrationV2Checkpoint["status"],
+            files: OrchestrationV2Checkpoint["files"] = [],
+            gitUpdate?: OrchestrationV2CheckpointGitUpdate,
+          ) =>
+            makeCheckpoint({
               id: checkpointId,
               scope: input.scope,
               runId: input.runId,
@@ -413,10 +417,14 @@ export const layer: Layer.Layer<
               ordinalWithinScope: input.ordinalWithinScope,
               appRunOrdinal: input.appRunOrdinal,
               ref: checkpointRef,
-              status: "missing",
-              files: [],
+              status,
+              files,
+              gitUpdate,
               capturedAt: input.capturedAt,
             });
+
+          if (!(yield* isGitCheckpointable(input.scope.cwd))) {
+            return checkpointWith("missing");
           }
 
           const captured = yield* checkpointStore
@@ -436,19 +444,7 @@ export const layer: Layer.Layer<
             );
 
           if (!captured) {
-            return makeCheckpoint({
-              id: checkpointId,
-              scope: input.scope,
-              runId: input.runId,
-              nodeId: input.nodeId,
-              parentCheckpointId,
-              ordinalWithinScope: input.ordinalWithinScope,
-              appRunOrdinal: input.appRunOrdinal,
-              ref: checkpointRef,
-              status: "error",
-              files: [],
-              capturedAt: input.capturedAt,
-            });
+            return checkpointWith("error");
           }
 
           // Reading both refs' recorded HEADs also proves the previous ref exists.
@@ -463,7 +459,7 @@ export const layer: Layer.Layer<
                   scopeId: input.scope.id,
                   checkpointRef: previousCheckpointRef,
                   cause: String(cause),
-                }).pipe(Effect.as(new Map<CheckpointRef, never>())),
+                }).pipe(Effect.as(new Map<CheckpointRef, VcsCheckpointHead | null>())),
               ),
             );
           const previousExists = heads.has(previousCheckpointRef);
@@ -503,26 +499,17 @@ export const layer: Layer.Layer<
                 ),
               );
             if (attribution !== null && attribution.gitMoved.fileCount > 0) {
-              return makeCheckpoint({
-                id: checkpointId,
-                scope: input.scope,
-                runId: input.runId,
-                nodeId: input.nodeId,
-                parentCheckpointId,
-                ordinalWithinScope: input.ordinalWithinScope,
-                appRunOrdinal: input.appRunOrdinal,
-                ref: checkpointRef,
-                status: "ready",
-                files: attribution.files.map((file) => ({ ...file, kind: "modified" })),
-                gitUpdate: {
+              return checkpointWith(
+                "ready",
+                attribution.files.map((file) => ({ ...file, kind: "modified" })),
+                {
                   fromBranch: shortBranchName(previousHead.branch),
                   toBranch: shortBranchName(currentHead.branch),
                   fromHead: previousHead.commit,
                   toHead: currentHead.commit,
                   ...attribution.gitMoved,
                 },
-                capturedAt: input.capturedAt,
-              });
+              );
             }
           }
 
@@ -555,19 +542,7 @@ export const layer: Layer.Layer<
                 )
             : [];
 
-          return makeCheckpoint({
-            id: checkpointId,
-            scope: input.scope,
-            runId: input.runId,
-            nodeId: input.nodeId,
-            parentCheckpointId,
-            ordinalWithinScope: input.ordinalWithinScope,
-            appRunOrdinal: input.appRunOrdinal,
-            ref: checkpointRef,
-            status: "ready",
-            files,
-            capturedAt: input.capturedAt,
-          });
+          return checkpointWith("ready", files);
         }),
       ).pipe(
         Effect.mapError(

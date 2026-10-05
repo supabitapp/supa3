@@ -1,7 +1,7 @@
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import type { ChangeTypes, FileDiffMetadata } from "@pierre/diffs/types";
 import {
-  formatGitUpdateRefs,
+  formatGitUpdateLabel,
   type ThreadCheckpointSummary,
 } from "@supacode/client-runtime/state/thread-checkpoints";
 import type {
@@ -114,7 +114,7 @@ function checkpointSubtitle(checkpoint: ThreadCheckpointSummary): string {
   }
   const changed = `${fileCount} file${fileCount === 1 ? "" : "s"} changed`;
   if (checkpoint.gitUpdate === undefined) return changed;
-  const gitUpdate = `Updated via Git · ${formatGitUpdateRefs(checkpoint.gitUpdate)}`;
+  const gitUpdate = formatGitUpdateLabel(checkpoint.gitUpdate);
   return fileCount === 0 ? gitUpdate : `${changed} · ${gitUpdate}`;
 }
 

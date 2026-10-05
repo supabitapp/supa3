@@ -441,7 +441,7 @@ const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
 
 function chunkPathsByBytes(
   relativePaths: ReadonlyArray<string>,
-  maxChunkBytes = GIT_CHECK_IGNORE_MAX_STDIN_BYTES,
+  maxChunkBytes: number,
 ): string[][] {
   const chunks: string[][] = [];
   let chunk: string[] = [];
@@ -699,7 +699,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     }
 
     const ignoredPaths = new Set<string>();
-    const chunks = chunkPathsByBytes(relativePaths);
+    const chunks = chunkPathsByBytes(relativePaths, GIT_CHECK_IGNORE_MAX_STDIN_BYTES);
 
     for (const chunk of chunks) {
       const result = yield* gitCommand(
@@ -1376,15 +1376,15 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                 Effect.map((result) =>
                   combined
                     ? GitCheckpointAttribution.parseCombinedDiffPaths(result.stdout)
-                    : result.stdout.split("\0").filter((filePath) => filePath.length > 0),
+                    : splitNullSeparatedGitStdoutPaths(result),
                 ),
               );
         // A merge counts only for the paths it resolved by hand, which needs the
         // dense combined patch; `--name-only` would also list clean auto-merges.
-        const [commitPaths, mergePaths] = yield* Effect.all([
-          turnCommitPaths(turnCommits.commits, false),
-          turnCommitPaths(turnCommits.merges, true),
-        ]);
+        const [commitPaths, mergePaths] = yield* Effect.all(
+          [turnCommitPaths(turnCommits.commits, false), turnCommitPaths(turnCommits.merges, true)],
+          { concurrency: "unbounded" },
+        );
         return GitCheckpointAttribution.attributeCheckpointChanges({
           tree,
           head,

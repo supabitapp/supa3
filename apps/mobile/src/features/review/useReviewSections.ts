@@ -134,7 +134,7 @@ export function useReviewSections(input: {
   }
   const includeGitChanges =
     input.includeGitChanges === true && activeCheckpoint?.gitUpdate !== undefined;
-  const activeSectionId = activeCheckpoint
+  const activeTurnDiffCacheId = activeCheckpoint
     ? getReviewTurnDiffCacheId(activeCheckpoint, includeGitChanges)
     : null;
   const activeTurnDiff = useCheckpointDiff({
@@ -148,19 +148,23 @@ export function useReviewSections(input: {
   });
 
   useEffect(() => {
-    if (!reviewCache.threadKey || !activeSectionId) {
+    if (!reviewCache.threadKey || !activeTurnDiffCacheId) {
       return;
     }
-    setReviewTurnDiffLoading(reviewCache.threadKey, activeSectionId, activeTurnDiff.isPending);
-  }, [activeSectionId, activeTurnDiff.isPending, reviewCache.threadKey]);
+    setReviewTurnDiffLoading(
+      reviewCache.threadKey,
+      activeTurnDiffCacheId,
+      activeTurnDiff.isPending,
+    );
+  }, [activeTurnDiffCacheId, activeTurnDiff.isPending, reviewCache.threadKey]);
 
   useEffect(() => {
-    if (!reviewCache.threadKey || !activeSectionId || !activeTurnDiff.data) {
+    if (!reviewCache.threadKey || !activeTurnDiffCacheId || !activeTurnDiff.data) {
       return;
     }
-    setReviewTurnDiff(reviewCache.threadKey, activeSectionId, activeTurnDiff.data.diff);
+    setReviewTurnDiff(reviewCache.threadKey, activeTurnDiffCacheId, activeTurnDiff.data.diff);
     setReviewAsyncError(reviewCache.threadKey, null);
-  }, [activeSectionId, activeTurnDiff.data, reviewCache.threadKey]);
+  }, [activeTurnDiffCacheId, activeTurnDiff.data, reviewCache.threadKey]);
 
   useEffect(() => {
     if (reviewCache.threadKey && activeTurnDiff.error) {

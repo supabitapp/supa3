@@ -1,4 +1,4 @@
-import { formatGitUpdateRefs } from "@supacode/client-runtime/state/thread-checkpoints";
+import { formatGitUpdateLabel } from "@supacode/client-runtime/state/thread-checkpoints";
 import { type OrchestrationV2CheckpointGitUpdate, type RunId } from "@supacode/contracts";
 import { type MouseEvent, memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
@@ -29,7 +29,7 @@ function GitUpdateSummary(props: { gitUpdate: OrchestrationV2CheckpointGitUpdate
     <div className="flex min-w-0 items-center gap-2 text-xs font-normal text-muted-foreground">
       <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="truncate">
-        Updated via Git · {formatGitUpdateRefs(gitUpdate)} · {gitUpdate.fileCount} file
+        {formatGitUpdateLabel(gitUpdate)} · {gitUpdate.fileCount} file
         {gitUpdate.fileCount === 1 ? "" : "s"}
       </span>
       {hasNonZeroStat(gitUpdate) && (

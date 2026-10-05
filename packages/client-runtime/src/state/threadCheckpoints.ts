@@ -61,3 +61,8 @@ export function formatGitUpdateRefs(gitUpdate: OrchestrationV2CheckpointGitUpdat
   const to = gitUpdate.toBranch ?? gitUpdate.toHead.slice(0, 7);
   return from === to ? to : `${from} → ${to}`;
 }
+
+/** The label every surface shows for a turn's git update. */
+export function formatGitUpdateLabel(gitUpdate: OrchestrationV2CheckpointGitUpdate): string {
+  return `Updated via Git · ${formatGitUpdateRefs(gitUpdate)}`;
+}

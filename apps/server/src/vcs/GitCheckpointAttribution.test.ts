@@ -33,6 +33,8 @@ describe("parseRawDiff", () => {
     assert.isUndefined(parseRawDiff(output([...modified("a.txt"), "1\t0\tb.txt"]), true));
     // A rename or copy record, which these diffs never request.
     assert.isUndefined(parseRawDiff(output([`:100644 100644 ${OLD} ${NEW} R100`, "a.txt"]), false));
+    // A path that was not valid UTF-8, which a path-limited diff could not find.
+    assert.isUndefined(parseRawDiff(output(modified("caf\uFFFD.txt")), false));
     // Trailing records where no numstat was requested.
     assert.isUndefined(parseRawDiff(output([...modified("a.txt"), "1\t0\ta.txt"]), false));
   });

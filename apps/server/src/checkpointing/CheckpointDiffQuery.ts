@@ -61,7 +61,7 @@ const isTurnDiffResult = Schema.is(OrchestrationGetTurnDiffResult);
 /**
  * Paths the turns in a range changed themselves, or undefined to diff every path.
  * Filtering needs a path list from every turn in the range, so a range mixing
- * split and unsplit turns, or a path Git output could not decode, shows everything.
+ * split and unsplit turns shows everything.
  */
 function agentPathsForRange(
   checkpoints: ProjectionCheckpointContext["checkpoints"],
@@ -78,10 +78,7 @@ function agentPathsForRange(
   const paths = new Set<string>();
   for (const checkpoint of inRange) {
     if (checkpoint.agentFilePaths === null) return undefined;
-    for (const path of checkpoint.agentFilePaths) {
-      if (path.includes("\uFFFD")) return undefined;
-      paths.add(path);
-    }
+    for (const path of checkpoint.agentFilePaths) paths.add(path);
   }
   return [...paths].toSorted();
 }

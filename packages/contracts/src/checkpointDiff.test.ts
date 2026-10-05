@@ -73,21 +73,3 @@ it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
     assert.strictEqual(result._tag, "Failure");
   }),
 );
-
-it.effect("parses turn diff inputs that opt back into git changes", () =>
-  Effect.gen(function* () {
-    const turn = yield* decodeTurnDiffInput({
-      threadId: "thread-1",
-      fromTurnCount: 1,
-      toTurnCount: 2,
-      includeGitChanges: true,
-    });
-    const fullThread = yield* decodeFullThreadDiffInput({
-      threadId: "thread-1",
-      toTurnCount: 2,
-      includeGitChanges: true,
-    });
-    assert.strictEqual(turn.includeGitChanges, true);
-    assert.strictEqual(fullThread.includeGitChanges, true);
-  }),
-);

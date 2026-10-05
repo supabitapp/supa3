@@ -5,7 +5,7 @@ import type {
 } from "@supacode/client-runtime/state/thread-requests";
 import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/turn-item-presentation";
 import { formatSubagentDisplayTitle } from "@supacode/client-runtime/state/subagent-display";
-import { formatGitUpdateRefs } from "@supacode/client-runtime/state/thread-checkpoints";
+import { formatGitUpdateLabel } from "@supacode/client-runtime/state/thread-checkpoints";
 import { extractToolActivityPresentation } from "@supacode/client-runtime/work-log/tool-presentation";
 import {
   turnItemHasDetail,
@@ -628,7 +628,7 @@ function itemPreview(item: OrchestrationV2TurnItem): string | null {
       return item.questions.map((question) => question.question).join(" · ") || null;
     case "checkpoint":
       if (item.files.length === 0 && item.gitUpdate !== undefined) {
-        return `Updated via Git · ${formatGitUpdateRefs(item.gitUpdate)}`;
+        return formatGitUpdateLabel(item.gitUpdate);
       }
       return item.files.length === 1
         ? (item.files[0]?.path ?? null)
