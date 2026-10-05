@@ -669,6 +669,8 @@ export const OrchestrationV2WorkflowAgent = Schema.Struct({
   label: WorkflowText,
   agentId: Schema.optional(WorkflowText),
   state: Schema.Literals(["queued", "running", "completed", "failed", "cancelled", "interrupted"]),
+  /** Coordinator completion settled a running member before its own final telemetry arrived. */
+  completionInferred: Schema.optional(Schema.Boolean),
   phaseIndex: Schema.optional(NonNegativeInt),
   phaseTitle: Schema.optional(WorkflowText),
   model: Schema.optional(WorkflowText),

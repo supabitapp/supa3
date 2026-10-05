@@ -149,14 +149,18 @@ export function ThreadSubagentGroup(props: {
       {!grouped || expanded ? (
         <View className="mb-1 gap-px rounded-xl border border-border bg-card/30 p-1">
           {agents.map((agent) => {
-            const threadId = agent.childThreadId;
+            const threadId = agent.workflow === undefined ? agent.childThreadId : null;
             return (
               <View key={agent.item.id}>
                 <Pressable
                   accessible
                   accessibilityRole={threadId === null ? undefined : "link"}
                   accessibilityHint={
-                    threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
+                    agent.workflow !== undefined
+                      ? "Expand the workflow below to follow its members"
+                      : threadId === null
+                        ? "Provider-managed agent"
+                        : "Opens this agent's thread"
                   }
                   disabled={threadId === null}
                   onPress={() => {

@@ -44,13 +44,13 @@ afterEach(async () => {
   state.showTooltips = false;
 });
 
-it("keeps a settled workflow available without a child thread and refreshes its expanded roster", async () => {
+it("opens a workflow roster instead of its coordinator transcript and refreshes retained outcomes", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const agent = {
     id: "workflow-1",
     driver: "claudeAgent",
     providerInstanceId: "claudeAgent",
-    childThreadId: null,
+    childThreadId: "workflow-child",
     title: "CCWorkflows",
     prompt: "Review this change",
     model: null,
@@ -94,6 +94,18 @@ it("keeps a settled workflow available without a child thread and refreshes its 
     subagents: [agent],
   };
   state.projection = projection;
+  state.shells = [
+    {
+      environmentId: EnvironmentId.make("test"),
+      source: {
+        id: "workflow-child",
+        title: "Empty coordinator transcript",
+        status: "completed",
+        forkedFrom: null,
+        lineage: { parentThreadId: "parent", relationshipToParent: "subagent" },
+      },
+    },
+  ];
   const panel = (
     <ThreadRelationshipsPanel
       environmentId={EnvironmentId.make("test")}
@@ -109,6 +121,7 @@ it("keeps a settled workflow available without a child thread and refreshes its 
       .flatMap((node) => node.children.filter((child) => typeof child === "string"))
       .join(" ");
   expect(text()).toContain("Workflow · Review");
+  expect(text()).not.toContain("Empty coordinator transcript");
   expect(text()).toContain("1 completed · 1 cancelled");
   expect(text()).not.toContain("Correctness reviewer");
   await act(async () => renderer.root.findByType("button").props.onClick());

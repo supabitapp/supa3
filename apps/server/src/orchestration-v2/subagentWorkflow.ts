@@ -20,6 +20,9 @@ export function settleSubagentWorkflow(
       if (agent.state !== "queued" && agent.state !== "running") return agent;
       return {
         ...agent,
+        ...(status === "completed" && agent.state === "running"
+          ? { completionInferred: true }
+          : {}),
         state:
           status === "completed" && agent.state === "running"
             ? "completed"

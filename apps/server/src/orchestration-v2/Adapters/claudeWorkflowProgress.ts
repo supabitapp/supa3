@@ -91,14 +91,20 @@ export function mergeClaudeWorkflowProgress(
         const attempt = agent.attempt ?? prior?.attempt ?? 1;
         if (prior !== undefined && attempt < (prior.attempt ?? 1)) continue;
         const restarted = prior !== undefined && attempt > (prior.attempt ?? 1);
+        const reportedOutcome = agent.state === "completed" || agent.state === "failed";
         const regressed =
           !restarted &&
           prior !== undefined &&
           (((prior.state === "completed" || prior.state === "failed") &&
-            agent.state !== prior.state) ||
+            agent.state !== prior.state &&
+            !(prior.completionInferred === true && reportedOutcome)) ||
             ((prior.state === "cancelled" || prior.state === "interrupted") &&
               (agent.state === "queued" || agent.state === "running")) ||
             (prior.state === "running" && agent.state === "queued"));
+        const retained =
+          prior === undefined || !reportedOutcome
+            ? prior
+            : (({ completionInferred: _inferred, ...observed }) => observed)(prior);
         agents.set(
           agent.index,
           regressed
@@ -109,7 +115,7 @@ export function mergeClaudeWorkflowProgress(
                       ...optional("phaseIndex", prior.phaseIndex),
                       ...optional("phaseTitle", prior.phaseTitle),
                     }
-                  : prior),
+                  : retained),
                 ...agent,
               },
         );

@@ -5585,9 +5585,14 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     return { childThreadId, toolThreadIds, assistantTexts };
   };
 
-  it.effect.each(["completed", "failed", "stopped"] as const)(
-    "retains workflow phases and members through %s and late telemetry",
-    (outcome) =>
+  it.effect.each([
+    { outcome: "completed", memberState: "done", expectedMemberStatus: "completed" },
+    { outcome: "completed", memberState: "error", expectedMemberStatus: "failed" },
+    { outcome: "failed", memberState: "done", expectedMemberStatus: "completed" },
+    { outcome: "stopped", memberState: "done", expectedMemberStatus: "completed" },
+  ] as const)(
+    "retains workflow phases and members through $outcome and late $memberState telemetry",
+    ({ outcome, memberState, expectedMemberStatus }) =>
       Effect.scoped(
         Effect.gen(function* () {
           const harness = yield* makeWakeHarness;
@@ -5704,7 +5709,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
               task_id: "workflow-1",
               tool_use_id: "toolu_workflow",
               description: "Stale running text",
-              workflow_progress: [member("done", 2400)],
+              workflow_progress: [member(memberState, 2400)],
               uuid: "00000000-0000-4000-8000-00000000a005",
               session_id: WAKE_NATIVE_SESSION,
             }),
@@ -5712,7 +5717,8 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           const late = (yield* Queue.take(harness.subagentReceipts)).subagent;
           assert.equal(late.status, terminal.status);
           assert.equal(late.result, terminal.result);
-          assert.equal(late.workflow?.agents[0]?.state, "completed");
+          assert.equal(late.workflow?.agents[0]?.state, expectedMemberStatus);
+          assert.isUndefined(late.workflow?.agents[0]?.completionInferred);
           assert.equal(late.workflow?.agents[0]?.totalTokens, 2400);
           assert.notEqual(late.progress, "Stale running text");
           const lateItem = harness.events.findLast(

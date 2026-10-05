@@ -159,6 +159,27 @@ describe("Claude workflow progress", () => {
     },
   );
 
+  it("replaces inferred completion with a reported failure without changing observed outcomes", () => {
+    const running = mergeClaudeWorkflowProgress(undefined, { workflow_progress: [agent()] });
+    const inferred = settleSubagentWorkflow(running, "completed");
+    expect(inferred?.agents[0]).toMatchObject({ state: "completed", completionInferred: true });
+    const lateRunning = mergeClaudeWorkflowProgress(inferred, { workflow_progress: [agent()] });
+    expect(lateRunning).toEqual(inferred);
+    const failure = mergeClaudeWorkflowProgress(inferred, {
+      workflow_progress: [agent({ state: "error" })],
+    });
+    expect(failure?.agents[0]?.state).toBe("failed");
+    expect(failure?.agents[0]?.completionInferred).toBeUndefined();
+    const success = mergeClaudeWorkflowProgress(inferred, {
+      workflow_progress: [agent({ state: "done" })],
+    });
+    expect(success?.agents[0]?.state).toBe("completed");
+    expect(success?.agents[0]?.completionInferred).toBeUndefined();
+    expect(
+      mergeClaudeWorkflowProgress(success, { workflow_progress: [agent({ state: "error" })] }),
+    ).toEqual(success);
+  });
+
   it("allows authentic late completion to enrich a member cancelled by process loss", () => {
     const running = mergeClaudeWorkflowProgress(undefined, { workflow_progress: [agent()] });
     const cancelled = settleSubagentWorkflow(running, "cancelled");

@@ -241,11 +241,16 @@ export function ThreadRelationshipsPanel(props: {
     () =>
       orderWebThreadLineageRows({
         graph,
-        rows: immediateThreadRelationships(graph, props.threadId),
+        rows: immediateThreadRelationships(graph, props.threadId).filter(
+          ({ threadId, edge }) =>
+            edge.kind !== "subagent" ||
+            isParentThreadRelationship(edge, props.threadId) ||
+            subagentsByThreadId.get(threadId)?.workflow === undefined,
+        ),
         currentThreadId: props.threadId,
         mergeTargetThreadId,
       }),
-    [graph, mergeTargetThreadId, props.threadId],
+    [graph, mergeTargetThreadId, props.threadId, subagentsByThreadId],
   );
   const canMerge = mergeTargetThreadId !== null && latestMergeBackRun !== null;
   const canDetach = projection ? canDetachThreadProviderSession(projection) : false;
@@ -269,10 +274,12 @@ export function ThreadRelationshipsPanel(props: {
     { id: "active", label: null, rows: active, expanded: true },
     { id: "previous", label: "Previous agents", rows: previous, expanded: false },
   ];
-  // Subagents without a child thread yet have no row, so count them separately.
+  // Unlinked subagents and roster-only workflows have no transcript row.
   const runningCount =
     (projection?.subagents.filter(
-      (agent) => agent.childThreadId === null && agent.status === "running",
+      (agent) =>
+        (agent.childThreadId === null || agent.workflow !== undefined) &&
+        agent.status === "running",
     ).length ?? 0) + active.filter(({ edge }) => edge.status === "running").length;
 
   if (relationshipRows.length === 0 && runningCount === 0 && workflows.length === 0) {
