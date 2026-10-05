@@ -93,5 +93,34 @@ class StagePreviewBundleTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(), "untouched")
 
 
+class StageWebPreviewTests(StagePreviewBundleTests):
+    def bundle(self, extra=(), missing=None):
+        with zipfile.ZipFile(self.archive, "w") as bundle:
+            if missing is None:
+                bundle.writestr("index.html", b"preview HTML")
+            bundle.writestr("assets/default.js", b"browser JS")
+            for name, content in extra:
+                bundle.writestr(name, content)
+
+    def stage(self):
+        staging.stage_bundle(self.archive, self.destination, web=True)
+
+    def test_preserves_valid_bundle_layout_and_bytes(self):
+        self.bundle([("assets/", b""), ("assets/app.js", b"browser JS")])
+        self.stage()
+        self.assertEqual((self.destination / "index.html").read_bytes(), b"preview HTML")
+        self.assertEqual((self.destination / "assets/app.js").read_bytes(), b"browser JS")
+
+    def test_rejects_builder_overwrite_and_unsafe_paths_before_writing(self):
+        for name in ["../package.json", "/index.html", "assets/../../script.js",
+                     "assets/./alias", "assets//alias", "assets/back\\slash",
+                     "assets/file:stream", "INDEX.HTML"]:
+            with self.subTest(name=name):
+                self.bundle([(name, b"untrusted")])
+                with self.assertRaises(ValueError):
+                    self.stage()
+                self.assertFalse(self.destination.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

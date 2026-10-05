@@ -141,7 +141,7 @@ jobs:
         run: python3 -B .github/scripts/stage-preview-bundle.test.py
 
       - name: Test release tooling
-        run: node --test .github/scripts/check-nightly-release.test.cjs .github/scripts/mobile-build-history.test.cjs .github/scripts/mobile-build-fingerprint.test.cjs
+        run: node --test .github/scripts/publish-web-preview.test.cjs .github/scripts/check-nightly-release.test.cjs .github/scripts/mobile-build-history.test.cjs .github/scripts/mobile-build-fingerprint.test.cjs
 
       - name: Finish installing test build dependencies
         timeout-minutes: 5

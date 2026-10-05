@@ -1,34 +1,56 @@
 name: Web Preview
 
+# PR code builds static assets with a read-only token and no hosting secrets.
+# The publish workflow on the default branch verifies trust again and deploys.
 on:
   pull_request:
-    types: [labeled, synchronize, reopened]
+    types: [opened, reopened, synchronize, labeled]
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: web-preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event.action != 'labeled' || github.event.label.name == 'preview:web' }}
 
 jobs:
-  deploy:
-    name: Deploy web preview
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      contains(github.event.pull_request.labels.*.name, 'preview:web') &&
-      (github.event.action != 'labeled' || github.event.label.name == 'preview:web')
+  trust:
+    name: Check PR author trust
+    if: github.event.action != 'labeled' || github.event.label.name == 'preview:web'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      status: ${{ steps.vouch.outputs.status }}
+    steps:
+      # No checkout: the action reads the vouch list from the default branch.
+      - id: vouch
+        uses: mitchellh/vouch/action/check-user@d66fa29a64600490892131ad87597c30c91fcac4 # v1
+        with:
+          user: ${{ github.event.pull_request.user.login }}
+          allow-fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build web preview
+    needs: trust
+    if: contains(fromJSON('["bot", "collaborator", "vouched"]'), needs.trust.outputs.status)
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 10
-    environment: web-preview
     env:
       VITE_HOSTED_APP_URL: https://preview-${{ github.event.pull_request.number }}.next.supacode.sh
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout PR without credentials
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.event.pull_request.head.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git checkout --detach FETCH_HEAD
 
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
@@ -36,65 +58,10 @@ jobs:
         run: mise exec -- vp install --filter=@supacode/scripts... --filter=@supacode/web...
       - name: Build preview
         run: vp run --filter @supacode/web build
-      - name: Load hosting credentials
-        uses: ./.github/actions/load-release-secrets
+      - name: Upload static assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          profile: cloudflare
-          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-      - id: deploy
-        name: Deploy preview
-        env:
-          PREVIEW_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          node --input-type=module <<'JS'
-          import * as fs from "node:fs";
-          const config = JSON.parse(fs.readFileSync("apps/web/cloudflare/latest.json", "utf8"));
-          config.name = `supacode-next-preview-${process.env.PREVIEW_NUMBER}`;
-          config.routes = [{ pattern: new URL(process.env.VITE_HOSTED_APP_URL).hostname, custom_domain: true }];
-          fs.writeFileSync("apps/web/cloudflare/preview.json", JSON.stringify(config));
-          JS
-          vp dlx wrangler@4.147.0 deploy --config apps/web/cloudflare/preview.json
-          echo "deployment_url=$VITE_HOSTED_APP_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Comment deployment URL
-        uses: actions/github-script@v8
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        with:
-          script: |
-            const marker = "<!-- web-preview-deploy -->";
-            const body = [
-              marker,
-              "### Web preview",
-              "",
-              `${process.env.DEPLOYMENT_URL} (for ${process.env.HEAD_SHA.slice(0, 7)})`,
-              "",
-              "Open this exact URL — the hosted-app origin is baked in at build time.",
-              "Pair a server into it with `supacode pair --tailscale`, or paste a host + pairing",
-              "code under Settings → Connections.",
-            ].join("\n");
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              per_page: 100,
-            });
-            const existing = comments.find((comment) => comment.body?.includes(marker));
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body,
-              });
-            }
+          name: web-assets
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 1
