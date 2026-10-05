@@ -11,6 +11,7 @@ import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
 import { isThreadFindTarget, threadFindReveal, type ThreadFindTarget } from "./thread-find-target";
+import { useThreadFindScroll } from "./use-thread-find-scroll";
 import { resolveUserMessagePresentation } from "@supacode/client-runtime/user-message";
 import { repairMarkdownFileLinks } from "@supacode/client-runtime/repair-markdown-file-links";
 import { canForkProjectedAssistantItem } from "@supacode/client-runtime/state/thread-workflows";
@@ -2746,46 +2747,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.latestRun,
     ],
   );
-  const lastFindNavigationRef = useRef<string | null>(null);
-  const beforeFindViewRef = useRef<{ readonly offset: number; readonly follow: boolean } | null>(
-    null,
-  );
-  useEffect(() => {
-    const target = props.findTarget;
-    if (!target) {
-      lastFindNavigationRef.current = null;
-      const restore = beforeFindViewRef.current;
-      if (restore === null) return;
-      beforeFindViewRef.current = null;
-      setEndFollow(restore.follow);
-      const frame = requestAnimationFrame(() => {
-        if (restore.follow) listRef.current?.scrollToEnd({ animated: false });
-        else listRef.current?.scrollToOffset({ animated: false, offset: restore.offset });
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-    const index = presentedFeed.findIndex((entry) => isThreadFindTarget(entry, target));
-    const navigationKey = `${target.navigationKey}:${props.findBarHeight ?? 0}`;
-    if (index < 0 || lastFindNavigationRef.current === navigationKey) return;
-    if (beforeFindViewRef.current === null) {
-      beforeFindViewRef.current = {
-        offset: (listRef.current?.getState().scroll ?? 0) - (props.findBarHeight ?? 0),
-        follow: endFollowEnabledRef.current,
-      };
-    }
-    setEndFollow(false);
-    const frame = requestAnimationFrame(() => {
-      if (!listRef.current) return;
-      lastFindNavigationRef.current = navigationKey;
-      listRef.current.scrollToIndex({
-        index,
-        animated: false,
-        viewPosition: 0,
-        viewOffset: (props.findBarHeight ?? 0) + 12,
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [presentedFeed, props.findTarget, props.findBarHeight, listRef, setEndFollow]);
+  useThreadFindScroll({
+    navigationKey: props.findTarget?.navigationKey ?? null,
+    targetIndex: presentedFeed.findIndex((entry) => isThreadFindTarget(entry, props.findTarget)),
+    barHeight: props.findBarHeight ?? 0,
+    listRef,
+    endFollowRef: endFollowEnabledRef,
+    setEndFollow,
+  });
 
   const setupAnchorIndex = presentedFeed.findIndex(
     (entry) => entry.type === "message" && entry.message.role === "user",
