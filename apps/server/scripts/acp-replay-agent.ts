@@ -45,6 +45,7 @@ if ((encodedTranscript === undefined && transcriptPath === undefined) || statusP
 }
 
 const replayStatusPath = statusPath;
+const replayStatusTempPath = `${replayStatusPath}.${process.pid}.tmp`;
 const transcript = JSON.parse(
   transcriptPath === undefined
     ? Buffer.from(encodedTranscript ?? "", "base64").toString("utf8")
@@ -55,8 +56,6 @@ let stopped = false;
 let nextAgentRequestId = 1;
 const pendingClientRequestIds = new Map<string, string | number>();
 const pendingAgentRequestMethods = new Map<string, string>();
-
-const replayStatusTempPath = `${replayStatusPath}.${process.pid}.tmp`;
 
 function writeStatus(failure?: unknown): void {
   NodeFS.writeFileSync(
@@ -187,7 +186,8 @@ function materializeInbound(value: unknown): unknown {
   );
 }
 
-function inboundMessage(recorded: LogicalFrame): JsonRpcMessage | undefined {
+/** Records the request ids a frame needs and returns its message, or undefined once replay stops. */
+function prepareInboundMessage(recorded: LogicalFrame): JsonRpcMessage | undefined {
   const frame = materializeInbound(recorded) as LogicalFrame;
   switch (frame.kind) {
     case "notification":
@@ -247,8 +247,10 @@ function flushInbound(): void {
       stopWithFailure("Invalid emit_inbound logical ACP frame", entry.frame);
       return;
     }
-    const message = inboundMessage(frame);
+    const message = prepareInboundMessage(frame);
     if (message === undefined) return;
+    // Persist the step before the client can react to it: tests close the
+    // session on the last answer, which kills this process.
     advance();
     send(message);
   }
@@ -263,6 +265,7 @@ function handleMessage(message: JsonRpcMessage): void {
   }
   const entry = transcript.entries[cursor];
   if (entry?.type !== "expect_outbound" || !matchesExpected(entry.frame, actual)) {
+    stopWithFailure("Unexpected outbound ACP frame", actual);
     if (actual.kind === "request" && message.id !== undefined && message.id !== null) {
       send({
         jsonrpc: "2.0",
@@ -270,7 +273,6 @@ function handleMessage(message: JsonRpcMessage): void {
         error: { code: -32603, message: "ACP replay frame mismatch" },
       });
     }
-    stopWithFailure("Unexpected outbound ACP frame", actual);
     return;
   }
   if (actual.kind === "request" && message.id !== undefined && message.id !== null) {

@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
+import * as NodeEvents from "node:events";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -15,14 +16,11 @@ const killOnFirstWrite = `const write = process.stdout.write.bind(process.stdout
 process.stdout.write = (...args) => {
   process.kill(process.pid, "SIGKILL");
   return write(...args);
-};
-`;
+};`;
 
 it("records the replay status before its answer leaves the agent", async () => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "acp-replay-status-"));
   const statusPath = NodePath.join(directory, "status.json");
-  const preloadPath = NodePath.join(directory, "kill-on-first-write.mjs");
-  NodeFS.writeFileSync(preloadPath, killOnFirstWrite);
   const transcript = {
     scenario: "status-before-answer",
     entries: [
@@ -42,7 +40,7 @@ it("records the replay status before its answer leaves the agent", async () => {
       [
         "--experimental-strip-types",
         "--import",
-        NodeURL.pathToFileURL(preloadPath).href,
+        `data:text/javascript,${encodeURIComponent(killOnFirstWrite)}`,
         scriptPath,
       ],
       {
@@ -57,12 +55,13 @@ it("records the replay status before its answer leaves the agent", async () => {
         stdio: ["pipe", "ignore", "ignore"],
       },
     );
-    const exited = new Promise((resolve) => agent.once("exit", resolve));
-    agent.stdin.write(
+    const exit = NodeEvents.once(agent, "exit");
+    agent.stdin.end(
       `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/set_mode", params: setModeParams })}\n`,
     );
-    await exited;
+    const [, signal] = await exit;
 
+    assert.strictEqual(signal, "SIGKILL");
     assert.deepStrictEqual(JSON.parse(NodeFS.readFileSync(statusPath, "utf8")), {
       scenario: "status-before-answer",
       cursor: 2,
