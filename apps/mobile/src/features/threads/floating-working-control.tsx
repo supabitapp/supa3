@@ -45,6 +45,7 @@ const CONTROL_TIMING = {
   reduceMotion: ReduceMotion.System,
 } as const;
 const CONTROL_SEPARATION = (16 + CONTROL_HEIGHT) / 2;
+const HIDDEN_STYLE = { opacity: 0 } as const;
 // Both rows share the same centered anchor, so the outgoing one clears fast and
 // the incoming one waits for it to be mostly gone before it starts to show.
 const LABEL_ENTERING = FadeIn.duration(160).delay(80).reduceMotion(ReduceMotion.System);
@@ -75,6 +76,8 @@ export function FloatingWorkingControl(props: {
   readonly onOpenQueue: () => void;
   /** Extra distance to rise above the anchor, e.g. an overlay card's coverage. */
   readonly lift?: SharedValue<number>;
+  /** Hides and passes touches through, e.g. while a popover covers its slot. */
+  readonly hidden?: boolean;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const [overlayWidth, setOverlayWidth] = useState(windowWidth);
@@ -109,8 +112,15 @@ export function FloatingWorkingControl(props: {
   const arrowTransformStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -CONTROL_SEPARATION * (1 - separationProgress.value) }],
   }));
+  // Hiding follows a keystroke and the popover taking this slot appears without
+  // motion, so the control steps aside instantly too. UIKit drops a glass effect
+  // under a transparent ancestor, so native glass switches itself off and only
+  // the content inside it goes transparent.
+  const hidden = props.hidden === true;
+  const hiddenStyle = hidden ? HIDDEN_STYLE : undefined;
+  const glassEffectStyle = hidden ? "none" : "regular";
   const arrowContentStyle = useAnimatedStyle(() => ({
-    opacity: separationProgress.value,
+    opacity: hidden ? 0 : separationProgress.value,
   }));
 
   // Animate an in-flow sizer so native glass receives real layout updates.
@@ -182,7 +192,10 @@ export function FloatingWorkingControl(props: {
     ) : null;
 
   const capsuleContent = (
-    <View className="flex-row items-center">
+    <View
+      className="flex-row items-center"
+      style={NATIVE_LIQUID_GLASS_SUPPORTED ? hiddenStyle : undefined}
+    >
       {statusContent}
       {props.devicePreview !== null ? (
         <View
@@ -236,7 +249,9 @@ export function FloatingWorkingControl(props: {
 
   return (
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={hidden ? "none" : "box-none"}
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
       className="absolute left-0 right-0 z-20 items-center"
       style={[{ top: -CONTROL_OVERLAY_OFFSET }, liftStyle]}
       onLayout={(event) => setOverlayWidth(event.nativeEvent.layout.width)}
@@ -251,7 +266,7 @@ export function FloatingWorkingControl(props: {
         >
           <AnimatedGlassView
             colorScheme={props.colorScheme}
-            glassEffectStyle="regular"
+            glassEffectStyle={glassEffectStyle}
             isInteractive={capsuleInteractive}
             pointerEvents={capsuleInteractive ? "box-none" : "none"}
             className="h-11 items-center justify-center overflow-hidden rounded-full"
@@ -262,7 +277,7 @@ export function FloatingWorkingControl(props: {
 
           <AnimatedGlassView
             colorScheme={props.colorScheme}
-            glassEffectStyle="regular"
+            glassEffectStyle={glassEffectStyle}
             isInteractive
             pointerEvents={props.showScrollToEnd ? "auto" : "none"}
             accessibilityElementsHidden={!props.showScrollToEnd}
@@ -280,7 +295,7 @@ export function FloatingWorkingControl(props: {
           <Animated.View
             pointerEvents={capsuleInteractive ? "box-none" : "none"}
             className="h-11 items-center justify-center overflow-hidden rounded-full border border-border bg-glass-fallback shadow-md shadow-black/10"
-            style={capsuleStyle}
+            style={[capsuleStyle, hiddenStyle]}
           >
             {capsuleContent}
           </Animated.View>
@@ -304,20 +319,24 @@ export function FloatingWorkingControl(props: {
       ) : NATIVE_LIQUID_GLASS_SUPPORTED ? (
         <UniwindGlassView
           colorScheme={props.colorScheme}
-          glassEffectStyle="regular"
+          glassEffectStyle={glassEffectStyle}
           isInteractive
           className="h-11 w-11 items-center justify-center overflow-hidden rounded-full"
         >
-          <ScrollToEndButton onPress={props.onScrollToEnd} />
+          <View style={hiddenStyle}>
+            <ScrollToEndButton onPress={props.onScrollToEnd} />
+          </View>
         </UniwindGlassView>
       ) : (
-        <ControlPill
-          accessibilityLabel="Scroll to end"
-          activateOnPressIn
-          className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
-          icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
-          onPress={props.onScrollToEnd}
-        />
+        <View style={hiddenStyle}>
+          <ControlPill
+            accessibilityLabel="Scroll to end"
+            activateOnPressIn
+            className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
+            icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
+            onPress={props.onScrollToEnd}
+          />
+        </View>
       )}
     </Animated.View>
   );
