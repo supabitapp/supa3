@@ -1821,6 +1821,177 @@ it.layer(TestLayer)("ProjectionStoreV2", (it) => {
     }),
   );
 
+  it.effect("retains workflow metadata across durable reload and stale lifecycle updates", () =>
+    Effect.gen(function* () {
+      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+      const now = yield* DateTime.now;
+      const later = DateTime.add(now, { seconds: 1 });
+      const threadId = ThreadId.make("thread:projection-workflow");
+      const projectId = ProjectId.make("project:projection-workflow");
+      const runId = RunId.make("run:projection-workflow");
+      const rootNodeId = NodeId.make("node:projection-workflow-root");
+      const taskId = NodeId.make("node:projection-workflow-task");
+      const thread = {
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+        id: threadId,
+        projectId,
+        title: "Delegated completion projection",
+        providerInstanceId,
+        modelSelection,
+        runtimeMode: "full-access" as const,
+        interactionMode: "default" as const,
+        branch: null,
+        worktreePath: null,
+        activeProviderThreadId: null,
+        lineage: {
+          parentThreadId: null,
+          relationshipToParent: null,
+          rootThreadId: threadId,
+        },
+        forkedFrom: null,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        lastVisitedAt: null,
+        deletedAt: null,
+      };
+      const run = {
+        id: runId,
+        threadId,
+        ordinal: 1,
+        providerInstanceId,
+        modelSelection,
+        providerThreadId: null,
+        userMessageId: MessageId.make("message:projection-workflow"),
+        rootNodeId,
+        activeAttemptId: null,
+        status: "running" as const,
+        requestedAt: now,
+        startedAt: now,
+        completedAt: null,
+        checkpointId: null,
+        contextHandoffId: null,
+        delegatedCompletion: {
+          disposition: "stopped" as const,
+          nextGeneration: 2,
+          delivery: null,
+        },
+      };
+      const task = {
+        id: taskId,
+        threadId,
+        runId,
+        parentNodeId: rootNodeId,
+        origin: "provider_native" as const,
+        workflow: {
+          name: "Review changes",
+          phases: [{ index: 1, title: "Review" }],
+          agents: [
+            {
+              index: 1,
+              label: "Review implementation",
+              state: "completed" as const,
+              agentId: "native-reviewer",
+              model: "claude-sonnet-4-6",
+              lastToolName: "Read",
+              totalTokens: 2000,
+            },
+          ],
+        },
+        createdBy: "agent" as const,
+        driver,
+        providerInstanceId,
+        providerThreadId: null,
+        childThreadId: null,
+        nativeTaskRef: null,
+        prompt: "Inspect the stop barrier.",
+        title: null,
+        model: null,
+        completionWake: "always" as const,
+        completionDelivery: {
+          state: "disposed" as const,
+          observedByRunId: null,
+        },
+        status: "running" as const,
+        result: null,
+        startedAt: now,
+        completedAt: null,
+        updatedAt: now,
+      };
+
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-workflow:thread"),
+        type: "thread.created",
+        threadId,
+        occurredAt: now,
+        payload: thread,
+      });
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-workflow:run"),
+        type: "run.updated",
+        threadId,
+        runId,
+        nodeId: rootNodeId,
+        providerInstanceId,
+        occurredAt: now,
+        payload: run,
+      });
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-workflow:task"),
+        type: "subagent.updated",
+        threadId,
+        runId,
+        nodeId: taskId,
+        driver,
+        providerInstanceId,
+        occurredAt: now,
+        payload: task,
+      });
+
+      const { delegatedCompletion: _delegatedCompletion, ...staleRun } = run;
+      const { completionDelivery: _completionDelivery, workflow: _workflow, ...staleTask } = task;
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-workflow:stale-run"),
+        type: "run.updated",
+        threadId,
+        runId,
+        nodeId: rootNodeId,
+        providerInstanceId,
+        occurredAt: later,
+        payload: { ...staleRun, status: "interrupted", completedAt: later },
+      });
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-workflow:stale-task"),
+        type: "subagent.updated",
+        threadId,
+        runId,
+        nodeId: taskId,
+        driver,
+        providerInstanceId,
+        occurredAt: later,
+        payload: {
+          ...staleTask,
+          status: "interrupted",
+          completedAt: later,
+          updatedAt: later,
+        },
+      });
+
+      const projection = yield* projectionStore.getThreadProjection(threadId);
+      assert.deepEqual(projection.runs[0]?.delegatedCompletion, run.delegatedCompletion);
+      assert.deepEqual(projection.subagents[0]?.workflow, task.workflow);
+      const sql = yield* SqlClient.SqlClient;
+      const rows = yield* sql<{
+        payload_json: string;
+      }>`SELECT payload_json FROM orchestration_v2_projection_subagents WHERE subagent_id = ${task.id}`;
+      assert.isTrue(rows[0]?.payload_json.includes("native-reviewer"));
+      assert.isFalse(rows[0]?.payload_json.includes("promptPreview"));
+    }),
+  );
+
   it.effect("only exposes interruptible runs through the shell activeRunId", () =>
     Effect.gen(function* () {
       const projectionStore = yield* ProjectionStore.ProjectionStoreV2;

@@ -3,8 +3,12 @@ import type {
   OrchestrationV2ThreadShell,
   OrchestrationProjectShell,
   ServerProvider,
+  OrchestrationV2SubagentWorkflow,
+  OrchestrationV2WorkflowAgent,
 } from "@supacode/contracts";
 import { formatModelSlugName, resolveSelectableModel } from "@supacode/shared/model";
+import { formatDuration } from "@supacode/shared/orchestrationTiming";
+import { formatTokens } from "@supacode/shared/usageFormat";
 import { fileBasename } from "../markdownLinks.ts";
 import { isTerminalSubagentStatus } from "./subagentRuntime.ts";
 
@@ -129,4 +133,70 @@ export function subagentDetailPreview(input: {
     (isTerminalSubagentStatus(input.status) ? result || progress : progress || result) || "";
   const compact = detail.replace(/\s+/gu, " ");
   return compact.length > 280 ? `${compact.slice(0, 280).trimEnd()}…` : compact || null;
+}
+
+export interface SubagentWorkflowGroup {
+  readonly index: number | null;
+  readonly title: string;
+  readonly agents: ReadonlyArray<OrchestrationV2WorkflowAgent>;
+}
+
+/** Keep declared phases, including queued phases, and members whose phase arrived later. */
+export function groupSubagentWorkflowAgents(
+  workflow: OrchestrationV2SubagentWorkflow,
+): ReadonlyArray<SubagentWorkflowGroup> {
+  const groups = new Map<
+    number | null,
+    { title: string; agents: OrchestrationV2WorkflowAgent[] }
+  >();
+  for (const phase of workflow.phases) {
+    groups.set(phase.index, { title: phase.title, agents: [] });
+  }
+  for (const agent of workflow.agents) {
+    const index = agent.phaseIndex ?? null;
+    let group = groups.get(index);
+    if (group === undefined) {
+      group = {
+        title: agent.phaseTitle ?? (index === null ? "Agents" : `Phase ${index + 1}`),
+        agents: [],
+      };
+      groups.set(index, group);
+    }
+    group.agents.push(agent);
+  }
+  return [...groups].map(([index, group]) => ({ index, ...group }));
+}
+
+export function workflowAgentStatusLabel(state: OrchestrationV2WorkflowAgent["state"]): string {
+  return state[0]!.toUpperCase() + state.slice(1);
+}
+
+/** Queued and running remain distinct, so an unlaunched phase does not claim to be working. */
+export function summarizeWorkflowAgentStates(
+  agents: ReadonlyArray<OrchestrationV2WorkflowAgent>,
+): string {
+  const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, interrupted: 0 };
+  for (const agent of agents) counts[agent.state] += 1;
+  return (Object.keys(counts) as Array<keyof typeof counts>)
+    .filter((state) => counts[state] > 0)
+    .map((state) => `${counts[state]} ${state}`)
+    .join(" · ");
+}
+
+/** Only reported member metadata is shown; missing model and usage stay absent. */
+export function workflowAgentMetadata(
+  agent: OrchestrationV2WorkflowAgent,
+  provider?: Pick<ServerProvider, "driver" | "models">,
+): ReadonlyArray<string> {
+  return [
+    ...(agent.model ? [resolveSubagentMetadata({ model: agent.model, provider }).modelLabel] : []),
+    ...(agent.attempt !== undefined && agent.attempt > 1 ? [`Attempt ${agent.attempt}`] : []),
+    ...(agent.totalTokens !== undefined ? [`${formatTokens(agent.totalTokens)} tokens`] : []),
+    ...(agent.toolCalls !== undefined
+      ? [`${agent.toolCalls} ${agent.toolCalls === 1 ? "tool call" : "tool calls"}`]
+      : []),
+    ...(agent.durationMs !== undefined && agent.durationMs > 0
+      ? [formatDuration(agent.durationMs)]
+      : []),
+  ];
 }

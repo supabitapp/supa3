@@ -3,6 +3,7 @@ import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
+import { WorkflowRoster } from "./WorkflowRoster";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { scopedThreadKey, scopeThreadRef } from "@supacode/client-runtime/environment";
 import {
@@ -248,6 +249,7 @@ export function ThreadRelationshipsPanel(props: {
   );
   const canMerge = mergeTargetThreadId !== null && latestMergeBackRun !== null;
   const canDetach = projection ? canDetachThreadProviderSession(projection) : false;
+  const workflows = projection?.subagents.filter((agent) => agent.workflow !== undefined) ?? [];
 
   const {
     related = [],
@@ -273,7 +275,7 @@ export function ThreadRelationshipsPanel(props: {
       (agent) => agent.childThreadId === null && agent.status === "running",
     ).length ?? 0) + active.filter(({ edge }) => edge.status === "running").length;
 
-  if (relationshipRows.length === 0 && runningCount === 0) {
+  if (relationshipRows.length === 0 && runningCount === 0 && workflows.length === 0) {
     return null;
   }
 
@@ -345,6 +347,16 @@ export function ThreadRelationshipsPanel(props: {
         ) : null
       }
     >
+      {workflows.map((agent) =>
+        agent.workflow ? (
+          <WorkflowRoster
+            key={agent.id}
+            workflow={agent.workflow}
+            status={agent.status}
+            provider={providers?.find((entry) => entry.instanceId === agent.providerInstanceId)}
+          />
+        ) : null,
+      )}
       {groups.map((group) => (
         <ThreadLineageGroup key={`${scopedThreadKey(ref)}:${group.id}`} {...group}>
           {(visibleRows) =>

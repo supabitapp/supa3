@@ -44,6 +44,103 @@ afterEach(async () => {
   state.showTooltips = false;
 });
 
+it("keeps a settled workflow available without a child thread and refreshes its expanded roster", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const agent = {
+    id: "workflow-1",
+    driver: "claudeAgent",
+    providerInstanceId: "claudeAgent",
+    childThreadId: null,
+    title: "CCWorkflows",
+    prompt: "Review this change",
+    model: null,
+    status: "completed",
+    result: "Workflow finished",
+    startedAt: DateTime.makeUnsafe("2026-10-05T12:00:00Z"),
+    completedAt: DateTime.makeUnsafe("2026-10-05T12:01:00Z"),
+    updatedAt: DateTime.makeUnsafe("2026-10-05T12:01:00Z"),
+    workflow: {
+      name: "Review",
+      phases: [
+        { index: 0, title: "Analyze" },
+        { index: 1, title: "Verify" },
+      ],
+      agents: [
+        {
+          index: 0,
+          label: "Correctness reviewer",
+          state: "completed",
+          phaseIndex: 0,
+          model: "claude-sonnet-4-6",
+          lastToolName: "Read",
+          totalTokens: 1200,
+          toolCalls: 3,
+        },
+        { index: 1, label: "Verifier", state: "cancelled", phaseIndex: 1 },
+      ],
+      truncated: true,
+    },
+  };
+  const projection = {
+    thread: {
+      id: "parent",
+      lineage: { relationshipToParent: null },
+      activeProviderThreadId: null,
+    },
+    runs: [],
+    providerThreads: [],
+    providerSessions: [],
+    contextTransfers: [],
+    subagents: [agent],
+  };
+  state.projection = projection;
+  const panel = (
+    <ThreadRelationshipsPanel
+      environmentId={EnvironmentId.make("test")}
+      threadId={ThreadId.make("parent")}
+    />
+  );
+  await act(async () => {
+    renderer = create(panel);
+  });
+  const text = () =>
+    renderer.root
+      .findAll((node) => typeof node.type === "string")
+      .flatMap((node) => node.children.filter((child) => typeof child === "string"))
+      .join(" ");
+  expect(text()).toContain("Workflow · Review");
+  expect(text()).toContain("1 completed · 1 cancelled");
+  expect(text()).not.toContain("Correctness reviewer");
+  await act(async () => renderer.root.findByType("button").props.onClick());
+  expect(text()).toContain("Analyze");
+  expect(text()).toContain("Correctness reviewer");
+  expect(text()).toContain("Claude Sonnet 4.6 · 1.20K tokens · 3 tool calls");
+  expect(text()).toContain("Last tool: ");
+  expect(text()).toContain("Read");
+  expect(text()).toContain("Additional members may be omitted");
+  await act(async () => renderer.root.findAllByType("button")[1]!.props.onClick());
+  expect(text()).not.toContain("Correctness reviewer");
+  expect(text()).toContain("Verifier");
+  state.projection = {
+    ...projection,
+    subagents: [
+      {
+        ...agent,
+        status: "failed",
+        workflow: {
+          ...agent.workflow,
+          agents: [{ ...agent.workflow.agents[0], state: "failed" }, agent.workflow.agents[1]],
+        },
+      },
+    ],
+  };
+  await act(async () => renderer.update(cloneElement(panel)));
+  expect(text()).toContain("1 failed · 1 cancelled");
+  expect(text()).toContain("Failed");
+  expect(text()).not.toContain("Correctness reviewer");
+  expect(state.navigate).not.toHaveBeenCalled();
+});
+
 it("shows the matching child agent details and refreshes them when the agent settles", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const agent = {

@@ -589,14 +589,19 @@ function preserveRunRecordedFields(
   };
 }
 
-function preserveCompletionDelivery(
+function preserveSubagentRecordedFields(
   current: OrchestrationV2Subagent | undefined,
   next: OrchestrationV2Subagent,
 ): OrchestrationV2Subagent {
-  if (next.completionDelivery !== undefined || current?.completionDelivery === undefined) {
-    return next;
-  }
-  return { ...next, completionDelivery: current.completionDelivery };
+  return {
+    ...next,
+    ...(next.completionDelivery === undefined && current?.completionDelivery !== undefined
+      ? { completionDelivery: current.completionDelivery }
+      : {}),
+    ...(next.workflow === undefined && current?.workflow !== undefined
+      ? { workflow: current.workflow }
+      : {}),
+  };
 }
 
 export function emptyProjection(
@@ -719,7 +724,7 @@ export function applyToProjection(
         ...base,
         subagents: upsertById(
           base.subagents,
-          preserveCompletionDelivery(
+          preserveSubagentRecordedFields(
             base.subagents.find((task) => task.id === event.payload.id),
             event.payload,
           ),
@@ -1964,7 +1969,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
                 updated_at = excluded.updated_at,
-                payload_json = CASE
+                payload_json = json_patch(CASE
                   WHEN json_type(excluded.payload_json, '$.completionDelivery') IS NULL
                     AND json_type(orchestration_v2_projection_subagents.payload_json, '$.completionDelivery') IS NOT NULL
                   THEN json_set(
@@ -1976,7 +1981,14 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     )
                   )
                   ELSE excluded.payload_json
-                END
+                END, CASE
+                  WHEN json_type(excluded.payload_json, '$.workflow') IS NULL
+                    AND json_type(orchestration_v2_projection_subagents.payload_json, '$.workflow') IS NOT NULL
+                  THEN json_object(
+                    'workflow', json_extract(orchestration_v2_projection_subagents.payload_json, '$.workflow')
+                  )
+                  ELSE '{}'
+                END)
             `;
             break;
           }

@@ -21,6 +21,7 @@ import { environmentThreadDetails } from "../../state/threads";
 import { subagentCardElapsed } from "./subagent-card-presentation";
 import { SubagentRow } from "./SubagentRow";
 import { WorkLogBlock } from "./work-log-layout";
+import { WorkflowRoster } from "./WorkflowRoster";
 
 type SubagentItem = Extract<OrchestrationV2TurnItem, { type: "subagent" }>;
 type AgentTiming = Pick<OrchestrationV2Subagent, "status" | "startedAt" | "completedAt">;
@@ -89,6 +90,7 @@ export function ThreadSubagentGroup(props: {
       result: live?.result ?? item.result,
       progress: live?.progress ?? item.progress,
       model: live?.model ?? null,
+      workflow: live?.workflow,
     };
   });
   const grouped = agents.length > 1;
@@ -149,29 +151,39 @@ export function ThreadSubagentGroup(props: {
           {agents.map((agent) => {
             const threadId = agent.childThreadId;
             return (
-              <Pressable
-                key={agent.item.id}
-                accessible
-                accessibilityRole={threadId === null ? undefined : "link"}
-                accessibilityHint={
-                  threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
-                }
-                disabled={threadId === null}
-                onPress={() => {
-                  if (threadId !== null)
-                    navigation.navigate("Thread", {
-                      environmentId: String(props.environmentId),
-                      threadId: String(threadId),
-                    });
-                }}
-                className="rounded-lg px-3 py-3 active:bg-subtle"
-              >
-                <SubagentRow
-                  environmentId={props.environmentId}
-                  subagent={agent}
-                  elapsed={<SubagentElapsed agents={[agent]} />}
-                />
-              </Pressable>
+              <View key={agent.item.id}>
+                <Pressable
+                  accessible
+                  accessibilityRole={threadId === null ? undefined : "link"}
+                  accessibilityHint={
+                    threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
+                  }
+                  disabled={threadId === null}
+                  onPress={() => {
+                    if (threadId !== null)
+                      navigation.navigate("Thread", {
+                        environmentId: String(props.environmentId),
+                        threadId: String(threadId),
+                      });
+                  }}
+                  className="rounded-lg px-3 py-3 active:bg-subtle"
+                >
+                  <SubagentRow
+                    environmentId={props.environmentId}
+                    subagent={agent}
+                    elapsed={<SubagentElapsed agents={[agent]} />}
+                  />
+                </Pressable>
+                {agent.workflow ? (
+                  <View className="px-3 pb-2">
+                    <WorkflowRoster
+                      workflow={agent.workflow}
+                      environmentId={props.environmentId}
+                      providerInstanceId={agent.providerInstanceId}
+                    />
+                  </View>
+                ) : null}
+              </View>
             );
           })}
         </View>

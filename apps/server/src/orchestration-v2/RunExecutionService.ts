@@ -1,4 +1,5 @@
 import { makeAssistantStreamingFilter } from "./assistantStreaming.ts";
+import { settleSubagentWorkflow } from "./subagentWorkflow.ts";
 import { resolveProjectSettings } from "@supacode/shared/projectSettings";
 import {
   isOrchestrationV2WorkActive,
@@ -241,6 +242,9 @@ export function cascadeTerminalizeRunOwnedSubagents(input: {
           occurredAt: input.completedAt,
           payload: {
             ...subagent,
+            ...(subagent.workflow === undefined
+              ? {}
+              : { workflow: settleSubagentWorkflow(subagent.workflow, input.status) }),
             status: input.status,
             completedAt: input.completedAt,
             updatedAt: input.completedAt,

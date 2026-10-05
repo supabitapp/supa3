@@ -4,6 +4,7 @@ import { projectedSubagentsToRuntime } from "@supacode/client-runtime/state/suba
 import type { ReactNode } from "react";
 import { useThreadShell, useProject } from "../../state/entities";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
+import { WorkflowRoster } from "./WorkflowRoster";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef, scopeProjectRef } from "@supacode/client-runtime/environment";
 import { environmentThreadDetails } from "../../state/threads";
@@ -484,6 +485,14 @@ function SubagentTimelineLink(props: {
   );
   const className =
     "group/subagent flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left";
+  if (agent?.workflow !== undefined) {
+    return (
+      <div data-v2-item-type="subagent" className="rounded-md border border-border/65">
+        <div className={className}>{content}</div>
+        <WorkflowRoster workflow={agent.workflow} status={liveStatus} provider={props.provider} />
+      </div>
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger

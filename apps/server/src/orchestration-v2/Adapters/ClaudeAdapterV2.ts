@@ -1,6 +1,8 @@
 import * as NodeCrypto from "node:crypto";
 
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
+import { mergeClaudeWorkflowProgress } from "./claudeWorkflowProgress.ts";
+import { settleSubagentWorkflow } from "../subagentWorkflow.ts";
 import {
   dynamicToolTitle,
   formatReadToolLabel,
@@ -58,6 +60,7 @@ import {
   type OrchestrationV2RuntimeRequest,
   type OrchestrationV2UserInputQuestion,
   type OrchestrationV2Subagent,
+  OrchestrationV2SubagentWorkflow,
   type OrchestrationV2TurnItem,
   type OrchestrationV2WebSearchResult,
   type ProviderApprovalDecision,
@@ -173,6 +176,8 @@ export function claudeProviderTurnTokenUsage(
   };
 }
 export const CLAUDE_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CLAUDE_PROVIDER);
+const workflowEquivalence = Schema.toEquivalence(OrchestrationV2SubagentWorkflow);
+
 const DEFAULT_CLAUDE_SETTINGS = Schema.decodeSync(ClaudeSettings)({});
 
 export const ClaudeProviderCapabilitiesV2 = {
@@ -4010,6 +4015,7 @@ export function makeClaudeAdapterV2(
           // when this call registers the subagent.
           readonly owner?: ActiveClaudeSubagent;
           readonly progress?: string;
+          readonly workflowMessage?: unknown;
           readonly result?: string;
           readonly status: Extract<
             OrchestrationV2ExecutionNode["status"],
@@ -4038,14 +4044,25 @@ export function makeClaudeAdapterV2(
             existingSubagent !== undefined &&
             existingSubagent.task.status !== "running" &&
             input.status === "running";
+          const lateWorkflowProgress =
+            existingSubagent !== undefined &&
+            existingSubagent.task.workflow !== undefined &&
+            existingSubagent.task.status !== "running" &&
+            input.status === "running" &&
+            !isReopen &&
+            input.workflowMessage !== undefined;
           if (
             existingSubagent !== undefined &&
             existingSubagent.task.status !== "running" &&
             input.status === "running" &&
-            !isReopen
+            !isReopen &&
+            !lateWorkflowProgress
           ) {
             return;
           }
+          // Final roster frames can race the notification. Retain their metadata
+          // while keeping the coordinator terminal and excluding stale progress text.
+          const status = lateWorkflowProgress ? existingSubagent.task.status : input.status;
           // A task_started under a tool call other than the current run's is
           // a resume: SendMessage re-emits task_started for the same task id
           // under its own tool_use_id, with the sent message as the prompt.
@@ -4059,12 +4076,12 @@ export function makeClaudeAdapterV2(
               : null;
           const lifecycleChanged =
             existingSubagent === undefined ||
-            existingSubagent.task.status !== input.status ||
+            existingSubagent.task.status !== status ||
             // A drain-replayed resume task_started finds the registry entry
             // already pre-opened to running by bufferWakeMessage while the
             // projection node still holds the old terminal status; re-emit
             // the node lifecycle for authoritative task_started updates.
-            (input.reopen === true && input.status === "running");
+            (input.reopen === true && status === "running");
 
           const now = yield* DateTime.now;
           const nativeItemId = `task:${input.taskId}`;
@@ -4089,6 +4106,30 @@ export function makeClaudeAdapterV2(
                     existingSubagent.task,
                   )
                 : existingSubagent.task;
+          let workflow = settleSubagentWorkflow(
+            mergeClaudeWorkflowProgress(priorTask?.workflow, input.workflowMessage),
+            status,
+          );
+          if (
+            workflow !== undefined &&
+            priorTask?.workflow !== undefined &&
+            workflowEquivalence(workflow, priorTask.workflow)
+          ) {
+            workflow = priorTask?.workflow;
+          }
+          if (
+            !lifecycleChanged &&
+            workflow === priorTask?.workflow &&
+            (input.progress === undefined ||
+              lateWorkflowProgress ||
+              input.progress === existingSubagent?.task.progress) &&
+            (input.result === undefined || input.result === priorTask?.result) &&
+            (input.model === undefined || input.model === priorTask?.model) &&
+            (input.title === undefined || input.title === priorTask?.title) &&
+            (input.prompt === undefined || input.prompt === priorTask?.prompt)
+          ) {
+            return;
+          }
           const task = {
             ...(priorTask ?? {
               id: nodeId,
@@ -4112,7 +4153,7 @@ export function makeClaudeAdapterV2(
               result: null,
               startedAt: now,
             }),
-            status: input.status,
+            status,
             // A reopen replayed under a continuation run re-attributes the
             // subagent to that run. RunExecutionService routes parent-thread
             // events by runId, and only the resuming run's ingestion fiber is
@@ -4120,18 +4161,19 @@ export function makeClaudeAdapterV2(
             // subagents terminalize); attribution also enrolls the subagent
             // in the resuming run's active-child tracking so its fiber
             // outlives settle until the resumed task completes.
-            ...(input.reopen === true &&
-            input.status === "running" &&
-            existingSubagent !== undefined
+            ...(input.reopen === true && status === "running" && existingSubagent !== undefined
               ? { runId: input.context.input.runId }
               : {}),
             ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
             ...(input.title === undefined ? {} : { title: input.title }),
             ...(input.model === undefined ? {} : { model: input.model }),
-            ...(input.progress === undefined ? {} : { progress: input.progress }),
+            ...(input.progress === undefined || lateWorkflowProgress
+              ? {}
+              : { progress: input.progress }),
+            ...(workflow === undefined ? {} : { workflow }),
             ...(input.result === undefined ? {} : { result: input.result }),
             ...(isReopen ? { startedAt: now } : {}),
-            completedAt: input.status === "running" ? null : (priorTask?.completedAt ?? now),
+            completedAt: status === "running" ? null : (priorTask?.completedAt ?? now),
             updatedAt: now,
           } satisfies OrchestrationV2Subagent;
           const subagent = {
@@ -4177,7 +4219,7 @@ export function makeClaudeAdapterV2(
             if (
               registered !== undefined &&
               registered.task.status !== "running" &&
-              input.status === "running" &&
+              status === "running" &&
               !(isReopen && registered === existingSubagent)
             ) {
               return current;
@@ -4228,7 +4270,7 @@ export function makeClaudeAdapterV2(
                 parentNodeId: task.parentNodeId,
                 rootNodeId: subagent.rootNodeId,
                 kind: "subagent",
-                status: input.status,
+                status: task.status,
                 countsForRun: false,
                 providerThreadId: input.context.input.providerThread.id,
                 providerTurnId: input.context.providerTurnId,
@@ -4253,7 +4295,7 @@ export function makeClaudeAdapterV2(
                 parentNodeId: null,
                 rootNodeId: childRootNodeId,
                 kind: "root_turn",
-                status: input.status,
+                status: task.status,
                 countsForRun: false,
                 providerThreadId: null,
                 providerTurnId: null,
@@ -4273,7 +4315,7 @@ export function makeClaudeAdapterV2(
               : resumeToolUseId === null
                 ? null
                 : `${nativeItemId}:prompt:${resumeToolUseId}`;
-          if (promptNativeItemId !== null) {
+          if (promptNativeItemId !== null && task.workflow === undefined) {
             const promptArtifacts = makeSubagentConversationArtifacts({
               senderThreadId: input.context.input.threadId,
               messageId: idAllocator.derive.messageFromProviderItem({
@@ -5920,18 +5962,25 @@ export function makeClaudeAdapterV2(
                   new Set(current).add(message.task_id),
                 );
               }
-              yield* recoverResumedClaudeSubagent({
-                context,
-                nativeThreadId: liveQuery.nativeThreadId,
-                taskId: message.task_id,
-                toolUseId: message.tool_use_id,
-                title: message.description,
-              });
+              if (message.task_type !== "local_workflow") {
+                yield* recoverResumedClaudeSubagent({
+                  context,
+                  nativeThreadId: liveQuery.nativeThreadId,
+                  taskId: message.task_id,
+                  toolUseId: message.tool_use_id,
+                  title: message.description,
+                });
+              }
               yield* updateClaudeSubagentNode({
                 context,
                 taskId: message.task_id,
                 ...(message.tool_use_id === undefined ? {} : { toolUseId: message.tool_use_id }),
-                ...(message.prompt === undefined ? {} : { prompt: message.prompt }),
+                ...(message.task_type === "local_workflow"
+                  ? { prompt: "" }
+                  : message.prompt === undefined
+                    ? {}
+                    : { prompt: message.prompt }),
+                workflowMessage: message,
                 ...(model === undefined ? {} : { model }),
                 ...(owner === undefined ? {} : { owner }),
                 title: message.description,
@@ -5948,7 +5997,8 @@ export function makeClaudeAdapterV2(
               message.task_id,
             );
             if (
-              progress.length > 0 &&
+              (progress.length > 0 ||
+                mergeClaudeWorkflowProgress(undefined, message) !== undefined) &&
               !context.ignoredTaskIds.has(message.task_id) &&
               !isBackgroundTask
             ) {
@@ -5956,7 +6006,8 @@ export function makeClaudeAdapterV2(
                 context,
                 taskId: message.task_id,
                 ...(message.tool_use_id === undefined ? {} : { toolUseId: message.tool_use_id }),
-                progress,
+                ...(progress.length === 0 ? {} : { progress }),
+                workflowMessage: message,
                 status: "running",
               });
             }

@@ -1,10 +1,16 @@
 import { ProjectId, ProviderDriverKind } from "@supacode/contracts";
-import type { OrchestrationV2TurnItemStatus } from "@supacode/contracts";
+import type {
+  OrchestrationV2TurnItemStatus,
+  OrchestrationV2WorkflowAgent,
+} from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   subagentGroupSummary,
   resolveSubagentMetadata,
   subagentDetailPreview,
+  groupSubagentWorkflowAgents,
+  summarizeWorkflowAgentStates,
+  workflowAgentMetadata,
 } from "./subagentDisplay.js";
 
 describe("subagentGroupSummary", () => {
@@ -162,5 +168,67 @@ describe("subagentDetailPreview", () => {
       subagentDetailPreview({ status: "failed", progress: "Last progress", result: " " }),
     ).toBe("Last progress");
     expect(subagentDetailPreview({ status: "pending" })).toBeNull();
+  });
+});
+
+describe("workflow roster presentation", () => {
+  it("keeps planned phases and groups members whose phase has not been declared yet", () => {
+    const declared = { index: 0, label: "Reviewer", state: "completed", phaseIndex: 0 } as const;
+    const undeclared = {
+      index: 1,
+      label: "Verifier",
+      state: "running",
+      phaseIndex: 2,
+      phaseTitle: "Verify",
+    } as const;
+    const unassigned = { index: 2, label: "Assistant", state: "queued" } as const;
+    const groups = groupSubagentWorkflowAgents({
+      phases: [
+        { index: 0, title: "Review" },
+        { index: 1, title: "Implement" },
+      ],
+      agents: [unassigned, undeclared, declared],
+    });
+
+    expect(groups).toEqual([
+      { index: 0, title: "Review", agents: [declared] },
+      { index: 1, title: "Implement", agents: [] },
+      { index: null, title: "Agents", agents: [unassigned] },
+      { index: 2, title: "Verify", agents: [undeclared] },
+    ]);
+    expect(groups.flatMap((group) => group.agents)).toHaveLength(3);
+  });
+
+  it("does not count queued members as running or cancelled members as failed", () => {
+    const members: ReadonlyArray<OrchestrationV2WorkflowAgent> = [
+      { index: 0, label: "Reviewer", state: "completed" },
+      { index: 1, label: "Verifier", state: "running" },
+      { index: 2, label: "Security", state: "failed" },
+      { index: 3, label: "Writer", state: "cancelled" },
+      { index: 4, label: "Assistant", state: "queued" },
+    ];
+    expect(summarizeWorkflowAgentStates(members)).toBe(
+      "1 queued · 1 running · 1 completed · 1 failed · 1 cancelled",
+    );
+    expect(summarizeWorkflowAgentStates([])).toBe("");
+  });
+
+  it("shows reported zero usage, readable models, and retry counts without inventing metadata", () => {
+    expect(
+      workflowAgentMetadata({
+        index: 0,
+        label: "Reviewer",
+        state: "running",
+        model: "claude-sonnet-4-6",
+        totalTokens: 1200,
+        toolCalls: 0,
+        durationMs: 12_000,
+        attempt: 2,
+      }),
+    ).toEqual(["Claude Sonnet 4.6", "Attempt 2", "1.20K tokens", "0 tool calls", "12s"]);
+    expect(workflowAgentMetadata({ index: 0, label: "Reviewer", state: "queued" })).toEqual([]);
+    expect(
+      workflowAgentMetadata({ index: 0, label: "Reviewer", state: "completed", totalTokens: 0 }),
+    ).toEqual(["0 tokens"]);
   });
 });

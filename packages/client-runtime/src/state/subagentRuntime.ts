@@ -3,7 +3,7 @@
  * web agent rows render.
  */
 import * as DateTime from "effect/DateTime";
-import type { OrchestrationV2Subagent } from "@supacode/contracts";
+import type { OrchestrationV2Subagent, OrchestrationV2SubagentWorkflow } from "@supacode/contracts";
 import { isOrchestrationV2WorkActive } from "@supacode/contracts";
 
 export type RuntimeSubagentStatus =
@@ -65,6 +65,7 @@ export interface RuntimeSubagent {
   readonly attempt: number | null;
   readonly workflowName: string | null;
   readonly phases: ReadonlyArray<SubagentWorkflowPhase>;
+  readonly workflow?: OrchestrationV2SubagentWorkflow;
   readonly runHandles: SubagentRunHandles | null;
   readonly recentActivity: ReadonlyArray<SubagentActivityEntry>;
   /** First retained observation, used as the roster's stable display order. */
@@ -103,6 +104,7 @@ export function projectedSubagentsToRuntime(
     readonly model: string | null;
     readonly status: OrchestrationV2Subagent["status"];
     readonly progress?: string | undefined;
+    readonly workflow?: OrchestrationV2SubagentWorkflow | undefined;
     readonly result: string | null;
     readonly startedAt: DateTime.Utc | null;
     readonly completedAt: DateTime.Utc | null;
@@ -114,7 +116,7 @@ export function projectedSubagentsToRuntime(
     const startedAt = subagent.startedAt === null ? null : DateTime.formatIso(subagent.startedAt);
     return {
       id: subagent.id,
-      kind: "subagent" as const,
+      kind: subagent.workflow === undefined ? ("subagent" as const) : ("workflow" as const),
       title:
         subagent.title ??
         (subagent.prompt.length > 80 ? `${subagent.prompt.slice(0, 77)}...` : subagent.prompt),
@@ -134,8 +136,9 @@ export function projectedSubagentsToRuntime(
       phaseIndex: null,
       phaseTitle: null,
       attempt: null,
-      workflowName: null,
-      phases: [],
+      workflowName: subagent.workflow?.name ?? null,
+      phases: subagent.workflow?.phases ?? [],
+      ...(subagent.workflow === undefined ? {} : { workflow: subagent.workflow }),
       runHandles: null,
       recentActivity: [],
       firstSeenAt: startedAt ?? updatedAt,

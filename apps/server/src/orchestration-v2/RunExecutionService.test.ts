@@ -2969,6 +2969,18 @@ it.effect("cascade helper is provider-neutral for Claude and Codex-shaped child 
         runId,
         parentNodeId: NodeId.make(`node:cascade-helper:${driverKind}:root`),
         origin: "provider_native",
+        ...(driverKind === "claudeAgent"
+          ? {
+              workflow: {
+                name: "Cascade workflow",
+                phases: [{ index: 1, title: "Review" }],
+                agents: [
+                  { index: 1, label: "Done", state: "completed" as const },
+                  { index: 2, label: "Active", state: "running" as const },
+                ],
+              },
+            }
+          : {}),
         createdBy: "agent",
         driver: driverKind,
         providerInstanceId,
@@ -3119,6 +3131,13 @@ it.effect("cascade helper is provider-neutral for Claude and Codex-shaped child 
       assert.equal(terminalSubagent.payload.progress, "partial progress");
       assert.equal(terminalSubagent.payload.result, "partial result");
       assert.equal(terminalSubagent.payload.driver, driverKind);
+      if (driverKind === "claudeAgent") {
+        assert.deepEqual(
+          terminalSubagent.payload.workflow?.agents.map(({ state }) => state),
+          ["completed", "cancelled"],
+        );
+        assert.equal(terminalSubagent.payload.workflow?.name, "Cascade workflow");
+      } else assert.isUndefined(terminalSubagent.payload.workflow);
 
       const terminalItem = events.find(
         (event) => event.type === "turn-item.updated" && event.payload.type === "subagent",

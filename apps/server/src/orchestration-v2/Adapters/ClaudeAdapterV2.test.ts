@@ -2070,6 +2070,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       const offeredMessages: Array<SDKUserMessage> = [];
       const permissionModeChanges: Array<string> = [];
       const continuationRequests: Array<ProviderContinuationRequest> = [];
+      const launchLookups: Array<string> = [];
+      const subagentReceipts =
+        yield* Queue.unbounded<Extract<ProviderAdapterV2Event, { type: "subagent.updated" }>>();
       const terminalReceipts =
         yield* Queue.unbounded<Extract<ProviderAdapterV2Event, { type: "turn.terminal" }>>();
       const systemNoticeReceipts =
@@ -2126,7 +2129,11 @@ describe("ClaudeAdapterV2 background wake turns", () => {
               };
             }),
           forkSession: () => Effect.die("unused forkSession"),
-          subagentLaunchToolUseId: () => Effect.succeed(null),
+          subagentLaunchToolUseId: (input) =>
+            Effect.sync(() => {
+              launchLookups.push(input.agentId);
+              return null;
+            }),
           assertComplete: Effect.void,
         },
       });
@@ -2147,6 +2154,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         Stream.runForEach((event) =>
           Effect.gen(function* () {
             events.push(event);
+            if (event.type === "subagent.updated") yield* Queue.offer(subagentReceipts, event);
             if (event.type === "turn.terminal") {
               yield* Queue.offer(terminalReceipts, event);
             }
@@ -2177,6 +2185,8 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         continuationRequests,
         events,
         terminalReceipts,
+        subagentReceipts,
+        launchLookups,
         systemNoticeReceipts,
         getOpenedOptions: () => openedOptions,
         terminalEvents,
@@ -5574,6 +5584,167 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       );
     return { childThreadId, toolThreadIds, assistantTexts };
   };
+
+  it.effect.each(["completed", "failed", "stopped"] as const)(
+    "retains workflow phases and members through %s and late telemetry",
+    (outcome) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const harness = yield* makeWakeHarness;
+          const now = yield* DateTime.now;
+          yield* harness.runtime.startTurn(
+            makeClaudeTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now,
+              attemptId: RunAttemptId.make(`attempt-workflow-${outcome}`),
+              text: "Run a workflow.",
+              attachments: [],
+            }),
+          );
+          yield* harness.offerAndWait(
+            claudeSdkFrame({
+              type: "assistant",
+              message: {
+                id: "msg_workflow",
+                model: "claude-sonnet-4-6",
+                type: "message",
+                role: "assistant",
+                content: [
+                  {
+                    type: "tool_use",
+                    id: "toolu_workflow",
+                    name: "Workflow",
+                    input: { description: "Review changes" },
+                  },
+                ],
+              },
+              parent_tool_use_id: null,
+              uuid: "00000000-0000-4000-8000-00000000a001",
+              session_id: WAKE_NATIVE_SESSION,
+            }),
+          );
+          yield* harness.offerAndWait(
+            claudeSdkFrame({
+              type: "system",
+              subtype: "task_started",
+              task_id: "workflow-1",
+              tool_use_id: "toolu_workflow",
+              task_type: "local_workflow",
+              workflow_name: "Review changes",
+              description: "Review repository",
+              prompt: "export const meta = { name: 'Review changes' }; // private workflow source",
+              uuid: "00000000-0000-4000-8000-00000000a002",
+              session_id: WAKE_NATIVE_SESSION,
+            }),
+          );
+          const launched = (yield* Queue.take(harness.subagentReceipts)).subagent;
+          assert.deepEqual(launched.workflow, { name: "Review changes", phases: [], agents: [] });
+          assert.equal(launched.prompt, "");
+          assert.deepEqual(harness.launchLookups, []);
+          const member = (state: string, tokens: number) => ({
+            type: "workflow_agent",
+            index: 1,
+            label: "Check tests",
+            phaseIndex: 1,
+            phaseTitle: "Review",
+            agentId: "native-member-1",
+            model: "claude-opus-5-5[1m]",
+            state,
+            attempt: 1,
+            lastToolName: "Bash",
+            tokens,
+            toolCalls: 3,
+            promptPreview: "private member prompt",
+          });
+          yield* harness.offerAndWait(
+            claudeSdkFrame({
+              type: "system",
+              subtype: "task_progress",
+              task_id: "workflow-1",
+              tool_use_id: "toolu_workflow",
+              description: "",
+              workflow_progress: [
+                { type: "workflow_phase", index: 1, title: "Review" },
+                member("progress", 1200),
+                { ...member("queued", 0), index: 2, label: "Optional review" },
+              ],
+              uuid: "00000000-0000-4000-8000-00000000a003",
+              session_id: WAKE_NATIVE_SESSION,
+            }),
+          );
+          const progressing = (yield* Queue.take(harness.subagentReceipts)).subagent;
+          assert.equal(progressing.workflow?.agents[0]?.state, "running");
+          assert.equal(progressing.workflow?.agents[0]?.totalTokens, 1200);
+          assert.deepEqual(progressing.workflow?.phases, [{ index: 1, title: "Review" }]);
+          yield* harness.offerAndWait(
+            claudeSdkFrame({
+              type: "system",
+              subtype: "task_notification",
+              task_id: "workflow-1",
+              tool_use_id: "toolu_workflow",
+              status: outcome,
+              summary: `Workflow ${outcome}`,
+              output_file: "/tmp/workflow.output",
+              uuid: "00000000-0000-4000-8000-00000000a004",
+              session_id: WAKE_NATIVE_SESSION,
+            }),
+          );
+          const terminal = (yield* Queue.take(harness.subagentReceipts)).subagent;
+          assert.equal(terminal.status, outcome === "stopped" ? "cancelled" : outcome);
+          assert.equal(
+            terminal.workflow?.agents[0]?.state,
+            outcome === "completed" ? "completed" : "cancelled",
+          );
+          assert.equal(terminal.workflow?.agents[1]?.state, "cancelled");
+          yield* harness.offerAndWait(
+            claudeSdkFrame({
+              type: "system",
+              subtype: "task_progress",
+              task_id: "workflow-1",
+              tool_use_id: "toolu_workflow",
+              description: "Stale running text",
+              workflow_progress: [member("done", 2400)],
+              uuid: "00000000-0000-4000-8000-00000000a005",
+              session_id: WAKE_NATIVE_SESSION,
+            }),
+          );
+          const late = (yield* Queue.take(harness.subagentReceipts)).subagent;
+          assert.equal(late.status, terminal.status);
+          assert.equal(late.result, terminal.result);
+          assert.equal(late.workflow?.agents[0]?.state, "completed");
+          assert.equal(late.workflow?.agents[0]?.totalTokens, 2400);
+          assert.notEqual(late.progress, "Stale running text");
+          const lateItem = harness.events.findLast(
+            (event) => event.type === "turn_item.updated" && event.turnItem.type === "subagent",
+          );
+          assert.equal(
+            lateItem?.type === "turn_item.updated" ? lateItem.turnItem.status : undefined,
+            terminal.status,
+          );
+          assert.isFalse(
+            harness.events.some(
+              (event) =>
+                event.type === "message.updated" &&
+                event.message.threadId === launched.childThreadId &&
+                event.message.role === "user",
+            ),
+          );
+          assert.isFalse(
+            harness.events.some(
+              (event) =>
+                event.type === "message.updated" &&
+                (event.message.text.includes("private workflow source") ||
+                  event.message.text.includes("private member prompt")),
+            ),
+          );
+          yield* harness.offerAndWait(
+            makeResultFrame({ uuid: "00000000-0000-4000-8000-00000000a006", result: "Finished." }),
+          );
+          yield* Queue.take(harness.terminalReceipts);
+        }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      ),
+  );
 
   it.effect("a subagent re-run in the foreground does not join a later wake", () =>
     Effect.scoped(

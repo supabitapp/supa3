@@ -653,6 +653,42 @@ export const OrchestrationV2ExecutionNode = Schema.Struct({
 });
 export type OrchestrationV2ExecutionNode = typeof OrchestrationV2ExecutionNode.Type;
 
+// Bound provider rosters before they enter durable events and client snapshots.
+export const WORKFLOW_MAX_PHASES = 64;
+export const WORKFLOW_MAX_AGENTS = 200;
+const WorkflowText = TrimmedNonEmptyString.check(Schema.isMaxLength(512));
+
+export const OrchestrationV2WorkflowPhase = Schema.Struct({
+  index: NonNegativeInt,
+  title: WorkflowText,
+});
+export type OrchestrationV2WorkflowPhase = typeof OrchestrationV2WorkflowPhase.Type;
+
+export const OrchestrationV2WorkflowAgent = Schema.Struct({
+  index: NonNegativeInt,
+  label: WorkflowText,
+  agentId: Schema.optional(WorkflowText),
+  state: Schema.Literals(["queued", "running", "completed", "failed", "cancelled", "interrupted"]),
+  phaseIndex: Schema.optional(NonNegativeInt),
+  phaseTitle: Schema.optional(WorkflowText),
+  model: Schema.optional(WorkflowText),
+  lastToolName: Schema.optional(WorkflowText),
+  attempt: Schema.optional(NonNegativeInt),
+  totalTokens: Schema.optional(NonNegativeInt),
+  toolCalls: Schema.optional(NonNegativeInt),
+  durationMs: Schema.optional(NonNegativeInt),
+});
+export type OrchestrationV2WorkflowAgent = typeof OrchestrationV2WorkflowAgent.Type;
+
+/** Live member metadata, excluding workflow scripts and member prompts/transcripts. */
+export const OrchestrationV2SubagentWorkflow = Schema.Struct({
+  name: Schema.optional(WorkflowText),
+  phases: Schema.Array(OrchestrationV2WorkflowPhase).check(Schema.isMaxLength(WORKFLOW_MAX_PHASES)),
+  agents: Schema.Array(OrchestrationV2WorkflowAgent).check(Schema.isMaxLength(WORKFLOW_MAX_AGENTS)),
+  truncated: Schema.optional(Schema.Boolean),
+});
+export type OrchestrationV2SubagentWorkflow = typeof OrchestrationV2SubagentWorkflow.Type;
+
 export const OrchestrationV2Subagent = Schema.Struct({
   id: NodeId,
   threadId: ThreadId,
@@ -686,6 +722,7 @@ export const OrchestrationV2Subagent = Schema.Struct({
     "interrupted",
   ]),
   progress: Schema.optional(Schema.String),
+  workflow: Schema.optional(OrchestrationV2SubagentWorkflow),
   result: Schema.NullOr(Schema.String),
   startedAt: Schema.NullOr(Schema.DateTimeUtc),
   completedAt: Schema.NullOr(Schema.DateTimeUtc),

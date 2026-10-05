@@ -21,6 +21,7 @@ import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { environmentThreadDetails } from "../../state/threads";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
 import { SubagentRow } from "./SubagentRow";
+import { WorkflowRoster } from "./WorkflowRoster";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -134,8 +135,17 @@ function AgentRow(props: {
         subagent={subagent}
         elapsed={<AgentElapsed subagent={subagent} tickSeconds={props.tickSeconds} />}
       />
+      {subagent.workflow ? (
+        <WorkflowRoster
+          workflow={subagent.workflow}
+          environmentId={props.environmentId}
+          providerInstanceId={subagent.providerInstanceId}
+        />
+      ) : null}
     </View>
   );
+
+  if (subagent.workflow) return row;
 
   if (childThreadId === null) {
     return (

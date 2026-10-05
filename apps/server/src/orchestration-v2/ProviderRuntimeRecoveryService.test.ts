@@ -1165,6 +1165,22 @@ it.effect(
           driver: ProviderDriverKind.make("claude"),
           providerInstanceId: claudeInstanceId,
           status: "running",
+          workflow: {
+            name: "Recovery workflow",
+            phases: [{ index: 1, title: "Apply" }],
+            agents: [
+              { index: 1, label: "Already done", state: "completed" },
+              {
+                index: 2,
+                label: "Running member",
+                state: "running",
+                lastToolName: "Bash",
+                totalTokens: 1234,
+              },
+              { index: 3, label: "Queued member", state: "queued" },
+              { index: 4, label: "Failed member", state: "failed" },
+            ],
+          },
         },
         {
           // Already finished with a real result: must never be overwritten.
@@ -1247,6 +1263,26 @@ it.effect(
       assert.equal(
         subagentCancel?.type === "subagent.updated" ? subagentCancel.payload.status : null,
         "cancelled",
+      );
+
+      assert.deepEqual(
+        subagentCancel?.type === "subagent.updated" ? subagentCancel.payload.workflow : undefined,
+        {
+          name: "Recovery workflow",
+          phases: [{ index: 1, title: "Apply" }],
+          agents: [
+            { index: 1, label: "Already done", state: "completed" },
+            {
+              index: 2,
+              label: "Running member",
+              state: "cancelled",
+              lastToolName: "Bash",
+              totalTokens: 1234,
+            },
+            { index: 3, label: "Queued member", state: "cancelled" },
+            { index: 4, label: "Failed member", state: "failed" },
+          ],
+        },
       );
 
       // So is its execution node, which no live process can terminalize.

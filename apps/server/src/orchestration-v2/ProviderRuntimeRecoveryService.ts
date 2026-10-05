@@ -22,6 +22,7 @@ import * as IdAllocator from "./IdAllocator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { restartContinuationRun } from "./RestartContinuation.ts";
+import { settleSubagentWorkflow } from "./subagentWorkflow.ts";
 import {
   cancelledRosterTaskWork,
   cancelledTurnItemWork,
@@ -370,7 +371,15 @@ export const make = Effect.gen(function* () {
             driver: subagent.driver,
             providerInstanceId: subagent.providerInstanceId,
             occurredAt: now,
-            payload: { ...subagent, status: "cancelled", completedAt: now, updatedAt: now },
+            payload: {
+              ...subagent,
+              ...(subagent.workflow === undefined
+                ? {}
+                : { workflow: settleSubagentWorkflow(subagent.workflow, "cancelled") }),
+              status: "cancelled",
+              completedAt: now,
+              updatedAt: now,
+            },
           });
         }
         for (const providerTurn of projection.providerTurns.filter(
@@ -498,7 +507,15 @@ export const make = Effect.gen(function* () {
             driver: staleSubagent.driver,
             providerInstanceId: staleSubagent.providerInstanceId,
             occurredAt: now,
-            payload: { ...staleSubagent, status: "cancelled", completedAt: now, updatedAt: now },
+            payload: {
+              ...staleSubagent,
+              ...(staleSubagent.workflow === undefined
+                ? {}
+                : { workflow: settleSubagentWorkflow(staleSubagent.workflow, "cancelled") }),
+              status: "cancelled",
+              completedAt: now,
+              updatedAt: now,
+            },
           });
         }
         const staleSubagentNode = projection.nodes.find(
