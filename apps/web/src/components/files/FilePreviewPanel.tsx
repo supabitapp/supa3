@@ -3,6 +3,7 @@ import type {
   ChatFileAttachment,
   EditorId,
   EnvironmentId,
+  ProjectReadFileResult,
   ResolvedKeybindingsConfig,
   ScopedThreadRef,
 } from "@supacode/contracts";
@@ -84,7 +85,7 @@ import { projectFileCacheKey, projectFileEditorCacheKey } from "./fileContentRev
 import {
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
-  setMarkdownTaskChecked,
+  resolveMarkdownTaskPreviewUpdate,
   shouldShowFileExplorer,
 } from "./filePreviewMode";
 import { useFileSaveCoordinator } from "./useFileSaveCoordinator";
@@ -843,12 +844,13 @@ function RenderedMarkdownSurface({
   environmentId,
   cwd,
   relativePath,
-  contents,
+  file,
   threadRef,
   readOnly,
   onPendingChange,
 }: Omit<
   EditableFileSurfaceProps,
+  | "contents"
   | "resolvedTheme"
   | "composerDraftTarget"
   | "revealLine"
@@ -856,6 +858,7 @@ function RenderedMarkdownSurface({
   | "wordWrap"
   | "onPostRender"
 > & {
+  file: ProjectReadFileResult;
   threadRef: ScopedThreadRef;
   readOnly: boolean;
 }) {
@@ -869,19 +872,22 @@ function RenderedMarkdownSurface({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <FileMarkdownPreview
-        text={contents}
+        text={file.contents}
         cwd={cwd}
         relativePath={relativePath}
         threadRef={threadRef}
         onTaskListChange={
-          readOnly
+          readOnly || file.truncated
             ? undefined
             : ({ markerOffset, checked }) => {
-                const currentContents =
-                  getOptimisticProjectFileQueryData(environmentId, cwd, relativePath)?.contents ??
-                  contents;
-                const nextContents = setMarkdownTaskChecked(currentContents, markerOffset, checked);
-                if (nextContents === currentContents) return;
+                const currentFile =
+                  getOptimisticProjectFileQueryData(environmentId, cwd, relativePath) ?? file;
+                const nextContents = resolveMarkdownTaskPreviewUpdate(
+                  currentFile,
+                  markerOffset,
+                  checked,
+                );
+                if (nextContents === null) return;
                 setProjectFileQueryData(environmentId, cwd, relativePath, nextContents);
                 saveCoordinator.change(nextContents);
               }
@@ -974,7 +980,7 @@ export default function FilePreviewPanel({
   // it on the panel meant a thread switch dropped it and forced source back.
   const [renderMarkdownPreferred, setRenderMarkdownPreferred] = useLocalStorage(
     RENDER_MARKDOWN_STORAGE_KEY,
-    false,
+    true,
     Schema.Boolean,
   );
   const [renderBrowserFilePreferred, setRenderBrowserFilePreferred] = useLocalStorage(
@@ -1182,7 +1188,8 @@ export default function FilePreviewPanel({
       !renderBrowserFile &&
       file.data?.truncated ? (
         <div className="shrink-0 border-b border-warning/20 bg-warning-surface px-3 py-1.5 text-2xs text-warning-foreground">
-          Preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()} byte file.
+          Read-only preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()}{" "}
+          byte file.
         </div>
       ) : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -1255,8 +1262,8 @@ export default function FilePreviewPanel({
                 cwd={cwd}
                 relativePath={relativePath}
                 threadRef={threadRef}
-                contents={file.data.contents}
-                readOnly={isHostFile}
+                file={file.data}
+                readOnly={isHostFile || file.data.truncated}
                 onPendingChange={onPendingChange}
               />
             ) : tableDelimiter && renderTable ? (

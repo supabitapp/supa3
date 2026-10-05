@@ -36,3 +36,14 @@ export function setMarkdownTaskChecked(
 
   return `${markdown.slice(0, markerOffset + 1)}${checked ? "x" : " "}${markdown.slice(markerOffset + 2)}`;
 }
+
+/** A rendered task toggle writes the whole document, so partial previews cannot be saved. */
+export function resolveMarkdownTaskPreviewUpdate(
+  file: { readonly contents: string; readonly truncated: boolean },
+  markerOffset: number,
+  checked: boolean,
+): string | null {
+  if (file.truncated) return null;
+  const nextContents = setMarkdownTaskChecked(file.contents, markerOffset, checked);
+  return nextContents === file.contents ? null : nextContents;
+}

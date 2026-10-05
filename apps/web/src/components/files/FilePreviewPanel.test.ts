@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { decodeFilePreviewText, FILE_TEXT_PREVIEW_MAX_BYTES } from "@supacode/shared/filePreview";
 
 import {
   formatFileCommentRange,
@@ -8,6 +9,7 @@ import {
 import {
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
+  resolveMarkdownTaskPreviewUpdate,
   setMarkdownTaskChecked,
   shouldShowFileExplorer,
 } from "./filePreviewMode";
@@ -119,6 +121,40 @@ describe("setMarkdownTaskChecked", () => {
   it("leaves the document unchanged for a stale or invalid marker offset", () => {
     expect(setMarkdownTaskChecked(markdown, 0, true)).toBe(markdown);
     expect(setMarkdownTaskChecked(markdown, 200, true)).toBe(markdown);
+  });
+});
+
+describe("rendered markdown task updates", () => {
+  it("refuses a task update from a bounded prefix of a larger document", () => {
+    const markdown = `- [ ] First task\n${"a".repeat(FILE_TEXT_PREVIEW_MAX_BYTES)}\nTail must survive`;
+    const preview = decodeFilePreviewText(new TextEncoder().encode(markdown));
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text).not.toContain("Tail must survive");
+    expect(
+      resolveMarkdownTaskPreviewUpdate(
+        { contents: preview.text, truncated: preview.truncated },
+        2,
+        true,
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps complete documents editable without dropping their tail", () => {
+    const markdown = "- [ ] First task\n- [x] Second task\nTail must survive\n";
+    const file = { contents: markdown, truncated: false };
+    const checked = resolveMarkdownTaskPreviewUpdate(file, 2, true);
+    expect(checked).toBe("- [x] First task\n- [x] Second task\nTail must survive\n");
+    if (checked === null) expect.unreachable("expected a complete task update");
+    expect(resolveMarkdownTaskPreviewUpdate({ ...file, contents: checked }, 2, false)).toBe(
+      markdown,
+    );
+  });
+
+  it("does not schedule writes for an unchanged or stale task marker", () => {
+    const file = { contents: "- [x] Already checked\n", truncated: false };
+    expect(resolveMarkdownTaskPreviewUpdate(file, 2, true)).toBeNull();
+    expect(resolveMarkdownTaskPreviewUpdate(file, 20, false)).toBeNull();
   });
 });
 

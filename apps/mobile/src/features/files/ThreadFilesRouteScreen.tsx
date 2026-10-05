@@ -39,6 +39,11 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 import { ThreadRouteScreen } from "../threads/ThreadRouteScreen";
 import { FilePreviewLoading, FilePreviewNotice } from "./FilePreviewFeedback";
 import { FileMarkdownPreview } from "./FileMarkdownPreview";
+import {
+  type FileViewMode,
+  type FileViewModeOverride,
+  resolveFileViewMode,
+} from "./filePreviewMode";
 import { FileTreeBrowser } from "./FileTreeBrowser";
 import { useFileTreeEntries } from "./useFileTreeEntries";
 import { preloadWorkspaceFileContents } from "./preload-workspace-file";
@@ -169,8 +174,6 @@ function FileHeader(props: {
   );
 }
 
-type FileViewMode = "preview" | "source";
-
 function firstRouteParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -193,16 +196,6 @@ function normalizeRouteLine(value: string | null): number | null {
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function defaultViewMode(path: string | null): FileViewMode {
-  return path !== null &&
-    (isWorkspaceBrowserPreviewPath(path) ||
-      isWorkspaceImagePreviewPath(path) ||
-      isVideoPreviewFile(path) ||
-      isAudioPreviewFile(path))
-    ? "preview"
-    : "source";
 }
 
 function FileContent(props: {
@@ -568,10 +561,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   const { cwd, environmentId, projectName, selectedThread, threadId } = useThreadFilesWorkspace(
     props.route.params,
   );
-  const [modeOverride, setModeOverride] = useState<{
-    readonly path: string;
-    readonly mode: FileViewMode;
-  } | null>(null);
+  const [modeOverride, setModeOverride] = useState<FileViewModeOverride | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
   const previewKey = JSON.stringify([environmentId, cwd, relativePath, previewRevision]);
   const [fullScreenPreview, setFullScreenPreview] = useState<FilePreviewSource | null>(null);
@@ -588,10 +578,11 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
       isImageFile ||
       isVideoFile ||
       isAudioFile);
-  const activeMode =
-    relativePath !== null && modeOverride?.path === relativePath
-      ? modeOverride.mode
-      : defaultViewMode(relativePath);
+  const activeMode = resolveFileViewMode({
+    path: relativePath,
+    line: targetLine,
+    override: modeOverride,
+  });
   const resolvedActiveMode =
     isVideoFile || isAudioFile ? "preview" : canPreview ? activeMode : "source";
   const assetPreviewPath =
@@ -731,7 +722,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             title: "Preview",
             icon: "eye",
             inline: true,
-            onPress: () => setModeOverride({ path: relativePath, mode: "preview" }),
+            onPress: () =>
+              setModeOverride({ path: relativePath, line: targetLine, mode: "preview" }),
           } as const)
         : null,
       canToggleMode
@@ -740,7 +732,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             title: "Source",
             icon: "doc.text",
             inline: true,
-            onPress: () => setModeOverride({ path: relativePath, mode: "source" }),
+            onPress: () =>
+              setModeOverride({ path: relativePath, line: targetLine, mode: "source" }),
           } as const)
         : null,
       // Only the source body wraps; a rendered preview lays itself out.
@@ -833,6 +826,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     isImageFile,
     isVideoFile,
     relativePath,
+    targetLine,
     resolvedActiveMode,
     mediaSource,
     mediaActions.actions,
