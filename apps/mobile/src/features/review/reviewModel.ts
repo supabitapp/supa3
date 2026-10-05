@@ -1,7 +1,13 @@
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import type { ChangeTypes, FileDiffMetadata } from "@pierre/diffs/types";
-import type { ThreadCheckpointSummary } from "@supacode/client-runtime/state/thread-checkpoints";
-import type { ReviewDiffPreviewSource } from "@supacode/contracts";
+import {
+  formatGitUpdateRefs,
+  type ThreadCheckpointSummary,
+} from "@supacode/client-runtime/state/thread-checkpoints";
+import type {
+  OrchestrationV2CheckpointGitUpdate,
+  ReviewDiffPreviewSource,
+} from "@supacode/contracts";
 import { unquoteGitPatchPath } from "@supacode/shared/gitPatchPath";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
@@ -23,6 +29,8 @@ export interface ReviewSectionItem {
   readonly files?: ReviewDiffPreviewSource["files"];
   readonly truncated?: boolean;
   readonly source?: ReviewDiffPreviewSource;
+  /** Changes HEAD brought into a turn, left out of its diff unless requested. */
+  readonly gitUpdate?: OrchestrationV2CheckpointGitUpdate;
 }
 
 export interface ReviewRenderableHunkRow {
@@ -104,7 +112,10 @@ function checkpointSubtitle(checkpoint: ThreadCheckpointSummary): string {
   if (checkpoint.status !== "ready") {
     return `Diff ${checkpoint.status}`;
   }
-  return `${fileCount} file${fileCount === 1 ? "" : "s"} changed`;
+  const changed = `${fileCount} file${fileCount === 1 ? "" : "s"} changed`;
+  if (checkpoint.gitUpdate === undefined) return changed;
+  const gitUpdate = `Updated via Git · ${formatGitUpdateRefs(checkpoint.gitUpdate)}`;
+  return fileCount === 0 ? gitUpdate : `${changed} · ${gitUpdate}`;
 }
 
 function compareCheckpointTurnCountDescending(
@@ -428,6 +439,7 @@ export function buildReviewSectionItems(input: {
         subtitle: checkpointSubtitle(checkpoint),
         diff: input.turnDiffById[id] ?? null,
         isLoading: input.loadingTurnIds[id] === true,
+        ...(checkpoint.gitUpdate === undefined ? {} : { gitUpdate: checkpoint.gitUpdate }),
       };
     },
   );

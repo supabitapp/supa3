@@ -6,6 +6,7 @@ export interface CheckpointDiffTarget {
   readonly fromTurnCount: number | null;
   readonly toTurnCount: number | null;
   readonly ignoreWhitespace: boolean;
+  readonly includeGitChanges?: boolean;
 }
 
 export function normalizeComposerPathSearchQuery(query: string | null): string {
@@ -21,6 +22,8 @@ export function buildCheckpointDiffTargets(target: CheckpointDiffTarget) {
   ) {
     return { fullThread: null, turn: null } as const;
   }
+  // Left out unless set, so the default request keeps its existing cache key.
+  const includeGitChanges = target.includeGitChanges === true ? { includeGitChanges: true } : {};
 
   if (target.fromTurnCount === 0) {
     return {
@@ -30,6 +33,7 @@ export function buildCheckpointDiffTargets(target: CheckpointDiffTarget) {
           threadId: target.threadId,
           toTurnCount: target.toTurnCount,
           ignoreWhitespace: target.ignoreWhitespace,
+          ...includeGitChanges,
         },
       },
       turn: null,
@@ -45,6 +49,7 @@ export function buildCheckpointDiffTargets(target: CheckpointDiffTarget) {
         fromTurnCount: target.fromTurnCount,
         toTurnCount: target.toTurnCount,
         ignoreWhitespace: target.ignoreWhitespace,
+        ...includeGitChanges,
       },
     },
   } as const;

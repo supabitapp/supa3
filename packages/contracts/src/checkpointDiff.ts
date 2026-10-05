@@ -26,10 +26,15 @@ export const ThreadTurnDiff = TurnCountRange.mapFields(
   { unsafePreserveChecks: true },
 );
 
+/**
+ * Turns whose checkpoint has a gitUpdate leave out the changes HEAD brought in.
+ * `includeGitChanges` puts them back.
+ */
 export const OrchestrationGetTurnDiffInput = TurnCountRange.mapFields(
   Struct.assign({
     threadId: ThreadId,
     ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+    includeGitChanges: Schema.optionalKey(Schema.Boolean),
   }),
   { unsafePreserveChecks: true },
 );
@@ -42,6 +47,7 @@ export const OrchestrationGetFullThreadDiffInput = Schema.Struct({
   threadId: ThreadId,
   toTurnCount: NonNegativeInt,
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  includeGitChanges: Schema.optionalKey(Schema.Boolean),
 });
 export type OrchestrationGetFullThreadDiffInput = typeof OrchestrationGetFullThreadDiffInput.Type;
 

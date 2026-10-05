@@ -7,6 +7,7 @@ import {
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@supacode/client-runtime/errors";
+import { formatGitUpdateRefs } from "@supacode/client-runtime/state/thread-checkpoints";
 import type { ScopedThreadRef, RunId } from "@supacode/contracts";
 import {
   ArrowRightIcon,
@@ -14,6 +15,7 @@ import {
   ChevronDownIcon,
   Columns2Icon,
   FolderTreeIcon,
+  GitBranchIcon,
   PilcrowIcon,
   Rows3Icon,
   TextWrapIcon,
@@ -135,6 +137,7 @@ export default function DiffPanel({
   const updateClientSettings = useUpdateClientSettings();
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
+  const [showGitChanges, setShowGitChanges] = useState(false);
   const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
     DIFF_FILE_TREE_STORAGE_KEY,
     false,
@@ -257,6 +260,8 @@ export default function DiffPanel({
         : null,
     [selectedCheckpointTurnCount],
   );
+  const selectedGitUpdate = selectedTurn?.gitUpdate;
+  const includeGitChanges = showGitChanges && selectedGitUpdate !== undefined;
   const activeCheckpointDiff = useCheckpointDiff(
     {
       environmentId: activeThread?.environmentId ?? null,
@@ -264,6 +269,7 @@ export default function DiffPanel({
       fromTurnCount: selectedCheckpointRange?.fromTurnCount ?? null,
       toTurnCount: selectedCheckpointRange?.toTurnCount ?? null,
       ignoreWhitespace: diffIgnoreWhitespace,
+      includeGitChanges,
       cacheScope: selectedTurn ? `turn:${selectedTurn.runId}` : null,
     },
     { enabled: isGitRepo && selectedTurn !== undefined },
@@ -934,6 +940,28 @@ export default function DiffPanel({
             {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
           </TooltipPopup>
         </Tooltip>
+        {selectedGitUpdate && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Toggle
+                  aria-label={showGitChanges ? "Hide Git changes" : "Show Git changes"}
+                  variant="ghost"
+                  size="sm"
+                  pressed={showGitChanges}
+                  onPressedChange={(pressed) => setShowGitChanges(Boolean(pressed))}
+                />
+              }
+            >
+              <GitBranchIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">
+              {showGitChanges
+                ? "Hide changes updated via Git"
+                : `Show ${selectedGitUpdate.fileCount} file${selectedGitUpdate.fileCount === 1 ? "" : "s"} updated via Git`}
+            </TooltipPopup>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -1020,12 +1048,19 @@ export default function DiffPanel({
                   }
                 />
               ) : (
-                <div className="flex h-full items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-3 py-2 text-xs text-muted-foreground/70">
                   <p>
-                    {hasNoNetChanges
-                      ? "No net changes in this selection."
-                      : "No patch available for this selection."}
+                    {hasNoNetChanges && selectedGitUpdate && !includeGitChanges
+                      ? `This turn only updated files via Git (${formatGitUpdateRefs(selectedGitUpdate)}).`
+                      : hasNoNetChanges
+                        ? "No net changes in this selection."
+                        : "No patch available for this selection."}
                   </p>
+                  {hasNoNetChanges && selectedGitUpdate && !includeGitChanges ? (
+                    <Button size="xs" variant="outline" onClick={() => setShowGitChanges(true)}>
+                      Show Git changes
+                    </Button>
+                  ) : null}
                 </div>
               )
             ) : lazySource || renderablePatch?.kind === "files" ? (

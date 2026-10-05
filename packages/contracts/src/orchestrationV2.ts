@@ -1138,6 +1138,22 @@ export const OrchestrationV2CheckpointFileSummary = Schema.Struct({
 });
 export type OrchestrationV2CheckpointFileSummary = typeof OrchestrationV2CheckpointFileSummary.Type;
 
+/**
+ * Changes that arrived because HEAD moved (checkout, pull, rebase onto upstream),
+ * kept out of the checkpoint's own `files`. Branches are short names, null when
+ * HEAD was detached.
+ */
+export const OrchestrationV2CheckpointGitUpdate = Schema.Struct({
+  fromBranch: Schema.NullOr(Schema.String),
+  toBranch: Schema.NullOr(Schema.String),
+  fromHead: TrimmedNonEmptyString,
+  toHead: TrimmedNonEmptyString,
+  fileCount: PositiveInt,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+});
+export type OrchestrationV2CheckpointGitUpdate = typeof OrchestrationV2CheckpointGitUpdate.Type;
+
 export const OrchestrationV2Checkpoint = Schema.Struct({
   id: CheckpointId,
   threadId: ThreadId,
@@ -1149,7 +1165,9 @@ export const OrchestrationV2Checkpoint = Schema.Struct({
   appRunOrdinal: Schema.NullOr(PositiveInt),
   ref: CheckpointRef,
   status: Schema.Literals(["ready", "missing", "error", "stale"]),
+  /** The turn's own changes. Changes that only followed HEAD are in gitUpdate. */
   files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+  gitUpdate: Schema.optional(OrchestrationV2CheckpointGitUpdate),
   capturedAt: Schema.DateTimeUtc,
 });
 export type OrchestrationV2Checkpoint = typeof OrchestrationV2Checkpoint.Type;
@@ -1391,6 +1409,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     checkpointId: CheckpointId,
     scopeId: CheckpointScopeId,
     files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+    gitUpdate: Schema.optional(OrchestrationV2CheckpointGitUpdate),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2127,6 +2146,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     checkpointId: CheckpointId,
     scopeId: CheckpointScopeId,
     files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+    gitUpdate: Schema.optional(OrchestrationV2CheckpointGitUpdate),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,

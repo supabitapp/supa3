@@ -37,6 +37,7 @@ import {
   PATCH_RENDER_PREFIX_ARGS,
   splitNullSeparatedGitStdoutPaths,
 } from "./GitVcsDriverCore.ts";
+import * as GitCheckpointAttribution from "./GitCheckpointAttribution.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
@@ -418,6 +419,10 @@ const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
 const CHECKPOINT_RECOVERY_TIMEOUT = "5 seconds";
 const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
 const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
+/** Pathspec bytes per `git diff`, well inside every platform's argv limit. */
+const CHECKPOINT_DIFF_MAX_PATHSPEC_BYTES = 64 * 1024;
+/** Commits between two checkpoint HEADs beyond which attribution gives up. */
+const CHECKPOINT_ATTRIBUTION_MAX_COMMITS = 10_000;
 const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
   "-c",
   "core.fsmonitor=false",
@@ -434,14 +439,17 @@ const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
   };
 });
 
-function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): string[][] {
+function chunkPathsByBytes(
+  relativePaths: ReadonlyArray<string>,
+  maxChunkBytes = GIT_CHECK_IGNORE_MAX_STDIN_BYTES,
+): string[][] {
   const chunks: string[][] = [];
   let chunk: string[] = [];
   let chunkBytes = 0;
 
   for (const relativePath of relativePaths) {
     const relativePathBytes = Buffer.byteLength(relativePath) + 1;
-    if (chunk.length > 0 && chunkBytes + relativePathBytes > GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
+    if (chunk.length > 0 && chunkBytes + relativePathBytes > maxChunkBytes) {
       chunks.push(chunk);
       chunk = [];
       chunkBytes = 0;
@@ -450,7 +458,7 @@ function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): stri
     chunk.push(relativePath);
     chunkBytes += relativePathBytes;
 
-    if (chunkBytes >= GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
+    if (chunkBytes >= maxChunkBytes) {
       chunks.push(chunk);
       chunk = [];
       chunkBytes = 0;
@@ -691,7 +699,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     }
 
     const ignoredPaths = new Set<string>();
-    const chunks = chunkPathsForGitCheckIgnore(relativePaths);
+    const chunks = chunkPathsByBytes(relativePaths);
 
     for (const chunk of chunks) {
       const result = yield* gitCommand(
@@ -760,6 +768,19 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       allowNonZeroExit: true,
       ...(env !== undefined ? { env } : {}),
     }).pipe(Effect.map((result) => result.exitCode === 0));
+
+  // One rev-parse answers both whether HEAD is born and where it points.
+  const readCheckpointHead = (cwd: string) =>
+    execute({
+      operation: VcsProcess.CHECKPOINT_CAPTURE_OPERATION,
+      cwd,
+      args: ["rev-parse", "HEAD^{commit}", "--symbolic-full-name", "HEAD", "--"],
+      allowNonZeroExit: true,
+    }).pipe(
+      Effect.map((result) =>
+        result.exitCode === 0 ? GitCheckpointAttribution.parseRevParseHead(result.stdout) : null,
+      ),
+    );
 
   const resolveCheckpointCommit = (cwd: string, checkpointRef: string) =>
     execute({
@@ -830,7 +851,8 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       );
 
       yield* Effect.gen(function* () {
-        const headExists = yield* hasHeadCommit(input.cwd);
+        const head = yield* readCheckpointHead(input.cwd);
+        const headExists = head !== null;
         const sparseConfig = yield* execute({
           operation,
           cwd: input.cwd,
@@ -1042,7 +1064,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           });
         }
 
-        const message = `supacode checkpoint ref=${input.checkpointRef}`;
+        const message = GitCheckpointAttribution.formatCheckpointMessage(input.checkpointRef, head);
         const commitTreeResult = yield* execute({
           operation,
           cwd: input.cwd,
@@ -1183,37 +1205,173 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         }
       }
 
-      const result = yield* execute({
-        operation,
-        cwd: input.cwd,
-        args: [
-          "diff",
-          ...(input.format === "numstat" ? ["--numstat", "-z"] : ["--patch"]),
-          "--no-color",
-          "--no-ext-diff",
-          "--no-textconv",
-          ...PATCH_RENDER_PREFIX_ARGS,
-          ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
-          `${fromRevision}^{commit}`,
-          `${input.toCheckpointRef}^{commit}`,
-        ],
-        allowNonZeroExit: true,
-        maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
-        outputMode: input.format === "numstat" ? "error" : "truncate",
-      });
-
-      if (result.exitCode !== 0) {
-        return yield* new VcsProcessExitError({
+      const diffArgs = [
+        "diff",
+        ...(input.format === "numstat" ? ["--numstat", "-z"] : ["--patch"]),
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        ...PATCH_RENDER_PREFIX_ARGS,
+        ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+        `${fromRevision}^{commit}`,
+        `${input.toCheckpointRef}^{commit}`,
+      ];
+      // Stored paths are repository-relative, while bare pathspecs resolve from cwd.
+      // An empty path list selects nothing, so it runs no diff at all.
+      const pathspecChunks =
+        input.paths === undefined
+          ? [[]]
+          : chunkPathsByBytes(
+              input.paths.map((filePath) => `:(top,literal)${filePath}`),
+              CHECKPOINT_DIFF_MAX_PATHSPEC_BYTES,
+            );
+      let stdout = "";
+      let stdoutBytes = 0;
+      for (const pathspecs of pathspecChunks) {
+        const result = yield* execute({
           operation,
-          command: "git diff",
           cwd: input.cwd,
-          exitCode: result.exitCode,
-          detail: result.stderr.trim() || "Checkpoint ref is unavailable for diff operation.",
+          args: pathspecs.length === 0 ? diffArgs : [...diffArgs, "--", ...pathspecs],
+          allowNonZeroExit: true,
+          maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES - stdoutBytes,
+          outputMode: input.format === "numstat" ? "error" : "truncate",
         });
+
+        if (result.exitCode !== 0) {
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "git diff",
+            cwd: input.cwd,
+            exitCode: result.exitCode,
+            detail: result.stderr.trim() || "Checkpoint ref is unavailable for diff operation.",
+          });
+        }
+
+        stdout += result.stdout;
+        stdoutBytes += Buffer.byteLength(result.stdout);
+        if (result.stdoutTruncated || stdoutBytes >= CHECKPOINT_DIFF_MAX_OUTPUT_BYTES) break;
       }
 
-      return result.stdout;
+      return stdout;
     }),
+
+    readCheckpointHeads: Effect.fn("GitVcsDriver.checkpoints.readCheckpointHeads")(
+      function* (input) {
+        // for-each-ref lists every ref when given no patterns.
+        if (input.checkpointRefs.length === 0) return new Map();
+        const result = yield* execute({
+          operation: "GitVcsDriver.checkpoints.readCheckpointHeads",
+          cwd: input.cwd,
+          args: [
+            "for-each-ref",
+            "--format=%(refname)%00%(objecttype)%00%(subject)%00",
+            ...input.checkpointRefs,
+          ],
+        });
+        const heads = GitCheckpointAttribution.parseCheckpointHeadRecords(result.stdout);
+        return new Map(
+          input.checkpointRefs.flatMap((checkpointRef) => {
+            const head = heads.get(checkpointRef);
+            return head === undefined ? [] : [[checkpointRef, head] as const];
+          }),
+        );
+      },
+    ),
+
+    attributeCheckpointChanges: Effect.fn("GitVcsDriver.checkpoints.attributeCheckpointChanges")(
+      function* (input) {
+        const operation = "GitVcsDriver.checkpoints.attributeCheckpointChanges";
+        // Plumbing diff-tree ignores diff.relative, diff.renames, and textconv config,
+        // so both diffs report the same repository-relative paths.
+        const diffTree = (from: string, to: string, numstat: boolean) =>
+          execute({
+            operation,
+            cwd: input.cwd,
+            args: [
+              "diff-tree",
+              "-r",
+              "--raw",
+              ...(numstat ? ["--numstat"] : []),
+              "--no-renames",
+              "-z",
+              `${from}^{commit}`,
+              `${to}^{commit}`,
+            ],
+            maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+          }).pipe(Effect.map((result) => GitCheckpointAttribution.parseRawDiff(result.stdout)));
+        const [tree, head, history] = yield* Effect.all(
+          [
+            diffTree(input.fromCheckpointRef, input.toCheckpointRef, true),
+            diffTree(input.fromHead, input.toHead, false),
+            execute({
+              operation,
+              cwd: input.cwd,
+              args: [
+                "rev-list",
+                "--timestamp",
+                "--parents",
+                `--max-count=${CHECKPOINT_ATTRIBUTION_MAX_COMMITS + 1}`,
+                input.toHead,
+                `^${input.fromHead}`,
+              ],
+              maxOutputBytes: 2 * 1024 * 1024,
+            }),
+          ],
+          { concurrency: "unbounded" },
+        );
+        const commitCount = history.stdout.split("\n").filter((line) => line.length > 0).length;
+        if (commitCount > CHECKPOINT_ATTRIBUTION_MAX_COMMITS) {
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "git rev-list",
+            cwd: input.cwd,
+            exitCode: 0,
+            detail: `HEAD moved across more than ${CHECKPOINT_ATTRIBUTION_MAX_COMMITS} commits.`,
+          });
+        }
+        // Committer dates have one-second precision. Rounding the start down keeps a
+        // commit made in the turn's first second with the turn.
+        const turnCommits = GitCheckpointAttribution.selectTurnCommits(
+          history.stdout,
+          Math.floor(DateTime.toEpochMillis(input.turnStartedAt) / 1000),
+        );
+        const turnCommitPaths = (commits: ReadonlyArray<string>, combined: boolean) =>
+          commits.length === 0
+            ? Effect.succeed<ReadonlyArray<string>>([])
+            : execute({
+                operation,
+                cwd: input.cwd,
+                args: [
+                  "diff-tree",
+                  "--stdin",
+                  "--no-commit-id",
+                  "-r",
+                  "--root",
+                  "--no-renames",
+                  ...(combined ? ["--cc", "--no-color"] : ["--name-only", "-z"]),
+                ],
+                stdin: `${commits.join("\n")}\n`,
+                maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+              }).pipe(
+                Effect.map((result) =>
+                  combined
+                    ? GitCheckpointAttribution.parseCombinedDiffPaths(result.stdout)
+                    : result.stdout.split("\0").filter((filePath) => filePath.length > 0),
+                ),
+              );
+        // A merge counts only for the paths it resolved by hand, which needs the
+        // dense combined patch; `--name-only` would also list clean auto-merges.
+        const [commitPaths, mergePaths] = yield* Effect.all([
+          turnCommitPaths(turnCommits.commits, false),
+          turnCommitPaths(turnCommits.merges, true),
+        ]);
+        return GitCheckpointAttribution.attributeCheckpointChanges({
+          tree,
+          head,
+          turnPaths: new Set([...commitPaths, ...mergePaths]),
+        });
+      },
+    ),
 
     deleteCheckpointRefs: Effect.fn("GitVcsDriver.checkpoints.deleteCheckpointRefs")(
       function* (input) {

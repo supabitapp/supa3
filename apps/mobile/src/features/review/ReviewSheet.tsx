@@ -1,3 +1,4 @@
+import { formatGitUpdateRefs } from "@supacode/client-runtime/state/thread-checkpoints";
 import type { EnvironmentId, ThreadId } from "@supacode/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
@@ -74,12 +75,16 @@ function ReviewHeader(
     readonly sectionMenu: ReturnType<typeof buildReviewSectionMenu>;
     readonly showSectionToolbar: boolean;
     readonly showChangedFilesToggle: boolean;
+    readonly showGitChanges: boolean;
+    readonly onToggleGitChanges: () => void;
     readonly onSelectSection: (sectionId: string) => void;
     readonly onReturnToThread: () => void;
   },
 ) {
   const { panes, toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const presentation = useReviewHeaderPresentation(props);
+  const selectedGitUpdate =
+    props.selectedSection?.kind === "turn" ? props.selectedSection.gitUpdate : undefined;
   const sectionAction = (
     section: ReviewSectionItem | null,
     title: string,
@@ -143,6 +148,17 @@ function ReviewHeader(
                             selected: section.id === props.selectedSection?.id,
                             onPress: () => props.onSelectSection(section.id),
                           })),
+                        },
+                      ]
+                    : []),
+                  ...(selectedGitUpdate
+                    ? [
+                        {
+                          id: "git-changes",
+                          title: "Show Git changes",
+                          subtitle: `${selectedGitUpdate.fileCount} file${selectedGitUpdate.fileCount === 1 ? "" : "s"} · ${formatGitUpdateRefs(selectedGitUpdate)}`,
+                          selected: props.showGitChanges,
+                          onPress: props.onToggleGitChanges,
                         },
                       ]
                     : []),
@@ -477,6 +493,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
   // natively, so no manual top inset is needed. (Android renders its own
   // in-flow AndroidScreenHeader, so it needs no inset either.)
   const topContentInset = 0;
+  const [showGitChanges, setShowGitChanges] = useState(false);
+  const toggleGitChanges = useCallback(() => setShowGitChanges((current) => !current), []);
 
   const {
     error,
@@ -491,6 +509,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
     environmentId,
     threadId,
     reviewCache,
+    includeGitChanges: showGitChanges,
   });
   useReviewDiffPrewarming({
     threadKey: reviewCache.threadKey,
@@ -736,6 +755,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
         selectedSection={selectedSection}
         showSectionToolbar={showSectionToolbar}
         showChangedFilesToggle={showChangedFilesToggle}
+        showGitChanges={showGitChanges}
+        onToggleGitChanges={toggleGitChanges}
         onRefresh={handlePullToRefresh}
         onSelectSection={selectSection}
         onReturnToThread={handleReturnToThread}

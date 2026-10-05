@@ -19,7 +19,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import type { CheckpointStoreError } from "./Errors.ts";
-import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
+import type {
+  VcsAttributeCheckpointChangesInput,
+  VcsCheckpointChangeAttribution,
+  VcsCheckpointHead,
+  VcsCheckpointOps,
+  VcsReadCheckpointHeadsInput,
+} from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 export interface CaptureCheckpointInput {
@@ -40,6 +46,8 @@ export interface DiffCheckpointsInput {
   readonly fallbackFromToHead?: boolean;
   readonly ignoreWhitespace: boolean;
   readonly format?: "patch" | "numstat";
+  /** Limit the diff to these repository-root paths. An empty list yields no diff. */
+  readonly paths?: ReadonlyArray<string>;
 }
 
 export interface DeleteCheckpointRefsInput {
@@ -86,6 +94,22 @@ export class CheckpointStore extends Context.Service<
     readonly diffCheckpoints: (
       input: DiffCheckpointsInput,
     ) => Effect.Effect<string, CheckpointStoreError>;
+
+    /**
+     * Read the HEAD each checkpoint was captured on. Missing refs are absent;
+     * checkpoints that predate HEAD recording map to null.
+     */
+    readonly readCheckpointHeads: (
+      input: VcsReadCheckpointHeadsInput,
+    ) => Effect.Effect<ReadonlyMap<CheckpointRef, VcsCheckpointHead | null>, CheckpointStoreError>;
+
+    /**
+     * Split a checkpoint diff whose HEAD moved into the turn's own changes and
+     * totals for the changes HEAD brought in.
+     */
+    readonly attributeCheckpointChanges: (
+      input: VcsAttributeCheckpointChangesInput,
+    ) => Effect.Effect<VcsCheckpointChangeAttribution, CheckpointStoreError>;
 
     /**
      * Delete the provided checkpoint refs.
@@ -150,6 +174,22 @@ export const make = Effect.gen(function* () {
     return yield* checkpoints.diffCheckpoints(input);
   });
 
+  const readCheckpointHeads: CheckpointStore["Service"]["readCheckpointHeads"] = Effect.fn(
+    "readCheckpointHeads",
+  )(function* (input) {
+    const checkpoints = yield* resolveCheckpoints("CheckpointStore.readCheckpointHeads", input.cwd);
+    return yield* checkpoints.readCheckpointHeads(input);
+  });
+
+  const attributeCheckpointChanges: CheckpointStore["Service"]["attributeCheckpointChanges"] =
+    Effect.fn("attributeCheckpointChanges")(function* (input) {
+      const checkpoints = yield* resolveCheckpoints(
+        "CheckpointStore.attributeCheckpointChanges",
+        input.cwd,
+      );
+      return yield* checkpoints.attributeCheckpointChanges(input);
+    });
+
   const deleteCheckpointRefs: CheckpointStore["Service"]["deleteCheckpointRefs"] = Effect.fn(
     "deleteCheckpointRefs",
   )(function* (input) {
@@ -166,6 +206,8 @@ export const make = Effect.gen(function* () {
     hasCheckpointRef,
     restoreCheckpoint,
     diffCheckpoints,
+    readCheckpointHeads,
+    attributeCheckpointChanges,
     deleteCheckpointRefs,
   });
 });

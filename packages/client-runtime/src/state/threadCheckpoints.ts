@@ -3,6 +3,7 @@ import type {
   CheckpointRef,
   CheckpointScopeId,
   MessageId,
+  OrchestrationV2CheckpointGitUpdate,
   OrchestrationV2ThreadProjection,
   RunId,
 } from "@supacode/contracts";
@@ -21,6 +22,8 @@ export interface ThreadCheckpointSummary {
     readonly additions: number;
     readonly deletions: number;
   }>;
+  /** Changes HEAD brought in during or before the turn, kept out of `files`. */
+  readonly gitUpdate?: OrchestrationV2CheckpointGitUpdate;
   readonly assistantMessageId: MessageId | null;
   readonly completedAt: string;
 }
@@ -44,9 +47,17 @@ export function deriveThreadCheckpointSummaries(
         checkpointRef: checkpoint.ref,
         status: checkpoint.status,
         files: checkpoint.files,
+        ...(checkpoint.gitUpdate === undefined ? {} : { gitUpdate: checkpoint.gitUpdate }),
         assistantMessageId,
         completedAt: DateTime.formatIso(checkpoint.capturedAt),
       },
     ];
   });
+}
+
+/** "main → feature", one name when the branch stayed put, short commits for a detached HEAD. */
+export function formatGitUpdateRefs(gitUpdate: OrchestrationV2CheckpointGitUpdate): string {
+  const from = gitUpdate.fromBranch ?? gitUpdate.fromHead.slice(0, 7);
+  const to = gitUpdate.toBranch ?? gitUpdate.toHead.slice(0, 7);
+  return from === to ? to : `${from} → ${to}`;
 }

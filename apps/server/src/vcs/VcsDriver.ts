@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import type * as DateTime from "effect/DateTime";
 import type * as Effect from "effect/Effect";
 
 import type {
@@ -32,6 +33,47 @@ export interface VcsDiffCheckpointsInput {
   readonly fallbackFromToHead?: boolean;
   readonly ignoreWhitespace: boolean;
   readonly format?: "patch" | "numstat";
+  /** Limit the diff to these repository-root paths. */
+  readonly paths?: ReadonlyArray<string>;
+}
+
+/** HEAD as recorded in a checkpoint commit. */
+export interface VcsCheckpointHead {
+  readonly commit: string;
+  /** Full ref name, or null when HEAD was detached. */
+  readonly branch: string | null;
+}
+
+export interface VcsReadCheckpointHeadsInput {
+  readonly cwd: string;
+  readonly checkpointRefs: ReadonlyArray<CheckpointRef>;
+}
+
+export interface VcsAttributeCheckpointChangesInput {
+  readonly cwd: string;
+  readonly fromCheckpointRef: CheckpointRef;
+  readonly toCheckpointRef: CheckpointRef;
+  readonly fromHead: string;
+  readonly toHead: string;
+  /** Commits made at or after this instant are the turn's own work. */
+  readonly turnStartedAt: DateTime.Utc;
+}
+
+export interface VcsCheckpointFileChange {
+  readonly path: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+export interface VcsCheckpointChangeAttribution {
+  /** Changes HEAD moving does not explain, listed without rename detection. */
+  readonly files: ReadonlyArray<VcsCheckpointFileChange>;
+  /** Totals for paths whose change is exactly the change between the two HEADs. */
+  readonly gitMoved: {
+    readonly fileCount: number;
+    readonly additions: number;
+    readonly deletions: number;
+  };
 }
 
 export interface VcsDeleteCheckpointRefsInput {
@@ -48,6 +90,20 @@ export interface VcsCheckpointOps {
     input: VcsRestoreCheckpointInput,
   ) => Effect.Effect<boolean, VcsError>;
   readonly diffCheckpoints: (input: VcsDiffCheckpointsInput) => Effect.Effect<string, VcsError>;
+  /**
+   * Read the HEAD each checkpoint recorded. Missing refs are absent from the map;
+   * checkpoints without a recorded HEAD map to null.
+   */
+  readonly readCheckpointHeads: (
+    input: VcsReadCheckpointHeadsInput,
+  ) => Effect.Effect<ReadonlyMap<CheckpointRef, VcsCheckpointHead | null>, VcsError>;
+  /**
+   * Split a checkpoint diff into the turn's own changes and the paths that only
+   * followed HEAD. Fails when the history is too large to attribute.
+   */
+  readonly attributeCheckpointChanges: (
+    input: VcsAttributeCheckpointChangesInput,
+  ) => Effect.Effect<VcsCheckpointChangeAttribution, VcsError>;
   readonly deleteCheckpointRefs: (
     input: VcsDeleteCheckpointRefsInput,
   ) => Effect.Effect<void, VcsError>;

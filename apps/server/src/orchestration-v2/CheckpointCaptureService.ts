@@ -1,6 +1,7 @@
 import {
   CheckpointScopeId,
   CommandId,
+  orchestrationV2RunWorkStartedAt,
   type OrchestrationV2Checkpoint,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -126,6 +127,8 @@ export const layer: Layer.Layer<
         nodeId: rootNode.id,
         ordinalWithinScope: run.ordinal,
         appRunOrdinal: run.ordinal,
+        // A wake run's work began in the run it continues, so its commits count too.
+        turnStartedAt: orchestrationV2RunWorkStartedAt(run),
         capturedAt,
       });
       // Match RunExecutionService: capture loaded the waiting run before
@@ -281,5 +284,6 @@ function makeCheckpointTurnItem(input: {
     checkpointId: input.checkpoint.id,
     scopeId: input.checkpoint.scopeId,
     files: input.checkpoint.files,
+    ...(input.checkpoint.gitUpdate === undefined ? {} : { gitUpdate: input.checkpoint.gitUpdate }),
   };
 }

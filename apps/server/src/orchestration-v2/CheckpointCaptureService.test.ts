@@ -286,6 +286,15 @@ it.layer(ProjectionStoreTestLayer)("CheckpointCaptureServiceV2", (it) => {
                                 timeoutMs: 30000,
                               }),
                             ),
+                          readCheckpointHeads: () =>
+                            Effect.fail(
+                              new VcsProcessTimeoutError({
+                                operation: "test.readCheckpointHeads",
+                                command: "git",
+                                cwd: "/repo",
+                                timeoutMs: 30000,
+                              }),
+                            ),
                         }),
                       ),
                     ),

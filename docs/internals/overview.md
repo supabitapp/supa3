@@ -84,6 +84,14 @@ capture workspace state without adding commits to the user's branch. A revert mu
 workspace state with the provider conversation. A provider that cannot roll back its conversation
 must reject that operation before changing the filesystem.
 
+Each checkpoint commit's subject records the HEAD it was captured on, so its format is part of the
+checkpoint contract. When HEAD differs between two checkpoints, a checkout, pull, or rebase would
+otherwise appear as the agent's work. Capture moves a path into the checkpoint's `gitUpdate`
+summary only when its exact blob transition equals the change between the two HEADs and no commit
+made since the run started touched it; for a merge, only paths the dense combined diff shows count.
+Every failure, timeout, or size bound lists all changes instead, because hiding an agent edit is
+worse than over-listing. Turn diffs leave the summarized paths out unless a client asks for them.
+
 Thread settlement is server-owned. The
 [settlement service](../../apps/server/src/orchestration-v2/ThreadSettlementService.ts) evaluates PR
 and inactivity settings without a connected client. Merge notifications invalidate cached PR state

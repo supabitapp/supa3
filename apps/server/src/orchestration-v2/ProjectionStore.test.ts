@@ -2759,7 +2759,51 @@ it.layer(TestLayer)("ProjectionStoreV2", (it) => {
         assert.deepEqual(yield* projectionStore.getCheckpointContext(threadId), {
           runs: [{ id: runId, ordinal: 1, status: "completed" }],
           checkpointScopes: [{ id: scopeId, runId, kind: "root_run", cwd: "/repo/worktree" }],
-          checkpoints: [{ scopeId, runId, appRunOrdinal: 1, status: "ready", ref }],
+          checkpoints: [
+            { scopeId, runId, appRunOrdinal: 1, status: "ready", ref, agentFilePaths: null },
+          ],
+        });
+        // A checkpoint that split off a git update exposes its own paths for diff filtering.
+        const gitUpdateRef = CheckpointRef.make("refs/supacode/checkpoint-context/2");
+        yield* projectionStore.apply({
+          id: EventId.make("event:checkpoint-context:checkpoint-2"),
+          type: "checkpoint.captured",
+          threadId,
+          occurredAt: now,
+          payload: {
+            id: CheckpointId.make("checkpoint:checkpoint-context:2"),
+            threadId,
+            scopeId,
+            runId,
+            nodeId,
+            parentCheckpointId: checkpointId,
+            ordinalWithinScope: 2,
+            appRunOrdinal: 2,
+            ref: gitUpdateRef,
+            status: "ready",
+            files: [
+              { path: "src/a b.ts", kind: "modified", additions: 1, deletions: 0 },
+              { path: 'docs/"quoted".md', kind: "modified", additions: 0, deletions: 2 },
+            ],
+            gitUpdate: {
+              fromBranch: "main",
+              toBranch: "feature",
+              fromHead: "a".repeat(40),
+              toHead: "b".repeat(40),
+              fileCount: 1233,
+              additions: 145_000,
+              deletions: 369_000,
+            },
+            capturedAt: now,
+          },
+        });
+        assert.deepEqual((yield* projectionStore.getCheckpointContext(threadId)).checkpoints[1], {
+          scopeId,
+          runId,
+          appRunOrdinal: 2,
+          status: "ready",
+          ref: gitUpdateRef,
+          agentFilePaths: ["src/a b.ts", 'docs/"quoted".md'],
         });
         const missing = yield* projectionStore
           .getCheckpointContext(ThreadId.make("thread:checkpoint-context:missing"))

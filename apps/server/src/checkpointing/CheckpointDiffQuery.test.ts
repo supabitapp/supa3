@@ -39,6 +39,7 @@ function makeProjection(): ProjectionCheckpointContext {
         appRunOrdinal: 2,
         status: "ready",
         ref: secondRef,
+        agentFilePaths: null,
       },
     ],
   };
@@ -190,6 +191,49 @@ it.effect("preserves the typed missing-baseline-ref error contract", () => {
     assert.deepEqual(
       { checkpoint: error.checkpoint, turnCount: error.turnCount },
       { checkpoint: "from", turnCount: 0 },
+    );
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect("limits a split turn's diff to its own paths unless git changes are requested", () => {
+  const projection = makeProjection();
+  const firstRef = CheckpointRef.make("refs/supacode/test/first");
+  const diffCheckpoints = vi.fn((_input: CheckpointStore.DiffCheckpointsInput) =>
+    Effect.succeed("diff"),
+  );
+  const layer = makeLayer({
+    projection: Effect.succeed({
+      ...projection,
+      checkpoints: [
+        {
+          scopeId: firstScopeId,
+          runId: firstRunId,
+          appRunOrdinal: 1,
+          status: "ready",
+          ref: firstRef,
+          agentFilePaths: null,
+        },
+        { ...projection.checkpoints[0]!, agentFilePaths: ["src/b.ts", "src/a.ts"] },
+      ],
+    }),
+    diffCheckpoints,
+  });
+
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    yield* query.getTurnDiff({ threadId, fromTurnCount: 1, toTurnCount: 2 });
+    yield* query.getTurnDiff({
+      threadId,
+      fromTurnCount: 1,
+      toTurnCount: 2,
+      includeGitChanges: true,
+    });
+    // Turn 1 kept every change, so a range spanning both turns cannot filter.
+    yield* query.getFullThreadDiff({ threadId, toTurnCount: 2 });
+
+    assert.deepEqual(
+      diffCheckpoints.mock.calls.map(([input]) => input.paths),
+      [["src/a.ts", "src/b.ts"], undefined, undefined],
     );
   }).pipe(Effect.provide(layer));
 });

@@ -99,6 +99,14 @@ For a local Git repository without a remote, **Publish Repository** creates a ho
 adds it as `origin`, and pushes your commits. If there are no commits yet, it creates the remote;
 make your first commit before pushing.
 
+## Changes from a turn
+
+After each turn, the thread lists the files the agent changed. When the branch moved, such as a
+checkout, pull, or rebase during the turn or a pull while the thread was idle, the files Git
+brought in collapse into one **Updated via Git** row. Commits the agent made during the turn,
+including resolved merge conflicts, stay in the list. To see the Git changes too, turn on **Show
+Git changes** in the diff panel's toolbar, or in the Review sheet's diff menu on mobile.
+
 ## Create a pull request
 
 Use a thread's Git actions to commit, push, and create a pull request. Supacode can generate commit

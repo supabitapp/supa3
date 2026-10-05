@@ -20,6 +20,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import { checkpointRefForScopeOrdinal } from "../orchestration-v2/CheckpointService.ts";
+import type { ProjectionCheckpointContext } from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import {
   CheckpointDiffResultInvalidError,
@@ -57,6 +58,34 @@ export class CheckpointDiffQuery extends Context.Service<
 
 const isTurnDiffResult = Schema.is(OrchestrationGetTurnDiffResult);
 
+/**
+ * Paths the turns in a range changed themselves, or undefined to diff every path.
+ * Filtering needs a path list from every turn in the range, so a range mixing
+ * split and unsplit turns, or a path Git output could not decode, shows everything.
+ */
+function agentPathsForRange(
+  checkpoints: ProjectionCheckpointContext["checkpoints"],
+  range: { readonly fromTurnCount: number; readonly toTurnCount: number },
+): ReadonlyArray<string> | undefined {
+  const inRange = checkpoints.filter(
+    (checkpoint) =>
+      checkpoint.appRunOrdinal !== null &&
+      checkpoint.appRunOrdinal > range.fromTurnCount &&
+      checkpoint.appRunOrdinal <= range.toTurnCount,
+  );
+  const turnCount = new Set(inRange.map((checkpoint) => checkpoint.appRunOrdinal)).size;
+  if (turnCount !== range.toTurnCount - range.fromTurnCount) return undefined;
+  const paths = new Set<string>();
+  for (const checkpoint of inRange) {
+    if (checkpoint.agentFilePaths === null) return undefined;
+    for (const path of checkpoint.agentFilePaths) {
+      if (path.includes("\uFFFD")) return undefined;
+      paths.add(path);
+    }
+  }
+  return [...paths].toSorted();
+}
+
 function buildTurnDiffResult(
   input: {
     readonly threadId: ThreadId;
@@ -87,6 +116,7 @@ export const make = Effect.gen(function* () {
         "checkpoint.from_turn_count": input.fromTurnCount,
         "checkpoint.to_turn_count": input.toTurnCount,
         "checkpoint.ignore_whitespace": ignoreWhitespace,
+        "checkpoint.include_git_changes": input.includeGitChanges === true,
       });
 
       if (input.fromTurnCount === input.toTurnCount) {
@@ -181,6 +211,8 @@ export const make = Effect.gen(function* () {
         });
       }
 
+      const paths =
+        input.includeGitChanges === true ? undefined : agentPathsForRange(readyCheckpoints, input);
       const diff = yield* checkpointStore
         .diffCheckpoints({
           cwd: toScope.cwd,
@@ -188,6 +220,7 @@ export const make = Effect.gen(function* () {
           toCheckpointRef: toCheckpoint.ref,
           fallbackFromToHead: false,
           ignoreWhitespace,
+          ...(paths === undefined ? {} : { paths }),
         })
         .pipe(Effect.withSpan("checkpoint.turnDiff.diffCheckpoints"));
 
@@ -239,6 +272,9 @@ export const make = Effect.gen(function* () {
       fromTurnCount: 0,
       toTurnCount: input.toTurnCount,
       ignoreWhitespace,
+      ...(input.includeGitChanges === undefined
+        ? {}
+        : { includeGitChanges: input.includeGitChanges }),
     });
     if (!isTurnDiffResult(turnDiff)) {
       return yield* new CheckpointDiffResultInvalidError({

@@ -54,7 +54,11 @@ const LegacySubscribeThreadInput = Schema.Struct({
   afterSequence: Schema.optionalKey(NonNegativeInt),
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
 });
+const LegacyCheckpoint = OrchestrationV2Checkpoint.mapFields(
+  ({ gitUpdate: _gitUpdate, ...fields }) => fields,
+);
 const decodeLegacyShellStreamItem = Schema.decodeUnknownSync(LegacyShellStreamItem);
+const decodeLegacyCheckpoint = Schema.decodeUnknownSync(LegacyCheckpoint);
 const decodeLegacySubscribeThreadInput = Schema.decodeUnknownSync(LegacySubscribeThreadInput);
 const decodeOrchestrationV2Command = Schema.decodeUnknownSync(OrchestrationV2Command);
 const decodeOrchestrationV2TurnItem = Schema.decodeUnknownSync(OrchestrationV2TurnItem);
@@ -368,6 +372,66 @@ describe("orchestration V2 contracts", () => {
     expect(checkpoint.appRunOrdinal).toBeNull();
     expect(checkpoint.scopeId).toBe(CheckpointScopeId.make("scope-child-1"));
     expect(checkpoint.parentCheckpointId).toBe(CheckpointId.make("checkpoint-root-1"));
+  });
+
+  it("keeps checkpoint git updates readable by decoders on either side of the change", () => {
+    const gitUpdate = {
+      fromBranch: "main",
+      toBranch: null,
+      fromHead: "a".repeat(40),
+      toHead: "b".repeat(40),
+      fileCount: 1233,
+      additions: 145_000,
+      deletions: 369_000,
+    };
+    const payload = {
+      id: "checkpoint-1",
+      threadId: "thread-1",
+      scopeId: "scope-1",
+      runId: "run-1",
+      nodeId: "node-1",
+      parentCheckpointId: null,
+      ordinalWithinScope: 1,
+      appRunOrdinal: 1,
+      ref: "git-ref-1",
+      status: "ready",
+      files: [{ path: "src/app.ts", kind: "modified", additions: 3, deletions: 1 }],
+      gitUpdate,
+      capturedAt: now,
+    };
+
+    const legacy = decodeLegacyCheckpoint(payload);
+    expect("gitUpdate" in legacy).toBe(false);
+    expect(decodeOrchestrationV2Checkpoint(payload).gitUpdate).toEqual(gitUpdate);
+    const { gitUpdate: _omitted, ...legacyPayload } = payload;
+    expect(decodeOrchestrationV2Checkpoint(legacyPayload).gitUpdate).toBeUndefined();
+    expect(() =>
+      decodeOrchestrationV2Checkpoint({ ...payload, gitUpdate: { ...gitUpdate, fileCount: 0 } }),
+    ).toThrow();
+
+    const turnItem = decodeOrchestrationV2TurnItemJson({
+      id: "turn-item-checkpoint-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      nodeId: "node-1",
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 199,
+      status: "completed",
+      title: null,
+      startedAt: "2026-04-20T00:00:00.000Z",
+      completedAt: "2026-04-20T00:00:00.000Z",
+      updatedAt: "2026-04-20T00:00:00.000Z",
+      type: "checkpoint",
+      checkpointId: "checkpoint-1",
+      scopeId: "scope-1",
+      files: payload.files,
+      gitUpdate,
+    });
+    expect(turnItem.type === "checkpoint" ? turnItem.gitUpdate : undefined).toEqual(gitUpdate);
+    expect(encodeOrchestrationV2TurnItemJson(turnItem)).toMatchObject({ gitUpdate });
   });
 
   it("decodes command and domain event shapes for command-to-projection tests", () => {

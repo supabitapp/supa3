@@ -212,6 +212,8 @@ const ProjectionCheckpointContext = Schema.Struct({
         appRunOrdinal,
         status,
         ref,
+        /** The turn's own paths, set only when a git update was split off. */
+        agentFilePaths: Schema.NullOr(Schema.fromJsonString(Schema.Array(Schema.String))),
       }),
     ),
   ),
@@ -4392,7 +4394,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               sql`
               SELECT scope_id AS "scopeId", run_id AS "runId",
                 app_run_ordinal AS "appRunOrdinal", status,
-                json_extract(payload_json, '$.ref') AS ref
+                json_extract(payload_json, '$.ref') AS ref,
+                CASE WHEN json_type(payload_json, '$.gitUpdate') = 'object' THEN (
+                  SELECT json_group_array(json_extract(file.value, '$.path'))
+                  FROM json_each(payload_json, '$.files') AS file
+                ) END AS "agentFilePaths"
               FROM orchestration_v2_projection_checkpoints
               WHERE thread_id = ${threadId}
               ORDER BY scope_id ASC, ordinal_within_scope ASC
@@ -5988,12 +5994,13 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
               cwd,
             })),
             checkpoints: projection.checkpoints.map(
-              ({ scopeId, runId, appRunOrdinal, status, ref }) => ({
+              ({ scopeId, runId, appRunOrdinal, status, ref, files, gitUpdate }) => ({
                 scopeId,
                 runId,
                 appRunOrdinal,
                 status,
                 ref,
+                agentFilePaths: gitUpdate === undefined ? null : files.map((file) => file.path),
               }),
             ),
           };

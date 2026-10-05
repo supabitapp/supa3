@@ -693,7 +693,11 @@ function turnItemText(item: OrchestrationV2TurnItem): string | null {
     case "approval_request":
       return item.prompt ?? item.requestKind;
     case "checkpoint":
-      return jsonText(item.files);
+      return jsonText(
+        item.gitUpdate === undefined
+          ? item.files
+          : { files: item.files, gitUpdate: item.gitUpdate },
+      );
     case "run_interrupt_request":
     case "run_interrupt_result":
     case "system_notice":

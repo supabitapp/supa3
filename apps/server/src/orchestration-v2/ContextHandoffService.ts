@@ -112,7 +112,9 @@ function summarizeDeltaItem(item: OrchestrationV2TurnItem): string | null {
     case "file_change":
       return `- File change: ${item.fileName}`;
     case "checkpoint":
-      return `- Checkpoint: ${item.files.length} files`;
+      return item.gitUpdate === undefined
+        ? `- Checkpoint: ${item.files.length} files`
+        : `- Checkpoint: ${item.files.length} files, plus ${item.gitUpdate.fileCount} updated via Git`;
     case "handoff":
       return `- Handoff: ${compactText(item.summary ?? item.strategy)}`;
     default:

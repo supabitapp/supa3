@@ -55,6 +55,7 @@ it.effect.each([false, true, "interrupt"] as const)(
             isGitRepository: () => Effect.succeed(true),
             hasCheckpointRef,
             captureCheckpoint: () => Effect.void,
+            readCheckpointHeads: () => Effect.interrupt,
           }),
         ),
       ),
@@ -74,6 +75,7 @@ it.effect.each([false, true, "interrupt"] as const)(
             runId: scope.runId!,
             nodeId: scope.nodeId!,
             appRunOrdinal: 1,
+            turnStartedAt: scope.createdAt,
             capturedAt: scope.createdAt,
           }),
         );

@@ -1,4 +1,5 @@
-import { type RunId } from "@supacode/contracts";
+import { formatGitUpdateRefs } from "@supacode/client-runtime/state/thread-checkpoints";
+import { type OrchestrationV2CheckpointGitUpdate, type RunId } from "@supacode/contracts";
 import { type MouseEvent, memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import {
@@ -6,7 +7,7 @@ import {
   summarizeTurnDiffStats,
   type TurnDiffTreeNode,
 } from "../../lib/turnDiffTree";
-import { ChevronRightIcon, FileDiffIcon } from "lucide-react";
+import { ChevronRightIcon, FileDiffIcon, GitBranchIcon } from "lucide-react";
 import { ChevronsDownUp, ChevronsUpDown, Folder, FolderClosed } from "lucide";
 import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
@@ -21,9 +22,32 @@ const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
 /** Opens the OS-level context menu for a changed file (reveal in file manager, open in editor). */
 export type ChangedFileContextMenuHandler = (filePath: string, event: MouseEvent) => void;
 
+/** One line for the changes HEAD brought in, which the file list leaves out. */
+function GitUpdateSummary(props: { gitUpdate: OrchestrationV2CheckpointGitUpdate }) {
+  const { gitUpdate } = props;
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-xs font-normal text-muted-foreground">
+      <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="truncate">
+        Updated via Git · {formatGitUpdateRefs(gitUpdate)} · {gitUpdate.fileCount} file
+        {gitUpdate.fileCount === 1 ? "" : "s"}
+      </span>
+      {hasNonZeroStat(gitUpdate) && (
+        <DiffStatLabel
+          additions={gitUpdate.additions}
+          deletions={gitUpdate.deletions}
+          layout="inline"
+          className="shrink-0 text-xs leading-4 opacity-70"
+        />
+      )}
+    </div>
+  );
+}
+
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   runId: RunId;
   files: ReadonlyArray<TurnDiffFileChange>;
+  gitUpdate?: OrchestrationV2CheckpointGitUpdate | undefined;
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
   onToggleAllDirectories: () => void;
@@ -33,6 +57,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   const {
     runId,
     files,
+    gitUpdate,
     allDirectoriesExpanded,
     resolvedTheme,
     onToggleAllDirectories,
@@ -51,19 +76,23 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         data-changed-files-header=""
         className="sticky top-2 z-10 flex items-center justify-between gap-2 rounded-t-lg bg-secondary px-3 py-2 dark:bg-background dark:bg-linear-to-b dark:from-input/20 dark:to-input/20"
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-foreground">
-          <span>
-            {files.length} changed file{files.length === 1 ? "" : "s"}
-          </span>
-          {hasNonZeroStat(summaryStat) && (
-            <DiffStatLabel
-              additions={summaryStat.additions}
-              deletions={summaryStat.deletions}
-              layout="inline"
-              className="text-xs leading-4"
-            />
-          )}
-        </div>
+        {files.length === 0 && gitUpdate ? (
+          <GitUpdateSummary gitUpdate={gitUpdate} />
+        ) : (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-foreground">
+            <span>
+              {files.length} changed file{files.length === 1 ? "" : "s"}
+            </span>
+            {hasNonZeroStat(summaryStat) && (
+              <DiffStatLabel
+                additions={summaryStat.additions}
+                deletions={summaryStat.deletions}
+                layout="inline"
+                className="text-xs leading-4"
+              />
+            )}
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-1">
           {hasDirectories && (
             <Tooltip>
@@ -110,15 +139,22 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           </Tooltip>
         </div>
       </div>
-      <ChangedFilesTree
-        key={`${runId}:${allDirectoriesExpanded}`}
-        runId={runId}
-        files={files}
-        allDirectoriesExpanded={allDirectoriesExpanded}
-        resolvedTheme={resolvedTheme}
-        onOpenTurnDiff={onOpenTurnDiff}
-        onFileContextMenu={onFileContextMenu}
-      />
+      {files.length > 0 && (
+        <ChangedFilesTree
+          key={`${runId}:${allDirectoriesExpanded}`}
+          runId={runId}
+          files={files}
+          allDirectoriesExpanded={allDirectoriesExpanded}
+          resolvedTheme={resolvedTheme}
+          onOpenTurnDiff={onOpenTurnDiff}
+          onFileContextMenu={onFileContextMenu}
+        />
+      )}
+      {files.length > 0 && gitUpdate && (
+        <div className="border-t border-border/60 px-3 py-2">
+          <GitUpdateSummary gitUpdate={gitUpdate} />
+        </div>
+      )}
     </div>
   );
 });

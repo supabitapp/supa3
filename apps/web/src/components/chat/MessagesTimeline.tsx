@@ -3752,7 +3752,8 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
 }) {
   if (!turnSummary) return null;
   const checkpointFiles = turnSummary.files;
-  if (checkpointFiles.length === 0) return null;
+  // A turn that only moved HEAD still gets a card for its git update.
+  if (checkpointFiles.length === 0 && turnSummary.gitUpdate === undefined) return null;
 
   return (
     <AssistantChangedFilesSectionInner
@@ -3800,6 +3801,7 @@ function AssistantChangedFilesSectionInner({
     <ChangedFilesCard
       runId={turnSummary.runId}
       files={checkpointFiles}
+      gitUpdate={turnSummary.gitUpdate}
       allDirectoriesExpanded={allDirectoriesExpanded}
       resolvedTheme={resolvedTheme}
       onToggleAllDirectories={() =>

@@ -323,6 +323,8 @@ export function useCheckpointDiff(
     target.threadId !== null &&
     target.fromTurnCount !== null &&
     target.toTurnCount !== null;
+  // Left out unless set, so the default request keeps its existing cache key.
+  const includeGitChanges = target.includeGitChanges === true ? { includeGitChanges: true } : {};
   const fullThreadTarget =
     enabled && target.fromTurnCount === 0
       ? {
@@ -331,6 +333,7 @@ export function useCheckpointDiff(
             threadId: target.threadId!,
             toTurnCount: target.toTurnCount!,
             ignoreWhitespace: target.ignoreWhitespace,
+            ...includeGitChanges,
           },
         }
       : null;
@@ -343,6 +346,7 @@ export function useCheckpointDiff(
             fromTurnCount: target.fromTurnCount!,
             toTurnCount: target.toTurnCount!,
             ignoreWhitespace: target.ignoreWhitespace,
+            ...includeGitChanges,
           },
         }
       : null;

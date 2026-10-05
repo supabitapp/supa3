@@ -4,6 +4,7 @@ import {
   CheckpointScopeId,
   NodeId,
   OrchestrationV2Checkpoint,
+  OrchestrationV2CheckpointGitUpdate,
   OrchestrationV2CheckpointScope,
   ProviderThreadId,
   RunId,
@@ -25,6 +26,8 @@ import * as IdAllocator from "./IdAllocator.ts";
 
 const CHECKPOINT_REFS_PREFIX = "refs/supacode/orchestration-v2/checkpoints";
 const ROOT_CHECKPOINT_SCOPE_NAME = "root";
+/** Attribution past this budget gives up and lists every change as the turn's. */
+const GIT_MOVE_ATTRIBUTION_TIMEOUT = "10 seconds";
 
 export class CheckpointRootScopePrepareError extends Schema.TaggedError<CheckpointRootScopePrepareError>()(
   "CheckpointRootScopePrepareError",
@@ -141,6 +144,8 @@ export interface CheckpointServiceV2Shape {
     readonly nodeId: NodeId;
     readonly ordinalWithinScope: number;
     readonly appRunOrdinal: number | null;
+    /** When the run's work began. Commits from then on are the turn's own. */
+    readonly turnStartedAt: DateTime.Utc;
     readonly capturedAt: DateTime.Utc;
   }) => Effect.Effect<OrchestrationV2Checkpoint, CheckpointServiceV2Error>;
   readonly restore: (input: {
@@ -222,6 +227,7 @@ function makeCheckpoint(input: {
   readonly ref: CheckpointRef;
   readonly status: OrchestrationV2Checkpoint["status"];
   readonly files: OrchestrationV2Checkpoint["files"];
+  readonly gitUpdate?: OrchestrationV2CheckpointGitUpdate | undefined;
   readonly capturedAt: DateTime.Utc;
 }): OrchestrationV2Checkpoint {
   return {
@@ -236,8 +242,13 @@ function makeCheckpoint(input: {
     ref: input.ref,
     status: input.status,
     files: input.files,
+    ...(input.gitUpdate === undefined ? {} : { gitUpdate: input.gitUpdate }),
     capturedAt: input.capturedAt,
   };
+}
+
+function shortBranchName(branch: string | null): string | null {
+  return branch?.startsWith("refs/heads/") === true ? branch.slice("refs/heads/".length) : branch;
 }
 
 export const layer: Layer.Layer<
@@ -440,10 +451,11 @@ export const layer: Layer.Layer<
             });
           }
 
-          const previousExists = yield* checkpointStore
-            .hasCheckpointRef({
+          // Reading both refs' recorded HEADs also proves the previous ref exists.
+          const heads = yield* checkpointStore
+            .readCheckpointHeads({
               cwd: input.scope.cwd,
-              checkpointRef: previousCheckpointRef,
+              checkpointRefs: [previousCheckpointRef, checkpointRef],
             })
             .pipe(
               Effect.catch((cause) =>
@@ -451,9 +463,78 @@ export const layer: Layer.Layer<
                   scopeId: input.scope.id,
                   checkpointRef: previousCheckpointRef,
                   cause: String(cause),
-                }).pipe(Effect.as(false)),
+                }).pipe(Effect.as(new Map<CheckpointRef, never>())),
               ),
             );
+          const previousExists = heads.has(previousCheckpointRef);
+          const previousHead = heads.get(previousCheckpointRef) ?? null;
+          const currentHead = heads.get(checkpointRef) ?? null;
+          // Checkpoints without a recorded HEAD keep listing every change. Any
+          // failure here does too: hiding a real edit is worse than over-listing.
+          const gitMoveSplit =
+            previousHead !== null &&
+            currentHead !== null &&
+            previousHead.commit !== currentHead.commit
+              ? yield* checkpointStore
+                  .attributeCheckpointChanges({
+                    cwd: input.scope.cwd,
+                    fromCheckpointRef: previousCheckpointRef,
+                    toCheckpointRef: checkpointRef,
+                    fromHead: previousHead.commit,
+                    toHead: currentHead.commit,
+                    turnStartedAt: input.turnStartedAt,
+                  })
+                  .pipe(
+                    Effect.map((attribution) =>
+                      attribution.gitMoved.fileCount === 0
+                        ? null
+                        : {
+                            files: attribution.files.map((file) => ({
+                              ...file,
+                              kind: "modified",
+                            })),
+                            gitUpdate: {
+                              fromBranch: shortBranchName(previousHead.branch),
+                              toBranch: shortBranchName(currentHead.branch),
+                              fromHead: previousHead.commit,
+                              toHead: currentHead.commit,
+                              ...attribution.gitMoved,
+                            },
+                          },
+                    ),
+                    Effect.timeoutOrElse({
+                      duration: GIT_MOVE_ATTRIBUTION_TIMEOUT,
+                      orElse: () =>
+                        Effect.logWarning("orchestration V2 git move attribution timed out", {
+                          scopeId: input.scope.id,
+                          checkpointRef,
+                        }).pipe(Effect.as(null)),
+                    }),
+                    Effect.catch((cause) =>
+                      Effect.logWarning("orchestration V2 git move attribution failed", {
+                        scopeId: input.scope.id,
+                        checkpointRef,
+                        cause: String(cause),
+                      }).pipe(Effect.as(null)),
+                    ),
+                  )
+              : null;
+          if (gitMoveSplit !== null) {
+            return makeCheckpoint({
+              id: checkpointId,
+              scope: input.scope,
+              runId: input.runId,
+              nodeId: input.nodeId,
+              parentCheckpointId,
+              ordinalWithinScope: input.ordinalWithinScope,
+              appRunOrdinal: input.appRunOrdinal,
+              ref: checkpointRef,
+              status: "ready",
+              ...gitMoveSplit,
+              capturedAt: input.capturedAt,
+            });
+          }
+
           const files = previousExists
             ? yield* checkpointStore
                 .diffCheckpoints({

@@ -108,6 +108,45 @@ describe("buildReviewSectionItems", () => {
     expect(getDefaultReviewSectionId(items)).toBe("git:branch-range");
   });
 
+  it("counts only the turn's own files and summarizes its git update", () => {
+    const gitUpdate = {
+      fromBranch: "main",
+      toBranch: "feature",
+      fromHead: "a".repeat(40),
+      toHead: "b".repeat(40),
+      fileCount: 1233,
+      additions: 145_000,
+      deletions: 369_000,
+    };
+    const items = buildReviewSectionItems({
+      checkpoints: [
+        makeCheckpoint({
+          runId: RunId.make("run-2"),
+          checkpointTurnCount: 2,
+          completedAt: "2026-04-02T00:00:00.000Z",
+          gitUpdate: { ...gitUpdate, fromBranch: null, toBranch: null },
+        }),
+        makeCheckpoint({
+          runId: RunId.make("run-1"),
+          checkpointTurnCount: 1,
+          completedAt: "2026-04-01T00:00:00.000Z",
+          files: [{ path: "src/app.ts", kind: "modified", additions: 2, deletions: 1 }],
+          gitUpdate,
+        }),
+      ],
+      gitSections: [],
+      turnDiffById: {},
+      loadingTurnIds: {},
+      loadingGitSections: false,
+    });
+
+    expect(items.map((item) => item.subtitle)).toEqual([
+      "Updated via Git · aaaaaaa → bbbbbbb",
+      "1 file changed · Updated via Git · main → feature",
+    ]);
+    expect(items[1]?.gitUpdate).toEqual(gitUpdate);
+  });
+
   it("falls back to the first turn without git sections", () => {
     const items = buildReviewSectionItems({
       checkpoints: [

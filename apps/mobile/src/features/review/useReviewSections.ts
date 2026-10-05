@@ -32,6 +32,8 @@ export function useReviewSections(input: {
   readonly environmentId?: EnvironmentId;
   readonly threadId?: ThreadId;
   readonly reviewCache: ReviewCacheForThread;
+  /** Include changes a turn's git update brought in. */
+  readonly includeGitChanges?: boolean;
 }) {
   const { environmentId, reviewCache, threadId } = input;
   const enabled = input.enabled ?? true;
@@ -137,6 +139,8 @@ export function useReviewSections(input: {
       enabled && activeCheckpoint ? Math.max(0, activeCheckpoint.checkpointTurnCount - 1) : null,
     toTurnCount: enabled ? (activeCheckpoint?.checkpointTurnCount ?? null) : null,
     ignoreWhitespace: false,
+    includeGitChanges:
+      input.includeGitChanges === true && activeCheckpoint?.gitUpdate !== undefined,
   });
 
   useEffect(() => {

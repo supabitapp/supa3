@@ -21,5 +21,7 @@ export interface CheckpointDiffTarget {
   readonly fromTurnCount: number | null;
   readonly toTurnCount: number | null;
   readonly ignoreWhitespace: boolean;
+  /** Also show changes a turn's git update brought in. */
+  readonly includeGitChanges?: boolean;
   readonly cacheScope?: string | null;
 }
