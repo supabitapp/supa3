@@ -118,6 +118,27 @@ describe("evaluatePullRequestWatch", () => {
     assert.deepEqual(again.next.remarkIds, [first.id, "late"]);
   });
 
+  it("reports edits after the watermark once and counts them toward the wake limit", () => {
+    const old = remark("greptile[bot]", "2026-10-02T11:00:00Z");
+    const watching = watch({
+      headSha: "aaaaaaaaaa",
+      remarkIds: [old.id],
+      wakes: PULL_REQUEST_WATCH_WAKE_LIMIT - 1,
+    });
+    assert.deepEqual(evaluatePullRequestWatch(watching, detail(), [old]).changes, []);
+    const edited = { ...old, editedAt: "2026-10-02T12:06:00Z" };
+    const report = evaluatePullRequestWatch(watching, detail(), [edited]);
+    assert.deepEqual(report.changes, [{ kind: "remarks", remarks: [edited] }]);
+    assert.equal(report.next.remarksThrough, edited.editedAt);
+    assert.deepEqual(report.next.remarkIds, [old.id]);
+    assert.isTrue(report.exhausted);
+    assert.deepEqual(evaluatePullRequestWatch(report.next, detail(), [edited]).changes, []);
+    const late = { ...edited, id: "late" };
+    assert.deepEqual(evaluatePullRequestWatch(report.next, detail(), [edited, late]).changes, [
+      { kind: "remarks", remarks: [late] },
+    ]);
+  });
+
   it("does not treat a failed check read as a rerun", () => {
     const failed = detail({ checks: [check("lint", "failure")] });
     const reported = evaluatePullRequestWatch(watch(), failed, noRemarks);
