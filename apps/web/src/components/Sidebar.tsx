@@ -403,6 +403,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  statusLabel,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -420,6 +421,7 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  statusLabel: string | null;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
@@ -438,6 +440,7 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {statusLabel ? <div>{statusLabel}</div> : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -798,11 +801,12 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   project: ProjectFaviconProject | null;
   projectDisplayName: string | null;
   isActive: boolean;
+  compact: boolean;
   onNavigate: (draftId: DraftId) => void;
   onDiscard: (draftId: DraftId) => void;
   onContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
 }) {
-  const { composer, draftId, onContextMenu, onDiscard, onNavigate } = props;
+  const { compact, composer, draftId, onContextMenu, onDiscard, onNavigate } = props;
   const promptPreview =
     replaceComposerContextReferences(composer.prompt, (occurrence) => occurrence.label)
       .trim()
@@ -859,66 +863,95 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     [draftId, onDiscard],
   );
   return (
-    <li className="list-none py-0.5">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={accessibility.label}
-        aria-current={accessibility.current}
-        data-testid="sidebar-draft-row"
-        className={cn(
-          "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-          props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
-        )}
-        onClick={handleActivate}
-        onContextMenu={handleContextMenu}
-        onKeyDown={handleKeyDown}
-        onMouseDown={(event) => {
-          if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
-            return;
-          }
-          event.preventDefault();
-        }}
-        onAuxClick={(event) => {
-          if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
-            return;
-          }
-          handleDiscard(event);
-        }}
-      >
-        <span className="sr-only">{preview}</span>
-        <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
-          <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <SquarePenIcon aria-hidden className={draftPenClassName} />
-            {props.project ? (
-              <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+    <li className={cn("list-none", !compact && "py-0.5")}>
+      <Tooltip disabled={!compact}>
+        <TooltipTrigger
+          render={<div />}
+          role="button"
+          tabIndex={0}
+          aria-label={accessibility.label}
+          aria-current={accessibility.current}
+          data-testid="sidebar-draft-row"
+          className={cn(
+            "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+            props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
+          )}
+          onClick={handleActivate}
+          onContextMenu={handleContextMenu}
+          onKeyDown={handleKeyDown}
+          onMouseDown={(event) => {
+            if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
+              return;
+            }
+            event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (event.button !== 1 || (event.target as HTMLElement).closest("button, a, input")) {
+              return;
+            }
+            handleDiscard(event);
+          }}
+        >
+          <span className="sr-only">{preview}</span>
+          <div
+            className={cn(
+              "relative z-10",
+              compact
+                ? "flex h-9 items-center px-2.5"
+                : "h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
+            )}
+          >
+            <div
+              className={cn(
+                "flex h-5 min-w-0 items-center",
+                compact ? "w-full gap-2.5" : "gap-1.5",
+              )}
+            >
+              <SquarePenIcon aria-hidden className={draftPenClassName} />
+              {props.project ? (
+                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+              ) : null}
+              <span
+                aria-hidden={compact || undefined}
+                className={cn(
+                  "min-w-0 flex-1 truncate font-medium",
+                  compact ? "text-sm text-foreground/90" : "text-xs text-secondary-label",
+                )}
+              >
+                {compact ? preview : props.projectDisplayName}
+              </span>
+              <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Discard draft"
+                        onClick={handleDiscard}
+                        className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
+                      >
+                        <XIcon className="size-3" />
+                      </button>
+                    }
+                  />
+                  <TooltipPopup side="top">Discard draft</TooltipPopup>
+                </Tooltip>
+              </span>
+            </div>
+            {!compact ? (
+              <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
+                {preview}
+              </div>
             ) : null}
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
-              {props.projectDisplayName}
-            </span>
-            <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Discard draft"
-                      onClick={handleDiscard}
-                      className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
-                    >
-                      <XIcon className="size-3" />
-                    </button>
-                  }
-                />
-                <TooltipPopup side="top">Discard draft</TooltipPopup>
-              </Tooltip>
-            </span>
           </div>
-          <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
-            {preview}
-          </div>
-        </div>
-      </div>
+        </TooltipTrigger>
+        <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>
+          <ThreadHoverCard title={preview}>
+            <div>Unsent draft</div>
+            {props.projectDisplayName ? <div>{props.projectDisplayName}</div> : null}
+          </ThreadHoverCard>
+        </ThreadHoverCardPopup>
+      </Tooltip>
     </li>
   );
 });
@@ -945,6 +978,7 @@ function readSidebarDraftRow(routeDraftId: string | null) {
 // subscription + closing divider) so per-keystroke composer updates
 // re-render only this block, never the whole sidebar. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
+  compact: boolean;
   projectByKey: ReadonlyMap<string, EnvironmentProject>;
   projectDisplayNameByKey: ReadonlyMap<string, string>;
   scopedProjectKeys: ReadonlySet<string> | null;
@@ -1019,6 +1053,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
         return (
           <SidebarDraftRow
             key={draftId}
+            compact={props.compact}
             draftId={draftId}
             composer={composer}
             project={props.projectByKey.get(projectKey) ?? null}
@@ -1092,15 +1127,15 @@ function toastThreadActionFailure(title: string, result: AtomCommandResult<unkno
 
 const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   thread: SidebarThreadSummary;
-  variant: "card" | "slim";
-  // Settled rows un-settle, snoozed rows wake, and cards settle.
+  variant: "card" | "compact" | "slim";
+  // Settled rows un-settle, snoozed rows wake, and active rows settle.
   variantAction: SidebarSweepAction;
   // False on environments whose server predates thread.settle/unsettle:
   // the lifecycle affordances hide entirely rather than fail on click.
   settlementSupported: boolean;
   // Same contract for thread.snooze/unsnooze.
   snoozeSupported: boolean;
-  // Renders the pin glyph. Pinned cards keep the full settle/snooze quick
+  // Renders the pin glyph. Pinned rows keep the full settle/snooze quick
   // actions: settling clears the pin server-side, and snoozing hides the
   // card until wake with the pin intact underneath. The glyph is also the
   // in-row pin state cue (the pinned block has no header), so it always
@@ -1180,6 +1215,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     variant,
     variantAction,
   } = props;
+  const compact = variant === "compact";
   const threadRef = useMemo(
     () => scopeThreadRef(thread.environmentId, thread.id),
     [thread.environmentId, thread.id],
@@ -1366,6 +1402,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      statusLabel={compact ? (topStatus?.label ?? "Ready") : null}
     />
   );
 
@@ -1661,7 +1698,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       className={cn(
         "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
         shouldRecede ? "font-normal" : "font-medium",
-        variant === "card"
+        variant !== "slim"
           ? cn(
               "truncate",
               shouldRecede
@@ -1926,6 +1963,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   }
 
   const diff = latestRunDiff(thread);
+  const StatusIcon = topStatus?.icon
+    ? {
+        working: CircleDashedIcon,
+        input: MessageCircleQuestionIcon,
+        approval: ShieldQuestionIcon,
+        failed: CircleAlertIcon,
+        done: CircleCheckIcon,
+        woke: AlarmClockIcon,
+      }[topStatus.icon]
+    : isPendingCreation
+      ? CircleDashedIcon
+      : ClockIcon;
 
   return (
     <li
@@ -1933,8 +1982,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
-        // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
-        "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        // Keep the offscreen size in sync with the selected row's content box.
+        "list-none [content-visibility:auto]",
+        compact
+          ? "[contain-intrinsic-size:auto_36px]"
+          : "py-0.5 [contain-intrinsic-size:auto_78px]",
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -1947,7 +1999,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               tabIndex={0}
               aria-label={accessibility.label}
               aria-current={accessibility.current}
-              data-testid="sidebar-row-card"
+              data-testid={compact ? "sidebar-row-compact" : "sidebar-row-card"}
               aria-busy={isPendingCreation || isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}
@@ -1960,13 +2012,27 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           {accessibleTitle}
-          <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
-            <div className="flex h-5 min-w-0 items-center gap-1.5">
+          <div
+            className={cn(
+              "relative z-10",
+              compact
+                ? "flex h-9 items-center px-2.5"
+                : "h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
+            )}
+          >
+            <div
+              className={cn(
+                "flex h-5 min-w-0 items-center",
+                compact ? "w-full gap-2.5" : "gap-1.5",
+              )}
+            >
               {draftIndicator}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
-              {props.projectDisplayName ? (
+              {compact ? (
+                title
+              ) : props.projectDisplayName ? (
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
@@ -1979,6 +2045,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <span className="flex-1" />
               )}
               {pinIndicator}
+              {compact ? (
+                <>
+                  {isRemote ? (
+                    <span
+                      role="img"
+                      aria-label={props.environmentLabel ?? "Remote environment"}
+                      className="inline-flex shrink-0"
+                    >
+                      <EnvironmentMachineIcon
+                        kind={props.environmentMachine}
+                        className="size-3.5 text-sidebar-muted-foreground/70"
+                      />
+                    </span>
+                  ) : null}
+                  {terminalStatusIcon}
+                  {prBadge}
+                </>
+              ) : null}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
                   the hidden state out of flow lets the project label reclaim
@@ -2019,7 +2103,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                                 )}
                               >
                                 <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
-                                <span role="status">{topStatus.label}</span>
+                                <span role="status" className={compact ? "sr-only" : undefined}>
+                                  {topStatus.label}
+                                </span>
                               </button>
                             }
                           />
@@ -2032,21 +2118,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             topStatus.className,
                           )}
                         >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+                          {compact || topStatus.icon !== null ? (
+                            <StatusIcon
+                              aria-hidden
+                              className={cn("shrink-0", compact ? "size-3.5" : "size-4")}
+                            />
                           ) : null}
                           {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
+                          <span role="status" className={compact ? "sr-only" : undefined}>
+                            {topStatus.label}
+                          </span>
                           {status === "working" ? (
                             <span aria-hidden>
                               <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
@@ -2109,7 +2192,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             }
                           >
                             <CheckIcon className="size-3.5" />
-                            Settle
+                            {compact ? null : "Settle"}
                           </TooltipTrigger>
                           <TooltipPopup>Settle thread</TooltipPopup>
                         </Tooltip>
@@ -2123,55 +2206,57 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   release click still fires and is consumed. */}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            <div className="mt-1 flex min-w-0">
-              {title}
-              {isRegeneratingTitle ? (
-                <span role="status" className="sr-only">
-                  Regenerating title
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-              {/* Always the branch. The plan step used to take this slot while
+            {isRegeneratingTitle ? (
+              <span role="status" className="sr-only">
+                Regenerating title
+              </span>
+            ) : null}
+            {!compact ? (
+              <>
+                <div className="mt-1 flex min-w-0">{title}</div>
+                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
+                  {/* Always the branch. The plan step used to take this slot while
                   working, but it truncated to a half-sentence and dropped the
                   branch, so the row lost its most stable identifier. */}
-              {thread.branch ? (
-                <>
-                  <ThreadWorktreeIndicator thread={thread} />
-                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
-                    <MiddleTruncate value={thread.branch} showTitle={false} />
-                  </span>
-                </>
-              ) : (
-                <span className="flex-1" />
-              )}
-              {terminalStatusIcon}
-              {prBadge}
-              {diff ? (
-                <span className="shrink-0 font-mono">
-                  <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
-                  <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
-                </span>
-              ) : null}
-              <span
-                aria-hidden
-                className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
-              >
-                {isRemote ? (
-                  <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-                    <EnvironmentMachineIcon
-                      aria-hidden
-                      kind={props.environmentMachine}
-                      className="size-3.5"
+                  {thread.branch ? (
+                    <>
+                      <ThreadWorktreeIndicator thread={thread} />
+                      <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+                        <MiddleTruncate value={thread.branch} showTitle={false} />
+                      </span>
+                    </>
+                  ) : (
+                    <span className="flex-1" />
+                  )}
+                  {terminalStatusIcon}
+                  {prBadge}
+                  {diff ? (
+                    <span className="shrink-0 font-mono">
+                      <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
+                      <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
+                    </span>
+                  ) : null}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
+                  >
+                    {isRemote ? (
+                      <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
+                        <EnvironmentMachineIcon
+                          aria-hidden
+                          kind={props.environmentMachine}
+                          className="size-3.5"
+                        />
+                      </span>
+                    ) : null}
+                    <SidebarProviderStack
+                      thread={thread}
+                      providerEntryByInstanceId={props.providerEntryByInstanceId}
                     />
                   </span>
-                ) : null}
-                <SidebarProviderStack
-                  thread={thread}
-                  providerEntryByInstanceId={props.providerEntryByInstanceId}
-                />
-              </span>
-            </div>
+                </div>
+              </>
+            ) : null}
           </div>
           {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
@@ -2191,6 +2276,7 @@ function latestRunDiff(
 }
 
 export default function Sidebar() {
+  const compactRows = useClientSettings((settings) => settings.sidebarThreadDisplay === "compact");
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useSidebarThreadShells();
@@ -3544,12 +3630,14 @@ export default function Sidebar() {
   const sidebarListLayout = useMemo(
     () => ({
       orderKey: sidebarListOrderKey,
+      compactRows,
       routeDraftId: routeDraftIdForRows,
       draftCount: visibleDraftSessionCount,
       undoNoticeShown,
       animate: !listMotionPaused && sidebarListHasRows,
     }),
     [
+      compactRows,
       listMotionPaused,
       routeDraftIdForRows,
       sidebarListHasRows,
@@ -4773,14 +4861,15 @@ export default function Sidebar() {
                       const threadKey = scopedThreadKey(
                         scopeThreadRef(thread.environmentId, thread.id),
                       );
-                      // Settled and snoozed are the ONLY things that collapse a
-                      // row: every other thread is a full card. Density comes
-                      // from users (or the auto rules) actually parking work,
-                      // not from the sidebar second-guessing what still matters.
-                      // Working rows stay cards so their live status shows.
-                      const isCard =
+                      // Parked threads stay slim. Active threads keep their live
+                      // status and actions in either of the user's display modes.
+                      const isActiveSection =
                         section === "active" || section === "pinned" || section === "working";
-                      const rowVariant = isCard ? "card" : "slim";
+                      const rowVariant = isActiveSection
+                        ? compactRows
+                          ? "compact"
+                          : "card"
+                        : "slim";
                       return (
                         <SidebarThreadRow
                           // Fade between card and compact rows while the outer
@@ -4899,6 +4988,7 @@ export default function Sidebar() {
                     const items: ReactNode[] = [
                       <SidebarDraftBlock
                         key="draft-sessions"
+                        compact={compactRows}
                         projectByKey={projectByKey}
                         projectDisplayNameByKey={projectDisplayNameByKey}
                         scopedProjectKeys={scopedProjectKeys}
