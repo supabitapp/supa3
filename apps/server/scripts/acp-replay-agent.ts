@@ -140,17 +140,19 @@ function stopWithFailure(detail: string, actual?: unknown): void {
   process.stdin.pause();
 }
 
-function advance(): void {
-  cursor += 1;
-  writeStatus();
-}
-
 function isCleanRuntimeExit(entry: ReplayEntry | undefined): boolean {
   return (
     entry?.type === "runtime_exit" && (entry.status === "success" || entry.status === "cancelled")
   );
 }
 
+function advance(): void {
+  cursor += 1;
+  while (isCleanRuntimeExit(transcript.entries[cursor])) cursor += 1;
+  writeStatus();
+}
+
+/** Callers persist status first: the client may kill this process as soon as it reads the line. */
 function send(message: JsonRpcMessage): void {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
@@ -192,7 +194,7 @@ function materializeInbound(value: unknown): unknown {
   );
 }
 
-/** Records the request ids a frame needs and returns its message, or undefined once replay stops. */
+/** Allocates or consumes the frame's request id and returns its message, or undefined after recording a failure. */
 function prepareInboundMessage(recorded: LogicalFrame): JsonRpcMessage | undefined {
   const frame = materializeInbound(recorded) as LogicalFrame;
   switch (frame.kind) {
@@ -255,12 +257,7 @@ function flushInbound(): void {
     }
     const message = prepareInboundMessage(frame);
     if (message === undefined) return;
-    // Persist the step, and any clean exit recorded right after it, before the
-    // client can react: tests close the session on the last answer, which kills
-    // this process.
-    cursor += 1;
-    while (isCleanRuntimeExit(transcript.entries[cursor])) cursor += 1;
-    writeStatus();
+    advance();
     send(message);
   }
 }

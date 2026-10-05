@@ -225,7 +225,6 @@ describe("AcpRegistryAdapterV2", () => {
           }),
         })
         .pipe(Effect.scoped);
-      // The script must be consumed exactly.
       yield* makeAcpReplayCompletenessAssertion(fileSystem, statusPath, transcript);
     });
 
