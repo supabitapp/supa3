@@ -37,8 +37,6 @@ describe("generate mobile Uniwind themes", () => {
       "ember-dark",
       "iris-light",
       "iris-dark",
-      "zenbones-light",
-      "zenbones-dark",
     ]);
 
     const stylesheet = renderUniwindThemesCSS();
@@ -52,10 +50,10 @@ describe("generate mobile Uniwind themes", () => {
 
     expect(variables.light).toEqual(readDefaultMobileThemeVariables("light"));
     expect(variables.dark).toEqual(readDefaultMobileThemeVariables("dark"));
-    expect(variables.light["--color-screen"]).toBe("#fcfcfc");
-    expect(variables.light["--color-drawer"]).toBe("#fafafa");
-    expect(variables.dark["--color-screen"]).toBe("#0a0a0a");
-    expect(variables.dark["--color-drawer"]).toBe("#000000");
+    expect(variables.light["--color-screen"]).toBe("#f0edec");
+    expect(variables.light["--color-drawer"]).toBe("#e7e2e0");
+    expect(variables.dark["--color-screen"]).toBe("#1c1917");
+    expect(variables.dark["--color-drawer"]).toBe("#171412");
     expect(Object.keys(variables.light)).toEqual(Object.keys(variables.dark));
   });
 

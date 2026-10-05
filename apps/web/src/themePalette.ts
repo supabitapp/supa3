@@ -224,7 +224,11 @@ function releaseBuiltInThemeIds(storedThemes: ReadonlyArray<unknown>): ReadonlyA
   }
   return storedThemes.map((storedTheme) => {
     if (!isRecord(storedTheme) || typeof storedTheme.id !== "string") return storedTheme;
-    if (!BUILT_IN_THEMES.some((theme) => theme.id === storedTheme.id)) return storedTheme;
+    if (
+      storedTheme.id !== "zenbones" &&
+      !BUILT_IN_THEMES.some((theme) => theme.id === storedTheme.id)
+    )
+      return storedTheme;
     const id = freeThemeId(storedTheme.id, takenIds);
     takenIds.add(id);
     return { ...storedTheme, id };
@@ -1050,7 +1054,17 @@ export function updateThemeColorFamily(
 
 const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = BUILT_IN_THEMES;
 
+// Resolve saved selections and appearance mixes without listing a second copy of Supacode.
+const LEGACY_ZENBONES_THEME: ThemeDefinition = {
+  id: "zenbones",
+  label: "Supacode",
+  appearance: "light",
+  colors: SUPACODE_LIGHT_THEME_COLORS,
+  variants: { dark: SUPACODE_DARK_THEME_COLORS },
+};
+
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {
+  if (theme === "zenbones") return LEGACY_ZENBONES_THEME;
   return (
     BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === theme) ??
     getCustomThemes().find((definition) => definition.id === theme) ??
@@ -1063,6 +1077,7 @@ export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | nu
 
 /** Artwork palettes are reviewed alongside built-ins; user themes always use the pill fallback. */
 export function themeAllowsSidebarArtwork(theme: ThemePreference): boolean {
+  if (theme === "zenbones") return true;
   return (
     BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === theme)?.sidebarArtwork ===
     true
@@ -1499,19 +1514,14 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   setThemePreviewSidebarArtwork(null);
   const palette = getThemeDefinition(theme);
 
-  if (palette) {
-    root.dataset.themeId = palette.id;
-    const mode = appearance ?? palette.appearance;
-    const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
-    for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
-      root.style.setProperty(APP_THEME_VARIABLES[role], value);
-    }
-    return;
-  }
-
-  delete root.dataset.themeId;
-  for (const variable of Object.values(APP_THEME_VARIABLES)) {
-    root.style.removeProperty(variable);
+  // The standard palette uses the same role mapping as installed themes.
+  root.dataset.themeId = palette && theme !== "zenbones" ? palette.id : "__default";
+  const mode = appearance ?? getThemePreferenceMode(theme) ?? "light";
+  const colors = palette
+    ? (getThemeColorsForMode(palette, mode) ?? palette.colors)
+    : getStandardThemeColors(mode);
+  for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
+    root.style.setProperty(APP_THEME_VARIABLES[role], value);
   }
 }
 

@@ -84,33 +84,44 @@ describe("theme files", () => {
     }
   });
 
-  it("keeps stock dark controls in the neutral-black surface hierarchy", () => {
-    expectThemeColors(getStandardThemeColors("dark"), {
-      canvas: "#0a0a0a",
-      surface: "#111111",
-      surfaceRaised: "#111111",
-      surfaceOverlay: "#111111",
-      toolbarControl: "#111111",
-      secondary: "#111111",
-      muted: "#111111",
-      accentSurface: "#141414",
+  it("uses Zenbones for the standard palette in both appearances", () => {
+    expectThemeColors(getStandardThemeColors("light"), {
+      canvas: "#f0edec",
+      sidebar: "#e7e2e0",
+      messageSurface: "#e1dad7",
     });
+    expectThemeColors(getStandardThemeColors("dark"), {
+      canvas: "#1c1917",
+      sidebar: "#171412",
+      messageSurface: "#302b29",
+    });
+    expect(BUILT_IN_THEMES.some((theme) => theme.id === "zenbones")).toBe(false);
   });
 
-  it("keeps the stock sidebar and chat on distinct surfaces in both appearances", () => {
-    expectThemeColors(getStandardThemeColors("light"), {
-      canvas: "#fcfcfc",
-      sidebar: "#fafafa",
-      sidebarRowActive: "#ffffff",
-      messageSurface: "#f4f4f5",
-    });
-    expectThemeColors(getStandardThemeColors("dark"), {
-      canvas: "#0a0a0a",
-      sidebar: "#000000",
-      sidebarRowActive: "#1a1b1b",
-      messageSurface: "#141414",
-    });
-  });
+  it.each(["light", "dark"] as const)(
+    "restores the standard %s palette after switching themes",
+    (appearance) => {
+      const variables = new Map<string, string>();
+      const dataset: Record<string, string> = {};
+      vi.stubGlobal("document", {
+        documentElement: {
+          dataset,
+          style: { setProperty: (name: string, value: string) => variables.set(name, value) },
+        },
+      });
+      applyThemePalette("ocean", appearance);
+      applyThemePalette("system", appearance);
+      expect(dataset.themeId).toBe("__default");
+      expect(variables.get("--app-theme-canvas")).toBe(getStandardThemeColors(appearance).canvas);
+      expect(variables.get("--app-theme-message-action")).toBe(
+        getStandardThemeColors(appearance).messageAction,
+      );
+      applyThemePalette("zenbones", appearance);
+      expect(dataset.themeId).toBe("__default");
+      expect(variables.get("--app-theme-canvas")).toBe(getStandardThemeColors(appearance).canvas);
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("derives readable, distinctive vivid palettes from exact seeds", () => {
     const seeds: ReadonlyArray<["light" | "dark", string, string]> = [
@@ -568,7 +579,7 @@ describe("theme files", () => {
       ["zenbones-custom", "Zenbones Tweak"],
       ["zenbones-custom-2", "My Zenbones"],
     ]);
-    expect(getThemeDefinition("zenbones")?.label).toBe("Zenbones");
+    expect(getThemeDefinition("zenbones")?.label).toBe("Supacode");
 
     removeCustomTheme("zenbones-custom-2");
 

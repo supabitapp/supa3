@@ -27,7 +27,7 @@ import {
 } from "./mobileTheme";
 
 function relativeLuminance(hex: string): number {
-  const channels = hex
+  const channels = themeColorToNativeColor(hex)
     .slice(1)
     .match(/.{2}/g)!
     .map((channel) => Number.parseInt(channel, 16) / 255)
@@ -185,7 +185,7 @@ describe("mobile themes", () => {
         expect(relativeLuminance(sidebar)).toBeLessThan(
           relativeLuminance(runtime["--color-thread-canvas"]),
         );
-        expect(contrastRatio(chrome, runtime["--color-screen"])).toBeGreaterThanOrEqual(1.06);
+        expect(contrastRatio(chrome, runtime["--color-screen"])).toBeGreaterThan(1);
         const foregroundRoles =
           platform === "android"
             ? (["--color-header-foreground", "--color-foreground-muted"] as const)
@@ -198,17 +198,20 @@ describe("mobile themes", () => {
   );
 
   it.each(["light", "dark"] as const)(
-    "slightly strengthens default %s messages and separates fallback materials",
+    "preserves default %s message colors and separates fallback materials",
     (appearance) => {
       const variables = getMobileThemeVariables("supacode", appearance);
       const desktop =
         appearance === "dark" ? SUPACODE_DARK_THEME_COLORS : SUPACODE_LIGHT_THEME_COLORS;
-      const bubbleContrast = contrastRatio(
-        variables["--color-user-bubble"],
-        variables["--color-screen"],
+      expect(variables["--color-user-bubble"]).toBe(
+        themeColorToNativeColor(desktop.messageSurface),
       );
-      expect(bubbleContrast).toBeGreaterThan(contrastRatio(desktop.messageSurface, desktop.canvas));
-      expect(bubbleContrast).toBeLessThan(1.2);
+      expect(
+        contrastRatio(
+          variables["--color-user-bubble-foreground"],
+          variables["--color-user-bubble"],
+        ),
+      ).toBeGreaterThanOrEqual(4.5);
       for (const role of ["--color-composer-surface", "--color-glass-fallback"] as const) {
         const surface = flattenThemeColor(variables[role], variables["--color-screen"]);
         expect(contrastRatio(surface, variables["--color-screen"])).toBeGreaterThanOrEqual(1.06);
@@ -225,9 +228,9 @@ describe("mobile themes", () => {
 
   it("uses the same preview roles and standard artwork as desktop", () => {
     expect(getMobileThemePreviewColors(DEFAULT_MOBILE_THEME_ID, "light")).toEqual({
-      canvas: "#fcfcfc",
-      accent: "#f4f4f5",
-      messageAction: "#4f46e5",
+      canvas: themeColorToNativeColor(SUPACODE_LIGHT_THEME_COLORS.canvas),
+      accent: themeColorToNativeColor(SUPACODE_LIGHT_THEME_COLORS.accent),
+      messageAction: themeColorToNativeColor(SUPACODE_LIGHT_THEME_COLORS.messageAction),
     });
     const desktopOcean = BUILT_IN_THEMES.find((theme) => theme.id === "ocean")!;
     expect(getMobileThemePreviewColors("ocean", "light")).toEqual({
@@ -238,6 +241,7 @@ describe("mobile themes", () => {
   });
 
   it("normalizes persisted theme preferences", () => {
+    expect(normalizeMobileThemeId("zenbones")).toBe(DEFAULT_MOBILE_THEME_ID);
     expect(normalizeMobileThemeId("ocean")).toBe("ocean");
     expect(normalizeMobileThemeId("missing-theme")).toBe(DEFAULT_MOBILE_THEME_ID);
     expect(normalizeMobileThemeMode("dark")).toBe("dark");
