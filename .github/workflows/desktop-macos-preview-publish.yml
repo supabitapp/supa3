@@ -271,6 +271,9 @@ jobs:
       actions: read
       contents: read
     uses: ./.github/workflows/release-desktop.yml
+    # Without passed secrets, the called job's release environment secrets
+    # resolve empty, so the signing credentials never load.
+    secrets: inherit
     with:
       version: ${{ needs.resolve.outputs.version }}
       ref: ${{ github.sha }}
