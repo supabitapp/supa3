@@ -8,7 +8,7 @@ Download at https://next.supacode.sh
 
 ## iOS app
 
-[Join the Supacode beta on TestFlight](https://testflight.apple.com/join/ga2vGT3h). Requires a running Supacode server.
+[Join the Supacode beta on TestFlight](https://testflight.apple.com/join/ga2vGT3h). 
 
 ## Command line
 
