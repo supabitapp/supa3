@@ -11,10 +11,9 @@ import {
   turnItemNeedsDetailFetch,
   turnItemOutputText,
 } from "@supacode/client-runtime/work-log/item-detail";
-import { ExternalLinkIcon, GitBranchIcon, RotateCcwIcon } from "lucide-react";
+import { ExternalLinkIcon, GitBranchIcon } from "lucide-react";
 import { memo, Suspense, use, useMemo } from "react";
 
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
 import { resolveDiffThemeName } from "../../lib/diffRendering";
@@ -24,7 +23,6 @@ import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { Button } from "../ui/button";
 import ChatMarkdown from "../ChatMarkdown";
-import { InlineConfirmIcon, InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
 import { RenderErrorBoundary } from "../RenderErrorBoundary";
 import { resolveExternalWebLinkHref } from "./externalLinkContextMenu";
 
@@ -35,10 +33,6 @@ interface V2ItemInspectorProps {
   readonly workspaceRoot?: string | undefined;
   readonly onOpenThread: (threadId: ThreadId) => void;
   readonly onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
-  readonly onRollbackCheckpoint?: (input: {
-    readonly checkpointId: string;
-    readonly scopeId: string;
-  }) => void;
 }
 
 function JsonTokens({ text }: { readonly text: string }) {
@@ -196,24 +190,6 @@ function ToolCallBody(
   );
 }
 
-function CheckpointRollbackButton({ onRollback }: { readonly onRollback: () => void }) {
-  const confirm = useInlineConfirm<"rollback">();
-  const armed = confirm.armed === "rollback";
-  return (
-    <InlineConfirmTooltip
-      armed={armed}
-      tip="Roll back this thread to this checkpoint"
-      armedTip="Click again to roll back this thread to this checkpoint. This can't be undone."
-      render={<Button size="xs" variant="outline" {...confirm.bind("rollback", onRollback)} />}
-    >
-      <InlineConfirmIcon armed={armed}>
-        <RotateCcwIcon className="size-3.5" />
-      </InlineConfirmIcon>
-      <InlineConfirmLabel armed={armed} idle="Roll back" confirm="Confirm roll back" />
-    </InlineConfirmTooltip>
-  );
-}
-
 export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspectorProps) {
   const fetched = useFetchedTurnItem(props.projectedItem, props.environmentId);
   const item = fetched.item;
@@ -356,24 +332,6 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
             .map((step) => `${step.status === "completed" ? "✓" : "○"} ${step.text}`)
             .join("\n")}
         />
-      ) : null}
-
-      {item.type === "checkpoint" ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground">
-            {support.checkpoint?.status ?? item.status} · {item.files.length} files
-          </span>
-          {props.onRollbackCheckpoint && support.checkpoint?.status === "ready" ? (
-            <CheckpointRollbackButton
-              onRollback={() =>
-                props.onRollbackCheckpoint?.({
-                  checkpointId: item.checkpointId,
-                  scopeId: item.scopeId,
-                })
-              }
-            />
-          ) : null}
-        </div>
       ) : null}
 
       {item.type === "fork" ? (

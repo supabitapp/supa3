@@ -470,13 +470,6 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
         toolTitle: title ?? "Web search",
         toolData: item,
       };
-    case "checkpoint":
-      return {
-        ...common,
-        label: title ?? "Checkpoint captured",
-        changedFiles: item.files.map((file) => file.path),
-        toolData: item,
-      };
     case "system_notice":
       return {
         ...common,
