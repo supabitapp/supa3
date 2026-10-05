@@ -1,7 +1,7 @@
 import type { ServerProcessSignal } from "@supacode/contracts";
 
 import { useInlineConfirm } from "../../hooks/useInlineConfirm";
-import { InlineConfirmLabel } from "../InlineConfirm";
+import { InlineConfirmIcon } from "../InlineConfirm";
 import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -19,23 +19,21 @@ export function ProcessSignalActions({
   const killArmed = confirm.armed === "kill";
   return (
     <div className="flex items-center justify-end gap-1.5">
-      {killArmed ? null : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <InlineButton
-                disabled={disabled}
-                aria-label="Send SIGINT"
-                tone="muted"
-                onClick={() => onSignal("SIGINT")}
-              >
-                INT
-              </InlineButton>
-            }
-          />
-          <TooltipPopup side="top">Send SIGINT</TooltipPopup>
-        </Tooltip>
-      )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <InlineButton
+              disabled={disabled}
+              aria-label="Send SIGINT"
+              tone="muted"
+              onClick={() => onSignal("SIGINT")}
+            >
+              INT
+            </InlineButton>
+          }
+        />
+        <TooltipPopup side="top">Send SIGINT</TooltipPopup>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -45,7 +43,7 @@ export function ProcessSignalActions({
               tone="destructive"
               {...confirm.bind("kill", () => onSignal("SIGKILL"))}
             >
-              <InlineConfirmLabel armed={killArmed} idle="KILL" confirm="CONFIRM" />
+              <InlineConfirmIcon armed={killArmed}>KILL</InlineConfirmIcon>
             </InlineButton>
           }
         />
