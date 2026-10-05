@@ -7,10 +7,11 @@ on:
 jobs:
   preview:
     name: Mobile preview ${{ matrix.platform }}
+    # A same-repo head already means the author can push here, and fork PRs get
+    # no secrets. Do not gate on author_association: event payloads do not
+    # report members with private org membership as MEMBER.
     if: |
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.pull_request.author_association == 'OWNER' ||
-        github.event.pull_request.author_association == 'MEMBER') &&
       contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment') &&
       (github.event.action != 'labeled' || github.event.label.name == '🚀 Mobile Continuous Deployment')
     strategy:
