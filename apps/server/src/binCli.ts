@@ -12,7 +12,7 @@ import { appCommand } from "./cli/app.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
-import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
+import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { updateCommand } from "./cli/update.ts";
 import { uninstallCommand } from "./cli/uninstall.ts";
 import { serviceLauncherCommand } from "./cli/serviceLauncher.ts";
@@ -29,7 +29,7 @@ const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 export const makeCli = () =>
   Command.make("supacode", { ...sharedServerCommandFlags }).pipe(
     Command.withDescription("Run the Supacode server."),
-    Command.withHandler((flags) => runServerCommand(flags)),
+    Command.withHandler(runDefaultServerCommand),
     Command.withSubcommands([
       acpMcpBridgeCommand,
       acpMcpCallCommand,

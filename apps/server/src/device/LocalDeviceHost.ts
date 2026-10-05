@@ -4,11 +4,11 @@ import { deviceToolInstallMessage } from "@supacode/contracts";
  * The device host that is this machine.
  *
  * Runs expo-device-hub as a supervised child on a loopback port and starts the
- * agent-device daemon in HTTP mode under a Supacode-owned state directory. Both are
+ * agent-device daemon in HTTP mode under a T3-owned state directory. Both are
  * lazy: the device service requires explicit setup consent before it calls
  * ensureReady to install tools or start helper processes.
  *
- * The hub runs in its standalone mode (origin root). The Supacode proxy strips its
+ * The hub runs in its standalone mode (origin root). The T3 proxy strips its
  * own prefix, and the Device panel derives stream and socket URLs from the
  * prefix itself rather than from anything the hub prints.
  */
@@ -19,7 +19,11 @@ import {
   LOCAL_DEVICE_HOST_ID,
 } from "@supacode/contracts";
 import { waitForHttpReady } from "@supacode/shared/httpReadiness";
-import { HostProcessEnvironment, HostProcessPlatform } from "@supacode/shared/hostProcess";
+import {
+  HostProcessEnvironment,
+  HostProcessPlatform,
+  HostProcessUserId,
+} from "@supacode/shared/hostProcess";
 import {
   resolveNodeExecutable,
   type NodeRuntimeUnavailableError,
@@ -32,8 +36,8 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -199,6 +203,28 @@ const deviceHostEnvironment = (
     : environment;
 };
 
+const hubEnvironment = Effect.fn("LocalDeviceHost.hubEnvironment")(function* (
+  environment: NodeJS.ProcessEnv,
+) {
+  const env: NodeJS.ProcessEnv = { ...environment, FORCE_COLOR: "0", NO_COLOR: "1" };
+  const platform = yield* HostProcessPlatform;
+  const uid = yield* HostProcessUserId;
+  if (platform === "linux" && env.XDG_RUNTIME_DIR === undefined && uid !== undefined) {
+    // SSH sessions may omit the directory where the emulator publishes its gRPC token.
+    const runtimeDir = `/run/user/${uid}`;
+    const fs = yield* FileSystem.FileSystem;
+    const stat = yield* fs.stat(runtimeDir).pipe(Effect.option);
+    if (
+      stat._tag === "Some" &&
+      stat.value.type === "Directory" &&
+      Option.contains(stat.value.uid, uid)
+    ) {
+      env.XDG_RUNTIME_DIR = runtimeDir;
+    }
+  }
+  return env;
+});
+
 export const make = Effect.fn("LocalDeviceHost.make")(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const config = yield* ServerConfig.ServerConfig;
@@ -265,12 +291,6 @@ export const make = Effect.fn("LocalDeviceHost.make")(function* () {
       hubInstalled,
       agentDeviceInstalled,
     };
-  });
-
-  const hubEnvironment = (): NodeJS.ProcessEnv => ({
-    ...hostEnvironment,
-    FORCE_COLOR: "0",
-    NO_COLOR: "1",
   });
 
   const stopHub = (hub: HubProcess | undefined) =>
@@ -376,7 +396,10 @@ export const make = Effect.fn("LocalDeviceHost.make")(function* () {
             shell: false,
             stdout: "pipe",
             stderr: "pipe",
-            env: hubEnvironment(),
+            env: yield* hubEnvironment(hostEnvironment).pipe(
+              Effect.provideService(FileSystem.FileSystem, fs),
+              Effect.provideService(HostProcessPlatform, hostPlatform),
+            ),
           },
         ),
       )
@@ -426,8 +449,8 @@ export const make = Effect.fn("LocalDeviceHost.make")(function* () {
     );
 
   /**
-   * Restart the hub when it dies under us, with a doubling backoff so a hub
-   * that crashes on boot cannot spin.
+   * Restart the hub when it dies under us, with the same doubling backoff the
+   * relay connector uses so a hub that crashes on boot cannot spin.
    */
   const superviseHub = (hub: HubProcess, hubTool: DeviceToolPaths): Effect.Effect<void> =>
     Effect.gen(function* () {
@@ -766,4 +789,5 @@ export const __testing = {
   androidSdk,
   platformReason,
   deviceHostEnvironment,
+  hubEnvironment,
 };

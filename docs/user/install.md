@@ -25,6 +25,16 @@ mise exec -- vp run dev
 Open the pairing URL printed by the dev runner to connect the web app.
 See [development](../operations/development.md) for desktop and mobile builds.
 
+On Windows, in PowerShell, install the packaged command line with:
+
+```powershell
+irm https://next.supacode.sh/install.ps1 | iex
+```
+
+This puts `supacode` in `~/.local/bin`. If your shell reports `command not found`
+afterwards, add that directory to `PATH`. Set `SUPACODE_CHANNEL=nightly` to install
+the nightly train, or `SUPACODE_VERSION` to pin an exact version.
+
 ### Intel Macs
 
 The pre-commit hook tool is not available for Intel macOS. Install the project tools and run the

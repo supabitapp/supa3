@@ -4,8 +4,7 @@ import {
   ProviderDriverKind,
   type ProviderOptionDescriptor,
 } from "@supacode/contracts";
-import { getSpeedToggle } from "@supacode/client-runtime/provider-speed-toggle";
-import { buildTraitsTriggerLabel, buildUnavailableModelOptionDescriptors } from "./TraitsPicker";
+import { buildTraitsTriggerDisplay, buildUnavailableModelOptionDescriptors } from "./TraitsPicker";
 
 function selectDescriptor(
   id: string,
@@ -57,30 +56,136 @@ const CONTEXT_WINDOW = selectDescriptor(
 
 const CODEX = ProviderDriverKind.make("codex");
 
-function label(
-  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
-  ultrathinkPromptControlled = false,
-) {
-  return buildTraitsTriggerLabel({
+function display(descriptors: ReadonlyArray<ProviderOptionDescriptor>) {
+  return buildTraitsTriggerDisplay({
+    provider: CODEX,
     descriptors,
-    speedToggle: getSpeedToggle(CODEX, descriptors),
     primarySelectDescriptorId: "reasoningEffort",
-    ultrathinkPromptControlled,
+    ultrathinkPromptControlled: false,
   });
 }
 
-describe("buildTraitsTriggerLabel", () => {
-  it("leaves speed to the toggle", () => {
-    for (const fastMode of [false, true]) {
-      expect(label([EFFORT, fastModeDescriptor(fastMode), CONTEXT_WINDOW])).toBe("High · 1M");
-    }
-    for (const tier of ["default", "priority", "ultrafast"] as const) {
-      expect(label([EFFORT, serviceTierDescriptor(tier)])).toBe("High");
-    }
+describe("buildTraitsTriggerDisplay", () => {
+  it("omits fast mode from the label entirely when it is off", () => {
+    expect(display([EFFORT, fastModeDescriptor(false), CONTEXT_WINDOW])).toEqual({
+      label: "High · 1M",
+    });
+  });
+
+  it("pairs fast mode with reasoning before the context window", () => {
+    expect(display([EFFORT, fastModeDescriptor(true), CONTEXT_WINDOW])).toEqual({
+      label: "High Fast · 1M",
+    });
+    expect(display([EFFORT, CONTEXT_WINDOW, fastModeDescriptor(true)])).toEqual({
+      label: "High Fast · 1M",
+    });
+  });
+
+  it.each(["reasoningEffort", "reasoning", "effort", "variant", "thinking"])(
+    "pairs Fast with %s even when context is the primary select",
+    (id) => {
+      for (const speed of [fastModeDescriptor(true), serviceTierDescriptor("priority")]) {
+        expect(
+          buildTraitsTriggerDisplay({
+            provider: CODEX,
+            descriptors: [
+              selectDescriptor("profile", [{ id: "balanced", label: "Balanced" }], "balanced"),
+              CONTEXT_WINDOW,
+              { ...EFFORT, id },
+              speed,
+            ],
+            primarySelectDescriptorId: "profile",
+            ultrathinkPromptControlled: false,
+          }),
+        ).toEqual({ label: "Balanced · 1M · High Fast" });
+      }
+      expect(
+        buildTraitsTriggerDisplay({
+          provider: CODEX,
+          descriptors: [CONTEXT_WINDOW, { ...EFFORT, id }, serviceTierDescriptor("ultrafast")],
+          primarySelectDescriptorId: CONTEXT_WINDOW.id,
+          ultrathinkPromptControlled: false,
+        }),
+      ).toEqual({ label: "1M · High Ultrafast" });
+    },
+  );
+
+  it("pairs Cursor Fast with reasoning rather than the thinking toggle", () => {
+    expect(
+      buildTraitsTriggerDisplay({
+        provider: ProviderDriverKind.make("cursor"),
+        descriptors: [
+          { ...EFFORT, id: "reasoning" },
+          fastModeDescriptor(true),
+          { id: "thinking", label: "Thinking", type: "boolean", currentValue: true },
+        ],
+        primarySelectDescriptorId: "reasoning",
+        ultrathinkPromptControlled: false,
+      }),
+    ).toEqual({ label: "High Fast · Thinking On" });
+  });
+
+  it.each([true, false])("keeps boolean thinking %s independent of Fast", (currentValue) => {
+    const thinking = {
+      id: "thinking",
+      label: "Thinking",
+      type: "boolean" as const,
+      currentValue,
+    };
+    const label = `Thinking ${currentValue ? "On" : "Off"}`;
+    expect(display([thinking, fastModeDescriptor(true)])).toEqual({ label: `${label} · Fast` });
+    expect(display([thinking, { ...EFFORT, id: "reasoning" }, fastModeDescriptor(true)])).toEqual({
+      label: `${label} · High Fast`,
+    });
+    expect(display([thinking, fastModeDescriptor(false)])).toEqual({ label });
+  });
+
+  it("keeps speed separate when there is no reasoning descriptor", () => {
+    expect(display([CONTEXT_WINDOW, fastModeDescriptor(true)])).toEqual({ label: "1M · Fast" });
+  });
+
+  it.each(["Low", "Medium", "High", "Extra High", "Max", "Ultra"])(
+    "preserves %s reasoning with Fast across harnesses",
+    (label) => {
+      for (const provider of ["codex", "claudeAgent", "cursor"]) {
+        expect(
+          buildTraitsTriggerDisplay({
+            provider: ProviderDriverKind.make(provider),
+            descriptors: [
+              { ...EFFORT, options: [{ id: "effort", label }], currentValue: "effort" },
+              fastModeDescriptor(true),
+            ],
+            primarySelectDescriptorId: EFFORT.id,
+            ultrathinkPromptControlled: false,
+          }),
+        ).toEqual({ label: `${label} Fast` });
+      }
+    },
+  );
+
+  it("treats Codex standard and fast service tiers as fast mode states", () => {
+    expect(display([EFFORT, serviceTierDescriptor("default")])).toEqual({ label: "High" });
+    expect(display([EFFORT, serviceTierDescriptor("priority")])).toEqual({ label: "High Fast" });
+  });
+
+  it("keeps Codex Ultrafast distinct from Fast", () => {
+    expect(display([EFFORT, serviceTierDescriptor("ultrafast")])).toEqual({
+      label: "High Ultrafast",
+    });
+  });
+
+  it("uses Ultrafast without requiring a Fast tier", () => {
+    const descriptor = serviceTierDescriptor("ultrafast");
+    expect(
+      display([
+        EFFORT,
+        { ...descriptor, options: descriptor.options.filter(({ id }) => id !== "priority") },
+      ]),
+    ).toEqual({ label: "High Ultrafast" });
   });
 
   it("keeps other Codex service tiers in the label", () => {
-    expect(label([EFFORT, serviceTierDescriptor("flex")])).toBe("High · Flex");
+    expect(display([EFFORT, serviceTierDescriptor("flex")])).toEqual({ label: "High · Flex" });
   });
 
   it("keeps Standard as text for models without speed tiers", () => {
@@ -89,14 +194,17 @@ describe("buildTraitsTriggerLabel", () => {
       ...descriptor,
       options: descriptor.options.filter(({ id }) => id === "default" || id === "flex"),
     };
-    expect(label([EFFORT, nonSpeedDescriptor])).toBe("High · Standard");
-    expect(label([nonSpeedDescriptor])).toBe("Standard");
+    expect(display([EFFORT, nonSpeedDescriptor])).toEqual({ label: "High · Standard" });
+    expect(display([nonSpeedDescriptor])).toEqual({ label: "Standard" });
   });
 
   it("keeps the Codex service tier readable when it is the only trait", () => {
-    expect(label([serviceTierDescriptor("default")])).toBe("Standard");
-    expect(label([serviceTierDescriptor("priority")])).toBe("Fast");
-    expect(label([serviceTierDescriptor("ultrafast")])).toBe("Ultrafast");
+    expect(display([serviceTierDescriptor("default")])).toEqual({ label: "Standard" });
+    expect(display([serviceTierDescriptor("priority")])).toEqual({ label: "Fast" });
+  });
+
+  it("keeps Ultrafast readable when it is the only trait", () => {
+    expect(display([serviceTierDescriptor("ultrafast")])).toEqual({ label: "Ultrafast" });
   });
 
   it("keeps non-fastMode booleans as text labels", () => {
@@ -106,10 +214,22 @@ describe("buildTraitsTriggerLabel", () => {
       type: "boolean",
       currentValue: true,
     };
-    expect(label([EFFORT, thinking])).toBe("High · Thinking On");
+    expect(display([EFFORT, thinking])).toEqual({ label: "High · Thinking On" });
   });
 
-  it("stays blank when descriptors resolve to no label and there is no speed tier", () => {
+  it("falls back to a text label when fast mode is the only trait", () => {
+    expect(display([fastModeDescriptor(true)])).toEqual({ label: "Fast" });
+    expect(display([fastModeDescriptor(false)])).toEqual({ label: "Normal" });
+  });
+
+  it("does not add Fast to a model without a speed option", () => {
+    expect(display([EFFORT, CONTEXT_WINDOW])).toEqual({ label: "High · 1M" });
+  });
+
+  it("stays blank when descriptors resolve to no label and there is no fast mode", () => {
+    // A select with neither a currentValue nor an isDefault option yields no
+    // label. Without a fastMode descriptor present that must stay blank rather
+    // than falling through to a bogus "Normal".
     const unresolved: Extract<ProviderOptionDescriptor, { type: "select" }> = {
       id: "effort",
       label: "effort",
@@ -119,12 +239,18 @@ describe("buildTraitsTriggerLabel", () => {
         { id: "high", label: "High" },
       ],
     };
-    expect(label([unresolved])).toBe("");
-    expect(label([fastModeDescriptor(true)])).toBe("");
+    expect(display([unresolved])).toEqual({ label: "" });
   });
 
-  it("still renders the prompt-controlled ultrathink label", () => {
-    expect(label([EFFORT, serviceTierDescriptor("priority")], true)).toBe("Ultrathink");
+  it("still renders prompt-controlled ultrathink with Fast", () => {
+    expect(
+      buildTraitsTriggerDisplay({
+        provider: CODEX,
+        descriptors: [EFFORT, fastModeDescriptor(true)],
+        primarySelectDescriptorId: "reasoningEffort",
+        ultrathinkPromptControlled: true,
+      }),
+    ).toEqual({ label: "Ultrathink Fast" });
   });
 });
 
@@ -168,7 +294,7 @@ it("shows Unknown until a matching provider report provides Default", () => {
     options: [],
   };
   const input = {
-    speedToggle: null,
+    provider: ProviderDriverKind.make("opencode"),
     descriptors: [
       selectDescriptor(
         "variant",
@@ -183,11 +309,11 @@ it("shows Unknown until a matching provider report provides Default", () => {
     ultrathinkPromptControlled: false,
     modelSelection: selection,
   };
-  expect(buildTraitsTriggerLabel(input)).toBe("Unknown");
+  expect(buildTraitsTriggerDisplay(input).label).toBe("Unknown");
   expect(
-    buildTraitsTriggerLabel({
+    buildTraitsTriggerDisplay({
       ...input,
       reportedModelSelection: { ...selection, options: [{ id: "variant", value: "default" }] },
-    }),
+    }).label,
   ).toBe("Default");
 });

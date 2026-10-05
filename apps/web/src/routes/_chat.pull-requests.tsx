@@ -2,6 +2,9 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import { useShortcutModifierState } from "~/shortcutModifierState";
 import type { PullRequestSpeedActionResult } from "~/components/pullRequest/PullRequestSpeedActions";
+import { usePullRequestCloseBatch } from "~/components/pullRequest/usePullRequestActions";
+import { SidebarPointerSensor } from "~/components/Sidebar.pointer";
+import { resolveSidebarSweepKeys } from "~/components/Sidebar.logic";
 import { pullRequestHostOf, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import type {
   EnvironmentId,
@@ -39,7 +42,6 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -683,9 +685,7 @@ function PullRequestsRouteView() {
   const scopeKey = `${environmentKey}:${assignmentKey}:${search.state}:${search.involvement}:${scopedProjectId ?? ""}:${search.host ?? ""}:${search.draft ?? ""}:${search.review ?? ""}:${search.checks ?? ""}:${search.author ?? ""}:${search.labels?.join("\u0000") ?? ""}`;
   const filterKey = `${scopeKey}:${sentQuery}`;
   const statsScopeRef = useRef<PullRequestStatsScope>({ key: filterKey, policy: statsPolicy });
-  useLayoutEffect(() => {
-    statsScopeRef.current = { key: filterKey, policy: statsPolicy };
-  });
+  statsScopeRef.current = { key: filterKey, policy: statsPolicy };
   // Where the next slice carries on from, per repository within each environment, as that
   // environment handed it back. Sending it is what makes a second page cost a second page rather
   // than the whole list again — and a repository it does not name has run out and is not read a
@@ -709,9 +709,9 @@ function PullRequestsRouteView() {
   // Typing a search, or clearing one, starts the list again at its first page. Without this the
   // paging state from before the search is still filed under these filters and comes back with
   // it, so clearing would return to the slice that had been scrolled to rather than to the list.
-  if (page.key !== filterKey) {
+  useEffect(() => {
     setPage({ key: filterKey, size: PAGE_SIZE, cursors: null, regrown: [] });
-  }
+  }, [filterKey]);
 
   /** The listing input each environment is asked for, which differs only in its continuation. */
   const listTargets = useMemo(
@@ -796,6 +796,11 @@ function PullRequestsRouteView() {
     ],
   );
   const baselineQuery = usePullRequestList(baselineTargets);
+  const baselineEmpty =
+    baselineQuery.data?.entries.length === 0 &&
+    baselineQuery.data.errors.length === 0 &&
+    !baselineQuery.isPending &&
+    baselineQuery.error === null;
   const facetTargets = useMemo(() => {
     if (!filtersOpen) return NO_LIST_TARGETS;
     return environmentQueries.map(({ environmentId, projectIds }) => ({
@@ -868,6 +873,45 @@ function PullRequestsRouteView() {
   // from the first moment rather than the second: a button that stays live through the slow half
   // of its own work is a button that gets pressed again, and buys the whole cascade twice.
   const [invalidating, setInvalidating] = useState(false);
+  const refreshListAndStats = (
+    requestedStatsScope = statsScopeRef.current,
+    actedEnvironmentId?: EnvironmentId,
+  ) => {
+    refreshList(true, actedEnvironmentId);
+    const visible = visibleStatsKeys.current;
+    const batches = pullRequestStatsRefreshBatches({
+      requestedScope: requestedStatsScope,
+      currentScope: statsScopeRef.current,
+      entriesByKey: entriesByStatsKey.current,
+      candidateKeys: visible.key === requestedStatsScope.key ? visible.values : new Set(),
+      statsByRow: statsByRowRef.current,
+    });
+    if (batches !== null) {
+      setStatsTargetState({ key: requestedStatsScope.key, batches });
+      statsQuery.refresh(
+        batches
+          .filter(({ environmentId }) =>
+            actedEnvironmentId === undefined ? true : environmentId === actedEnvironmentId,
+          )
+          .map(({ environmentId, input }) => ({ environmentId, input })),
+      );
+    }
+  };
+  const refreshFromHost = async () => {
+    const requestedStatsScope = statsScopeRef.current;
+    setInvalidating(true);
+    try {
+      // Every environment the page is reading, since what the reader pressed refresh for is the
+      // list in front of them rather than whichever machine happens to be first.
+      await Promise.all(
+        queryEnvironmentIds.map((environmentId) => invalidate({ environmentId, input: {} })),
+      );
+    } finally {
+      setInvalidating(false);
+    }
+    refreshListAndStats(requestedStatsScope);
+    setDetailRefreshToken((token) => token + 1);
+  };
   const refreshing = invalidating || listQuery.isPending;
 
   // Every page size and every search is its own query, and a new one starts empty. The last
@@ -921,34 +965,43 @@ function PullRequestsRouteView() {
   };
   /** The detail panel's own writes, by row, so its failure takes back its own note. */
   const detailOverrideTokens = useRef(new Map<string, number | null>());
+  const speedActionRef = useRef<(result: PullRequestSpeedActionResult) => void>(() => {});
+  speedActionRef.current = ({ entry, action }) => {
+    // Some hosts accept a merge before it completes. Let the next host read declare it merged.
+    if (action !== "merge") overrideEntry(entry, action);
+  };
+  const onSpeedAction = useCallback((result: PullRequestSpeedActionResult) => {
+    speedActionRef.current(result);
+  }, []);
+  const onBatchClosed = useCallback((entry: EnvironmentPullRequestEntry) => {
+    speedActionRef.current({ entry, action: "close" });
+  }, []);
+  const { close: closeBatch, closingKeys } = usePullRequestCloseBatch(onBatchClosed);
   // A reload recreates the registry the queries live in, so with nothing held the page would
   // cold-start into skeletons even though almost every row is unchanged. The last answer for
   // this set of environments is kept across reloads and hydrated here as the carried rows: they
   // render at once — narrowed to the current filters like any carried answer — and the live read
   // reconciles them in place by key rather than replacing them with ghosts.
-  const [hydratedEnvironmentKey, setHydratedEnvironmentKey] = useState<string | null>(null);
-  if (hydratedEnvironmentKey !== environmentKey) {
-    setHydratedEnvironmentKey(environmentKey);
-    if (environmentKey.length > 0) {
-      setLoaded((current) => {
-        // Rows read from a different set of environments cannot even be narrowed — one of them may
-        // no longer be connected at all — so that set's own snapshot beats holding them.
-        if (current !== null && current.environmentKey === environmentKey) return current;
-        const snapshot = readPullRequestListSnapshot(
-          typeof window === "undefined" ? undefined : window.localStorage,
-          environmentKey,
-        );
-        if (snapshot === null) return null;
-        return {
-          environmentKey,
-          scope: snapshot.scope,
-          query: "",
-          data: snapshot.data,
-          ...(snapshot.partitions === undefined ? {} : { partitions: snapshot.partitions }),
-        };
-      });
-    }
-  }
+  useEffect(() => {
+    if (environmentKey.length === 0) return;
+    setLoaded((current) => {
+      // Rows read from a different set of environments cannot even be narrowed — one of them may
+      // no longer be connected at all — so that set's own snapshot beats holding them.
+      if (current !== null && current.environmentKey === environmentKey) return current;
+      const snapshot = readPullRequestListSnapshot(
+        typeof window === "undefined" ? undefined : window.localStorage,
+        environmentKey,
+      );
+      if (snapshot === null) return null;
+      return {
+        environmentKey,
+        scope: snapshot.scope,
+        query: "",
+        data: snapshot.data,
+        ...(snapshot.partitions === undefined ? {} : { partitions: snapshot.partitions }),
+      };
+    });
+  }, [environmentKey]);
   useEffect(() => {
     // Only once this query has settled. While a search is being swapped in or out the text has
     // already changed and the data has not, so recording them together would file the previous
@@ -956,20 +1009,21 @@ function PullRequestsRouteView() {
     // workspace after the search was cleared.
     if (!listQuery.data || listQuery.isPending) return;
     const data = listQuery.data;
-    // oxlint-disable-next-line react/set-state-in-effect
     setLoaded((current) => {
       // The partitions arrive on their own clock, so this records whichever have landed by
       // now and runs again when the rest do. Until then the ones already held for this scope
       // stay — hydrated or previously answered — rather than being dropped for a feed that
       // merely settled first.
       const partitions =
-        partitionsWanted && authoredQuery.data !== null && reviewingQuery.data !== null
-          ? { authored: authoredQuery.data.entries, reviewing: reviewingQuery.data.entries }
-          : current !== null &&
-              current.environmentKey === environmentKey &&
-              current.scope === scopeKey
-            ? current.partitions
-            : undefined;
+        partitionsWanted && baselineEmpty
+          ? { authored: [], reviewing: [] }
+          : partitionsWanted && authoredQuery.data !== null && reviewingQuery.data !== null
+            ? { authored: authoredQuery.data.entries, reviewing: reviewingQuery.data.entries }
+            : current !== null &&
+                current.environmentKey === environmentKey &&
+                current.scope === scopeKey
+              ? current.partitions
+              : undefined;
       // A search's answer is the search's, not the workspace's, so only unsearched lists
       // persist. Written here where the held partitions are in reach, so a feed settling
       // ahead of them cannot overwrite a stored snapshot that already had both groups.
@@ -1010,6 +1064,7 @@ function PullRequestsRouteView() {
     sentQuery,
     listQuery.data,
     listQuery.isPending,
+    baselineEmpty,
     partitionsWanted,
     authoredQuery.data,
     reviewingQuery.data,
@@ -1063,7 +1118,6 @@ function PullRequestsRouteView() {
   // own answer.
   useEffect(() => {
     if (!answered || listQuery.isPending || (listQuery.error && listQuery.data === null)) return;
-    // oxlint-disable-next-line react/set-state-in-effect
     setOrdered((previous) => {
       if (previous === null || previous.key !== filterKey) {
         return {
@@ -1302,6 +1356,11 @@ function PullRequestsRouteView() {
    */
   const groups = useMemo(() => {
     if (search.involvement !== "all") return [{ key: "others" as const, label: "", entries }];
+    // An empty whole-list answer also empties the priority groups. Their old snapshot must
+    // not restore the last merged rows after the partition reads are no longer mounted.
+    if (baselineEmpty) {
+      return groupPullRequestsByInvolvement(entries, viewers);
+    }
     // Until both partitions have answered, the snapshot's stand in — they are yesterday's
     // groups, but whole ones, where grouping the feed's first page locally loses every
     // authored row older than it. Once the live reads land they take over; with neither,
@@ -1331,6 +1390,7 @@ function PullRequestsRouteView() {
     return partitionPullRequestsWithPriority(entries, authored, reviewing);
   }, [
     hasLocalFilters,
+    baselineEmpty,
     localFilters,
     authoredQuery.data?.entries,
     entries,
@@ -1345,26 +1405,16 @@ function PullRequestsRouteView() {
 
   // Date sorts keep optional line-count reads near the viewport. Size and readiness sorts need
   // every loaded count before their order is final. Counts stay cached across both policies.
-  const statsEntriesByKey = useMemo(
-    () =>
-      new Map(
-        groups.flatMap((group) =>
-          group.entries.map((entry) => [pullRequestEntryKey(entry), entry] as const),
-        ),
-      ),
-    [groups],
+  const entriesByStatsKey = useRef<ReadonlyMap<string, EnvironmentPullRequestEntry>>(new Map());
+  entriesByStatsKey.current = new Map(
+    groups.flatMap((group) =>
+      group.entries.map((entry) => [pullRequestEntryKey(entry), entry] as const),
+    ),
   );
-  const entriesByStatsKey =
-    useRef<ReadonlyMap<string, EnvironmentPullRequestEntry>>(statsEntriesByKey);
-  useLayoutEffect(() => {
-    entriesByStatsKey.current = statsEntriesByKey;
-  });
   const visibleStatsKeys = useRef({ key: filterKey, values: new Set<string>() });
   const [statsByRow, setStatsByRow] = useState<PullRequestDiffStats>(() => new Map());
   const statsByRowRef = useRef(statsByRow);
-  useLayoutEffect(() => {
-    statsByRowRef.current = statsByRow;
-  });
+  statsByRowRef.current = statsByRow;
   const [statsTargetState, setStatsTargetState] = useState<{
     readonly key: string;
     readonly batches: ReadonlyArray<PullRequestStatsBatch>;
@@ -1382,9 +1432,7 @@ function PullRequestsRouteView() {
   const statsRows = useRef(new Set<HTMLDivElement>());
   const statsPending = useRef(true);
   const statsPolicyRef = useRef(statsPolicy);
-  useLayoutEffect(() => {
-    statsPolicyRef.current = statsPolicy;
-  });
+  statsPolicyRef.current = statsPolicy;
   const registerStatsRow = useCallback((node: HTMLDivElement | null) => {
     if (node === null || typeof IntersectionObserver === "undefined") return;
     statsRows.current.add(node);
@@ -1414,7 +1462,7 @@ function PullRequestsRouteView() {
     setStatsTargetState((current) => {
       const batches = current.key === filterKey ? current.batches : [];
       const added = pullRequestStatsRequestBatches({
-        entriesByKey: statsEntriesByKey,
+        entriesByKey: entriesByStatsKey.current,
         candidateKeys: visibleStatsKeys.current.values,
         policy: statsPolicy,
         activeBatches: batches,
@@ -1423,7 +1471,7 @@ function PullRequestsRouteView() {
       if (added.length === 0 && current.key === filterKey) return current;
       return { key: filterKey, batches: [...batches, ...added] };
     });
-  }, [filterKey, statsEntriesByKey, statsPolicy]);
+  }, [filterKey, groups, statsPolicy]);
   useEffect(() => {
     if (statsPolicy !== "visible" || typeof IntersectionObserver === "undefined") return;
     visibleStatsKeys.current = { key: filterKey, values: new Set() };
@@ -1472,9 +1520,7 @@ function PullRequestsRouteView() {
     };
   }, [filterKey, statsPolicy]);
   const statsQuery = usePullRequestListStats(statsTargets);
-  useLayoutEffect(() => {
-    statsPending.current = statsQuery.isPending;
-  });
+  statsPending.current = statsQuery.isPending;
   useEffect(() => {
     if (statsPolicy !== "visible" || statsQuery.isPending) return;
     const visible = visibleStatsKeys.current;
@@ -1487,65 +1533,11 @@ function PullRequestsRouteView() {
   // Adding or removing one row keys a fresh stats query with nothing in it yet, so the counts
   // are merged into what is already held rather than rebuilt: every count on screen stays until
   // its replacement arrives.
-  const stats = statsQuery.stats;
-  const [mergedStats, setMergedStats] = useState<typeof stats>(null);
-  if (mergedStats !== stats) {
-    setMergedStats(stats);
-    if (stats !== null) {
-      setStatsByRow((previous) => mergePullRequestDiffStats(previous, stats));
-    }
-  }
-  const refreshListAndStats = (
-    requestedStatsScope = statsScopeRef.current,
-    actedEnvironmentId?: EnvironmentId,
-  ) => {
-    refreshList(true, actedEnvironmentId);
-    const visible = visibleStatsKeys.current;
-    const batches = pullRequestStatsRefreshBatches({
-      requestedScope: requestedStatsScope,
-      currentScope: statsScopeRef.current,
-      entriesByKey: entriesByStatsKey.current,
-      candidateKeys: visible.key === requestedStatsScope.key ? visible.values : new Set(),
-      statsByRow: statsByRowRef.current,
-    });
-    if (batches !== null) {
-      setStatsTargetState({ key: requestedStatsScope.key, batches });
-      statsQuery.refresh(
-        batches
-          .filter(({ environmentId }) =>
-            actedEnvironmentId === undefined ? true : environmentId === actedEnvironmentId,
-          )
-          .map(({ environmentId, input }) => ({ environmentId, input })),
-      );
-    }
-  };
-  const speedActionRef = useRef<(result: PullRequestSpeedActionResult) => void>(() => {});
-  useLayoutEffect(() => {
-    speedActionRef.current = ({ entry, action }) => {
-      // Some hosts accept a merge before it completes. Let the next host read declare it merged.
-      if (action !== "merge") overrideEntry(entry, action);
-      setDetailRefreshToken((token) => token + 1);
-      refreshListAndStats(undefined, entry.environmentId);
-    };
-  });
-  const onSpeedAction = useCallback((result: PullRequestSpeedActionResult) => {
-    speedActionRef.current(result);
-  }, []);
-  const refreshFromHost = async () => {
-    const requestedStatsScope = statsScopeRef.current;
-    setInvalidating(true);
-    try {
-      // Every environment the page is reading, since what the reader pressed refresh for is the
-      // list in front of them rather than whichever machine happens to be first.
-      await Promise.all(
-        queryEnvironmentIds.map((environmentId) => invalidate({ environmentId, input: {} })),
-      );
-    } finally {
-      setInvalidating(false);
-    }
-    refreshListAndStats(requestedStatsScope);
-    setDetailRefreshToken((token) => token + 1);
-  };
+  useEffect(() => {
+    const stats = statsQuery.stats;
+    if (stats === null) return;
+    setStatsByRow((previous) => mergePullRequestDiffStats(previous, stats));
+  }, [statsQuery.stats]);
   const displayGroups = useMemo(() => {
     // The reader's pending answers go on here, after grouping: the authored and reviewing
     // groups are read separately from the feed, and a row closed a moment ago has to leave
@@ -1600,6 +1592,97 @@ function PullRequestsRouteView() {
   ]);
   /** What is actually on screen once the reader's pending answers are on the rows. */
   const shownCount = displayGroups.reduce((count, group) => count + group.entries.length, 0);
+  const [closeSweepKeys, setCloseSweepKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const closeSensorRef = useRef<SidebarPointerSensor | null>(null);
+  const closeSweepRows = useMemo(
+    () =>
+      new Map(
+        displayGroups.flatMap((group) =>
+          group.entries.map(
+            (entry) => [pullRequestEntryKey(entry), { entry, groupKey: group.key }] as const,
+          ),
+        ),
+      ),
+    [displayGroups],
+  );
+  const closeSweepRef = useRef({ displayGroups, closeSweepRows, closingKeys, closeBatch });
+  closeSweepRef.current = { displayGroups, closeSweepRows, closingKeys, closeBatch };
+  useEffect(() => () => closeSensorRef.current?.cancel(), [filterKey, search.q, sort]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || closeSensorRef.current === null) return;
+      event.preventDefault();
+      closeSensorRef.current.cancel();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+  const startCloseSweep = useCallback((entry: EnvironmentPullRequestEntry, event: PointerEvent) => {
+    closeSensorRef.current?.cancel();
+    const originKey = pullRequestEntryKey(entry);
+    const group = closeSweepRef.current.displayGroups.find((candidate) =>
+      candidate.entries.some((row) => pullRequestEntryKey(row) === originKey),
+    );
+    if (!group || closeSweepRef.current.closingKeys.has(originKey)) return;
+    const orderedKeys = closeSweepRef.current.displayGroups.flatMap((candidate) =>
+      candidate.entries.map(pullRequestEntryKey),
+    );
+    const canClose = (key: string) => {
+      const row = closeSweepRef.current.closeSweepRows.get(key);
+      return (
+        row?.groupKey === group.key &&
+        row.entry.state === "open" &&
+        row.entry.provider === "github" &&
+        !closeSweepRef.current.closingKeys.has(key) &&
+        !scrollRef.current?.querySelector(
+          `[data-pull-request-key="${CSS.escape(key)}"] [data-pull-request-action-pending="true"]`,
+        )
+      );
+    };
+    let sweptKeys: string[] = [];
+    let targetKey: string | null = null;
+    const sweepTo = (key: string) => {
+      if (key === targetKey) return;
+      targetKey = key;
+      sweptKeys = resolveSidebarSweepKeys(orderedKeys, originKey, key, canClose);
+      setCloseSweepKeys(new Set(sweptKeys));
+    };
+    closeSensorRef.current = new SidebarPointerSensor({
+      active: originKey,
+      event,
+      options: {
+        distance: 6,
+        onAttach: () => {},
+        onFinish: () => {
+          closeSensorRef.current = null;
+          setCloseSweepKeys(new Set());
+        },
+      },
+      onPending: () => {},
+      onStart: () => sweepTo(originKey),
+      onMove: ({ y }) => {
+        const viewport = scrollRef.current;
+        if (!viewport) return;
+        const bounds = viewport.getBoundingClientRect();
+        const visibleY = Math.min(Math.max(y, bounds.top), bounds.bottom - 1);
+        let key: string | null = null;
+        for (const row of viewport.querySelectorAll<HTMLElement>("[data-pull-request-key]")) {
+          if (key !== null && row.getBoundingClientRect().top > visibleY) break;
+          key = row.dataset.pullRequestKey ?? null;
+        }
+        if (key !== null) sweepTo(key);
+      },
+      onEnd: () => {
+        const batch = sweptKeys.filter(canClose).flatMap((key) => {
+          const row = closeSweepRef.current.closeSweepRows.get(key);
+          return row ? [row.entry] : [];
+        });
+        void closeSweepRef.current.closeBatch(batch);
+      },
+      onCancel: () => {},
+      onAbort: () => {},
+    });
+  }, []);
   const heldPullRequestsBySurface = useMemo(
     () =>
       new Map(
@@ -1686,23 +1769,17 @@ function PullRequestsRouteView() {
   // The provider list is the workspace's hosts, not the filtered ones, so switching to a host
   // cannot make the switcher that got you there disappear.
   const [hosts, setHosts] = useState<PullRequestListResult["providers"]>([]);
-  const [hostsFrom, setHostsFrom] = useState<{
-    readonly answered: typeof answered;
-    readonly host: string | undefined;
-  } | null>(null);
-  if (hostsFrom === null || hostsFrom.answered !== answered || hostsFrom.host !== search.host) {
-    setHostsFrom({ answered, host: search.host });
+  useEffect(() => {
     // Only from an answer to these filters. Rows carried over from the previous ones bring the
     // host summaries of the question they answered, and coming back from one host to all of them
     // would take the switcher's other hosts out of it on the strength of the narrowed answer.
-    if (answered !== null) {
-      // An unfiltered response is the full set of hosts. A filtered one only seeds the switcher
-      // when there is nothing to seed it with, which is a link that arrived already scoped.
-      setHosts((previous) =>
-        search.host === undefined || previous.length === 0 ? answered.providers : previous,
-      );
-    }
-  }
+    if (answered === null) return;
+    // An unfiltered response is the full set of hosts. A filtered one only seeds the switcher
+    // when there is nothing to seed it with, which is a link that arrived already scoped.
+    setHosts((previous) =>
+      search.host === undefined || previous.length === 0 ? answered.providers : previous,
+    );
+  }, [answered, search.host]);
   const showProvider = hosts.length > 1;
   // The workspace's own projects already name their hosts, so the row's shape is known before
   // the list is. Only its shape: which hosts can actually be read still comes from the server.
@@ -1802,7 +1879,7 @@ function PullRequestsRouteView() {
       ) : !pullRequestsSupported ? (
         <PullRequestsUnavailableState
           title="Pull requests unavailable"
-          error="Update your Supacode servers to browse pull requests."
+          error="Update your T3 Code servers to browse pull requests."
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} />
@@ -1834,7 +1911,7 @@ function PullRequestsRouteView() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="space-y-3">
+        <div className={cn("space-y-3", closeSweepKeys.size > 0 && "**:pointer-events-none")}>
           {displayGroups.map((group) => (
             <div key={group.key} className="space-y-0.5">
               {group.label ? <PullRequestGroupHeader group={group} /> : null}
@@ -1867,6 +1944,9 @@ function PullRequestsRouteView() {
                     onSelect={selectEntry}
                     speedMode={speedMode}
                     onActed={onSpeedAction}
+                    closing={closingKeys.has(entryKey)}
+                    sweeping={closeSweepKeys.has(entryKey)}
+                    onCloseSweepStart={startCloseSweep}
                   />
                 );
               })}
@@ -2135,7 +2215,7 @@ function PullRequestsRouteView() {
           <RightPanelTabs
             mode="inline"
             open={rightPanelState.isOpen}
-            widthStorageKey="supacode:pull-request-panel-width"
+            widthStorageKey="t3code:pull-request-panel-width"
             // Default to roughly half the viewport: the PR list needs more
             // room than a chat, so the 540px chat-preview default squashes
             // it. SSR has no window, so fall back to a reasonable width.
@@ -2466,7 +2546,7 @@ function PullRequestsColumn({
     );
     observer.observe(marker);
     return () => observer.disconnect();
-  }, [scrollRef]);
+  }, []);
   // Typing into the topbar search narrows the list, and a short enough list un-scrolls the
   // page — which dissolves the condensed topbar and unmounts the very input being typed in.
   // The two inputs are one search to the reader, so the focus follows the value into the
@@ -2497,11 +2577,11 @@ function PullRequestsColumn({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [condensed]);
-  // The fold-out is gone from the chrome; forgetting it open keeps the next condensing
-  // from starting with an empty expanded search nobody asked for.
-  if (!condensed && searchOpen) setSearchOpen(false);
   useEffect(() => {
     if (condensed) return;
+    // The fold-out is gone from the chrome; forgetting it open keeps the next condensing
+    // from starting with an empty expanded search nobody asked for.
+    setSearchOpen(false);
     if (!topbarSearchFocusedRef.current) return;
     topbarSearchFocusedRef.current = false;
     const input = inFlowSearchRef.current?.querySelector("input");

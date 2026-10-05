@@ -67,7 +67,6 @@ import {
   type ProviderUserInputAnswers,
   type ProviderThreadId,
   type ThreadId,
-  type ToolActivitySource,
 } from "@supacode/contracts";
 
 import * as Cause from "effect/Cause";
@@ -116,6 +115,7 @@ import type { ServerProviderShape } from "../../provider/Services/ServerProvider
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
 import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/SupacodeOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
+import { mcpToolPresentation, normalizeMcpText } from "../../provider/McpToolPresentation.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as IdAllocator from "../IdAllocator.ts";
 import { makeProviderFailure, makeProviderRetryTurnItem } from "../ProviderFailure.ts";
@@ -198,6 +198,7 @@ export const ClaudeProviderCapabilitiesV2 = {
     emitsTurnCompleted: true,
     supportsInterrupt: true,
     supportsActiveSteering: true,
+    activeSteeringInterruptsTools: true,
     supportsSteeringByInterruptRestart: false,
     supportsQueuedMessages: true,
     terminalStatusQuality: "strong",
@@ -1359,9 +1360,7 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
 // Stable per run attempt, so a replayed prompt offer matches its recording.
 // Claude echoes it back as user_message_uuid on the turn that answers it.
 export function claudePromptUuid(attemptId: string): NonNullable<SDKUserMessage["uuid"]> {
-  const hex = NodeCrypto.createHash("sha256")
-    .update(`supacode-claude-prompt:${attemptId}`)
-    .digest("hex");
+  const hex = NodeCrypto.createHash("sha256").update(`t3-claude-prompt:${attemptId}`).digest("hex");
   const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -1768,7 +1767,7 @@ function isClaudeBackgroundTasksChangedMessage(message: SDKMessage): boolean {
   );
 }
 
-// Claude opens every turn it runs with a root `init` frame. Outside a Supacode turn
+// Claude opens every turn it runs with a root `init` frame. Outside a T3 turn
 // that turn is a wake, and `init` comes 20-110 ms after the notification that
 // caused it but seconds before its first output (model thinking time).
 function isClaudeTurnStartMessage(message: SDKMessage): boolean {
@@ -2091,62 +2090,33 @@ function claudeToolUseBlocksFromAssistantMessage(
   return message.message.content.filter(isClaudeToolUseContentBlock);
 }
 
-interface ClaudeToolPresentation {
-  readonly title: string;
-  readonly toolSource?: ToolActivitySource;
-}
+type ClaudeToolPresentation = ReturnType<typeof mcpToolPresentation>;
 
-function boundedMetaText(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim().replace(/\s+/gu, " ");
-  return text.length > 0 && text.length <= maxLength ? text : undefined;
-}
-
-function metaHttpUrl(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length > 4096) return undefined;
-  try {
-    const url = new URL(value);
-    return (url.protocol === "https:" || url.protocol === "http:") && url.href.length <= 4096
-      ? url.href
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Claude Code's own label for each tool use (the MCP tool's title, or its
- * humanized name) plus the server's name and icon. The CLI sends these as
- * `tool_use_meta` on assistant frames; the SDK types do not declare it yet.
- */
 function claudeToolPresentationsFromAssistantMessage(
   message: SDKMessage,
 ): ReadonlyMap<string, ClaudeToolPresentation> {
   const presentations = new Map<string, ClaudeToolPresentation>();
   const meta = message.type === "assistant" ? Reflect.get(message, "tool_use_meta") : undefined;
   if (!Array.isArray(meta)) return presentations;
+  const toolNames = new Map(
+    claudeToolUseBlocksFromAssistantMessage(message).map((tool) => [
+      tool.id,
+      tool.name.replace(/^mcp__claude_ai_/u, "mcp__"),
+    ]),
+  );
   for (const entry of meta) {
     if (typeof entry !== "object" || entry === null) continue;
-    const id = boundedMetaText(Reflect.get(entry, "id"), 512);
-    const title = boundedMetaText(Reflect.get(entry, "display_name"), 160);
-    if (id === undefined || title === undefined) continue;
-    const serverName = boundedMetaText(Reflect.get(entry, "server_display_name"), 160);
-    const iconUrl = metaHttpUrl(Reflect.get(entry, "icon_url"));
-    presentations.set(id, {
-      title,
-      ...(serverName === undefined
-        ? {}
-        : {
-            toolSource: {
-              key: `mcp:${serverName.toLowerCase()}`,
-              name: serverName,
-              kind: "integration",
-              ...(iconUrl === undefined
-                ? {}
-                : { icon: { _tag: "themed-logo", logoUrl: iconUrl } as const }),
-            },
-          }),
-    });
+    const id = normalizeMcpText(Reflect.get(entry, "id"), 512);
+    if (id === undefined) continue;
+    presentations.set(
+      id,
+      mcpToolPresentation({
+        toolName: toolNames.get(id),
+        title: Reflect.get(entry, "display_name"),
+        serverDisplayName: Reflect.get(entry, "server_display_name"),
+        iconUrl: Reflect.get(entry, "icon_url"),
+      }),
+    );
   }
   return presentations;
 }
@@ -2192,6 +2162,24 @@ function claudeToolResultEntriesFromMessage(message: SDKMessage): ReadonlyArray<
             }),
     })),
   ];
+}
+
+// These wire fields are not yet declared by the SDK's SDKUserMessage type.
+const ClaudeToolResultMetadata = Schema.Struct({
+  tool_result_meta: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      non_execution_kind: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ),
+});
+const isClaudeToolResultMetadata = Schema.is(ClaudeToolResultMetadata);
+
+function claudeToolNonExecutionKind(message: SDKMessage, toolUseId: string) {
+  return isClaudeToolResultMetadata(message)
+    ? (message.tool_result_meta.find((meta) => meta.id === toolUseId)?.non_execution_kind ??
+        undefined)
+    : undefined;
 }
 
 function parentToolUseIdFromSdkMessage(message: SDKMessage): string | null {
@@ -3736,6 +3724,7 @@ export function makeClaudeAdapterV2(
           readonly startedAt: DateTime.Utc;
           readonly updatedAt: DateTime.Utc;
           readonly presentation: ClaudeToolPresentation | undefined;
+          readonly toolNonExecutionKind?: string;
         }) => {
           const completedAt = input.status === "running" ? null : input.updatedAt;
           const nodeId = idAllocator.derive.nodeFromProviderItem({
@@ -3783,6 +3772,9 @@ export function makeClaudeAdapterV2(
               })
             : undefined;
           const itemBase = {
+            ...(input.toolNonExecutionKind === undefined
+              ? {}
+              : { toolNonExecutionKind: input.toolNonExecutionKind }),
             id: turnItemId,
             threadId: input.threadId,
             runId: input.runId,
@@ -3880,6 +3872,9 @@ export function makeClaudeAdapterV2(
                   : {
                       ...itemBase,
                       type: "dynamic_tool",
+                      ...(input.presentation?.toolIcon === undefined
+                        ? {}
+                        : { toolIcon: input.presentation.toolIcon }),
                       ...(input.presentation?.toolSource === undefined
                         ? {}
                         : { toolSource: input.presentation.toolSource }),
@@ -6055,7 +6050,11 @@ export function makeClaudeAdapterV2(
               toolName: toolUse.name,
               toolInput: nativeToolInput,
               parentToolUseId: parentToolUseIdFromSdkMessage(message),
-              presentation: toolPresentations.get(toolUse.id),
+              presentation:
+                toolPresentations.get(toolUse.id) ??
+                mcpToolPresentation({
+                  toolName: toolUse.name.replace(/^mcp__claude_ai_/u, "mcp__"),
+                }),
             });
             const heldPlan = heldProposedPlansByToolUseId.get(toolUse.id);
             if (heldPlan !== undefined) {
@@ -6104,6 +6103,10 @@ export function makeClaudeAdapterV2(
                 parentToolUseId,
               }));
             const completedAt = yield* DateTime.now;
+            const toolNonExecutionKind = claudeToolNonExecutionKind(
+              message,
+              toolResult.tool_use_id,
+            );
             const artifacts = buildToolCallArtifacts({
               context,
               nativeItemId: toolCall.nativeItemId,
@@ -6116,7 +6119,13 @@ export function makeClaudeAdapterV2(
               parentNodeId: toolCall.parentNodeId,
               ordinal: toolCall.ordinal,
               output,
-              status: isClaudeToolResultError(toolResult) ? "failed" : "completed",
+              status:
+                toolNonExecutionKind === "cancelled"
+                  ? "cancelled"
+                  : isClaudeToolResultError(toolResult)
+                    ? "failed"
+                    : "completed",
+              ...(toolNonExecutionKind === undefined ? {} : { toolNonExecutionKind }),
               startedAt: toolCall.startedAt,
               updatedAt: completedAt,
               presentation: toolCall.presentation,
@@ -6274,7 +6283,7 @@ export function makeClaudeAdapterV2(
 
           // The converse of the drop above, and the case actually worth
           // watching: a positive-turn task-notification result settling a turn
-          // Supacode did not mark as a continuation. That is the hang fix working,
+          // T3 did not mark as a continuation. That is the hang fix working,
           // but it is also the shape a stale result would take if one ever
           // carried model turns, which nothing on the wire lets us rule out.
           if (
@@ -6971,11 +6980,12 @@ export function makeClaudeAdapterV2(
 
           const openedWithResume = (yield* Ref.get(openedNativeThreads)).has(nativeThreadId);
           // openedNativeThreads is per session instance and is lost when the
-          // provider session is idle-released. A prior persisted provider turn
-          // proves the native session already exists, so the query must resume
-          // it; reopening with a fixed session id makes the CLI fail fast with
-          // "Session ID ... is already in use".
-          const hasPersistedProviderTurn = turnInput.providerTurnOrdinal > 1;
+          // provider session is idle-released. A prior turn on this native id
+          // requires resume; sessionId would fail with "already in use".
+          // A fresh-session fallback keeps provider-thread history but binds
+          // a new native id, which must be created before it can be resumed.
+          const hasPersistedProviderTurn =
+            turnInput.nativeThreadHasTurns ?? turnInput.providerTurnOrdinal > 1;
           const shouldResume =
             resumeSessionAt !== undefined || openedWithResume || hasPersistedProviderTurn;
           const queryOptions = makeClaudeQueryOptions({
@@ -7827,3 +7837,35 @@ export const ClaudeAdapterV2Driver: ProviderAdapterDriver<
   defaultConfig: (): ClaudeSettings => DEFAULT_CLAUDE_SETTINGS,
   create: (input) => createClaudeAdapterV2(input, {}),
 };
+
+const makeDefaultClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2.layer")(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const hostEnvironment = yield* HostProcessEnvironment;
+  const idAllocator = yield* IdAllocator.IdAllocatorV2;
+  const queryRunner = yield* ClaudeAgentSdkQueryRunner;
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+
+  return makeClaudeAdapterV2({
+    instanceId: CLAUDE_DEFAULT_INSTANCE_ID,
+    settings: DEFAULT_CLAUDE_SETTINGS,
+    environment: hostEnvironment,
+    attachmentsDir: serverConfig.attachmentsDir,
+    fileSystem,
+    path,
+    idAllocator,
+    queryRunner,
+    continuationRequests,
+  });
+});
+
+const layer: Layer.Layer<
+  ProviderAdapter.ProviderAdapterV2,
+  never,
+  | ClaudeAgentSdkQueryRunner
+  | FileSystem.FileSystem
+  | IdAllocator.IdAllocatorV2
+  | Path.Path
+  | ServerConfig.ServerConfig
+> = Layer.effect(ProviderAdapter.ProviderAdapterV2, makeDefaultClaudeAdapterV2());

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useIsFocused, useNavigation } from "@react-navigation/native";
+import { StackActions, useIsFocused, useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
 import { summarizeSubagentStatuses } from "@supacode/client-runtime/state/subagent-display";
 import { isActiveSubagentStatus } from "@supacode/client-runtime/state/subagentRuntime";
@@ -120,7 +120,7 @@ export function ThreadSubagentGroup(props: {
             ) : null}
           </View>
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text numberOfLines={1} className="font-supacode-medium text-sm text-foreground">
+            <Text numberOfLines={1} className="font-t3-medium text-sm text-foreground">
               {label}
             </Text>
             <Text
@@ -158,11 +158,15 @@ export function ThreadSubagentGroup(props: {
                 }
                 disabled={threadId === null}
                 onPress={() => {
+                  // Push, not navigate: navigate reuses this Thread route, so back
+                  // would skip the parent thread.
                   if (threadId !== null)
-                    navigation.navigate("Thread", {
-                      environmentId: String(props.environmentId),
-                      threadId: String(threadId),
-                    });
+                    navigation.dispatch(
+                      StackActions.push("Thread", {
+                        environmentId: String(props.environmentId),
+                        threadId: String(threadId),
+                      }),
+                    );
                 }}
                 className="rounded-lg px-3 py-3 active:bg-subtle"
               >

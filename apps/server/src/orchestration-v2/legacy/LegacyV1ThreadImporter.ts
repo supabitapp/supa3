@@ -21,6 +21,7 @@ import {
   ThreadPullRequestLink,
   TurnItemId,
 } from "@supacode/contracts";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -30,7 +31,6 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as EventSink from "../EventSink.ts";
-import { makeKeyedSerialExecutor } from "../KeyedSerialExecutor.ts";
 import { randomUuidV4 } from "../RandomUuid.ts";
 
 const IMPORT_EVENT_PREFIX = "migration:v1";
@@ -123,7 +123,6 @@ const decodeModelSelection = Schema.decodeUnknownOption(ModelSelection);
 const decodeAttachments = Schema.decodeUnknownOption(Schema.Array(ChatAttachment));
 const decodePullRequests = Schema.decodeUnknownOption(Schema.Array(ThreadPullRequestLink));
 const decodeLinkedPullRequest = Schema.decodeUnknownOption(ThreadLinkedPullRequest);
-const decodeMessageContext = Schema.decodeUnknownSync(OrchestrationMessageContext);
 const decodeStoredThread = Schema.decodeUnknownOption(
   Schema.fromJsonString(OrchestrationV2AppThreadJson),
 );
@@ -260,7 +259,9 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
     text: row.text,
     ...(row.context_json
       ? {
-          context: decodeMessageContext(parseJson(row.context_json)),
+          context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
+            parseJson(row.context_json),
+          ),
         }
       : {}),
     attachments,
@@ -296,7 +297,9 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           text: row.text,
           ...(row.context_json
             ? {
-                context: decodeMessageContext(parseJson(row.context_json)),
+                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
+                  parseJson(row.context_json),
+                ),
               }
             : {}),
           attachments,
@@ -308,7 +311,9 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           text: row.text,
           ...(row.context_json
             ? {
-                context: decodeMessageContext(parseJson(row.context_json)),
+                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
+                  parseJson(row.context_json),
+                ),
               }
             : {}),
           streaming: false,
@@ -342,7 +347,7 @@ function chunks<A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const eventSink = yield* EventSink.EventSinkV2;
-  const transcriptImports = yield* makeKeyedSerialExecutor<ThreadId>();
+  const transcriptImports = yield* KeyedLock.make<ThreadId>();
 
   const listMessages = (threadId: ThreadId) =>
     sql<LegacyMessageRow>`
