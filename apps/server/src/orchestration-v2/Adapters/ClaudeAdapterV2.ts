@@ -946,6 +946,8 @@ export const CLAUDE_READ_ONLY_SUPACODE_MCP_ALLOWED_TOOLS: ReadonlyArray<string> 
   "mcp__supacode__supacode_environment_read",
   "mcp__supacode__supacode_queue_list",
   "mcp__supacode__supacode_queue_read",
+  "mcp__supacode__html_preview",
+  "mcp__supacode__html_render",
 ];
 
 // Claude Code aborts an HTTP MCP call after 60 s ("The operation timed out.")

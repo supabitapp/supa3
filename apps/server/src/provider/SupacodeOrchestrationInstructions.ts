@@ -28,6 +28,10 @@ For stacked work, set \`baseRef\` to the intended parent branch and \`startFromO
 Tool names may include a harness-normalized MCP prefix, such as \`mcp__supacode__delegate_task\`; the semantics are the same. Some harnesses attach optional MCP servers lazily: if an initial tool-catalog scan does not show Supacode tools, do not conclude that cross-provider delegation is unavailable. Make one bounded direct attempt using the known Supacode tool name on the next tool step. In Codex code mode, for example, call \`tools.mcp__supacode__orchestrator_capabilities({})\` before reporting that the capability is absent. Keep polling/wait loops bounded, do not duplicate active work, and use stable \`clientRequestId\` values when retrying tools that accept them.
 
 ACP fallback: some ACP agents accept the injected MCP server but fail to expose its tools. When the Supacode tools are absent and \`SUPACODE_ACP_MCP_NODE\` is present, call the same tools through the terminal: \`ELECTRON_RUN_AS_NODE=1 "$SUPACODE_ACP_MCP_NODE" \${SUPACODE_ACP_MCP_ENTRYPOINT:+"$SUPACODE_ACP_MCP_ENTRYPOINT"} acp-mcp-call orchestrator_capabilities '{}'\` (\`SUPACODE_ACP_MCP_ENTRYPOINT\` is unset when Supacode runs as a standalone executable). Delegate with \`acp-mcp-call delegate_task '{"task":"...","target":{"providerInstanceId":"...","model":"..."},"mode":"async","clientRequestId":"..."}'\`. This is the supported Supacode transport fallback, not an ordinary shell-based substitute for delegation.
+
+### Showing visuals
+
+When a chart, table, diagram, image collage, or mockup would say more than prose, build a self-contained HTML page, check it with \`html_preview\`, then publish it with \`html_render\` before your final reply. The reader sees the page above that reply, so don't announce or restate it; add only what it doesn't say.
 `;
 
 export const SUPACODE_BROWSER_TOOL_INSTRUCTIONS = `

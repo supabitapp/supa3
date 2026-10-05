@@ -91,6 +91,16 @@ describe("resolveSupacodeMcpToolPresentation", () => {
     }
   });
 
+  it("matches OpenCode 2's per-thread server names, whose thread ids hold underscores", () => {
+    expect(
+      resolveSupacodeMcpToolPresentation("supacode-thread_opencode2-adapter_delegate_task")
+        ?.displayName,
+    ).toBe("Delegate a child task");
+    expect(
+      resolveSupacodeMcpToolPresentation("supacode-thread_opencode2-adapter_not_a_tool"),
+    ).toBeNull();
+  });
+
   it("keeps unknown MCP tools on the generic renderer path", () => {
     expect(resolveSupacodeMcpToolPresentation("mcp__github__search_issues")).toBeNull();
     expect(resolveSupacodeMcpToolPresentation("supacode.not_a_real_tool")).toBeNull();

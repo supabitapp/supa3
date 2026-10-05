@@ -52,6 +52,7 @@ import { attachmentRelativePath } from "../../attachmentStore.ts";
 import * as ServerConfig from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { PreviewControlsToolkit } from "../../mcp/toolkits/previewControls/tools.ts";
+import { HtmlToolkit } from "../../mcp/toolkits/html/tools.ts";
 import { EnvironmentToolkit } from "../../mcp/toolkits/environment/tools.ts";
 import { ProjectToolkit } from "../../mcp/toolkits/project/tools.ts";
 import { WorktreeToolkit } from "../../mcp/toolkits/worktree/tools.ts";
@@ -657,6 +658,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       ...Object.values(ProjectToolkit.tools),
       ...Object.values(EnvironmentToolkit.tools),
       ...Object.values(PreviewControlsToolkit.tools),
+      ...Object.values(HtmlToolkit.tools),
     ]
       .flatMap((tool) =>
         Context.get(tool.annotations, Tool.Readonly) ? [`mcp__supacode__${tool.name}`] : [],
