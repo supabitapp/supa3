@@ -19,6 +19,7 @@ function withShortcut(label: string, shortcut: string | null) {
 
 export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCount: number }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const size = isMobile ? "default" : "compact";
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const startNewThreadInCurrentProject = useStartNewThreadInCurrentProject();
   const automationsActive = useLocation({
@@ -39,9 +40,10 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
   };
 
   return (
-    <SidebarMenu>
+    <SidebarMenu size={size}>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={size}
           disabled={projectGroupCount === 0}
           onClick={handleNewThread}
           {...withTooltip(withShortcut("New thread", newThreadShortcut) ?? "New thread")}
@@ -52,6 +54,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={size}
           // The palette is a dialog over the whole app; on narrow screens the
           // sidebar sheet closes first so the two never stack.
           onClick={() => {
@@ -68,6 +71,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={size}
           isActive={automationsActive}
           render={<Link to="/automations" onClick={closeMobileSidebar} />}
           {...withTooltip(
