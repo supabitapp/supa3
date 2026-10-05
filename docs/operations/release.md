@@ -61,18 +61,17 @@ bumps require a new store binary under the existing OTA fingerprint policy.
 
 ## Pull request macOS previews
 
-Labeling a PR `preview:mac` publishes a signed, notarized Apple Silicon DMG to the rolling
-`desktop-preview` prerelease, and works for fork PRs. The label is a one-shot request
-for the commit it is applied to: the trusted workflow removes it once the build is in hand, and later
-pushes do not build until a maintainer applies it again. Every signed preview is therefore a
-per-commit maintainer decision, which matters because the result carries the Developer ID signature.
-Vouching a contributor lets their labeled commits be signed; it is not a standing grant. The build is
-split so the Developer ID certificate never shares a job with PR code:
+PRs from trusted authors automatically publish a signed, notarized Apple Silicon DMG to the
+rolling `desktop-preview` prerelease when opened, reopened, or updated. This includes fork PRs.
+Apply `preview:mac` to request another build of the current commit. The trusted workflow consumes
+that label so it can be applied again; removing it does not disable automatic previews.
+The label does not bypass author trust. The build is split so the Developer ID certificate never
+shares a job with PR code:
 
 - `.github/workflows/desktop-macos-preview.yml` runs on `pull_request` with no secrets and builds
   only the JS bundle from the PR (the same `js-bundle` artifact `release.yml` produces).
 - `.github/workflows/desktop-macos-preview-publish.yml` runs on `workflow_run` from `main`. It
-  refuses unless the PR is open, still labeled, its head is the built commit, and the author is a
+  refuses unless the PR is open, its head is the built commit, and the author is a
   bot, a collaborator, or listed in `.github/VOUCHED.td` (read from the default branch, so a PR cannot vouch
   for itself). It then packages and signs the bundle through `release-desktop.yml` checked out at
   `main`, so packaging, native helpers, and the Electron/desktop dependencies come from `main`, not
@@ -84,8 +83,7 @@ and accepts only regular files under `server/dist` and `desktop/dist-electron`, 
 entries that lead to those roots. The artifact cannot
 overwrite packaging code or installed dependencies. The bundle is copied into the app, never executed,
 on the signing runner. The
-`pull_request_target` cleanup job in the publish workflow removes the download when the PR closes, or
-when the label is removed by hand before a build consumed it, and never checks out PR code.
+`pull_request_target` cleanup job in the publish workflow removes the download when the PR closes and never checks out PR code.
 
 ## Required release credentials
 
@@ -112,7 +110,18 @@ The release workflow builds static assets while desktop jobs run and uploads the
 
 The `cloudflare` fnox profile reads `CLOUDFLARE_API_TOKEN` from the `Cloudflare Hosting` item in the `Supacode CI` vault. The token needs Workers Scripts edit access in the configured account, plus Workers Routes edit and Zone read access for `supacode.sh`. Deployment jobs use the `release` GitHub environment. Wrangler manages the custom domains and their certificates.
 
-Same-repository pull requests labeled `preview:web` deploy to `preview-<number>.next.supacode.sh`. The `web-preview` GitHub environment supplies `OP_SERVICE_ACCOUNT_TOKEN` for those deployments. Open the URL posted on the pull request and pair a reachable server under Settings → Connections.
+Web previews deploy automatically for trusted authors when a PR opens, reopens, or receives new
+commits, including fork PRs. The trust policy is the same as for macOS previews: bots,
+collaborators, and contributors in the default branch's `.github/VOUCHED.td`. The existing
+`vouch:trusted`, `vouch:unvouched`, and `vouch:denounced` labels report that status; applying a
+label by hand does not grant trust. Apply `preview:web` to rebuild the current commit. The
+workflow consumes that optional label, and closing the PR deletes its deployment.
+
+PR builds produce static assets without hosting credentials. A separate workflow from the default
+branch checks author trust again, validates the artifact, and deploys to
+`preview-<number>.next.supacode.sh`. The `web-preview` GitHub environment supplies
+`OP_SERVICE_ACCOUNT_TOKEN` only to that deployment job. Open the URL posted on the pull request
+and pair a reachable server under Settings → Connections.
 
 ## Nightly builds
 

@@ -1,0 +1,151 @@
+name: Web Preview Publish
+
+# This workflow runs from the default branch. PR assets are validated data;
+# PR code and configuration never run with deployment credentials.
+on:
+  workflow_run:
+    workflows: [Web Preview]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Verify preview eligibility
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    # Skipped builds have no bundle. Keep their eligibility check cheap.
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      # Write only to consume the optional rebuild label.
+      pull-requests: write
+    outputs:
+      eligible: ${{ steps.preview.outputs.eligible }}
+      pr_number: ${{ steps.preview.outputs.pr_number }}
+      head_sha: ${{ steps.preview.outputs.head_sha }}
+      artifact_id: ${{ steps.preview.outputs.artifact_id }}
+    steps:
+      # Local action and validator code must come from the default-branch
+      # revision that owns this workflow, never the PR or its artifacts.
+      - name: Checkout trusted preview tools
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set .github/actions/resolve-preview .github/scripts
+          git checkout --detach FETCH_HEAD
+
+      - id: preview
+        uses: ./.github/actions/resolve-preview
+        with:
+          artifact-name: web-assets
+          preview-label: preview:web
+
+  publish:
+    name: Deploy or remove web preview
+    needs: resolve
+    if: >-
+      always() && !cancelled() &&
+      ((needs.resolve.result == 'success' && needs.resolve.outputs.eligible == 'true') ||
+      (github.event_name == 'pull_request_target' && github.event.action == 'closed'))
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 15
+    environment: web-preview
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    # Deploy and cleanup share a lock. Each checks current PR state so an old
+    # completion or close event cannot overwrite a newer preview.
+    concurrency:
+      group: web-preview-publish-${{ needs.resolve.outputs.pr_number || github.event.pull_request.number }}
+      cancel-in-progress: false
+    env:
+      PR_NUMBER: ${{ needs.resolve.outputs.pr_number || github.event.pull_request.number }}
+      HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted deployment code
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git checkout --detach FETCH_HEAD
+
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Download and validate static assets
+        if: github.event_name == 'workflow_run'
+        env:
+          ARTIFACT_ID: ${{ needs.resolve.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > "$RUNNER_TEMP/web-assets.zip"
+          python3 .github/scripts/stage-preview-bundle.py "$RUNNER_TEMP/web-assets.zip" "$RUNNER_TEMP/web-assets" --web
+
+      - name: Load hosting credentials
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: cloudflare
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - id: deploy
+        name: Reconcile preview with current PR state
+        run: node .github/scripts/publish-web-preview.cjs
+
+      - name: Update preview comment
+        if: steps.deploy.outputs.result != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RESULT: ${{ steps.deploy.outputs.result }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        with:
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const removed = process.env.RESULT === "removed";
+            const current = pull.state === "open" && pull.head.sha === process.env.HEAD_SHA;
+            const outdated = removed ? pull.state === "open" : !current;
+            if (outdated) {
+              core.info("Skipping outdated preview comment.");
+              return;
+            }
+            const marker = "<!-- web-preview-deploy -->";
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber, per_page: 100,
+            });
+            const existing = comments.find((comment) =>
+              comment.user?.login === "github-actions[bot]" && comment.body?.includes(marker));
+            if (removed && !existing) return;
+            const details = removed
+              ? ["The web preview was removed because this PR closed."]
+              : [
+                `${process.env.DEPLOYMENT_URL} (for ${process.env.HEAD_SHA.slice(0, 7)})`,
+                "",
+                "Open this exact URL and pair a reachable server under Settings → Connections.",
+                "New commits deploy automatically for trusted authors. Apply `preview:web` to rebuild the current commit.",
+              ];
+            const body = [marker, "### Web preview", "", ...details].join("\n");
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
+            }

@@ -6,17 +6,16 @@ name: Desktop macOS Preview
 # main, verifies the PR author is vouched, then packages, signs, notarizes, and
 # publishes the bundle without ever executing it.
 #
-# The label is a one-shot request for the commit it was applied to, not a
-# standing subscription: the trusted half removes it once this run completes,
-# and later pushes do not build until a maintainer applies it again. Each
-# signed preview is therefore an explicit per-commit decision.
+# Trusted authors get a preview on opening, reopening, and pushing to a PR.
+# preview:mac remains a one-shot manual rebuild request. The publish workflow
+# independently rechecks author trust before accessing signing credentials.
 #
 # Closing the PR is handled by the publish workflow too, since deleting the
 # download needs a write token.
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, reopened, synchronize, labeled]
 
 permissions:
   contents: read
@@ -24,12 +23,30 @@ permissions:
 concurrency:
   group: desktop-macos-preview-${{ github.event.pull_request.number }}
   # Adding an unrelated label skips the job and must not cancel a build.
-  cancel-in-progress: ${{ github.event.label.name == 'preview:mac' }}
+  cancel-in-progress: ${{ github.event.action != 'labeled' || github.event.label.name == 'preview:mac' }}
 
 jobs:
+  trust:
+    name: Check PR author trust
+    if: github.event.action != 'labeled' || github.event.label.name == 'preview:mac'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      status: ${{ steps.vouch.outputs.status }}
+    steps:
+      # No checkout: the action reads the vouch list from the default branch.
+      - id: vouch
+        uses: mitchellh/vouch/action/check-user@d66fa29a64600490892131ad87597c30c91fcac4 # v1
+        with:
+          user: ${{ github.event.pull_request.user.login }}
+          allow-fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build preview JS bundle
-    if: github.event.label.name == 'preview:mac'
+    needs: trust
+    if: contains(fromJSON('["bot", "collaborator", "vouched"]'), needs.trust.outputs.status)
     runs-on: depot-ubuntu-24.04-32
     timeout-minutes: 30
     steps:

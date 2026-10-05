@@ -1,4 +1,4 @@
-"""Stage an untrusted preview ZIP without letting it replace packaging code."""
+"""Stage an untrusted preview ZIP outside trusted packaging and deployment code."""
 
 import shutil
 import stat
@@ -19,7 +19,8 @@ MAX_EXPANDED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ENTRIES = 50_000
 
 
-def stage_bundle(archive: Path, destination: Path):
+def stage_bundle(archive: Path, destination: Path, *, web=False):
+    required_files = {"index.html"} if web else REQUIRED_FILES
     if archive.stat().st_size > MAX_ARCHIVE_BYTES:
         raise ValueError("Preview archive is too large")
     with zipfile.ZipFile(archive) as bundle:
@@ -43,7 +44,7 @@ def stage_bundle(archive: Path, destination: Path):
                 or any(ord(char) < 32 or ord(char) == 127 for char in name)
             ):
                 raise ValueError(f"Unsafe preview path: {entry.filename!r}")
-            allowed = any(name.startswith(root + "/") for root in ROOTS)
+            allowed = web or any(name.startswith(root + "/") for root in ROOTS)
             if entry.is_dir():
                 allowed |= any(root == name or root.startswith(name + "/") for root in ROOTS)
             if not allowed:
@@ -56,7 +57,7 @@ def stage_bundle(archive: Path, destination: Path):
             seen.add(name.casefold())
             if not entry.is_dir():
                 files.add(name)
-        if not REQUIRED_FILES <= files:
+        if not required_files <= files:
             raise ValueError("Preview bundle is missing required entry points")
         # Validate all names before writing anything. This is a fresh directory
         # outside the checkout; neither pre-existing links nor trusted files
@@ -73,4 +74,4 @@ def stage_bundle(archive: Path, destination: Path):
 
 
 if __name__ == "__main__":
-    stage_bundle(Path(sys.argv[1]), Path(sys.argv[2]))
+    stage_bundle(Path(sys.argv[1]), Path(sys.argv[2]), web="--web" in sys.argv[3:])
