@@ -1468,6 +1468,43 @@ it.effect("publishes the state each host read of detail and checks sees", () =>
   ),
 );
 
+it.effect("refreshing a pull request from one project refreshes every project's copy", () =>
+  Effect.gen(function* () {
+    let reads = 0;
+    const service = yield* makeService({
+      projects: [
+        project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" }),
+        // A worktree of the same repository is its own project.
+        project({ id: "p2", title: "web worktree", workspaceRoot: "/b", repository: "acme/web" }),
+      ],
+      providers: [
+        fakeProvider("github", {
+          getChangeRequest: () =>
+            Effect.sync(() => {
+              reads += 1;
+              return hostedChangeRequest("body");
+            }),
+        }),
+      ],
+    });
+    const worktree = {
+      projectId: "p2" as ProjectId,
+      repository: "acme/web",
+      number: 1,
+      allowStale: false,
+    };
+    yield* service.detail(worktree);
+    yield* service.detail(worktree);
+    assert.strictEqual(reads, 1);
+
+    yield* service.invalidate({
+      reference: { projectId: "p1" as ProjectId, repository: "acme/web", number: 1 },
+    });
+    yield* service.detail(worktree);
+    assert.strictEqual(reads, 2);
+  }),
+);
+
 it.effect("refreshes every reader before a queued merge confirmation finishes", () =>
   Effect.scoped(
     Effect.gen(function* () {

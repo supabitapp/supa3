@@ -2682,13 +2682,10 @@ export const make = Effect.gen(function* () {
   const projectEpochs = new Map<ProjectId, number>();
   let projectEpochFloor = 0;
   const REF_EPOCH_CAPACITY = 2_048;
+  // A pull request is the same object whichever project reads it (worktrees of one repository
+  // are separate projects), so refreshing it from one strands every project's copy.
   const refScope = (ref: PullRequestRef) =>
-    JSON.stringify([
-      ref.projectId,
-      ref.host?.toLowerCase() ?? "",
-      ref.repository.toLowerCase(),
-      ref.number,
-    ]);
+    JSON.stringify([ref.host?.toLowerCase() ?? "", ref.repository.toLowerCase(), ref.number]);
   const refEpoch = (ref: PullRequestRef) =>
     Math.max(
       projectEpochs.get(ref.projectId) ?? projectEpochFloor,
