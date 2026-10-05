@@ -71,6 +71,7 @@ import {
   type PullRequestUpdateInput,
   type SourceControlProviderInfo,
   type SourceControlProviderKind,
+  type ThreadPullRequestKey,
 } from "@supacode/contracts";
 import { detectSourceControlProviderFromRemoteUrl } from "@supacode/shared/sourceControl";
 
@@ -88,20 +89,16 @@ import {
 } from "./PullRequestProvider.ts";
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
+import { pullRequestSyncKey } from "./pullRequestSyncKey.ts";
 import * as ViewedFiles from "./pullRequestViewedFiles.ts";
 
 export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
 }
 
-/** The state a detail or checks read saw, so thread link snapshots can catch up to it. */
-export interface PullRequestStateObservation {
-  readonly host: string;
-  readonly repository: string;
-  readonly number: number;
+/** The state a detail or checks read got from the host, keyed like a thread's link to it. */
+export interface PullRequestSeenState extends ThreadPullRequestKey {
   readonly state: PullRequestState;
-  /** The host's update time; null for reads that do not carry one, such as checks. */
-  readonly updatedAt: string | null;
 }
 
 /**
@@ -217,9 +214,9 @@ export class PullRequestService extends Context.Service<
       never,
       Scope.Scope
     >;
-    /** States seen by detail and checks reads, which can learn of a merge before the sync sweep. */
-    readonly subscribeObservedStates: Effect.Effect<
-      Stream.Stream<PullRequestStateObservation>,
+    /** States detail and checks reads got from the host, which can learn of a merge first. */
+    readonly subscribeSeenStates: Effect.Effect<
+      Stream.Stream<PullRequestSeenState>,
       never,
       Scope.Scope
     >;
@@ -649,7 +646,7 @@ const observeRead = Effect.fnUntraced(function* <A, E, R>(read: Effect.Effect<A,
 
 export const make = Effect.gen(function* () {
   const mergedPullRequests = yield* PubSub.sliding<PullRequestMergeEvent>(64);
-  const observedStates = yield* PubSub.sliding<PullRequestStateObservation>(256);
+  const seenStates = yield* PubSub.sliding<PullRequestSeenState>(256);
   const pullRequestRefreshes = yield* SubscriptionRef.make(0);
   const registry = yield* PullRequestProviderRegistry.PullRequestProviderRegistry;
   const projects = yield* ProjectService.ProjectService;
@@ -925,6 +922,20 @@ export const make = Effect.gen(function* () {
       repository: project.repository,
     };
   });
+
+  /** Called on host reads only; a cached answer has nothing new to tell the thread links. */
+  const publishSeenState = (project: SupportedProject, number: number, state: PullRequestState) => {
+    const key = pullRequestSyncKey(
+      {
+        projectId: project.project.id,
+        host: project.host,
+        repository: project.repository,
+        number,
+      },
+      project.project.repositoryIdentity,
+    );
+    return key === null ? Effect.void : PubSub.publish(seenStates, { ...key, state });
+  };
 
   /**
    * What the signed-in account may do with this change request, asked of the host itself. Every
@@ -1693,7 +1704,13 @@ export const make = Effect.gen(function* () {
                 host: project.host,
                 number: input.number,
               })
-              .pipe(Effect.mapError(toPullRequestError("detail")), observeRead),
+              .pipe(
+                Effect.mapError(toPullRequestError("detail")),
+                Effect.tap((changeRequest) =>
+                  publishSeenState(project, input.number, changeRequest.state),
+                ),
+                observeRead,
+              ),
             viewerOf(project),
           ],
           { concurrency: 2 },
@@ -2922,7 +2939,10 @@ export const make = Effect.gen(function* () {
                   host: project.host,
                   number: input.number,
                 })
-                .pipe(Effect.mapError(toPullRequestError("checks"))),
+                .pipe(
+                  Effect.mapError(toPullRequestError("checks")),
+                  Effect.tap((checks) => publishSeenState(project, input.number, checks.state)),
+                ),
         ),
       );
     },
@@ -2991,16 +3011,6 @@ export const make = Effect.gen(function* () {
     if (next.updatedAt !== current.updatedAt) return next.updatedAt > current.updatedAt;
     return (next.observedAt ?? -Infinity) >= (current.observedAt ?? -Infinity);
   };
-  const observeState = (ref: PullRequestRef, state: PullRequestState, updatedAt: string | null) =>
-    ref.host === undefined
-      ? Effect.void
-      : PubSub.publish(observedStates, {
-          host: ref.host,
-          repository: ref.repository,
-          number: ref.number,
-          state,
-          updatedAt,
-        }).pipe(Effect.asVoid);
   const detail: PullRequestService["Service"]["detail"] = (input) => {
     const key = refCacheKey(input);
     // Record the summary from a host or cache read, not the stale value
@@ -3014,7 +3024,6 @@ export const make = Effect.gen(function* () {
           ? lastGoodSummary.record(key, summary)
           : Effect.void;
       }),
-      Effect.tap((value) => observeState(input, value.state, value.updatedAt)),
     );
     return input.allowStale === false
       ? read.pipe(Effect.tap((value) => lastGoodDetail.record(key, value)))
@@ -3305,7 +3314,7 @@ export const make = Effect.gen(function* () {
     subscribeMerges: PubSub.subscribe(mergedPullRequests).pipe(
       Effect.map((subscription) => Stream.fromSubscription(subscription)),
     ),
-    subscribeObservedStates: PubSub.subscribe(observedStates).pipe(
+    subscribeSeenStates: PubSub.subscribe(seenStates).pipe(
       Effect.map((subscription) => Stream.fromSubscription(subscription)),
     ),
     subscribeRefreshes: SubscriptionRef.changes(pullRequestRefreshes).pipe(
@@ -3313,13 +3322,7 @@ export const make = Effect.gen(function* () {
     ),
     refreshAfterTurn,
     detail: credentialCached(detail),
-    checks: credentialCached((input) =>
-      Cache.get(checksCache, refCacheKey(input)).pipe(
-        Effect.tap((value) =>
-          value === null ? Effect.void : observeState(input, value.state, null),
-        ),
-      ),
-    ),
+    checks: credentialCached((input) => Cache.get(checksCache, refCacheKey(input))),
     activity: credentialCached(activity),
     preview: credentialCached(preview),
     threadComments,

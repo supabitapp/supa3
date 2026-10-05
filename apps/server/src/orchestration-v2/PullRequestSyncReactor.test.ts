@@ -179,7 +179,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
   const summaryCalls = yield* Ref.make<ReadonlyArray<PullRequestRef>>([]);
   const stackCalls = yield* Ref.make<ReadonlyArray<PullRequestRef>>([]);
   const domainEvents = yield* Queue.unbounded<OrchestrationV2DomainEvent>();
-  const observedStates = yield* Queue.unbounded<PullRequestService.PullRequestStateObservation>();
+  const seenStates = yield* Queue.unbounded<PullRequestService.PullRequestSeenState>();
 
   const summary: PullRequestService.PullRequestService["Service"]["summary"] = (
     input,
@@ -217,7 +217,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
       summary,
       stack,
       invalidate: options.invalidate ?? (() => Effect.void),
-      subscribeObservedStates: Effect.succeed(Stream.fromQueue(observedStates)),
+      subscribeSeenStates: Effect.succeed(Stream.fromQueue(seenStates)),
     }),
     Layer.mock(ProjectionStore.ProjectionStoreV2)({
       // Mirrors the store's filter: active threads that have at least one link.
@@ -264,7 +264,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
     summaryCalls,
     stackCalls,
     domainEvents,
-    observedStates,
+    seenStates,
     layer: PullRequestSyncReactor.layer.pipe(Layer.provide(dependencies)),
   };
 });
@@ -831,12 +831,12 @@ describe("PullRequestSyncReactor", () => {
     ),
   );
 
-  it.effect("syncs a link as soon as another read observes a newer state", () =>
+  it.effect("syncs a link as soon as another read sees a new state, then tells readers", () =>
     Effect.scoped(
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(NOW));
         const state = yield* Ref.make<"open" | "merged">("open");
-        const invalidated = yield* Ref.make(0);
+        const invalidations = yield* Ref.make<ReadonlyArray<boolean>>([]);
         const fixture = yield* makeHarness({
           snapshot: makeSnapshot([
             makeThread("settled", {
@@ -846,83 +846,80 @@ describe("PullRequestSyncReactor", () => {
             }),
           ]),
           summary: (input) =>
-            Ref.get(state).pipe(
-              Effect.map((state) =>
-                makeSummary(input, { state, updatedAt: "2026-08-28T11:59:00.000Z" }),
-              ),
-            ),
-          invalidate: () => Ref.update(invalidated, (count) => count + 1),
+            Ref.get(state).pipe(Effect.map((state) => makeSummary(input, { state }))),
+          invalidate: (_input, options) =>
+            Ref.update(invalidations, (all) => [...all, options?.notifyReaders === true]),
         });
 
         yield* Effect.gen(function* () {
           const reactor = yield* startAndSweep(fixture);
-          assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 1);
+          assert.deepStrictEqual(yield* Ref.get(invalidations), []);
 
           // Merged in the browser; the settled thread's next sweep is fifteen minutes away.
           yield* Ref.set(state, "merged");
-          yield* Queue.offer(fixture.observedStates, {
+          yield* Queue.offer(fixture.seenStates, {
             host: "github.com",
             repository: "owner/repository",
             number: 5,
             state: "merged",
-            updatedAt: null,
           });
           yield* Queue.take(fixture.snapshotReads);
           yield* reactor.drain;
 
-          assert.strictEqual(yield* Ref.get(invalidated), 1);
           assert.strictEqual(
             (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state,
             "merged",
           );
+          // The requested read forgets the cached answer; the changed state then notifies readers.
+          assert.deepStrictEqual(yield* Ref.get(invalidations), [false, true]);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
   );
 
-  it("asks for a sync only when an observation contradicts the snapshot", () => {
-    const observation = (
-      state: "open" | "closed" | "merged",
-      updatedAt: string | null,
-    ): PullRequestService.PullRequestStateObservation => ({
-      host: "github.com",
-      repository: "owner/repository",
-      number: 1,
-      state,
-      updatedAt,
-    });
-    const open = { state: "open", updatedAt: "2026-08-28T12:00:00Z" } as const;
+  it.effect("ignores seen states its snapshots already hold, and merged snapshots", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("settled", {
+              settledOverride: "settled",
+              settledAt: "2026-08-21T00:00:00.000Z",
+              pullRequests: [
+                makeLink(5, { state: "open" }),
+                makeLink(6, { state: "merged" }),
+                makeLink(7, { state: "open" }),
+              ],
+            }),
+          ]),
+        });
 
-    assert.isFalse(PullRequestSyncReactor.observationNeedsSync(open, observation("open", null)));
-    assert.isTrue(PullRequestSyncReactor.observationNeedsSync(open, observation("merged", null)));
-    assert.isTrue(
-      PullRequestSyncReactor.observationNeedsSync(
-        open,
-        observation("closed", "2026-08-28T12:01:00Z"),
-      ),
-    );
-    // A cached checks read cannot say an open pull request reopened a closed one.
-    assert.isFalse(
-      PullRequestSyncReactor.observationNeedsSync(
-        { state: "closed", updatedAt: "2026-08-28T12:00:00Z" },
-        observation("open", null),
-      ),
-    );
-    // A cached read from before the snapshot was taken.
-    assert.isFalse(
-      PullRequestSyncReactor.observationNeedsSync(
-        { state: "closed", updatedAt: "2026-08-28T12:00:00Z" },
-        observation("open", "2026-08-28T11:00:00Z"),
-      ),
-    );
-    // Merged is final, whatever a stale read says.
-    assert.isFalse(
-      PullRequestSyncReactor.observationNeedsSync(
-        { state: "merged", updatedAt: "2026-08-28T12:00:00Z" },
-        observation("open", null),
-      ),
-    );
-  });
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          yield* Ref.set(fixture.summaryCalls, []);
+          const seen = (number: number, state: "open" | "closed") => ({
+            host: "github.com",
+            repository: "owner/repository",
+            number,
+            state,
+          });
+          yield* Queue.offerAll(fixture.seenStates, [
+            seen(5, "open"),
+            seen(6, "open"),
+            seen(7, "closed"),
+          ]);
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.summaryCalls)).map((call) => call.number),
+            [7],
+          );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
 
   it.effect("auto-links missing native stack layers and leaves dismissed ones alone", () =>
     Effect.scoped(
@@ -1048,7 +1045,8 @@ describe("PullRequestSyncReactor", () => {
           yield* Queue.take(fixture.snapshotReads);
           yield* reactor.drain;
 
-          assert.deepStrictEqual(yield* Ref.get(invalidated), [7]);
+          // The fresh read, then readers told of the merge.
+          assert.deepStrictEqual(yield* Ref.get(invalidated), [7, 7]);
           assert.deepStrictEqual(
             (yield* Ref.get(fixture.summaryCalls)).map((call) => call.number),
             [7],

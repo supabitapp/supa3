@@ -1434,34 +1434,35 @@ it.effect("publishes a merge for immediate settlement only after host confirmati
   ),
 );
 
-it.effect("publishes the state each detail and checks read observes", () =>
+it.effect("publishes the state each host read of detail and checks sees", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const detail = { ...hostedChangeRequest("merged"), state: "merged" as const };
       const service = yield* makeService({
         projects: [
           project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" }),
         ],
         providers: [
           fakeProvider("github", {
-            getChangeRequest: () => Effect.succeed({ ...detail, mergedAt: detail.updatedAt }),
+            getChangeRequest: () => Effect.succeed(hostedChangeRequest("open")),
             getChangeRequestChecks: () => Effect.succeed({ state: "merged", checks: [] }),
           }),
         ],
       });
-      const observed = yield* service.subscribeObservedStates;
-      const firstTwo = yield* Stream.runCollect(Stream.take(observed, 2)).pipe(
+      const seen = yield* service.subscribeSeenStates;
+      const firstTwo = yield* Stream.runCollect(Stream.take(seen, 2)).pipe(
         Effect.forkChild({ startImmediately: true }),
       );
       const reference = { projectId: "p1" as ProjectId, repository: "ACME/web", number: 1 };
 
       yield* service.detail({ ...reference, allowStale: false });
+      // Served from the cache, so it has nothing new to report.
+      yield* service.detail({ ...reference, allowStale: false });
       yield* service.checks(reference);
 
       const pullRequest = { host: "github.com", repository: "acme/web", number: 1 };
       assert.deepStrictEqual(Array.from(yield* Fiber.join(firstTwo)), [
-        { ...pullRequest, state: "merged", updatedAt: detail.updatedAt },
-        { ...pullRequest, state: "merged", updatedAt: null },
+        { ...pullRequest, state: "open" },
+        { ...pullRequest, state: "merged" },
       ]);
     }),
   ),
