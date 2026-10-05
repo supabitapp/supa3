@@ -195,6 +195,8 @@ export const make = Effect.gen(function* () {
     // Layers auto-linked this sweep, so two links of one thread that share a
     // stack do not both try to add the same sibling.
     const linkedThisSweep = new Set<string>();
+    // Set when a link's state changed, so readers are told once per sweep, not once per PR.
+    let readersStale = false;
     const persistence = yield* Semaphore.make(1);
 
     const syncEntry = Effect.fn("PullRequestSyncReactor.syncEntry")(function* (
@@ -310,28 +312,23 @@ export const make = Effect.gen(function* () {
       snapshotStates.set(key, [fields.state]);
       // A refresh requested while the host read was in flight belongs to the next sweep.
       if (requested.get(key) === generation) requested.delete(key);
-      yield* Effect.forEach(
-        entries,
-        (entry) =>
-          syncEntry(entry, fields, fetchedStack).pipe(
-            persistence.withPermits(1),
-            Effect.catchCause((cause) => {
-              if (!Cause.hasInterruptsOnly(cause)) retryStacks.add(key);
-              return logSkipped("pull request sync skipped", { threadId: entry.thread.id, key })(
-                cause,
-              );
-            }),
-          ),
-        { discard: true },
+      const stateChanged = yield* Effect.forEach(entries, (entry) =>
+        syncEntry(entry, fields, fetchedStack).pipe(
+          persistence.withPermits(1),
+          Effect.as(entry.link.snapshot !== null && entry.link.snapshot.state !== fields.state),
+          Effect.catchCause((cause) => {
+            if (!Cause.hasInterruptsOnly(cause)) retryStacks.add(key);
+            return logSkipped("pull request sync skipped", { threadId: entry.thread.id, key })(
+              cause,
+            ).pipe(Effect.as(false));
+          }),
+        ),
       );
       // Readers of the pull request's detail and checks refresh on their own timers; a changed
-      // state tells them to read it now, so every surface agrees with the thread badge.
-      if (
-        entries.some(
-          (entry) => entry.link.snapshot !== null && entry.link.snapshot.state !== fields.state,
-        )
-      ) {
-        yield* pullRequests.invalidate({ reference: ref }, { notifyReaders: true });
+      // state strands their cached answers, and the sweep then tells them to read again.
+      if (stateChanged.some(Boolean)) {
+        yield* pullRequests.invalidate({ reference: ref });
+        readersStale = true;
       }
     });
 
@@ -347,6 +344,7 @@ export const make = Effect.gen(function* () {
       // GitHub answers them in one request rather than one `gh pr view` apiece.
       { concurrency: 25, discard: true },
     );
+    if (readersStale) yield* pullRequests.notifyReaders;
   });
 
   const worker = yield* makeDrainableWorker((scope: "all" | "requested") =>

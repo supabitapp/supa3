@@ -281,6 +281,8 @@ export class PullRequestService extends Context.Service<
       input: PullRequestInvalidateInput,
       options?: { readonly notifyReaders?: boolean },
     ) => Effect.Effect<void>;
+    /** Tells every client reading pull requests to read them again; pair it with invalidations. */
+    readonly notifyReaders: Effect.Effect<void>;
   }
 >()("supacode/pullRequest/PullRequestService") {}
 
@@ -3182,6 +3184,9 @@ export const make = Effect.gen(function* () {
     return { stats: [...held, ...result.stats] };
   });
 
+  const notifyReaders = Effect.suspend(() =>
+    SubscriptionRef.set(pullRequestRefreshes, ++epochCounter),
+  );
   const invalidate: PullRequestService["Service"]["invalidate"] = Effect.fn(
     "PullRequestService.invalidate",
   )(function* (input, options) {
@@ -3209,9 +3214,7 @@ export const make = Effect.gen(function* () {
       viewersByHost.clear();
       yield* Cache.invalidateAll(viewerFlights);
     }
-    if (options?.notifyReaders) {
-      yield* SubscriptionRef.set(pullRequestRefreshes, ++epochCounter);
-    }
+    if (options?.notifyReaders) yield* notifyReaders;
   });
 
   const refreshAfterTurn: PullRequestService["Service"]["refreshAfterTurn"] = (projectId) =>
@@ -3341,6 +3344,7 @@ export const make = Effect.gen(function* () {
     labelCandidates,
     setLabels: invalidatedByMutation(setLabels),
     invalidate,
+    notifyReaders,
   });
 });
 

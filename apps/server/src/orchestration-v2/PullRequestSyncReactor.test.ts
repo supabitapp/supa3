@@ -180,6 +180,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
   const stackCalls = yield* Ref.make<ReadonlyArray<PullRequestRef>>([]);
   const domainEvents = yield* Queue.unbounded<OrchestrationV2DomainEvent>();
   const seenStates = yield* Queue.unbounded<PullRequestService.PullRequestSeenState>();
+  const readerNotifications = yield* Ref.make(0);
 
   const summary: PullRequestService.PullRequestService["Service"]["summary"] = (
     input,
@@ -218,6 +219,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
       stack,
       invalidate: options.invalidate ?? (() => Effect.void),
       subscribeSeenStates: Effect.succeed(Stream.fromQueue(seenStates)),
+      notifyReaders: Ref.update(readerNotifications, (count) => count + 1),
     }),
     Layer.mock(ProjectionStore.ProjectionStoreV2)({
       // Mirrors the store's filter: active threads that have at least one link.
@@ -265,6 +267,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
     stackCalls,
     domainEvents,
     seenStates,
+    readerNotifications,
     layer: PullRequestSyncReactor.layer.pipe(Layer.provide(dependencies)),
   };
 });
@@ -836,7 +839,6 @@ describe("PullRequestSyncReactor", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(NOW));
         const state = yield* Ref.make<"open" | "merged">("open");
-        const invalidations = yield* Ref.make<ReadonlyArray<boolean>>([]);
         const fixture = yield* makeHarness({
           snapshot: makeSnapshot([
             makeThread("settled", {
@@ -847,13 +849,11 @@ describe("PullRequestSyncReactor", () => {
           ]),
           summary: (input) =>
             Ref.get(state).pipe(Effect.map((state) => makeSummary(input, { state }))),
-          invalidate: (_input, options) =>
-            Ref.update(invalidations, (all) => [...all, options?.notifyReaders === true]),
         });
 
         yield* Effect.gen(function* () {
           const reactor = yield* startAndSweep(fixture);
-          assert.deepStrictEqual(yield* Ref.get(invalidations), []);
+          assert.strictEqual(yield* Ref.get(fixture.readerNotifications), 0);
 
           // Merged in the browser; the settled thread's next sweep is fifteen minutes away.
           yield* Ref.set(state, "merged");
@@ -870,8 +870,37 @@ describe("PullRequestSyncReactor", () => {
             (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state,
             "merged",
           );
-          // The requested read forgets the cached answer; the changed state then notifies readers.
-          assert.deepStrictEqual(yield* Ref.get(invalidations), [false, true]);
+          assert.strictEqual(yield* Ref.get(fixture.readerNotifications), 1);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("tells readers once per sweep, however many links changed state", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const state = yield* Ref.make<"open" | "merged">("open");
+        const invalidated = yield* Ref.make<ReadonlyArray<number>>([]);
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("active", {
+              pullRequests: [makeLink(5, { state: "open" }), makeLink(6, { state: "open" })],
+            }),
+          ]),
+          summary: (input) =>
+            Ref.get(state).pipe(Effect.map((state) => makeSummary(input, { state }))),
+          invalidate: ({ reference }) =>
+            Ref.update(invalidated, (numbers) => [...numbers, reference?.number ?? -1]),
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          yield* Ref.set(state, "merged");
+          yield* sweepAgain(fixture, reactor);
+
+          assert.deepStrictEqual((yield* Ref.get(invalidated)).toSorted(), [5, 6]);
+          assert.strictEqual(yield* Ref.get(fixture.readerNotifications), 1);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
