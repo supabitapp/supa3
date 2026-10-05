@@ -7,7 +7,7 @@ import {
 } from "@supacode/client-runtime/state/item-support";
 import type { EnvironmentId, ThreadId, TurnItemId } from "@supacode/contracts";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails } from "./threads";
 

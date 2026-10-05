@@ -1,6 +1,6 @@
 import type { OrchestrationV2ThreadProjection, ScopedThreadRef } from "@supacode/contracts";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import {
   deriveThreadQueueWorkflowState,

@@ -31,8 +31,8 @@ import {
   type ServerSettings as ContractServerSettings,
 } from "@supacode/contracts";
 import * as PlatformError from "effect/PlatformError";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { ChildProcessSpawner } from "effect/process";
 import { deepMerge } from "@supacode/shared/Struct";
 import { createModelCapabilities } from "@supacode/shared/model";
 import { applyServerSettingsPatch } from "@supacode/shared/serverSettings";

@@ -1,6 +1,6 @@
 import { scopeThreadRef, scopedThreadKey } from "@supacode/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@supacode/contracts";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { waitForAtomValue } from "../state/waitForAtomValue";

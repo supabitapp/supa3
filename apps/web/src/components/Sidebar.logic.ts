@@ -7,7 +7,7 @@ import {
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import type { ContextMenuItem } from "@supacode/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@supacode/contracts/settings";
-import type { AsyncResult } from "effect/unstable/reactivity";
+import type { AsyncResult } from "effect/reactivity";
 import { planPinnedReorder } from "@supacode/client-runtime/state/thread-sort";
 import {
   effectiveSnoozed,

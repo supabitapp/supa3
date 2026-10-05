@@ -5,7 +5,7 @@ import type {
   ThreadId,
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import type { AtomCommand } from "./runtime.ts";
 

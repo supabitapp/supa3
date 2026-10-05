@@ -4,7 +4,7 @@ import { deriveReportedModelSelection } from "@supacode/client-runtime/state/thr
 import type { ThreadTurnSubagents } from "@supacode/client-runtime/state/thread-subagents";
 import type { EnvironmentThread } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId, OrchestrationV2ThreadProjection, ThreadId } from "@supacode/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails, useEnvironmentThread } from "./threads";
 import { useThreadSelection } from "./use-thread-selection";

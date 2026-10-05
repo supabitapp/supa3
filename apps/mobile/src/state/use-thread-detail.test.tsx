@@ -7,7 +7,7 @@ import {
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { CommandId, EnvironmentId, MessageId } from "@supacode/contracts";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 

@@ -11,7 +11,7 @@ import {
 } from "@supacode/client-runtime/state/threads";
 import type { ScopedProjectRef, ScopedThreadRef, ServerConfig } from "@supacode/contracts";
 import type { EnvironmentId, OrchestrationV2ProjectedTurnItem } from "@supacode/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom } from "./server";

@@ -6,7 +6,7 @@ import {
   type OrchestrationV2ThreadProjection,
 } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { describe, test } from "vite-plus/test";
 
 import { issueRemoteWebSocketTicket } from "./authorization/remote.ts";

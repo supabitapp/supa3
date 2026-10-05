@@ -51,7 +51,7 @@ import { inlineCodeFilePathCandidate } from "@supacode/client-runtime/markdown-l
 import { mediaFileReference, mediaUrlReference } from "@supacode/client-runtime/media-reference";
 import { mediaKindFromPath, mediaMimeTypeFromExtension } from "@supacode/shared/filePreview";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import React, {
   Children,
   Suspense,

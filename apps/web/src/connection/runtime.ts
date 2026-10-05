@@ -6,7 +6,7 @@ import {
 } from "@supacode/client-runtime/state/threads";
 import { PullRequestDiffLoader } from "@supacode/client-runtime/state/pull-requests";
 import * as Layer from "effect/Layer";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import { runtimeContextLayer } from "../lib/runtime";
 import {
