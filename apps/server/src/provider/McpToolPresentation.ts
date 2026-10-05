@@ -38,15 +38,7 @@ export function mcpToolPresentation(input: {
     typeof input.toolName === "string" ? /^mcp__(.+?)__(.+)$/i.exec(input.toolName) : null;
   const server = normalizeMcpText(input.serverName ?? qualified?.[1] ?? input.serverDisplayName);
   const tool = normalizeMcpText(qualified?.[2] ?? input.toolName);
-  if (
-    server &&
-    tool &&
-    (resolveSupacodeMcpToolDefinition(`${server}.${tool}`) !== null ||
-      (server.toLowerCase() === "t3-code" &&
-        resolveSupacodeMcpToolDefinition(`supacode.${tool}`) !== null))
-  ) {
-    return {};
-  }
+  if (server && tool && resolveSupacodeMcpToolDefinition(`${server}.${tool}`)) return {};
   const title =
     normalizeMcpText(input.title) ??
     (server && tool ? normalizeMcpText(tool.replace(/[_-]+/gu, " ")) : undefined);

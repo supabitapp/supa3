@@ -290,7 +290,7 @@ function resolvePullRequestWorktreeLocalBranchName(
 
   const sanitizedHeadBranch = sanitizeBranchFragment(pullRequest.headBranch).trim();
   const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
-  return `t3code/pr-${pullRequest.number}/${suffix}`;
+  return `supacode/pr-${pullRequest.number}/${suffix}`;
 }
 
 export function parseRepositoryNameWithOwnerFromRemoteUrl(
@@ -2093,7 +2093,7 @@ export const make = Effect.gen(function* () {
 
     const bodyFile = path.join(
       tempDir,
-      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
+      `supacode-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
     );
     yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
       Effect.mapError(
@@ -2604,7 +2604,7 @@ export const make = Effect.gen(function* () {
           path: null,
         },
         {
-          // Best effort: a settings read failure falls back to the checkout's t3.json.
+          // Best effort: a settings read failure falls back to the checkout's supacode.json.
           submodules: yield* projectSettingsFor(input).pipe(
             Effect.map((settings) => settings.worktreeSubmodules),
             Effect.orElseSucceed(() => null),

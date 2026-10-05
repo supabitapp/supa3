@@ -1360,7 +1360,9 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
 // Stable per run attempt, so a replayed prompt offer matches its recording.
 // Claude echoes it back as user_message_uuid on the turn that answers it.
 export function claudePromptUuid(attemptId: string): NonNullable<SDKUserMessage["uuid"]> {
-  const hex = NodeCrypto.createHash("sha256").update(`t3-claude-prompt:${attemptId}`).digest("hex");
+  const hex = NodeCrypto.createHash("sha256")
+    .update(`supacode-claude-prompt:${attemptId}`)
+    .digest("hex");
   const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -1767,7 +1769,7 @@ function isClaudeBackgroundTasksChangedMessage(message: SDKMessage): boolean {
   );
 }
 
-// Claude opens every turn it runs with a root `init` frame. Outside a T3 turn
+// Claude opens every turn it runs with a root `init` frame. Outside a Supacode turn
 // that turn is a wake, and `init` comes 20-110 ms after the notification that
 // caused it but seconds before its first output (model thinking time).
 function isClaudeTurnStartMessage(message: SDKMessage): boolean {
@@ -6283,7 +6285,7 @@ export function makeClaudeAdapterV2(
 
           // The converse of the drop above, and the case actually worth
           // watching: a positive-turn task-notification result settling a turn
-          // T3 did not mark as a continuation. That is the hang fix working,
+          // Supacode did not mark as a continuation. That is the hang fix working,
           // but it is also the shape a stale result would take if one ever
           // carried model turns, which nothing on the wire lets us rule out.
           if (
@@ -7837,35 +7839,3 @@ export const ClaudeAdapterV2Driver: ProviderAdapterDriver<
   defaultConfig: (): ClaudeSettings => DEFAULT_CLAUDE_SETTINGS,
   create: (input) => createClaudeAdapterV2(input, {}),
 };
-
-const makeDefaultClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2.layer")(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const hostEnvironment = yield* HostProcessEnvironment;
-  const idAllocator = yield* IdAllocator.IdAllocatorV2;
-  const queryRunner = yield* ClaudeAgentSdkQueryRunner;
-  const serverConfig = yield* ServerConfig.ServerConfig;
-  const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
-
-  return makeClaudeAdapterV2({
-    instanceId: CLAUDE_DEFAULT_INSTANCE_ID,
-    settings: DEFAULT_CLAUDE_SETTINGS,
-    environment: hostEnvironment,
-    attachmentsDir: serverConfig.attachmentsDir,
-    fileSystem,
-    path,
-    idAllocator,
-    queryRunner,
-    continuationRequests,
-  });
-});
-
-const layer: Layer.Layer<
-  ProviderAdapter.ProviderAdapterV2,
-  never,
-  | ClaudeAgentSdkQueryRunner
-  | FileSystem.FileSystem
-  | IdAllocator.IdAllocatorV2
-  | Path.Path
-  | ServerConfig.ServerConfig
-> = Layer.effect(ProviderAdapter.ProviderAdapterV2, makeDefaultClaudeAdapterV2());

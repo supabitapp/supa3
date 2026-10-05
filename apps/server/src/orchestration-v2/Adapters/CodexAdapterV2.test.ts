@@ -3921,7 +3921,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       ),
   );
 
-  // "thread_unloaded": the thread was settled, so T3 unsubscribed and Codex
+  // "thread_unloaded": the thread was settled, so Supacode unsubscribed and Codex
   // unloaded it (killing its terminals) before Stop arrived.
   const backgroundStopCases = [true, false, "still_running", "thread_unloaded"] as const;
   const makeBackgroundStopTranscript = (terminated: (typeof backgroundStopCases)[number]) => {

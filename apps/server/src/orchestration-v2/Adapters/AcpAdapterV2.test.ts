@@ -1246,13 +1246,13 @@ describe("AcpAdapterV2", () => {
       );
       assert.deepEqual([...childMessages.values()], ["Checking the code.", "ONE"]);
       assert.equal(task?.prompt, "Run pwd, then reply ONE.");
-      // Terminal-fallback MCP calls in a child session keep their T3 identity.
+      // Terminal-fallback MCP calls in a child session keep their Supacode identity.
       assert.isTrue(
         items.some(
           (item) =>
             item.threadId === task?.childThreadId &&
             item.type === "dynamic_tool" &&
-            item.toolName === "t3-code.task_status",
+            item.toolName === "supacode.task_status",
         ),
       );
       const childMcp = items.find(
