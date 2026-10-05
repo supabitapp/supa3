@@ -7,7 +7,11 @@
  * both themes) and the single `animate-skeleton` pulse, applied once on the container so any
  * number of bars costs one opacity animation.
  */
-import type { PullRequestListEntry, PullRequestSummary } from "@supacode/contracts";
+import type {
+  PullRequestListEntry,
+  PullRequestSummary,
+  ScopedThreadRef,
+} from "@supacode/contracts";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -21,7 +25,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { readLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 
@@ -29,6 +32,7 @@ import { Button, InlineButton } from "../ui/button";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { PullRequestCopyableCode } from "./PullRequestCopyableCode";
+import { useOpenPullRequestHostLink } from "./useOpenPullRequestHostLink";
 import {
   PullRequestActorLabel,
   PullRequestDiffStat,
@@ -95,6 +99,7 @@ export function PullRequestListGhost({
  * another a moment later.
  */
 export function PullRequestDetailGhost({
+  threadRef = null,
   seed: entry,
   summary,
   actions,
@@ -106,6 +111,7 @@ export function PullRequestDetailGhost({
   onClose,
   onCheckoutError,
 }: {
+  threadRef?: ScopedThreadRef | null;
   seed?: PullRequestListEntry | null;
   summary?: PullRequestSummary | null;
   actions?: ReactNode;
@@ -118,6 +124,7 @@ export function PullRequestDetailGhost({
   onClose?: (() => void) | undefined;
   onCheckoutError?: ((error: Error) => void) | undefined;
 }) {
+  const openHostLink = useOpenPullRequestHostLink(threadRef);
   const seed = summary
     ? {
         ...entry,
@@ -168,7 +175,7 @@ export function PullRequestDetailGhost({
               <>
                 <span className="min-w-0 truncate font-medium">{seed.repository}</span>
                 <InlineButton
-                  onClick={() => void readLocalApi()?.shell.openExternal(seed.url)}
+                  onClick={(event) => void openHostLink(seed.url, { event })}
                   aria-label={`Open pull request #${seed.number} on host`}
                 >
                   <span className={statePresentation?.toneClassName}>#{seed.number}</span>

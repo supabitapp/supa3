@@ -66,7 +66,6 @@ import { usePullRequestDefaultMergeMethodResolver } from "./usePullRequestAction
 import { changeRequestRepositoryUrl, gitHubPullRequestBrowserUrl } from "~/lib/openPullRequestLink";
 import { usePreparePullRequestThreadAction } from "~/lib/sourceControlActions";
 import { cn } from "~/lib/utils";
-import { readLocalApi } from "~/localApi";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
 import { useProjects, useServerConfigs } from "~/state/entities";
 import { useEnvironments } from "~/state/environments";
@@ -113,6 +112,7 @@ import { DiffPanelLoadingState } from "../DiffPanelShell";
 import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import type { PullRequestAgentSelectionInput } from "./PullRequestCodeTab";
 import { openOnHostLabel, showPullRequestLinkContextMenu } from "./pullRequestLinkContextMenu";
+import { useOpenPullRequestHostLink } from "./useOpenPullRequestHostLink";
 import { PullRequestMarkdownContext } from "./PullRequestMarkdown";
 import { PullRequestComposer } from "./PullRequestComposer";
 import { PullRequestSummaryTab } from "./PullRequestSummaryTab";
@@ -306,6 +306,7 @@ function ActOnEnvironmentPicker({
 const openNumberContextMenu = (
   event: ReactMouseEvent,
   detail: { readonly url: string; readonly provider: string },
+  openLink: (url: string) => Promise<void>,
 ): void => {
   event.preventDefault();
   event.stopPropagation();
@@ -313,6 +314,7 @@ const openNumberContextMenu = (
     url: detail.url,
     openLabel: openOnHostLabel(detail.provider),
     position: { x: event.clientX, y: event.clientY },
+    openLink,
   });
 };
 
@@ -446,10 +448,9 @@ export function PullRequestDetailPanel({
   getShortcutContext: () => ShortcutMatchContext;
   onSelectPullRequest?: ((reference: PullRequestRef) => void) | undefined;
   /**
-   * The thread this panel sits beside, if any. Links that are not the pull
-   * request itself (check details, host permalinks) can open in that thread's
-   * in-app browser when the user has asked for it; the page has no thread, so
-   * there they always go to the system browser.
+   * The thread this panel sits beside, if any. Host pages and check details can
+   * open in its in-app browser when the user has asked for it. The page has no
+   * thread, so there they always go to the system browser.
    */
   threadRef?: ScopedThreadRef | null;
   reference: PullRequestRef;
@@ -488,6 +489,7 @@ export function PullRequestDetailPanel({
    */
   onBack?: (() => void) | undefined;
 }) {
+  const openHostLink = useOpenPullRequestHostLink(threadRef);
   const environmentConfigs = useServerConfigs();
   const projects = useProjects();
   const project = projects.find(
@@ -1633,6 +1635,7 @@ export function PullRequestDetailPanel({
   if (detailQuery.isPending && !detail) {
     return (
       <PullRequestDetailGhost
+        threadRef={threadRef}
         seed={matchingListEntry}
         summary={sharedSummary}
         checkoutCommand={checkoutCommand}
@@ -1713,7 +1716,7 @@ export function PullRequestDetailPanel({
                       repositoryUrl ? (
                         <button
                           type="button"
-                          onClick={() => void readLocalApi()?.shell.openExternal(repositoryUrl)}
+                          onClick={(event) => void openHostLink(repositoryUrl, { event })}
                           className="min-w-0 cursor-pointer truncate text-left font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                         >
                           {detail.repository}
@@ -1734,8 +1737,10 @@ export function PullRequestDetailPanel({
                     render={
                       <button
                         type="button"
-                        onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}
-                        onContextMenu={(event) => openNumberContextMenu(event, detail)}
+                        onClick={(event) => void openHostLink(detail.url, { event })}
+                        onContextMenu={(event) =>
+                          openNumberContextMenu(event, detail, openHostLink)
+                        }
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
                           statePresentation.toneClassName,
@@ -1789,8 +1794,10 @@ export function PullRequestDetailPanel({
                       <button
                         type="button"
                         tabIndex={condensed ? 0 : -1}
-                        onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}
-                        onContextMenu={(event) => openNumberContextMenu(event, detail)}
+                        onClick={(event) => void openHostLink(detail.url, { event })}
+                        onContextMenu={(event) =>
+                          openNumberContextMenu(event, detail, openHostLink)
+                        }
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
                           statePresentation.toneClassName,
@@ -2210,7 +2217,7 @@ export function PullRequestDetailPanel({
                       ) : null}
                     </>
                   ) : null}
-                  <MenuItem onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}>
+                  <MenuItem onClick={(event) => void openHostLink(detail.url, { event })}>
                     <ArrowUpRightIcon className="size-3.5" />
                     {openOnHostLabel(detail.provider)}
                   </MenuItem>
@@ -2775,6 +2782,7 @@ export function PullRequestDetailPanel({
       >
         {detailQuery.error && !detail ? (
           <PullRequestsUnavailableState
+            threadRef={threadRef}
             {...(isPullRequestNotFound(detailQuery.failure)
               ? {
                   title: `Pull request #${reference.number} not found`,

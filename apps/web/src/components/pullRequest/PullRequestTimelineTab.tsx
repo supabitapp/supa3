@@ -16,7 +16,6 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
-import { readLocalApi } from "~/localApi";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
@@ -49,6 +48,9 @@ import {
   pullRequestReviewOutcomeToneClassName,
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { useOpenPullRequestHostLink } from "./useOpenPullRequestHostLink";
+
+type OpenHostLink = ReturnType<typeof useOpenPullRequestHostLink>;
 
 /** What every comment on the timeline needs to react; only the subject differs between them. */
 interface ReactionSurface {
@@ -160,14 +162,14 @@ function ReviewStateBadge({ state }: { state: string }) {
   );
 }
 
-function OpenOnHostButton({ url, onOpen }: { url: string | null; onOpen: (url: string) => void }) {
+function OpenOnHostButton({ url, onOpen }: { url: string | null; onOpen: OpenHostLink }) {
   return url === null ? null : (
     <Button
       size="icon-xs"
       variant="ghost-muted"
       className="-mr-1 -mt-1 shrink-0"
       aria-label="Open activity on host"
-      onClick={() => onOpen(url)}
+      onClick={(event) => void onOpen(url, { event })}
     >
       <ExternalLinkIcon className="size-3" />
     </Button>
@@ -185,7 +187,7 @@ function ConversationCard({
   /** The remark behind this entry, only where this reader may rewrite it. */
   editable: PullRequestComment | null;
   cwd: string;
-  onOpen: (url: string) => void;
+  onOpen: OpenHostLink;
   reactions: ReactionSurface;
 }) {
   const [editing, setEditing] = useState(false);
@@ -300,7 +302,7 @@ function ConversationGroup({
   events: ReadonlyArray<PullRequestTimelineEvent>;
   editable: ReadonlyMap<string, PullRequestComment>;
   cwd: string;
-  onOpen: (url: string) => void;
+  onOpen: OpenHostLink;
   reactions: ReactionSurface;
 }) {
   const [open, setOpen] = useState(false);
@@ -457,7 +459,7 @@ function ReviewVerdictEvent({
   /** Commits landed after this verdict, so it speaks for code the branch no longer has. */
   stale: boolean;
   cwd: string;
-  onOpen: (url: string) => void;
+  onOpen: OpenHostLink;
   reactions: ReactionSurface;
 }) {
   return (
@@ -554,6 +556,7 @@ export function PullRequestTimelineTab({
   onOpenCommit: (oid: string) => void;
   onRefresh: () => void;
 }) {
+  const openOnHost = useOpenPullRequestHostLink(threadRef);
   const events = buildPullRequestTimeline(detail);
   const newestCommitAt = newestPullRequestCommitAt(detail.commits);
   const reactions: ReactionSurface = {
@@ -572,10 +575,6 @@ export function PullRequestTimelineTab({
   );
   const orderedEvents = order === "newest" ? events : events.toReversed();
   const rows = groupPullRequestTimelineConversations(orderedEvents);
-  const openOnHost = (url: string) => {
-    void readLocalApi()?.shell.openExternal(url);
-  };
-
   return (
     <div className="h-full overflow-y-auto px-4 py-5">
       <div className="mx-auto max-w-3xl">

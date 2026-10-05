@@ -1,9 +1,11 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
+import type { ScopedThreadRef } from "@supacode/contracts";
 import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { useOpenPullRequestHostLink } from "./useOpenPullRequestHostLink";
 
 export function PullRequestsUnavailableState({
   title = "Could not load pull requests",
@@ -11,13 +13,16 @@ export function PullRequestsUnavailableState({
   onRetry,
   refreshing = false,
   gitHubUrl,
+  threadRef = null,
 }: {
   title?: string;
   error: string;
   onRetry?: () => void;
   refreshing?: boolean;
   gitHubUrl?: string;
+  threadRef?: ScopedThreadRef | null;
 }) {
+  const openHostLink = useOpenPullRequestHostLink(threadRef);
   return (
     <Empty className="min-h-0 justify-center-safe overflow-y-auto [&>*]:shrink-0">
       <EmptyMedia variant="icon">
@@ -47,6 +52,10 @@ export function PullRequestsUnavailableState({
             <Button
               size="sm"
               variant="outline"
+              onClick={(event) => {
+                event.preventDefault();
+                void openHostLink(gitHubUrl, { event });
+              }}
               render={<a href={gitHubUrl} target="_blank" rel="noopener noreferrer" />}
             >
               <ExternalLinkIcon aria-hidden className="size-3.5" />
