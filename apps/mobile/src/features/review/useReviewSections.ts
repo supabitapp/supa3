@@ -17,6 +17,7 @@ import {
   getDefaultReviewSectionId,
   getReadyReviewCheckpoints,
   getReviewSectionIdForCheckpoint,
+  getReviewTurnDiffCacheId,
 } from "./reviewModel";
 import {
   setReviewAsyncError,
@@ -80,8 +81,10 @@ export function useReviewSections(input: {
         turnDiffById: reviewCache.turnDiffById,
         loadingTurnIds,
         loadingGitSections: diffPreview.isPending,
+        includeGitChanges: input.includeGitChanges === true,
       }),
     [
+      input.includeGitChanges,
       diffPreview.isPending,
       diffPreview.data?.sources,
       loadingTurnIds,
@@ -129,8 +132,10 @@ export function useReviewSections(input: {
   if (selectedSection?.kind === "turn") {
     activeCheckpoint = checkpointBySectionId[selectedSection.id] ?? activeCheckpoint;
   }
+  const includeGitChanges =
+    input.includeGitChanges === true && activeCheckpoint?.gitUpdate !== undefined;
   const activeSectionId = activeCheckpoint
-    ? getReviewSectionIdForCheckpoint(activeCheckpoint)
+    ? getReviewTurnDiffCacheId(activeCheckpoint, includeGitChanges)
     : null;
   const activeTurnDiff = useCheckpointDiff({
     environmentId: enabled ? (environmentId ?? null) : null,
@@ -139,8 +144,7 @@ export function useReviewSections(input: {
       enabled && activeCheckpoint ? Math.max(0, activeCheckpoint.checkpointTurnCount - 1) : null,
     toTurnCount: enabled ? (activeCheckpoint?.checkpointTurnCount ?? null) : null,
     ignoreWhitespace: false,
-    includeGitChanges:
-      input.includeGitChanges === true && activeCheckpoint?.gitUpdate !== undefined,
+    includeGitChanges,
   });
 
   useEffect(() => {

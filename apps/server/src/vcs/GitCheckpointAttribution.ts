@@ -78,33 +78,44 @@ interface TreeChange extends RawChange {
   readonly deletions: number;
 }
 
+const RAW_HEADER =
+  /^:\d{6} \d{6} [0-9a-f]{40}(?:[0-9a-f]{24})? [0-9a-f]{40}(?:[0-9a-f]{24})? [ADMT]$/;
+
 /**
- * Reads NUL-delimited `--raw` records, optionally followed by `--numstat`
- * records, from a diff without rename detection.
+ * Reads NUL-delimited `--raw` records, followed by one `--numstat` record per
+ * change when `withNumstat` is set, from a diff without rename detection.
+ * Returns undefined for output it cannot fully account for, since a change
+ * dropped here would vanish from the turn instead of being listed.
  */
-export function parseRawDiff(stdout: string): Map<string, TreeChange> {
-  const records = stdout.split("\0");
+export function parseRawDiff(
+  stdout: string,
+  withNumstat: boolean,
+): Map<string, TreeChange> | undefined {
+  if (stdout === "") return new Map();
+  if (!stdout.endsWith("\0")) return undefined;
+  const records = stdout.slice(0, -1).split("\0");
   const changes = new Map<string, TreeChange>();
   let index = 0;
   // A raw header always precedes its path, so a path starting with ":" is safe.
   while (records[index]?.startsWith(":") === true) {
     const header = records[index]!;
-    const path = records[index + 1] ?? "";
-    index += 2;
-    if (path.length === 0) continue;
+    const path = records[index + 1];
+    if (!RAW_HEADER.test(header) || !path || changes.has(path)) return undefined;
     changes.set(path, {
       transition: header.slice(1, header.lastIndexOf(" ")),
       additions: 0,
       deletions: 0,
     });
+    index += 2;
   }
+  if (records.length - index !== (withNumstat ? changes.size : 0)) return undefined;
   for (; index < records.length; index += 1) {
     const record = records[index]!;
     const counts = /^(\d+|-)\t(\d+|-)\t/.exec(record);
-    if (!counts) continue;
+    if (!counts) return undefined;
     const path = record.slice(counts[0].length);
     const change = changes.get(path);
-    if (change === undefined) continue;
+    if (change === undefined) return undefined;
     changes.set(path, {
       ...change,
       additions: counts[1] === "-" ? 0 : Number(counts[1]),

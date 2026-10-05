@@ -147,6 +147,47 @@ describe("buildReviewSectionItems", () => {
     expect(items[1]?.gitUpdate).toEqual(gitUpdate);
   });
 
+  it("keeps a turn's patch with Git changes apart from its own patch", () => {
+    const build = (includeGitChanges: boolean) =>
+      buildReviewSectionItems({
+        checkpoints: [
+          makeCheckpoint({
+            runId: RunId.make("run-2"),
+            checkpointTurnCount: 2,
+            completedAt: "2026-04-02T00:00:00.000Z",
+            gitUpdate: {
+              fromBranch: "main",
+              toBranch: "feature",
+              fromHead: "a".repeat(40),
+              toHead: "b".repeat(40),
+              fileCount: 3,
+              additions: 3,
+              deletions: 0,
+            },
+          }),
+          makeCheckpoint({
+            runId: RunId.make("run-1"),
+            checkpointTurnCount: 1,
+            completedAt: "2026-04-01T00:00:00.000Z",
+          }),
+        ],
+        gitSections: [],
+        turnDiffById: { "turn:2": "own", "turn:2:git": "with git", "turn:1": "first" },
+        loadingTurnIds: {},
+        loadingGitSections: false,
+        includeGitChanges,
+      }).map((item) => [item.id, item.diff]);
+
+    expect(build(false)).toEqual([
+      ["turn:2", "own"],
+      ["turn:1", "first"],
+    ]);
+    expect(build(true)).toEqual([
+      ["turn:2", "with git"],
+      ["turn:1", "first"],
+    ]);
+  });
+
   it("falls back to the first turn without git sections", () => {
     const items = buildReviewSectionItems({
       checkpoints: [

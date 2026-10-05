@@ -412,6 +412,15 @@ export function getReviewSectionIdForCheckpoint(
   return `turn:${checkpoint.checkpointTurnCount}`;
 }
 
+/** Cache key for a turn's patch, kept apart when it includes a git update's changes. */
+export function getReviewTurnDiffCacheId(
+  checkpoint: Pick<ThreadCheckpointSummary, "checkpointTurnCount" | "gitUpdate">,
+  includeGitChanges: boolean,
+): string {
+  const id = getReviewSectionIdForCheckpoint(checkpoint);
+  return includeGitChanges && checkpoint.gitUpdate !== undefined ? `${id}:git` : id;
+}
+
 export function getReadyReviewCheckpoints(
   checkpoints: ReadonlyArray<ThreadCheckpointSummary>,
 ): ReadonlyArray<ThreadCheckpointSummary> {
@@ -428,17 +437,18 @@ export function buildReviewSectionItems(input: {
   readonly turnDiffById: Readonly<Record<string, string | undefined>>;
   readonly loadingTurnIds: Readonly<Record<string, boolean | undefined>>;
   readonly loadingGitSections: boolean;
+  readonly includeGitChanges?: boolean;
 }): ReadonlyArray<ReviewSectionItem> {
   const turnItems = getReadyReviewCheckpoints(input.checkpoints).map<ReviewSectionItem>(
     (checkpoint) => {
-      const id = getReviewSectionIdForCheckpoint(checkpoint);
+      const cacheId = getReviewTurnDiffCacheId(checkpoint, input.includeGitChanges === true);
       return {
-        id,
+        id: getReviewSectionIdForCheckpoint(checkpoint),
         kind: "turn",
         title: checkpointTitle(checkpoint),
         subtitle: checkpointSubtitle(checkpoint),
-        diff: input.turnDiffById[id] ?? null,
-        isLoading: input.loadingTurnIds[id] === true,
+        diff: input.turnDiffById[cacheId] ?? null,
+        isLoading: input.loadingTurnIds[cacheId] === true,
         ...(checkpoint.gitUpdate === undefined ? {} : { gitUpdate: checkpoint.gitUpdate }),
       };
     },

@@ -1282,7 +1282,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       function* (input) {
         const operation = "GitVcsDriver.checkpoints.attributeCheckpointChanges";
         // Plumbing diff-tree ignores diff.relative, diff.renames, and textconv config,
-        // so both diffs report the same repository-relative paths.
+        // so both diffs report the same repository-relative paths. Every read here
+        // fails rather than truncates: partial output would drop changes or turn
+        // commits, and either one could hide an edit the turn made.
         const diffTree = (from: string, to: string, numstat: boolean) =>
           execute({
             operation,
@@ -1298,7 +1300,23 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
               `${to}^{commit}`,
             ],
             maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
-          }).pipe(Effect.map((result) => GitCheckpointAttribution.parseRawDiff(result.stdout)));
+            outputMode: "error",
+          }).pipe(
+            Effect.flatMap((result) => {
+              const changes = GitCheckpointAttribution.parseRawDiff(result.stdout, numstat);
+              return changes === undefined
+                ? Effect.fail(
+                    new VcsProcessExitError({
+                      operation,
+                      command: "git diff-tree",
+                      cwd: input.cwd,
+                      exitCode: 0,
+                      detail: "git diff-tree returned output attribution could not parse.",
+                    }),
+                  )
+                : Effect.succeed(changes);
+            }),
+          );
         const [tree, head, history] = yield* Effect.all(
           [
             diffTree(input.fromCheckpointRef, input.toCheckpointRef, true),
@@ -1315,6 +1333,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                 `^${input.fromHead}`,
               ],
               maxOutputBytes: 2 * 1024 * 1024,
+              outputMode: "error",
             }),
           ],
           { concurrency: "unbounded" },
@@ -1352,6 +1371,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                 ],
                 stdin: `${commits.join("\n")}\n`,
                 maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+                outputMode: "error",
               }).pipe(
                 Effect.map((result) =>
                   combined
