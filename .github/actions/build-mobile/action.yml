@@ -1,4 +1,4 @@
-name: Build mobile
+name: Build mobile on Depot
 description: Compile and sign a mobile binary on the current runner
 inputs:
   platform:

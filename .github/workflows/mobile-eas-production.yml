@@ -164,7 +164,7 @@ jobs:
           node --input-type=module -e '
             import fs from "node:fs";
             const include = [
-              { platform: "ios", runner: "macos-26", legacy: false },
+              { platform: "ios", runner: "depot-macos-26", legacy: false },
               { platform: "android", runner: "depot-ubuntu-24.04-8", legacy: false },
               { platform: "ios", runner: "depot-ubuntu-24.04-8", legacy: true },
             ].filter(({ platform, legacy }) =>
@@ -218,7 +218,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
       - id: history
-        name: Find completed Actions builds
+        name: Find completed Depot builds
         uses: actions/github-script@v8
         env:
           MOBILE_VERSION: ${{ steps.config.outputs.version }}
@@ -245,7 +245,7 @@ jobs:
           echo "version_exists=$([[ "$version_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "compatible=$([[ "$compatible_count" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - id: build
-        name: Compile and sign
+        name: Compile and sign on Depot
         if: ${{ !matrix.legacy && (inputs.mode == 'build' || (github.event_name == 'push' && steps.history.outputs.version_exists != 'true' && steps.legacy.outputs.version_exists != 'true')) }}
         uses: ./.github/actions/build-mobile
         with:
@@ -288,11 +288,11 @@ jobs:
         env:
           MOBILE_FINGERPRINT: ${{ steps.config.outputs.fingerprint }}
           BUILT_FINGERPRINT: ${{ steps.build.outputs.fingerprint }}
-          ACTIONS_COMPATIBLE: ${{ steps.history.outputs.compatible }}
+          DEPOT_COMPATIBLE: ${{ steps.history.outputs.compatible }}
           CLOUD_COMPATIBLE: ${{ steps.legacy.outputs.compatible }}
           UPDATE_MESSAGE: ${{ inputs.message }}
         run: |
-          if [ "$ACTIONS_COMPATIBLE" != true ] && [ "$CLOUD_COMPATIBLE" != true ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
+          if [ "$DEPOT_COMPATIBLE" != true ] && [ "$CLOUD_COMPATIBLE" != true ] && [ "$BUILT_FINGERPRINT" != "$MOBILE_FINGERPRINT" ]; then
             echo "$MOBILE_PLATFORM: no completed build matches $MOBILE_FINGERPRINT; OTA skipped." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
