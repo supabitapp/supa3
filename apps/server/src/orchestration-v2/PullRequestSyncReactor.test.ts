@@ -877,6 +877,59 @@ describe("PullRequestSyncReactor", () => {
     ),
   );
 
+  it.effect("reads nothing more when the notified readers report the state it just synced", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const closed = yield* Ref.make(false);
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("settled", {
+              settledOverride: "settled",
+              settledAt: "2026-08-21T00:00:00.000Z",
+              pullRequests: [makeLink(5, { state: "open" }), makeLink(8, { state: "open" })],
+            }),
+          ]),
+          summary: (input) =>
+            Ref.get(closed).pipe(
+              Effect.map((closed) =>
+                makeSummary(input, { state: closed && input.number === 5 ? "closed" : "open" }),
+              ),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          const seen = (number: number, state: "open" | "closed") => ({
+            host: "github.com",
+            repository: "owner/repository",
+            number,
+            state,
+          });
+          yield* Ref.set(closed, true);
+          yield* Queue.offer(fixture.seenStates, seen(5, "closed"));
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+          assert.strictEqual(
+            (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state,
+            "closed",
+          );
+          yield* Ref.set(fixture.summaryCalls, []);
+
+          // The notified readers re-read #5 and agree; only #8's change is news.
+          yield* Queue.offerAll(fixture.seenStates, [seen(5, "closed"), seen(8, "closed")]);
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.summaryCalls)).map((call) => call.number),
+            [8],
+          );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
   it.effect("ignores seen states its snapshots already hold, and merged snapshots", () =>
     Effect.scoped(
       Effect.gen(function* () {
