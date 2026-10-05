@@ -318,12 +318,18 @@ function JumpHintBadge(props: { label: string }) {
 }
 
 // Only the time label subscribes to the shared minute clock.
-function SidebarRelativeTime({ timestamp }: { timestamp: string }) {
+function SidebarRelativeTime({
+  timestamp,
+  className,
+}: {
+  timestamp: string;
+  className?: string | undefined;
+}) {
   const nowMinute = useNowMinute();
   return (
     <time
       dateTime={timestamp}
-      className="w-8 shrink-0 text-right text-xs text-secondary-label tabular-nums"
+      className={cn("w-8 shrink-0 text-right text-xs text-secondary-label tabular-nums", className)}
     >
       {compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp, Date.parse(`${nowMinute}:00Z`)))}
     </time>
@@ -1755,6 +1761,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                     replaceSettledTimeOnHover &&
                       "group-any-hover/sidebar-row:opacity-0 group-focus-within/sidebar-row:opacity-0",
+                    jumpHintIndicatorsClassName,
                   )}
                 >
                   {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1944,7 +1951,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     <span className="size-5" />
                   )}
                 </span>
-                <SidebarRelativeTime timestamp={thread.latestUserMessageAt ?? thread.updatedAt} />
+                <SidebarRelativeTime
+                  timestamp={thread.latestUserMessageAt ?? thread.updatedAt}
+                  className={jumpHintIndicatorsClassName}
+                />
               </span>
             </div>
             {showDragDestination ? (
