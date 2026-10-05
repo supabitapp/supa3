@@ -59,7 +59,7 @@ export function SidebarUpdateReleaseNotes({
   return (
     <div className="flex max-h-[calc(var(--available-height)-0.5rem)] min-h-0 w-fit max-w-[min(24rem,calc(100vw-2rem))] flex-col text-left">
       <div className="shrink-0 px-1">
-        {state.status === "available" ? (
+        {state.status === "available" && state.errorContext !== "download" ? (
           <div>
             <div className="whitespace-nowrap text-sm leading-5 font-medium">
               Update ready to download

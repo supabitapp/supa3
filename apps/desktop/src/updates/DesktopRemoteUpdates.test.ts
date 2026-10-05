@@ -334,11 +334,12 @@ describe("DesktopRemoteUpdates", () => {
     );
   });
 
-  it.effect("retries a download refused while the check still holds the reservation", () => {
+  it.effect("rides along with the automatic download after a refused download", () => {
     // electron-updater emits update-available from inside checkForUpdates,
     // before the check action releases its reservation. The download the
-    // remote flow forks in response is refused and must be retried once the
-    // reservation frees up, without burning a download attempt.
+    // remote flow forks in response is refused; once the check releases, the
+    // automatic download takes the reservation and the retry must wait for
+    // it rather than download a second time.
     const releaseCheck = Deferred.makeUnsafe<void>();
     const harness = makeHarness({ checkForUpdates: Deferred.await(releaseCheck) });
 
@@ -366,6 +367,36 @@ describe("DesktopRemoteUpdates", () => {
           ["ready-to-install"],
         );
         assert.equal(harness.quitAndInstalls(), 0);
+      }),
+    );
+  });
+
+  it.effect("downloads itself after the automatic download fails", () => {
+    let downloads = 0;
+    const harness = makeHarness({
+      downloadUpdate: Effect.suspend(() => {
+        downloads += 1;
+        return downloads === 1 ? Effect.die(new Error("connection reset")) : Effect.void;
+      }),
+    });
+
+    return runRemoteUpdatesTest(harness, ({ reports, requests }) =>
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        harness.emit("update-available", { version: "1.2.4" });
+        yield* settle;
+        assert.equal((yield* updates.getState).errorContext, "download");
+
+        yield* Queue.offer(requests, request("req-auto-failed"));
+        yield* settle;
+        assert.equal(harness.downloadCount(), 2);
+
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* settle;
+        assert.deepEqual(
+          terminalReports(reports).map((report) => report.outcome),
+          ["ready-to-install"],
+        );
       }),
     );
   });

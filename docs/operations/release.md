@@ -165,8 +165,8 @@ available.
 - `apps/desktop/src/main.ts` only wires the updater layers into the desktop runtime.
 - Update UX:
   - Background checks run on startup delay + interval.
-  - A found update downloads automatically; install never happens without a click.
-  - The desktop UI shows an update button with download progress; click it after download to restart/install. A failed download stays clickable to retry, and the next background check retries it too.
+  - A found update downloads automatically. Installing waits for a click, or for a remote update request from a connected client.
+  - The desktop UI shows an update button with download progress; click it after download to restart/install. A failed download stays clickable to retry. Background checks retry it automatically up to three failures per version per app session.
 - Provider: GitHub Releases (`provider: github`) configured at build time.
 - Repository slug source:
   - `SUPACODE_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.

@@ -185,15 +185,17 @@ export const listen: Effect.Effect<
         // while the action that produced it still holds the reservation
         // (e.g. "available" before the check releases), so a forked action
         // can be refused with no later state event to retry on. Rejected
-        // actions re-enqueue their state here after a short pause so the
-        // step runs again once the reservation is free.
+        // actions re-enqueue the current state after a short pause so the
+        // step runs again once the reservation is free. Re-reading matters:
+        // replaying the refused state would keep retrying a download that
+        // the automatic download already owns.
         const retries = yield* Queue.unbounded<DesktopUpdateState>();
-        const retryLater = (state: DesktopUpdateState) =>
-          Effect.sleep(ACTION_RETRY_DELAY).pipe(
-            Effect.andThen(Queue.offer(retries, state)),
-            Effect.asVoid,
-            Effect.forkScoped,
-          );
+        const retryLater = Effect.sleep(ACTION_RETRY_DELAY).pipe(
+          Effect.andThen(updates.getState),
+          Effect.flatMap((state) => Queue.offer(retries, state)),
+          Effect.asVoid,
+          Effect.forkScoped,
+        );
 
         // Returns true when the run reached a terminal outcome.
         const step = (state: DesktopUpdateState): Effect.Effect<boolean, never, Scope.Scope> =>
@@ -211,7 +213,7 @@ export const listen: Effect.Effect<
                   Effect.flatMap((result) => {
                     if (result.checked) return Effect.void;
                     attempts = { ...attempts, checks: attempts.checks - 1 };
-                    return retryLater(state);
+                    return retryLater;
                   }),
                   Effect.forkScoped,
                 );
@@ -222,7 +224,7 @@ export const listen: Effect.Effect<
                   Effect.flatMap((result) => {
                     if (result.accepted) return Effect.void;
                     attempts = { ...attempts, downloads: attempts.downloads - 1 };
-                    return retryLater(state);
+                    return retryLater;
                   }),
                   Effect.forkScoped,
                 );
@@ -232,7 +234,7 @@ export const listen: Effect.Effect<
                 // updater reservation. Wait until the prepared install can
                 // be committed by the client in a separate RPC.
                 if (yield* updates.isActionActive) {
-                  yield* retryLater(state);
+                  yield* retryLater;
                   return false;
                 }
                 if (state.downloadedVersion === null) {

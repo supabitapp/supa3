@@ -49,6 +49,7 @@ import {
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
+const MAX_AUTO_DOWNLOAD_FAILURES = 3;
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
 
@@ -288,6 +289,10 @@ export const make = Effect.gen(function* () {
   const finishedUpdateActions = yield* PubSub.unbounded<UpdateAction>();
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
+  const autoDownloadFailuresRef = yield* Ref.make<{
+    readonly version: string | null;
+    readonly count: number;
+  }>({ version: null, count: 0 });
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
     createInitialDesktopUpdateState(
       environment.appVersion,
@@ -517,21 +522,35 @@ export const make = Effect.gen(function* () {
 
   // Found updates download without a click. "update-available" fires from
   // inside the check (or channel change) that found it, so wait for that
-  // action to release its reservation before starting the download.
-  const downloadFoundUpdate = Effect.scoped(
-    Effect.gen(function* () {
-      const actionCompletions = yield* PubSub.subscribe(finishedUpdateActions);
-      let activeAction = yield* activeUpdateAction;
-      while (
-        Option.isSome(activeAction) &&
-        (activeAction.value === "check" || activeAction.value === "channel")
-      ) {
-        yield* PubSub.take(actionCompletions);
-        activeAction = yield* activeUpdateAction;
-      }
-      yield* downloadAvailableUpdate;
-    }),
-  ).pipe(Effect.withSpan("desktop.updates.downloadFoundUpdate"));
+  // action to release its reservation first. A version that keeps failing is
+  // left to a manual retry rather than re-downloaded on every poll.
+  const autoDownloadUpdate = Effect.fn("desktop.updates.autoDownloadUpdate")(function* (
+    version: string,
+  ) {
+    const failures = yield* Ref.get(autoDownloadFailuresRef);
+    if (failures.version === version && failures.count >= MAX_AUTO_DOWNLOAD_FAILURES) return;
+
+    const result = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const actionCompletions = yield* PubSub.subscribe(finishedUpdateActions);
+        while (
+          Option.exists(
+            yield* activeUpdateAction,
+            (action) => action === "check" || action === "channel",
+          )
+        ) {
+          yield* PubSub.take(actionCompletions);
+        }
+        return yield* downloadAvailableUpdate;
+      }),
+    );
+    if (result.accepted && !result.completed) {
+      yield* Ref.update(autoDownloadFailuresRef, (current) => ({
+        version,
+        count: current.version === version ? current.count + 1 : 1,
+      }));
+    }
+  });
 
   const resetInstallAction = Effect.all(
     [finishUpdateAction("install"), Ref.set(desktopState.quitting, false)],
@@ -761,7 +780,9 @@ export const make = Effect.gen(function* () {
             releaseNoteGroups: releaseNotes.length,
             omittedReleaseCount,
           });
-          yield* downloadFoundUpdate;
+          yield* autoDownloadUpdate(info.version).pipe(
+            Effect.forkScoped({ startImmediately: true }),
+          );
         }),
       ),
       Effect.catchCause((cause) => {
@@ -896,8 +917,9 @@ export const make = Effect.gen(function* () {
     emitState,
     disabledReason: resolveDisabledReason,
     configure: Effect.gen(function* () {
-      const context = yield* Effect.context<never>();
-      const runEffect = (effect: Effect.Effect<void>) => {
+      // Handlers fork long work (automatic downloads) into configure's scope.
+      const context = yield* Effect.context<Scope.Scope>();
+      const runEffect = (effect: Effect.Effect<void, never, Scope.Scope>) => {
         void Effect.runPromiseWith(context)(effect);
       };
 
@@ -919,6 +941,8 @@ export const make = Effect.gen(function* () {
       }
       yield* Ref.set(updaterConfiguredRef, true);
 
+      // autoDownloadUpdate downloads instead, so the channel filter and the
+      // single-action reservation still apply.
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
       yield* applyAutoUpdaterChannel(settings.updateChannel);

@@ -185,6 +185,56 @@ describe("DesktopUpdates", () => {
     }),
   );
 
+  it.effect("starts the download once the channel change that found it finishes", () => {
+    const harness = makeHarness({
+      checkForUpdates: Effect.sync(() =>
+        harness.emit("update-available", { version: "1.2.4-nightly.20260710.1" }),
+      ),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        yield* updates.setChannel("nightly");
+        yield* flushCallbacks;
+
+        const state = yield* updates.getState;
+        assert.equal(state.status, "downloading");
+        assert.equal(state.availableVersion, "1.2.4-nightly.20260710.1");
+        assert.equal(harness.downloadCount(), 1);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("stops downloading a version automatically after repeated failures", () => {
+    const harness = makeHarness({ downloadUpdate: Effect.die(new Error("checksum mismatch")) });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        // Each event stands in for a later background poll finding the same build.
+        for (let poll = 0; poll < 4; poll += 1) {
+          harness.emit("update-available", { version: "1.2.4" });
+          yield* flushCallbacks;
+        }
+        assert.equal(harness.downloadCount(), 3);
+        assert.equal((yield* updates.getState).status, "available");
+
+        const manualRetry = yield* updates.download;
+        assert.isTrue(manualRetry.accepted);
+        assert.equal(harness.downloadCount(), 4);
+
+        harness.emit("update-available", { version: "1.2.5" });
+        yield* flushCallbacks;
+        assert.equal(harness.downloadCount(), 5);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect("enables nightly full changelog release notes and broadcasts summaries", () => {
     const harness = makeHarness();
 

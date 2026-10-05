@@ -57,6 +57,19 @@ describe("desktop update button state", () => {
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to retry");
   });
 
+  it("reports a failed download that fell back to available", () => {
+    const state: DesktopUpdateState = {
+      ...baseState,
+      status: "available",
+      availableVersion: "1.1.0",
+      message: "checksum mismatch",
+      errorContext: "download",
+      canRetry: true,
+    };
+    expect(resolveDesktopUpdateButtonAction(state)).toBe("download");
+    expect(getDesktopUpdateButtonTooltip(state)).toBe("Download failed for 1.1.0. Click to retry.");
+  });
+
   it("keeps install action available after an install error", () => {
     const state: DesktopUpdateState = {
       ...baseState,

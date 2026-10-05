@@ -72,6 +72,10 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
   if (state.status === "available") {
+    // Failed downloads fall back to "available" so they can be retried.
+    if (state.errorContext === "download" && state.availableVersion) {
+      return `Download failed for ${state.availableVersion}. Click to retry.`;
+    }
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
   if (state.status === "downloading") {
