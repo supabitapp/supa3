@@ -1,6 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
-import { once } from "node:events";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -60,11 +59,13 @@ it.each([
         stdio: ["pipe", "ignore", "ignore"],
       },
     );
-    const exit = once(agent, "exit");
+    const exitSignal = new Promise<NodeJS.Signals | null>((resolve) =>
+      agent.once("exit", (_code, signal) => resolve(signal)),
+    );
     agent.stdin.end(
       `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/set_mode", params: setModeParams })}\n`,
     );
-    const [, signal] = await exit;
+    const signal = await exitSignal;
 
     assert.strictEqual(signal, "SIGKILL");
     assert.deepStrictEqual(JSON.parse(NodeFS.readFileSync(statusPath, "utf8")), {
