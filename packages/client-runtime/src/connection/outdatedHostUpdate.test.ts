@@ -14,9 +14,13 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import * as Socket from "effect/unstable/socket/Socket";
 
-import type { ConnectionCatalogEntry } from "./catalog.ts";
+import { BearerConnectionProfile, type ConnectionCatalogEntry } from "./catalog.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
-import { PrimaryConnectionTarget } from "./model.ts";
+import {
+  BearerConnectionTarget,
+  ConnectionTransientError,
+  PrimaryConnectionTarget,
+} from "./model.ts";
 import { updateOutdatedHost } from "./outdatedHostUpdate.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import * as ConnectionResolver from "./resolver.ts";
@@ -111,89 +115,150 @@ class OutdatedHostSocket {
 }
 
 describe("updateOutdatedHost", () => {
-  it.effect("updates a protocol-1 host over a bare socket, then switches it back on", () =>
-    Effect.gen(function* () {
-      const blocked = orchestrationProtocolCompatibilityError(descriptor(undefined, "0.0.45"));
-      expect(blocked).toMatchObject({ serverUpdateRequired: true });
+  it.effect.each([false, true])(
+    "updates a protocol-1 host and resumes it (fallback route: %s)",
+    (useFallback) =>
+      Effect.gen(function* () {
+        const blocked = orchestrationProtocolCompatibilityError(descriptor(undefined, "0.0.45"));
+        expect(blocked).toMatchObject({ serverUpdateRequired: true });
 
-      const sockets: Array<OutdatedHostSocket> = [];
-      let served: ExecutionEnvironmentDescriptor = descriptor(undefined, "0.0.45");
-      const entries = yield* SubscriptionRef.make<
-        ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
-      >(
-        new Map([
-          [
-            TARGET.environmentId,
-            {
-              target: TARGET,
-              profile: Option.none(),
-              enabled: false,
-              unsupportedReason: blocked?.message ?? "",
-              serverUpdateRequired: true,
-            },
-          ],
-        ]),
-      );
-      const calls: Array<string> = [];
-      const registry = EnvironmentRegistry.EnvironmentRegistry.of({
-        entries,
-        setCompatibility: (_environmentId: EnvironmentId, error: unknown) =>
-          Effect.sync(() => calls.push(`compatibility:${error === null ? "clear" : "block"}`)),
-        setEnabled: (_environmentId: EnvironmentId, enabled: boolean) =>
-          Effect.sync(() => calls.push(`enabled:${enabled}`)),
-      } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
-      const resolver = ConnectionResolver.ConnectionResolver.of({
-        prepare: () => Effect.die(new Error("The update must bypass the protocol gate.")),
-        prepareForUpdate: () =>
-          Effect.sync(() => served).pipe(
-            Effect.map((current) => ({
-              descriptor: current,
-              prepared: {
-                environmentId: TARGET.environmentId,
-                label: TARGET.label,
-                httpBaseUrl: TARGET.httpBaseUrl,
-                socketUrl: "wss://build.example.test/ws?wsTicket=ticket",
-                httpAuthorization: null,
+        const sockets: Array<OutdatedHostSocket> = [];
+        let served: ExecutionEnvironmentDescriptor = descriptor(undefined, "0.0.45");
+        const entries = yield* SubscriptionRef.make<
+          ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
+        >(
+          new Map([
+            [
+              TARGET.environmentId,
+              {
                 target: TARGET,
+                profile: Option.none(),
+                enabled: false,
+                unsupportedReason: blocked?.message ?? "",
+                serverUpdateRequired: true,
               },
-            })),
-          ),
-      });
-      const httpClient = HttpClient.make((request) =>
-        Effect.sync(() =>
-          HttpClientResponse.fromWeb(request, new Response(encodeDescriptor(served))),
-        ),
-      );
-
-      const result = yield* updateOutdatedHost(
-        TARGET.environmentId,
-        { targetVersion: "0.0.46" },
-        () => Effect.void,
-      ).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registry),
-            Layer.succeed(ConnectionResolver.ConnectionResolver, resolver),
-            Layer.succeed(HttpClient.HttpClient, httpClient),
-            Layer.succeed(Socket.WebSocketConstructor, (url) => {
-              // The host relaunches on a compatible protocol once the update lands.
-              const socket = new OutdatedHostSocket(url, () => {
-                served = descriptor(ORCHESTRATION_PROTOCOL_VERSION, "0.0.46");
-              });
-              sockets.push(socket);
-              return socket as unknown as globalThis.WebSocket;
+            ],
+          ]),
+        );
+        const fallbackUrl = "https://fallback.example.ts.net";
+        const fallbackTarget = new BearerConnectionTarget({
+          environmentId: TARGET.environmentId,
+          label: TARGET.label,
+          connectionId: "paired-fallback",
+        });
+        if (useFallback) {
+          yield* SubscriptionRef.update(
+            entries,
+            (current) =>
+              new Map([
+                [
+                  TARGET.environmentId,
+                  {
+                    ...current.get(TARGET.environmentId)!,
+                    alternateRoutes: [
+                      {
+                        target: fallbackTarget,
+                        profile: Option.some(
+                          new BearerConnectionProfile({
+                            environmentId: fallbackTarget.environmentId,
+                            connectionId: fallbackTarget.connectionId,
+                            label: fallbackTarget.label,
+                            httpBaseUrl: fallbackUrl,
+                            wsBaseUrl: fallbackUrl.replace(/^http/, "ws"),
+                          }),
+                        ),
+                      },
+                    ],
+                  },
+                ],
+              ]),
+          );
+        }
+        const preparedOrigins: Array<string> = [];
+        const polledOrigins: Array<string> = [];
+        const calls: Array<string> = [];
+        const registry = EnvironmentRegistry.EnvironmentRegistry.of({
+          entries,
+          setCompatibility: (_environmentId: EnvironmentId, error: unknown) =>
+            Effect.sync(() => calls.push(`compatibility:${error === null ? "clear" : "block"}`)),
+          setEnabled: (_environmentId: EnvironmentId, enabled: boolean) =>
+            Effect.sync(() => calls.push(`enabled:${enabled}`)),
+        } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+        const resolver = ConnectionResolver.ConnectionResolver.of({
+          prepare: () => Effect.die(new Error("The update must bypass the protocol gate.")),
+          prepareForUpdate: (entry) =>
+            Effect.gen(function* () {
+              const origin =
+                entry.target._tag === "BearerConnectionTarget" ? fallbackUrl : TARGET.httpBaseUrl;
+              preparedOrigins.push(origin);
+              if (useFallback && entry.target._tag === "PrimaryConnectionTarget") {
+                return yield* new ConnectionTransientError({
+                  reason: "endpoint-unavailable",
+                  detail: "LAN unavailable",
+                });
+              }
+              return {
+                descriptor: served,
+                prepared: {
+                  environmentId: TARGET.environmentId,
+                  label: TARGET.label,
+                  httpBaseUrl: origin,
+                  socketUrl: `${origin.replace(/^http/, "ws")}/ws?wsTicket=ticket`,
+                  httpAuthorization: null,
+                  target: entry.target,
+                },
+              };
             }),
-          ),
-        ),
-      );
+        });
+        const httpClient = HttpClient.make((request) =>
+          Effect.sync(() => {
+            const origin = new URL(request.url).origin;
+            polledOrigins.push(origin);
+            // After restart this address belongs to a different server. A successful
+            // descriptor response must not stop the search for our environment.
+            const response =
+              origin === fallbackUrl
+                ? { ...served, environmentId: EnvironmentId.make("unrelated-environment") }
+                : served;
+            return HttpClientResponse.fromWeb(request, new Response(encodeDescriptor(response)));
+          }),
+        );
 
-      expect(sockets[0]?.url).not.toContain("orchestrationProtocol");
-      expect(sockets[0]?.requests.map((request) => request.tag)).toEqual([
-        WS_METHODS.serverUpdateServer,
-      ]);
-      expect(result.targetVersion).toBe("0.0.46");
-      expect(calls).toEqual(["compatibility:clear", "enabled:true"]);
-    }),
+        const result = yield* updateOutdatedHost(
+          TARGET.environmentId,
+          { targetVersion: "0.0.46" },
+          () => Effect.void,
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registry),
+              Layer.succeed(ConnectionResolver.ConnectionResolver, resolver),
+              Layer.succeed(HttpClient.HttpClient, httpClient),
+              Layer.succeed(Socket.WebSocketConstructor, (url) => {
+                // The host relaunches on a compatible protocol once the update lands.
+                const socket = new OutdatedHostSocket(url, () => {
+                  served = descriptor(ORCHESTRATION_PROTOCOL_VERSION, "0.0.46");
+                });
+                sockets.push(socket);
+                return socket as unknown as globalThis.WebSocket;
+              }),
+            ),
+          ),
+        );
+
+        expect(sockets[0]?.url).not.toContain("orchestrationProtocol");
+        expect(sockets[0]?.requests.map((request) => request.tag)).toEqual([
+          WS_METHODS.serverUpdateServer,
+        ]);
+        expect(preparedOrigins).toEqual(
+          useFallback ? [TARGET.httpBaseUrl, fallbackUrl] : [TARGET.httpBaseUrl],
+        );
+        expect(polledOrigins).toEqual(
+          useFallback ? [fallbackUrl, TARGET.httpBaseUrl] : [TARGET.httpBaseUrl],
+        );
+        expect(result.targetVersion).toBe("0.0.46");
+        expect(calls).toEqual(["compatibility:clear", "enabled:true"]);
+      }),
   );
 
   it.effect("refuses a host that cannot update itself without opening a socket", () =>

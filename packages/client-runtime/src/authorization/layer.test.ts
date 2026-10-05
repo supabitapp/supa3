@@ -69,6 +69,39 @@ function makeHarness(responses: ReadonlyArray<Response>) {
 }
 
 describe("RemoteEnvironmentAuthorization", () => {
+  it.effect("checks a changed route before sending the paired credential", () =>
+    Effect.gen(function* () {
+      const lanUrl = "http://192.168.1.20:4389";
+      const harness = makeHarness([
+        Response.json(DESCRIPTOR),
+        websocketTicket("paired-ticket"),
+        Response.json({ ...DESCRIPTOR, environmentId: "another-environment" }),
+      ]);
+      const failure = yield* Effect.gen(function* () {
+        const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
+        const input = {
+          expectedEnvironmentId: ENVIRONMENT_ID,
+          ...ENDPOINT,
+          bearerToken: "paired-token",
+          connectionMethod: "direct" as const,
+        };
+        yield* remote.authorizeBearer(input);
+        return yield* remote
+          .authorizeBearer({
+            ...input,
+            httpBaseUrl: lanUrl,
+            wsBaseUrl: lanUrl.replace(/^http/, "ws"),
+          })
+          .pipe(Effect.flip);
+      }).pipe(Effect.provide(harness.layer));
+      expect(failure).toMatchObject({ _tag: "ConnectionBlockedError", reason: "configuration" });
+      expect(harness.fetch.calls).toHaveLength(3);
+      const [url, init] = harness.fetch.calls[2]!;
+      expect(String(url)).toBe(`${lanUrl}/.well-known/supacode/environment`);
+      expect(new Headers(init.headers).has("authorization")).toBe(false);
+    }),
+  );
+
   it.effect("reuses a validated bearer descriptor while issuing fresh websocket tickets", () =>
     Effect.gen(function* () {
       const harness = makeHarness([
