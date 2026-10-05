@@ -128,6 +128,7 @@ import {
   useThreadSelectionStore,
 } from "../threadSelectionStore";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
+import { useThreadUndoNotice } from "../hooks/showThreadUndoNotice";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
@@ -3536,12 +3537,16 @@ export default function Sidebar() {
     [sidebarListItems],
   );
   const sidebarListHasRows = sidebarListItems.length + visibleDraftSessionCount > 0;
+  // The undo notice resizes the footer and shifts the bottom-pinned settled
+  // shelf. It mounts and expires apart from any reorder, so it needs its own pass.
+  const undoNoticeShown = useThreadUndoNotice((state) => state.notice !== null);
   // Draft navigation can reveal a frozen row without changing the draft count.
   const sidebarListLayout = useMemo(
     () => ({
       orderKey: sidebarListOrderKey,
       routeDraftId: routeDraftIdForRows,
       draftCount: visibleDraftSessionCount,
+      undoNoticeShown,
       animate: !listMotionPaused && sidebarListHasRows,
     }),
     [
@@ -3549,6 +3554,7 @@ export default function Sidebar() {
       routeDraftIdForRows,
       sidebarListHasRows,
       sidebarListOrderKey,
+      undoNoticeShown,
       visibleDraftSessionCount,
     ],
   );
