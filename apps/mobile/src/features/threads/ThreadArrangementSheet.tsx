@@ -36,7 +36,6 @@ import {
   type ThreadMoveDestination,
 } from "./threadOrder";
 import { getThreadListV2OrderedSection, threadListInboxReturns } from "./threadListV2";
-import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 
 const ROW_HEIGHT = 56;
 const HEADER_HEIGHT = 48;
@@ -173,7 +172,6 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const pendingOrder = useAtomValue(pendingThreadOrderAtom);
   const dropBusy = useAtomValue(threadDropBusyAtom);
   const { moveThread } = useThreadListActions();
-  const { workingShelfEnabled } = useThreadListV2ShelfPreferences();
   const [now, setNow] = useState(() => new Date().toISOString());
   const [expanded, setExpanded] = useState({ snoozed: false, settled: false });
   useEffect(() => {
@@ -215,36 +213,29 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
     );
     return {
       pinned,
-      // The Working beta orders the inbox by time; show that order here too.
-      active: workingShelfEnabled
-        ? sortInboxThreadsByReturn(active, threadListInboxReturns.returnedAt)
-        : active,
+      // The inbox is ordered by time; show that order here too.
+      active: sortInboxThreadsByReturn(active, threadListInboxReturns.returnedAt),
       snoozed: parked.filter((thread) => effectiveSnoozed(thread, { now })),
       settled: parked.filter((thread) => !effectiveSnoozed(thread, { now })),
     };
-  }, [threads, configs, now, queuedThreadKeys, pendingOrder, workingShelfEnabled]);
+  }, [threads, configs, now, queuedThreadKeys, pendingOrder]);
   const planners = useMemo(() => {
     const planner = (section: "pinned" | "active") =>
       createThreadMovePlanner({
         ordered: sections[section],
         allThreads: threads,
         section,
-        // A time-ordered inbox has no slots, so Active takes no drops while
-        // the Working beta is on. The saved arrangement stays untouched.
+        // A time-ordered inbox has no slots, so Active takes no drops.
         reorderableEnvironmentIds: new Set(
-          [...configs].flatMap(([id, config]) =>
-            (
-              section === "pinned"
-                ? config.environment.capabilities.threadPinReorder
-                : !workingShelfEnabled && config.environment.capabilities.threadActiveReorder
-            )
-              ? [id]
-              : [],
-          ),
+          section === "pinned"
+            ? [...configs].flatMap(([id, config]) =>
+                config.environment.capabilities.threadPinReorder ? [id] : [],
+              )
+            : [],
         ),
       });
     return { pinned: planner("pinned"), active: planner("active") };
-  }, [sections, threads, configs, workingShelfEnabled]);
+  }, [sections, threads, configs]);
   const rows = useMemo(() => {
     const result: Row[] = [];
     let offset = 0;

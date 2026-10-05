@@ -458,7 +458,6 @@ export function HomeScreen(props: HomeScreenProps) {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
     snoozedShelfExpanded,
-    workingShelfEnabled,
     pinnedShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
@@ -499,7 +498,6 @@ export function HomeScreen(props: HomeScreenProps) {
     pinningEnvironmentIds,
     autoSettleOptOutEnvironmentIds,
     pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
     titleRegenerationEnvironmentIds,
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
@@ -516,7 +514,6 @@ export function HomeScreen(props: HomeScreenProps) {
     queuedThreadKeys,
     settledLimit: settledVisibleCount,
     now: listClock.now,
-    workingShelfEnabled,
     pinnedShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
@@ -714,11 +711,7 @@ export function HomeScreen(props: HomeScreenProps) {
           snoozeSupported={snoozeEnvironmentIds.has(thread.environmentId)}
           pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
           autoSettleOptOutSupported={autoSettleOptOutEnvironmentIds.has(thread.environmentId)}
-          reorderSupported={
-            item.item.pinned
-              ? pinReorderEnvironmentIds.has(thread.environmentId)
-              : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
-          }
+          reorderSupported={item.item.pinned && pinReorderEnvironmentIds.has(thread.environmentId)}
           onSnoozeThread={handleSnoozeThread}
           onUnsnoozeThread={handleUnsnoozeThread}
           onUnsettleThread={handleUnsettleThread}
@@ -733,7 +726,6 @@ export function HomeScreen(props: HomeScreenProps) {
     },
     [
       handleDeleteThread,
-      activeReorderEnvironmentIds,
       handlePinThread,
       handleRegenerateThreadTitle,
       handleRenameThread,
@@ -769,7 +761,6 @@ export function HomeScreen(props: HomeScreenProps) {
       toggleWorkingShelf,
       v2ProjectTitleByProjectKey,
       props.searchQuery,
-      workingShelfEnabled,
     ],
   );
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
@@ -786,8 +777,6 @@ export function HomeScreen(props: HomeScreenProps) {
       savedConnectionsById: props.savedConnectionsById,
       searchQuery: props.searchQuery,
       threadSearchMatchByKey,
-      // Rows read it for their reorder menu items.
-      workingShelfEnabled,
     }),
     [
       projectByKey,
@@ -796,7 +785,6 @@ export function HomeScreen(props: HomeScreenProps) {
       listEnvironments,
       threadSearchMatchByKey,
       v2ProjectTitleByProjectKey,
-      workingShelfEnabled,
     ],
   );
 

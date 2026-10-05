@@ -31,7 +31,6 @@ import {
   readEnvironmentSupportsAutoSettleOptOut,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsPinReorder,
-  readEnvironmentSupportsActiveReorder,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsVisitedTracking,
@@ -143,18 +142,6 @@ export class ThreadPinReorderUnsupportedError extends Schema.TaggedError<ThreadP
 ) {
   override get message(): string {
     return "This environment's server does not support reordering pinned threads yet. Update the server to reorder pins.";
-  }
-}
-
-export class ThreadActiveReorderUnsupportedError extends Schema.TaggedError<ThreadActiveReorderUnsupportedError>()(
-  "ThreadActiveReorderUnsupportedError",
-  {
-    environmentId: EnvironmentId,
-    threadId: ThreadId,
-  },
-) {
-  override get message(): string {
-    return "Update this environment's server to reorder active threads.";
   }
 }
 
@@ -270,9 +257,6 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const reorderPinnedThreadMutation = useAtomCommand(threadEnvironment.reorderPin, {
-    reportFailure: false,
-  });
-  const reorderActiveThreadMutation = useAtomCommand(threadEnvironment.reorderActive, {
     reportFailure: false,
   });
   const snoozeThreadMutation = useAtomCommand(threadEnvironment.snooze, {
@@ -840,26 +824,6 @@ export function useThreadActions() {
     [reorderPinnedThreadMutation],
   );
 
-  const reorderActiveThread = useCallback(
-    async (target: ScopedThreadRef, orderKey: string) => {
-      if (!readEnvironmentSupportsActiveReorder(target.environmentId)) {
-        return AsyncResult.failure(
-          Cause.fail(
-            new ThreadActiveReorderUnsupportedError({
-              environmentId: target.environmentId,
-              threadId: target.threadId,
-            }),
-          ),
-        );
-      }
-      return reorderActiveThreadMutation({
-        environmentId: target.environmentId,
-        input: { threadId: target.threadId, orderKey },
-      });
-    },
-    [reorderActiveThreadMutation],
-  );
-
   const unsnoozeThread = useCallback(
     async (target: ScopedThreadRef) => {
       if (!readEnvironmentSupportsSnooze(target.environmentId)) {
@@ -972,7 +936,6 @@ export function useThreadActions() {
       unpinThread,
       confirmAndUnpinThread,
       reorderPinnedThread,
-      reorderActiveThread,
       markThreadUnread,
       setThreadAutoSettle,
     }),
@@ -984,7 +947,6 @@ export function useThreadActions() {
       markThreadUnread,
       pinThread,
       reorderPinnedThread,
-      reorderActiveThread,
       setThreadAutoSettle,
       settleThread,
       snoozeThread,

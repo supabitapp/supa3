@@ -83,27 +83,25 @@ edge to pin a thread. Section labels stay readable for the whole drag, and the s
 thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
-Drag within the pinned or active section to change its order. Other rows slide aside to show the
-spot where the thread will land. Drops into either section keep the position you choose. On
-mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
-**Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
-settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
-or **Settled** to drag a parked thread back into either live section. Each drop saves; **Done** returns to the thread list.
-The server saves the order, so it survives a refresh and appears on your other connected devices.
+Drag within the pinned section to change its order. Other rows slide aside to show the spot where
+the thread will land. On mobile, open a thread's menu and choose **Arrange threads**. Drag a
+handle within **Pinned** to reorder, or between **Pinned** and **Active** to pin or unpin. Drop
+onto the **Settled** divider to settle a thread. The dragged card shows the action before you
+release it. Expand **Snoozed** or **Settled** to drag a parked thread back into either live
+section. Each drop saves; **Done** returns to the thread list. The server saves the pinned order,
+so it survives a refresh and appears on your other connected devices.
 
 On web and desktop, the list also animates section changes made with thread actions such as
 **Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion
 preference. While dragging, rows follow the insertion gap without replaying a second transition
 after the drop.
 
-New threads appear above the active threads you have arranged. Settling clears a thread's active
-position, so using **Un-settle** returns it to the top. Pinning and snoozing preserve its active
-position until you move it again. Thread activity does not change the order. The settled shelf
-continues to use settlement time.
+The active list is ordered by when each thread last came back to you, so you cannot drag or move
+threads within it. The settled shelf continues to use settlement time.
 
 If dragging is unavailable for one environment, update the Supacode server running in that
-environment. Pinned and active reordering require server support. Threads from older servers keep
-their default order until the server is updated.
+environment. Pinned reordering requires server support. Threads from older servers keep their
+default order until the server is updated.
 
 To generate a fresh title from the conversation, open a thread's menu and choose
 **Regenerate title**. The action is unavailable while title generation is in progress
@@ -114,17 +112,12 @@ rename a thread, regenerate its title, or link and unlink a pull request. These 
 appear on web, desktop, and mobile without requiring the originating browser to remain
 open.
 
-### Fold working threads (beta)
+### Working threads
 
-Turn on **Settings → General → Working section (beta)** on web and desktop, or **Settings →
-Thread behavior → Working section** on iOS and Android, to move threads that are working or
-monitoring into a collapsed **Working** section below the active list. A thread returns to the top
-of the active list when it finishes, fails, or needs an approval or answer. The Working section
-lists the thread you last sent work to first. Pinned threads stay in the pinned section. Each
-device keeps its own choice.
-
-While this is on, the active list is ordered by when each thread last came back to you, so you
-cannot drag or move threads within it. Your saved order returns when you turn it off.
+Threads that are working or monitoring fold into a collapsed **Working** section below the active
+list. A thread returns to the top of the active list when it finishes, fails, or needs an approval
+or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
+in the pinned section.
 
 ## Settle finished work
 

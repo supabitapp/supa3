@@ -2077,16 +2077,10 @@ describe("Working shelf (beta)", () => {
       expect(resolveSidebarDropVerb("active", "working")).toBeNull();
     });
 
-    it("only changes lifecycle when the inbox is time-ordered", () => {
+    it("only changes lifecycle when dropping into the time-ordered inbox", () => {
       const base = {
         pinnedOrder: ["p1"],
         pinnedKeysById: new Map([["p1", "m"]]),
-        activeOrder: ["a1", "a2"],
-        activeKeysById: new Map([
-          ["a1", "f"],
-          ["a2", "t"],
-        ]),
-        activeTimeOrdered: true,
       };
       expect(
         planSidebarThreadDrop({
@@ -2105,8 +2099,6 @@ describe("Working shelf (beta)", () => {
         }),
       ).toEqual({
         kind: "move-active",
-        order: null,
-        assignments: [],
         unpin: true,
         unsettle: false,
         unsnooze: false,

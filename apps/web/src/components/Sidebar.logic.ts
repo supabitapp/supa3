@@ -243,11 +243,9 @@ export type SidebarThreadDropPlan =
       readonly orderKey: string | undefined;
       readonly extraAssignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
     }
+  /** Into the time-ordered inbox: the drop has no placement to write. */
   | {
       readonly kind: "move-active";
-      /** Null when the inbox is time-ordered: the drop has no placement. */
-      readonly order: readonly string[] | null;
-      readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
       readonly unpin: boolean;
       readonly unsettle: boolean;
       readonly unsnooze: boolean;
@@ -311,11 +309,6 @@ export function planSidebarThreadDrop(input: {
   readonly pinnedOrder: readonly string[];
   readonly pinnedKeysById: ReadonlyMap<string, string | null | undefined>;
   readonly reorderableKeys?: ReadonlySet<string>;
-  readonly activeOrder: readonly string[];
-  readonly activeKeysById: ReadonlyMap<string, string | null | undefined>;
-  readonly activeReorderableKeys?: ReadonlySet<string>;
-  /** Working beta: the inbox sorts by time, so drops only change lifecycle. */
-  readonly activeTimeOrdered?: boolean;
 }): SidebarThreadDropPlan {
   const {
     activeKey,
@@ -326,54 +319,22 @@ export function planSidebarThreadDrop(input: {
     pinnedOrder,
     pinnedKeysById,
     reorderableKeys,
-    activeOrder,
-    activeKeysById,
-    activeReorderableKeys,
   } = input;
   if (input.supportsSettlement === false && (target.section === "settled" || activeSettled)) {
     return { kind: "none" };
   }
   switch (target.section) {
-    case "active": {
-      // Like the settled tail: threads can enter a time-ordered inbox, but
+    case "active":
+      // Like the settled tail: threads can enter the time-ordered inbox, but
       // not be arranged inside it.
-      if (input.activeTimeOrdered) {
-        return activeSection === "active"
-          ? { kind: "none" }
-          : {
-              kind: "move-active",
-              order: null,
-              assignments: [],
-              unpin: activePinned,
-              unsettle: activeSettled,
-              unsnooze: activeSection === "snoozed",
-            };
-      }
-      const order = target.activeOrder;
-      if (
-        activeSection === "active" &&
-        order.length === activeOrder.length &&
-        order.every((key, index) => key === activeOrder[index])
-      ) {
-        return { kind: "none" };
-      }
-      const assignments = planPinnedReorder({
-        orderedIds: order,
-        keysById: activeKeysById,
-        movedId: activeKey,
-      });
-      if (activeReorderableKeys && assignments.some(({ id }) => !activeReorderableKeys.has(id))) {
-        return { kind: "none" };
-      }
-      return {
-        kind: "move-active",
-        order,
-        assignments,
-        unpin: activePinned,
-        unsettle: activeSettled,
-        unsnooze: activeSection === "snoozed",
-      };
-    }
+      return activeSection === "active"
+        ? { kind: "none" }
+        : {
+            kind: "move-active",
+            unpin: activePinned,
+            unsettle: activeSettled,
+            unsnooze: activeSection === "snoozed",
+          };
     case "settled":
       return activeSection === "settled" ? { kind: "none" } : { kind: "settle" };
     case "pinned": {
@@ -446,7 +407,6 @@ export function applySidebarThreadDrop<
     ...resumed,
     pinnedAt: section === "pinned" ? (thread.pinnedAt ?? now) : null,
     pinOrderKey: section === "pinned" ? (orderKey ?? thread.pinOrderKey) : null,
-    ...(section === "active" && orderKey !== undefined ? { activeOrderKey: orderKey } : {}),
   };
 }
 
@@ -1002,8 +962,7 @@ export function firstValidTimestampMs(
   return 0;
 }
 
-export { sortActiveThreadsByOrderKey as sortThreadsForSidebar } from "@supacode/client-runtime/state/thread-sort";
-// The Working section beta folds and orders the inbox the same way on mobile.
+// The Working section folds and orders the inbox the same way on mobile.
 export {
   isThreadWorking as isSidebarThreadWorking,
   sortInboxThreadsByReturn,

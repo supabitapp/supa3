@@ -41,19 +41,12 @@ describe("createInboxReturnTracker", () => {
     expect(tracker.returnedAt(thread("b", false))).toBeUndefined();
   });
 
-  it("forgets deleted threads and resets when the beta turns off", () => {
+  it("forgets deleted threads", () => {
     const tracker = createInboxReturnTracker();
     tracker.observe([thread("a", true), thread("b", true)]);
     tracker.observe([thread("a", false), thread("b", false)]);
     tracker.observe([thread("b", false)]);
     expect(tracker.returnedAt(thread("a", false))).toBeUndefined();
-    expect(tracker.returnedAt(thread("b", false))).toBeDefined();
-
-    tracker.observe(null);
-    expect(tracker.returnedAt(thread("b", false))).toBeUndefined();
-    // After a reset the next call is a fresh baseline again.
-    tracker.observe([thread("b", true)]);
-    tracker.observe([thread("b", false)]);
     expect(tracker.returnedAt(thread("b", false))).toBeDefined();
   });
 });
