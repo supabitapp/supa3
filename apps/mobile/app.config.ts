@@ -231,9 +231,9 @@ const config: ExpoConfig = {
     // showcase capture build requires full screen (see infoPlist below).
     requireFullScreen: process.env.SUPACODE_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the Supacode team so non-interactive `expo run:ios`
+    // Pin code signing to SUPABIT COMPANY LIMITED so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups).
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: "9ZLSJ2GN2B",
     entitlements: {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
     },
