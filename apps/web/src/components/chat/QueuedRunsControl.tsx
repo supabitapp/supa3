@@ -14,6 +14,7 @@ import {
   GripVerticalIcon,
   ListOrderedIcon,
   PencilIcon,
+  XIcon,
 } from "lucide-react";
 import { useId, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 
@@ -24,6 +25,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { isImageAttachment, type ChatMessage } from "../../types";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -468,20 +470,19 @@ export function QueuedRunsControl({
                               : `Send as a steer instead${item.serverIndex === 0 && props.steerShortcutLabel ? ` (${props.steerShortcutLabel})` : ""}`}
                           </TooltipPopup>
                         </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <ComposerBanner.Dismiss
-                                aria-label="Remove queued message"
-                                disabled={item.runId === null || busyRunId !== null}
-                                onClick={() => {
-                                  if (item.runId !== null) void remove(item.runId);
-                                }}
-                              />
-                            }
-                          />
-                          <TooltipPopup>Remove from queue</TooltipPopup>
-                        </Tooltip>
+                        <InlineConfirmButton
+                          size="icon-xs"
+                          variant="ghost"
+                          disabled={item.runId === null || busyRunId !== null}
+                          icon={<XIcon className="size-3.5" />}
+                          label="Remove queued message"
+                          confirmLabel="Confirm remove"
+                          tooltip="Remove from queue"
+                          confirmTooltip="Click again to remove from the queue and discard the message"
+                          onConfirm={() => {
+                            if (item.runId !== null) void remove(item.runId);
+                          }}
+                        />
                       </>
                     )}
                   </ComposerBanner.Actions>

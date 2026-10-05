@@ -133,7 +133,8 @@ memory. The action is available only when the provider supports rewind.
 On web and desktop, press `Cmd+S` on macOS or `Ctrl+S` on Windows and Linux to save
 the current prompt and its attachments for later. Wait for uploads to finish first.
 With an empty composer, the same shortcut restores a single stash or opens the
-stash menu when there are several.
+stash menu when there are several. To delete a stash, press its **X** twice;
+Escape cancels.
 
 Stashes containing uploaded files must be restored in their original environment.
 Those files are retained for 24 hours. After an upload expires, restore the prompt
@@ -164,7 +165,8 @@ switch the button to a queue icon. Click while holding that key, or press `Cmd+E
 
 Queued messages appear above the composer. Rows show a thumbnail of any attached image alongside
 the text. Drag a row by its handle to reorder it, use the handle's arrow keys, promote the message
-to a steer, or remove it.
+to a steer, or remove it. On web and desktop, removing takes two presses of the row's **X**
+because the message is discarded, not returned to the composer.
 
 If the server restarts, saved queued messages keep their order and are held. Press
 **Resume** in an empty composer on web or desktop, or **Resume queue** in the queue

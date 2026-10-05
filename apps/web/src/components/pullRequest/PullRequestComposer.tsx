@@ -12,6 +12,7 @@ import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@supa
 import { MessageSquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Popover, PopoverClose, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popover";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -131,16 +132,17 @@ export function PullRequestComposer({
           )}
           <div className="flex items-center gap-1">
             {mode === "review" && pendingComments.length > 0 ? (
-              <Button
+              <InlineConfirmButton
                 size="icon-xs"
                 variant="ghost"
-                aria-label="Discard pending line comments"
-                title="Discard pending line comments"
                 disabled={reviewPending}
-                onClick={() => clearComments(reviewKey)}
-              >
-                <Trash2Icon className="size-3.5" />
-              </Button>
+                icon={<Trash2Icon className="size-3.5" />}
+                label="Discard pending line comments"
+                confirmLabel="Confirm discard"
+                tooltip="Discard pending line comments"
+                confirmTooltip={`Click again to discard ${pendingComments.length} pending line ${pendingComments.length === 1 ? "comment" : "comments"}`}
+                onConfirm={() => clearComments(reviewKey)}
+              />
             ) : null}
             <PopoverClose
               render={<Button size="icon-xs" variant="ghost" />}
