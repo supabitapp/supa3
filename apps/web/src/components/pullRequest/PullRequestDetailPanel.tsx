@@ -433,6 +433,7 @@ export function PullRequestDetailPanel({
   getShortcutContext,
   threadRef = null,
   reference: requestedReference,
+  url,
   listEntry = null,
   refreshToken: forcedRefreshToken = 0,
   onActed,
@@ -454,6 +455,8 @@ export function PullRequestDetailPanel({
    */
   threadRef?: ScopedThreadRef | null;
   reference: PullRequestRef;
+  /** Host page retained by the selected surface, available before its detail can be read. */
+  url?: string | undefined;
   /** Row fields already loaded by the pull-request list, used while richer detail arrives. */
   listEntry?: PullRequestListEntry | null;
   /**
@@ -729,6 +732,7 @@ export function PullRequestDetailPanel({
   const pullRequestBrowserUrl =
     detail?.url ??
     matchingListEntry?.url ??
+    url ??
     gitHubPullRequestBrowserUrl(repositoryIdentity, reference.repository, reference.number);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { copyToClipboard: copyReference } = useCopyToClipboard<string>({

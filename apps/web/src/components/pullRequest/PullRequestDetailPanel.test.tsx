@@ -7,24 +7,33 @@ import {
   type ThreadPullRequestLink,
 } from "@supacode/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@supacode/contracts/settings";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
 import { act, type ReactNode, type ReactElement, type ComponentProps } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 
-const { newThread, prepareThread, refresh, Wrapper, Trigger } = vi.hoisted(() => ({
-  newThread: vi.fn(),
-  prepareThread: vi.fn(),
-  refresh: vi.fn(),
-  Wrapper: ({ children }: { children?: ReactNode }) => children,
-  Trigger: ({ children, render }: { children?: ReactNode; render?: ReactElement }) => (
-    <>
-      {render}
-      {children}
-    </>
-  ),
-}));
-vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+const { newThread, prepareThread, refresh, openLink, detailRead, Wrapper, Trigger } = vi.hoisted(
+  () => ({
+    newThread: vi.fn(),
+    prepareThread: vi.fn(),
+    refresh: vi.fn(),
+    openLink: vi.fn(),
+    detailRead: {
+      data: undefined as PullRequestDetailView | null | undefined,
+      isPending: false,
+      error: null as string | null,
+    },
+    Wrapper: ({ children }: { children?: ReactNode }) => children,
+    Trigger: ({ children, render }: { children?: ReactNode; render?: ReactElement }) => (
+      <>
+        {render}
+        {children}
+      </>
+    ),
+  }),
+);
+vi.mock("@effect/atom-react", () => ({ useAtomValue: () => DEFAULT_RESOLVED_KEYBINDINGS }));
 vi.mock("~/state/server", () => ({ primaryServerKeybindingsAtom: {} }));
 vi.mock("~/state/entities", () => ({ useProjects: () => [], useServerConfigs: () => new Map() }));
 vi.mock("~/state/environments", () => ({
@@ -51,10 +60,10 @@ vi.mock("~/state/pullRequests", async (importOriginal) => ({
 vi.mock("~/state/vcs", () => ({ vcsEnvironment: { listRefs: () => null } }));
 vi.mock("~/state/query", () => ({
   useEnvironmentQuery: (query: string) => ({
-    data: query === "detail" ? detail : null,
-    isPending: false,
-    isSuccess: true,
-    error: null,
+    data: query === "detail" ? (detailRead.data === undefined ? detail : detailRead.data) : null,
+    isPending: query === "detail" && detailRead.isPending,
+    isSuccess: !detailRead.isPending && detailRead.error === null,
+    error: query === "detail" ? detailRead.error : null,
     refresh,
   }),
 }));
@@ -88,7 +97,12 @@ vi.mock("./PullRequestMarkdown", () => ({
   PullRequestMarkdownContext: Wrapper,
   PullRequestMarkdown: () => null,
 }));
-vi.mock("~/browser/useOpenLink", () => ({ useOpenLink: () => vi.fn() }));
+vi.mock("~/browser/useOpenLink", () => ({
+  useOpenLink:
+    (targetThreadRef: ScopedThreadRef | null | undefined) =>
+    (...args: readonly unknown[]) =>
+      openLink(targetThreadRef, ...args),
+}));
 vi.mock("./PullRequestThreadLinks", () => ({ PullRequestThreadLinks: () => null }));
 vi.mock("./PullRequestSummaryTab", () => ({
   PullRequestSummaryTab: ({
@@ -199,6 +213,10 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  detailRead.data = undefined;
+  detailRead.isPending = false;
+  detailRead.error = null;
+  openLink.mockReset().mockResolvedValue(undefined);
   useComposerDraftStore.setState({ draftsByThreadKey: {} });
   newThread
     .mockReset()
@@ -206,6 +224,97 @@ beforeEach(() => {
   prepareThread.mockReset().mockResolvedValue({
     _tag: "Success",
     value: { branch: "feature", worktreePath: "/workspace/pr" },
+  });
+});
+
+describe("open pull request keyboard shortcut", () => {
+  it.each([
+    [
+      "pending GitLab MR beside a thread",
+      true,
+      threadRef,
+      "https://gitlab.example/team/repo/-/merge_requests/42",
+    ],
+    [
+      "failed GitLab MR on the PR page",
+      false,
+      null,
+      "https://gitlab.example/team/repo/-/merge_requests/42",
+    ],
+    ["pending Forgejo PR on the PR page", true, null, "https://forgejo.example/team/repo/pulls/42"],
+    [
+      "failed Forgejo PR beside a thread",
+      false,
+      threadRef,
+      "https://forgejo.example/team/repo/pulls/42",
+    ],
+  ] as const)("opens the saved URL for a %s", async (_name, pending, targetThreadRef, url) => {
+    const keyboardEvents = new EventTarget();
+    vi.stubGlobal("window", keyboardEvents);
+    vi.stubGlobal("navigator", { platform: "MacIntel" });
+    detailRead.data = null;
+    detailRead.isPending = pending;
+    detailRead.error = pending ? null : "Host unavailable";
+    const getShortcutContext = () => ({
+      terminalFocus: false,
+      terminalOpen: false,
+      previewFocus: false,
+      previewOpen: false,
+      isWeb: true,
+      isDesktop: false,
+    });
+    const renderPanels = (active: boolean) => (
+      <>
+        <PullRequestDetailPanel
+          environmentId={EnvironmentId.make("other-environment")}
+          reference={{
+            projectId: ProjectId.make("other-project"),
+            repository: "team/repo",
+            number: 42,
+          }}
+          url="https://inactive.example/team/repo/pulls/42"
+          shortcutsEnabled={false}
+          getShortcutContext={getShortcutContext}
+        />
+        <PullRequestDetailPanel
+          environmentId={threadRef.environmentId}
+          threadRef={targetThreadRef}
+          reference={{ projectId: detail.projectId, repository: "team/repo", number: 42 }}
+          url={url}
+          shortcutsEnabled={active}
+          getShortcutContext={getShortcutContext}
+        />
+      </>
+    );
+    await act(async () => {
+      renderer = create(renderPanels(true));
+    });
+    const pressShortcut = (repeat = false) => {
+      const event = Object.assign(new Event("keydown", { cancelable: true }), {
+        key: "ø",
+        code: "KeyO",
+        metaKey: true,
+        ctrlKey: false,
+        altKey: true,
+        shiftKey: false,
+        repeat,
+      });
+      keyboardEvents.dispatchEvent(event);
+      return event;
+    };
+    await act(async () => {
+      expect(pressShortcut().defaultPrevented).toBe(true);
+      pressShortcut(true);
+    });
+    expect(openLink.mock.calls).toEqual([[targetThreadRef, url]]);
+
+    await act(async () => {
+      renderer.update(renderPanels(false));
+    });
+    await act(async () => {
+      expect(pressShortcut().defaultPrevented).toBe(false);
+    });
+    expect(openLink).toHaveBeenCalledTimes(1);
   });
 });
 afterEach(() => {
