@@ -33,7 +33,7 @@ if (install.status !== 0) process.exit(install.status ?? 1);
 // Env files live as real files in the main checkout; worktrees only get
 // symlinks to them. Only a symlink is ever replaced, so a real env file is
 // never deleted, including when this runs in the main checkout itself.
-const ENV_FILES = [".env", NodePath.join("infra", "relay", ".env")];
+const ENV_FILES = [".env"];
 for (const file of ENV_FILES) {
   const source = NodePath.join(projectRoot, file);
   const sourceStat = NodeFS.lstatSync(source, { throwIfNoEntry: false });
