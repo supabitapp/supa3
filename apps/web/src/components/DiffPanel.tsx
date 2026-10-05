@@ -400,6 +400,7 @@ export default function DiffPanel({
   const selectedPatchError = selectedTurn ? activeCheckpointDiff.error : branchDiffPreview.error;
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
+  const isGitOnlyTurn = hasNoNetChanges && selectedGitUpdate !== undefined && !includeGitChanges;
   const lazySource =
     !selectedTurn && selectedGitSource?.truncated && selectedGitSource.files
       ? selectedGitSource
@@ -1049,18 +1050,23 @@ export default function DiffPanel({
                 />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-3 py-2 text-xs text-muted-foreground/70">
-                  <p>
-                    {hasNoNetChanges && selectedGitUpdate && !includeGitChanges
-                      ? `This turn only updated files via Git (${formatGitUpdateRefs(selectedGitUpdate)}).`
-                      : hasNoNetChanges
+                  {isGitOnlyTurn ? (
+                    <>
+                      <p>
+                        This turn only updated files via Git (
+                        {formatGitUpdateRefs(selectedGitUpdate)}).
+                      </p>
+                      <Button size="xs" variant="outline" onClick={() => setShowGitChanges(true)}>
+                        Show Git changes
+                      </Button>
+                    </>
+                  ) : (
+                    <p>
+                      {hasNoNetChanges
                         ? "No net changes in this selection."
                         : "No patch available for this selection."}
-                  </p>
-                  {hasNoNetChanges && selectedGitUpdate && !includeGitChanges ? (
-                    <Button size="xs" variant="outline" onClick={() => setShowGitChanges(true)}>
-                      Show Git changes
-                    </Button>
-                  ) : null}
+                    </p>
+                  )}
                 </div>
               )
             ) : lazySource || renderablePatch?.kind === "files" ? (

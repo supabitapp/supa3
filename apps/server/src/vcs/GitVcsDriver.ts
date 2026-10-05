@@ -770,9 +770,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     }).pipe(Effect.map((result) => result.exitCode === 0));
 
   // One rev-parse answers both whether HEAD is born and where it points.
-  const readCheckpointHead = (cwd: string) =>
+  const resolveHeadAndBranch = (cwd: string) =>
     execute({
-      operation: VcsProcess.CHECKPOINT_CAPTURE_OPERATION,
+      operation: "GitVcsDriver.checkpoints.resolveHeadAndBranch",
       cwd,
       args: ["rev-parse", "HEAD^{commit}", "--symbolic-full-name", "HEAD", "--"],
       allowNonZeroExit: true,
@@ -851,7 +851,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       );
 
       yield* Effect.gen(function* () {
-        const head = yield* readCheckpointHead(input.cwd);
+        const head = yield* resolveHeadAndBranch(input.cwd);
         const headExists = head !== null;
         const sparseConfig = yield* execute({
           operation,
