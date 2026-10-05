@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@supacode/contracts";
+import type { OrchestrationSkillsEnvironment } from "@supacode/client-runtime/orchestrationSkills";
 import { useOrchestrationSkills } from "../../../state/useOrchestrationSkills";
 import { serverEnvironment } from "../../../state/server";
 import { AppText as Text } from "../../../components/AppText";
@@ -6,20 +6,18 @@ import { SettingsRow } from "./SettingsRow";
 import { SettingsSection } from "./SettingsSection";
 
 export function OrchestrationSkillsSection({
-  environmentId,
-  label,
+  environments,
 }: {
-  environmentId: EnvironmentId;
-  label: string;
+  environments: readonly OrchestrationSkillsEnvironment[];
 }) {
-  const skills = useOrchestrationSkills(environmentId, serverEnvironment);
+  const skills = useOrchestrationSkills(environments, serverEnvironment);
   const busy = skills.pending !== null;
   return (
-    <SettingsSection title={`Orchestration skills · ${label}`}>
+    <SettingsSection title="Orchestration skills">
       <Text className="p-4 text-sm text-foreground-muted">
-        Install supacode-commitee and supacode-advisor skills for this environment’s provider
-        accounts. Applies to all projects and updates with Supacode. Restart existing agent sessions
-        to load skill changes.
+        Install supacode-commitee and supacode-advisor skills for the selected environments’
+        provider accounts. Applies to all projects and updates with Supacode. Restart existing agent
+        sessions to load skill changes.
       </Text>
       <SettingsRow
         icon="arrow.down.circle"
@@ -41,26 +39,16 @@ export function OrchestrationSkillsSection({
           onPress={() => void skills.request("Uninstall")}
         />
       ) : null}
-      {skills.conflicts.map((target) => (
-        <Text key={target.directory} className="p-4 text-sm text-foreground-muted">
-          Existing skill folders or unrelated links in {target.directory} were left unchanged.
+      {skills.notices.map((notice) => (
+        <Text key={notice} className="p-4 text-sm text-foreground-muted">
+          {notice}
         </Text>
       ))}
-      {skills.status?.targets.length === 0 ? (
-        <Text className="p-4 text-sm text-foreground-muted">
-          No providers support native skill installation here.
-        </Text>
-      ) : null}
-      {skills.status && skills.status.unsupportedProviders.length > 0 ? (
-        <Text className="p-4 text-sm text-foreground-muted">
-          Not supported: {skills.status.unsupportedProviders.join(", ")}.
-        </Text>
-      ) : null}
       {skills.error ? (
         <SettingsRow
           icon="arrow.clockwise"
           label="Retry"
-          value={skills.error}
+          value="Retry the selected environments."
           disabled={busy}
           onPress={() => void skills.request("Status")}
         />

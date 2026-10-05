@@ -196,8 +196,10 @@ mobile. Only skills enabled for the provider are listed.
 To install Supacode's optional `supacode-advisor` and `supacode-commitee` skills,
 choose **Install Skills** in **Settings → Integrations → Orchestration skills**
 on web and desktop, or **Settings → Agent behavior** on mobile. Nothing installs
-automatically. Installation applies to all projects on the chosen environment
-and links the providers' native skill folders to Supacode's bundled skills.
+automatically. Installation applies to all projects on the selected connected
+environments and links the providers' native skill folders to Supacode's bundled skills.
+With **All environments** selected, offline environments are skipped; reconnect
+and install again to include them.
 Installed skills update when the updated app starts. Use **Uninstall Skills** to
 remove those links. Existing skill folders and unrelated links are preserved.
 Create a separate skill if you want to customize the instructions; changes to

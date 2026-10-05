@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@supacode/contracts";
+import type { OrchestrationSkillsEnvironment } from "@supacode/client-runtime/orchestrationSkills";
 import { useOrchestrationSkills } from "../../state/useOrchestrationSkills";
 import { serverEnvironment } from "../../state/server";
 import { Button } from "../ui/button";
@@ -6,45 +6,30 @@ import { searchableSetting } from "./settingsSearch";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSettingsScope } from "./SettingsScopeContext";
 
-function EnvironmentSkills({
-  environmentId,
-  label,
+function SelectedEnvironmentSkills({
+  environments,
 }: {
-  environmentId: EnvironmentId;
-  label: string;
+  environments: readonly OrchestrationSkillsEnvironment[];
 }) {
-  const skills = useOrchestrationSkills(environmentId, serverEnvironment);
+  const skills = useOrchestrationSkills(environments, serverEnvironment);
   const busy = skills.pending !== null;
   return (
     <SettingsRow
-      title={label}
+      title="Orchestration skills"
       description={
         <>
-          Install supacode-commitee and supacode-advisor skills for this environment’s provider
-          accounts. Applies to all projects and updates with Supacode.
+          Install supacode-commitee and supacode-advisor skills for the selected environments’
+          provider accounts. Applies to all projects and updates with Supacode.
           {skills.installed ? (
             <span className="block">
               Installed. Restart existing agent sessions to load skill changes.
             </span>
           ) : null}
-          {skills.status?.targets.length === 0 ? (
-            <span className="block">No providers support native skill installation here.</span>
-          ) : null}
-          {skills.status && skills.status.unsupportedProviders.length > 0 ? (
-            <span className="block">
-              Not supported: {skills.status.unsupportedProviders.join(", ")}.
-            </span>
-          ) : null}
-          {skills.conflicts.map((target) => (
-            <span className="block" key={target.directory}>
-              Existing skill folders or unrelated links in {target.directory} were left unchanged.
+          {skills.notices.map((notice) => (
+            <span className="block" key={notice}>
+              {notice}
             </span>
           ))}
-          {skills.error ? (
-            <span className="block" role="alert">
-              {skills.error}
-            </span>
-          ) : null}
         </>
       }
       control={
@@ -88,22 +73,35 @@ function EnvironmentSkills({
 }
 
 export function OrchestrationSkillsSettings() {
-  const { connectedEnvironments } = useSettingsScope();
+  const { environments, connectedEnvironments } = useSettingsScope();
+  const offline = environments.filter(
+    (environment) =>
+      !connectedEnvironments.some(
+        (connected) => connected.environmentId === environment.environmentId,
+      ),
+  );
   return (
     <SettingsSection {...searchableSetting("orchestration-skills")}>
       {connectedEnvironments.length === 0 ? (
         <SettingsRow
-          title="Install Skills"
+          title="Orchestration skills"
           description="Connect to an environment to install supacode-commitee and supacode-advisor skills."
         />
-      ) : null}
-      {connectedEnvironments.map((environment) => (
-        <EnvironmentSkills
-          key={environment.environmentId}
-          environmentId={environment.environmentId}
-          label={environment.label}
+      ) : (
+        <SelectedEnvironmentSkills
+          key={connectedEnvironments
+            .map((environment) => environment.environmentId)
+            .sort()
+            .join(",")}
+          environments={connectedEnvironments}
         />
-      ))}
+      )}
+      {offline.length > 0 ? (
+        <SettingsRow
+          title="Offline environments"
+          description={`Skipped: ${offline.map((environment) => environment.label).join(", ")}. Reconnect and install again to include them.`}
+        />
+      ) : null}
     </SettingsSection>
   );
 }

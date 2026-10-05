@@ -380,13 +380,13 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       />
                     ))}
                   </SettingsSection>
-                  {selectedTargets.map((target) => (
-                    <OrchestrationSkillsSection
-                      key={target.environmentId}
-                      environmentId={target.environmentId}
-                      label={target.label}
-                    />
-                  ))}
+                  <OrchestrationSkillsSection
+                    key={selectedTargets
+                      .map((target) => target.environmentId)
+                      .sort()
+                      .join(",")}
+                    environments={selectedTargets}
+                  />
                   <SettingsSection title="Preview browser">
                     <SettingsSwitchRow
                       icon="globe"
