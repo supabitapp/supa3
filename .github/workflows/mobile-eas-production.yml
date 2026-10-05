@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight / Google Play) or update (OTA)"
+        description: "build (+ iOS review with manual release / Google Play) or update (OTA)"
         required: true
         type: choice
         default: build
@@ -51,6 +51,9 @@ on:
       - .github/workflows/mobile-eas-production.yml
       - .github/actions/setup-mobile-release/**
       - .github/actions/build-mobile/**
+      - .github/actions/load-release-secrets/**
+      - .github/fnox.toml
+      - .github/scripts/load-release-secrets.mjs
       - .github/scripts/mobile-build-*.cjs
 
 concurrency:
@@ -251,8 +254,14 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           profile: ${{ env.MOBILE_PROFILE }}
+      - name: Submit signed binary to stores
+        if: steps.build.outcome == 'success'
+        working-directory: apps/mobile
+        env:
+          MOBILE_BINARY: ${{ steps.build.outputs.binary }}
+        run: eas submit --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" --path "$MOBILE_BINARY" --non-interactive --wait
       - id: artifact
-        name: Save signed binary
+        name: Save submitted binary
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
@@ -260,12 +269,6 @@ jobs:
           path: ${{ steps.build.outputs.binary }}
           if-no-files-found: error
           retention-days: 14
-      - name: Submit signed binary to stores
-        if: steps.build.outcome == 'success'
-        working-directory: apps/mobile
-        env:
-          MOBILE_BINARY: ${{ steps.build.outputs.binary }}
-        run: eas submit --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" --path "$MOBILE_BINARY" --non-interactive --wait
       - name: Record completed store build
         if: steps.build.outcome == 'success'
         uses: actions/github-script@v8
@@ -299,3 +302,64 @@ jobs:
           message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
           eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
             --message "$message" --non-interactive
+
+  ios-review:
+    name: Submit iOS for App Store review
+    needs: [prepare, production]
+    if: ${{ !cancelled() && needs.prepare.outputs.enabled == 'true' && (inputs.profile || 'production') == 'production' && (inputs.platform || 'all') != 'android' && inputs.mode != 'update' }}
+    runs-on: depot-macos-26
+    environment: release
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - id: artifact
+        name: Find uploaded production iOS binary
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            // A retry of only this job reuses the binary from the successful build attempt.
+            const artifact = artifacts
+              .filter(({ name }) => /^mobile-production-ios-\d+$/.test(name))
+              .sort((a, b) => b.id - a.id)[0];
+            if (!artifact) {
+              await core.summary.addRaw('No new production iOS binary was uploaded; App Store review skipped.').write();
+            } else if (artifact.expired) {
+              core.setFailed('The production iOS binary expired. Run a new iOS build before submitting for review.');
+            } else {
+              core.setOutput('id', artifact.id);
+            }
+      - uses: actions/download-artifact@v8
+        if: steps.artifact.outputs.id != ''
+        with:
+          artifact-ids: ${{ steps.artifact.outputs.id }}
+          path: ${{ runner.temp }}/ios-review
+      - uses: ./.github/actions/setup-mise
+        if: steps.artifact.outputs.id != ''
+      - name: Install fastlane
+        if: steps.artifact.outputs.id != ''
+        run: command -v fastlane || brew install fastlane
+      - name: Load App Store Connect credentials
+        if: steps.artifact.outputs.id != ''
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: app-store
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Submit for review and hold for manual release
+        if: steps.artifact.outputs.id != ''
+        working-directory: apps/mobile
+        env:
+          MOBILE_BINARY: ${{ runner.temp }}/ios-review/supacode-ios.ipa
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+          FASTLANE_OPT_OUT_USAGE: "1"
+        run: |
+          fastlane ios submit_review
+          printf '%s\n' 'iOS review submitted with manual release. Approval waits in Pending Developer Release until a maintainer publishes the version.' >> "$GITHUB_STEP_SUMMARY"

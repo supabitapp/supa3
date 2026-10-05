@@ -2,7 +2,7 @@
 
 > For maintainers. Using Supacode? See [docs/user](../user/).
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+This document covers stable and nightly desktop releases and mobile store releases.
 
 ## Version numbers
 
@@ -58,6 +58,22 @@ bumps require a new store binary under the existing OTA fingerprint policy.
   - stable releases are aliased to the `latest` hosted app channel
   - nightly releases are aliased to the `nightly` hosted app channel
 - Release macOS jobs require Apple credentials from 1Password. Windows signing is auto-detected from its Azure secrets.
+
+## Mobile store releases
+
+The [Mobile Production workflow](../../.github/workflows/mobile-eas-production.yml) builds a new store
+binary when the mobile version changes on `main`. Dispatch `mode=build`, `profile=production`, and
+`platform=ios` to build manually. After the TestFlight upload, the iOS review job submits that exact
+build for App Store review with manual release enabled. Approved versions wait in Pending Developer
+Release until a maintainer releases them in App Store Connect. Preview builds and OTA updates skip
+App Store review.
+
+The review job uses the `release` environment's `OP_SERVICE_ACCOUNT_TOKEN` and the
+[`app-store` fnox profile](../../.github/fnox.toml). Its Apple API key must have Admin or App Manager
+access to the app. Keep required store metadata and review information complete in App Store Connect.
+The job fills empty release notes and preserves other store metadata, including review attachments.
+If submission fails after the upload, retry the review job while the submitted IPA artifact is
+available. Retrying the build creates another binary.
 
 ## Pull request macOS previews
 

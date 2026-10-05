@@ -9,6 +9,11 @@ APPLE_API_KEY = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API
 APPLE_API_KEY_ID = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_KEY_ID" }
 APPLE_API_ISSUER = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_ISSUER" }
 
+[profiles.app-store.secrets]
+APPLE_API_KEY = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_KEY" }
+APPLE_API_KEY_ID = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_KEY_ID" }
+APPLE_API_ISSUER = { provider = "op", value = "dxvzgzlnmd4fen4c7ltqdre76m/APPLE_API_ISSUER" }
+
 [profiles.release-app.secrets]
 RELEASE_APP_ID = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_ID" }
 RELEASE_APP_PRIVATE_KEY = { provider = "op", value = "pd4gows6bleou7dovea5ngtyym/RELEASE_APP_PRIVATE_KEY" }
