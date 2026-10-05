@@ -36,6 +36,7 @@ import {
   sortSettledThreads,
 } from "@supacode/client-runtime/state/thread-sort";
 import {
+  resolveThreadWorkingStartedAt,
   resolveThreadProviderStack,
   threadRuntimeCanArchive,
   type EnvironmentThreadShell,
@@ -174,6 +175,7 @@ import {
   buildBulkUnpinContextMenuItem,
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
+  formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
   isSidebarNestedLinkClick,
@@ -253,6 +255,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { SidebarPrimaryNavigation } from "./sidebar/SidebarPrimaryNavigation";
 import { SidebarPinButton } from "./sidebar/SidebarPinButton";
+import { SidebarSnoozeButton } from "./sidebar/SidebarSnoozeButton";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
@@ -334,6 +337,19 @@ function SidebarRelativeTime({
       {compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp, Date.parse(`${nowMinute}:00Z`)))}
     </time>
   );
+}
+
+// The elapsed label ticks independently so the row and its queries stay idle.
+function WorkingDuration({ startedAt }: { startedAt: string | null }) {
+  const startedMs = startedAt === null ? Number.NaN : Date.parse(startedAt);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!Number.isFinite(startedMs)) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [startedMs]);
+  if (!Number.isFinite(startedMs)) return null;
+  return <span className="tabular-nums">{formatWorkingDurationLabel(nowMs - startedMs)}</span>;
 }
 
 function terminalProcessLabel(count: number): string {
@@ -1093,6 +1109,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     event: PointerEvent,
   ) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
+  onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
   onPin: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
@@ -1113,6 +1130,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onThreadActivate,
     onThreadClick,
     onUnsettle,
+    onSnooze,
     onUnsnooze,
     onPin,
     onUnpin,
@@ -1475,6 +1493,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   );
   const handleUnpin = useCallback(() => onUnpin(threadRef), [onUnpin, threadRef]);
   const handlePin = useCallback(() => onPin(threadRef), [onPin, threadRef]);
+  const handleSnoozePreset = useCallback(
+    (preset: Pick<SnoozePreset, "snoozedUntil">) => onSnooze(threadRef, preset),
+    [onSnooze, threadRef],
+  );
+  const showSnoozeButton =
+    !isParked && snoozeSupported && canSnooze(thread, { now: new Date().toISOString() });
+  const [snoozeMenuOpenRaw, setSnoozeMenuOpen] = useState(false);
+  const snoozeMenuOpen = snoozeMenuOpenRaw && showSnoozeButton;
+  // A newly blocked thread unmounts the menu without an onOpenChange callback.
+  if (!showSnoozeButton && snoozeMenuOpenRaw) setSnoozeMenuOpen(false);
   const handlePrClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>, targetUrl?: string) => {
       const url = targetUrl ?? pr?.url ?? currentLinkedPr?.url;
@@ -1867,6 +1895,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       ? CircleDashedIcon
       : ClockIcon;
   const showDragDestination = sortable?.isDragging || props.sweepAction !== null;
+  const showHoverActions =
+    (props.pinningSupported && !isPendingCreation) || showSnoozeButton || settlementSupported;
 
   return (
     <li
@@ -1878,7 +1908,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         sortable?.isDragging && "relative z-20",
       )}
     >
-      <Tooltip disabled={sortable?.isDragging}>
+      <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
         <TooltipTrigger
           render={
             <div
@@ -1908,28 +1938,56 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 ) : null}
               </span>
               {title}
-              {/* Opacity alone reveals these fixed slots. Neither actions nor
-                  time leave the layout, so hovering cannot shift any content. */}
+              {/* Both layers reserve the same slot so hover and keyboard focus
+                  replace the status without shifting the title or branch. */}
               <span
                 className={cn(
-                  "flex shrink-0 items-center gap-1",
+                  "group/sidebar-status-slot grid h-5 shrink-0 items-center text-xs",
                   showDragDestination && "invisible",
                 )}
               >
-                <span className="pointer-events-none flex w-10 shrink-0 items-center opacity-0 transition-opacity group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 group-focus-visible/sidebar-row:pointer-events-auto group-focus-visible/sidebar-row:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
+                <span
+                  className={cn(
+                    "pointer-events-none col-start-1 row-start-1 flex items-center gap-1.5 justify-self-end transition-opacity motion-reduce:transition-none",
+                    showHoverActions &&
+                      "group-any-hover/sidebar-row:opacity-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0",
+                    snoozeMenuOpen && "opacity-0",
+                    jumpHintIndicatorsClassName,
+                  )}
+                >
+                  {topStatus?.icon === "working" ? (
+                    <span className="inline-flex items-center gap-1.5 text-info">
+                      <span role="status">Working</span>
+                      <span aria-hidden>
+                        <WorkingDuration startedAt={resolveThreadWorkingStartedAt(thread)} />
+                      </span>
+                    </span>
+                  ) : (
+                    <SidebarRelativeTime
+                      timestamp={thread.latestUserMessageAt ?? thread.updatedAt}
+                    />
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "pointer-events-none col-start-1 row-start-1 flex items-center justify-self-end opacity-0 transition-opacity group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 motion-reduce:transition-none",
+                    snoozeMenuOpen && "pointer-events-auto opacity-100",
+                  )}
+                >
                   {props.pinningSupported && !isPendingCreation ? (
                     <SidebarPinButton
                       pinned={props.isPinned}
                       onPin={handlePin}
                       onUnpin={handleUnpin}
                     />
-                  ) : (
-                    <span className="inline-flex size-5 items-center justify-center">
-                      {props.isPinned ? (
-                        <PinIcon aria-label="Pinned" role="img" className="size-3.5" />
-                      ) : null}
-                    </span>
-                  )}
+                  ) : null}
+                  {showSnoozeButton ? (
+                    <SidebarSnoozeButton
+                      open={snoozeMenuOpen}
+                      onOpenChange={setSnoozeMenuOpen}
+                      onSnooze={handleSnoozePreset}
+                    />
+                  ) : null}
                   {settlementSupported ? (
                     <Tooltip>
                       <TooltipTrigger
@@ -1939,22 +1997,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             aria-label="Settle thread"
                             onClick={handleSettleClick}
                             onPointerDown={handleActionPointerDown}
-                            className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/65 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-sm px-1.5 text-muted-foreground/65 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                           />
                         }
                       >
                         <CheckIcon aria-hidden className="size-3.5" />
+                        Settle
                       </TooltipTrigger>
                       <TooltipPopup>Settle thread</TooltipPopup>
                     </Tooltip>
-                  ) : (
-                    <span className="size-5" />
-                  )}
+                  ) : null}
                 </span>
-                <SidebarRelativeTime
-                  timestamp={thread.latestUserMessageAt ?? thread.updatedAt}
-                  className={jumpHintIndicatorsClassName}
-                />
               </span>
             </div>
             {showDragDestination ? (
@@ -1995,7 +2048,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <span className={cn("contents", jumpHintIndicatorsClassName)}>
                 {terminalStatusIcon}
                 {prBadge}
-                {topStatus ? (
+                {topStatus && topStatus.icon !== "working" ? (
                   isWokeStatus ? (
                     <button
                       type="button"
@@ -4672,6 +4725,7 @@ export default function Sidebar() {
                           onSettle={attemptSettle}
                           onActionSweepStart={startActionSweep}
                           onUnsettle={attemptUnsettle}
+                          onSnooze={attemptSnooze}
                           onUnsnooze={attemptUnsnooze}
                           onPin={attemptPin}
                           onUnpin={attemptUnpinWithoutDialog}
