@@ -2,7 +2,10 @@ amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pk
 import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
 
 steps {
-  ["vp-fmt"] = Builtins.vp_fmt
+  ["vp-fmt"] = (Builtins.vp_fmt) {
+    fix = "vp fmt --no-error-on-unmatched-pattern {{files}}"
+    check = "vp fmt --check --no-error-on-unmatched-pattern {{files}}"
+  }
   ["gitleaks"] = (Builtins.gitleaks) {
     scan = "staged"
   }
