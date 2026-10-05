@@ -432,29 +432,23 @@ export function resolveThreadPanelPullRequestAction(
  * A row's own host reads with the thread's known state laid over them when that state is newer.
  * The linked snapshot and branch status refresh on the server's schedule, not the row's, so either
  * side can learn of a merge first; a row still reading "open" beside a merged thread badge would
- * contradict it. Merged is final, otherwise the later host update wins.
+ * contradict it. Merged is final, otherwise the later host update wins. Only the state is taken:
+ * a snapshot defaults the draft flag when its host leaves it out, so it cannot overrule a read.
  */
 export function withKnownPullRequestState<
-  T extends {
-    readonly state: PullRequestState;
-    readonly isDraft: boolean;
-    readonly updatedAt: string;
-  },
+  T extends { readonly state: PullRequestState; readonly updatedAt: string },
 >(
   detail: T,
   known: {
     readonly state: PullRequestState;
-    readonly isDraft?: boolean | undefined;
     readonly updatedAt?: string | null | undefined;
   } | null,
 ): T {
-  if (known === null || detail.state === "merged") return detail;
-  const isDraft = known.isDraft === true;
-  if (known.state === detail.state && isDraft === detail.isDraft) return detail;
+  if (known === null || detail.state === "merged" || known.state === detail.state) return detail;
   const newer =
     known.state === "merged" ||
     (known.updatedAt != null && Date.parse(known.updatedAt) > Date.parse(detail.updatedAt));
-  return newer ? { ...detail, state: known.state, isDraft } : detail;
+  return newer ? { ...detail, state: known.state } : detail;
 }
 
 /** Chronological ascending, oldest to newest — reversed for the "newest" reading order. */

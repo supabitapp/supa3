@@ -1630,13 +1630,6 @@ describe("the compact row against the thread's known state", () => {
       withKnownPullRequestState(fetched, { state: "closed", updatedAt: "2026-10-05T16:11:00Z" }),
     ).toEqual({ ...fetched, state: "closed" });
     expect(
-      withKnownPullRequestState(fetched, {
-        state: "open",
-        isDraft: true,
-        updatedAt: "2026-10-05T16:11:00Z",
-      }),
-    ).toEqual({ ...fetched, isDraft: true });
-    expect(
       withKnownPullRequestState(fetched, { state: "closed", updatedAt: "2026-10-05T16:09:00Z" }),
     ).toBe(fetched);
     expect(withKnownPullRequestState(fetched, { state: "closed" })).toBe(fetched);
@@ -1644,6 +1637,11 @@ describe("the compact row against the thread's known state", () => {
 
   it("keeps its own read when it already agrees or is merged", () => {
     expect(withKnownPullRequestState(fetched, { state: "open" })).toBe(fetched);
+    const draft = { ...fetched, isDraft: true };
+    // A newer snapshot from a host that omits drafts says nothing about this one.
+    expect(
+      withKnownPullRequestState(draft, { state: "open", updatedAt: "2026-10-05T16:11:00Z" }),
+    ).toBe(draft);
     expect(withKnownPullRequestState(fetched, null)).toBe(fetched);
     const merged = { ...fetched, state: "merged" } as const;
     expect(
