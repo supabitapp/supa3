@@ -7,4 +7,3 @@ self-hosted-runner:
     - depot-ubuntu-24.04-32
     - depot-ubuntu-24.04-arm-16
     - depot-windows-2025-8
-    - depot-windows-2025-32
