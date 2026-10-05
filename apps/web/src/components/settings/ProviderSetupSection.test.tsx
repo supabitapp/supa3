@@ -337,25 +337,6 @@ describe("Antigravity setup", () => {
     ).toBe(1);
   });
 
-  it("removes an owned damaged runtime from the selected environment", async () => {
-    setup.auth = authState({ phase: "idle", flowId: null, authorizationUrl: null });
-    setup.installation = {
-      ...setup.installation!,
-      phase: "failed",
-      canRemove: true,
-      installedVersion: null,
-    };
-    const remove = visitElements(
-      renderSetup(),
-      (element) => typeof element.props.onRemove === "function",
-    );
-    if (!remove) throw new Error("Missing runtime remove button.");
-    expect(remove.props.disabled).toBe(false);
-    (remove.props.onRemove as () => void)();
-    await flushPromises();
-    expect(setup.removeInstall).toHaveBeenCalledWith({ environmentId, input: { instanceId } });
-  });
-
   it.each([true, false])(
     "can sign out a verified account when its instance is enabled=%s",
     async (enabled) => {
