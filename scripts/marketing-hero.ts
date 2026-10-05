@@ -3,12 +3,14 @@
 /**
  * Regenerates the marketing hero screenshot (apps/marketing/src/assets/app-desktop.webp).
  *
- *   vp run screenshots:marketing [--skip-build] [--keep] [--out <file.webp>]
+ *   vp run screenshots:marketing [--keep] [--out <file.webp>]
  *
- * Builds the web client, starts an isolated server on it, seeds the scene from
+ * Starts an isolated server and the web dev client, seeds the scene from
  * `marketing-hero.scene.ts` as fake git repos plus projection rows, and captures
  * the hero thread with its turn diff at 1440x900 @2x in headless Chromium.
- * Nothing touches ~/.supacode: all state lives in a temp directory.
+ * The dev client is deliberate: it draws the blueprint art behind the sidebar
+ * header, which production builds leave out. Nothing touches ~/.supacode: all
+ * state lives in a temp directory.
  *
  * Projection rows are written directly, which is fine for a visual fixture but
  * skips the event log. Payloads are decoded with the contract schemas before
@@ -745,15 +747,42 @@ async function reservePort(): Promise<number> {
   });
 }
 
+/** Resolves with the first match of `pattern` in the child's stdout; rejects on exit or after two minutes. */
+function waitForOutput(
+  child: NodeChildProcess.ChildProcess,
+  label: string,
+  pattern: RegExp,
+): Promise<RegExpExecArray> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    const timeout = setTimeout(
+      () => reject(new Error(`${label} printed nothing matching ${pattern} within two minutes.`)),
+      120_000,
+    );
+    child.stdout!.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      const match = pattern.exec(output);
+      if (!match) return;
+      clearTimeout(timeout);
+      resolve(match);
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`${label} exited with ${code} before it was ready.`));
+    });
+  });
+}
+
 /** Starts the server and resolves with the pairing URL it prints once startup has finished. */
-async function startServer(
+function startServer(
   root: string,
   home: string,
   port: number,
-): Promise<{
+  webOrigin: string,
+): {
   readonly server: NodeChildProcess.ChildProcess;
   readonly pairingUrl: Promise<string>;
-}> {
+} {
   // Run outside the repo so per-directory tool shims (mise, asdf) resolve
   // provider CLIs the way they would for a normal install.
   const server = NodeChildProcess.spawn(
@@ -768,31 +797,66 @@ async function startServer(
       "--base-dir",
       home,
       "--no-browser",
+      "--dev-url",
+      webOrigin,
       "--log-level",
       "error",
     ],
     { cwd: root, stdio: ["ignore", "pipe", "inherit"] },
   );
-  const pairingUrl = new Promise<string>((resolve, reject) => {
-    let output = "";
-    server.stdout!.on("data", (chunk: Buffer) => {
-      output += chunk.toString();
-      const match = /Pairing URL: (\S+)/.exec(output);
-      if (match) resolve(match[1]!);
-    });
-    server.once("exit", (code) =>
-      reject(new Error(`Server exited with ${code} before it was ready.`)),
-    );
-  });
+  const pairingUrl = waitForOutput(server, "Server", /Pairing URL: (\S+)/).then(
+    (match) => match[1]!,
+  );
   return { server, pairingUrl };
 }
 
-async function stopServer(server: NodeChildProcess.ChildProcess): Promise<void> {
-  if (server.exitCode !== null || server.signalCode !== null) return;
-  const exited = new Promise((resolve) => server.once("exit", resolve));
-  server.kill("SIGTERM");
+/** Starts the web client's Vite dev server, proxying to the server the way `vp run dev` does. */
+function startWebDevServer(
+  webPort: number,
+  serverPort: number,
+): { readonly web: NodeChildProcess.ChildProcess; readonly ready: Promise<unknown> } {
+  const env: NodeJS.ProcessEnv = {
+    ...NodeProcess.env,
+    PORT: String(webPort),
+    SUPACODE_PORT: String(serverPort),
+    SUPACODE_SINGLE_ORIGIN_DEV: "1",
+    NO_COLOR: "1",
+  };
+  // A developer's .env must not point the client at another origin or channel.
+  delete env.VITE_HTTP_URL;
+  delete env.VITE_WS_URL;
+  delete env.VITE_HOSTED_APP_CHANNEL;
+  const web = NodeChildProcess.spawn("vp", ["dev"], {
+    cwd: NodePath.join(REPO_ROOT, "apps/web"),
+    env,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return { web, ready: waitForOutput(web, "Web dev server", /Local:\s+http/) };
+}
+
+function childPids(pid: number): ReadonlyArray<number> {
+  const result = NodeChildProcess.spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" });
+  return result.stdout.split("\n").filter(Boolean).map(Number);
+}
+
+/** Stops a process this script spawned along with its descendants (`vp dev` does not forward signals). */
+async function stopProcessTree(child: NodeChildProcess.ChildProcess): Promise<void> {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+  const tree: number[] = [];
+  const collect = (pid: number) => {
+    for (const childPid of childPids(pid)) collect(childPid);
+    tree.push(pid);
+  };
+  collect(child.pid);
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  for (const pid of tree) {
+    try {
+      NodeProcess.kill(pid, "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
   await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000))]);
-  if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
 }
 
 function issuePairingCredential(home: string): string {
@@ -820,9 +884,14 @@ function installChromium(): Promise<void> {
   return run(NodeProcess.execPath, [cli, "install", "chromium"]);
 }
 
-async function capture(page: Page, pairingUrl: string, environmentId: string): Promise<Buffer> {
-  const origin = new URL(pairingUrl).origin;
-  await page.goto(pairingUrl);
+async function capture(
+  page: Page,
+  origin: string,
+  environmentId: string,
+  pairingUrl: string,
+): Promise<Buffer> {
+  // Pair through the web dev origin; the server prints its own.
+  await page.goto(`${origin}/pair${new URL(pairingUrl).hash}`);
   await page.waitForURL((url) => !url.pathname.startsWith("/pair"));
   await page.goto(`${origin}/${environmentId}/${HERO_THREAD.id}`);
 
@@ -874,13 +943,11 @@ async function capture(page: Page, pairingUrl: string, environmentId: string): P
 async function main(): Promise<void> {
   const { values } = NodeUtil.parseArgs({
     options: {
-      "skip-build": { type: "boolean", default: false },
       keep: { type: "boolean", default: false },
       out: { type: "string", default: DEFAULT_OUTPUT },
     },
   });
 
-  if (!values["skip-build"]) await run("vp", ["run", "--filter", "@supacode/web", "build"]);
   await installChromium();
 
   const root = await NodeFSP.realpath(
@@ -889,13 +956,16 @@ async function main(): Promise<void> {
   const home = NodePath.join(root, "home");
   const workspace = await createWorkspace(root);
   const port = await reservePort();
-  const { server, pairingUrl } = await startServer(root, home, port);
+  const webPort = await reservePort();
+  const webOrigin = `http://localhost:${webPort}`;
+  const { server, pairingUrl } = startServer(root, home, port, webOrigin);
+  const { web, ready: webReady } = startWebDevServer(webPort, port);
   const browser = await chromium.launch().catch(async (error: unknown) => {
-    await stopServer(server);
+    await Promise.all([stopProcessTree(server), stopProcessTree(web)]);
     throw error;
   });
   try {
-    const startupPairingUrl = await pairingUrl;
+    const [startupPairingUrl] = await Promise.all([pairingUrl, webReady]);
     const environmentId = (
       await NodeFSP.readFile(NodePath.join(home, "userdata", "environment-id"), "utf8")
     ).trim();
@@ -915,7 +985,7 @@ async function main(): Promise<void> {
       deviceScaleFactor: 2,
       colorScheme: "dark",
     });
-    const png = await capture(await context.newPage(), startupPairingUrl, environmentId);
+    const png = await capture(await context.newPage(), webOrigin, environmentId, startupPairingUrl);
     // The full-quality PNG outlives the temp directory for PR before/after evidence.
     const pngPath = NodePath.join(NodeOS.tmpdir(), "supacode-marketing-hero.png");
     await NodeFSP.writeFile(pngPath, png);
@@ -927,16 +997,16 @@ async function main(): Promise<void> {
     if (values.keep) {
       await browser.close();
       NodeProcess.stdout.write(
-        `Server left running at http://127.0.0.1:${port}/${environmentId}/${HERO_THREAD.id}\n` +
-          `Pair a browser with http://127.0.0.1:${port}/pair#token=${issuePairingCredential(home)}\n` +
+        `Left running at ${webOrigin}/${environmentId}/${HERO_THREAD.id}\n` +
+          `Pair a browser with ${webOrigin}/pair#token=${issuePairingCredential(home)}\n` +
           `State is in ${root}. Press Ctrl-C to stop.\n`,
       );
-      // Ctrl-C reaches the whole foreground process group, server included.
+      // Ctrl-C reaches the whole foreground process group, servers included.
       await new Promise<never>(() => {});
     }
   } finally {
     await browser.close();
-    await stopServer(server);
+    await Promise.all([stopProcessTree(server), stopProcessTree(web)]);
     if (!values.keep) await NodeFSP.rm(root, { recursive: true, force: true }).catch(() => {});
   }
 }
