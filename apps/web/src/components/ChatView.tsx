@@ -567,7 +567,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ServerUpdateAction } from "./ServerUpdateAction";
 import { useAutoBalanceUpdateBanner } from "./chat/useAutoBalanceUpdateBanner";
-import { RestoreThreadBranchButton } from "./chat/RestoreThreadBranchButton";
+import { InlineConfirmButton } from "./InlineConfirm";
 import {
   ComposerServerUpdateIcon,
   ComposerServerUpdateStatus,
@@ -7452,7 +7452,6 @@ export default function ChatView(props: ChatViewProps) {
     resumeCompactionPermanentlyDismissed,
     selectedProvider,
   ]);
-  const threadBranchHasUncommittedChanges = gitStatusQuery.data?.hasWorkingTreeChanges === true;
   const feedbackBannerItems = useMemo(
     () =>
       feedbackSubmissions.flatMap((submission) => {
@@ -7542,11 +7541,20 @@ export default function ChatView(props: ChatViewProps) {
           </span>
         ),
         actions: (
-          <RestoreThreadBranchButton
-            branch={localCheckoutBranchMismatch.threadBranch}
-            hasUncommittedChanges={threadBranchHasUncommittedChanges}
-            restoring={isRestoringThreadBranch}
-            onRestore={() => void handleSwitchCheckoutToThread()}
+          <InlineConfirmButton
+            size="xs"
+            variant="ghost"
+            disabled={isRestoringThreadBranch}
+            required={gitStatusQuery.data?.hasWorkingTreeChanges === true}
+            label={isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
+            confirmLabel="Confirm restore"
+            tooltip={
+              gitStatusQuery.data?.hasWorkingTreeChanges
+                ? `Switch back to ${localCheckoutBranchMismatch.threadBranch}. You have uncommitted changes.`
+                : `Switch back to ${localCheckoutBranchMismatch.threadBranch}`
+            }
+            confirmTooltip={`Click again to switch to ${localCheckoutBranchMismatch.threadBranch}. Your uncommitted changes will carry over, or block the switch if they conflict.`}
+            onConfirm={() => void handleSwitchCheckoutToThread()}
           />
         ),
         dismissLabel: "Dismiss branch change notice",
@@ -7560,6 +7568,7 @@ export default function ChatView(props: ChatViewProps) {
   }, [
     activeBranchMismatchKey,
     feedbackBannerItems,
+    gitStatusQuery.data?.hasWorkingTreeChanges,
     limitRecoveryBanner,
     handleSwitchCheckoutToThread,
     isRestoringThreadBranch,
@@ -7570,7 +7579,6 @@ export default function ChatView(props: ChatViewProps) {
     resumeCompactionBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
-    threadBranchHasUncommittedChanges,
     usageLimitsBanner,
     wokeThreadBannerItem,
   ]);

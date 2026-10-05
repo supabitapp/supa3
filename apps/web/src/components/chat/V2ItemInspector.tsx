@@ -23,9 +23,8 @@ import { useTurnItemDetail } from "../../state/queries";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatMarkdown from "../ChatMarkdown";
-import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
+import { InlineConfirmIcon, InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
 import { RenderErrorBoundary } from "../RenderErrorBoundary";
 import { resolveExternalWebLinkHref } from "./externalLinkContextMenu";
 
@@ -197,38 +196,21 @@ function ToolCallBody(
   );
 }
 
-function CheckpointRollbackButton(props: {
-  readonly checkpointId: string;
-  readonly scopeId: string;
-  readonly onRollback: NonNullable<V2ItemInspectorProps["onRollbackCheckpoint"]>;
-}) {
+function CheckpointRollbackButton({ onRollback }: { readonly onRollback: () => void }) {
   const confirm = useInlineConfirm<"rollback">();
   const armed = confirm.armed === "rollback";
   return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <Button
-            size="xs"
-            variant="outline"
-            {...confirm.bind("rollback", () =>
-              props.onRollback({ checkpointId: props.checkpointId, scopeId: props.scopeId }),
-            )}
-          />
-        }
-      >
-        <InlineConfirmIcon armed={armed}>
-          <RotateCcwIcon className="size-3" />
-        </InlineConfirmIcon>
-        <InlineConfirmLabel armed={armed} idle="Roll back" confirm="Confirm roll back" />
-      </TooltipTrigger>
-      <TooltipPopup key={armed ? "armed" : "idle"} side="top">
-        {armed
-          ? "Click again to roll back this thread to this checkpoint. This can't be undone."
-          : "Roll back this thread to this checkpoint"}
-      </TooltipPopup>
-    </Tooltip>
+    <InlineConfirmTooltip
+      armed={armed}
+      tip="Roll back this thread to this checkpoint"
+      armedTip="Click again to roll back this thread to this checkpoint. This can't be undone."
+      render={<Button size="xs" variant="outline" {...confirm.bind("rollback", onRollback)} />}
+    >
+      <InlineConfirmIcon armed={armed}>
+        <RotateCcwIcon className="size-3.5" />
+      </InlineConfirmIcon>
+      <InlineConfirmLabel armed={armed} idle="Roll back" confirm="Confirm roll back" />
+    </InlineConfirmTooltip>
   );
 }
 
@@ -383,9 +365,12 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
           </span>
           {props.onRollbackCheckpoint && support.checkpoint?.status === "ready" ? (
             <CheckpointRollbackButton
-              checkpointId={item.checkpointId}
-              scopeId={item.scopeId}
-              onRollback={props.onRollbackCheckpoint}
+              onRollback={() =>
+                props.onRollbackCheckpoint?.({
+                  checkpointId: item.checkpointId,
+                  scopeId: item.scopeId,
+                })
+              }
             />
           ) : null}
         </div>

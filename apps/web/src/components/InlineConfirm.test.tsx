@@ -4,20 +4,24 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { RestoreThreadBranchButton } from "./RestoreThreadBranchButton";
+import { InlineConfirmButton } from "./InlineConfirm";
 
 let root: Root;
 let container: HTMLDivElement;
-const onRestore = vi.fn();
+const onConfirm = vi.fn();
 
-const render = (hasUncommittedChanges: boolean) =>
+const render = (required: boolean) =>
   act(() =>
     root.render(
-      <RestoreThreadBranchButton
-        branch="feature/thread"
-        hasUncommittedChanges={hasUncommittedChanges}
-        restoring={false}
-        onRestore={onRestore}
+      <InlineConfirmButton
+        size="xs"
+        variant="ghost"
+        required={required}
+        label="Restore branch"
+        confirmLabel="Confirm restore"
+        tooltip="Switch back"
+        confirmTooltip="Click again to switch back"
+        onConfirm={onConfirm}
       />,
     ),
   );
@@ -35,34 +39,34 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  onRestore.mockClear();
+  onConfirm.mockClear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
-describe("RestoreThreadBranchButton", () => {
-  it("restores a clean checkout on the first press", () => {
+describe("InlineConfirmButton", () => {
+  it("runs on the first press when no confirmation is required", () => {
     render(false);
     press();
-    expect(onRestore).toHaveBeenCalledOnce();
+    expect(onConfirm).toHaveBeenCalledOnce();
   });
 
-  it("asks for a second press before carrying uncommitted changes across", () => {
+  it("asks for a second press when a confirmation is required", () => {
     render(true);
     press();
-    expect(onRestore).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(500));
     press();
-    expect(onRestore).toHaveBeenCalledOnce();
+    expect(onConfirm).toHaveBeenCalledOnce();
   });
 
-  it("drops a pending confirmation once the checkout is clean", () => {
+  it("drops a pending confirmation once it is no longer required", () => {
     render(true);
     press();
     render(false);
     render(true);
     act(() => vi.advanceTimersByTime(500));
     press();
-    expect(onRestore).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });

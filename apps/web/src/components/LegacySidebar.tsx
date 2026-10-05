@@ -172,6 +172,7 @@ import {
 } from "./ui/number-field";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { InlineConfirmTooltip } from "./InlineConfirm";
 import {
   SidebarContent,
   SidebarGroup,
@@ -249,6 +250,8 @@ const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> =
 };
 const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
   "inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-0.75 text-icon-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
+const SIDEBAR_ARCHIVE_CONFIRM_BUTTON_CLASS =
+  "inline-flex h-5 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-3xs font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40";
 
 function SidebarThreadDetailPrewarmer({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
   useEnvironmentThread(threadRef.environmentId, threadRef.threadId);
@@ -655,15 +658,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     [],
   );
   const archive = () => void attemptArchiveThread(threadRef);
-  const { onClick: pressArchiveConfirm, ...archiveConfirmTarget } = archiveConfirm.bind(
-    "archive",
-    archive,
-  );
+  const archiveTarget = appSettingsConfirmThreadArchive
+    ? archiveConfirm.bind("archive", archive)
+    : { onClick: archive };
   const handleArchiveClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (appSettingsConfirmThreadArchive) pressArchiveConfirm(event);
-    else archive();
+    archiveTarget.onClick(event);
   };
 
   return (
@@ -807,45 +808,43 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             }`}
           >
             {canArchive ? (
-              <Tooltip>
-                <TooltipTrigger
-                  closeOnClick={false}
-                  render={
-                    <div
-                      className={cn(
-                        "absolute top-1/2 -translate-y-1/2",
+              <InlineConfirmTooltip
+                armed={isConfirmingArchive}
+                required={appSettingsConfirmThreadArchive}
+                tip="Archive"
+                armedTip="Click again to archive"
+                render={
+                  <div
+                    className={cn(
+                      "absolute top-1/2 -translate-y-1/2",
+                      isConfirmingArchive
+                        ? "right-1"
+                        : "pointer-events-none right-0.5 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      data-thread-selection-safe
+                      data-testid={`thread-archive-${thread.id}`}
+                      aria-label={
                         isConfirmingArchive
-                          ? "right-1"
-                          : "pointer-events-none right-0.5 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100",
-                      )}
+                          ? `Confirm archive ${thread.title}`
+                          : `Archive ${thread.title}`
+                      }
+                      className={
+                        isConfirmingArchive
+                          ? SIDEBAR_ARCHIVE_CONFIRM_BUTTON_CLASS
+                          : SIDEBAR_ICON_ACTION_BUTTON_CLASS
+                      }
+                      {...archiveTarget}
+                      onPointerDown={stopPropagationOnPointerDown}
+                      onClick={handleArchiveClick}
                     >
-                      <button
-                        type="button"
-                        data-thread-selection-safe
-                        data-testid={`thread-archive-${thread.id}`}
-                        aria-label={
-                          isConfirmingArchive
-                            ? `Confirm archive ${thread.title}`
-                            : `Archive ${thread.title}`
-                        }
-                        className={
-                          isConfirmingArchive
-                            ? "inline-flex h-5 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-3xs font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40"
-                            : SIDEBAR_ICON_ACTION_BUTTON_CLASS
-                        }
-                        {...(appSettingsConfirmThreadArchive ? archiveConfirmTarget : {})}
-                        onPointerDown={stopPropagationOnPointerDown}
-                        onClick={handleArchiveClick}
-                      >
-                        {isConfirmingArchive ? "Confirm" : <ArchiveIcon className="size-3.5" />}
-                      </button>
-                    </div>
-                  }
-                />
-                <TooltipPopup key={isConfirmingArchive ? "armed" : "idle"} side="top">
-                  {isConfirmingArchive ? "Click again to archive" : "Archive"}
-                </TooltipPopup>
-              </Tooltip>
+                      {isConfirmingArchive ? "Confirm" : <ArchiveIcon className="size-3.5" />}
+                    </button>
+                  </div>
+                }
+              />
             ) : null}
             <span className={threadMetaClassName}>
               <span className="inline-flex items-center gap-1">
