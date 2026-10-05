@@ -10807,9 +10807,17 @@ export default function ChatView(props: ChatViewProps) {
     versionMismatch:
       showVersionMismatchBanner && versionMismatch
         ? {
-            clientVersion: versionMismatch.clientVersion,
             serverVersion: versionMismatch.serverVersion,
-            serverLabel: versionMismatchServerLabel,
+            update: {
+              environmentId: activeThread.environmentId,
+              serverLabel: versionMismatchServerLabel,
+              selfUpdate: versionMismatchSelfUpdate,
+              installation: versionMismatchInstallation,
+              desktopAppUpdate: versionMismatchDesktopAppUpdate,
+              threadContinuation: versionMismatchThreadContinuation,
+              targetVersion: versionMismatch.clientVersion,
+            },
+            updateState: serverUpdateState,
           }
         : null,
     onDismissVersionMismatch: handleDismissVersionMismatch,

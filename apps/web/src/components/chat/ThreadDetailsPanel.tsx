@@ -5,6 +5,7 @@ import type {
   ResolvedKeybindingsConfig,
   ThreadId,
 } from "@supacode/contracts";
+import type { ServerUpdateState } from "@supacode/client-runtime/state/server";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 
 import type { DraftId } from "../../composerDraftStore";
@@ -21,6 +22,11 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import {
+  ServerUpdateAction,
+  ServerUpdateProgress,
+  type ServerUpdateTarget,
+} from "../ServerUpdateAction";
 import { Button } from "../ui/button";
 import type { ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
@@ -30,9 +36,10 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 
 interface VersionMismatchIssue {
-  readonly clientVersion: string;
   readonly serverVersion: string;
-  readonly serverLabel: string;
+  /** Targets this client's version, so `targetVersion` is the client version. */
+  readonly update: Omit<ServerUpdateTarget, "continueThreadsAfterServerUpdate">;
+  readonly updateState: ServerUpdateState;
 }
 
 export interface ThreadDetailsPanelProps extends Pick<
@@ -75,6 +82,48 @@ export interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+}
+
+function VersionMismatchNotice({
+  issue,
+  onDismiss,
+}: {
+  readonly issue: VersionMismatchIssue;
+  readonly onDismiss: () => void;
+}) {
+  const { serverVersion, update, updateState } = issue;
+  const updateRunning = updateState.status === "running";
+  return (
+    <div className="mx-1 mb-2 flex gap-2 rounded-xl border border-warning/30 bg-warning/6 p-3">
+      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium">Client and server versions differ</p>
+        <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
+          Client {update.targetVersion} · {update.serverLabel} {serverVersion}
+        </p>
+        {updateState.status !== "idle" ? <ServerUpdateProgress state={updateState} /> : null}
+        {updateRunning ? null : (
+          <div className="mt-2">
+            <ServerUpdateAction
+              {...update}
+              label={updateState.status === "failed" ? "Retry update" : "Update server"}
+              variant="warning-outline"
+            />
+          </div>
+        )}
+      </div>
+      {updateRunning ? null : (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Dismiss version mismatch warning"
+          onClick={onDismiss}
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -129,24 +178,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             showHeading={false}
           >
             {props.versionMismatch ? (
-              <div className="mx-1 mb-2 flex gap-2 rounded-xl border border-warning/30 bg-warning/6 p-3">
-                <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium">Client and server versions differ</p>
-                  <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
-                    Client {props.versionMismatch.clientVersion} ·{" "}
-                    {props.versionMismatch.serverLabel} {props.versionMismatch.serverVersion}
-                  </p>
-                </div>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Dismiss version mismatch warning"
-                  onClick={props.onDismissVersionMismatch}
-                >
-                  <XIcon className="size-3.5" />
-                </Button>
-              </div>
+              <VersionMismatchNotice
+                issue={props.versionMismatch}
+                onDismiss={props.onDismissVersionMismatch}
+              />
             ) : null}
 
             <div className="flex flex-col">
