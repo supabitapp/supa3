@@ -32,16 +32,20 @@ import {
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
+import { connectionRoutes, routeEntry, sshTargetKey } from "./routes.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
   readonly host?: string;
   readonly pairingCode?: string;
+  /** When set, the pairing must resolve to an existing environment route. */
+  readonly expectedEnvironmentId?: EnvironmentId;
 }
 
 export interface SshConnectionInput {
   readonly target: DesktopSshEnvironmentTarget;
   readonly label?: string;
+  readonly expectedEnvironmentId?: EnvironmentId;
 }
 
 export interface BearerConnectionUpdateInput {
@@ -84,6 +88,17 @@ const resolvePairingTarget = Effect.fn("clientRuntime.connection.onboarding.reso
   },
 );
 
+function bearerConnectionId(environmentId: EnvironmentId, httpBaseUrl: string): string {
+  return `bearer:${environmentId}:${new URL(httpBaseUrl).origin}`;
+}
+
+function differentMachineError(label: string) {
+  return new ConnectionBlockedError({
+    reason: "configuration",
+    detail: `That address reaches ${label}, a different machine. Add it as its own environment instead.`,
+  });
+}
+
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
 )(function* (input: PairingConnectionInput) {
@@ -92,6 +107,12 @@ export const preparePairingRegistration = Effect.fn(
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
     httpBaseUrl: target.httpBaseUrl,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+  if (
+    input.expectedEnvironmentId !== undefined &&
+    descriptor.environmentId !== input.expectedEnvironmentId
+  ) {
+    return yield* differentMachineError(descriptor.label);
+  }
   const compatibilityError = orchestrationProtocolCompatibilityError(descriptor);
   // An outdated server is still saved so it can be updated from this client.
   if (compatibilityError !== null && compatibilityError.serverUpdateRequired !== true) {
@@ -103,7 +124,7 @@ export const preparePairingRegistration = Effect.fn(
     scopes: presentation.scopes,
     clientMetadata: presentation.metadata,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
-  const connectionId = `bearer:${descriptor.environmentId}`;
+  const connectionId = bearerConnectionId(descriptor.environmentId, target.httpBaseUrl);
 
   return new BearerConnectionRegistration({
     target: new BearerConnectionTarget({
@@ -141,7 +162,14 @@ const updateBearerConnection = Effect.fn(
 )(function* (input: BearerConnectionUpdateInput) {
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
   const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
-  const entry = (yield* SubscriptionRef.get(registry.entries)).get(input.environmentId);
+  const saved = (yield* SubscriptionRef.get(registry.entries)).get(input.environmentId);
+  const route =
+    saved === undefined
+      ? undefined
+      : connectionRoutes(saved).find(
+          (candidate) => candidate.target._tag === "BearerConnectionTarget",
+        );
+  const entry = saved === undefined || route === undefined ? saved : routeEntry(saved, route);
   const credential =
     entry?.target._tag === "BearerConnectionTarget"
       ? yield* credentials.get(entry.target.connectionId)
@@ -220,8 +248,17 @@ export const prepareSshRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.prepareSshRegistration",
 )(function* (input: SshConnectionInput) {
   const gateway = yield* ClientCapabilities.SshEnvironmentGateway;
-  const provisioned = yield* gateway.provision(input.target);
-  const connectionId = `ssh:${provisioned.environmentId}`;
+  const provisioned = yield* gateway.provision(input.target, input.expectedEnvironmentId);
+  if (
+    input.expectedEnvironmentId !== undefined &&
+    provisioned.environmentId !== input.expectedEnvironmentId
+  ) {
+    return yield* new ConnectionBlockedError({
+      reason: "configuration",
+      detail: "The SSH target belongs to a different environment.",
+    });
+  }
+  const connectionId = `ssh:${provisioned.environmentId}:${sshTargetKey(provisioned.bootstrap.target)}`;
   const label = input.label?.trim() || provisioned.label || provisioned.bootstrap.target.alias;
 
   return new SshConnectionRegistration({

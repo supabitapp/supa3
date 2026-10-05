@@ -27,6 +27,7 @@ import {
 import * as RpcSession from "../rpc/session.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
+import { connectionRouteId, connectionRoutes } from "./routes.ts";
 
 const RETRY_BASE_DELAY_MS = 1_000;
 const RETRY_MAX_DELAY_MS = 300_000;
@@ -83,6 +84,10 @@ function exitUnlessInterrupted<A, E, R>(
 
 export interface EnvironmentSupervisorOptions {
   readonly initiallyDesired?: boolean;
+  readonly learnRoutes?: (input: {
+    readonly activeRoute: import("./catalog.ts").ConnectionRoute;
+    readonly reported: ReadonlyArray<{ readonly httpBaseUrl: string }>;
+  }) => Effect.Effect<Option.Option<ConnectionCatalogEntry>>;
 }
 
 /**
@@ -239,6 +244,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   );
   const session = yield* SubscriptionRef.make<Option.Option<RpcSession.RpcSession>>(Option.none());
   const prepared = yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(Option.none());
+  const currentEntry = yield* Ref.make(entry);
 
   const clearLease = Effect.all(
     [SubscriptionRef.set(session, Option.none()), SubscriptionRef.set(prepared, Option.none())],
@@ -274,7 +280,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     generation: number,
     lastFailure: ConnectionAttemptError | null,
   ) {
-    return yield* driver.connect(entry, (progress) =>
+    return yield* driver.connect(yield* Ref.get(currentEntry), (progress) =>
       reportProgress(attempt, generation, lastFailure, progress),
     );
   });
@@ -414,6 +420,24 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     }
   });
 
+  const learnRoutesFrom = Effect.fnUntraced(function* (
+    lease: ConnectionDriver.EnvironmentConnectionLease,
+  ) {
+    if (options?.learnRoutes === undefined) return;
+    const config = yield* lease.session.initialConfig.pipe(Effect.option);
+    if (Option.isNone(config) || config.value.directEndpoints === undefined) return;
+    const activeId = connectionRouteId(lease.prepared.target);
+    const activeRoute = connectionRoutes(yield* Ref.get(currentEntry)).find(
+      (route) => connectionRouteId(route.target) === activeId,
+    );
+    if (activeRoute === undefined) return;
+    const updated = yield* options.learnRoutes({
+      activeRoute,
+      reported: config.value.directEndpoints,
+    });
+    if (Option.isSome(updated)) yield* Ref.set(currentEntry, updated.value);
+  });
+
   const runAttempt = Effect.fnUntraced(function* (
     attempt: number,
     generation: number,
@@ -434,9 +458,12 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
           resetRetry,
         })),
       ),
-      Effect.sleep(CONNECTION_ESTABLISHMENT_TIMEOUT).pipe(
-        Effect.as<EstablishmentEvent>({ _tag: "TimedOut" }),
-      ),
+      Effect.sleep(
+        Duration.times(
+          Duration.fromInputUnsafe(CONNECTION_ESTABLISHMENT_TIMEOUT),
+          connectionRoutes(yield* Ref.get(currentEntry)).length,
+        ),
+      ).pipe(Effect.as<EstablishmentEvent>({ _tag: "TimedOut" })),
     ]);
 
     if (establishment._tag === "Interrupted") {
@@ -491,6 +518,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     const connectedAt = yield* Clock.currentTimeMillis;
     yield* SubscriptionRef.set(prepared, Option.some(lease.prepared));
     yield* SubscriptionRef.set(session, Option.some(lease.session));
+    yield* learnRoutesFrom(lease).pipe(Effect.forkScoped);
     yield* setState({
       desired: true,
       network: currentIntent.network,

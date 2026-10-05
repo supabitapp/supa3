@@ -10,6 +10,7 @@ import {
   removeCatalogValue,
   removeConnectionFromCatalog,
   setConnectionEnabledInCatalog,
+  setRoutesInCatalog,
   replaceCatalogValue,
   Persistence,
 } from "@supacode/client-runtime/platform";
@@ -84,6 +85,7 @@ function persistenceError(
     | "list-targets"
     | "list-disabled-targets"
     | "register-connection"
+    | "set-connection-routes"
     | "remove-connection"
     | "set-connection-enabled"
     | "load-shell"
@@ -472,10 +474,14 @@ export const connectionStorageLayer = Layer.effectContext(
       ),
     });
     const registrationStore = Persistence.ConnectionRegistrationStore.of({
-      register: (registration) =>
+      register: (registration, routes) =>
         catalog
-          .update((document) => registerConnectionInCatalog(document, registration))
+          .update((document) => registerConnectionInCatalog(document, registration, routes))
           .pipe(Effect.mapError((cause) => persistenceError("register-connection", cause))),
+      setRoutes: (environmentId, routes) =>
+        catalog
+          .update((document) => setRoutesInCatalog(document, environmentId, routes))
+          .pipe(Effect.mapError((cause) => persistenceError("set-connection-routes", cause))),
       remove: (target) =>
         catalog
           .update((document) => removeConnectionFromCatalog(document, target))

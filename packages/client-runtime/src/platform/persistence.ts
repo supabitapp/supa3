@@ -12,7 +12,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { ConnectionRegistration } from "../connection/catalog.ts";
-import type { ConnectionTarget } from "../connection/model.ts";
+import type { ConnectionTarget, PersistedConnectionTarget } from "../connection/model.ts";
 
 export class ConnectionPersistenceError extends Schema.TaggedError<ConnectionPersistenceError>()(
   "ConnectionPersistenceError",
@@ -21,6 +21,7 @@ export class ConnectionPersistenceError extends Schema.TaggedError<ConnectionPer
       "list-targets",
       "list-disabled-targets",
       "register-connection",
+      "set-connection-routes",
       "remove-connection",
       "set-connection-enabled",
       "load-shell",
@@ -54,6 +55,11 @@ export class ConnectionRegistrationStore extends Context.Service<
   {
     readonly register: (
       registration: ConnectionRegistration,
+      routes?: ReadonlyArray<PersistedConnectionTarget>,
+    ) => Effect.Effect<void, ConnectionPersistenceError>;
+    readonly setRoutes?: (
+      environmentId: EnvironmentId,
+      routes: ReadonlyArray<PersistedConnectionTarget>,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly remove: (target: ConnectionTarget) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly setEnabled: (

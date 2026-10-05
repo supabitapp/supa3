@@ -6,6 +6,7 @@ import {
   useRoute,
   type StaticScreenProps,
 } from "@react-navigation/native";
+import type { EnvironmentId } from "@supacode/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Linking, Platform, View } from "react-native";
@@ -23,6 +24,7 @@ type ConnectionsNewRouteParams = {
   readonly mode?: string;
   readonly pairingUrl?: string;
   readonly autoConnect?: string;
+  readonly routeFor?: EnvironmentId;
 };
 
 export function ConnectionsNewRouteScreen({
@@ -167,7 +169,7 @@ export function ConnectionsNewRouteScreen({
       setIsSubmitting(true);
       onChangeConnectionPairingUrl(pairingUrl);
       const connect = async () => {
-        const result = await onConnectPress(pairingUrl);
+        const result = await onConnectPress(pairingUrl, params.routeFor);
         if (AsyncResult.isSuccess(result)) {
           if (replaceWithHome || !navigation.canGoBack()) {
             navigation.dispatch(StackActions.replace("Home"));
@@ -197,7 +199,7 @@ export function ConnectionsNewRouteScreen({
   return (
     <SettingsScreen
       formSheet={routeName === "ConnectionsNew"}
-      title={showScanner ? "Scan QR Code" : "Add Environment"}
+      title={showScanner ? "Scan QR Code" : params.routeFor ? "Add Route" : "Add Environment"}
       actions={[
         {
           accessibilityLabel: showScanner ? "Close scanner" : "Scan QR code",
@@ -275,7 +277,9 @@ export function ConnectionsNewRouteScreen({
               <View className="android:flex-row android:justify-end">
                 <ConnectionSheetButton
                   icon="plus"
-                  label={isSubmitting ? "Pairing..." : "Add environment"}
+                  label={
+                    isSubmitting ? "Pairing..." : params.routeFor ? "Add route" : "Add environment"
+                  }
                   disabled={connectDisabled}
                   tone="primary"
                   onPress={() => {

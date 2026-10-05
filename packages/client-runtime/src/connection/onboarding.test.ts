@@ -98,12 +98,12 @@ describe("connection onboarding", () => {
         target: {
           environmentId: "environment-paired",
           label: "Paired environment",
-          connectionId: "bearer:environment-paired",
+          connectionId: "bearer:environment-paired:https://remote.example.test",
         },
         profile: {
           environmentId: "environment-paired",
           label: "Paired environment",
-          connectionId: "bearer:environment-paired",
+          connectionId: "bearer:environment-paired:https://remote.example.test",
           httpBaseUrl: "https://remote.example.test/",
           wsBaseUrl: "wss://remote.example.test/",
         },
@@ -251,11 +251,11 @@ describe("connection onboarding", () => {
           target: new BearerConnectionTarget({
             environmentId,
             label: "Old label",
-            connectionId: "bearer:environment-paired",
+            connectionId: "bearer:environment-paired:https://remote.example.test",
           }),
           profile: Option.some(
             new BearerConnectionProfile({
-              connectionId: "bearer:environment-paired",
+              connectionId: "bearer:environment-paired:https://remote.example.test",
               environmentId,
               label: "Old label",
               httpBaseUrl: "http://old.example.test/",
@@ -271,7 +271,7 @@ describe("connection onboarding", () => {
         target: {
           environmentId,
           label: "Renamed environment",
-          connectionId: "bearer:environment-paired",
+          connectionId: "bearer:environment-paired:https://remote.example.test",
         },
         profile: {
           environmentId,
@@ -321,12 +321,12 @@ describe("connection onboarding", () => {
         target: {
           environmentId: "environment-ssh",
           label: "Remote development box",
-          connectionId: "ssh:environment-ssh",
+          connectionId: 'ssh:environment-ssh:["devbox","devbox.example.test","developer",22]',
         },
         profile: {
           environmentId: "environment-ssh",
           label: "Remote development box",
-          connectionId: "ssh:environment-ssh",
+          connectionId: 'ssh:environment-ssh:["devbox","devbox.example.test","developer",22]',
           target,
         },
       });

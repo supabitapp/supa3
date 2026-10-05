@@ -16,8 +16,15 @@ import {
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@supacode/shared/model";
+import {
+  getSpeedToggle,
+  getSpeedToggleNextValue,
+  SPEED_TOGGLE_LABELS,
+  type SpeedToggle,
+} from "@supacode/client-runtime/provider-speed-toggle";
 import { memo, useCallback } from "react";
-import { BrainIcon } from "lucide-react";
+import { BrainIcon, ZapIcon } from "lucide-react";
+import { UltrafastIcon } from "../Icons";
 import {
   Menu,
   MenuGroup,
@@ -167,8 +174,6 @@ function getSelectedTraits(
   const contextWindowDescriptor =
     selectDescriptors.find((descriptor) => descriptor.id === "contextWindow") ?? null;
   const agentDescriptor = selectDescriptors.find((descriptor) => descriptor.id === "agent") ?? null;
-  const fastModeDescriptor =
-    booleanDescriptors.find((descriptor) => descriptor.id === "fastMode") ?? null;
   const thinkingDescriptor =
     booleanDescriptors.find((descriptor) => descriptor.id === "thinking") ?? null;
 
@@ -201,7 +206,6 @@ function getSelectedTraits(
     primarySelectDescriptor,
     contextWindowDescriptor,
     agentDescriptor,
-    fastModeDescriptor,
     thinkingDescriptor,
     effort,
     thinkingEnabled,
@@ -233,26 +237,24 @@ function getTraitsSectionVisibility(input: {
     input.planModeEnabled,
   );
 
-  const showEffort = selected.primarySelectDescriptor !== null;
-  const showThinking = selected.thinkingDescriptor !== null;
-  const showFastMode = selected.fastModeDescriptor !== null;
-  const showContextWindow = selected.contextWindowDescriptor !== null;
-  const showAgent = selected.agentDescriptor !== null;
+  const speedToggle = selected.modelIsUnavailable
+    ? null
+    : getSpeedToggle(input.provider, selected.descriptors);
+  const toggleOnlyDescriptorId = speedToggle?.coversDescriptor ? speedToggle.descriptorId : null;
+  const hasMenuControls =
+    selected.descriptors.some(
+      (descriptor) =>
+        descriptor.id !== toggleOnlyDescriptorId &&
+        (descriptor.type === "select" || descriptor.id === "thinking"),
+    ) ||
+    (selected.modelIsUnavailable && selected.descriptors.length > 0);
 
   return {
     ...selected,
-    showEffort,
-    showThinking,
-    showFastMode,
-    showContextWindow,
-    showAgent,
-    hasAnyControls:
-      showEffort ||
-      showThinking ||
-      showFastMode ||
-      showContextWindow ||
-      showAgent ||
-      (selected.modelIsUnavailable && selected.descriptors.length > 0),
+    speedToggle,
+    toggleOnlyDescriptorId,
+    hasMenuControls,
+    hasAnyControls: hasMenuControls || speedToggle !== null,
   };
 }
 
@@ -283,23 +285,14 @@ export interface TraitsMenuContentProps {
   isComposerOwned?: boolean;
 }
 
-export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
-  provider,
-  instanceId,
-  models,
-  model,
-  prompt,
-  onPromptChange,
-  modelOptions,
-  reportedModelSelection,
-  allowPromptInjectedEffort = true,
-  planModeEnabled,
-  ...persistence
-}: TraitsMenuContentProps & TraitsPersistence) {
-  const modelSelection =
-    instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null;
+function useUpdateModelOptions(
+  provider: ProviderDriverKind,
+  instanceId: ProviderInstanceId | undefined,
+  model: string | null | undefined,
+  persistence: TraitsPersistence,
+) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
-  const updateModelOptions = useCallback(
+  return useCallback(
     (nextOptions: ProviderOptions | undefined) => {
       if ("onModelOptionsChange" in persistence) {
         persistence.onModelOptionsChange(nextOptions);
@@ -317,6 +310,25 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     },
     [instanceId, model, persistence, provider, setProviderModelOptions],
   );
+}
+
+export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
+  provider,
+  instanceId,
+  models,
+  model,
+  prompt,
+  onPromptChange,
+  modelOptions,
+  reportedModelSelection,
+  allowPromptInjectedEffort = true,
+  planModeEnabled,
+  omitToggleOnlyOptions = false,
+  ...persistence
+}: TraitsMenuContentProps & TraitsPersistence & { omitToggleOnlyOptions?: boolean }) {
+  const modelSelection =
+    instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null;
+  const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
   const {
     descriptors,
     selectDescriptors,
@@ -324,6 +336,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     primarySelectDescriptor,
     ultrathinkPromptControlled,
     ultrathinkInBodyText,
+    toggleOnlyDescriptorId,
     hasAnyControls,
     modelIsUnavailable,
   } = getTraitsSectionVisibility({
@@ -335,6 +348,13 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     allowPromptInjectedEffort,
     planModeEnabled,
   });
+  const omittedDescriptorId = omitToggleOnlyOptions ? toggleOnlyDescriptorId : null;
+  const menuSelectDescriptors = selectDescriptors.filter(
+    (descriptor) => descriptor.id !== omittedDescriptorId,
+  );
+  const menuBooleanDescriptors = booleanDescriptors.filter(
+    (descriptor) => descriptor.id !== omittedDescriptorId,
+  );
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
@@ -392,7 +412,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
   return (
     <>
-      {selectDescriptors.map((descriptor, index) => {
+      {menuSelectDescriptors.map((descriptor, index) => {
         const selectedValue =
           ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
             ? "ultrathink"
@@ -450,12 +470,12 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           </div>
         );
       })}
-      {booleanDescriptors.map((descriptor, index) => {
+      {menuBooleanDescriptors.map((descriptor, index) => {
         const selectedValue = descriptor.currentValue === true ? "on" : "off";
 
         return (
           <div key={descriptor.id}>
-            {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
+            {index > 0 || menuSelectDescriptors.length > 0 ? <MenuDivider /> : null}
             <MenuGroup>
               <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
                 {descriptor.label}
@@ -484,46 +504,28 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   );
 });
 
-/** Pair speed with reasoning while keeping other traits separated. */
-export function buildTraitsTriggerDisplay(input: {
-  provider: ProviderDriverKind;
+/**
+ * Speed lives on the bolt toggle beside the trigger, so it stays out of the
+ * label unless it is the only trait or a non-speed tier such as Flex.
+ */
+export function buildTraitsTriggerLabel(input: {
   descriptors: ReadonlyArray<ProviderOptionDescriptor>;
+  speedToggle: SpeedToggle | null;
   primarySelectDescriptorId: string | null;
   ultrathinkPromptControlled: boolean;
   modelSelection?: ModelSelection | null;
   reportedModelSelection?: ModelSelection | null | undefined;
-}): { label: string } {
-  let fastModeFallbackLabel: string | null = null;
-  let speedLabel: string | null = null;
-  let reasoningLabelIndex = -1;
+}): string {
+  let speedFallbackLabel: string | null = null;
   const labels: Array<string> = [];
   for (const descriptor of input.descriptors) {
-    if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      speedLabel = descriptor.currentValue === true ? "Fast" : null;
-      fastModeFallbackLabel = speedLabel ?? "Normal";
-      continue;
-    }
-    if (
-      input.provider === "codex" &&
-      descriptor.id === "serviceTier" &&
-      descriptor.type === "select"
-    ) {
+    if (input.speedToggle && descriptor.id === input.speedToggle.descriptorId) {
       const currentValue = getProviderOptionCurrentValue(descriptor);
-      const fastTier = descriptor.options.find(({ label }) => label === "Fast");
-      const ultrafastTier = descriptor.options.find(({ label }) => label === "Ultrafast");
-      if (
-        ((fastTier || ultrafastTier) && currentValue === "default") ||
-        (fastTier && currentValue === fastTier.id) ||
-        (ultrafastTier && currentValue === ultrafastTier.id)
-      ) {
-        speedLabel =
-          ultrafastTier && currentValue === ultrafastTier.id
-            ? "Ultrafast"
-            : fastTier && currentValue === fastTier.id
-              ? "Fast"
-              : null;
-        fastModeFallbackLabel =
-          descriptor.options.find(({ id }) => id === currentValue)?.label ?? "Normal";
+      if (input.speedToggle.level !== "off" || currentValue === input.speedToggle.offValue) {
+        if (descriptor.type === "select") {
+          speedFallbackLabel =
+            descriptor.options.find(({ id }) => id === currentValue)?.label ?? null;
+        }
         continue;
       }
     }
@@ -538,32 +540,17 @@ export function buildTraitsTriggerDisplay(input: {
               input.reportedModelSelection,
             );
     if (typeof label === "string" && label.length > 0) {
-      // Custom models retain descriptor order, so the primary select can be context.
-      if (
-        reasoningLabelIndex === -1 &&
-        descriptor.type === "select" &&
-        ["reasoningEffort", "reasoning", "effort", "variant", "thinking"].includes(descriptor.id)
-      ) {
-        reasoningLabelIndex = labels.length;
-      }
       labels.push(label);
     }
   }
 
-  // Only fall back to text when fast mode is genuinely the sole trait. Keying
-  // off an empty label list alone would also catch descriptors that resolved to
-  // no label at all, printing a bogus "Normal" for a model without fast mode.
-  if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel };
+  // Only fall back to text when speed is genuinely the sole trait. Keying off an
+  // empty label list alone would also catch descriptors that resolved to no
+  // label at all.
+  if (labels.length === 0 && speedFallbackLabel !== null) {
+    return speedFallbackLabel;
   }
-  if (speedLabel) {
-    if (reasoningLabelIndex >= 0) {
-      labels[reasoningLabelIndex] = `${labels[reasoningLabelIndex]} ${speedLabel}`;
-    } else {
-      labels.push(speedLabel);
-    }
-  }
-  return { label: labels.join(" · ") };
+  return labels.join(" · ");
 }
 
 export const TraitsPicker = memo(function TraitsPicker({
@@ -589,107 +576,157 @@ export const TraitsPicker = memo(function TraitsPicker({
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
-  const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
-    getTraitsSectionVisibility({
-      provider,
-      models,
-      model,
-      prompt,
-      modelOptions,
-      allowPromptInjectedEffort,
-      planModeEnabled,
-    });
-  if (
-    !shouldRenderTraitsControls({
-      provider,
-      models,
-      model,
-      prompt,
-      modelOptions,
-      allowPromptInjectedEffort,
-      planModeEnabled,
-    })
-  ) {
+  const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
+  const {
+    descriptors,
+    primarySelectDescriptor,
+    speedToggle,
+    ultrathinkPromptControlled,
+    hasMenuControls,
+    hasAnyControls,
+  } = getTraitsSectionVisibility({
+    provider,
+    models,
+    model,
+    prompt,
+    modelOptions,
+    allowPromptInjectedEffort,
+    planModeEnabled,
+  });
+  if (!hasAnyControls) {
     return null;
   }
 
-  const { label: triggerLabel } = buildTraitsTriggerDisplay({
-    provider,
+  const speedOn = speedToggle !== null && speedToggle.level !== "off";
+  const speedToggleControl = speedToggle ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComposerControl
+            size={size}
+            activeBackground={false}
+            aria-pressed={speedOn}
+            aria-label="Fast mode"
+            onClick={() =>
+              updateModelOptions(
+                buildProviderOptionSelectionsFromDescriptors(
+                  replaceDescriptorCurrentValue(
+                    descriptors,
+                    speedToggle.descriptorId,
+                    getSpeedToggleNextValue(speedToggle),
+                  ),
+                ),
+              )
+            }
+          />
+        }
+      >
+        <ComposerControlIcon
+          icon={speedToggle.level === "ultrafast" ? UltrafastIcon : ZapIcon}
+          size={size}
+          className={speedOn ? "fill-current text-fast-mode" : undefined}
+        />
+      </TooltipTrigger>
+      <TooltipPopup side="top">{SPEED_TOGGLE_LABELS[speedToggle.level]}</TooltipPopup>
+    </Tooltip>
+  ) : null;
+
+  if (!hasMenuControls) {
+    return speedToggleControl;
+  }
+
+  const triggerLabel = buildTraitsTriggerLabel({
     descriptors,
+    speedToggle,
     primarySelectDescriptorId: primarySelectDescriptor?.id ?? null,
     ultrathinkPromptControlled,
     modelSelection: instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null,
     reportedModelSelection,
   });
+
   const isCodexStyle = provider === "codex";
 
   return (
-    <Menu
-      open={isMenuOpen}
-      onOpenChange={(open) => {
-        setIsMenuOpen(open);
-      }}
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <ComposerControl
-                  aria-label={triggerLabel}
-                  data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
-                  size={size}
-                  className={cn(
-                    isCodexStyle
-                      ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
-                      : "shrink-0 whitespace-nowrap",
-                    triggerClassName,
-                  )}
-                />
-              }
-            />
-          }
-        >
-          {isCodexStyle ? (
-            // The label truncates itself; clipping the wrapper too would cut off
-            // the chevron, whose negative end margin overhangs the wrapper edge.
-            <span
-              className={cn(
-                "flex min-w-0 w-full items-center",
-                size === "xs" ? "gap-1" : "gap-1.5",
-              )}
-            >
-              <ComposerControlIcon icon={BrainIcon} size={size} />
-              <span data-composer-control-label className="min-w-0 truncate">
-                {triggerLabel}
+    <>
+      <Menu
+        open={isMenuOpen}
+        onOpenChange={(open) => {
+          setIsMenuOpen(open);
+        }}
+      >
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <MenuTrigger
+                render={
+                  <ComposerControl
+                    aria-label={triggerLabel}
+                    data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
+                    size={size}
+                    className={cn(
+                      isCodexStyle
+                        ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
+                        : "shrink-0 whitespace-nowrap",
+                      triggerClassName,
+                    )}
+                  />
+                }
+              />
+            }
+          >
+            {isCodexStyle ? (
+              // The label truncates itself; clipping the wrapper too would cut off
+              // the chevron, whose negative end margin overhangs the wrapper edge.
+              <span
+                className={cn(
+                  "flex min-w-0 w-full items-center",
+                  size === "xs" ? "gap-1" : "gap-1.5",
+                )}
+              >
+                <span
+                  data-composer-control-compact-icon
+                  className="pointer-events-none invisible absolute"
+                >
+                  <ComposerControlIcon icon={BrainIcon} size={size} />
+                </span>
+                <span data-composer-control-label className="min-w-0 truncate">
+                  {triggerLabel}
+                </span>
+                <ComposerControlChevron size={size} />
               </span>
-              <ComposerControlChevron size={size} />
-            </span>
-          ) : (
-            <>
-              <ComposerControlIcon icon={BrainIcon} size={size} />
-              <span data-composer-control-label>{triggerLabel}</span>
-              <ComposerControlChevron size={size} />
-            </>
-          )}
-        </TooltipTrigger>
-        <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
-      </Tooltip>
-      <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
-        <TraitsMenuContent
-          provider={provider}
-          {...(instanceId ? { instanceId } : {})}
-          models={models}
-          model={model}
-          prompt={prompt}
-          onPromptChange={onPromptChange}
-          modelOptions={modelOptions}
-          reportedModelSelection={reportedModelSelection}
-          allowPromptInjectedEffort={allowPromptInjectedEffort}
-          planModeEnabled={planModeEnabled}
-          {...persistence}
-        />
-      </MenuPopup>
-    </Menu>
+            ) : (
+              <>
+                <span
+                  data-composer-control-compact-icon
+                  className="pointer-events-none invisible absolute"
+                >
+                  <ComposerControlIcon icon={BrainIcon} size={size} />
+                </span>
+                <span data-composer-control-label>{triggerLabel}</span>
+                <ComposerControlChevron size={size} />
+              </>
+            )}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
+        </Tooltip>
+        <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
+          <TraitsMenuContent
+            provider={provider}
+            {...(instanceId ? { instanceId } : {})}
+            models={models}
+            model={model}
+            prompt={prompt}
+            onPromptChange={onPromptChange}
+            modelOptions={modelOptions}
+            reportedModelSelection={reportedModelSelection}
+            allowPromptInjectedEffort={allowPromptInjectedEffort}
+            planModeEnabled={planModeEnabled}
+            omitToggleOnlyOptions
+            {...persistence}
+          />
+        </MenuPopup>
+      </Menu>
+      {speedToggleControl}
+    </>
   );
 });

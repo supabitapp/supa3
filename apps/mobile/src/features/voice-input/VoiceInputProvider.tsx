@@ -4,7 +4,6 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   setIsAudioActiveAsync,
-  type RecorderState,
   type RecordingStatus,
 } from "expo-audio";
 import { File } from "expo-file-system";
@@ -29,7 +28,7 @@ import {
   voiceInputBlocksSubmission,
   type VoiceInputState,
 } from "@supacode/client-runtime/voice-input";
-import { createLazyVoiceRecorder, type LazyVoiceRecorder } from "./lazyVoiceRecorder";
+import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 
@@ -109,17 +108,15 @@ function useVoiceInputRuntime() {
   const keepAwakeId = useId();
   const keepAwakeSessionRef = useRef(0);
   const elapsedSecondsRef = useRef(0);
-  const audioLevelsRef = useRef(Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0));
-  const audioLevels = useSharedValue(audioLevelsRef.current);
-  const sessionRef = useRef<VoiceInputSession | null>(null);
-  const recorderRef = useRef<LazyVoiceRecorder<RecorderState> | null>(null);
-
-  if (!sessionRef.current || !recorderRef.current) {
+  const [initialAudioLevels] = useState(() => Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0));
+  const audioLevelsRef = useRef(initialAudioLevels);
+  const audioLevels = useSharedValue(initialAudioLevels);
+  const [{ session, recorder }] = useState(() => {
     // The native recorder is created when dictation starts, not on app launch.
     const recorder = createLazyVoiceRecorder({
       create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
       onStatus: (status: RecordingStatus) => {
-        sessionRef.current?.controller.handleRecorderStatus({
+        session.controller.handleRecorderStatus({
           isFinished: status.isFinished,
           hasError: status.hasError || status.mediaServicesDidReset === true,
           error: status.error,
@@ -127,8 +124,7 @@ function useVoiceInputRuntime() {
         });
       },
     });
-    recorderRef.current = recorder;
-    sessionRef.current = new VoiceInputSession({
+    const session = new VoiceInputSession({
       recorder,
       getTranscriber: getLocalVoiceTranscriber,
       requestPermission: async () => {
@@ -139,17 +135,11 @@ function useVoiceInputRuntime() {
       releaseRecording: releaseVoiceRecordingAudio,
       deleteRecording: (uri) => new File(uri).delete(),
       onStateChange: (nextState) =>
-        setState({
-          state: nextState,
-          ownerKey: sessionRef.current?.ownerKey ?? null,
-          label: sessionRef.current?.label ?? null,
-        }),
+        setState({ state: nextState, ownerKey: session.ownerKey, label: session.label }),
     });
-  }
-
-  const session = sessionRef.current;
+    return { session, recorder };
+  });
   const controller = session.controller;
-  const recorder = recorderRef.current;
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -187,7 +177,7 @@ function useVoiceInputRuntime() {
 
     if (audioLevelsRef.current.some((level) => level !== 0)) {
       audioLevelsRef.current = Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0);
-      audioLevels.value = audioLevelsRef.current;
+      audioLevels.set(audioLevelsRef.current);
     }
     if (elapsedSecondsRef.current !== 0) {
       elapsedSecondsRef.current = 0;
@@ -205,7 +195,7 @@ function useVoiceInputRuntime() {
       if (level !== 0 || history.some((sample) => sample !== 0)) {
         const nextLevels = [...history.slice(1), level];
         audioLevelsRef.current = nextLevels;
-        audioLevels.value = nextLevels;
+        audioLevels.set(nextLevels);
       }
 
       const nextElapsedSeconds = Math.min(
