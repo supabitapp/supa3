@@ -93,10 +93,17 @@ export function ThreadDetailsPrRow({
   const supportsPullRequests =
     serverConfigs.get(environmentId)?.environment.capabilities.pullRequests === true;
   const repository = sourceControlRepositorySelector(project?.repositoryIdentity);
+  // Only the identity fields: a link also carries its snapshot, and keying the reads by that would
+  // start a new query every time the server syncs it.
   const reference: PullRequestRef | null =
     supportsPullRequests && project !== null
       ? linkedReference
-        ? { ...linkedReference, projectId: project.id as ProjectId }
+        ? {
+            projectId: project.id as ProjectId,
+            ...(linkedReference.host === undefined ? {} : { host: linkedReference.host }),
+            repository: linkedReference.repository,
+            number: linkedReference.number,
+          }
         : repository !== null
           ? { projectId: project.id as ProjectId, repository, number }
           : null

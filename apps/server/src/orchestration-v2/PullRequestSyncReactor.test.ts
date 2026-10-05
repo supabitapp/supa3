@@ -901,6 +901,13 @@ describe("PullRequestSyncReactor", () => {
         observation("closed", "2026-08-28T12:01:00Z"),
       ),
     );
+    // A cached checks read cannot say an open pull request reopened a closed one.
+    assert.isFalse(
+      PullRequestSyncReactor.observationNeedsSync(
+        { state: "closed", updatedAt: "2026-08-28T12:00:00Z" },
+        observation("open", null),
+      ),
+    );
     // A cached read from before the snapshot was taken.
     assert.isFalse(
       PullRequestSyncReactor.observationNeedsSync(

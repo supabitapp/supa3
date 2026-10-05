@@ -109,15 +109,16 @@ function stacksEqual(
 
 /**
  * Whether a state another read observed contradicts a link's snapshot. Merged is final, and a
- * read older than the snapshot is ignored; checks carry no update time, so a differing state is
- * enough there.
+ * read older than the snapshot is ignored. Checks carry no update time, so a cached one is only
+ * trusted to report that an open pull request has since closed or merged.
  */
 export function observationNeedsSync(
   snapshot: Pick<ThreadPullRequestSnapshot, "state" | "updatedAt">,
   observation: PullRequestService.PullRequestStateObservation,
 ): boolean {
   if (snapshot.state === "merged" || snapshot.state === observation.state) return false;
-  if (observation.updatedAt === null || snapshot.updatedAt === null) return true;
+  if (observation.updatedAt === null) return snapshot.state === "open";
+  if (snapshot.updatedAt === null) return true;
   return Date.parse(observation.updatedAt) > Date.parse(snapshot.updatedAt);
 }
 
