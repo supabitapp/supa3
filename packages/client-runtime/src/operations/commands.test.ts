@@ -233,50 +233,6 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 
-  it.effect("resolves run ordinal zero to the persisted thread-start checkpoint", () =>
-    Effect.gen(function* () {
-      const scopeId = CheckpointScopeId.make("checkpoint-scope-root");
-      const checkpointId = CheckpointId.make("checkpoint-thread-start");
-      const projection: OrchestrationV2ThreadProjection = {
-        ...v2Projection,
-        checkpoints: [
-          {
-            id: checkpointId,
-            threadId: v2ThreadId,
-            scopeId,
-            runId: null,
-            nodeId: NodeId.make("node-run-1"),
-            parentCheckpointId: null,
-            ordinalWithinScope: 0,
-            appRunOrdinal: null,
-            ref: CheckpointRef.make("refs/supacode/thread-start"),
-            status: "ready",
-            files: [],
-            capturedAt: v2Now,
-          },
-        ],
-      };
-      const commands: OrchestrationV2Command[] = [];
-      const supervisor = yield* makeSupervisor({ commands, projects: [], projection });
-
-      yield* revertThreadCheckpoint({
-        commandId: CommandId.make("rollback-thread-start"),
-        threadId: v2ThreadId,
-        turnCount: 0,
-      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
-
-      expect(commands).toEqual([
-        {
-          type: "checkpoint.rollback",
-          commandId: "rollback-thread-start",
-          threadId: v2ThreadId,
-          scopeId,
-          checkpointId,
-        },
-      ]);
-    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
-  );
-
   it.effect("preserves plan implementation provenance on V2 runs", () =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];
@@ -740,102 +696,117 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 
-  it.effect.each([true, false])(
-    "rolls back to a ready run checkpoint, restoreFiles=%s",
-    (restoreFiles) =>
-      Effect.gen(function* () {
-        const checkpointId = CheckpointId.make("run-checkpoint");
-        const scopeId = CheckpointScopeId.make("run-checkpoint-scope");
-        const commands: OrchestrationV2Command[] = [];
-        const supervisor = yield* makeSupervisor({
-          commands,
-          projects: [],
-          projection: {
-            ...v2Projection,
-            checkpoints: [
-              {
-                id: checkpointId,
-                threadId: v2ThreadId,
-                scopeId,
-                runId: null,
-                nodeId: NodeId.make("run-checkpoint-node"),
-                parentCheckpointId: null,
-                ordinalWithinScope: 1,
-                appRunOrdinal: 1,
-                ref: CheckpointRef.make("refs/supacode/run-checkpoint"),
-                status: "ready",
-                files: [],
-                capturedAt: v2Now,
-              },
-            ],
-          },
-        });
+  describe("revertThreadCheckpoint", () => {
+    const checkpoint = (input: {
+      readonly id: string;
+      readonly ordinalWithinScope: number;
+      readonly appRunOrdinal: number | null;
+      readonly status: OrchestrationV2ThreadProjection["checkpoints"][number]["status"];
+    }): OrchestrationV2ThreadProjection["checkpoints"][number] => ({
+      id: CheckpointId.make(input.id),
+      threadId: v2ThreadId,
+      scopeId: CheckpointScopeId.make(`${input.id}-scope`),
+      runId: null,
+      nodeId: NodeId.make(`${input.id}-node`),
+      parentCheckpointId: null,
+      ordinalWithinScope: input.ordinalWithinScope,
+      appRunOrdinal: input.appRunOrdinal,
+      ref: CheckpointRef.make(`refs/supacode/${input.id}`),
+      status: input.status,
+      files: [],
+      capturedAt: v2Now,
+    });
+    const threadStart = checkpoint({
+      id: "thread-start",
+      ordinalWithinScope: 0,
+      appRunOrdinal: null,
+      status: "ready",
+    });
+    const earlierRunOne = checkpoint({
+      id: "run-1-earlier",
+      ordinalWithinScope: 1,
+      appRunOrdinal: 1,
+      status: "ready",
+    });
+    const latestRunOne = checkpoint({
+      id: "run-1-latest",
+      ordinalWithinScope: 2,
+      appRunOrdinal: 1,
+      status: "ready",
+    });
 
-        yield* revertThreadCheckpoint({
-          commandId: CommandId.make("rollback-run-checkpoint"),
-          threadId: v2ThreadId,
-          turnCount: 1,
-          restoreFiles,
-        }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+    it.effect.each([
+      { turnCount: 0, restoreFiles: undefined, expected: threadStart },
+      { turnCount: 1, restoreFiles: true, expected: latestRunOne },
+      { turnCount: 1, restoreFiles: false, expected: latestRunOne },
+    ])(
+      "rolls back turn count $turnCount to its latest ready checkpoint",
+      ({ turnCount, restoreFiles, expected }) =>
+        Effect.gen(function* () {
+          const commands: OrchestrationV2Command[] = [];
+          const supervisor = yield* makeSupervisor({
+            commands,
+            projects: [],
+            projection: {
+              ...v2Projection,
+              checkpoints: [threadStart, earlierRunOne, latestRunOne],
+            },
+          });
 
-        expect(commands).toEqual([
-          {
-            type: "checkpoint.rollback",
-            commandId: "rollback-run-checkpoint",
+          yield* revertThreadCheckpoint({
+            commandId: CommandId.make("rollback"),
             threadId: v2ThreadId,
-            checkpointId,
-            scopeId,
-            restoreFiles,
-          },
-        ]);
-      }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
-  );
+            turnCount,
+            ...(restoreFiles === undefined ? {} : { restoreFiles }),
+          }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
-  it.effect("refuses to roll back to a run checkpoint that is not ready", () =>
-    Effect.gen(function* () {
-      for (const status of ["missing", "error", "stale", null] as const) {
-        const commands: OrchestrationV2Command[] = [];
-        const supervisor = yield* makeSupervisor({
-          commands,
-          projects: [],
-          projection: {
-            ...v2Projection,
-            checkpoints:
-              status === null
-                ? []
-                : [
-                    {
-                      id: CheckpointId.make("unready-checkpoint"),
-                      threadId: v2ThreadId,
-                      scopeId: CheckpointScopeId.make("unready-checkpoint-scope"),
-                      runId: null,
-                      nodeId: NodeId.make("unready-checkpoint-node"),
-                      parentCheckpointId: null,
-                      ordinalWithinScope: 1,
-                      appRunOrdinal: 1,
-                      ref: CheckpointRef.make("refs/supacode/unready-checkpoint"),
-                      status,
-                      files: [],
-                      capturedAt: v2Now,
-                    },
-                  ],
-          },
-        });
+          expect(commands).toEqual([
+            {
+              type: "checkpoint.rollback",
+              commandId: "rollback",
+              threadId: v2ThreadId,
+              checkpointId: expected.id,
+              scopeId: expected.scopeId,
+              ...(restoreFiles === undefined ? {} : { restoreFiles }),
+            },
+          ]);
+        }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+    );
 
-        const error = yield* revertThreadCheckpoint({
-          commandId: CommandId.make(`rollback-unready-${status}`),
-          threadId: v2ThreadId,
-          turnCount: 1,
-        }).pipe(
-          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
-          Effect.flip,
-        );
+    it.effect.each(["missing", "error", "stale", null] as const)(
+      "refuses a run checkpoint whose status is %s",
+      (status) =>
+        Effect.gen(function* () {
+          const commands: OrchestrationV2Command[] = [];
+          const supervisor = yield* makeSupervisor({
+            commands,
+            projects: [],
+            projection: {
+              ...v2Projection,
+              checkpoints:
+                status === null
+                  ? []
+                  : [checkpoint({ id: "run-1", ordinalWithinScope: 1, appRunOrdinal: 1, status })],
+            },
+          });
 
-        expect(error._tag).toBe("OrchestrationV2CheckpointUnavailableError");
-        expect(commands).toEqual([]);
-      }
-    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
-  );
+          const error = yield* revertThreadCheckpoint({
+            commandId: CommandId.make("rollback"),
+            threadId: v2ThreadId,
+            turnCount: 1,
+          }).pipe(
+            Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+            Effect.flip,
+          );
+
+          expect(error).toMatchObject({
+            _tag: "OrchestrationV2CheckpointUnavailableError",
+            target: "run ordinal 1",
+          });
+          expect(commands).toEqual([]);
+        }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+    );
+  });
 
   it.effect("dispatches settle and unsettle commands without timestamps", () =>
     Effect.gen(function* () {

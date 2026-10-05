@@ -36,10 +36,10 @@ The v2 checks pin these invariants:
 - Shell resume sends deltas plus compact repository-enrichment metadata, not another full project
   and thread snapshot.
 - Auto, steer, and restart sends resolve delivery from authoritative state inside the
-  server's per-thread dispatch lock. Model selection also dispatches
-  without first fetching a full thread projection when the server advertises support.
-  Older servers retain projection-based validation. Explicit start sends already skipped that
-  read, so this saving does not apply to every client send path.
+  server's per-thread dispatch lock. Model selection also dispatches without first fetching a
+  full thread projection when the server advertises support. Older servers retain
+  projection-based validation. Explicit start sends already skipped that read, so this saving
+  does not apply to every client send path.
 
 When changing projection schemas, paging, shell synchronization, or thread state, run this command
 alongside the focused package typechecks and a real-client pass on every affected surface. The
