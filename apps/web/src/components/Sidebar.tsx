@@ -4629,7 +4629,10 @@ export default function Sidebar() {
                   // presentational while preserving every descendant control.
                   role="presentation"
                   className={cn(
-                    "relative flex flex-col gap-px",
+                    // The last shelf is bottom-pinned; let it use the group's
+                    // bottom inset once instead of adding a second gap above
+                    // the footer's own vertical inset.
+                    "relative -mb-2 flex flex-col gap-px",
                     sidebarListItems.length > 0 && "flex-1",
                     // An action sweep owns the pointer: rows it passes over
                     // neither show hover actions nor open tooltips, even
