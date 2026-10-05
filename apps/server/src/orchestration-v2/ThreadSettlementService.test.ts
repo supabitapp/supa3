@@ -16,6 +16,7 @@ import {
   type PullRequestSummary,
   type ServerSettings as ContractServerSettings,
   type ServerSettingsPatch,
+  type ThreadPullRequestLink,
 } from "@supacode/contracts";
 import { applyServerSettingsPatch } from "@supacode/shared/serverSettings";
 import * as Crypto from "effect/Crypto";
@@ -479,6 +480,28 @@ function makeBranchPullRequest(state: "open" | "closed" | "merged") {
   } satisfies GitManager.GitBranchPullRequest;
 }
 
+function makeMergedPullRequestLink(): ThreadPullRequestLink {
+  return {
+    host: "example.test",
+    repository: "owner/repository",
+    number: 42,
+    url: "https://example.test/owner/repository/pull/42",
+    source: "manual",
+    linkedAt: "2026-08-20T00:00:00.000Z",
+    snapshot: {
+      state: "merged",
+      title: "Pull request",
+      headBranch: "feature",
+      baseBranch: "main",
+      isDraft: false,
+      updatedAt: NOW,
+      syncedAt: NOW,
+      mergedAt: NOW,
+    },
+    stack: null,
+  };
+}
+
 interface HarnessOptions {
   readonly snapshot: SettlementSnapshot;
   readonly settings?: ContractServerSettings;
@@ -660,27 +683,7 @@ describe("ThreadSettlementServiceV2 worker", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(NOW));
         const thread = makeThread("merged-link", {
-          pullRequests: [
-            {
-              host: "example.test",
-              repository: "owner/repository",
-              number: 42,
-              url: "https://example.test/owner/repository/pull/42",
-              source: "manual",
-              linkedAt: "2026-08-20T00:00:00.000Z",
-              snapshot: {
-                state: "merged",
-                title: "Pull request",
-                headBranch: "feature",
-                baseBranch: "main",
-                isDraft: false,
-                updatedAt: NOW,
-                syncedAt: NOW,
-                mergedAt: NOW,
-              },
-              stack: null,
-            },
-          ],
+          pullRequests: [makeMergedPullRequestLink()],
         });
         const fixture = yield* makeHarness({
           snapshot: makeSnapshot([thread]),
@@ -693,6 +696,38 @@ describe("ThreadSettlementServiceV2 worker", () => {
           expect((yield* Ref.get(fixture.commands)).map((command) => command.threadId)).toEqual([
             thread.id,
           ]);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("never settles a pinned thread, even after its pull request merges", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const pinnedAt = DateTime.makeUnsafe("2026-08-20T00:00:00.000Z");
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("pinned-merged-link", {
+              pinnedAt,
+              pullRequests: [makeMergedPullRequestLink()],
+            }),
+            makeThread("pinned-merged-branch", { pinnedAt, branch: "feature" }),
+            makeThread("unpinned-merged-link", { pullRequests: [makeMergedPullRequestLink()] }),
+          ]),
+          branchPullRequest: () => Effect.succeed(makeBranchPullRequest("merged")),
+          // Only the merge can settle these threads, so the branch lookup path is exercised.
+          settings: { ...DEFAULT_SERVER_SETTINGS, sidebarAutoSettleAfterDays: null },
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          expect((yield* Ref.get(fixture.commands)).map((command) => command.threadId)).toEqual([
+            ThreadId.make("unpinned-merged-link"),
+          ]);
+          // Pinned threads drop out before any source control lookup.
+          expect(yield* Ref.get(fixture.branchCalls)).toEqual([]);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
