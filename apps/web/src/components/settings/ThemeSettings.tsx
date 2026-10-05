@@ -635,8 +635,10 @@ export function ThemeLibrary({
   // The pair model: one theme owns light, one owns dark, and the global
   // appearance mode (light / dark / auto) decides which is showing.
   const baseCardId = getThemeDefinition(theme)?.id ?? null;
-  const lightOwner = themeHalves?.light ?? baseCardId;
-  const darkOwner = themeHalves?.dark ?? baseCardId;
+  const lightThemeId = themeHalves?.light ?? baseCardId;
+  const darkThemeId = themeHalves?.dark ?? baseCardId;
+  const lightOwner = lightThemeId === "zenbones" ? null : lightThemeId;
+  const darkOwner = darkThemeId === "zenbones" ? null : darkThemeId;
 
   const assignHalf = useCallback(
     (appearance: ThemeAppearance, cardId: string | null) => {

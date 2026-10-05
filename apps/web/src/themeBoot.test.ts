@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { BUILT_IN_THEMES } from "@supacode/shared/themePalettes";
+import {
+  BUILT_IN_THEMES,
+  SUPACODE_LIGHT_THEME_COLORS,
+  SUPACODE_DARK_THEME_COLORS,
+} from "@supacode/shared/themePalettes";
 
 import indexHtml from "../index.html?raw";
 import {
@@ -245,6 +249,40 @@ describe("index.html boot script", () => {
     expect(boot.isDark).toBe(runtimeResolvedAppearance(storage, prefersDark) === "dark");
   });
 
+  it.each(["light", "dark"] as const)(
+    "boots the standard %s palette without a saved selection",
+    (appearance) => {
+      const colors =
+        appearance === "dark" ? SUPACODE_DARK_THEME_COLORS : SUPACODE_LIGHT_THEME_COLORS;
+      const boot = runBootScript({ prefersDark: appearance === "dark" });
+      expect(boot.backgroundColor).toBe(colors.chrome);
+      expect(boot.metaContent).toBe(colors.chrome);
+    },
+  );
+
+  it.each(["light", "dark"] as const)(
+    "preserves saved Zenbones selections and %s mixes",
+    (appearance) => {
+      const colors =
+        appearance === "dark" ? SUPACODE_DARK_THEME_COLORS : SUPACODE_LIGHT_THEME_COLORS;
+      for (const storage of [
+        { [THEME_STORAGE_KEY]: "zenbones" },
+        {
+          [THEME_STORAGE_KEY]: "grove",
+          "supacode:theme-halves:v1": JSON.stringify({ [appearance]: "zenbones" }),
+        },
+      ]) {
+        const preferences = { ...storage, [THEME_APPEARANCE_MODE_STORAGE_KEY]: appearance };
+        const boot = runBootScript({ storage: preferences, prefersDark: appearance === "dark" });
+        expect(boot.isDark).toBe(
+          runtimeResolvedAppearance(preferences, appearance === "dark") === "dark",
+        );
+        expect(boot.backgroundColor).toBe(colors.chrome);
+        expect(boot.bootVariables["--boot-background"]).toBe(colors.canvas);
+      }
+    },
+  );
+
   it("marks built-in and custom themes on the document element", () => {
     const chat = runBootScript({
       storage: { [THEME_STORAGE_KEY]: "supacode-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
@@ -465,8 +503,8 @@ describe("index.html boot script", () => {
 
     expect(boot.themeId).toBeUndefined();
     expect(boot.themeSelected).toBeUndefined();
-    expect(boot.backgroundColor).toBe("#ffffff");
-    expect(boot.metaContent).toBe("#ffffff");
+    expect(boot.backgroundColor).toBe(SUPACODE_LIGHT_THEME_COLORS.chrome);
+    expect(boot.metaContent).toBe(SUPACODE_LIGHT_THEME_COLORS.chrome);
   });
 
   it("leaves unknown preferences unthemed so the runtime default applies", () => {

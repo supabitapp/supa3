@@ -371,25 +371,8 @@ export function getMobileThemeVariables(
   // Mobile settings groups and fallback materials use tonal fills where desktop
   // uses outlined cards. Regular cards retain their shared desktop surface.
   const groupedCard =
-    themeId === DEFAULT_MOBILE_THEME_ID
-      ? appearance === "light"
-        ? colors.toolbarControlHover
-        : colors.sidebarRowActive
-      : colors.surface;
-  const mobileColors =
-    themeId === DEFAULT_MOBILE_THEME_ID
-      ? {
-          ...colors,
-          messageSurface: flattenThemeColor(
-            themeColorWithAlpha(
-              appearance === "dark" ? colors.sidebarRowActive : colors.border,
-              0.3,
-            ),
-            colors.messageSurface,
-          ),
-        }
-      : colors;
-  const baseVariables = createMobileThemeVariables(mobileColors, appearance, groupedCard);
+    themeId === DEFAULT_MOBILE_THEME_ID ? colors.toolbarControlHover : colors.surface;
+  const baseVariables = createMobileThemeVariables(colors, appearance, groupedCard);
 
   // The complete base record guarantees that optional overrides cannot leave a token undefined.
   return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
@@ -399,8 +382,14 @@ export function getMobileThemePreviewColors(
   themeId: MobileThemeId,
   appearance: MobileThemeAppearance,
 ): ThemePreviewColors {
-  if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you")
-    return STANDARD_THEME_PREVIEW_COLORS[appearance];
+  if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you") {
+    const colors = STANDARD_THEME_PREVIEW_COLORS[appearance];
+    return {
+      canvas: themeColorToNativeColor(colors.canvas),
+      accent: themeColorToNativeColor(colors.accent),
+      messageAction: themeColorToNativeColor(colors.messageAction),
+    };
+  }
   const theme =
     BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? SUPACODE_CHAT_THEME;
   const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;

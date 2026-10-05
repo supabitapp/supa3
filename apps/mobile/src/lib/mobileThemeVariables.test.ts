@@ -55,7 +55,7 @@ describe("mobile theme runtime variables", () => {
       for (const appearance of ["light", "dark"] as const) {
         const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
         expect(variables["--color-header"]).toBe(
-          appearance === "light" ? "rgba(244, 244, 245, 1)" : "rgba(20, 20, 20, 1)",
+          appearance === "light" ? "rgba(217, 209, 205, 1)" : "rgba(53, 47, 45, 1)",
         );
         for (const pane of ["--color-screen", "--color-sheet-solid", "--color-drawer"] as const) {
           expect(variables["--color-header"]).not.toBe(themeColorWithAlpha(variables[pane], 1));
@@ -77,8 +77,8 @@ describe("mobile theme runtime variables", () => {
         } else {
           expect(ios).toEqual(getMobileThemeVariables("supacode", appearance));
           expect(ios["--color-drawer"]).toBe(android["--color-drawer"]);
-          expect(ios["--color-drawer"]).toBe("#000000");
-          expect(ios["--color-thread-canvas"]).toBe("#0a0a0a");
+          expect(ios["--color-drawer"]).toBe("#171412");
+          expect(ios["--color-thread-canvas"]).toBe("#1c1917");
         }
         expect(themeColorWithAlpha(ios["--color-thread-hover"], 1)).not.toBe(
           themeColorWithAlpha(ios["--color-drawer"], 1),
