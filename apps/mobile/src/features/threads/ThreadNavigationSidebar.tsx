@@ -61,6 +61,8 @@ import {
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
+  ThreadListV2PinnedShelfHeader,
+  ThreadListV2SectionDivider,
   ThreadListV2WorkingShelfHeader,
 } from "./thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "./thread-provider-instance";
@@ -311,9 +313,11 @@ function ThreadNavigationSidebarPane(
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
+    togglePinnedShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the pane stays open.
@@ -360,6 +364,7 @@ function ThreadNavigationSidebarPane(
     settledLimit: settledVisibleCount,
     now: listClock.now,
     workingShelfEnabled,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
@@ -400,7 +405,9 @@ function ThreadNavigationSidebarPane(
     const items: SidebarListItem[] = buildThreadListV2ListItems({
       items: threadListV2Layout.items,
       pendingTasks: v2PendingTasks,
+      pinnedCount: threadListV2Layout.pinnedCount,
       workingCount: threadListV2Layout.workingCount,
+      pinnedShelfExpanded,
       workingShelfExpanded,
       workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
       snoozedCount: threadListV2Layout.snoozedCount,
@@ -434,6 +441,7 @@ function ThreadNavigationSidebarPane(
     snoozedShelfExpanded,
     snoozeEnvironmentIds,
     threadListV2Layout,
+    pinnedShelfExpanded,
     workingShelfExpanded,
   ]);
   const listMenuActions = useMemo<MenuAction[]>(
@@ -713,6 +721,18 @@ function ThreadNavigationSidebarPane(
             />
           );
         }
+        case "v2-active-header":
+          return <ThreadListV2SectionDivider label="Active" pane="sidebar" />;
+        case "v2-pinned-shelf":
+          return (
+            <ThreadListV2PinnedShelfHeader
+              count={item.count}
+              disabled={item.disabled}
+              expanded={item.expanded}
+              onToggle={togglePinnedShelf}
+              pane="sidebar"
+            />
+          );
         case "v2-working-shelf":
           return (
             <ThreadListV2WorkingShelfHeader
@@ -790,6 +810,7 @@ function ThreadNavigationSidebarPane(
       snoozeThread,
       toggleSettledShelf,
       toggleSnoozedShelf,
+      togglePinnedShelf,
       toggleWorkingShelf,
       unpinThread,
       unsettleThread,

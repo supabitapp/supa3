@@ -13,6 +13,8 @@ export function useThreadListV2ShelfPreferences() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const loaded = AsyncResult.isSuccess(preferencesResult);
+  const pinnedShelfExpanded =
+    !loaded || preferencesResult.value.threadListPinnedShelfExpanded !== false;
   const snoozedShelfExpanded =
     loaded && preferencesResult.value.threadListSnoozedShelfExpanded === true;
   const settledShelfExpanded =
@@ -21,15 +23,23 @@ export function useThreadListV2ShelfPreferences() {
   const workingShelfEnabled = loaded && preferencesResult.value.workingShelfEnabled === true;
   const workingShelfExpanded =
     loaded && preferencesResult.value.threadListWorkingShelfExpanded === true;
+  const pinnedShelfExpandedRef = useRef(pinnedShelfExpanded);
   const snoozedShelfExpandedRef = useRef(snoozedShelfExpanded);
   const settledShelfExpandedRef = useRef(settledShelfExpanded);
   const workingShelfExpandedRef = useRef(workingShelfExpanded);
   useLayoutEffect(() => {
+    pinnedShelfExpandedRef.current = pinnedShelfExpanded;
     snoozedShelfExpandedRef.current = snoozedShelfExpanded;
     settledShelfExpandedRef.current = settledShelfExpanded;
     workingShelfExpandedRef.current = workingShelfExpanded;
   });
 
+  const togglePinnedShelf = useCallback(() => {
+    if (!loaded) return;
+    const expanded = !pinnedShelfExpandedRef.current;
+    pinnedShelfExpandedRef.current = expanded;
+    savePreferences({ threadListPinnedShelfExpanded: expanded });
+  }, [loaded, savePreferences]);
   const toggleSnoozedShelf = useCallback(() => {
     if (!loaded) return;
     const expanded = !snoozedShelfExpandedRef.current;
@@ -51,10 +61,12 @@ export function useThreadListV2ShelfPreferences() {
 
   return {
     loaded,
+    pinnedShelfExpanded,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    togglePinnedShelf,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,

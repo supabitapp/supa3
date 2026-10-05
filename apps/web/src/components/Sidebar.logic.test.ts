@@ -1,6 +1,5 @@
 import { presentThreadShell } from "@supacode/client-runtime/state/models";
 import * as DateTime from "effect/DateTime";
-import { deriveActiveWorkStartedAt } from "../session-logic.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import * as Cause from "effect/Cause";
@@ -15,7 +14,6 @@ import {
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   filterSidebarV2VisibleThreads,
-  formatWorkingDurationLabel,
   getFallbackThreadIdAfterDelete,
   getProjectSortTimestamp,
   getSidebarForkParentThreadId,
@@ -38,7 +36,6 @@ import {
   resolveSidebarV2TopStatus,
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
-  resolveWorkingStartedAt,
   shouldClearThreadSelectionOnMouseDown,
   shouldShowSidebarV2Duration,
   shouldRecedeSidebarThread,
@@ -1045,102 +1042,6 @@ describe("reduceSidebarProjectScopeMenuState", () => {
         { type: "query-changed", query: "beta" },
       ),
     ).toEqual({ open: true, query: "beta" });
-  });
-});
-
-describe("resolveWorkingStartedAt", () => {
-  const runtime = {
-    status: "running" as const,
-    providerName: "Codex",
-    providerInstanceId: ProviderInstanceId.make("codex"),
-    activeRunId: RunId.make("turn-1"),
-    lastError: null,
-    updatedAt: "2026-03-09T10:02:00.000Z",
-  };
-
-  it("uses the running run's start time", () => {
-    expect(
-      resolveWorkingStartedAt({
-        latestRun: makeLatestRun({ completedAt: null }),
-        runtime,
-      }),
-    ).toBe("2026-03-09T10:00:00.000Z");
-  });
-
-  it("uses the request time while a run awaits adoption", () => {
-    expect(
-      resolveWorkingStartedAt({
-        latestRun: makeLatestRun({ startedAt: null, completedAt: null }),
-        runtime,
-      }),
-    ).toBe("2026-03-09T10:00:00.000Z");
-  });
-
-  it("does not invent a start from activity updates when the newest run completed", () => {
-    expect(
-      resolveWorkingStartedAt({
-        latestRun: makeLatestRun(),
-        runtime,
-      }),
-    ).toBeNull();
-  });
-
-  it("skips a malformed startedAt instead of returning it", () => {
-    expect(
-      resolveWorkingStartedAt({
-        latestRun: makeLatestRun({ startedAt: "not-a-date", completedAt: null }),
-        runtime,
-      }),
-    ).toBe("2026-03-09T10:00:00.000Z");
-  });
-
-  it.each(["queued", "cancelled"] as const)(
-    "shares the detail timer when a newer run is %s",
-    (status) => {
-      const activityStartedAt = "2026-03-09T10:00:00.000Z";
-      const latestRun = {
-        ...makeLatestRun(),
-        runId: RunId.make("newer-run"),
-        status,
-        startedAt: null,
-        completedAt: status === "queued" ? null : "2026-03-09T10:05:00.000Z",
-      };
-      for (const updatedAt of ["2026-03-09T10:30:00.000Z", "2026-03-09T10:50:00.000Z"]) {
-        const activeRuntime = { ...runtime, updatedAt, activityStartedAt };
-        expect(resolveWorkingStartedAt({ latestRun, runtime: activeRuntime })).toBe(
-          activityStartedAt,
-        );
-        expect(deriveActiveWorkStartedAt(latestRun, activeRuntime, updatedAt)).toBe(
-          activityStartedAt,
-        );
-      }
-      // A server-owned run without a valid start must not borrow a local dispatch clock.
-      expect(
-        deriveActiveWorkStartedAt(
-          latestRun,
-          { ...runtime, activityStartedAt: null },
-          "2026-03-09T10:50:00.000Z",
-        ),
-      ).toBeNull();
-    },
-  );
-
-  it("returns null with neither a running run nor a runtime", () => {
-    expect(resolveWorkingStartedAt({ latestRun: null, runtime: null })).toBeNull();
-  });
-});
-
-describe("formatWorkingDurationLabel", () => {
-  it("formats seconds, minutes, and hours", () => {
-    expect(formatWorkingDurationLabel(0)).toBe("0s");
-    expect(formatWorkingDurationLabel(42_000)).toBe("42s");
-    expect(formatWorkingDurationLabel(5 * 60_000)).toBe("5m");
-    expect(formatWorkingDurationLabel(90 * 60_000)).toBe("1h 30m");
-  });
-
-  it("clamps negative and non-finite elapsed values to zero", () => {
-    expect(formatWorkingDurationLabel(-5_000)).toBe("0s");
-    expect(formatWorkingDurationLabel(Number.NaN)).toBe("0s");
   });
 });
 
