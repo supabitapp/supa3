@@ -6,7 +6,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessResourceHistorySummary,
@@ -301,7 +301,7 @@ function ProcessDiagnosticsTable({
 }: {
   processes: ReadonlyArray<ServerProcessDiagnosticsEntry>;
   signalingPid: number | null;
-  onSignal: (pid: number, signal: ServerProcessSignal) => void;
+  onSignal: (process: ServerProcessDiagnosticsEntry, signal: ServerProcessSignal) => void;
   emptyLabel?: string;
 }) {
   const [collapsedPids, setCollapsedPids] = useState<ReadonlySet<number>>(() => new Set());
@@ -409,7 +409,7 @@ function ProcessDiagnosticsTable({
                   <ProcessSignalActions
                     pid={process.pid}
                     disabled={signalingPid === process.pid}
-                    onSignal={(signal) => onSignal(process.pid, signal)}
+                    onSignal={(signal) => onSignal(process, signal)}
                   />
                 </td>
               </tr>
@@ -757,17 +757,6 @@ export function DiagnosticsSettingsPanel() {
   const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<string | null>(null);
   const [signalingPid, setSignalingPid] = useState<number | null>(null);
   const signalingPidRef = useRef<number | null>(null);
-  const environmentIdRef = useRef(environmentId);
-  const processDataRef = useRef(processData);
-  useEffect(() => {
-    processDataRef.current = processData;
-  }, [processData]);
-  useEffect(() => {
-    environmentIdRef.current = environmentId;
-    return () => {
-      environmentIdRef.current = null;
-    };
-  }, [environmentId]);
 
   const openLogsDirectory = useCallback(() => {
     const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
@@ -806,59 +795,54 @@ export function DiagnosticsSettingsPanel() {
   const isInitialLoading = isPending && data === null;
   const isProcessInitialLoading = isProcessPending && processData === null;
   const signalProcess = useCallback(
-    async (pid: number, signal: ServerProcessSignal) => {
-      const targetEnvironmentId = environmentIdRef.current;
-      const process = processDataRef.current?.processes.find((entry) => entry.pid === pid);
-      if (targetEnvironmentId === null || process === undefined) return;
-      if (signalingPidRef.current !== null) return;
-      signalingPidRef.current = pid;
-      setSignalingPid(pid);
-      const clearSignaling = () => {
-        signalingPidRef.current = null;
-        setSignalingPid(null);
-      };
+    (process: ServerProcessDiagnosticsEntry, signal: ServerProcessSignal) => {
+      if (environmentId === null || signalingPidRef.current !== null) return;
+      signalingPidRef.current = process.pid;
+      setSignalingPid(process.pid);
+      void signalServerProcess({
+        environmentId,
+        input: { pid: process.pid, startTimeMs: process.startTimeMs, signal },
+      })
+        .then((result) => {
+          if (result._tag === "Failure") {
+            if (!isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add({
+                type: "error",
+                title: `Could not send ${signal}`,
+                description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
+              });
+            }
+            return;
+          }
+          if (!result.value.signaled) {
+            const message = Option.getOrUndefined(result.value.message);
+            refreshProcesses();
+            if (isStaleProcessSignalMessage(message)) {
+              toastManager.add({
+                type: "info",
+                title: "Process already exited",
+                description:
+                  "The process is not a child of the Supacode Server. It might already have exited.",
+              });
+              return;
+            }
 
-      const sendSignal = async () => {
-        const result = await signalServerProcess({
-          environmentId: targetEnvironmentId,
-          input: { pid, startTimeMs: process.startTimeMs, signal },
-        });
-        if (result._tag === "Failure") {
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
             toastManager.add({
               type: "error",
               title: `Could not send ${signal}`,
-              description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
-            });
-          }
-          return;
-        }
-        if (!result.value.signaled) {
-          const message = Option.getOrUndefined(result.value.message);
-          refreshProcesses();
-          if (isStaleProcessSignalMessage(message)) {
-            toastManager.add({
-              type: "info",
-              title: "Process already exited",
-              description:
-                "The process is not a child of the Supacode Server. It might already have exited.",
+              description: message ?? `Failed to send ${signal}.`,
             });
             return;
           }
-
-          toastManager.add({
-            type: "error",
-            title: `Could not send ${signal}`,
-            description: message ?? `Failed to send ${signal}.`,
-          });
-          return;
-        }
-        refreshProcesses();
-      };
-      await sendSignal().finally(clearSignaling);
+          refreshProcesses();
+        })
+        .finally(() => {
+          signalingPidRef.current = null;
+          setSignalingPid(null);
+        });
     },
-    [refreshProcesses, signalServerProcess],
+    [environmentId, refreshProcesses, signalServerProcess],
   );
 
   const processDiagnosticsError = processData ? Option.getOrNull(processData.error) : null;

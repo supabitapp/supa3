@@ -27,7 +27,7 @@ import type {
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -837,34 +837,20 @@ export function ResourceTelemetryDiagnostics({
   });
   const [signalingKeys, setSignalingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const signalingKeysRef = useRef<ReadonlySet<string>>(new Set());
-  const environmentIdRef = useRef(environmentId);
-  useEffect(() => {
-    environmentIdRef.current = environmentId;
-    return () => {
-      environmentIdRef.current = null;
-    };
-  }, [environmentId]);
   const [isRetrying, setIsRetrying] = useState(false);
   const snapshot = telemetry.data;
   const allSupacode = snapshot?.groups.allSupacode;
 
   const signalProcess = useCallback(
     (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
-      const targetEnvironmentId = environmentIdRef.current;
-      if (targetEnvironmentId === null) return;
+      if (environmentId === null) return;
       const identityKey = processIdentityKey(process);
       if (signalingKeysRef.current.has(identityKey)) return;
       const nextSignalingKeys = new Set(signalingKeysRef.current).add(identityKey);
       signalingKeysRef.current = nextSignalingKeys;
       setSignalingKeys(nextSignalingKeys);
-      const clearSignaling = () => {
-        const next = new Set(signalingKeysRef.current);
-        next.delete(identityKey);
-        signalingKeysRef.current = next;
-        setSignalingKeys(next);
-      };
       void signalServerProcess({
-        environmentId: targetEnvironmentId,
+        environmentId,
         input: {
           pid: process.identity.pid,
           startTimeMs: process.identity.startTimeMs,
@@ -894,10 +880,13 @@ export function ResourceTelemetryDiagnostics({
           });
         })
         .finally(() => {
-          clearSignaling();
+          const next = new Set(signalingKeysRef.current);
+          next.delete(identityKey);
+          signalingKeysRef.current = next;
+          setSignalingKeys(next);
         });
     },
-    [signalServerProcess],
+    [environmentId, signalServerProcess],
   );
 
   const retryCollector = useCallback(() => {

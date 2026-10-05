@@ -117,16 +117,13 @@ function ThemeLibraryCard({
       preview: ThemeCardDefinition["previews"][number];
     }>;
     onSelectAndUse: (themeIndex: number, mode: ThemeAppearance) => void;
+    onRemove: () => void;
   };
 }) {
   // A one-appearance theme can only take its own side of the mix, so the card
   // tooltip promises exactly what clicking it does.
   const cardModes = theme.previews.map((preview) => preview.mode);
   const [radialModeOpen, setRadialModeOpen] = useState<ThemeAppearance | null>(null);
-  const removeConfirm = useInlineConfirm<"remove">();
-  const removeArmed = removeConfirm.armed === "remove";
-  const removeBinding =
-    onRemove && !variantNavigation ? removeConfirm.bind("remove", onRemove) : null;
   const radialModeGroups = (["light", "dark"] as const).map((mode) => {
     const options =
       variantNavigation?.options.flatMap((option) => {
@@ -308,7 +305,7 @@ function ThemeLibraryCard({
                   </button>
                 </div>
               </div>
-              {onEdit || onDuplicate || onDownload || onRemove ? (
+              {onEdit || onDuplicate || onDownload || onRemove || variantNavigation ? (
                 <div className="flex shrink-0 items-center gap-1">
                   {onDuplicate ? (
                     <Tooltip>
@@ -370,41 +367,27 @@ function ThemeLibraryCard({
                       <TooltipPopup>Export theme file</TooltipPopup>
                     </Tooltip>
                   ) : null}
-                  {onRemove ? (
+                  {variantNavigation ? (
                     <Tooltip>
                       <TooltipTrigger
                         render={
                           <Button
-                            aria-label={
-                              variantNavigation
-                                ? `Remove themes from ${variantNavigation.collectionLabel}`
-                                : removeArmed
-                                  ? `Confirm remove ${theme.label}`
-                                  : `Remove ${theme.label}`
-                            }
+                            aria-label={`Remove themes from ${variantNavigation.collectionLabel}`}
                             size="icon-xs"
                             variant="ghost-destructive"
-                            {...removeBinding}
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (removeBinding) removeBinding.onClick(event);
-                              else onRemove();
+                              variantNavigation.onRemove();
                             }}
                           >
-                            <InlineConfirmIcon armed={removeArmed}>
-                              <Trash2Icon />
-                            </InlineConfirmIcon>
+                            <Trash2Icon />
                           </Button>
                         }
                       />
-                      <TooltipPopup>
-                        {variantNavigation
-                          ? "Remove themes"
-                          : removeArmed
-                            ? `Click again to remove ${theme.label}. Importing its JSON file brings it back.`
-                            : "Remove theme"}
-                      </TooltipPopup>
+                      <TooltipPopup>Remove themes</TooltipPopup>
                     </Tooltip>
+                  ) : onRemove ? (
+                    <RemoveThemeButton label={theme.label} onRemove={onRemove} />
                   ) : null}
                 </div>
               ) : null}
@@ -423,6 +406,39 @@ function ThemeLibraryCard({
   );
 }
 
+function RemoveThemeButton({ label, onRemove }: { label: string; onRemove: () => void }) {
+  const confirm = useInlineConfirm<"remove">();
+  const armed = confirm.armed === "remove";
+  const binding = confirm.bind("remove", onRemove);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            aria-label={armed ? `Confirm remove ${label}` : `Remove ${label}`}
+            size="icon-xs"
+            variant="ghost-destructive"
+            {...binding}
+            onClick={(event) => {
+              event.stopPropagation();
+              binding.onClick(event);
+            }}
+          >
+            <InlineConfirmIcon armed={armed}>
+              <Trash2Icon />
+            </InlineConfirmIcon>
+          </Button>
+        }
+      />
+      <TooltipPopup>
+        {armed
+          ? `Click again to remove ${label}. Importing its JSON file brings it back.`
+          : "Remove theme"}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 function CustomThemeCollectionCard({
   themes,
   activeModesFor,
@@ -431,7 +447,8 @@ function CustomThemeCollectionCard({
   onDuplicate,
   onEdit,
   onDownload,
-  onRemove,
+  onRemoveTheme,
+  onRemoveCollection,
 }: {
   themes: ReadonlyArray<ThemeDefinition>;
   activeModesFor: (themeId: string) => ReadonlyArray<ThemeMode>;
@@ -440,7 +457,8 @@ function CustomThemeCollectionCard({
   onDuplicate: (theme: ThemeDefinition) => void;
   onEdit: (theme: ThemeDefinition) => void;
   onDownload: (theme: ThemeDefinition) => void;
-  onRemove: (theme: ThemeDefinition) => void;
+  onRemoveTheme: (theme: ThemeDefinition) => void;
+  onRemoveCollection: (themes: ReadonlyArray<ThemeDefinition>) => void;
 }) {
   const [variantIndex, setVariantIndex] = useState(() => {
     const activeIndex = themes.findIndex((theme) => activeModesFor(theme.id).length > 0);
@@ -473,7 +491,6 @@ function CustomThemeCollectionCard({
       onDownload={() => onDownload(theme)}
       onDuplicate={() => onDuplicate(theme)}
       onEdit={() => onEdit(theme)}
-      onRemove={() => onRemove(theme)}
       onUse={selectCollectionDefaults}
       onUseMode={(mode) => onUseMode(theme, mode)}
       theme={getThemeCardDefinition(theme)}
@@ -495,9 +512,10 @@ function CustomThemeCollectionCard({
                 setVariantIndex(themeIndex);
                 onUseMode(selectedTheme, mode);
               },
+              onRemove: () => onRemoveCollection(themes),
             },
           }
-        : {})}
+        : { onRemove: () => onRemoveTheme(theme) })}
     />
   );
 }
@@ -859,9 +877,8 @@ export function ThemeLibrary({
                 initialAppearance,
               })
             }
-            onRemove={(customTheme) =>
-              themes.length > 1 ? openCollectionRemoval(themes) : removeThemes([customTheme.id])
-            }
+            onRemoveTheme={(customTheme) => removeThemes([customTheme.id])}
+            onRemoveCollection={openCollectionRemoval}
             onUse={(customTheme) => {
               const modes = getThemeModes(customTheme);
               if (modes.length === 1) assignHalf(modes[0]!, customTheme.id);
