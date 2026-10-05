@@ -609,6 +609,19 @@ describe("ClientSettings environment identification", () => {
 });
 
 describe("ClientSettings sidebar", () => {
+  it("defaults to cards and preserves either thread display mode", () => {
+    expect(decodeClientSettings({}).sidebarThreadDisplay).toBe("cards");
+    expect(decodeClientSettingsPatch({})).not.toHaveProperty("sidebarThreadDisplay");
+    for (const mode of ["cards", "compact"] as const) {
+      expect(decodeClientSettings({ sidebarThreadDisplay: mode }).sidebarThreadDisplay).toBe(mode);
+      expect(decodeClientSettingsPatch({ sidebarThreadDisplay: mode }).sidebarThreadDisplay).toBe(
+        mode,
+      );
+    }
+    expect(() => decodeClientSettings({ sidebarThreadDisplay: "rail" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ sidebarThreadDisplay: true })).toThrow();
+  });
+
   it("defaults to the current sidebar", () => {
     expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
   });
@@ -628,6 +641,7 @@ describe("ClientSettings sidebar", () => {
     const decoded = decodeClientSettings(stored);
     expect(decoded).not.toHaveProperty("compactSidebarEnabled");
     expect(decoded).not.toHaveProperty("sidebarCompactThreadRows");
+    expect(decoded.sidebarThreadDisplay).toBe("cards");
     expect(decodeClientSettingsPatch(stored)).toEqual({});
   });
 
