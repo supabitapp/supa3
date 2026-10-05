@@ -51,11 +51,11 @@ export function SidebarThreadHeader({
       {/* Unfilled: the buttons carry their own hover states, and a background
           well reads far louder on themed palettes than on the base ones. */}
       <div className="flex shrink-0 items-center">
+        <SidebarDisplayMenu />
         {projectScope}
         <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
           <FolderPlusIcon />
         </SidebarHeaderIconButton>
-        <SidebarDisplayMenu />
       </div>
     </div>
   );
