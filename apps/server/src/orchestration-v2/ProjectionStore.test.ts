@@ -2736,6 +2736,29 @@ it.layer(TestLayer)("ProjectionStoreV2", (it) => {
             capturedAt: now,
           },
         });
+        const gitUpdate = {
+          fromHead: "a".repeat(40),
+          toHead: "b".repeat(40),
+          fromBranch: "refs/heads/main",
+          toBranch: "refs/heads/feature",
+          fileCount: 1233,
+          additions: 145000,
+          deletions: 369000,
+        };
+        const files = [{ path: "agent.txt", kind: "modified", additions: 1, deletions: 0 }];
+        yield* sql`
+          UPDATE orchestration_v2_projection_checkpoints
+          SET payload_json = json_set(payload_json, '$.gitUpdate', json(${encodeUnknownJsonString(gitUpdate)}), '$.files', json(${encodeUnknownJsonString(files)}))
+          WHERE checkpoint_id = ${checkpointId}
+        `;
+        const context = yield* projectionStore.getCheckpointContext(threadId);
+        assert.deepEqual(context.checkpoints[0]?.gitUpdate, gitUpdate);
+        assert.deepEqual(context.checkpoints[0]?.files, files);
+        yield* sql`
+          UPDATE orchestration_v2_projection_checkpoints
+          SET payload_json = json_remove(payload_json, '$.gitUpdate')
+          WHERE checkpoint_id = ${checkpointId}
+        `;
         // Old transcript shapes must not make a metadata-only diff unreadable.
         yield* sql`
         INSERT INTO orchestration_v2_projection_turn_items (

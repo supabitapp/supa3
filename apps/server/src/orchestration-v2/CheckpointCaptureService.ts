@@ -1,4 +1,5 @@
 import {
+  orchestrationV2RunWorkStartedAt,
   CheckpointScopeId,
   CommandId,
   type OrchestrationV2Checkpoint,
@@ -127,6 +128,7 @@ export const layer: Layer.Layer<
         ordinalWithinScope: run.ordinal,
         appRunOrdinal: run.ordinal,
         capturedAt,
+        runStartedAt: orchestrationV2RunWorkStartedAt(run),
       });
       // Match RunExecutionService: capture loaded the waiting run before
       // materializing baselines. Omit delegatedCompletion so a newer cohort

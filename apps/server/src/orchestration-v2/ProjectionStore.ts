@@ -206,18 +206,26 @@ const ProjectionCheckpointContext = Schema.Struct({
   ),
   checkpoints: Schema.Array(
     OrchestrationV2CheckpointJsonSchema.mapFields(
-      ({ scopeId, runId, appRunOrdinal, status, ref }) => ({
+      ({ scopeId, runId, appRunOrdinal, status, ref, files, gitUpdate }) => ({
         scopeId,
         runId,
         appRunOrdinal,
         status,
         ref,
+        files: Schema.optionalKey(files),
+        gitUpdate,
       }),
     ),
   ),
 });
 export type ProjectionCheckpointContext = typeof ProjectionCheckpointContext.Type;
 const decodeCheckpointContext = Schema.decodeUnknownEffect(ProjectionCheckpointContext);
+const decodeCheckpointContextFiles = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(OrchestrationV2CheckpointJsonSchema.fields.files),
+);
+const decodeCheckpointContextGitUpdate = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.NullOr(OrchestrationV2CheckpointJsonSchema.fields.gitUpdate)),
+);
 
 /** Durable capture targets, without transcript or checkpoint file payloads. */
 export interface ProjectionCheckpointCaptureContext {
@@ -4373,8 +4381,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             if (threads.length === 0) {
               return yield* new ProjectionStoreThreadNotFoundError({ threadId });
             }
-            // Checkpoint diffs need no transcript or fork ancestry. Select just the
-            // metadata columns so large run/checkpoint JSON payloads stay in SQLite.
+            // Checkpoint diffs need no transcript or fork ancestry. File summaries
+            // supply the allowlist when a range contains Git updates.
             const [runs, checkpointScopes, checkpoints] = yield* Effect.all([
               sql`
               SELECT run_id AS id, ordinal, status
@@ -4392,13 +4400,43 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               sql`
               SELECT scope_id AS "scopeId", run_id AS "runId",
                 app_run_ordinal AS "appRunOrdinal", status,
-                json_extract(payload_json, '$.ref') AS ref
+                json_extract(payload_json, '$.ref') AS ref,
+                CASE WHEN json_type(payload_json, '$.gitUpdate') = 'object'
+                  THEN json_extract(payload_json, '$.files') END AS files_json,
+                json_extract(payload_json, '$.gitUpdate') AS git_update_json
               FROM orchestration_v2_projection_checkpoints
               WHERE thread_id = ${threadId}
               ORDER BY scope_id ASC, ordinal_within_scope ASC
             `,
             ]);
-            return yield* decodeCheckpointContext({ runs, checkpointScopes, checkpoints });
+            return yield* decodeCheckpointContext({
+              runs,
+              checkpointScopes,
+              checkpoints: yield* Effect.forEach(
+                checkpoints,
+                Effect.fnUntraced(function* (row) {
+                  const { files_json, git_update_json, ...metadata } = row;
+                  // A legacy file-summary shape must not prevent an unfiltered diff.
+                  const files =
+                    files_json === null
+                      ? undefined
+                      : yield* decodeCheckpointContextFiles(files_json).pipe(
+                          Effect.orElseSucceed(() => undefined),
+                        );
+                  const gitUpdate =
+                    git_update_json === null
+                      ? undefined
+                      : yield* decodeCheckpointContextGitUpdate(git_update_json).pipe(
+                          Effect.orElseSucceed(() => undefined),
+                        );
+                  return {
+                    ...metadata,
+                    ...(files ? { files } : {}),
+                    ...(gitUpdate ? { gitUpdate } : {}),
+                  };
+                }),
+              ),
+            });
           }),
         )
         .pipe(
@@ -5988,7 +6026,8 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
               cwd,
             })),
             checkpoints: projection.checkpoints.map(
-              ({ scopeId, runId, appRunOrdinal, status, ref }) => ({
+              ({ scopeId, runId, appRunOrdinal, status, ref, files, gitUpdate }) => ({
+                ...(gitUpdate ? { files, gitUpdate } : {}),
                 scopeId,
                 runId,
                 appRunOrdinal,

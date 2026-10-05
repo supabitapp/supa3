@@ -13,6 +13,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import {
   GitCommandError,
   VcsProcessExitError,
+  VcsProcessOutputLimitError,
   type VcsSwitchRefInput,
   type VcsSwitchRefResult,
   type VcsCreateRefInput,
@@ -38,6 +39,7 @@ import {
   splitNullSeparatedGitStdoutPaths,
 } from "./GitVcsDriverCore.ts";
 import * as VcsDriver from "./VcsDriver.ts";
+import * as GitCheckpointAttribution from "./GitCheckpointAttribution.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
 export interface ExecuteGitInput {
@@ -800,6 +802,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   ] as const;
 
   const checkpoints: VcsDriver.VcsCheckpointOps = {
+    getCheckpointGitUpdate: (input) =>
+      GitCheckpointAttribution.getCheckpointGitUpdate(input).pipe(
+        Effect.provideService(VcsProcess.VcsProcess, vcsProcess),
+      ),
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = VcsProcess.CHECKPOINT_CAPTURE_OPERATION;
       const indexConfig = [
@@ -830,7 +836,17 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       );
 
       yield* Effect.gen(function* () {
-        const headExists = yield* hasHeadCommit(input.cwd);
+        const headInfo = yield* execute({
+          operation,
+          cwd: input.cwd,
+          args: ["rev-parse", "--revs-only", "HEAD", "--symbolic-full-name", "HEAD"],
+          allowNonZeroExit: true,
+        });
+        const [headOid, headBranch] = headInfo.stdout.trim().split("\n");
+        const head =
+          headInfo.exitCode === 0 && headOid && /^[a-f0-9]{40,64}$/.test(headOid) ? headOid : null;
+        const headExists = head !== null;
+        const branch = headBranch?.startsWith("refs/heads/") ? headBranch : null;
         const sparseConfig = yield* execute({
           operation,
           cwd: input.cwd,
@@ -1042,7 +1058,11 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           });
         }
 
-        const message = `supacode checkpoint ref=${input.checkpointRef}`;
+        // If HEAD changed while staging the snapshot, omit attribution metadata.
+        const stableHead =
+          head !== null &&
+          head === (yield* resolveHeadCommit(input.cwd).pipe(Effect.orElseSucceed(() => null)));
+        const message = `supacode checkpoint ref=${input.checkpointRef}${stableHead ? ` head=${head}${branch ? ` branch=${branch}` : ""}` : ""}`;
         const commitTreeResult = yield* execute({
           operation,
           cwd: input.cwd,
@@ -1183,36 +1203,82 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         }
       }
 
-      const result = yield* execute({
-        operation,
-        cwd: input.cwd,
-        args: [
-          "diff",
-          ...(input.format === "numstat" ? ["--numstat", "-z"] : ["--patch"]),
-          "--no-color",
-          "--no-ext-diff",
-          "--no-textconv",
-          ...PATCH_RENDER_PREFIX_ARGS,
-          ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
-          `${fromRevision}^{commit}`,
-          `${input.toCheckpointRef}^{commit}`,
-        ],
-        allowNonZeroExit: true,
-        maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
-        outputMode: input.format === "numstat" ? "error" : "truncate",
-      });
-
-      if (result.exitCode !== 0) {
-        return yield* new VcsProcessExitError({
-          operation,
-          command: "git diff",
-          cwd: input.cwd,
-          exitCode: result.exitCode,
-          detail: result.stderr.trim() || "Checkpoint ref is unavailable for diff operation.",
-        });
+      // Bounded literal pathspec batches avoid argv limits and Git glob/magic
+      // interpretation. An explicitly empty list must not mean the whole tree.
+      const batches: string[][] = [];
+      if (input.paths === undefined) batches.push([]);
+      else {
+        let batch: string[] = [];
+        let bytes = 0;
+        for (const filePath of new Set(input.paths)) {
+          const spec = `:(top,literal)${filePath}`;
+          const size = NodeBuffer.Buffer.byteLength(spec) + 1;
+          if (bytes + size > 16 * 1024 && batch.length > 0) {
+            batches.push(batch);
+            batch = [];
+            bytes = 0;
+          }
+          batch.push(spec);
+          bytes += size;
+        }
+        if (batch.length > 0) batches.push(batch);
       }
+      const chunks: string[] = [];
+      let remainingBytes = CHECKPOINT_DIFF_MAX_OUTPUT_BYTES;
+      for (const [index, paths] of batches.entries()) {
+        const result = yield* execute({
+          operation,
+          cwd: input.cwd,
+          args: [
+            "diff",
+            ...(input.format === "numstat" ? ["--numstat", "-z"] : ["--patch"]),
+            "--no-color",
+            ...(input.paths !== undefined || input.noRenames
+              ? ["--no-renames", "--no-relative"]
+              : []),
+            "--no-ext-diff",
+            "--no-textconv",
+            ...PATCH_RENDER_PREFIX_ARGS,
+            ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+            `${fromRevision}^{commit}`,
+            `${input.toCheckpointRef}^{commit}`,
+            "--",
+            ...paths,
+          ],
+          allowNonZeroExit: true,
+          maxOutputBytes: remainingBytes,
+          outputMode: input.format === "numstat" ? "error" : "truncate",
+          appendTruncationMarker: input.format !== "numstat",
+        });
 
-      return result.stdout;
+        if (result.exitCode !== 0) {
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "git diff",
+            cwd: input.cwd,
+            exitCode: result.exitCode,
+            detail: result.stderr.trim() || "Checkpoint ref is unavailable for diff operation.",
+          });
+        }
+
+        chunks.push(result.stdout);
+        remainingBytes -= NodeBuffer.Buffer.byteLength(result.stdout);
+        if (result.stdoutTruncated) break;
+        if (remainingBytes <= 0 && index < batches.length - 1) {
+          if (input.format === "numstat")
+            return yield* new VcsProcessOutputLimitError({
+              operation,
+              command: "git",
+              cwd: input.cwd,
+              stream: "stdout",
+              maxBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+              observedBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES + 1,
+            });
+          chunks.push("\n\n[truncated]");
+          break;
+        }
+      }
+      return chunks.join("");
     }),
 
     deleteCheckpointRefs: Effect.fn("GitVcsDriver.checkpoints.deleteCheckpointRefs")(

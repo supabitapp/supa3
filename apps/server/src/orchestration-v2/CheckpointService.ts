@@ -142,6 +142,7 @@ export interface CheckpointServiceV2Shape {
     readonly ordinalWithinScope: number;
     readonly appRunOrdinal: number | null;
     readonly capturedAt: DateTime.Utc;
+    readonly runStartedAt?: DateTime.Utc;
   }) => Effect.Effect<OrchestrationV2Checkpoint, CheckpointServiceV2Error>;
   readonly restore: (input: {
     readonly scope: OrchestrationV2CheckpointScope;
@@ -222,6 +223,7 @@ function makeCheckpoint(input: {
   readonly ref: CheckpointRef;
   readonly status: OrchestrationV2Checkpoint["status"];
   readonly files: OrchestrationV2Checkpoint["files"];
+  readonly gitUpdate?: OrchestrationV2Checkpoint["gitUpdate"];
   readonly capturedAt: DateTime.Utc;
 }): OrchestrationV2Checkpoint {
   return {
@@ -236,6 +238,7 @@ function makeCheckpoint(input: {
     ref: input.ref,
     status: input.status,
     files: input.files,
+    ...(input.gitUpdate ? { gitUpdate: input.gitUpdate } : {}),
     capturedAt: input.capturedAt,
   };
 }
@@ -483,6 +486,18 @@ export const layer: Layer.Layer<
                 )
             : [];
 
+          const gitUpdate =
+            previousExists && input.runStartedAt !== undefined && files.length > 0
+              ? yield* checkpointStore
+                  .getCheckpointGitUpdate({
+                    cwd: input.scope.cwd,
+                    fromCheckpointRef: previousCheckpointRef,
+                    toCheckpointRef: checkpointRef,
+                    runStartedAtMs: DateTime.toEpochMillis(input.runStartedAt),
+                  })
+                  .pipe(Effect.orElseSucceed(() => undefined))
+              : undefined;
+
           return makeCheckpoint({
             id: checkpointId,
             scope: input.scope,
@@ -493,7 +508,8 @@ export const layer: Layer.Layer<
             appRunOrdinal: input.appRunOrdinal,
             ref: checkpointRef,
             status: "ready",
-            files,
+            files: gitUpdate?.files ?? files,
+            ...(gitUpdate ? { gitUpdate: gitUpdate.summary } : {}),
             capturedAt: input.capturedAt,
           });
         }),

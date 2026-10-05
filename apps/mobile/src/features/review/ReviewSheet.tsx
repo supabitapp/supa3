@@ -1,3 +1,4 @@
+import { formatCheckpointGitUpdate } from "@supacode/client-runtime/state/thread-checkpoints";
 import type { EnvironmentId, ThreadId } from "@supacode/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
@@ -481,6 +482,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const {
     error,
     reviewSections,
+    includeGitChanges,
+    toggleGitChanges,
     selectedSection,
     refreshSelectedSection,
     selectSection,
@@ -700,6 +703,26 @@ export function ReviewSheet(props: ReviewSheetProps) {
       );
     }
 
+    if (selectedSection?.gitUpdate) {
+      children.push(
+        <View key="git-update" className="px-4 py-3">
+          <Text className="text-xs text-foreground-muted">
+            {formatCheckpointGitUpdate(selectedSection.gitUpdate)}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: includeGitChanges }}
+            onPress={toggleGitChanges}
+            className="py-2"
+          >
+            <Text className="text-sm text-primary">
+              {includeGitChanges ? "Hide Git changes" : "Show Git changes"}
+            </Text>
+          </Pressable>
+        </View>,
+      );
+    }
+
     if (parsedDiffNotice) {
       children.push(<ReviewNotice key="review-notice" notice={parsedDiffNotice} />);
     }
@@ -709,7 +732,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
     }
 
     return <>{children}</>;
-  }, [error, parsedDiffNotice]);
+  }, [error, includeGitChanges, parsedDiffNotice, selectedSection, toggleGitChanges]);
   const headerSubtitle = [
     headerDiffSummary.additions,
     headerDiffSummary.deletions,

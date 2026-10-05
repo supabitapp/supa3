@@ -1,7 +1,10 @@
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import type { ChangeTypes, FileDiffMetadata } from "@pierre/diffs/types";
 import type { ThreadCheckpointSummary } from "@supacode/client-runtime/state/thread-checkpoints";
-import type { ReviewDiffPreviewSource } from "@supacode/contracts";
+import type {
+  OrchestrationV2CheckpointGitUpdate,
+  ReviewDiffPreviewSource,
+} from "@supacode/contracts";
 import { unquoteGitPatchPath } from "@supacode/shared/gitPatchPath";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
@@ -23,6 +26,7 @@ export interface ReviewSectionItem {
   readonly files?: ReviewDiffPreviewSource["files"];
   readonly truncated?: boolean;
   readonly source?: ReviewDiffPreviewSource;
+  readonly gitUpdate?: OrchestrationV2CheckpointGitUpdate;
 }
 
 export interface ReviewRenderableHunkRow {
@@ -417,17 +421,20 @@ export function buildReviewSectionItems(input: {
   readonly turnDiffById: Readonly<Record<string, string | undefined>>;
   readonly loadingTurnIds: Readonly<Record<string, boolean | undefined>>;
   readonly loadingGitSections: boolean;
+  readonly includeGitChanges?: boolean;
 }): ReadonlyArray<ReviewSectionItem> {
   const turnItems = getReadyReviewCheckpoints(input.checkpoints).map<ReviewSectionItem>(
     (checkpoint) => {
       const id = getReviewSectionIdForCheckpoint(checkpoint);
+      const cacheId = input.includeGitChanges && checkpoint.gitUpdate ? `${id}:git` : id;
       return {
         id,
         kind: "turn",
         title: checkpointTitle(checkpoint),
         subtitle: checkpointSubtitle(checkpoint),
-        diff: input.turnDiffById[id] ?? null,
-        isLoading: input.loadingTurnIds[id] === true,
+        diff: input.turnDiffById[cacheId] ?? null,
+        isLoading: input.loadingTurnIds[cacheId] === true,
+        ...(checkpoint.gitUpdate ? { gitUpdate: checkpoint.gitUpdate } : {}),
       };
     },
   );

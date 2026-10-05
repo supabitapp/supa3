@@ -128,6 +128,70 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
     }),
   );
   describe("diffCheckpoints", () => {
+    it.effect("filters thousands of literal paths, including binary files, without renames", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        yield* initRepoWithCommit(tmp);
+        const fs = yield* FileSystem.FileSystem;
+        const store = yield* CheckpointStore.CheckpointStore;
+        const baseline = checkpointRefForThreadTurn(ThreadId.make("literal-paths"), 0);
+        const next = checkpointRefForThreadTurn(ThreadId.make("literal-paths"), 1);
+        const platform = yield* HostProcessPlatform;
+        const unusual = platform === "win32" ? "unicode café.txt" : 'literal[ab]*?\t"名\n.txt';
+        yield* writeTextFile(NodePath.join(tmp, "renamed-old.txt"), "rename me\n");
+        yield* store.captureCheckpoint({ cwd: tmp, checkpointRef: baseline });
+        const paths = [
+          ...Array.from(
+            { length: 1200 },
+            (_, index) => `agent-${index}-long-path-for-batching.txt`,
+          ),
+          unusual,
+          "binary.bin",
+          "renamed-new.txt",
+        ];
+        yield* fs.rename(
+          NodePath.join(tmp, "renamed-old.txt"),
+          NodePath.join(tmp, "renamed-new.txt"),
+        );
+        yield* Effect.forEach(
+          paths.filter((file) => file !== "renamed-new.txt"),
+          (file) =>
+            writeTextFile(
+              NodePath.join(tmp, file),
+              file === "binary.bin" ? "\0binary" : "agent content\n",
+            ),
+          { concurrency: 16, discard: true },
+        );
+        yield* writeTextFile(NodePath.join(tmp, "excluded.txt"), "git content\n");
+        yield* store.captureCheckpoint({ cwd: tmp, checkpointRef: next });
+        const input = {
+          cwd: tmp,
+          fromCheckpointRef: baseline,
+          toCheckpointRef: next,
+          ignoreWhitespace: false,
+        };
+        const stats = parseTurnDiffFilesFromNumstat(
+          yield* store.diffCheckpoints({ ...input, format: "numstat", paths }),
+        );
+        expect(new Set(stats.map((file) => file.path))).toEqual(new Set(paths));
+        const patch = yield* store.diffCheckpoints({ ...input, paths });
+        expect(patch).not.toContain("excluded.txt");
+        expect(patch).not.toContain("rename from");
+        expect(patch).toContain("Binary files /dev/null and b/binary.bin differ");
+        expect(patch.match(/^diff --git /gm)?.length).toBe(paths.length);
+        expect(yield* store.diffCheckpoints({ ...input, paths: [] })).toBe("");
+        const nested = NodePath.join(tmp, "nested");
+        yield* fs.makeDirectory(nested);
+        yield* git(tmp, ["config", "diff.relative", "true"]);
+        const nestedPatch = yield* store.diffCheckpoints({
+          ...input,
+          cwd: nested,
+          paths: ["binary.bin"],
+        });
+        expect(nestedPatch).toContain("Binary files /dev/null and b/binary.bin differ");
+      }),
+    );
+
     it.effect("returns full oversized checkpoint diffs without truncation", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();

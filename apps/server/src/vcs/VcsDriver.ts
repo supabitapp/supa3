@@ -2,6 +2,8 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type {
+  OrchestrationV2CheckpointGitUpdate,
+  OrchestrationV2CheckpointFileSummary,
   VcsDriverCapabilities,
   VcsError,
   VcsInitInput,
@@ -32,6 +34,20 @@ export interface VcsDiffCheckpointsInput {
   readonly fallbackFromToHead?: boolean;
   readonly ignoreWhitespace: boolean;
   readonly format?: "patch" | "numstat";
+  readonly paths?: ReadonlyArray<string>;
+  readonly noRenames?: boolean;
+}
+
+export interface VcsCheckpointGitUpdateInput {
+  readonly cwd: string;
+  readonly fromCheckpointRef: CheckpointRef;
+  readonly toCheckpointRef: CheckpointRef;
+  readonly runStartedAtMs: number;
+}
+
+export interface VcsCheckpointGitUpdate {
+  readonly files: ReadonlyArray<OrchestrationV2CheckpointFileSummary>;
+  readonly summary: OrchestrationV2CheckpointGitUpdate;
 }
 
 export interface VcsDeleteCheckpointRefsInput {
@@ -40,6 +56,9 @@ export interface VcsDeleteCheckpointRefsInput {
 }
 
 export interface VcsCheckpointOps {
+  readonly getCheckpointGitUpdate?: (
+    input: VcsCheckpointGitUpdateInput,
+  ) => Effect.Effect<VcsCheckpointGitUpdate | undefined, VcsError>;
   readonly captureCheckpoint: (input: VcsCaptureCheckpointInput) => Effect.Effect<void, VcsError>;
   readonly hasCheckpointRef: (
     input: Omit<VcsRestoreCheckpointInput, "fallbackToHead">,

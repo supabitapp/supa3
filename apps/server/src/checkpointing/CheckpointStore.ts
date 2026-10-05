@@ -19,7 +19,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import type { CheckpointStoreError } from "./Errors.ts";
-import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
+import type {
+  VcsCheckpointOps,
+  VcsCheckpointGitUpdateInput,
+  VcsCheckpointGitUpdate,
+} from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 export interface CaptureCheckpointInput {
@@ -40,6 +44,8 @@ export interface DiffCheckpointsInput {
   readonly fallbackFromToHead?: boolean;
   readonly ignoreWhitespace: boolean;
   readonly format?: "patch" | "numstat";
+  readonly paths?: ReadonlyArray<string>;
+  readonly noRenames?: boolean;
 }
 
 export interface DeleteCheckpointRefsInput {
@@ -51,6 +57,10 @@ export interface DeleteCheckpointRefsInput {
 export class CheckpointStore extends Context.Service<
   CheckpointStore,
   {
+    readonly getCheckpointGitUpdate: (
+      input: VcsCheckpointGitUpdateInput,
+    ) => Effect.Effect<VcsCheckpointGitUpdate | undefined, CheckpointStoreError>;
+
     /** Check whether cwd is inside a Git worktree. */
     readonly isGitRepository: (cwd: string) => Effect.Effect<boolean, CheckpointStoreError>;
 
@@ -160,7 +170,19 @@ export const make = Effect.gen(function* () {
     return yield* checkpoints.deleteCheckpointRefs(input);
   });
 
+  const getCheckpointGitUpdate: CheckpointStore["Service"]["getCheckpointGitUpdate"] = Effect.fn(
+    "CheckpointStore.getCheckpointGitUpdate",
+  )(function* (input) {
+    const checkpoints = yield* resolveCheckpoints(
+      "CheckpointStore.getCheckpointGitUpdate",
+      input.cwd,
+    );
+    if (!checkpoints.getCheckpointGitUpdate) return undefined;
+    return yield* checkpoints.getCheckpointGitUpdate(input);
+  });
+
   return CheckpointStore.of({
+    getCheckpointGitUpdate,
     isGitRepository,
     captureCheckpoint,
     hasCheckpointRef,

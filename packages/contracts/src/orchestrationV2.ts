@@ -1138,6 +1138,18 @@ export const OrchestrationV2CheckpointFileSummary = Schema.Struct({
 });
 export type OrchestrationV2CheckpointFileSummary = typeof OrchestrationV2CheckpointFileSummary.Type;
 
+/** Aggregate of checkpoint changes attributable to moving Git HEAD. */
+export const OrchestrationV2CheckpointGitUpdate = Schema.Struct({
+  fromBranch: Schema.NullOr(Schema.String),
+  toBranch: Schema.NullOr(Schema.String),
+  fromHead: TrimmedNonEmptyString,
+  toHead: TrimmedNonEmptyString,
+  fileCount: NonNegativeInt,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+});
+export type OrchestrationV2CheckpointGitUpdate = typeof OrchestrationV2CheckpointGitUpdate.Type;
+
 export const OrchestrationV2Checkpoint = Schema.Struct({
   id: CheckpointId,
   threadId: ThreadId,
@@ -1150,6 +1162,7 @@ export const OrchestrationV2Checkpoint = Schema.Struct({
   ref: CheckpointRef,
   status: Schema.Literals(["ready", "missing", "error", "stale"]),
   files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+  gitUpdate: Schema.optionalKey(OrchestrationV2CheckpointGitUpdate),
   capturedAt: Schema.DateTimeUtc,
 });
 export type OrchestrationV2Checkpoint = typeof OrchestrationV2Checkpoint.Type;

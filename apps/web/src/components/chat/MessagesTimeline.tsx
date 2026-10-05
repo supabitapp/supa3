@@ -3752,7 +3752,7 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
 }) {
   if (!turnSummary) return null;
   const checkpointFiles = turnSummary.files;
-  if (checkpointFiles.length === 0) return null;
+  if (checkpointFiles.length === 0 && !turnSummary.gitUpdate) return null;
 
   return (
     <AssistantChangedFilesSectionInner
@@ -3800,6 +3800,7 @@ function AssistantChangedFilesSectionInner({
     <ChangedFilesCard
       runId={turnSummary.runId}
       files={checkpointFiles}
+      gitUpdate={turnSummary.gitUpdate}
       allDirectoriesExpanded={allDirectoriesExpanded}
       resolvedTheme={resolvedTheme}
       onToggleAllDirectories={() =>

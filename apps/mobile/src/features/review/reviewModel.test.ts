@@ -45,6 +45,40 @@ function makeRenderableFile(
 }
 
 describe("buildReviewSectionItems", () => {
+  it("counts agent files separately and caches both Git toggle states", () => {
+    const gitUpdate = {
+      fromHead: "a".repeat(40),
+      toHead: "b".repeat(40),
+      fromBranch: "refs/heads/main",
+      toBranch: "refs/heads/feature",
+      fileCount: 1233,
+      additions: 145000,
+      deletions: 369000,
+    };
+    const checkpoints = [
+      makeCheckpoint({
+        runId: RunId.make("run-git"),
+        checkpointTurnCount: 1,
+        completedAt: "2026-04-01T00:00:00.000Z",
+        gitUpdate,
+      }),
+    ];
+    const input = {
+      checkpoints,
+      gitSections: [],
+      turnDiffById: { "turn:1": "agent patch", "turn:1:git": "full patch" },
+      loadingTurnIds: {},
+      loadingGitSections: false,
+    };
+    const agent = buildReviewSectionItems(input)[0]!;
+    const all = buildReviewSectionItems({ ...input, includeGitChanges: true })[0]!;
+    expect(agent.subtitle).toBe("0 files changed");
+    expect(agent.gitUpdate).toEqual(gitUpdate);
+    expect(agent.diff).toBe("agent patch");
+    expect(all.diff).toBe("full patch");
+    expect(all.id).toBe(agent.id);
+  });
+
   it("keeps one chip per checkpoint and appends git sources", () => {
     const checkpoints = [
       makeCheckpoint({

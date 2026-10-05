@@ -73,3 +73,20 @@ it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+it.effect("decodes the Git changes opt-in on turn and full-thread queries", () =>
+  Effect.gen(function* () {
+    const input = {
+      threadId: "thread-1",
+      fromTurnCount: 0,
+      toTurnCount: 1,
+      includeGitChanges: true,
+    };
+    assert.isTrue((yield* decodeTurnDiffInput(input)).includeGitChanges);
+    assert.isTrue((yield* decodeFullThreadDiffInput(input)).includeGitChanges);
+    assert.isUndefined(
+      (yield* decodeTurnDiffInput({ threadId: "thread-1", fromTurnCount: 0, toTurnCount: 1 }))
+        .includeGitChanges,
+    );
+  }),
+);

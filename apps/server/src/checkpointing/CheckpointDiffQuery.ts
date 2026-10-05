@@ -30,6 +30,7 @@ import {
   type CheckpointServiceError,
 } from "./Errors.ts";
 import * as CheckpointStore from "./CheckpointStore.ts";
+import { parseTurnDiffFilesFromNumstat } from "./Diffs.ts";
 
 /** Service tag for checkpoint diff queries. */
 export class CheckpointDiffQuery extends Context.Service<
@@ -181,6 +182,58 @@ export const make = Effect.gen(function* () {
         });
       }
 
+      const range = readyCheckpoints.filter(
+        (checkpoint) =>
+          checkpoint.appRunOrdinal !== null &&
+          checkpoint.appRunOrdinal > input.fromTurnCount &&
+          checkpoint.appRunOrdinal <= input.toTurnCount,
+      );
+      const hasGitUpdates = range.some((checkpoint) => checkpoint.gitUpdate);
+      const paths =
+        !input.includeGitChanges && hasGitUpdates
+          ? yield* Effect.gen(function* () {
+              // Missing or very large ranges retain the full diff. For ungrouped
+              // turns, read literal paths from Git: legacy summaries may collapse
+              // renames and omit the source path needed by a no-renames patch.
+              if (range.length !== input.toTurnCount - input.fromTurnCount || range.length > 512)
+                return undefined;
+              const selected = new Set<string>();
+              for (const checkpoint of range) {
+                if (checkpoint.gitUpdate) {
+                  if (checkpoint.files === undefined) return undefined;
+                  for (const file of checkpoint.files) selected.add(file.path);
+                  continue;
+                }
+                const previousRef =
+                  checkpoint.appRunOrdinal === input.fromTurnCount + 1
+                    ? fromCheckpointRef
+                    : readyCheckpoints.find(
+                        (candidate) => candidate.appRunOrdinal === checkpoint.appRunOrdinal! - 1,
+                      )?.ref;
+                if (previousRef === undefined) return undefined;
+                const numstat = yield* checkpointStore.diffCheckpoints({
+                  cwd: toScope.cwd,
+                  fromCheckpointRef: previousRef,
+                  toCheckpointRef: checkpoint.ref,
+                  fallbackFromToHead: false,
+                  ignoreWhitespace: false,
+                  format: "numstat",
+                  noRenames: true,
+                });
+                if (
+                  numstat !== "" &&
+                  (!numstat.endsWith("\0") ||
+                    numstat
+                      .slice(0, -1)
+                      .split("\0")
+                      .some((record) => !/^(\d+|-)\t(\d+|-)\t[\s\S]+$/.test(record)))
+                )
+                  return undefined;
+                for (const file of parseTurnDiffFilesFromNumstat(numstat)) selected.add(file.path);
+              }
+              return [...selected];
+            }).pipe(Effect.orElseSucceed(() => undefined))
+          : undefined;
       const diff = yield* checkpointStore
         .diffCheckpoints({
           cwd: toScope.cwd,
@@ -188,6 +241,8 @@ export const make = Effect.gen(function* () {
           toCheckpointRef: toCheckpoint.ref,
           fallbackFromToHead: false,
           ignoreWhitespace,
+          ...(paths === undefined ? {} : { paths }),
+          ...(hasGitUpdates ? { noRenames: true } : {}),
         })
         .pipe(Effect.withSpan("checkpoint.turnDiff.diffCheckpoints"));
 
@@ -239,6 +294,9 @@ export const make = Effect.gen(function* () {
       fromTurnCount: 0,
       toTurnCount: input.toTurnCount,
       ignoreWhitespace,
+      ...(input.includeGitChanges === undefined
+        ? {}
+        : { includeGitChanges: input.includeGitChanges }),
     });
     if (!isTurnDiffResult(turnDiff)) {
       return yield* new CheckpointDiffResultInvalidError({

@@ -39,6 +39,7 @@ function makeProjection(): ProjectionCheckpointContext {
         appRunOrdinal: 2,
         status: "ready",
         ref: secondRef,
+        files: [],
       },
     ],
   };
@@ -192,4 +193,133 @@ it.effect("preserves the typed missing-baseline-ref error contract", () => {
       { checkpoint: "from", turnCount: 0 },
     );
   }).pipe(Effect.provide(layer));
+});
+
+const gitUpdate = {
+  fromBranch: "refs/heads/main",
+  toBranch: "refs/heads/feature",
+  fromHead: "a".repeat(40),
+  toHead: "b".repeat(40),
+  fileCount: 1233,
+  additions: 145000,
+  deletions: 369000,
+};
+
+it.effect.each([false, true])(
+  "filters attributed paths unless includeGitChanges=%s",
+  (includeGitChanges) => {
+    const projection = makeProjection();
+    const files = [{ path: 'agent\t"file\n.txt', kind: "modified", additions: 1, deletions: 0 }];
+    const checkpoints = [
+      {
+        ...projection.checkpoints[0]!,
+        appRunOrdinal: 1,
+        runId: firstRunId,
+        ref: CheckpointRef.make("refs/test/first"),
+        files: [],
+      },
+      { ...projection.checkpoints[0]!, files, gitUpdate },
+    ];
+    const diffCheckpoints = vi.fn((_input: CheckpointStore.DiffCheckpointsInput) =>
+      Effect.succeed("selected patch"),
+    );
+    return Effect.gen(function* () {
+      const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+      yield* query.getTurnDiff({ threadId, fromTurnCount: 1, toTurnCount: 2, includeGitChanges });
+      assert.deepEqual(
+        diffCheckpoints.mock.calls[0]?.[0].paths,
+        includeGitChanges ? undefined : files.map((file) => file.path),
+      );
+      assert.equal(diffCheckpoints.mock.calls[0]?.[0].noRenames, true);
+    }).pipe(
+      Effect.provide(
+        makeLayer({ projection: Effect.succeed({ ...projection, checkpoints }), diffCheckpoints }),
+      ),
+    );
+  },
+);
+
+it.effect("passes an empty allowlist for a Git-only turn", () => {
+  const projection = makeProjection();
+  const diffCheckpoints = vi.fn((_input: CheckpointStore.DiffCheckpointsInput) =>
+    Effect.succeed(""),
+  );
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    const result = yield* query.getTurnDiff({ threadId, fromTurnCount: 0, toTurnCount: 1 });
+    assert.equal(result.diff, "");
+    assert.deepEqual(diffCheckpoints.mock.calls[0]?.[0].paths, []);
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        projection: Effect.succeed({
+          ...projection,
+          checkpoints: [
+            { ...projection.checkpoints[0]!, appRunOrdinal: 1, runId: firstRunId, gitUpdate },
+          ],
+        }),
+        diffCheckpoints,
+      }),
+    ),
+  );
+});
+
+it.effect("full-thread diffs union agent paths from every turn and forward the opt-in", () => {
+  const projection = makeProjection();
+  const files = (path: string) => [{ path, kind: "modified", additions: 1, deletions: 0 }];
+  const checkpoints = [
+    {
+      ...projection.checkpoints[0]!,
+      appRunOrdinal: 1,
+      runId: firstRunId,
+      files: files("first.txt"),
+    },
+    { ...projection.checkpoints[0]!, files: files("second.txt"), gitUpdate },
+  ];
+  const diffCheckpoints = vi.fn((input: CheckpointStore.DiffCheckpointsInput) =>
+    Effect.succeed(
+      input.format === "numstat" ? "0\t1\told-name.txt\u00001\t0\tfirst.txt\0" : "patch",
+    ),
+  );
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    yield* query.getFullThreadDiff({ threadId, toTurnCount: 2 });
+    assert.deepEqual(diffCheckpoints.mock.calls[1]?.[0].paths, [
+      "first.txt",
+      "old-name.txt",
+      "second.txt",
+    ]);
+    yield* query.getFullThreadDiff({ threadId, toTurnCount: 2, includeGitChanges: true });
+    assert.isUndefined(diffCheckpoints.mock.calls[2]?.[0].paths);
+  }).pipe(
+    Effect.provide(
+      makeLayer({ projection: Effect.succeed({ ...projection, checkpoints }), diffCheckpoints }),
+    ),
+  );
+});
+
+it.effect("fails open for a range with an unavailable grouped file summary", () => {
+  const projection = makeProjection();
+  const { files: _files, ...metadata } = projection.checkpoints[0]!;
+  const diffCheckpoints = vi.fn((_input: CheckpointStore.DiffCheckpointsInput) =>
+    Effect.succeed("patch"),
+  );
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    yield* query.getFullThreadDiff({ threadId, toTurnCount: 2 });
+    assert.isUndefined(diffCheckpoints.mock.calls[0]?.[0].paths);
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        projection: Effect.succeed({
+          ...projection,
+          checkpoints: [
+            { ...metadata, appRunOrdinal: 1, runId: firstRunId, gitUpdate },
+            { ...projection.checkpoints[0]!, gitUpdate },
+          ],
+        }),
+        diffCheckpoints,
+      }),
+    ),
+  );
 });

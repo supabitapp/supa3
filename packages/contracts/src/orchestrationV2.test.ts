@@ -64,6 +64,11 @@ const decodeOrchestrationV2CheckpointScope = Schema.decodeUnknownSync(
   OrchestrationV2CheckpointScope,
 );
 const decodeOrchestrationV2Checkpoint = Schema.decodeUnknownSync(OrchestrationV2Checkpoint);
+const encodeOrchestrationV2Checkpoint = Schema.encodeSync(OrchestrationV2Checkpoint);
+const LegacyCheckpoint = OrchestrationV2Checkpoint.mapFields(
+  ({ gitUpdate: _gitUpdate, ...fields }) => fields,
+);
+const decodeLegacyCheckpoint = Schema.decodeUnknownSync(LegacyCheckpoint);
 const decodeOrchestrationV2DomainEvent = Schema.decodeUnknownSync(OrchestrationV2DomainEvent);
 const decodeProviderReplayTranscript = Schema.decodeUnknownSync(ProviderReplayTranscript);
 const decodeOrchestrationV2Subagent = Schema.decodeUnknownSync(OrchestrationV2Subagent);
@@ -368,6 +373,44 @@ describe("orchestration V2 contracts", () => {
     expect(checkpoint.appRunOrdinal).toBeNull();
     expect(checkpoint.scopeId).toBe(CheckpointScopeId.make("scope-child-1"));
     expect(checkpoint.parentCheckpointId).toBe(CheckpointId.make("checkpoint-root-1"));
+  });
+
+  it("round-trips optional Git summaries while legacy checkpoint readers ignore them", () => {
+    const checkpoint = {
+      id: "checkpoint-git",
+      threadId: "thread-git",
+      scopeId: "scope-git",
+      runId: "run-git",
+      nodeId: "node-git",
+      parentCheckpointId: null,
+      ordinalWithinScope: 1,
+      appRunOrdinal: 1,
+      ref: "refs/checkpoint/git",
+      status: "ready",
+      files: [],
+      capturedAt: now,
+    };
+    const gitUpdate = {
+      fromHead: "a".repeat(40),
+      toHead: "b".repeat(40),
+      fromBranch: "refs/heads/main",
+      toBranch: null,
+      fileCount: 1233,
+      additions: 145000,
+      deletions: 369000,
+    };
+    const current = decodeOrchestrationV2Checkpoint({ ...checkpoint, gitUpdate });
+    expect(current.gitUpdate).toEqual(gitUpdate);
+    expect(decodeOrchestrationV2Checkpoint(checkpoint).gitUpdate).toBeUndefined();
+    expect(decodeLegacyCheckpoint(current)).toEqual(checkpoint);
+    const encoded = encodeOrchestrationV2Checkpoint(current);
+    expect(decodeOrchestrationV2Checkpoint(encoded).gitUpdate).toEqual(gitUpdate);
+    expect(() =>
+      decodeOrchestrationV2Checkpoint({
+        ...checkpoint,
+        gitUpdate: { ...gitUpdate, fileCount: -1 },
+      }),
+    ).toThrow();
   });
 
   it("decodes command and domain event shapes for command-to-projection tests", () => {

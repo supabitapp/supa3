@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as DateTime from "effect/DateTime";
 
 import {
@@ -35,6 +35,7 @@ export function useReviewSections(input: {
 }) {
   const { environmentId, reviewCache, threadId } = input;
   const enabled = input.enabled ?? true;
+  const [includeGitChanges, setIncludeGitChanges] = useState(false);
   const selectedThread = useSelectedThreadProjection();
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const diffPreview = useEnvironmentQuery(
@@ -78,8 +79,10 @@ export function useReviewSections(input: {
         turnDiffById: reviewCache.turnDiffById,
         loadingTurnIds,
         loadingGitSections: diffPreview.isPending,
+        includeGitChanges,
       }),
     [
+      includeGitChanges,
       diffPreview.isPending,
       diffPreview.data?.sources,
       loadingTurnIds,
@@ -128,7 +131,7 @@ export function useReviewSections(input: {
     activeCheckpoint = checkpointBySectionId[selectedSection.id] ?? activeCheckpoint;
   }
   const activeSectionId = activeCheckpoint
-    ? getReviewSectionIdForCheckpoint(activeCheckpoint)
+    ? `${getReviewSectionIdForCheckpoint(activeCheckpoint)}${includeGitChanges && activeCheckpoint.gitUpdate ? ":git" : ""}`
     : null;
   const activeTurnDiff = useCheckpointDiff({
     environmentId: enabled ? (environmentId ?? null) : null,
@@ -137,6 +140,7 @@ export function useReviewSections(input: {
       enabled && activeCheckpoint ? Math.max(0, activeCheckpoint.checkpointTurnCount - 1) : null,
     toTurnCount: enabled ? (activeCheckpoint?.checkpointTurnCount ?? null) : null,
     ignoreWhitespace: false,
+    includeGitChanges: includeGitChanges && activeCheckpoint?.gitUpdate !== undefined,
   });
 
   useEffect(() => {
@@ -180,7 +184,11 @@ export function useReviewSections(input: {
     [reviewCache.threadKey],
   );
 
+  const toggleGitChanges = useCallback(() => setIncludeGitChanges((value) => !value), []);
+
   return {
+    includeGitChanges,
+    toggleGitChanges,
     error: diffPreview.error ?? activeTurnDiff.error ?? reviewCache.asyncState.error,
     isSelectedSectionPending:
       selectedSection?.kind === "turn" ? activeTurnDiff.isPending : diffPreview.isPending,

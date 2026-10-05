@@ -1,4 +1,5 @@
-import { type RunId } from "@supacode/contracts";
+import { formatCheckpointGitUpdate } from "@supacode/client-runtime/state/thread-checkpoints";
+import { type OrchestrationV2CheckpointGitUpdate, type RunId } from "@supacode/contracts";
 import { type MouseEvent, memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import {
@@ -23,6 +24,7 @@ export type ChangedFileContextMenuHandler = (filePath: string, event: MouseEvent
 
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   runId: RunId;
+  gitUpdate?: OrchestrationV2CheckpointGitUpdate | undefined;
   files: ReadonlyArray<TurnDiffFileChange>;
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
@@ -110,6 +112,11 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           </Tooltip>
         </div>
       </div>
+      {props.gitUpdate && (
+        <div className="px-3 py-2 text-xs text-muted-foreground">
+          {formatCheckpointGitUpdate(props.gitUpdate)}
+        </div>
+      )}
       <ChangedFilesTree
         key={`${runId}:${allDirectoriesExpanded}`}
         runId={runId}

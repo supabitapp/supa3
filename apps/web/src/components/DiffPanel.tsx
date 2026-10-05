@@ -1,3 +1,4 @@
+import { formatCheckpointGitUpdate } from "@supacode/client-runtime/state/thread-checkpoints";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
@@ -134,6 +135,7 @@ export default function DiffPanel({
   const diffLayout = settings.diffLayout;
   const updateClientSettings = useUpdateClientSettings();
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
+  const [includeGitChanges, setIncludeGitChanges] = useState(false);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
     DIFF_FILE_TREE_STORAGE_KEY,
@@ -263,6 +265,7 @@ export default function DiffPanel({
       threadId: activeThreadId,
       fromTurnCount: selectedCheckpointRange?.fromTurnCount ?? null,
       toTurnCount: selectedCheckpointRange?.toTurnCount ?? null,
+      includeGitChanges,
       ignoreWhitespace: diffIgnoreWhitespace,
       cacheScope: selectedTurn ? `turn:${selectedTurn.runId}` : null,
     },
@@ -982,6 +985,22 @@ export default function DiffPanel({
 
   return (
     <DiffPanelShell mode={mode} header={headerRow}>
+      {selectedTurn?.gitUpdate && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
+          <span className="min-w-0 text-xs text-muted-foreground">
+            {formatCheckpointGitUpdate(selectedTurn.gitUpdate)}
+          </span>
+          <Button
+            size="xs"
+            variant="ghost-muted"
+            aria-pressed={includeGitChanges}
+            onClick={() => setIncludeGitChanges((value) => !value)}
+          >
+            {includeGitChanges ? "Hide Git changes" : "Show Git changes"}
+          </Button>
+        </div>
+      )}
+
       {!activeThread ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Select a thread to inspect turn diffs.

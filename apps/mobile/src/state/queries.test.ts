@@ -10,6 +10,18 @@ describe("appQueries", () => {
     expect(normalizeComposerPathSearchQuery(null)).toBe("");
   });
 
+  it.each([0, 2])("preserves the Git opt-in from turn %s in the query key", (fromTurnCount) => {
+    const target = buildCheckpointDiffTargets({
+      environmentId: EnvironmentId.make("environment-a"),
+      threadId: ThreadId.make("thread-a"),
+      fromTurnCount,
+      toTurnCount: 3,
+      ignoreWhitespace: false,
+      includeGitChanges: true,
+    });
+    expect((target.turn ?? target.fullThread)?.input.includeGitChanges).toBe(true);
+  });
+
   it("routes the first turn range through the full-thread diff query", () => {
     const environmentId = EnvironmentId.make("environment-a");
     const threadId = ThreadId.make("thread-a");
