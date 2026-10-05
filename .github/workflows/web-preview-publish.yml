@@ -28,135 +28,31 @@ jobs:
       # Write only to consume the optional rebuild label.
       pull-requests: write
     outputs:
-      eligible: ${{ steps.gate.outputs.eligible }}
-      pr_number: ${{ steps.pr.outputs.pr_number }}
-      head_sha: ${{ steps.pr.outputs.head_sha }}
-      artifact_id: ${{ steps.pr.outputs.artifact_id }}
+      eligible: ${{ steps.preview.outputs.eligible }}
+      pr_number: ${{ steps.preview.outputs.pr_number }}
+      head_sha: ${{ steps.preview.outputs.head_sha }}
+      artifact_id: ${{ steps.preview.outputs.artifact_id }}
     steps:
-      - id: pr
-        name: Resolve the pull request behind the build
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        with:
-          script: |
-            const run = context.payload.workflow_run;
-            const { owner, repo } = context.repo;
-
-            // The build workflow also completes (with every job skipped) for
-            // label events that are not the preview label. Only a run that
-            // produced a bundle is worth resolving.
-            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-              owner,
-              repo,
-              run_id: run.id,
-              per_page: 100,
-            });
-            const bundles = artifacts.filter((artifact) => artifact.name === "web-assets" && !artifact.expired);
-            if (bundles.length !== 1) {
-              core.info(`Expected one web-assets artifact; found ${bundles.length}. Skipping.`);
-              core.setOutput("eligible", "false");
-              return;
-            }
-
-            // workflow_run.pull_requests is empty for fork PRs, so resolve the
-            // PR from the built commit instead and require exactly one open PR
-            // from the same head repository and branch. The hosted origin is
-            // baked into the assets, so the PR must be unambiguous.
-            const associated = await github.paginate(
-              github.rest.repos.listPullRequestsAssociatedWithCommit,
-              { owner, repo, commit_sha: run.head_sha, per_page: 100 },
-            );
-            const matching = associated.filter(
-              (candidate) =>
-                candidate.state === "open" &&
-                candidate.head.sha === run.head_sha &&
-                candidate.head.ref === run.head_branch &&
-                candidate.head.repo?.full_name === run.head_repository?.full_name,
-            );
-            if (matching.length !== 1) {
-              core.info(`Expected one open PR for ${run.head_sha}; found ${matching.length}. Skipping.`);
-              core.setOutput("eligible", "false");
-              return;
-            }
-            const { data: pull } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: matching[0].number,
-            });
-
-            if (pull.state !== "open") {
-              core.info(`PR #${pull.number} is not open. Skipping.`);
-              core.setOutput("eligible", "false");
-              return;
-            }
-            if (pull.head.sha !== run.head_sha) {
-              core.info(`PR #${pull.number} moved to ${pull.head.sha} after ${run.head_sha} was built. Skipping.`);
-              core.setOutput("eligible", "false");
-              return;
-            }
-
-            core.setOutput("artifact_id", String(bundles[0].id));
-            core.setOutput("eligible", "true");
-            core.setOutput("pr_number", String(pull.number));
-            core.setOutput("head_sha", pull.head.sha);
-            core.setOutput("author", pull.user.login);
-
-      # Reads VOUCHED.td from the default branch through the API, so a PR
-      # cannot vouch for itself.
-      - id: vouch
-        name: Check PR author trust
-        if: steps.pr.outputs.eligible == 'true'
-        uses: mitchellh/vouch/action/check-user@d66fa29a64600490892131ad87597c30c91fcac4 # v1
-        with:
-          user: ${{ steps.pr.outputs.author }}
-          allow-fail: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - id: gate
-        name: Decide eligibility
+      # Local action and validator code must come from the default-branch
+      # revision that owns this workflow, never the PR or its artifacts.
+      - name: Checkout trusted preview tools
         shell: bash
         env:
-          PR_ELIGIBLE: ${{ steps.pr.outputs.eligible }}
-          VOUCH_STATUS: ${{ steps.vouch.outputs.status }}
-          AUTHOR: ${{ steps.pr.outputs.author }}
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           set -euo pipefail
-          if [[ "$PR_ELIGIBLE" != "true" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          case "$VOUCH_STATUS" in
-            bot|collaborator|vouched)
-              echo "Author $AUTHOR is trusted ($VOUCH_STATUS)."
-              echo "eligible=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "Author $AUTHOR is not vouched ($VOUCH_STATUS). Add them to .github/VOUCHED.td to allow web previews."
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set .github/actions/resolve-preview .github/scripts
+          git checkout --detach FETCH_HEAD
 
-      # Consume an optional manual request so the label can trigger another
-      # rebuild later. Its absence does not affect automatic previews.
-      - id: consume
-        name: Consume the preview label
-        if: steps.gate.outputs.eligible == 'true'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+      - id: preview
+        uses: ./.github/actions/resolve-preview
         with:
-          script: |
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: Number(process.env.PR_NUMBER),
-                name: "preview:web",
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.info("No manual preview request to consume; automatic preview continues.");
-            }
+          artifact-name: web-assets
+          preview-label: preview:web
 
   publish:
     name: Deploy or remove web preview
@@ -226,7 +122,9 @@ jobs:
             const { owner, repo } = context.repo;
             const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
             const removed = process.env.RESULT === "removed";
-            if (removed ? pull.state === "open" : pull.state !== "open" || pull.head.sha !== process.env.HEAD_SHA) {
+            const current = pull.state === "open" && pull.head.sha === process.env.HEAD_SHA;
+            const outdated = removed ? pull.state === "open" : !current;
+            if (outdated) {
               core.info("Skipping outdated preview comment.");
               return;
             }
@@ -237,17 +135,15 @@ jobs:
             const existing = comments.find((comment) =>
               comment.user?.login === "github-actions[bot]" && comment.body?.includes(marker));
             if (removed && !existing) return;
-            const body = [
-              marker,
-              "### Web preview",
-              "",
-              ...(removed ? ["The web preview was removed because this PR closed."] : [
+            const details = removed
+              ? ["The web preview was removed because this PR closed."]
+              : [
                 `${process.env.DEPLOYMENT_URL} (for ${process.env.HEAD_SHA.slice(0, 7)})`,
                 "",
                 "Open this exact URL and pair a reachable server under Settings → Connections.",
                 "New commits deploy automatically for trusted authors. Apply `preview:web` to rebuild the current commit.",
-              ]),
-            ].join("\n");
+              ];
+            const body = [marker, "### Web preview", "", ...details].join("\n");
             if (existing) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
             } else {
