@@ -18,22 +18,27 @@ process.stdout.write = (...args) => {
   return write(...args);
 };`;
 
-it("records the replay status before its answer leaves the agent", async () => {
+const setModeExchange = [
+  {
+    type: "expect_outbound",
+    frame: { kind: "request", method: "session/set_mode", params: setModeParams },
+  },
+  {
+    type: "emit_inbound",
+    frame: { kind: "response", method: "session/set_mode", result: {} },
+  },
+];
+
+it.each([
+  { name: "a final answer", entries: setModeExchange },
+  {
+    name: "a final answer followed by a clean runtime exit",
+    entries: [...setModeExchange, { type: "runtime_exit", status: "success" }],
+  },
+])("records the replay status before $name leaves the agent", async ({ entries }) => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "acp-replay-status-"));
   const statusPath = NodePath.join(directory, "status.json");
-  const transcript = {
-    scenario: "status-before-answer",
-    entries: [
-      {
-        type: "expect_outbound",
-        frame: { kind: "request", method: "session/set_mode", params: setModeParams },
-      },
-      {
-        type: "emit_inbound",
-        frame: { kind: "response", method: "session/set_mode", result: {} },
-      },
-    ],
-  };
+  const transcript = { scenario: "status-before-answer", entries };
   try {
     const agent = NodeChildProcess.spawn(
       process.execPath,
@@ -64,8 +69,8 @@ it("records the replay status before its answer leaves the agent", async () => {
     assert.strictEqual(signal, "SIGKILL");
     assert.deepStrictEqual(JSON.parse(NodeFS.readFileSync(statusPath, "utf8")), {
       scenario: "status-before-answer",
-      cursor: 2,
-      total: 2,
+      cursor: entries.length,
+      total: entries.length,
     });
   } finally {
     NodeFS.rmSync(directory, { recursive: true, force: true });

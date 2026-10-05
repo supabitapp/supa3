@@ -145,6 +145,12 @@ function advance(): void {
   writeStatus();
 }
 
+function isCleanRuntimeExit(entry: ReplayEntry | undefined): boolean {
+  return (
+    entry?.type === "runtime_exit" && (entry.status === "success" || entry.status === "cancelled")
+  );
+}
+
 function send(message: JsonRpcMessage): void {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
@@ -230,7 +236,7 @@ function flushInbound(): void {
     const entry = transcript.entries[cursor];
     if (entry === undefined || entry.type === "expect_outbound") return;
     if (entry.type === "runtime_exit") {
-      if (entry.status !== "success" && entry.status !== "cancelled") {
+      if (!isCleanRuntimeExit(entry)) {
         stopWithFailure(`Recorded runtime exit was ${entry.status ?? "unknown"}`, entry.error);
         return;
       }
@@ -249,9 +255,12 @@ function flushInbound(): void {
     }
     const message = prepareInboundMessage(frame);
     if (message === undefined) return;
-    // Persist the step before the client can react to it: tests close the
-    // session on the last answer, which kills this process.
-    advance();
+    // Persist the step, and any clean exit recorded right after it, before the
+    // client can react: tests close the session on the last answer, which kills
+    // this process.
+    cursor += 1;
+    while (isCleanRuntimeExit(transcript.entries[cursor])) cursor += 1;
+    writeStatus();
     send(message);
   }
 }
