@@ -1,4 +1,4 @@
-import { isValidElement, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import {
   EnvironmentId,
   ProjectId,
@@ -39,9 +39,6 @@ vi.mock("react", async (importOriginal) => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
   return {
     ...actual,
-    useEffect: () => undefined,
-    useId: () => "acp-section",
-    useRef: reactHookHarness.useRef,
     useState: reactHookHarness.useState,
   };
 });
@@ -79,6 +76,7 @@ vi.mock("../../localApi", () => ({
   ensureLocalApi: () => ({ dialogs }),
 }));
 
+import { InlineConfirmButton } from "../InlineConfirm";
 import { AcpSessionManagementSection } from "./AcpSessionManagementSection";
 
 const environmentId = EnvironmentId.make("remote-device");
@@ -137,15 +135,13 @@ function findByAriaLabel(
   return found!;
 }
 
-function pressInlineConfirm(idle: string, timeStamp: number) {
+function confirmInline(label: string) {
   const button = visitElements(
     render(),
-    (element) =>
-      isValidElement<{ idle?: unknown }>(element.props.children) &&
-      element.props.children.props.idle === idle,
+    (element) => element.type === InlineConfirmButton && element.props.label === label,
   );
   expect(button).not.toBeNull();
-  (button!.props.onClick as (event: { timeStamp: number }) => void)({ timeStamp });
+  (button!.props.onConfirm as () => void)();
 }
 
 async function flushPromises(): Promise<void> {
@@ -249,14 +245,10 @@ describe("AcpSessionManagementSection", () => {
     expect(commands.logout).not.toHaveBeenCalled();
   });
 
-  it("deletes unimported native sessions only on a second press", async () => {
+  it("deletes unimported native sessions through an inline confirm instead of a dialog", async () => {
     (findByLabel(render(), "List sessions").props.onClick as (() => void) | undefined)?.();
     await flushPromises();
-    pressInlineConfirm("Delete", 0);
-    await flushPromises();
-    expect(commands.delete).not.toHaveBeenCalled();
-
-    pressInlineConfirm("Delete", 500);
+    confirmInline("Delete");
     await flushPromises();
 
     expect(dialogs.confirm).not.toHaveBeenCalled();
@@ -311,11 +303,9 @@ describe("AcpSessionManagementSection", () => {
       },
     });
 
-    pressInlineConfirm("Disable", 0);
+    confirmInline("Disable");
     await flushPromises();
-    expect(commands.disableProvider).not.toHaveBeenCalled();
-    pressInlineConfirm("Disable", 500);
-    await flushPromises();
+    expect(dialogs.confirm).not.toHaveBeenCalled();
     expect(commands.disableProvider).toHaveBeenCalledWith({
       environmentId,
       input: { instanceId, projectId, providerId: "google" },

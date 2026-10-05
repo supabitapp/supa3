@@ -37,9 +37,8 @@ import {
 } from "@supacode/shared/model";
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { normalizeProviderAccentColor } from "../../providerInstances";
-import { InlineConfirmIcon } from "../InlineConfirm";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -258,8 +257,6 @@ function ProviderEnvironmentFieldRow(props: {
   readonly onCommit: (field: ProviderEnvironmentFieldDefinition, value: string) => void;
   readonly onRemove: (field: ProviderEnvironmentFieldDefinition) => void;
 }) {
-  const confirm = useInlineConfirm<"clear">();
-  const armed = confirm.armed === "clear";
   const inputId = `${props.idPrefix}-environment-${props.field.name}`;
   const value = props.variable?.valueRedacted ? "" : (props.variable?.value ?? "");
   const placeholder = props.variable?.valueRedacted
@@ -284,68 +281,20 @@ function ProviderEnvironmentFieldRow(props: {
             spellCheck={false}
           />
           {props.variable ? (
-            <Tooltip>
-              <TooltipTrigger
-                closeOnClick={false}
-                render={
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost-destructive"
-                    {...confirm.bind("clear", () => props.onRemove(props.field))}
-                    aria-label={`${armed ? "Confirm clear" : "Clear"} ${props.field.label}`}
-                  >
-                    <InlineConfirmIcon armed={armed}>
-                      <XIcon className="size-3.5" />
-                    </InlineConfirmIcon>
-                  </Button>
-                }
-              />
-              <TooltipPopup side="top">
-                {armed
-                  ? `Click again to clear ${props.field.label}.${props.field.sensitive === false ? "" : " The stored secret can't be recovered."}`
-                  : `Clear ${props.field.label}`}
-              </TooltipPopup>
-            </Tooltip>
+            <InlineConfirmButton
+              size="icon-sm"
+              variant="ghost-destructive"
+              icon={<XIcon className="size-3.5" />}
+              label={`Clear ${props.field.label}`}
+              confirmLabel={`Confirm clear ${props.field.label}`}
+              tooltip={`Clear ${props.field.label}`}
+              confirmTooltip={`Click again to clear ${props.field.label}.${props.field.sensitive === false ? "" : " The stored secret can't be recovered."}`}
+              onConfirm={() => props.onRemove(props.field)}
+            />
           ) : null}
         </div>
       }
     />
-  );
-}
-
-function RemoveEnvironmentVariableButton(props: {
-  readonly variable: EnvironmentDraftRow;
-  readonly label: string;
-  readonly onRemove: () => void;
-}) {
-  const confirm = useInlineConfirm<"remove">();
-  const armed = confirm.armed === "remove";
-  const blank = props.variable.name.trim() === "" && props.variable.value === "";
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <Button
-            type="button"
-            size="icon-micro"
-            variant="ghost-destructive"
-            {...(blank ? { onClick: props.onRemove } : confirm.bind("remove", props.onRemove))}
-            aria-label={`${armed ? "Confirm remove" : "Remove"} environment variable ${props.label}`}
-          >
-            <InlineConfirmIcon armed={armed}>
-              <XIcon className="size-3" />
-            </InlineConfirmIcon>
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">
-        {armed
-          ? `Click again to remove ${props.variable.name || "this variable"}.${props.variable.sensitive ? " Its secret value can't be recovered." : ""}`
-          : "Remove variable"}
-      </TooltipPopup>
-    </Tooltip>
   );
 }
 
@@ -502,10 +451,15 @@ function ProviderEnvironmentSection(props: {
                   {variable.sensitive ? "Sensitive, stored separately" : "Plain text"}
                 </TooltipPopup>
               </Tooltip>
-              <RemoveEnvironmentVariableButton
-                variable={variable}
-                label={variable.name || String(index + 1)}
-                onRemove={() => removeVariable(variable.id)}
+              <InlineConfirmButton
+                size="icon-micro"
+                variant="ghost-destructive"
+                icon={<XIcon className="size-3" />}
+                label={`Remove environment variable ${variable.name || index + 1}`}
+                confirmLabel={`Confirm remove environment variable ${variable.name || index + 1}`}
+                tooltip="Remove variable"
+                confirmTooltip={`Click again to remove ${variable.name || "this variable"}.${variable.sensitive ? " Its secret value can't be recovered." : ""}`}
+                onConfirm={() => removeVariable(variable.id)}
               />
             </div>
           ))}
@@ -515,43 +469,6 @@ function ProviderEnvironmentSection(props: {
         </div>
       ) : null}
     </SettingsRow>
-  );
-}
-
-function DeleteProviderInstanceButton(props: {
-  readonly instanceId: ProviderInstanceId;
-  readonly displayName: string;
-  readonly managedAgent: boolean;
-  readonly disabled: boolean;
-  readonly onDelete: () => void;
-}) {
-  const confirm = useInlineConfirm<"delete">();
-  const armed = confirm.armed === "delete";
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost-destructive"
-            disabled={props.disabled}
-            {...confirm.bind("delete", props.onDelete)}
-            aria-label={`${armed ? "Confirm delete" : "Delete"} instance ${props.instanceId}`}
-          >
-            <InlineConfirmIcon armed={armed}>
-              <Trash2Icon />
-            </InlineConfirmIcon>
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">
-        {armed
-          ? `Click again to delete ${props.displayName}. Its settings, variables, and custom models are removed${props.managedAgent ? ", and its agent files are uninstalled unless another instance uses them" : ""}.`
-          : "Delete instance"}
-      </TooltipPopup>
-    </Tooltip>
   );
 }
 
@@ -1027,12 +944,16 @@ export function ProviderInstanceCard({
       >
         {titleTailNode}
         {onDelete ? (
-          <DeleteProviderInstanceButton
-            instanceId={instanceId}
-            displayName={displayName}
-            managedAgent={instance.driver === "acpRegistry"}
+          <InlineConfirmButton
+            size="icon-xs"
+            variant="ghost-destructive"
             disabled={readOnly}
-            onDelete={onDelete}
+            icon={<Trash2Icon />}
+            label={`Delete instance ${instanceId}`}
+            confirmLabel={`Confirm delete instance ${instanceId}`}
+            tooltip="Delete instance"
+            confirmTooltip={`Click again to delete ${displayName}. Its settings, variables, and custom models are removed${instance.driver === "acpRegistry" ? ", and its agent files are uninstalled unless another instance uses them" : ""}.`}
+            onConfirm={onDelete}
           />
         ) : null}
       </span>

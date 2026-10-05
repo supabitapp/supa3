@@ -2,16 +2,14 @@ import type { BitbucketSettings, EnvironmentId } from "@supacode/contracts";
 import { ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { InlineConfirmLabel } from "../InlineConfirm";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 type CredentialMethod = "access-token" | "api-token";
 
@@ -92,7 +90,6 @@ export function BitbucketCredentialsSettings({
   const [emailDraft, setEmailDraft] = useState<string | null>(null);
   const [apiToken, setApiToken] = useState("");
   const [saving, setSaving] = useState(false);
-  const confirm = useInlineConfirm<"remove">();
   const current = savedMethod(saved);
   const method = methodChoice ?? current ?? "access-token";
   const methodIsSaved = current === method;
@@ -207,33 +204,16 @@ export function BitbucketCredentialsSettings({
           </p>
           <div className="flex shrink-0 gap-2">
             {current !== null ? (
-              <Tooltip>
-                <TooltipTrigger
-                  closeOnClick={false}
-                  render={
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      disabled={saving}
-                      {...confirm.bind(
-                        "remove",
-                        () => void save({ accessToken: "", email: "", apiToken: "" }),
-                      )}
-                    >
-                      <InlineConfirmLabel
-                        armed={confirm.armed === "remove"}
-                        idle="Remove"
-                        confirm="Confirm remove"
-                      />
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="top">
-                  {confirm.armed === "remove"
-                    ? `Click again to remove your ${METHODS[current].label.toLowerCase()}. The server falls back to its SUPACODE_BITBUCKET_* environment variables.`
-                    : "Remove the saved credentials"}
-                </TooltipPopup>
-              </Tooltip>
+              <InlineConfirmButton
+                size="xs"
+                variant="outline"
+                disabled={saving}
+                label="Remove"
+                confirmLabel="Confirm remove"
+                tooltip="Remove the saved credentials"
+                confirmTooltip={`Click again to remove your ${METHODS[current].label.toLowerCase()}. The server falls back to its SUPACODE_BITBUCKET_* environment variables.`}
+                onConfirm={() => void save({ accessToken: "", email: "", apiToken: "" })}
+              />
             ) : null}
             <Button type="submit" size="xs" disabled={!canSave || saving}>
               Save

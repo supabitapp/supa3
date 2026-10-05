@@ -751,6 +751,7 @@ function ManagedCodexSetup({
     />
   );
 
+  const title = displayName || provider?.displayName || "Codex";
   const logoutWarning =
     auth?.phase === "idle" && auth.message?.startsWith("Signed out locally.") ? auth.message : null;
 
@@ -767,7 +768,7 @@ function ManagedCodexSetup({
       <>
         {accountPicker}
         <CodexWelcomeCard
-          title={displayName || provider?.displayName || "Codex"}
+          title={title}
           description={
             installActive ? (
               runtimeDescription
@@ -949,7 +950,7 @@ function ManagedCodexSetup({
                   onClick={() => {
                     void ensureLocalApi()
                       .dialogs.confirm(
-                        `Disconnect ${displayName || provider?.displayName || "Codex"} from ChatGPT? This stops running threads that use this sign-in. Thread history is kept.`,
+                        `Disconnect ${title} from ChatGPT? This stops running threads that use this sign-in. Thread history is kept.`,
                       )
                       .then((confirmed) => {
                         if (confirmed) void run(() => logoutAuth(target));

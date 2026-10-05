@@ -27,7 +27,7 @@ import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Result from "effect/Result";
-import { PlusIcon, Undo2Icon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
@@ -39,9 +39,7 @@ import {
   useUpdateClientSettings,
   useUpdateEnvironmentSettings,
 } from "../../hooks/useSettings";
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import { InlineConfirmIcon } from "../InlineConfirm";
 import { cn } from "../../lib/utils";
 import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
@@ -190,37 +188,6 @@ function providerEnvironmentDetail(environment: EnvironmentPresentation): string
 // never changes the card's footprint.
 const providerCardHeightClassName =
   "@min-[48rem]/providers:h-[min(44rem,calc(100dvh-11rem))] @min-[48rem]/providers:min-h-[32rem]";
-
-function ProviderResetButton({ label, onReset }: { label: string; onReset: () => void }) {
-  const confirm = useInlineConfirm<"reset">();
-  const armed = confirm.armed === "reset";
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <Button
-            size="icon-micro"
-            variant="ghost-muted"
-            {...confirm.bind("reset", onReset)}
-            aria-label={
-              armed ? `Confirm reset ${label}` : `Reset ${label} provider settings to default`
-            }
-          >
-            <InlineConfirmIcon armed={armed}>
-              <Undo2Icon className="size-3" />
-            </InlineConfirmIcon>
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">
-        {armed
-          ? `Click again to reset ${label} to its defaults. Its variables and custom models are cleared.`
-          : "Reset to default"}
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
 
 /**
  * Same chrome as the provider editor (section heading, floating device tabs,
@@ -1161,9 +1128,10 @@ export function EnvironmentProviderSettings({
         }
         headerAction={
           mode === "editor" && row.isDefault && row.isDirty ? (
-            <ProviderResetButton
-              label={resetLabel}
-              onReset={() => void resetDefaultInstance(row.driver)}
+            <SettingResetButton
+              label={`${resetLabel} provider settings`}
+              confirmTooltip={`Click again to reset ${resetLabel} to its defaults. Its variables and custom models are cleared.`}
+              onClick={() => resetDefaultInstance(row.driver)}
             />
           ) : null
         }

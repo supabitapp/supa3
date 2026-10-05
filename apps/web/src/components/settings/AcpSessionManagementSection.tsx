@@ -13,16 +13,14 @@ import {
 } from "@supacode/client-runtime/state/runtime";
 import { useState } from "react";
 
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { ensureLocalApi } from "../../localApi";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { InlineConfirmLabel } from "../InlineConfirm";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SettingsRow } from "./settingsLayout";
 
 interface AcpSessionProject {
@@ -80,7 +78,6 @@ export function AcpSessionManagementSection(props: {
     reportFailure: false,
   });
   const logout = useAtomCommand(serverEnvironment.logoutAcpRegistry, { reportFailure: false });
-  const confirm = useInlineConfirm<`delete:${string}` | `disable:${string}`>();
   const canList = props.provider.nativeSessions?.canList === true;
   const canImport =
     props.provider.nativeSessions?.canLoad === true ||
@@ -382,40 +379,20 @@ export function AcpSessionManagementSection(props: {
                             : "Import"}
                       </Button>
                       {canDelete ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            closeOnClick={false}
-                            render={
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="ghost-muted"
-                                disabled={
-                                  props.readOnly ||
-                                  session.importedThreadId !== null ||
-                                  deletingSessionId !== null
-                                }
-                                {...confirm.bind(
-                                  `delete:${session.sessionId}`,
-                                  () => void deleteNativeSession(session),
-                                )}
-                              >
-                                <InlineConfirmLabel
-                                  armed={confirm.armed === `delete:${session.sessionId}`}
-                                  idle={
-                                    deletingSessionId === session.sessionId ? "Deleting" : "Delete"
-                                  }
-                                  confirm="Confirm delete"
-                                />
-                              </Button>
-                            }
-                          />
-                          <TooltipPopup side="top">
-                            {confirm.armed === `delete:${session.sessionId}`
-                              ? "Click again to permanently delete this session. The agent can't restore it."
-                              : "Delete this session from the agent"}
-                          </TooltipPopup>
-                        </Tooltip>
+                        <InlineConfirmButton
+                          size="xs"
+                          variant="ghost-muted"
+                          disabled={
+                            props.readOnly ||
+                            session.importedThreadId !== null ||
+                            deletingSessionId !== null
+                          }
+                          label={deletingSessionId === session.sessionId ? "Deleting" : "Delete"}
+                          confirmLabel="Confirm delete"
+                          tooltip="Delete this session from the agent"
+                          confirmTooltip="Click again to permanently delete this session. The agent can't restore it."
+                          onConfirm={() => void deleteNativeSession(session)}
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -526,34 +503,16 @@ export function AcpSessionManagementSection(props: {
                           {savingProviderId === provider.providerId ? "Saving" : "Save"}
                         </Button>
                         {!provider.required && provider.current !== null ? (
-                          <Tooltip>
-                            <TooltipTrigger
-                              closeOnClick={false}
-                              render={
-                                <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="ghost-muted"
-                                  disabled={props.readOnly || savingProviderId !== null}
-                                  {...confirm.bind(
-                                    `disable:${provider.providerId}`,
-                                    () => void disableConfiguredProvider(provider),
-                                  )}
-                                >
-                                  <InlineConfirmLabel
-                                    armed={confirm.armed === `disable:${provider.providerId}`}
-                                    idle="Disable"
-                                    confirm="Confirm disable"
-                                  />
-                                </Button>
-                              }
-                            />
-                            <TooltipPopup side="top">
-                              {confirm.armed === `disable:${provider.providerId}`
-                                ? `Click again to disable ${provider.providerId}. Turning it back on means entering its base URL and headers again.`
-                                : `Disable ${provider.providerId}`}
-                            </TooltipPopup>
-                          </Tooltip>
+                          <InlineConfirmButton
+                            size="xs"
+                            variant="ghost-muted"
+                            disabled={props.readOnly || savingProviderId !== null}
+                            label="Disable"
+                            confirmLabel="Confirm disable"
+                            tooltip={`Disable ${provider.providerId}`}
+                            confirmTooltip={`Click again to disable ${provider.providerId}. Turning it back on means entering its base URL and headers again.`}
+                            onConfirm={() => void disableConfiguredProvider(provider)}
+                          />
                         ) : null}
                       </div>
                     </div>

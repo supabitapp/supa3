@@ -19,6 +19,7 @@ import {
   usePrimarySettingsAvailable,
 } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { WorkspacePageContainer, type WorkspacePageWidth } from "../WorkspacePageContainer";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -474,14 +475,31 @@ export function SettingsRow({
 export function SettingResetButton({
   label,
   tooltip = "Reset to default",
+  confirmTooltip,
   disabled = false,
   onClick,
 }: {
   label: string;
   tooltip?: string;
+  confirmTooltip?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
+  if (confirmTooltip !== undefined) {
+    return (
+      <InlineConfirmButton
+        size="icon-micro"
+        variant="ghost-muted"
+        disabled={disabled}
+        icon={<Undo2Icon className="size-3" />}
+        label={`Reset ${label} to default`}
+        confirmLabel={`Confirm reset ${label}`}
+        tooltip={tooltip}
+        confirmTooltip={confirmTooltip}
+        onConfirm={onClick}
+      />
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger

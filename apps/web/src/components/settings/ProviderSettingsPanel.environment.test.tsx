@@ -470,10 +470,10 @@ describe("EnvironmentProviderSettings routing", () => {
     const resetAction = defaultCard?.props.headerAction;
     const resetButton = visitElements(
       resetAction,
-      (element) => typeof element.props.onReset === "function",
+      (element) => typeof element.props.onClick === "function",
     );
     expect(resetButton).not.toBeNull();
-    (resetButton?.props.onReset as (() => void) | undefined)?.();
+    (resetButton?.props.onClick as (() => void) | undefined)?.();
     await flushPromises();
 
     const [resetMutation, resetPatch] = settingsState.mutateProviderInstance.mock.lastCall ?? [];

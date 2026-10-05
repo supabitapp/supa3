@@ -9,11 +9,10 @@ import {
 } from "@supacode/contracts";
 import { type CustomModelDefinition, normalizeCustomModelSlug } from "@supacode/shared/model";
 
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { cn } from "../../lib/utils";
 import { sortModelsForProviderInstance } from "../../modelOrdering";
 import { MAX_CUSTOM_MODEL_LENGTH } from "../../modelSelection";
-import { InlineConfirmIcon } from "../InlineConfirm";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
@@ -180,7 +179,6 @@ export function ProviderModelsSection({
   const [error, setError] = useState<string | null>(null);
   // Slug of the custom model whose inline editor is open, if any.
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
-  const confirmRemove = useInlineConfirm<string>();
   const listRef = useRef<HTMLDivElement>(null);
   // Slug of a just-added custom model, scrolled into view once its row exists.
   const scrollToSlugRef = useRef<string | null>(null);
@@ -398,28 +396,16 @@ export function ProviderModelsSection({
             </TooltipTrigger>
             <TooltipPopup side="top">Edit name and options</TooltipPopup>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              closeOnClick={false}
-              render={
-                <Button
-                  size="icon-micro"
-                  variant="ghost-muted"
-                  aria-label={`${confirmRemove.armed === model.slug ? "Confirm remove" : "Remove"} ${model.slug}`}
-                  {...confirmRemove.bind(model.slug, () => handleRemove(model.slug))}
-                />
-              }
-            >
-              <InlineConfirmIcon armed={confirmRemove.armed === model.slug}>
-                <XIcon className="size-3" />
-              </InlineConfirmIcon>
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {confirmRemove.armed === model.slug
-                ? `Click again to remove ${model.name}`
-                : "Remove custom model"}
-            </TooltipPopup>
-          </Tooltip>
+          <InlineConfirmButton
+            size="icon-micro"
+            variant="ghost-muted"
+            icon={<XIcon className="size-3" />}
+            label={`Remove ${model.slug}`}
+            confirmLabel={`Confirm remove ${model.slug}`}
+            tooltip="Remove custom model"
+            confirmTooltip={`Click again to remove ${model.name}`}
+            onConfirm={() => handleRemove(model.slug)}
+          />
         </>
       ) : null}
     </span>
