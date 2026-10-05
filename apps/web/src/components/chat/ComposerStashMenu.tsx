@@ -6,8 +6,7 @@ import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import { type PromptStashEntry } from "../../promptStashStore";
-import { InlineConfirmIcon } from "../InlineConfirm";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { InlineConfirmIcon, InlineConfirmTooltip } from "../InlineConfirm";
 import { ComposerBanner } from "./ComposerBanner";
 
 const SNIPPET_MAX_CHARS = 90;
@@ -215,30 +214,25 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   >
                     {formatRelativeTimeLabel(entry.createdAt)}
                   </time>
-                  <Tooltip>
-                    <TooltipTrigger
-                      closeOnClick={false}
-                      render={
-                        <ComposerBanner.Dismiss
-                          className="z-10"
-                          aria-label={
-                            confirm.armed === entry.id ? "Confirm delete" : "Delete stashed prompt"
-                          }
-                          onPointerDown={(event) => event.preventDefault()}
-                          {...confirm.bind(entry.id, () => onDelete(entry))}
-                        />
-                      }
-                    >
-                      <InlineConfirmIcon armed={confirm.armed === entry.id}>
-                        <XIcon className="size-3.5" />
-                      </InlineConfirmIcon>
-                    </TooltipTrigger>
-                    <TooltipPopup>
-                      {confirm.armed === entry.id
-                        ? "Click again to delete this stashed prompt"
-                        : "Delete stashed prompt"}
-                    </TooltipPopup>
-                  </Tooltip>
+                  <InlineConfirmTooltip
+                    armed={confirm.armed === entry.id}
+                    tip="Delete stashed prompt"
+                    armedTip="Click again to delete this stashed prompt"
+                    render={
+                      <ComposerBanner.Dismiss
+                        className="z-10"
+                        aria-label={
+                          confirm.armed === entry.id ? "Confirm delete" : "Delete stashed prompt"
+                        }
+                        onPointerDown={(event) => event.preventDefault()}
+                        {...confirm.bind(entry.id, () => onDelete(entry))}
+                      />
+                    }
+                  >
+                    <InlineConfirmIcon armed={confirm.armed === entry.id}>
+                      <XIcon className="size-3.5" />
+                    </InlineConfirmIcon>
+                  </InlineConfirmTooltip>
                 </ComposerBanner.Actions>
               </ComposerBanner.Row>
             ))
