@@ -61,6 +61,7 @@ jobs:
   prepare:
     name: Prepare mobile release
     runs-on: depot-ubuntu-24.04-8
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != '' && 'release' || '' }}
     outputs:
       enabled: ${{ steps.expo-token.outputs.present }}
       sha: ${{ steps.source.outputs.sha }}
@@ -89,25 +90,40 @@ jobs:
             echo "EXPO_TOKEN is not available; skipping EAS production job."
           fi
 
-      - id: version_app_token
-        name: Mint release app token for version override
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != ''
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         if: steps.expo-token.outputs.present == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ steps.version_app_token.outputs.token || github.token }}
 
       - name: Setup Mise
         if: steps.expo-token.outputs.present == 'true'
         uses: ./.github/actions/setup-mise
+
+      - name: Load release App credentials for version override
+        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != ''
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: release-app
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+
+      - id: version_app_token
+        name: Mint release app token for version override
+        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ env.RELEASE_APP_ID }}
+          private-key: ${{ env.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout with version override push credentials
+        if: steps.version_app_token.outcome == 'success'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.version_app_token.outputs.token }}
+
       - name: Apply manual version override
         if: steps.version_app_token.outcome == 'success'
         env:
