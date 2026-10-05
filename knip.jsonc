@@ -14,6 +14,9 @@
         ".github/scripts/mobile-build-history.cjs",
         ".github/scripts/thread-transfer-report.cjs",
       ],
+      // Tests belong to their workspaces; do not discover them from the root.
+      "vite": { "entry": [] },
+      "vitest": { "entry": [] },
     },
     "scripts": {
       // Knip loads its preprocessor through a CLI option; native verification and
