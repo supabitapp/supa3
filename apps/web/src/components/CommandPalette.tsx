@@ -1987,6 +1987,7 @@ function OpenCommandPaletteDialog(props: {
       title: "New thread in...",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
+      shortcutCommand: "projectPicker.toggle",
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
     });
   }

@@ -1,4 +1,4 @@
-import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
+import { ThreadDetailsComboboxControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { EnvironmentId } from "@supacode/contracts";
@@ -14,13 +14,13 @@ import {
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
-  Select,
-  SelectGroup,
-  SelectGroupLabel,
-  SelectItem,
-  SelectPopup,
-  SelectValue,
-} from "./ui/select";
+  Combobox,
+  ComboboxPopup,
+  ComboboxSearchInput,
+  ComboboxList,
+  ComboboxEmpty,
+  ComboboxItem,
+} from "./ui/combobox";
 
 interface BranchToolbarEnvironmentSelectorProps {
   autoEnvironmentLabel?: string | undefined;
@@ -91,18 +91,26 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   }
 
   return (
-    <Select
-      modal={false}
-      value={autoEnvironmentLabel ? "auto" : environmentId}
-      onValueChange={(value) =>
-        value === "auto" ? onAutoEnvironment?.() : onEnvironmentChange(value as EnvironmentId)
+    <Combobox
+      autoHighlight
+      itemToStringLabel={(item) => item.label}
+      itemToStringValue={(item) => item.value}
+      value={
+        environmentItems.find(
+          (item) => item.value === (autoEnvironmentLabel ? "auto" : environmentId),
+        ) ?? null
       }
+      onValueChange={(item) => {
+        if (!item) return;
+        if (item.value === "auto") onAutoEnvironment?.();
+        else onEnvironmentChange(item.value as EnvironmentId);
+      }}
       items={environmentItems}
     >
       <Tooltip>
         <TooltipTrigger
           render={
-            <ThreadDetailsSelectControl
+            <ThreadDetailsComboboxControl
               panel={displayMode === "panel"}
               className="min-w-0 max-w-full"
               aria-label="Run on"
@@ -127,13 +135,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           )}
           <ComposerContextLabel displayMode={displayMode}>
-            <SelectValue />
+            {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
           </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
       </Tooltip>
-      <SelectPopup
-        alignItemWithTrigger={false}
+      <ComboboxPopup
         {...(displayMode === "toolbar" ? composerFloatingLayerProps : {})}
         {...(displayMode === "panel"
           ? {
@@ -141,31 +148,27 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             }
           : {})}
       >
-        <SelectGroup>
-          <SelectGroupLabel>Run on</SelectGroupLabel>
-          {onAutoEnvironment && (
-            <SelectItem
-              value="auto"
-              onClick={() => {
-                if (autoEnvironmentLabel) onAutoEnvironment?.();
-              }}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <ScaleIcon className="size-3" aria-hidden="true" />
-                {autoEnvironmentLabel ?? "Auto balance"}
-              </span>
-            </SelectItem>
+        <ComboboxSearchInput autoFocus aria-label="Search hosts" placeholder="Search hosts..." />
+        <ComboboxEmpty>No matches found.</ComboboxEmpty>
+        <ComboboxList>
+          {(item: (typeof environmentItems)[number]) => (
+            <ComboboxItem key={item.value} value={item}>
+              {item.value === "auto" ? (
+                <ScaleIcon className="size-3" />
+              ) : (
+                <EnvironmentMachineIcon
+                  kind={
+                    availableEnvironments.find((env) => env.environmentId === item.value)
+                      ?.machine ?? "server"
+                  }
+                  className="size-3"
+                />
+              )}{" "}
+              {item.label}
+            </ComboboxItem>
           )}
-          {availableEnvironments.map((env) => (
-            <SelectItem key={env.environmentId} value={env.environmentId}>
-              <span className="inline-flex items-center gap-1.5">
-                <EnvironmentMachineIcon kind={env.machine} className="size-3" />
-                {env.label}
-              </span>
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectPopup>
-    </Select>
+        </ComboboxList>
+      </ComboboxPopup>
+    </Combobox>
   );
 });
