@@ -127,7 +127,7 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("updates and broadcasts state from updater events", () => {
+  it.effect("downloads a found update and broadcasts each state", () => {
     const harness = makeHarness();
 
     return Effect.scoped(
@@ -139,13 +139,51 @@ describe("DesktopUpdates", () => {
         yield* flushCallbacks;
 
         const state = yield* updates.getState;
-        assert.equal(state.status, "available");
+        assert.equal(state.status, "downloading");
         assert.equal(state.availableVersion, "1.2.4");
         assert.isNotNull(state.checkedAt);
-        assert.equal(harness.sentStates.at(-1)?.status, "available");
+        assert.equal(harness.downloadCount(), 1);
+        assert.deepEqual(
+          harness.sentStates.slice(-2).map((sent) => sent.status),
+          ["available", "downloading"],
+        );
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
+
+  it.effect("starts the download once the check that found it releases", () =>
+    Effect.gen(function* () {
+      const checkStarted = yield* Deferred.make<void>();
+      const releaseCheck = yield* Deferred.make<void>();
+      const harness = makeHarness({
+        checkForUpdates: Deferred.succeed(checkStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseCheck)),
+        ),
+      });
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+
+          const checkFiber = yield* updates.check("poll").pipe(Effect.forkScoped);
+          yield* Deferred.await(checkStarted);
+          harness.emit("update-available", { version: "1.2.4" });
+          yield* flushCallbacks;
+
+          assert.equal((yield* updates.getState).status, "available");
+          assert.equal(harness.downloadCount(), 0);
+
+          yield* Deferred.succeed(releaseCheck, undefined);
+          yield* Fiber.join(checkFiber);
+          yield* flushCallbacks;
+
+          assert.equal((yield* updates.getState).status, "downloading");
+          assert.equal(harness.downloadCount(), 1);
+        }),
+      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+    }),
+  );
 
   it.effect("enables nightly full changelog release notes and broadcasts summaries", () => {
     const harness = makeHarness();
@@ -179,7 +217,7 @@ describe("DesktopUpdates", () => {
         yield* flushCallbacks;
 
         const state = yield* updates.getState;
-        assert.equal(state.status, "available");
+        assert.equal(state.status, "downloading");
         assert.deepEqual(state.releaseNotes, [
           {
             version: "1.2.4-nightly.20260709.766",
@@ -240,9 +278,10 @@ describe("DesktopUpdates", () => {
         yield* flushCallbacks;
 
         const state = yield* updates.getState;
-        assert.equal(state.status, "available");
+        assert.equal(state.status, "downloading");
         assert.equal(state.availableVersion, "1.2.5");
         assert.isNull(state.downloadedVersion);
+        assert.equal(harness.downloadCount(), 2);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
@@ -514,12 +553,14 @@ describe("DesktopUpdates", () => {
       const actionStarted = yield* Deferred.make<void>();
       let disableDifferentialCalls = 0;
       const harness = makeHarness({
+        // Calls: configure, the automatic download (fails), the interrupted
+        // manual retry, then the final retry.
         setDisableDifferentialDownload: Effect.suspend(() => {
           disableDifferentialCalls += 1;
-          if (disableDifferentialCalls === 1) {
-            return Effect.void;
-          }
           if (disableDifferentialCalls === 2) {
+            return Effect.die(new Error("download setup failed"));
+          }
+          if (disableDifferentialCalls === 3) {
             return Deferred.succeed(actionStarted, undefined).pipe(Effect.andThen(Effect.never));
           }
           return Effect.void;
@@ -532,14 +573,15 @@ describe("DesktopUpdates", () => {
           yield* updates.configure;
           harness.emit("update-available", { version: "1.2.4" });
           yield* flushCallbacks;
+          const failedState = yield* updates.getState;
+          assert.equal(failedState.errorContext, "download");
 
           const downloadFiber = yield* updates.download.pipe(Effect.forkScoped);
           yield* Deferred.await(actionStarted);
           yield* Fiber.interrupt(downloadFiber);
 
           const interruptedState = yield* updates.getState;
-          assert.equal(interruptedState.status, "available");
-          assert.isNull(interruptedState.message);
+          assert.deepEqual(interruptedState, failedState);
 
           const retry = yield* updates.download;
           assert.isTrue(retry.accepted);

@@ -515,6 +515,24 @@ export const make = Effect.gen(function* () {
     );
   }).pipe(Effect.withSpan("desktop.updates.downloadAvailableUpdate"));
 
+  // Found updates download without a click. "update-available" fires from
+  // inside the check (or channel change) that found it, so wait for that
+  // action to release its reservation before starting the download.
+  const downloadFoundUpdate = Effect.scoped(
+    Effect.gen(function* () {
+      const actionCompletions = yield* PubSub.subscribe(finishedUpdateActions);
+      let activeAction = yield* activeUpdateAction;
+      while (
+        Option.isSome(activeAction) &&
+        (activeAction.value === "check" || activeAction.value === "channel")
+      ) {
+        yield* PubSub.take(actionCompletions);
+        activeAction = yield* activeUpdateAction;
+      }
+      yield* downloadAvailableUpdate;
+    }),
+  ).pipe(Effect.withSpan("desktop.updates.downloadFoundUpdate"));
+
   const resetInstallAction = Effect.all(
     [finishUpdateAction("install"), Ref.set(desktopState.quitting, false)],
     { discard: true },
@@ -743,6 +761,7 @@ export const make = Effect.gen(function* () {
             releaseNoteGroups: releaseNotes.length,
             omittedReleaseCount,
           });
+          yield* downloadFoundUpdate;
         }),
       ),
       Effect.catchCause((cause) => {
