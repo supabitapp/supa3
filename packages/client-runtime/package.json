@@ -143,6 +143,10 @@
       "types": "./src/delayedStatus.ts",
       "default": "./src/delayedStatus.ts"
     },
+    "./inline-confirm": {
+      "types": "./src/inlineConfirm.ts",
+      "default": "./src/inlineConfirm.ts"
+    },
     "./state/connections": {
       "types": "./src/state/connections.ts",
       "default": "./src/state/connections.ts"

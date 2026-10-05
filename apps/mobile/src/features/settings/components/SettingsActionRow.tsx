@@ -6,38 +6,41 @@ import { AppText as Text } from "../../../components/AppText";
 import { MaterialListRow } from "../../../components/MaterialListRow";
 import { cn } from "../../../lib/cn";
 
-export function SettingsActionRow(props: {
+export function SettingsActionRow({
+  icon,
+  label,
+  tone,
+  loading,
+  ...props
+}: Omit<ComponentProps<typeof Pressable>, "children"> & {
   readonly icon: ComponentProps<typeof SymbolView>["name"];
   readonly label: string;
   readonly tone?: "default" | "danger";
-  readonly disabled?: boolean;
   readonly loading?: boolean;
-  readonly onPress: () => void;
 }) {
-  const danger = props.tone === "danger";
+  const danger = tone === "danger";
   const textClassName = danger ? "tabular-nums text-danger-foreground" : "text-foreground";
   const iconColorClassName = danger ? "accent-danger-foreground" : "accent-icon";
-  const icon = (
+  const symbol = (
     <SymbolView
-      name={props.icon}
+      name={icon}
       size={Platform.OS === "android" ? 24 : 22}
       tintColorClassName={iconColorClassName}
       type="monochrome"
       weight="regular"
     />
   );
-  const spinner = props.loading ? <ActivityIndicator colorClassName={iconColorClassName} /> : null;
+  const spinner = loading ? <ActivityIndicator colorClassName={iconColorClassName} /> : null;
 
   if (Platform.OS === "android") {
     return (
       <MaterialListRow
+        {...props}
         className="bg-grouped-card"
-        title={props.label}
+        title={label}
         titleClassName={textClassName}
-        leading={icon}
+        leading={symbol}
         trailing={spinner}
-        disabled={props.disabled}
-        onPress={props.onPress}
       />
     );
   }
@@ -45,12 +48,11 @@ export function SettingsActionRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      disabled={props.disabled}
-      onPress={props.onPress}
+      {...props}
       className="flex-row items-center gap-4 p-4 disabled:opacity-40"
     >
-      {icon}
-      <Text className={cn("flex-1 text-lg", textClassName)}>{props.label}</Text>
+      {symbol}
+      <Text className={cn("flex-1 text-lg", textClassName)}>{label}</Text>
       {spinner}
     </Pressable>
   );
