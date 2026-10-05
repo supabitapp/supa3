@@ -334,12 +334,6 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
         />
       ) : null}
 
-      {item.type === "checkpoint" ? (
-        <p className="text-muted-foreground">
-          {support.checkpoint?.status ?? item.status} · {item.files.length} files
-        </p>
-      ) : null}
-
       {item.type === "fork" ? (
         <Button size="xs" variant="outline" onClick={() => props.onOpenThread(item.targetThreadId)}>
           <GitBranchIcon className="size-3" />
