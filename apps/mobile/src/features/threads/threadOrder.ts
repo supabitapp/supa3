@@ -1,7 +1,7 @@
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { planPinnedReorder } from "@supacode/client-runtime/state/thread-sort";
 import { effectiveSnoozed } from "@supacode/client-runtime/state/thread-settled";
-import type { EnvironmentId } from "@supacode/contracts";
+import type { EnvironmentId, ExecutionEnvironmentCapabilities } from "@supacode/contracts";
 
 export type ThreadMoveDestination =
   | "up"
@@ -160,7 +160,7 @@ export function applyPendingThreadOrder<T extends OrderRow>(
 }
 
 /** Match desktop re-entry: a pin wakes the thread on the server; Active clears
- * each underlying parked state before assigning its destination order key. */
+ * each underlying parked state. */
 export function threadDropLifecycle(
   thread: EnvironmentThreadShell,
   section: "pinned" | "active",
@@ -176,6 +176,22 @@ export function threadDropLifecycle(
 }
 
 export type ThreadDragSection = "pinned" | "active" | "snoozed" | "settled";
+
+/** The inbox is time-ordered, so entering Active only unpins, un-settles, or
+ * wakes the thread. Each of those needs its server capability. */
+export function canMoveThreadToActive(
+  thread: Pick<EnvironmentThreadShell, "pinnedAt">,
+  source: ThreadDragSection,
+  capabilities:
+    | Pick<ExecutionEnvironmentCapabilities, "threadPinning" | "threadSettlement" | "threadSnooze">
+    | undefined,
+) {
+  if (source === "active") return false;
+  if (thread.pinnedAt != null && capabilities?.threadPinning !== true) return false;
+  if (source === "settled" && capabilities?.threadSettlement !== true) return false;
+  if (source === "snoozed" && capabilities?.threadSnooze !== true) return false;
+  return true;
+}
 
 /** The action shown during hover describes the lifecycle change made on drop. */
 export function threadDragAction(source: ThreadDragSection, destination: ThreadDragSection) {

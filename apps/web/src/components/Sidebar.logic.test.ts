@@ -1947,7 +1947,7 @@ describe("unseen completion with background work", () => {
   });
 });
 
-describe("Working shelf (beta)", () => {
+describe("Working shelf", () => {
   const runtime = {
     status: "running" as const,
     activeRunId: null,
@@ -2103,6 +2103,25 @@ describe("Working shelf (beta)", () => {
         unsettle: false,
         unsnooze: false,
       });
+      const intoActive = { section: "active", pinnedOrder: ["p1"], activeOrder: ["a1"] } as const;
+      expect(
+        planSidebarThreadDrop({
+          ...base,
+          activeKey: "s1",
+          activeSection: "settled",
+          target: intoActive,
+        }),
+      ).toEqual({ kind: "move-active", unpin: false, unsettle: true, unsnooze: false });
+      // A snoozed thread keeps its pin beneath the shelf; Active clears both.
+      expect(
+        planSidebarThreadDrop({
+          ...base,
+          activeKey: "z1",
+          activeSection: "snoozed",
+          activePinned: true,
+          target: intoActive,
+        }),
+      ).toEqual({ kind: "move-active", unpin: true, unsettle: false, unsnooze: true });
     });
   });
 });

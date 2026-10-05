@@ -123,10 +123,10 @@ export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
 
 // Rows and section markers share one sortable list. The separators resolve
 // the lifecycle action; Sidebar.drag previews the resulting layout. Pinned
-// and active threads keep the dragged position; settled threads use time
+// threads keep the dragged position; active and settled threads use time
 // order. Snoozed rows can leave the shelf, but dropping into it is not
-// supported because snoozing requires a wake time. The Working shelf (beta)
-// follows live status, so it is neither a drag source nor a destination.
+// supported because snoozing requires a wake time. The Working shelf follows
+// live status, so it is neither a drag source nor a destination.
 
 export type SidebarSection = "pinned" | "active" | "working" | "snoozed" | "settled";
 
@@ -188,8 +188,9 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
   return section;
 }
 
-/** Resolve the destination section and manual order from an arrayMove across
- * the separators. The working and snoozed shelves are never destinations. */
+/** Resolve the destination section and pointer order from an arrayMove across
+ * the separators. Only the pinned order is kept on drop. The working and
+ * snoozed shelves are never destinations. */
 export type SidebarDropTarget = {
   readonly section: "pinned" | "active" | "settled";
   readonly pinnedOrder: readonly string[];
