@@ -26,6 +26,10 @@ export function serializePreviewAutomationError(
 export function createPreviewAutomationRequestConsumerAtom<E>(options: {
   readonly requestsAtom: Atom.Atom<AutomationStreamResult<E>>;
   readonly clientId: PreviewAutomationHost["clientId"];
+  readonly onSubscribe?: () => void;
+  readonly onConnectionChange?: (
+    connectionId: PreviewAutomationStreamEvent["connectionId"] | null,
+  ) => void;
   readonly connectionAtom: Atom.Writable<PreviewAutomationStreamEvent["connectionId"] | null>;
   readonly environmentId: PreviewAutomationHost["environmentId"];
   readonly requestHandlerAtom: Atom.Atom<{
@@ -35,15 +39,23 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
   readonly label: string;
 }): Atom.Atom<void> {
   return Atom.make((get) => {
+    options.onSubscribe?.();
     get.mount(options.connectionAtom);
+    options.onConnectionChange?.(null);
     get.mount(options.requestHandlerAtom);
     let disposed = false;
     let activeConnectionId: PreviewAutomationStreamEvent["connectionId"] | null = null;
     let connectionExplicitlyAnnounced = false;
+    let rejectedConnectionId: PreviewAutomationStreamEvent["connectionId"] | null = null;
     let reportedConnectionId: PreviewAutomationStreamEvent["connectionId"] | null = null;
     let requestsVersion = 0;
 
     const consume = (result: AutomationStreamResult<E>) => {
+      if (disposed) return;
+      if (!AsyncResult.isSuccess(result) || result.waiting) {
+        rejectedConnectionId = reportedConnectionId ?? rejectedConnectionId;
+        options.onConnectionChange?.(null);
+      }
       if (!AsyncResult.isSuccess(result)) return;
       const event = result.value;
       if (event.type === "connected") {
@@ -60,6 +72,8 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
         get.set(options.connectionAtom, event.connectionId);
       }
       if (event.type === "connected") {
+        if (!result.waiting && event.connectionId !== rejectedConnectionId)
+          options.onConnectionChange?.(event.connectionId);
         return;
       }
       const request = event.request;
@@ -94,6 +108,7 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
 
     get.addFinalizer(() => {
       disposed = true;
+      options.onConnectionChange?.(null);
     });
     const initialRequest = get.once(options.requestsAtom);
     if (AsyncResult.isSuccess(initialRequest)) {
@@ -102,6 +117,8 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
       if (initialRequest.value.type === "connected") {
         reportedConnectionId = initialRequest.value.connectionId;
         get.set(options.connectionAtom, initialRequest.value.connectionId);
+        if (!initialRequest.waiting)
+          options.onConnectionChange?.(initialRequest.value.connectionId);
       }
     }
     get.subscribe(options.requestsAtom, (result) => {

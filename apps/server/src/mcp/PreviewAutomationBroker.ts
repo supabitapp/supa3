@@ -1,7 +1,10 @@
 import {
   PREVIEW_AUTOMATION_V1_OPERATIONS,
+  PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS,
+  type PreviewError,
   PreviewAutomationClientDisconnectedError,
   PreviewAutomationControlInterruptedError,
+  PreviewAutomationPausedError,
   PreviewAutomationExecutionError,
   PreviewAutomationInvalidSelectorError,
   PreviewAutomationMalformedResponseError,
@@ -19,6 +22,7 @@ import {
   PreviewAutomationUnsupportedClientError,
   PreviewTabId,
   type PreviewAutomationError,
+  type PreviewAutomationStatus,
   type PreviewAutomationOperation,
   type PreviewAutomationHost,
   type PreviewAutomationHostFocus,
@@ -37,6 +41,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
+import * as Preview from "../preview/Manager.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 
 export interface PreviewAutomationInvokeInput {
@@ -45,6 +50,8 @@ export interface PreviewAutomationInvokeInput {
   readonly input: unknown;
   readonly tabId?: PreviewTabId;
   readonly timeoutMs?: number;
+  /** Internal routing for a guarded close across each connected desktop. */
+  readonly targetClientId?: string;
   /** Background metadata reads must not change the agent's current tab. */
   readonly updateCurrentTab?: boolean;
   /** Capture the routed tab before another request changes the current assignment. */
@@ -61,6 +68,10 @@ export class PreviewAutomationBroker extends Context.Service<
     readonly respond: (
       response: PreviewAutomationResponse,
     ) => Effect.Effect<void, PreviewAutomationError>;
+    readonly closeFromAgent: (
+      scope: McpInvocationContext.McpInvocationScope,
+      tabId: PreviewTabId,
+    ) => Effect.Effect<void, PreviewAutomationError | PreviewError, Preview.PreviewManager>;
     readonly invoke: <A = unknown>(
       request: PreviewAutomationInvokeInput,
     ) => Effect.Effect<A, PreviewAutomationError>;
@@ -72,6 +83,7 @@ interface ClientConnection {
   readonly connectionId: string;
   readonly environmentId: PreviewAutomationHost["environmentId"];
   readonly supportedOperations: ReadonlySet<PreviewAutomationOperation>;
+  readonly advertisedOperationCount: number;
   readonly focused: boolean;
   readonly liveTabs: NonNullable<PreviewAutomationHostFocus["liveTabs"]>;
   readonly focusOrder: number;
@@ -244,6 +256,8 @@ const classifyResponseError = (
         ...context,
         ...remoteDiagnostics,
       });
+    case "PreviewAutomationPausedError":
+      return new PreviewAutomationPausedError({ ...context, ...remoteDiagnostics });
     case "PreviewAutomationControlInterruptedError":
       return new PreviewAutomationControlInterruptedError({
         ...context,
@@ -376,6 +390,8 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       connectionId,
       environmentId: host.environmentId,
       supportedOperations: new Set(host.supportedOperations ?? PREVIEW_AUTOMATION_V1_OPERATIONS),
+      advertisedOperationCount: (host.supportedOperations ?? PREVIEW_AUTOMATION_V1_OPERATIONS)
+        .length,
       focused: false,
       liveTabs: [],
       focusOrder: 0,
@@ -502,24 +518,31 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
             (!visibleOnly || tab.visible === true) &&
             (input.tabId === undefined || tab.tabId === input.tabId),
         );
+      const targetedConnection =
+        input.targetClientId === undefined ? undefined : current.clients.get(input.targetClientId);
       const connection =
-        hasLiveAssignment && supportsOperation(assignedConnection, input.operation)
-          ? assignedConnection
-          : hasLiveAssignment
-            ? undefined
-            : Array.from(current.clients.values())
-                .filter(
-                  (host) =>
-                    host.environmentId === input.scope.environmentId &&
-                    supportsOperation(host, input.operation),
-                )
-                .sort(
-                  (left, right) =>
-                    Number(ownsTargetTab(right, true)) - Number(ownsTargetTab(left, true)) ||
-                    Number(ownsTargetTab(right)) - Number(ownsTargetTab(left)) ||
-                    Number(right.focused) - Number(left.focused) ||
-                    right.focusOrder - left.focusOrder,
-                )[0];
+        input.targetClientId !== undefined
+          ? targetedConnection?.environmentId === input.scope.environmentId &&
+            supportsOperation(targetedConnection, input.operation)
+            ? targetedConnection
+            : undefined
+          : hasLiveAssignment && supportsOperation(assignedConnection, input.operation)
+            ? assignedConnection
+            : hasLiveAssignment
+              ? undefined
+              : Array.from(current.clients.values())
+                  .filter(
+                    (host) =>
+                      host.environmentId === input.scope.environmentId &&
+                      supportsOperation(host, input.operation),
+                  )
+                  .sort(
+                    (left, right) =>
+                      Number(ownsTargetTab(right, true)) - Number(ownsTargetTab(left, true)) ||
+                      Number(ownsTargetTab(right)) - Number(ownsTargetTab(left)) ||
+                      Number(right.focused) - Number(left.focused) ||
+                      right.focusOrder - left.focusOrder,
+                  )[0];
       if (!connection) {
         if (!hasLiveAssignment) assignments.delete(assignmentKey);
         return [undefined, { ...current, assignments }] as const;
@@ -528,15 +551,16 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         assigned !== undefined &&
         assigned.connectionId === connection.connectionId &&
         assigned.queue === connection.queue;
-      assignments.set(assignmentKey, {
-        clientId: connection.clientId,
-        connectionId: connection.connectionId,
-        queue: connection.queue,
-        ...(canReuseAssignedTab && assigned.tabId !== undefined ? { tabId: assigned.tabId } : {}),
-        ...(canReuseAssignedTab && assigned.tabSequence !== undefined
-          ? { tabSequence: assigned.tabSequence }
-          : {}),
-      });
+      if (input.targetClientId === undefined)
+        assignments.set(assignmentKey, {
+          clientId: connection.clientId,
+          connectionId: connection.connectionId,
+          queue: connection.queue,
+          ...(canReuseAssignedTab && assigned.tabId !== undefined ? { tabId: assigned.tabId } : {}),
+          ...(canReuseAssignedTab && assigned.tabSequence !== undefined
+            ? { tabSequence: assigned.tabSequence }
+            : {}),
+        });
 
       const requestSequence = current.requestSequence;
       const requestId = `preview-${requestSequence}`;
@@ -654,7 +678,98 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
     return result;
   });
 
-  return PreviewAutomationBroker.of({ connect, focusHost, respond, invoke });
+  const closeFromAgent = Effect.fn("PreviewAutomationBroker.closeFromAgent")(function* (
+    scope: McpInvocationContext.McpInvocationScope,
+    tabId: PreviewTabId,
+  ) {
+    const previews = yield* Preview.PreviewManager;
+    if (
+      !(yield* previews.list({ threadId: scope.threadId })).sessions.some(
+        (tab) => tab.tabId === tabId,
+      )
+    )
+      return;
+    const unavailable = () =>
+      new PreviewAutomationNoAvailableHostError({
+        operation: "close",
+        environmentId: scope.environmentId,
+        threadId: scope.threadId,
+        providerSessionId: scope.providerSessionId,
+        providerInstanceId: scope.providerInstanceId,
+        tabId,
+      });
+    const hosts = Array.from((yield* SynchronizedRef.get(state)).clients.values()).filter(
+      (host) => host.environmentId === scope.environmentId,
+    );
+    if (hosts.length === 0) return yield* unavailable();
+    for (const host of hosts) {
+      if (supportsOperation(host, "close")) continue;
+      // Omitted operations normalize to the documented stock V1 catalogue.
+      // Only complete shipped pre-pause catalogues establish that privacy pause is unsupported.
+      const legacy = [
+        PREVIEW_AUTOMATION_V1_OPERATIONS,
+        PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS,
+      ].some(
+        (catalogue) =>
+          host.advertisedOperationCount === catalogue.length &&
+          host.supportedOperations.size === catalogue.length &&
+          catalogue.every((operation) => host.supportedOperations.has(operation)),
+      );
+      if (!legacy) return yield* unavailable();
+    }
+    const modernHosts = hosts.filter((host) => supportsOperation(host, "close"));
+    for (const host of modernHosts) {
+      const status = yield* invoke<PreviewAutomationStatus>({
+        scope,
+        tabId,
+        input: {},
+        operation: "status",
+        targetClientId: host.clientId,
+        updateCurrentTab: false,
+      });
+      if (status.automationPaused)
+        return yield* new PreviewAutomationPausedError({
+          operation: "close",
+          environmentId: scope.environmentId,
+          threadId: scope.threadId,
+          providerSessionId: scope.providerSessionId,
+          providerInstanceId: scope.providerInstanceId,
+          tabId,
+          clientId: host.clientId,
+          connectionId: host.connectionId,
+          requestId: "preview-close-preflight",
+          timeoutMs: 15000,
+        });
+    }
+    for (const host of modernHosts) {
+      yield* invoke({
+        scope,
+        tabId,
+        input: {},
+        operation: "close",
+        targetClientId: host.clientId,
+        updateCurrentTab: false,
+      });
+    }
+    yield* SynchronizedRef.modifyEffect(state, (current) =>
+      Effect.gen(function* () {
+        const connected = Array.from(current.clients.values()).filter(
+          (host) => host.environmentId === scope.environmentId,
+        );
+        if (
+          connected.length !== hosts.length ||
+          hosts.some((host) => current.clients.get(host.clientId)?.queue !== host.queue)
+        )
+          return yield* unavailable();
+        // Registration and replacement cannot interleave with the metadata commit.
+        // A successfully closed tab disappearing from a host's liveTabs is expected.
+        yield* previews.close({ threadId: scope.threadId, tabId });
+        return [undefined, current] as const;
+      }),
+    );
+  });
+
+  return PreviewAutomationBroker.of({ connect, focusHost, respond, invoke, closeFromAgent });
 }).pipe(Effect.withSpan("PreviewAutomationBroker.make"));
 
 export const layer = Layer.effect(PreviewAutomationBroker, make);

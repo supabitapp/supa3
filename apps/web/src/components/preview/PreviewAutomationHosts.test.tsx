@@ -7,8 +7,11 @@ import {
   type PreviewAutomationStreamEvent,
   type PreviewOpenInput,
   type PreviewSessionSnapshot,
+  type PreviewListResult,
+  PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS,
 } from "@supacode/contracts";
 import type { AtomCommandResult } from "@supacode/client-runtime/state/runtime";
+import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { act } from "react";
@@ -23,6 +26,7 @@ import {
   readThreadPreviewState,
   resetPreviewStateForTests,
   applyPreviewDesktopState,
+  reconcilePreviewServerSessions,
 } from "~/previewStateStore";
 import { appAtomRegistry, AppAtomRegistryProvider } from "~/rpc/atomRegistry";
 
@@ -30,6 +34,8 @@ import { PreviewAutomationHosts } from "./PreviewAutomationHosts";
 
 const mocks = vi.hoisted(() => ({
   getClientSettings: vi.fn<() => Promise<ClientSettings | null>>(),
+  status: vi.fn(),
+  registration: vi.fn(),
   setClientSettings: vi.fn(),
   open: vi.fn(async (_target: { environmentId: EnvironmentId; input: PreviewOpenInput }) =>
     AsyncResult.success(snapshot),
@@ -50,9 +56,17 @@ vi.mock("~/env", () => ({ isElectron: true }));
 vi.mock("~/state/environments", () => ({
   useEnvironments: () => ({ environments: [{ environmentId }] }),
 }));
+vi.mock("~/state/server", () => ({
+  serverEnvironment: {
+    configValueAtom: () => serverConfigAtom,
+  },
+}));
 vi.mock("~/state/preview", () => ({
   previewEnvironment: {
-    automationRequests: () => requestsAtom,
+    automationRequests: (target: unknown) => {
+      mocks.registration(target);
+      return requestsAtom;
+    },
     list: () => listAtom,
     open: mocks.open,
     resize: mocks.resize,
@@ -66,8 +80,22 @@ vi.mock("~/state/use-atom-command", () => ({
 vi.mock("~/state/use-atom-query-runner", () => ({
   useAtomQueryRunner: () => mocks.list,
 }));
-vi.mock("./previewBridge", () => ({ previewBridge: { automation: {} } }));
+vi.mock("./previewBridge", () => ({
+  previewBridge: { automation: { status: mocks.status, close: vi.fn() } },
+}));
 
+const serverConfigAtom = Atom.make({
+  environment: { capabilities: { previewPrivateInput: true } },
+});
+const decodeLegacyRegistration = Schema.decodeUnknownSync(
+  Schema.Struct({
+    input: Schema.Struct({
+      supportedOperations: Schema.Array(
+        Schema.Literals(PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS),
+      ),
+    }),
+  }),
+);
 const environmentId = EnvironmentId.make("automation-environment");
 const threadId = ThreadId.make("automation-thread");
 const threadRef = { environmentId, threadId };
@@ -88,7 +116,7 @@ const snapshot: PreviewSessionSnapshot = {
   profileId: "work",
   updatedAt: "2026-09-05T00:00:00.000Z",
 };
-const emptyList = { sessions: [], serverEpoch: "test-server", revision: 0 };
+const emptyList: PreviewListResult = { sessions: [], serverEpoch: "test-server", revision: 0 };
 const listAtom = Atom.make(AsyncResult.success(emptyList));
 const requestsAtom = Atom.make<AsyncResult.AsyncResult<PreviewAutomationStreamEvent, Error>>(
   AsyncResult.initial(false),
@@ -122,6 +150,9 @@ beforeEach(async () => {
   mocks.focus.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   __resetClientSettingsPersistenceForTests();
   resetPreviewStateForTests();
+  appAtomRegistry.set(serverConfigAtom, {
+    environment: { capabilities: { previewPrivateInput: true } },
+  });
   useBrowserSurfaceStore.setState({ byTabId: {} });
   appAtomRegistry.set(requestsAtom, AsyncResult.initial(false));
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -186,6 +217,78 @@ describe("PreviewAutomationHosts open", () => {
     });
     expect(readThreadPreviewState(threadRef).snapshot).toEqual(snapshot);
     expect(mocks.setClientSettings).not.toHaveBeenCalled();
+  });
+
+  it("opens a separate tab while the default tab is paused for private input", async () => {
+    const nextSnapshot = { ...snapshot, tabId: "independent-tab" };
+    mocks.open.mockResolvedValueOnce(AsyncResult.success(nextSnapshot));
+    mocks.status.mockResolvedValue({
+      available: true,
+      visible: true,
+      tabId: snapshot.tabId,
+      automationPaused: true,
+      url: null,
+      title: null,
+      loading: false,
+    });
+    const list = { ...emptyList, sessions: [snapshot] };
+    mocks.list.mockResolvedValueOnce(AsyncResult.success(list));
+    await act(() => {
+      reconcilePreviewServerSessions(threadRef, list);
+      applyPreviewDesktopState(threadRef, snapshot.tabId, {
+        hasWebContents: true,
+        canGoBack: false,
+        canGoForward: false,
+        loading: false,
+        zoomFactor: 1,
+        pictureInPicture: false,
+        colorScheme: "system",
+        audioMuted: false,
+        audible: false,
+        controller: "human",
+        favicon: null,
+        automationPaused: true,
+      });
+    });
+    const response = deferred<PreviewAutomationResponse>();
+    mocks.respond.mockImplementationOnce(async ({ input }) => response.resolve(input));
+    await act(async () => {
+      appAtomRegistry.set(requestsAtom, AsyncResult.success(requestEvent));
+      await response.promise;
+    });
+    await expect(response.promise).resolves.toMatchObject({
+      ok: true,
+      result: { tabId: "independent-tab" },
+    });
+    expect(readThreadPreviewState(threadRef).desktopByTabId[snapshot.tabId]?.automationPaused).toBe(
+      true,
+    );
+  });
+
+  it("keeps an old-server host compatible while a different environment is paused", async () => {
+    const otherRef = { environmentId: EnvironmentId.make("other-environment"), threadId };
+    await act(() => {
+      appAtomRegistry.set(serverConfigAtom, {
+        environment: { capabilities: { previewPrivateInput: false } },
+      });
+      applyPreviewServerSnapshot(otherRef, snapshot);
+      applyPreviewDesktopState(otherRef, snapshot.tabId, {
+        hasWebContents: true,
+        canGoBack: false,
+        canGoForward: false,
+        loading: false,
+        zoomFactor: 1,
+        pictureInPicture: false,
+        colorScheme: "system",
+        audioMuted: false,
+        audible: false,
+        controller: "human",
+        favicon: null,
+        automationPaused: true,
+      });
+    });
+    const registration = mocks.registration.mock.calls.at(-1)?.[0];
+    expect(decodeLegacyRegistration(registration).input.supportedOperations).not.toContain("close");
   });
 
   it("reports a settings read failure without opening a tab", async () => {

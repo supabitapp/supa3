@@ -554,6 +554,308 @@ describe("PreviewManager", () => {
     webviewSend.mockClear();
   });
 
+  effectIt.effect(
+    "keeps private input paused across navigation and guest replacement until the user resumes",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const image = {
+            toJPEG: () => Buffer.from("frame"),
+            toPNG: () => Buffer.from("private"),
+            getSize: () => ({ width: 800, height: 600 }),
+          };
+          const host = makeTestHostWebContents();
+          const guest = makeTestPreviewWebContents(
+            vi.fn(async () => image),
+            42,
+            host,
+          );
+          const nativeSend = vi.fn(async (method: string) =>
+            method === "Runtime.evaluate" ? { result: { value: "resumed" } } : undefined,
+          );
+          Object.assign(guest, {
+            isDevToolsOpened: () => false,
+            loadURL: vi.fn(async () => undefined),
+          });
+          Object.assign(guest.debugger, { sendCommand: nativeSend, detach: vi.fn() });
+          fromId.mockReturnValue(guest);
+          let lastState: PreviewManager.PreviewTabState | undefined;
+          yield* manager.subscribeStateChanges((_tabId, state) =>
+            Effect.sync(() => {
+              lastState = state;
+            }),
+          );
+          yield* manager.createTab("private");
+          yield* manager.registerWebview("private", 42);
+          yield* manager.startRecording("private");
+          yield* manager.setAutomationPaused("private", true);
+          expect(host.executeJavaScript.mock.calls.at(-1)?.[0]).toContain(
+            "__supacodeDesktopPreviewRecordingCancel",
+          );
+          expect(guest.setBackgroundThrottling).toHaveBeenLastCalledWith(true);
+          expect(lastState).toMatchObject({
+            automationPaused: true,
+            controller: "human",
+            pictureInPicture: false,
+          });
+          const beforeCalls = nativeSend.mock.calls.length;
+          const blocked = [
+            manager.automationCloseTab("private"),
+            manager.automationSnapshot("private"),
+            manager.automationEvaluate("private", { expression: "document.body.innerText" }),
+            manager.automationClick("private", { x: 1, y: 1 }),
+            manager.automationType("private", { text: "secret" }),
+            manager.automationPress("private", { key: "Enter" }),
+            manager.automationScroll("private", { deltaY: 100 }),
+            manager.automationWaitFor("private", { text: "secret" }),
+            manager.automationNavigate("private", "https://example.com"),
+            manager.captureScreenshot("private"),
+            manager.pickElement("private"),
+            manager.startRecording("private"),
+            manager.saveRecording("private", "video/webm", Buffer.from("private")),
+            manager.openPictureInPicture("private"),
+          ];
+          for (const operation of blocked) {
+            const exit = yield* Effect.exit(operation);
+            expect(
+              Exit.isFailure(exit) && Option.getOrNull(Cause.findErrorOption(exit.cause)),
+            ).toMatchObject({ _tag: "PreviewAutomationPausedError" });
+          }
+          expect(nativeSend.mock.calls).toHaveLength(beforeCalls);
+          expect(writeFile).not.toHaveBeenCalled();
+          expect(yield* manager.automationStatus("private")).toMatchObject({
+            automationPaused: true,
+            url: null,
+            title: null,
+            loading: false,
+          });
+          yield* manager.navigate("private", "https://example.com/login");
+          expect(lastState?.automationPaused).toBe(true);
+          const replacement = makeTestPreviewWebContents(async () => image, 43, host);
+          Object.assign(replacement, { isDevToolsOpened: () => false });
+          Object.assign(replacement.debugger, { detach: vi.fn() });
+          fromId.mockReturnValue(replacement);
+          yield* manager.registerWebview("private", 43);
+          expect(lastState?.automationPaused).toBe(true);
+          yield* manager.setAutomationPaused("private", false);
+          expect(lastState).toMatchObject({ automationPaused: false, controller: "none" });
+          yield* manager.closeTab("private");
+          const reopened = yield* manager.createTab("private");
+          expect(reopened.automationPaused).toBe(false);
+        }),
+      ),
+  );
+
+  effectIt.effect("a claimed agent close rejects private pause before publishing it", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        let release: (() => void) | undefined;
+        const warmup = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const image = {
+          toJPEG: () => Buffer.from("frame"),
+          toPNG: () => Buffer.from("frame"),
+          getSize: () => ({ width: 800, height: 600 }),
+        };
+        const guest = makeTestPreviewWebContents(async () => {
+          Deferred.doneUnsafe(started, Effect.void);
+          await warmup;
+          return image;
+        });
+        Object.assign(guest, { isDevToolsOpened: () => false });
+        Object.assign(guest.debugger, { detach: vi.fn() });
+        fromId.mockReturnValue(guest);
+        yield* manager.createTab("closing-private");
+        yield* manager.registerWebview("closing-private", 42);
+        const recording = yield* manager
+          .startRecording("closing-private")
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Deferred.await(started);
+        const close = yield* manager
+          .automationCloseTab("closing-private")
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        const pause = yield* Effect.exit(manager.setAutomationPaused("closing-private", true));
+        expect(
+          Exit.isFailure(pause) && Option.getOrNull(Cause.findErrorOption(pause.cause)),
+        ).toMatchObject({ _tag: "PreviewTabNotFoundError" });
+        expect((yield* manager.automationStatus("closing-private")).automationPaused).not.toBe(
+          true,
+        );
+        release?.();
+        yield* Fiber.join(recording);
+        yield* Fiber.join(close);
+        const staleReopen = yield* Effect.exit(manager.createTab("closing-private"));
+        expect(Exit.isFailure(staleReopen)).toBe(true);
+        yield* manager.closeTab("closing-private");
+        expect((yield* manager.createTab("closing-private")).automationPaused).toBe(false);
+      }),
+    ),
+  );
+
+  effectIt.effect(
+    "clears browser diagnostics and rejects late messages from the pre-pause debugger",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          let runtimeHistory = false;
+          let logHistory = false;
+          const messages: Array<
+            (_event: Electron.Event, method: string, params: Record<string, unknown>) => void
+          > = [];
+          const image = {
+            toJPEG: () => Buffer.from("frame"),
+            toPNG: () => Buffer.from("frame"),
+            getSize: () => ({ width: 800, height: 600 }),
+          };
+          const guest = makeTestPreviewWebContents(async () => image);
+          Object.assign(guest, { isDevToolsOpened: () => false });
+          Object.assign(guest.debugger, {
+            detach: vi.fn(),
+            on: vi.fn((event: string, listener: (typeof messages)[number]) => {
+              if (event === "message") messages.push(listener);
+            }),
+            sendCommand: vi.fn(async (method: string) => {
+              if (method === "Runtime.discardConsoleEntries") runtimeHistory = false;
+              if (method === "Log.clear") logHistory = false;
+              if (method === "Runtime.enable" && runtimeHistory)
+                messages.at(-1)?.({} as Electron.Event, "Runtime.consoleAPICalled", {
+                  args: [{ value: "private-runtime-replay" }],
+                });
+              if (method === "Log.enable" && logHistory)
+                messages.at(-1)?.({} as Electron.Event, "Log.entryAdded", {
+                  entry: { text: "private-log-replay", level: "info" },
+                });
+              return method === "Runtime.evaluate"
+                ? {
+                    result: {
+                      value: {
+                        url: "https://example.com",
+                        title: "Example",
+                        loading: false,
+                        visibleText: "public",
+                        interactiveElements: [],
+                      },
+                    },
+                  }
+                : {};
+            }),
+          });
+          fromId.mockReturnValue(guest);
+          yield* manager.createTab("private-diagnostics");
+          yield* manager.registerWebview("private-diagnostics", 42);
+          yield* manager.automationSnapshot("private-diagnostics");
+          const oldHandler = messages[0];
+          oldHandler?.({} as Electron.Event, "Runtime.consoleAPICalled", {
+            args: [{ value: "before-pause" }],
+          });
+          yield* Effect.yieldNow;
+          expect(
+            (yield* manager.automationSnapshot("private-diagnostics")).consoleEntries,
+          ).toMatchObject([{ text: "before-pause" }]);
+          yield* manager.setAutomationPaused("private-diagnostics", true);
+          runtimeHistory = true;
+          logHistory = true;
+          oldHandler?.({} as Electron.Event, "Runtime.consoleAPICalled", {
+            args: [{ value: "private-sentinel" }],
+          });
+          yield* manager.setAutomationPaused("private-diagnostics", false);
+          expect(guest.debugger.sendCommand).toHaveBeenCalledWith("Runtime.discardConsoleEntries");
+          expect(guest.debugger.sendCommand).toHaveBeenCalledWith("Log.clear");
+          oldHandler?.({} as Electron.Event, "Network.requestWillBeSent", {
+            requestId: "old",
+            request: { url: "https://example.com/private-sentinel", method: "POST" },
+          });
+          oldHandler?.({} as Electron.Event, "Network.loadingFailed", {
+            requestId: "old",
+            errorText: "private-sentinel",
+          });
+          yield* Effect.yieldNow;
+          const snapshot = yield* manager.automationSnapshot("private-diagnostics");
+          expect(snapshot.consoleEntries).toEqual([]);
+          expect(snapshot.networkEntries).toEqual([]);
+        }),
+      ),
+  );
+
+  for (const operation of ["snapshot", "evaluate", "navigate"] as const) {
+    effectIt.effect(`discards in-flight ${operation} results across pause and resume`, () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const started = yield* Deferred.make<void>();
+          let release: (() => void) | undefined;
+          const pending = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          const image = {
+            toJPEG: () => Buffer.from("frame"),
+            toPNG: () => Buffer.from("private"),
+            getSize: () => ({ width: 800, height: 600 }),
+          };
+          const guest = makeTestPreviewWebContents(async () => {
+            if (operation === "snapshot") {
+              Deferred.doneUnsafe(started, Effect.void);
+              await pending;
+            }
+            return image;
+          });
+          Object.assign(guest, {
+            isDevToolsOpened: () => false,
+            loadURL: vi.fn(async () => {
+              Deferred.doneUnsafe(started, Effect.void);
+              await pending;
+            }),
+          });
+          Object.assign(guest.debugger, {
+            detach: vi.fn(),
+            sendCommand: vi.fn(async (method: string) => {
+              if (method === "Runtime.evaluate") {
+                if (operation === "evaluate") {
+                  Deferred.doneUnsafe(started, Effect.void);
+                  await pending;
+                }
+                return {
+                  result: {
+                    value: {
+                      url: "https://example.com",
+                      title: "private",
+                      visibleText: "secret",
+                      loading: false,
+                      interactiveElements: [],
+                    },
+                  },
+                };
+              }
+              return {};
+            }),
+          });
+          fromId.mockReturnValue(guest);
+          yield* manager.createTab("private-race");
+          yield* manager.registerWebview("private-race", 42);
+          const request =
+            operation === "snapshot"
+              ? manager.automationSnapshot("private-race")
+              : operation === "evaluate"
+                ? manager.automationEvaluate("private-race", {
+                    expression: "document.body.innerText",
+                  })
+                : manager.automationNavigate("private-race", "https://example.com/private");
+          const fiber = yield* request.pipe(Effect.forkChild({ startImmediately: true }));
+          yield* Deferred.await(started);
+          yield* manager.setAutomationPaused("private-race", true);
+          yield* manager.setAutomationPaused("private-race", false);
+          const exit = yield* Fiber.await(fiber);
+          release?.();
+          expect(
+            Exit.isFailure(exit) && Option.getOrNull(Cause.findErrorOption(exit.cause)),
+          ).toMatchObject({ _tag: "PreviewAutomationPausedError" });
+          expect(writeFile).not.toHaveBeenCalled();
+        }),
+      ),
+    );
+  }
+
   effectIt.effect("keeps preview shortcuts out of the host window", () =>
     withManager((manager) =>
       Effect.gen(function* () {

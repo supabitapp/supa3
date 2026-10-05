@@ -38,12 +38,27 @@ export const PREVIEW_AUTOMATION_V1_OPERATIONS = [
   "recordingStop",
 ] as const;
 
-/** Advertised by current desktop hosts for mixed-version routing. */
-export const PREVIEW_AUTOMATION_OPERATIONS = [
+/** Complete shipped pre-private-input catalogue. Exact equality identifies hosts without privacy pause. */
+export const PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS = [
   ...PREVIEW_AUTOMATION_V1_OPERATIONS,
   "resize",
   "setColorScheme",
 ] as const;
+
+/** Private-input hosts must support atomic agent close as well as capture guards. */
+export const PREVIEW_AUTOMATION_OPERATIONS = [
+  ...PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS,
+  "close",
+] as const;
+
+export function previewAutomationHostOperations(
+  privateInputSupported: boolean,
+  privateInputPaused: boolean,
+) {
+  return privateInputSupported || privateInputPaused
+    ? PREVIEW_AUTOMATION_OPERATIONS
+    : PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS;
+}
 
 export const PreviewAutomationOperation = Schema.Literals(PREVIEW_AUTOMATION_OPERATIONS);
 export type PreviewAutomationOperation = typeof PreviewAutomationOperation.Type;
@@ -65,6 +80,8 @@ export type PreviewAutomationTabTargetInput = typeof PreviewAutomationTabTargetI
 
 export const PreviewAutomationStatus = Schema.Struct({
   available: Schema.Boolean,
+  /** The user must resume automation in the browser before page access continues. */
+  automationPaused: Schema.optional(Schema.Boolean),
   visible: Schema.Boolean,
   tabId: Schema.NullOr(PreviewTabId),
   url: Schema.NullOr(Schema.String),
@@ -778,6 +795,18 @@ export class PreviewAutomationControlInterruptedError extends Schema.TaggedError
   }
 }
 
+export class PreviewAutomationPausedError extends Schema.TaggedError<PreviewAutomationPausedError>()(
+  "PreviewAutomationPausedError",
+  {
+    ...PreviewAutomationRequestErrorFields,
+    ...PreviewAutomationOptionalRemoteDiagnosticFields,
+  },
+) {
+  override get message(): string {
+    return "Browser automation and capture are paused for private input. Do not retry or use another browser tool to access this tab. Only the user can resume access in the browser.";
+  }
+}
+
 export class PreviewAutomationExecutionError extends Schema.TaggedError<PreviewAutomationExecutionError>()(
   "PreviewAutomationExecutionError",
   {
@@ -933,6 +962,7 @@ export const PreviewAutomationError = Schema.Union([
   PreviewAutomationTabNotFoundError,
   PreviewAutomationTimeoutError,
   PreviewAutomationControlInterruptedError,
+  PreviewAutomationPausedError,
   PreviewAutomationExecutionError,
   PreviewAutomationInvalidSelectorError,
   PreviewAutomationTargetNotEditableError,

@@ -172,6 +172,24 @@ const targetNotEditableDiagnostics = (
   };
 };
 
+export class PreviewAutomationPausedHostError extends Schema.TaggedError<PreviewAutomationPausedHostError>()(
+  "PreviewAutomationPausedHostError",
+  {
+    requestId: TrimmedNonEmptyString,
+    operation: PreviewAutomationOperation,
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    tabId: Schema.NullOr(PreviewTabId),
+  },
+) {
+  get responseTag() {
+    return "PreviewAutomationPausedError" as const;
+  }
+  override get message(): string {
+    return "Browser automation and capture are paused for private input. Only the user can resume access in the browser.";
+  }
+}
+
 export class PreviewAutomationOperationError extends Schema.TaggedError<PreviewAutomationOperationError>()(
   "PreviewAutomationOperationError",
   {
@@ -187,6 +205,13 @@ export class PreviewAutomationOperationError extends Schema.TaggedError<PreviewA
     input: PreviewAutomationOperationContext & { readonly cause: unknown },
   ): PreviewAutomationHostError {
     if (isPreviewAutomationHostError(input.cause)) return input.cause;
+    let cause = input.cause;
+    for (let depth = 0; depth < 4 && typeof cause === "object" && cause !== null; depth++) {
+      if ("_tag" in cause && cause._tag === "PreviewAutomationPausedError")
+        return new PreviewAutomationPausedHostError(input);
+      if (!("cause" in cause)) break;
+      cause = cause.cause;
+    }
     const diagnostics = targetNotEditableDiagnostics(input.cause);
     return diagnostics
       ? new PreviewAutomationTargetNotEditableHostError({
@@ -210,6 +235,7 @@ export class PreviewAutomationOperationError extends Schema.TaggedError<PreviewA
 }
 
 export const PreviewAutomationHostError = Schema.Union([
+  PreviewAutomationPausedHostError,
   PreviewAutomationRecordingTransferError,
   PreviewAutomationRecordingDesktopUpdateRequiredError,
   PreviewAutomationRecordingTooLargeError,

@@ -9,6 +9,7 @@ import * as NodeCrypto from "node:crypto";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
+  DESKTOP_PREVIEW_RECORDING_CANCEL_TRIGGER,
 } from "@supacode/contracts";
 import type {
   DesktopPreviewAnnotationTheme,
@@ -117,6 +118,7 @@ export interface PreviewTabState {
   audioMuted: boolean;
   /** Observed from Chromium. Stays true while a muted tab keeps playing. */
   audible: boolean;
+  automationPaused: boolean;
   controller: "human" | "agent" | "none";
   favicon?: DesktopPreviewFavicon;
   updatedAt: string;
@@ -668,6 +670,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const expectedAgentInputsRef = yield* Ref.make<
     ReadonlyMap<string, ReadonlyArray<ExpectedAgentInput>>
   >(new Map());
+  const privacyInterruptionsRef = yield* Ref.make<ReadonlyMap<string, Deferred.Deferred<void>>>(
+    new Map(),
+  );
+  const privacyEpochRef = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
   const controlEpochRef = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
   const actionTimelineRef = yield* Ref.make<
     ReadonlyMap<string, ReadonlyArray<PreviewAutomationActionEvent>>
@@ -682,6 +688,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   >(new Map());
   const pictureInPictureAspectRatiosRef = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
   const pictureInPictureMutationSemaphore = yield* Semaphore.make(1);
+  const privacyMutationSemaphore = yield* Semaphore.make(1);
+  const agentClosedTabIdsRef = yield* Ref.make<ReadonlySet<string>>(new Set());
   const closingTabIdsRef = yield* Ref.make<ReadonlySet<string>>(new Set());
   // Tab recording uses `setDisplayMediaRequestHandler` because Electron's legacy
   // `getMediaSourceId` + `chromeMediaSource: "tab"` capture path was removed upstream
@@ -711,15 +719,46 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     evaluate: () => PromiseLike<A>,
   ) =>
     Effect.tryPromise({
-      try: evaluate,
+      try: (_signal) => evaluate(),
       catch: (cause) => new PreviewOperationError({ ...errorContext, cause }),
     });
+  // A pause invalidates results even if the user resumes before a native promise settles.
+  const privacyCheck = Effect.fnUntraced(function* (tabId: string, operation: string) {
+    const epoch = (yield* Ref.get(privacyEpochRef)).get(tabId) ?? 0;
+    const generation = tabLifecycleGenerations.get(tabId);
+    const check = Effect.gen(function* () {
+      const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+      if (!tab) return yield* new PreviewTabNotFoundError({ tabId });
+      if (
+        tab.automationPaused ||
+        ((yield* Ref.get(privacyEpochRef)).get(tabId) ?? 0) !== epoch ||
+        tabLifecycleGenerations.get(tabId) !== generation
+      ) {
+        return yield* new PreviewAutomationPausedError({ operation, tabId });
+      }
+    });
+    yield* check;
+    const nextSignal = yield* Deferred.make<void>();
+    const signal = yield* Ref.modify(privacyInterruptionsRef, (signals) => {
+      const current = signals.get(tabId);
+      if (current) return [current, signals] as const;
+      return [nextSignal, replaceMap(signals, (copy) => copy.set(tabId, nextSignal))] as const;
+    });
+    const interrupted = Deferred.await(signal).pipe(
+      Effect.andThen(check),
+      Effect.andThen(new PreviewAutomationPausedError({ operation, tabId })),
+    );
+    return { check, interrupted };
+  });
+
   const capturePageWithRetry = Effect.fn("PreviewManager.capturePageWithRetry")(function* (
     errorContext: PreviewOperationContext,
     tabId: string,
     wc: Electron.WebContents,
   ) {
+    const { check: checkPrivacy, interrupted } = yield* privacyCheck(tabId, errorContext.operation);
     const requireCurrentGuest = Effect.gen(function* () {
+      yield* checkPrivacy;
       const tabs = yield* SynchronizedRef.get(tabsRef);
       if (wc.isDestroyed() || tabs.get(tabId)?.webContentsId !== wc.id) {
         return yield* new PreviewWebContentsNotFoundError({ tabId, webContentsId: wc.id });
@@ -743,6 +782,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       return image;
     });
     return yield* capture.pipe(
+      Effect.raceFirst(interrupted),
       Effect.retry({
         times: CAPTURE_PAGE_RETRY_ATTEMPTS - 1,
         schedule: Schedule.spaced(CAPTURE_PAGE_RETRY_DELAY_MS),
@@ -1146,7 +1186,11 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     webContentsId: number,
     method: string,
     params: Record<string, unknown>,
+    isActive: () => boolean,
   ) {
+    if (!isActive()) return;
+    const tabId = yield* tabIdForWebContents(webContentsId);
+    if (!tabId || (yield* SynchronizedRef.get(tabsRef)).get(tabId)?.automationPaused) return;
     const timestamp = yield* currentIso;
     yield* Ref.update(diagnosticsRef, (allDiagnostics) => {
       const current = allDiagnostics.get(webContentsId);
@@ -1292,7 +1336,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
 
   const ensureControlSession = Effect.fn("PreviewManager.ensureControlSession")(function* (
     wc: Electron.WebContents,
+    discardPrivateHistory = false,
   ) {
+    const ownedTabId = yield* tabIdForWebContents(wc.id);
+    if (ownedTabId && !discardPrivateHistory) yield* privacyCheck(ownedTabId, "attachDebugger");
     return yield* SynchronizedRef.modifyEffect(
       controlSessionsRef,
       (
@@ -1332,10 +1379,12 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           const semaphore = yield* Semaphore.make(1);
           const scope = yield* Scope.fork(parentScope, "sequential");
           const wcDebugger = wc.debugger;
+          let active = true;
           const handleDebuggerMessage = Effect.fnUntraced(function* (
             method: string,
             params: Record<string, unknown>,
           ) {
+            if (!active) return;
             if (method === "Page.screencastFrame") {
               const sessionId = params["sessionId"];
               if (typeof sessionId === "number") {
@@ -1347,6 +1396,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                   () => wcDebugger.sendCommand("Page.screencastFrameAck", { sessionId }),
                 ).pipe(Effect.ignore);
               }
+              if (!active) return;
               const tabId = yield* tabIdForWebContents(wc.id);
               const metadata =
                 typeof params["metadata"] === "object" && params["metadata"] !== null
@@ -1356,7 +1406,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                 const captureSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(
                   tabId,
                 );
-                if (captureSession?.consumers.has("recording")) {
+                if (
+                  captureSession?.consumers.has("recording") &&
+                  !(yield* SynchronizedRef.get(tabsRef)).get(tabId)?.automationPaused
+                ) {
                   const receivedAt = yield* currentIso;
                   const listeners = yield* Ref.get(recordingFrameListenersRef);
                   const frame: DesktopPreviewRecordingFrame = {
@@ -1377,7 +1430,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                 }
               }
             }
-            yield* captureDiagnosticMessage(wc.id, method, params);
+            yield* captureDiagnosticMessage(wc.id, method, params, () => active);
           });
           const onMessage: BrowserControlSession["onMessage"] = (_event, method, params) => {
             runFork(handleDebuggerMessage(method, params));
@@ -1386,6 +1439,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             scope,
             Effect.all(
               [
+                Effect.sync(() => {
+                  active = false;
+                }),
                 Ref.update(diagnosticsRef, (diagnostics) =>
                   replaceMap(diagnostics, (copy) => {
                     copy.delete(wc.id);
@@ -1435,6 +1491,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                   color: { r: 255, g: 255, b: 255, a: 1 },
                 }),
             );
+            if (discardPrivateHistory) {
+              // These native buffers replay when collectors are enabled after a detach.
+              for (const method of ["Runtime.discardConsoleEntries", "Log.clear"]) {
+                yield* attemptPromise({ operation: `resume.${method}`, webContentsId: wc.id }, () =>
+                  wcDebugger.sendCommand(method),
+                );
+              }
+            }
             yield* Effect.forEach(
               ["Runtime.enable", "Accessibility.enable", "Network.enable", "Log.enable"],
               (method) =>
@@ -1507,6 +1571,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       checkControl: Effect.Effect<void, PreviewManagerError>,
     ) => Effect.Effect<A, PreviewManagerError>,
   ) {
+    const { check: checkPrivacy, interrupted } = yield* privacyCheck(tabId, action);
     const sequence = yield* nextCounter(actionSequenceRef);
     const startedAt = yield* currentIso;
     const millis = yield* currentMillis;
@@ -1518,9 +1583,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     };
     yield* pushAction(tabId, actionEvent);
     const epoch = (yield* Ref.get(controlEpochRef)).get(tabId) ?? 0;
-    const control = yield* ensureControlSession(wc);
+    const control = yield* ensureControlSession(wc).pipe(Effect.raceFirst(interrupted));
     const execute = Effect.fn("PreviewManager.executeControlAction")(function* () {
       const checkControl = Effect.gen(function* () {
+        yield* checkPrivacy;
         const currentEpoch = (yield* Ref.get(controlEpochRef)).get(tabId) ?? 0;
         if (currentEpoch !== epoch) {
           return yield* new PreviewAutomationControlInterruptedError({
@@ -1567,11 +1633,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           );
         },
       );
-      return yield* use(send, sendCleanup, checkControl);
+      const result = yield* use(send, sendCleanup, checkControl);
+      yield* checkControl;
+      return result;
     });
     const finalize = Effect.fn("PreviewManager.finalizeControlAction")(function* (
       exit: Exit.Exit<A, PreviewManagerError>,
     ) {
+      if ((yield* SynchronizedRef.get(tabsRef)).get(tabId)?.automationPaused) return;
       const completedAt = yield* currentIso;
       if (exit._tag === "Success") {
         yield* replaceAction(tabId, {
@@ -1601,7 +1670,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       const tabs = yield* SynchronizedRef.get(tabsRef);
       if (tabs.has(tabId)) yield* update(tabId, { controller: "none" });
     });
-    return yield* control.semaphore.withPermit(execute().pipe(Effect.onExit(finalize)));
+    return yield* control.semaphore.withPermit(execute().pipe(Effect.onExit(finalize))).pipe(
+      Effect.raceFirst(interrupted),
+      Effect.catch((error) => checkPrivacy.pipe(Effect.andThen(Effect.fail(error)))),
+    );
   });
 
   const evaluateWithDebugger = <A = unknown>(
@@ -1846,6 +1918,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       readonly pageUrl: string;
       readonly requestId: number;
     }) {
+      if ((yield* SynchronizedRef.get(tabsRef)).get(tabId)?.automationPaused) return;
       const pageOrigin = safeHttpOrigin(input.pageUrl);
       const managed = (yield* Ref.get(attachedRef)).get(wc.id);
       if (
@@ -1899,17 +1972,20 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       const controller = new AbortController();
       activeCapture = { controller, documentId: captureDocumentId, eventKey, requestId };
       runFork(
-        Effect.tryPromise({
-          try: () =>
-            captureFavicon({ webContents: wc, pageUrl, candidates, signal: controller.signal }),
-          catch: (cause) =>
-            new PreviewOperationError({
-              operation: "captureFavicon",
-              tabId,
-              webContentsId: wc.id,
-              cause,
+        privacyCheck(tabId, "captureFavicon").pipe(
+          Effect.andThen(
+            Effect.tryPromise({
+              try: () =>
+                captureFavicon({ webContents: wc, pageUrl, candidates, signal: controller.signal }),
+              catch: (cause) =>
+                new PreviewOperationError({
+                  operation: "captureFavicon",
+                  tabId,
+                  webContentsId: wc.id,
+                  cause,
+                }),
             }),
-        }).pipe(
+          ),
           Effect.flatMap((result) =>
             result.kind === "captured"
               ? publishFavicon({
@@ -1974,7 +2050,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       );
       yield* Effect.sleep(750);
       const tabs = yield* SynchronizedRef.get(tabsRef);
-      if (tabs.get(tabId)?.controller === "human") {
+      if (tabs.get(tabId)?.controller === "human" && !tabs.get(tabId)?.automationPaused) {
         yield* update(tabId, { controller: "none" });
       }
     });
@@ -1984,7 +2060,12 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         Effect.gen(function* () {
           const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
           const capture = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(tabId);
-          if (tab?.webContentsId !== wc.id || !capture?.consumers.has("recording")) return;
+          if (
+            tab?.webContentsId !== wc.id ||
+            tab.automationPaused ||
+            !capture?.consumers.has("recording")
+          )
+            return;
           if (input.type === "key" && !capture.recordingInputOptions?.showKeyPresses) return;
           if (input.type === "pointer" && !capture.recordingInputOptions?.showMousePresses) return;
           const listeners = yield* Ref.get(recordingInputListenersRef);
@@ -2143,6 +2224,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     tabId: string,
     defaults?: DesktopPreviewTabDefaults,
   ) {
+    if ((yield* Ref.get(agentClosedTabIdsRef)).has(tabId))
+      return yield* new PreviewTabNotFoundError({ tabId });
     const updatedAt = yield* currentIso;
     const result = yield* SynchronizedRef.modify(
       tabsRef,
@@ -2165,6 +2248,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           colorScheme: defaults?.colorScheme ?? "system",
           audioMuted: false,
           audible: false,
+          automationPaused: false,
           controller: "none",
           updatedAt,
         };
@@ -2216,6 +2300,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     });
     if (Option.isNone(tab)) return;
     const closedTab = tab.value;
+    const interruption = yield* Ref.modify(privacyInterruptionsRef, (signals) => [
+      signals.get(tabId),
+      replaceMap(signals, (copy) => copy.delete(tabId)),
+    ]);
+    if (interruption) yield* Deferred.succeed(interruption, undefined);
+    yield* Ref.update(privacyEpochRef, (epochs) =>
+      replaceMap(epochs, (copy) => copy.delete(tabId)),
+    );
     if (closedTab.webContentsId != null) {
       yield* Effect.all(
         [detachControlSession(closedTab.webContentsId), detachListeners(closedTab.webContentsId)],
@@ -2234,6 +2326,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       colorScheme: "system",
       audioMuted: false,
       audible: false,
+      automationPaused: false,
       controller: "none",
       updatedAt,
     };
@@ -2241,16 +2334,51 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   });
 
   const closeTab = Effect.fn("PreviewManager.closeTab")(function* (tabId: string) {
-    const claimed = yield* Ref.modify(closingTabIdsRef, (closingTabIds) => {
-      if (closingTabIds.has(tabId)) return [false, closingTabIds] as const;
-      return [true, new Set([...closingTabIds, tabId])] as const;
+    yield* Ref.update(agentClosedTabIdsRef, (closed) => {
+      const next = new Set(closed);
+      next.delete(tabId);
+      return next;
     });
+    const claimed = yield* privacyMutationSemaphore.withPermit(
+      Ref.modify(closingTabIdsRef, (closingTabIds) => {
+        if (closingTabIds.has(tabId)) return [false, closingTabIds] as const;
+        return [true, new Set([...closingTabIds, tabId])] as const;
+      }),
+    );
     if (!claimed) return;
     return yield* withTabLifecycleLock(tabId, closeTabUnlocked(tabId)).pipe(
       Effect.ensuring(
         Ref.update(closingTabIdsRef, (closingTabIds) => {
           if (!closingTabIds.has(tabId)) return closingTabIds;
           const next = new Set(closingTabIds);
+          next.delete(tabId);
+          return next;
+        }),
+      ),
+    );
+  });
+
+  const automationCloseTab = Effect.fn("PreviewManager.automationCloseTab")(function* (
+    tabId: string,
+  ) {
+    const claimed = yield* privacyMutationSemaphore.withPermit(
+      Effect.gen(function* () {
+        const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+        if (tab?.automationPaused)
+          return yield* new PreviewAutomationPausedError({ operation: "close", tabId });
+        if ((yield* Ref.get(closingTabIdsRef)).has(tabId)) return false;
+        yield* Ref.update(closingTabIdsRef, (closing) => new Set([...closing, tabId]));
+        // Keep this runtime ID closed until the server close event acknowledges cleanup.
+        // A delayed renderer registration must not recreate an unpaused copy meanwhile.
+        yield* Ref.update(agentClosedTabIdsRef, (closed) => new Set([...closed, tabId]));
+        return true;
+      }),
+    );
+    if (!claimed) return;
+    yield* withTabLifecycleLock(tabId, closeTabUnlocked(tabId)).pipe(
+      Effect.ensuring(
+        Ref.update(closingTabIdsRef, (closing) => {
+          const next = new Set(closing);
           next.delete(tabId);
           return next;
         }),
@@ -2390,7 +2518,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     // Best-effort here, unlike in setAudioMuted: a guest that dies mid-attach
     // must not fail the registration it was attaching for.
     yield* assertTabAudioMuted(tabId).pipe(Effect.ignore);
-    runFork(restoreControlSession(tabId, wc));
+    if (registered.automationPaused) yield* detachControlSession(wc.id);
+    else runFork(restoreControlSession(tabId, wc));
     // emitIfCurrent, not emit: audio-state-changed can land between the commit
     // above and here, and republishing this snapshot would roll the UI back to
     // a superseded audibility that syncTabAudible will not re-send.
@@ -2453,6 +2582,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   });
 
   const navigate = Effect.fn("PreviewManager.navigate")(function* (tabId: string, rawUrl: string) {
+    if ((yield* Ref.get(agentClosedTabIdsRef)).has(tabId))
+      return yield* new PreviewTabNotFoundError({ tabId });
     const url = yield* attempt({ operation: "navigate.normalizeUrl", tabId }, () =>
       normalizePreviewUrl(rawUrl),
     );
@@ -2478,6 +2609,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         // left to restore it. Chromium reports the change when it happens.
         audioMuted: current?.audioMuted ?? false,
         audible: current?.audible ?? false,
+        automationPaused: current?.automationPaused ?? false,
         controller: current?.controller ?? "none",
         ...(current?.favicon ? { favicon: current.favicon } : {}),
         updatedAt,
@@ -2616,6 +2748,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   });
 
   const pickElement = Effect.fn("PreviewManager.pickElement")(function* (tabId: string) {
+    const { check: checkPrivacy } = yield* privacyCheck(tabId, "pickElement");
     const wc = yield* requireWebContents(tabId);
     yield* cancelPickElement(tabId);
     const annotationTheme = yield* Ref.get(annotationThemeRef);
@@ -2694,7 +2827,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           const cropRect = normalizeCaptureRect(args[1]);
           const submission = args[2] === "send" ? "send" : "attach";
           runFork(
-            captureAnnotationScreenshot(tabId, wc, cropRect).pipe(
+            checkPrivacy.pipe(
+              Effect.andThen(captureAnnotationScreenshot(tabId, wc, cropRect)),
+              Effect.tap(() => checkPrivacy),
               // The renderer cannot tell a dropped crop from a comment-only
               // pick by the null alone, so a failed or timed-out capture is
               // flagged on the result.
@@ -2709,6 +2844,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                     ? { annotation: payload, submission, screenshotFailed: true }
                     : { annotation: { ...payload, screenshot }, submission },
               }),
+              Effect.tap(() => checkPrivacy),
               Effect.flatMap((result) => {
                 // A capture that outlives its session must not touch the
                 // overlay: the preload tears down on the captured signal, and
@@ -2721,6 +2857,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                   },
                 ).pipe(Effect.ignore, Effect.andThen(finishPick(result)));
               }),
+              Effect.catch(() => settlePick(null)),
             ),
           );
         };
@@ -2746,6 +2883,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           // one was torn down. Cleanup already ran, so attaching listeners now
           // would leak them and start an overlay nobody is waiting on.
           if (settled) return;
+          yield* checkPrivacy;
           yield* attempt({ operation: "pickElement.register", tabId, webContentsId: wc.id }, () => {
             wc.ipc.on(ELEMENT_PICKED_CHANNEL, onMessage);
             wc.once("destroyed", onDestroyed);
@@ -2824,13 +2962,24 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   // color-scheme override the tab carries. The scheme is read after the
   // session attaches so a concurrent setColorScheme is not overwritten with
   // a stale snapshot.
-  const restoreControlSession = (tabId: string, wc: Electron.WebContents) =>
+  const restoreControlSession = (
+    tabId: string,
+    wc: Electron.WebContents,
+    resumePrivateInput = false,
+  ) =>
     Effect.gen(function* () {
       const beforeAttach = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
-      if (beforeAttach?.webContentsId !== wc.id) return;
-      const control = yield* ensureControlSession(wc);
+      if (
+        beforeAttach?.webContentsId !== wc.id ||
+        (beforeAttach.automationPaused && !resumePrivateInput)
+      )
+        return;
+      const control = yield* ensureControlSession(wc, resumePrivateInput);
       const afterAttach = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
-      if (afterAttach?.webContentsId !== wc.id) {
+      if (
+        afterAttach?.webContentsId !== wc.id ||
+        (afterAttach.automationPaused && !resumePrivateInput)
+      ) {
         yield* detachControlSession(wc.id);
         return;
       }
@@ -2846,7 +2995,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           }),
         );
       }
-    }).pipe(Effect.ignore);
+    }).pipe(Effect.catch((error) => (resumePrivateInput ? Effect.fail(error) : Effect.void)));
 
   const setColorScheme = Effect.fn("PreviewManager.setColorScheme")(function* (
     tabId: string,
@@ -2864,8 +3013,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     }
     // Re-read after the update: registerWebview may have swapped the guest
     // in the meantime and the override must land on the current one.
-    const webContentsId = (yield* SynchronizedRef.get(tabsRef)).get(tabId)?.webContentsId;
-    if (webContentsId == null) return;
+    const current = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    const webContentsId = current?.webContentsId;
+    if (webContentsId == null || current?.automationPaused) return;
     const wc = webContents.fromId(webContentsId);
     if (!wc || wc.isDestroyed()) return;
     yield* applyColorScheme(tabId, wc, colorScheme);
@@ -2907,6 +3057,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const captureScreenshot = Effect.fn("PreviewManager.captureScreenshot")(function* (
     tabId: string,
   ) {
+    const { check: checkPrivacy } = yield* privacyCheck(tabId, "captureScreenshot");
     const wc = yield* requireWebContents(tabId);
     const [createdAt, millis, image] = yield* Effect.all([
       currentIso,
@@ -2921,6 +3072,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc,
       ),
     ]);
+    yield* checkPrivacy;
     const id = `browser-screenshot-${artifactSiteSlug(wc.getURL())}-${millis.toString(36)}`;
     const artifactPath = path.join(resolvedArtifactDirectory, `${id}.png`);
     const data = image.toPNG();
@@ -2936,6 +3088,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           }),
       ),
     );
+    yield* checkPrivacy;
     yield* fileSystem.writeFile(artifactPath, data).pipe(
       Effect.mapError(
         (cause) =>
@@ -2947,6 +3100,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             cause,
           }),
       ),
+    );
+    yield* checkPrivacy.pipe(
+      Effect.onError(() => fileSystem.remove(artifactPath).pipe(Effect.ignore)),
     );
     return {
       id,
@@ -2961,6 +3117,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const capturePreviewFrame = Effect.fn("PreviewManager.capturePreviewFrame")(function* (
     tabId: string,
   ) {
+    const { check: checkPrivacy } = yield* privacyCheck(tabId, "frameCapture");
     const captureSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(tabId);
     if (!captureSession?.consumers.has("picture-in-picture") || captureSession.scope === null)
       return;
@@ -2973,6 +3130,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       },
       () => wc.capturePage(),
     );
+    yield* checkPrivacy;
     const currentCaptureSession = yield* Effect.all(
       [SynchronizedRef.get(frameCaptureSessionsRef), SynchronizedRef.get(tabsRef)],
       { concurrency: 2 },
@@ -3063,6 +3221,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
                 }),
               );
             }
+            yield* checkPrivacy;
             yield* attempt(
               {
                 operation: "pictureInPicture.deliverFrame",
@@ -3125,6 +3284,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           if (!tab || (yield* Ref.get(closingTabIdsRef)).has(tabId)) {
             return yield* new PreviewTabNotFoundError({ tabId });
           }
+          yield* privacyCheck(tabId, "startFrameCapture");
           const wc = yield* requireWebContents(tabId);
           const current = sessions.get(tabId);
           if (current) {
@@ -3264,6 +3424,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const openPictureInPicture = Effect.fn("PreviewManager.openPictureInPicture")(function* (
     tabId: string,
   ) {
+    yield* privacyCheck(tabId, "openPictureInPicture");
     const claim = yield* pictureInPictureMutationSemaphore.withPermit(
       Effect.gen(function* () {
         const existing = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(tabId);
@@ -3547,7 +3708,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     displayMediaHandlerSessions.add(session);
     session.setDisplayMediaRequestHandler((request, callback) => {
       const armed = pendingRecording;
-      if (!armed) {
+      if (!armed || SynchronizedRef.getUnsafe(tabsRef).get(armed.tabId)?.automationPaused) {
         callback({});
         return;
       }
@@ -3587,12 +3748,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     tabId: string,
     options: RecordingInputOptions = DEFAULT_RECORDING_INPUT_OPTIONS,
   ) {
+    const { check: checkPrivacy, interrupted } = yield* privacyCheck(tabId, "startRecording");
     if ((yield* Ref.get(closingTabIdsRef)).has(tabId)) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
     return yield* withTabLifecycleLock(
       tabId,
       Effect.gen(function* () {
+        yield* checkPrivacy;
         yield* startFrameCapture(tabId, "recording");
         yield* SynchronizedRef.update(frameCaptureSessionsRef, (sessions) =>
           replaceMap(sessions, (copy) => {
@@ -3627,6 +3790,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         if (!frameCaptureWindowOpen || requestWebContents.isDestroyed()) {
           return yield* new PreviewMainWindowClosedError({ tabId });
         }
+        yield* checkPrivacy;
         installDisplayMediaRequestHandler(requestWebContents.session);
         yield* armPendingRecording(tabId, wc, requestWebContents.mainFrame.frameTreeNodeId);
         const captureRequested = yield* attemptPromise(
@@ -3638,6 +3802,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           () =>
             requestWebContents.executeJavaScript(requestRecordingCaptureExpression(tabId), true),
         );
+        yield* checkPrivacy;
         if (captureRequested !== true) {
           return yield* new PreviewRecordingCaptureUnavailableError({
             tabId,
@@ -3645,6 +3810,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           });
         }
       }).pipe(
+        Effect.raceFirst(interrupted),
         Effect.onError(() => {
           clearPendingRecording(tabId);
           return stopFrameCapture(tabId, "recording").pipe(Effect.ignore);
@@ -3664,11 +3830,101 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
   });
 
+  const setAutomationPaused = Effect.fn("PreviewManager.setAutomationPaused")(function* (
+    tabId: string,
+    paused: boolean,
+  ) {
+    const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    if (!tab) return yield* new PreviewTabNotFoundError({ tabId });
+    const transitionEpoch = (yield* Ref.get(privacyEpochRef)).get(tabId) ?? 0;
+    if (paused)
+      yield* privacyMutationSemaphore.withPermit(
+        Effect.gen(function* () {
+          if (
+            (yield* Ref.get(closingTabIdsRef)).has(tabId) ||
+            (yield* Ref.get(agentClosedTabIdsRef)).has(tabId) ||
+            !(yield* SynchronizedRef.get(tabsRef)).has(tabId)
+          )
+            return yield* new PreviewTabNotFoundError({ tabId });
+          yield* Ref.update(privacyEpochRef, (epochs) =>
+            replaceMap(epochs, (copy) => copy.set(tabId, (epochs.get(tabId) ?? 0) + 1)),
+          );
+          yield* update(tabId, { automationPaused: true, controller: "human" });
+          const interruption = yield* Ref.modify(privacyInterruptionsRef, (signals) => [
+            signals.get(tabId),
+            replaceMap(signals, (copy) => copy.delete(tabId)),
+          ]);
+          if (interruption) yield* Deferred.succeed(interruption, undefined);
+        }),
+      );
+    yield* withTabLifecycleLock(
+      tabId,
+      Effect.gen(function* () {
+        const current = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+        if (!current) return yield* new PreviewTabNotFoundError({ tabId });
+        if (!paused) {
+          const wc =
+            current.webContentsId === null ? null : webContents.fromId(current.webContentsId);
+          if (wc && !wc.isDestroyed()) yield* restoreControlSession(tabId, wc, true);
+          yield* privacyMutationSemaphore.withPermit(
+            Effect.gen(function* () {
+              if (((yield* Ref.get(privacyEpochRef)).get(tabId) ?? 0) !== transitionEpoch) return;
+              yield* update(tabId, { automationPaused: false, controller: "none" });
+            }),
+          );
+          return;
+        }
+        clearPendingRecording(tabId);
+        const wc =
+          current.webContentsId === null ? null : webContents.fromId(current.webContentsId);
+        let recordingCancellation: Exit.Exit<unknown, PreviewOperationError> | undefined;
+        if (wc && !wc.isDestroyed()) {
+          agentDrivenWebContents.delete(wc);
+          const attached = (yield* Ref.get(attachedRef)).get(wc.id);
+          attached?.cancelFaviconCapture();
+          const host = wc.hostWebContents;
+          if (host && !host.isDestroyed()) {
+            // Stop renderer-owned media tracks before the user starts private input.
+            recordingCancellation = yield* Effect.exit(
+              attemptPromise({ operation: "pause.cancelRecording", tabId }, () =>
+                host.executeJavaScript(
+                  `window[${JSON.stringify(DESKTOP_PREVIEW_RECORDING_CANCEL_TRIGGER)}]?.(${JSON.stringify(tabId)})`,
+                ),
+              ),
+            );
+          }
+          yield* detachControlSession(wc.id);
+        }
+        yield* Ref.update(actionTimelineRef, (timelines) =>
+          replaceMap(timelines, (copy) => copy.delete(tabId)),
+        );
+        yield* Ref.update(expectedAgentInputsRef, (inputs) =>
+          replaceMap(inputs, (copy) => copy.delete(tabId)),
+        );
+        yield* cancelPickElement(tabId);
+        yield* closePictureInPicture(tabId);
+        yield* stopFrameCapture(tabId, "recording");
+        if (recordingCancellation?._tag === "Failure")
+          return yield* Effect.failCause(recordingCancellation.cause);
+      }),
+    );
+  });
+
+  const automationNavigate = Effect.fn("PreviewManager.automationNavigate")(function* (
+    tabId: string,
+    url: string,
+  ) {
+    const { check: checkPrivacy, interrupted } = yield* privacyCheck(tabId, "navigate");
+    yield* navigate(tabId, url).pipe(Effect.raceFirst(interrupted));
+    yield* checkPrivacy;
+  });
+
   const saveRecording = Effect.fn("PreviewManager.saveRecording")(function* (
     tabId: string,
     mimeType: string,
     data: Uint8Array,
   ) {
+    const { check: checkPrivacy } = yield* privacyCheck(tabId, "saveRecording");
     const [createdAt, millis] = yield* Effect.all([currentIso, currentMillis]);
     const id = `browser-recording-${millis.toString(36)}`;
     const extension = recordingFileExtension(mimeType);
@@ -3684,6 +3940,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           }),
       ),
     );
+    yield* checkPrivacy;
     yield* fileSystem.writeFile(artifactPath, data).pipe(
       Effect.mapError(
         (cause) =>
@@ -3694,6 +3951,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             cause,
           }),
       ),
+    );
+    yield* checkPrivacy.pipe(
+      Effect.onError(() => fileSystem.remove(artifactPath).pipe(Effect.ignore)),
     );
     return {
       id,
@@ -3707,6 +3967,17 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
 
   const automationStatus = Effect.fn("PreviewManager.automationStatus")(function* (tabId: string) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    if (tab?.automationPaused) {
+      return {
+        available: true,
+        visible: true,
+        tabId,
+        automationPaused: true,
+        url: null,
+        title: null,
+        loading: false,
+      };
+    }
     if (!tab || tab.webContentsId == null) {
       const navStatus = tab?.navStatus;
       return {
@@ -4691,6 +4962,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   yield* Effect.addFinalizer(() => destroy().pipe(Effect.ignore));
 
   return {
+    automationNavigate,
+    automationCloseTab,
+    setAutomationPaused,
     automationClick,
     automationEvaluate,
     automationPress,
@@ -5001,7 +5275,17 @@ export class PreviewAutomationControlInterruptedError extends Schema.TaggedError
   }
 }
 
+export class PreviewAutomationPausedError extends Schema.TaggedError<PreviewAutomationPausedError>()(
+  "PreviewAutomationPausedError",
+  { operation: Schema.String, tabId: Schema.String },
+) {
+  override get message(): string {
+    return "Browser automation and capture are paused for private input. Only the user can resume access in the browser.";
+  }
+}
+
 export const PreviewManagerError = Schema.Union([
+  PreviewAutomationPausedError,
   PreviewTabNotFoundError,
   PreviewWebContentsNotFoundError,
   PreviewWebviewNotInitializedError,
@@ -5050,6 +5334,15 @@ export class PreviewManager extends Context.Service<
       webContentsId: number,
     ) => Effect.Effect<void, PreviewManagerError>;
     readonly prepareWebview: (webContents: Electron.WebContents) => Effect.Effect<void>;
+    readonly setAutomationPaused: (
+      tabId: string,
+      paused: boolean,
+    ) => Effect.Effect<void, PreviewManagerError>;
+    readonly automationCloseTab: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
+    readonly automationNavigate: (
+      tabId: string,
+      url: string,
+    ) => Effect.Effect<void, PreviewManagerError>;
     readonly navigate: (tabId: string, url: string) => Effect.Effect<void, PreviewManagerError>;
     readonly goBack: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
     readonly goForward: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
@@ -5178,6 +5471,9 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     registerWebview: operations.registerWebview,
     prepareWebview: operations.prepareWebview,
     navigate: operations.navigate,
+    automationNavigate: operations.automationNavigate,
+    automationCloseTab: operations.automationCloseTab,
+    setAutomationPaused: operations.setAutomationPaused,
     goBack: operations.goBack,
     goForward: operations.goForward,
     refresh: operations.refresh,

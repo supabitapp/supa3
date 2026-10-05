@@ -74,6 +74,7 @@ import {
   BrowserRecordingFormatUnavailableError,
   BrowserRecordingStartCancelledError,
   findActiveBrowserRecordingRuntimeTabId,
+  discardBrowserRecordingForPrivateInput,
   readActiveBrowserRecordingTabIds,
   readActiveBrowserRecordingTargets,
   startBrowserRecording,
@@ -163,6 +164,51 @@ describe("browser recording", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("stops media tracks immediately and discards an active recording for private input", async () => {
+    const stopTrack = vi.fn();
+    getDisplayMedia.mockResolvedValue({
+      getVideoTracks: () => [],
+      getTracks: () => [{ stop: stopTrack }],
+    });
+    await startBrowserRecording("private-recording");
+    discardBrowserRecordingForPrivateInput("private-recording");
+    expect(stopTrack).toHaveBeenCalled();
+    expect(readActiveBrowserRecordingTabIds().has("private-recording")).toBe(false);
+    expect(FakeMediaRecorder.instances[0]?.state).toBe("inactive");
+    expect(await stopBrowserRecording("private-recording")).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("discards a media grant that arrives after private input begins", async () => {
+    let release: ((stream: MediaStream) => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const granted = new Promise<MediaStream>((resolve) => {
+      release = resolve;
+    });
+    const stopTrack = vi.fn();
+    getDisplayMedia.mockImplementation(() => {
+      markStarted?.();
+      return granted;
+    });
+    const recording = startBrowserRecording("private-starting");
+    const failure = expect(recording).rejects.toMatchObject({
+      _tag: "BrowserRecordingOperationError",
+    });
+    await started;
+    discardBrowserRecordingForPrivateInput("private-starting");
+    release?.({
+      getVideoTracks: () => [],
+      getTracks: () => [{ stop: stopTrack }],
+    } as unknown as MediaStream);
+    await failure;
+    expect(stopTrack).toHaveBeenCalled();
+    expect(readActiveBrowserRecordingTabIds().has("private-starting")).toBe(false);
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("starts recording for a visible tab", async () => {

@@ -8,6 +8,7 @@ import type {
 } from "@supacode/contracts";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
+import { unwrapPreviewAutomationResult } from "./preview/AutomationResult.ts";
 import * as IpcChannels from "./ipc/channels.ts";
 
 const SNAP_SHOT_EVENT_TYPES = new Set([
@@ -307,6 +308,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_COLOR_SCHEME_CHANNEL, { tabId, colorScheme }),
     setAudioMuted: (tabId, audioMuted) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_AUDIO_MUTED_CHANNEL, { tabId, audioMuted }),
+    setAutomationPaused: (tabId, paused) =>
+      ipcRenderer.invoke(IpcChannels.PREVIEW_SET_AUTOMATION_PAUSED_CHANNEL, { tabId, paused }),
     openDevTools: (tabId) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_OPEN_DEVTOOLS_CHANNEL, { tabId }),
     listBrowserImportSources: () => ipcRenderer.invoke(IpcChannels.PREVIEW_IMPORT_SOURCES_CHANNEL),
@@ -320,11 +323,16 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.invoke(IpcChannels.PREVIEW_GET_CONFIG_CHANNEL, { environmentId, profileId }),
     setAnnotationTheme: (theme) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_ANNOTATION_THEME_CHANNEL, { theme }),
-    pickElement: (tabId) => ipcRenderer.invoke(IpcChannels.PREVIEW_PICK_ELEMENT_CHANNEL, { tabId }),
+    pickElement: (tabId) =>
+      ipcRenderer
+        .invoke(IpcChannels.PREVIEW_PICK_ELEMENT_CHANNEL, { tabId })
+        .then(unwrapPreviewAutomationResult),
     cancelPickElement: (tabId) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_CANCEL_PICK_ELEMENT_CHANNEL, { tabId }),
     captureScreenshot: (tabId) =>
-      ipcRenderer.invoke(IpcChannels.PREVIEW_CAPTURE_SCREENSHOT_CHANNEL, { tabId }),
+      ipcRenderer
+        .invoke(IpcChannels.PREVIEW_CAPTURE_SCREENSHOT_CHANNEL, { tabId })
+        .then(unwrapPreviewAutomationResult),
     revealArtifact: (path) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_REVEAL_ARTIFACT_CHANNEL, { path }),
     copyArtifactToClipboard: (path) =>
@@ -346,15 +354,19 @@ contextBridge.exposeInMainWorld("desktopBridge", {
           ipcRenderer.removeListener(IpcChannels.PREVIEW_RECORDING_INPUT_CHANNEL, wrappedListener);
       },
       startScreencast: (tabId) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_RECORDING_START_CHANNEL, { tabId }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_RECORDING_START_CHANNEL, { tabId })
+          .then(unwrapPreviewAutomationResult),
       stopScreencast: (tabId) =>
         ipcRenderer.invoke(IpcChannels.PREVIEW_RECORDING_STOP_CHANNEL, { tabId }),
       save: (tabId, mimeType, data) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_RECORDING_SAVE_CHANNEL, {
-          tabId,
-          mimeType,
-          data,
-        }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_RECORDING_SAVE_CHANNEL, {
+            tabId,
+            mimeType,
+            data,
+          })
+          .then(unwrapPreviewAutomationResult),
       onFrame: (listener) => {
         const wrappedListener = (_event: Electron.IpcRendererEvent, frame: unknown) => {
           if (typeof frame !== "object" || frame === null) return;
@@ -366,22 +378,46 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       },
     },
     automation: {
+      close: (tabId) =>
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_CLOSE_CHANNEL, { tabId })
+          .then(unwrapPreviewAutomationResult),
+      navigate: (tabId, url) =>
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_NAVIGATE_CHANNEL, { tabId, url })
+          .then(unwrapPreviewAutomationResult),
       status: (tabId) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_STATUS_CHANNEL, { tabId }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_STATUS_CHANNEL, { tabId })
+          .then(unwrapPreviewAutomationResult),
       snapshot: (tabId) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_SNAPSHOT_CHANNEL, { tabId }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_SNAPSHOT_CHANNEL, { tabId })
+          .then(unwrapPreviewAutomationResult),
       click: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_CLICK_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_CLICK_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
       type: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_TYPE_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_TYPE_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
       press: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_PRESS_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_PRESS_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
       scroll: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_SCROLL_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_SCROLL_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
       evaluate: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
       waitFor: (tabId, input) =>
-        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL, { tabId, input }),
+        ipcRenderer
+          .invoke(IpcChannels.PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL, { tabId, input })
+          .then(unwrapPreviewAutomationResult),
     },
     onStateChange: (listener) => {
       const wrappedListener = (

@@ -11,6 +11,7 @@ import {
   type DesktopPreviewColorScheme,
   type DesktopPreviewFavicon,
   type PreviewEvent,
+  type PreviewNavStatus,
   type PreviewListResult,
   type PreviewSessionSnapshot,
   type ScopedThreadRef,
@@ -30,6 +31,8 @@ export interface DesktopPreviewOverlay {
   colorScheme: DesktopPreviewColorScheme;
   audioMuted: boolean;
   audible: boolean;
+  automationPaused?: boolean;
+  privateNavStatus?: PreviewNavStatus;
   controller: "human" | "agent" | "none";
   favicon: DesktopPreviewFavicon | null;
 }
@@ -372,6 +375,8 @@ function isPreviewStateEqual(
       previous.colorScheme === next.colorScheme &&
       previous.audioMuted === next.audioMuted &&
       previous.audible === next.audible &&
+      previous.automationPaused === next.automationPaused &&
+      previous.privateNavStatus === next.privateNavStatus &&
       previous.controller === next.controller &&
       previous.favicon?.dataUrl === next.favicon?.dataUrl &&
       previous.favicon?.pageUrl === next.favicon?.pageUrl &&

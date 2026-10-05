@@ -6,6 +6,7 @@ import {
   DesktopPreviewAutomationPressInputSchema,
   DesktopPreviewAutomationScrollInputSchema,
   DesktopPreviewAutomationStatusSchema,
+  DesktopPreviewAutomationPausedSchema,
   DesktopPreviewAutomationTypeInputSchema,
   DesktopPreviewAutomationWaitForInputSchema,
   DesktopPreviewConfigInputSchema,
@@ -104,6 +105,66 @@ export const navigate = DesktopIpc.makeIpcMethod({
   }),
 });
 
+class PreviewPrivacyUnauthorizedSenderError extends Schema.TaggedError<PreviewPrivacyUnauthorizedSenderError>()(
+  "PreviewPrivacyUnauthorizedSenderError",
+  {},
+) {
+  override get message(): string {
+    return "Browser privacy controls require the main app window.";
+  }
+}
+
+export const setAutomationPaused = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_AUTOMATION_PAUSED_CHANNEL,
+  payload: Schema.Struct({ ...DesktopPreviewTabInputSchema.fields, paused: Schema.Boolean }),
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setAutomationPaused")(function* (
+    { tabId, paused },
+    event,
+  ) {
+    const main = yield* (yield* ElectronWindow.ElectronWindow).main;
+    if (
+      !event ||
+      Option.isNone(main) ||
+      event.sender.id !== main.value.webContents.id ||
+      !event.senderFrame ||
+      event.senderFrame.frameTreeNodeId !== main.value.webContents.mainFrame.frameTreeNodeId
+    )
+      return yield* new PreviewPrivacyUnauthorizedSenderError();
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setAutomationPaused(tabId, paused);
+  }),
+});
+
+const automationPausedResult = (error: PreviewManager.PreviewAutomationPausedError) =>
+  Effect.succeed({ _tag: "PreviewAutomationPausedError" as const, tabId: error.tabId });
+
+export const automationClose = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_AUTOMATION_CLOSE_CHANNEL,
+  payload: DesktopPreviewTabInputSchema,
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationClose")(
+    function* ({ tabId }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationCloseTab(tabId);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
+});
+
+export const automationNavigate = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_AUTOMATION_NAVIGATE_CHANNEL,
+  payload: DesktopPreviewNavigateInputSchema,
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationNavigate")(
+    function* ({ tabId, url }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationNavigate(tabId, url);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
+});
+
 const tabMethod = (
   channel: string,
   name: string,
@@ -188,17 +249,20 @@ export const cancelPickElement = tabMethod(
 export const startRecording = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_RECORDING_START_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.startRecording")(function* ({ tabId }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    const store = yield* DesktopClientSettings.DesktopClientSettings;
-    const settings = yield* store.get;
-    const options = Option.map(settings, (value) => ({
-      showKeyPresses: value.browserRecordingShowKeyPresses,
-      showMousePresses: value.browserRecordingShowMousePresses,
-    }));
-    yield* manager.startRecording(tabId, Option.getOrUndefined(options));
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.startRecording")(
+    function* ({ tabId }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      const store = yield* DesktopClientSettings.DesktopClientSettings;
+      const settings = yield* store.get;
+      const options = Option.map(settings, (value) => ({
+        showKeyPresses: value.browserRecordingShowKeyPresses,
+        showMousePresses: value.browserRecordingShowMousePresses,
+      }));
+      yield* manager.startRecording(tabId, Option.getOrUndefined(options));
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 export const stopRecording = tabMethod(
   IpcChannels.PREVIEW_RECORDING_STOP_CHANNEL,
@@ -355,21 +419,33 @@ export const setAnnotationTheme = DesktopIpc.makeIpcMethod({
 export const pickElement = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_PICK_ELEMENT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
-  result: Schema.NullOr(PreviewAnnotationSubmissionResultSchema),
-  handler: Effect.fn("desktop.ipc.preview.pickElement")(function* ({ tabId }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    return yield* manager.pickElement(tabId);
-  }),
+  result: Schema.Union([
+    Schema.NullOr(PreviewAnnotationSubmissionResultSchema),
+    DesktopPreviewAutomationPausedSchema,
+  ]),
+  handler: Effect.fn("desktop.ipc.preview.pickElement")(
+    function* ({ tabId }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      return yield* manager.pickElement(tabId);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const captureScreenshot = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_CAPTURE_SCREENSHOT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
-  result: DesktopPreviewScreenshotArtifactSchema,
-  handler: Effect.fn("desktop.ipc.preview.captureScreenshot")(function* ({ tabId }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    return yield* manager.captureScreenshot(tabId);
-  }),
+  result: Schema.Union([
+    DesktopPreviewScreenshotArtifactSchema,
+    DesktopPreviewAutomationPausedSchema,
+  ]),
+  handler: Effect.fn("desktop.ipc.preview.captureScreenshot")(
+    function* ({ tabId }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      return yield* manager.captureScreenshot(tabId);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const revealArtifact = DesktopIpc.makeIpcMethod({
@@ -405,84 +481,118 @@ export const automationStatus = DesktopIpc.makeIpcMethod({
 export const automationSnapshot = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_SNAPSHOT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
-  result: PreviewAutomationSnapshot,
-  handler: Effect.fn("desktop.ipc.preview.automationSnapshot")(function* ({ tabId }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    return yield* manager.automationSnapshot(tabId);
-  }),
+  result: Schema.Union([PreviewAutomationSnapshot, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationSnapshot")(
+    function* ({ tabId }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      return yield* manager.automationSnapshot(tabId);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationClick = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_CLICK_CHANNEL,
   payload: DesktopPreviewAutomationClickInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.automationClick")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.automationClick(tabId, input);
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationClick")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationClick(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationType = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_TYPE_CHANNEL,
   payload: DesktopPreviewAutomationTypeInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.automationType")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.automationType(tabId, input);
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationType")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationType(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationPress = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_PRESS_CHANNEL,
   payload: DesktopPreviewAutomationPressInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.automationPress")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.automationPress(tabId, input);
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationPress")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationPress(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationScroll = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_SCROLL_CHANNEL,
   payload: DesktopPreviewAutomationScrollInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.automationScroll")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.automationScroll(tabId, input);
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationScroll")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationScroll(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationEvaluate = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL,
   payload: DesktopPreviewAutomationEvaluateInputSchema,
-  result: Schema.Unknown,
-  handler: Effect.fn("desktop.ipc.preview.automationEvaluate")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    return yield* manager.automationEvaluate(tabId, input);
-  }),
+  result: Schema.Union([Schema.Unknown, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationEvaluate")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      return yield* manager.automationEvaluate(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const automationWaitFor = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL,
   payload: DesktopPreviewAutomationWaitForInputSchema,
-  result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.automationWaitFor")(function* ({ tabId, input }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.automationWaitFor(tabId, input);
-  }),
+  result: Schema.Union([Schema.Void, DesktopPreviewAutomationPausedSchema]),
+  handler: Effect.fn("desktop.ipc.preview.automationWaitFor")(
+    function* ({ tabId, input }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      yield* manager.automationWaitFor(tabId, input);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
 export const saveRecording = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_RECORDING_SAVE_CHANNEL,
   payload: DesktopPreviewRecordingSaveInputSchema,
-  result: DesktopPreviewRecordingArtifactSchema,
-  handler: Effect.fn("desktop.ipc.preview.saveRecording")(function* ({ tabId, mimeType, data }) {
-    const manager = yield* PreviewManager.PreviewManager;
-    return yield* manager.saveRecording(tabId, mimeType, data);
-  }),
+  result: Schema.Union([
+    DesktopPreviewRecordingArtifactSchema,
+    DesktopPreviewAutomationPausedSchema,
+  ]),
+  handler: Effect.fn("desktop.ipc.preview.saveRecording")(
+    function* ({ tabId, mimeType, data }) {
+      const manager = yield* PreviewManager.PreviewManager;
+      return yield* manager.saveRecording(tabId, mimeType, data);
+    },
+    Effect.catchTag("PreviewAutomationPausedError", automationPausedResult),
+  ),
 });
 
-export const methods = [
+export const methods: ReadonlyArray<
+  DesktopIpc.DesktopIpcMethod<
+    | PreviewManager.PreviewManagerError
+    | DesktopClientSettings.DesktopClientSettingsReadError
+    | Schema.SchemaError,
+    PreviewManager.PreviewManager | DesktopClientSettings.DesktopClientSettings
+  >
+> = [
   createTab,
   closeTab,
   registerWebview,
@@ -496,6 +606,8 @@ export const methods = [
   hardReload,
   setColorScheme,
   setAudioMuted,
+  automationNavigate,
+  automationClose,
   openDevTools,
   clearCookies,
   clearCache,
@@ -519,4 +631,4 @@ export const methods = [
   startRecording,
   stopRecording,
   saveRecording,
-] as const;
+];

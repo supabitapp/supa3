@@ -639,6 +639,8 @@ export interface DesktopPreviewTabState {
    * sound" from "muted and silent".
    */
   audible: boolean;
+  /** Missing on older desktop hosts. Persists until the user resumes or closes the tab. */
+  automationPaused?: boolean;
   controller: "human" | "agent" | "none";
   favicon?: DesktopPreviewFavicon;
   updatedAt: string;
@@ -646,6 +648,14 @@ export interface DesktopPreviewTabState {
 
 export const DesktopPreviewTabIdSchema = Schema.String.check(Schema.isTrimmed()).check(
   Schema.isNonEmpty(),
+);
+
+/** Electron does not preserve custom properties on rejected IPC errors. */
+export const DesktopPreviewAutomationPausedSchema = Schema.TaggedStruct(
+  "PreviewAutomationPausedError",
+  {
+    tabId: DesktopPreviewTabIdSchema,
+  },
 );
 
 export const DesktopPreviewAutomationStatusSchema = Schema.Struct({
@@ -1262,6 +1272,8 @@ export interface DesktopBridge {
 }
 
 /** Renderer callback invoked by Electron with a fresh user gesture before display-media capture. */
+export const DESKTOP_PREVIEW_RECORDING_CANCEL_TRIGGER = "__supacodeDesktopPreviewRecordingCancel";
+
 export const DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER = "__supacodeDesktopPreviewRecordingCapture";
 
 export interface DesktopPreviewBridge {
@@ -1288,6 +1300,8 @@ export interface DesktopPreviewBridge {
    * allowed; it simply takes effect once the page plays something.
    */
   setAudioMuted: (tabId: string, audioMuted: boolean) => Promise<void>;
+  /** User-controlled privacy pause; deliberately absent from agent automation tools. */
+  setAutomationPaused: (tabId: string, paused: boolean) => Promise<void>;
   /** Open the guest webview's DevTools (detached). */
   openDevTools: (tabId: string) => Promise<void>;
   /** Drop cookies + storage data for the preview partition (all tabs). */
@@ -1341,6 +1355,8 @@ export interface DesktopPreviewBridge {
     onFrame: (listener: (frame: DesktopPreviewRecordingFrame) => void) => () => void;
   };
   automation: {
+    close: (tabId: string) => Promise<void>;
+    navigate: (tabId: string, url: string) => Promise<void>;
     status: (tabId: string) => Promise<DesktopPreviewAutomationStatus>;
     snapshot: (tabId: string) => Promise<PreviewAutomationSnapshot>;
     click: (tabId: string, input: PreviewAutomationClickInput) => Promise<void>;

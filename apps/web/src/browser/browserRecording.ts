@@ -1,4 +1,7 @@
-import { DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER } from "@supacode/contracts";
+import {
+  DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
+  DESKTOP_PREVIEW_RECORDING_CANCEL_TRIGGER,
+} from "@supacode/contracts";
 import type { DesktopPreviewRecordingArtifact, ScopedThreadRef } from "@supacode/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
@@ -129,6 +132,8 @@ interface ActiveRecording {
   savedBlob?: Blob;
   uploadPromise?: Promise<string>;
   lifecycle: BrowserRecordingLifecycle;
+  privateInputCancelled: boolean;
+  cancelMediaCapture: (() => void) | null;
 }
 
 export interface ActiveBrowserRecordingTarget {
@@ -418,13 +423,22 @@ const waitForBrowserRecordingPaint = async (): Promise<void> => {
   }
 };
 
+const stopOwnedNativeRecording = async (
+  bridge: NonNullable<typeof previewBridge>,
+  recording: ActiveRecording,
+): Promise<void> => {
+  const current = activeRecordings.get(recording.tabId);
+  if (current && current !== recording) return;
+  await bridge.recording.stopScreencast(recording.tabId);
+};
+
 const cleanupFailedRecordingStart = async (
   bridge: NonNullable<typeof previewBridge>,
   recording: ActiveRecording,
 ): Promise<unknown | undefined> => {
   const errors: unknown[] = [];
   try {
-    await bridge.recording.stopScreencast(recording.tabId);
+    await stopOwnedNativeRecording(bridge, recording);
   } catch (error) {
     errors.push(error);
   }
@@ -532,6 +546,8 @@ export async function startBrowserRecording(
     recorder: null,
     compositor: null,
     lifecycle: startingLifecycle,
+    privateInputCancelled: false,
+    cancelMediaCapture: null,
   };
   activeRecordings.set(tabId, recording);
   publishActiveRecordingTabIds();
@@ -548,7 +564,7 @@ export async function startBrowserRecording(
       // Only a contended start can be cancelled before it reaches native capture.
       if (activeRecordings.get(tabId) === recording) return;
       try {
-        await bridge.recording.stopScreencast(tabId);
+        await stopOwnedNativeRecording(bridge, recording);
       } catch (cause) {
         throw recordingStartupCancelledError(
           recording,
@@ -570,6 +586,7 @@ export async function startBrowserRecording(
       startingLifecycle.grantStarted = true;
       await throwIfStartupCancelled();
       const capture = prepareTabMediaCapture(tabId, frameRate);
+      recording.cancelMediaCapture = capture.cancel;
       try {
         await bridge.recording.startScreencast(tabId);
       } catch (cause) {
@@ -592,6 +609,10 @@ export async function startBrowserRecording(
       }
       try {
         recording.stream = await captureTabMediaStreamWithTimeout(tabId, capture.capturePromise);
+        if (recording.privateInputCancelled) {
+          stopMediaStream(recording.stream);
+          throw recordingStartupCancelledError(recording);
+        }
         return recording.stream;
       } catch (cause) {
         const cleanupCause = await cleanupFailedRecordingStart(bridge, recording);
@@ -633,10 +654,11 @@ export async function startBrowserRecording(
             if (event.tabId === tabId) listener(event.input);
           }),
       );
+      await throwIfStartupCancelled();
       recorder = createMediaRecorder(recording.compositor?.stream ?? stream);
       recording.recorder = recorder;
       recorder.addEventListener("dataavailable", (event) => {
-        if (event.data.size > 0) chunks.push(event.data);
+        if (!recording.privateInputCancelled && event.data.size > 0) chunks.push(event.data);
       });
     } catch (cause) {
       const cleanupCause = await cleanupFailedRecordingStart(bridge, recording);
@@ -692,8 +714,9 @@ const finalizeBrowserRecording = async (
     | { readonly _tag: "Failure"; readonly error: unknown };
   try {
     await waitForRecordingStartupToSettle(recording);
+    if (recording.privateInputCancelled) return null;
     try {
-      await bridge.recording.stopScreencast(tabId);
+      await stopOwnedNativeRecording(bridge, recording);
     } catch (cause) {
       throw new BrowserRecordingOperationError({
         operation: "stop-screencast",
@@ -701,7 +724,7 @@ const finalizeBrowserRecording = async (
         cause,
       });
     }
-    if (!recording.recorder) {
+    if (recording.privateInputCancelled || !recording.recorder) {
       result = { _tag: "Success", artifact: null };
     } else {
       try {
@@ -725,12 +748,12 @@ const finalizeBrowserRecording = async (
         throw new BrowserRecordingFormatUnavailableError({ tabId });
       }
       try {
+        if (recording.privateInputCancelled) return null;
         const blob = new Blob(recording.chunks, { type: mimeType });
-        const artifact = await bridge.recording.save(
-          tabId,
-          mimeType,
-          new Uint8Array(await blob.arrayBuffer()),
-        );
+        const data = new Uint8Array(await blob.arrayBuffer());
+        if (recording.privateInputCancelled) return null;
+        const artifact = await bridge.recording.save(tabId, mimeType, data);
+        if (recording.privateInputCancelled) return null;
         recording.savedBlob = blob;
         result = { _tag: "Success", artifact };
       } catch (cause) {
@@ -805,7 +828,7 @@ const discardBrowserRecording = async (
   recording: ActiveRecording,
 ): Promise<null> => {
   try {
-    await bridge.recording.stopScreencast(recording.tabId).catch(() => undefined);
+    await stopOwnedNativeRecording(bridge, recording).catch(() => undefined);
     await stopMediaRecorder(recording.recorder).catch(() => undefined);
     stopMediaStream(recording.stream);
     return null;
@@ -851,3 +874,29 @@ export async function stopBrowserRecordingForUpload(
   recording.uploadPromise ??= upload(artifact, recording.savedBlob);
   return { ...artifact, uploadedAttachmentId: await recording.uploadPromise };
 }
+
+/** Stops tracks immediately and drops buffered data when main pauses private input. */
+export function discardBrowserRecordingForPrivateInput(tabId: string): void {
+  const recording = activeRecordings.get(tabId);
+  if (!recording) return;
+  recording.privateInputCancelled = true;
+  recording.cancelMediaCapture?.();
+  recording.chunks.length = 0;
+  delete recording.savedBlob;
+  stopMediaStream(recording.stream);
+  void stopMediaRecorder(recording.recorder).catch(() => undefined);
+  clearActiveRecording(recording);
+}
+
+Object.defineProperty(globalThis, DESKTOP_PREVIEW_RECORDING_CANCEL_TRIGGER, {
+  configurable: true,
+  value: (tabId: unknown) => {
+    if (typeof tabId !== "string") return false;
+    discardBrowserRecordingForPrivateInput(tabId);
+    return true;
+  },
+});
+
+previewBridge?.onStateChange?.((tabId, state) => {
+  if (state.automationPaused) discardBrowserRecordingForPrivateInput(tabId);
+});

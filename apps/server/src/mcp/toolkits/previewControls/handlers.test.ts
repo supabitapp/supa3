@@ -1,3 +1,4 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -7,10 +8,12 @@ import {
   ThreadId,
 } from "@supacode/contracts";
 import { resolveProjectSettings } from "@supacode/shared/projectSettings";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 
+import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 import * as Preview from "../../../preview/Manager.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -43,7 +46,18 @@ it.effect.each([
       };
       const manager = yield* Preview.make;
       const tab = yield* manager.open({ threadId, url: "http://localhost:3000" });
+      const broker = yield* PreviewAutomationBroker.make.pipe(Effect.provide(NodeServices.layer));
+      const connected = yield* Deferred.make<void>();
+      const events = yield* broker.connect({
+        clientId: "legacy",
+        environmentId: scope.environmentId,
+      });
+      yield* Stream.runForEach(events, (event) =>
+        event.type === "connected" ? Deferred.succeed(connected, undefined) : Effect.void,
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
       const dependencies = Layer.mergeAll(
+        Layer.succeed(PreviewAutomationBroker.PreviewAutomationBroker, broker),
         Layer.succeed(Preview.PreviewManager, manager),
         Layer.succeed(McpInvocationContext.McpInvocationContext, scope),
         Layer.mock(ServerSettings.ServerSettingsService)({

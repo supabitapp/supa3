@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Preview from "../../../preview/Manager.ts";
+import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 import { requireMcpCapability } from "../../McpInvocationContext.ts";
 import { unavailable } from "../../threadAccess.ts";
 import { PreviewControlsToolkit } from "./tools.ts";
@@ -24,10 +25,14 @@ export const PreviewControlsHandlersLive = PreviewControlsToolkit.toLayer({
     }),
   supacode_preview_close: (input) =>
     Effect.gen(function* () {
-      const { scope, manager } = yield* access;
-      yield* manager
-        .close({ threadId: scope.threadId, tabId: input.tabId })
-        .pipe(Effect.mapError(unavailable));
+      const scope = yield* requireMcpCapability("preview");
+      const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+      yield* broker.closeFromAgent(scope, input.tabId).pipe(
+        Effect.catchTags({
+          PreviewSessionLookupError: () => Effect.fail(unavailable()),
+          PreviewInvalidUrlError: () => Effect.fail(unavailable()),
+        }),
+      );
       return {};
     }),
 });

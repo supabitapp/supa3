@@ -18,3 +18,11 @@ the import wizard afterward. You can revoke Full Disk Access once the import is 
 On Windows, import supports Firefox and Helium profiles that use standard profile encryption.
 Other Chromium-based browsers use app-bound encryption and cannot be imported. Partitioned cookies
 are skipped on all platforms.
+
+## Sign in privately
+
+Private sign-in requires an updated desktop app and connected server. In the desktop browser,
+choose **Pause automation and capture** before entering credentials or
+unlocking your password manager. The pause stops agent access and discards active recordings for
+that tab. Complete sign-in, then choose **Resume automation and capture** when the page is ready
+for the agent. The pause stays active through navigation until you resume or close the tab.

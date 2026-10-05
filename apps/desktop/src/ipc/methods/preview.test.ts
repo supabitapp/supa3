@@ -11,6 +11,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import * as PreviewManager from "../../preview/Manager.ts";
 import * as BrowserImport from "../../preview/BrowserImport/BrowserImport.ts";
 import * as PreviewIpc from "./preview.ts";
@@ -126,6 +127,63 @@ describe("preview IPC methods", () => {
         expect(fromPartition).not.toHaveBeenCalled();
       },
     ),
+  );
+
+  effectIt.effect("only the main app frame can pause or resume browser automation", () =>
+    Effect.gen(function* () {
+      const calls: boolean[] = [];
+      const manager = PreviewManager.PreviewManager.of({
+        setAutomationPaused: (_tabId: string, paused: boolean) =>
+          Effect.sync(() => {
+            calls.push(paused);
+          }),
+      } as unknown as PreviewManager.PreviewManager["Service"]);
+      const main = { webContents: { id: 7, mainFrame: { frameTreeNodeId: 70 } } };
+      const windowService = {
+        main: Effect.succeedSome(main),
+      } as unknown as ElectronWindow.ElectronWindow["Service"];
+      const request = (
+        paused: boolean,
+        event?: { sender: { id: number }; senderFrame?: { frameTreeNodeId: number } },
+      ) =>
+        PreviewIpc.setAutomationPaused
+          .handler({ tabId: "private-tab", paused }, event)
+          .pipe(
+            Effect.provideService(PreviewManager.PreviewManager, manager),
+            Effect.provideService(ElectronWindow.ElectronWindow, windowService),
+          );
+      for (const sender of [
+        undefined,
+        { sender: { id: 42 }, senderFrame: { frameTreeNodeId: 420 } },
+        { sender: { id: 7 }, senderFrame: { frameTreeNodeId: 71 } },
+        { sender: { id: 7 } },
+      ]) {
+        const exit = yield* Effect.exit(request(false, sender));
+        expect(
+          Exit.isFailure(exit) && Option.getOrNull(Cause.findErrorOption(exit.cause)),
+        ).toMatchObject({ _tag: "PreviewPrivacyUnauthorizedSenderError" });
+      }
+      expect(calls).toEqual([]);
+      const trusted = { sender: { id: 7 }, senderFrame: { frameTreeNodeId: 70 } };
+      yield* request(true, trusted);
+      yield* request(false, trusted);
+      expect(calls).toEqual([true, false]);
+    }),
+  );
+
+  effectIt.effect("carries privacy pauses as structured results across Electron IPC", () =>
+    Effect.gen(function* () {
+      const tabId = "private-tab";
+      const manager = PreviewManager.PreviewManager.of({
+        automationEvaluate: () =>
+          new PreviewManager.PreviewAutomationPausedError({ tabId, operation: "evaluate" }),
+      } as unknown as PreviewManager.PreviewManager["Service"]);
+      const result = yield* PreviewIpc.automationEvaluate
+        .handler({ tabId, input: { expression: "document.body.innerText" } })
+        .pipe(Effect.provideService(PreviewManager.PreviewManager, manager));
+      expect(result).toEqual({ _tag: "PreviewAutomationPausedError", tabId });
+      expect(structuredClone(result)).toEqual(result);
+    }),
   );
 
   effectIt.effect("returns automation status for long runtime tab ids", () =>

@@ -5,6 +5,10 @@ import {
   EnvironmentId,
   PreviewAutomationClientDisconnectedError,
   PreviewAutomationInvalidSelectorError,
+  PreviewAutomationPausedError,
+  PREVIEW_AUTOMATION_OPERATIONS,
+  PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS,
+  PREVIEW_AUTOMATION_V1_OPERATIONS,
   PreviewAutomationMalformedResponseError,
   PreviewAutomationNoAvailableHostError,
   PreviewAutomationTargetNotEditableError,
@@ -30,6 +34,7 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 
 import { rpcScopeAuthorizationLayer } from "../auth/RpcAuthorization.ts";
+import * as Preview from "../preview/Manager.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 
 const makeBroker = PreviewAutomationBroker.make.pipe(Effect.provide(NodeServices.layer));
@@ -90,6 +95,219 @@ it.effect("atomically registers a connected host and correlates its response", (
       });
 
       expect(result).toEqual({ available: true });
+    }),
+  ),
+);
+
+it.effect("preserves the private-input pause as a clear user-controlled error", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const requests = requestsFrom(yield* broker.connect(makeHost()));
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: false,
+          error: { _tag: "PreviewAutomationPausedError", message: "private input paused" },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      const exit = yield* Effect.exit(broker.invoke({ scope, operation: "snapshot", input: {} }));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const error = exit.cause.reasons.find((reason) => reason._tag === "Fail");
+        expect(error?._tag === "Fail" && error.error).toBeInstanceOf(PreviewAutomationPausedError);
+        expect(error?._tag === "Fail" && error.error.message).toContain("Only the user");
+      }
+    }),
+  ),
+);
+
+it.effect.each([
+  undefined,
+  [...PREVIEW_AUTOMATION_V1_OPERATIONS],
+  [...PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS],
+])("preserves close for a canonical legacy catalogue %j", (supportedOperations) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const previews = yield* Preview.make;
+      const tab = yield* previews.open({ threadId: scope.threadId });
+      const connected = yield* Deferred.make<void>();
+      const events = yield* broker.connect(
+        makeHost(supportedOperations === undefined ? {} : { supportedOperations }),
+      );
+      yield* Stream.runForEach(events, (event) =>
+        event.type === "connected" ? Deferred.succeed(connected, undefined) : Effect.void,
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      yield* broker
+        .closeFromAgent(scope, tab.tabId)
+        .pipe(Effect.provideService(Preview.PreviewManager, previews));
+      expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([]);
+    }),
+  ),
+);
+
+it.effect.each([
+  [],
+  ["status"] as const,
+  [...PREVIEW_AUTOMATION_PRE_PRIVATE_INPUT_OPERATIONS, "status"] as const,
+])("rejects unknown or noncanonical close protection %j", (supportedOperations) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const previews = yield* Preview.make;
+      const tab = yield* previews.open({ threadId: scope.threadId });
+      const connected = yield* Deferred.make<void>();
+      const events = yield* broker.connect(makeHost({ supportedOperations }));
+      yield* Stream.runForEach(events, (event) =>
+        event.type === "connected" ? Deferred.succeed(connected, undefined) : Effect.void,
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      const exit = yield* Effect.exit(
+        broker
+          .closeFromAgent(scope, tab.tabId)
+          .pipe(Effect.provideService(Preview.PreviewManager, previews)),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([tab]);
+    }),
+  ),
+);
+
+it.effect("guards every connected modern desktop before deleting shared tab metadata", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const previews = yield* Preview.make;
+      const tab = yield* previews.open({ threadId: scope.threadId });
+      const calls: string[] = [];
+      for (const clientId of ["first", "second"]) {
+        const ready = yield* Deferred.make<void>();
+        const requests = requestsFrom(
+          yield* broker.connect(
+            makeHost({ clientId, supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS] }),
+          ),
+          () => Deferred.doneUnsafe(ready, Effect.void),
+        );
+        yield* Stream.runForEach(requests, (request) =>
+          Effect.gen(function* () {
+            calls.push(`${clientId}:${request.operation}`);
+            if (request.operation === "close")
+              expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([tab]);
+            yield* broker.respond({
+              clientId,
+              connectionId: request.connectionId,
+              requestId: request.requestId,
+              ok: true,
+              result:
+                request.operation === "status"
+                  ? {
+                      available: true,
+                      visible: true,
+                      tabId: tab.tabId,
+                      automationPaused: false,
+                      url: null,
+                      title: null,
+                      loading: false,
+                    }
+                  : {},
+            });
+          }),
+        ).pipe(Effect.forkScoped);
+        yield* Deferred.await(ready);
+      }
+      yield* broker
+        .closeFromAgent(scope, tab.tabId)
+        .pipe(Effect.provideService(Preview.PreviewManager, previews));
+      expect(calls).toEqual(["first:status", "second:status", "first:close", "second:close"]);
+      expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([]);
+    }),
+  ),
+);
+
+it.effect("preserves metadata when any modern desktop rejects a private-tab close", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const previews = yield* Preview.make;
+      const tab = yield* previews.open({ threadId: scope.threadId });
+      const connected = yield* Deferred.make<void>();
+      const requests = requestsFrom(
+        yield* broker.connect(
+          makeHost({ supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS] }),
+        ),
+        () => Deferred.doneUnsafe(connected, Effect.void),
+      );
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: false,
+          error: { _tag: "PreviewAutomationPausedError", message: "paused" },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      const exit = yield* Effect.exit(
+        broker
+          .closeFromAgent(scope, tab.tabId)
+          .pipe(Effect.provideService(Preview.PreviewManager, previews)),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([tab]);
+    }),
+  ),
+);
+
+it.effect("does not delete metadata when a close acknowledgement races with host replacement", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const previews = yield* Preview.make;
+      const tab = yield* previews.open({ threadId: scope.threadId });
+      const connected = yield* Deferred.make<void>();
+      const requests = requestsFrom(
+        yield* broker.connect(
+          makeHost({ supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS] }),
+        ),
+        () => Deferred.doneUnsafe(connected, Effect.void),
+      );
+      yield* Stream.runForEach(requests, (request) =>
+        Effect.gen(function* () {
+          const replacementReady = yield* Deferred.make<void>();
+          const replacement = yield* broker.connect(
+            makeHost({
+              clientId: "new-client",
+              supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS],
+            }),
+          );
+          yield* Stream.runForEach(replacement, (event) =>
+            event.type === "connected"
+              ? Deferred.succeed(replacementReady, undefined)
+              : Effect.void,
+          ).pipe(Effect.forkScoped);
+          yield* Deferred.await(replacementReady);
+          yield* broker.respond({
+            clientId: "client-1",
+            connectionId: request.connectionId,
+            requestId: request.requestId,
+            ok: true,
+            result: {},
+          });
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      const exit = yield* Effect.exit(
+        broker
+          .closeFromAgent(scope, tab.tabId)
+          .pipe(Effect.provideService(Preview.PreviewManager, previews)),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect((yield* previews.list({ threadId: scope.threadId })).sessions).toEqual([tab]);
     }),
   ),
 );

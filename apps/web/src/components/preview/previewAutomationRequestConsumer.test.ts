@@ -6,6 +6,7 @@ import {
   PreviewTabId,
   ThreadId,
 } from "@supacode/contracts";
+import * as Cause from "effect/Cause";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -53,6 +54,42 @@ const consumerState = (handleRequest: (request: PreviewAutomationRequest) => Pro
 });
 
 describe("previewAutomationRequestConsumer", () => {
+  it("requires a fresh acknowledged connection after waiting or failure", () => {
+    const first = AsyncResult.success<PreviewAutomationStreamEvent, Error>({
+      type: "connected",
+      connectionId,
+    });
+    const requestsAtom =
+      Atom.make<AsyncResult.AsyncResult<PreviewAutomationStreamEvent, Error>>(first);
+    const state = consumerState(async () => undefined);
+    const onConnectionChange = vi.fn();
+    const consumer = createPreviewAutomationRequestConsumerAtom({
+      requestsAtom,
+      clientId,
+      environmentId,
+      ...state,
+      respond: async () => undefined,
+      onConnectionChange,
+      label: "privacy-registration",
+    });
+    const registry = AtomRegistry.make();
+    registry.mount(consumer);
+    expect(onConnectionChange).toHaveBeenLastCalledWith(connectionId);
+    registry.set(requestsAtom, AsyncResult.waiting(first));
+    expect(onConnectionChange).toHaveBeenLastCalledWith(null);
+    registry.set(requestsAtom, first);
+    expect(onConnectionChange).toHaveBeenLastCalledWith(null);
+    registry.set(requestsAtom, AsyncResult.failure(Cause.fail(new Error("disconnected"))));
+    expect(onConnectionChange).toHaveBeenLastCalledWith(null);
+    registry.set(
+      requestsAtom,
+      AsyncResult.success({ type: "connected", connectionId: "fresh-connection" }),
+    );
+    expect(onConnectionChange).toHaveBeenLastCalledWith("fresh-connection");
+    registry.dispose();
+    expect(onConnectionChange).toHaveBeenLastCalledWith(null);
+  });
+
   it("acknowledges a replacement stream before consuming requests from it", async () => {
     const requestsAtom = Atom.make(
       AsyncResult.success<PreviewAutomationStreamEvent, Error>({

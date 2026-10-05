@@ -5,7 +5,7 @@ import { parseScopedThreadKey } from "@supacode/client-runtime/environment";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
-  PREVIEW_AUTOMATION_OPERATIONS,
+  previewAutomationHostOperations,
   type EnvironmentId,
   type PreviewAutomationNavigateInput,
   type PreviewAutomationOpenInput,
@@ -60,12 +60,15 @@ import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { isElectron } from "~/env";
 import { useEnvironments } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
+import { serverEnvironment } from "~/state/server";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { useAtomCommand } from "~/state/use-atom-command";
 
 import { previewBridge } from "./previewBridge";
+import { beginPreviewPrivacyHost, setPreviewPrivacyHostReady } from "./previewPrivacyHostStore";
 import {
   PreviewAutomationOperationError,
+  PreviewAutomationPausedHostError,
   PreviewAutomationOverlayTimeoutError,
   PreviewAutomationRecordingNotActiveError,
   PreviewAutomationTargetUnavailableError,
@@ -133,12 +136,8 @@ const waitForDesktopOverlay = async (
   });
 };
 
-interface ExecutablePreviewWebview extends Element {
-  readonly executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
-}
-
-const findPreviewWebview = (tabId: string): ExecutablePreviewWebview | null =>
-  Array.from(document.querySelectorAll<ExecutablePreviewWebview>("webview[data-preview-tab]")).find(
+const findPreviewWebview = (tabId: string): HTMLElement | null =>
+  Array.from(document.querySelectorAll<HTMLElement>("webview[data-preview-tab]")).find(
     (candidate) => candidate.getAttribute("data-preview-tab") === tabId,
   ) ?? null;
 
@@ -148,11 +147,11 @@ const isPreviewWebviewRendering = (runtimeTabId: string): boolean => {
 };
 
 const readWebviewViewport = async (
-  webview: ExecutablePreviewWebview,
+  runtimeTabId: string,
 ): Promise<PreviewRenderedViewportSize | null> => {
-  const value = await webview.executeJavaScript(
-    "({ width: window.innerWidth, height: window.innerHeight })",
-  );
+  const value = await previewBridge?.automation.evaluate(runtimeTabId, {
+    expression: "({ width: window.innerWidth, height: window.innerHeight })",
+  });
   if (typeof value !== "object" || value === null) return null;
   const { width, height } = value as { readonly width?: unknown; readonly height?: unknown };
   return typeof width === "number" &&
@@ -170,12 +169,10 @@ const readRenderedViewport = async (
 ): Promise<PreviewRenderedViewportSize | null> => {
   const webview = findPreviewWebview(runtimeTabId);
   if (!webview) return null;
-  return await readWebviewViewport(webview);
+  return await readWebviewViewport(runtimeTabId);
 };
 
-const readDeclaredViewport = (
-  webview: ExecutablePreviewWebview | null,
-): PreviewRenderedViewportSize | null => {
+const readDeclaredViewport = (webview: HTMLElement | null): PreviewRenderedViewportSize | null => {
   const width = Number(webview?.getAttribute("data-preview-css-width"));
   const height = Number(webview?.getAttribute("data-preview-css-height"));
   return Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0
@@ -203,7 +200,7 @@ const waitForRenderedViewport = async (
       const webview = findPreviewWebview(runtimeTabId);
       const appliedSettingKey = webview?.getAttribute("data-preview-viewport-key") ?? null;
       const declaredViewport = readDeclaredViewport(webview);
-      const renderedViewport = webview ? await readWebviewViewport(webview) : null;
+      const renderedViewport = webview ? await readWebviewViewport(runtimeTabId) : null;
       if (
         renderedViewport &&
         isPreviewViewportReady({
@@ -215,7 +212,14 @@ const waitForRenderedViewport = async (
       ) {
         return renderedViewport;
       }
-    } catch {
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "_tag" in error &&
+        error._tag === "PreviewAutomationPausedError"
+      )
+        throw error;
       // Registration and navigation can transiently replace the guest while
       // React applies the server snapshot. Retry until the operation deadline.
     }
@@ -239,6 +243,10 @@ const currentStatus = async (
     ? (useBrowserSurfaceStore.getState().byTabId[runtimeTabId]?.visible ?? false)
     : false;
   const renderingActive = runtimeTabId ? isPreviewWebviewRendering(runtimeTabId) : false;
+  if (runtimeTabId && tabId && previewBridge && state.desktopByTabId[tabId]) {
+    const status = await previewBridge.automation.status(runtimeTabId);
+    if (status.automationPaused) return { ...status, tabId, visible };
+  }
   const viewportSetting = snapshot ? (snapshot.viewport ?? FILL_PREVIEW_VIEWPORT) : undefined;
   const viewport =
     runtimeTabId && renderingActive
@@ -333,13 +341,23 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
   const lastFocusReportRef = useRef<string | null>(null);
   const registry = useContext(RegistryContext);
   const [automationClientId] = useState(createPreviewAutomationClientId);
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const privateInputSupported =
+    serverConfig?.environment.capabilities.previewPrivateInput === true &&
+    typeof previewBridge?.automation.close === "function";
+  const privateInputPaused = Object.entries(previewSessions).some(
+    ([key, state]) =>
+      parseScopedThreadKey(key)?.environmentId === environmentId &&
+      Object.values(state.desktopByTabId).some((tab) => tab.automationPaused),
+  );
+  const advertisesPrivateInput = privateInputSupported || privateInputPaused;
   const initialAutomationHost = useMemo<PreviewAutomationHostState>(
     () => ({
       clientId: automationClientId,
       environmentId,
-      supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS],
+      supportedOperations: [...previewAutomationHostOperations(advertisesPrivateInput, false)],
     }),
-    [automationClientId, environmentId],
+    [automationClientId, environmentId, advertisesPrivateInput],
   );
   const automationRequestsAtom = previewEnvironment.automationRequests({
     environmentId,
@@ -401,6 +419,19 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
           tabId,
           bridgeAvailable: Boolean(previewBridge),
         };
+        const assertNotPaused = async (runtimeTabId: string) => {
+          const status = await previewBridge?.automation.status(runtimeTabId);
+          if (status?.automationPaused)
+            throw new PreviewAutomationPausedHostError(unavailableTarget);
+        };
+        if (
+          tabId &&
+          state.desktopByTabId[tabId] &&
+          request.operation !== "status" &&
+          request.operation !== "open"
+        ) {
+          await assertNotPaused(previewRuntimeTabId(threadRef, state.serverEpoch, tabId));
+        }
         const requireReadyTab = async () => {
           const bridge = previewBridge;
           const readyTabId = tabId;
@@ -409,6 +440,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
           }
           const readyState = readThreadPreviewState(threadRef);
           const runtimeTabId = previewRuntimeTabId(threadRef, readyState.serverEpoch, readyTabId);
+          await assertNotPaused(runtimeTabId);
           if (request.operation !== "open") {
             const { autoShowFloatingPreview } = await resolveBrowserDefaults();
             if (
@@ -435,6 +467,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
             request.operation,
             hostDeadlineMs,
           );
+          await assertNotPaused(runtimeTabId);
           return {
             bridge,
             tabId: readyTabId,
@@ -460,6 +493,9 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
             let activeSnapshot = activeTabId
               ? (state.sessions[activeTabId] ?? state.snapshot ?? undefined)
               : undefined;
+            if (activeTabId && state.desktopByTabId[activeTabId]) {
+              await assertNotPaused(previewRuntimeTabId(threadRef, state.serverEpoch, activeTabId));
+            }
             const reusedExistingTab = activeTabId !== null;
             tabId = activeTabId;
             if (!activeTabId) {
@@ -568,7 +604,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
             }
             if (reusedExistingTab && resolvedInputUrl && previewBridge) {
               assertPreviewRuntimeCurrent(threadRef, activeTabId, activeRuntimeTabId, request);
-              await previewBridge.navigate(activeRuntimeTabId, resolvedInputUrl);
+              await previewBridge.automation.navigate(activeRuntimeTabId, resolvedInputUrl);
               await waitForNavigationReadiness(
                 threadRef,
                 request.requestId,
@@ -591,7 +627,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 url: input.url!,
               },
             );
-            await ready.bridge.navigate(ready.runtimeTabId, resolution.resolvedUrl);
+            await ready.bridge.automation.navigate(ready.runtimeTabId, resolution.resolvedUrl);
             await waitForNavigationReadiness(
               threadRef,
               request.requestId,
@@ -740,6 +776,15 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
               request.input as Parameters<typeof ready.bridge.automation.waitFor>[1],
             );
           }
+          case "close": {
+            if (!tabId || !previewBridge)
+              throw new PreviewAutomationTargetUnavailableError(unavailableTarget);
+            const current = readThreadPreviewState(threadRef);
+            await previewBridge.automation.close(
+              previewRuntimeTabId(threadRef, current.serverEpoch, tabId),
+            );
+            return {};
+          }
           case "recordingStart": {
             const ready = await requireReadyTab();
             const startedAt = await startBrowserRecording(
@@ -812,30 +857,39 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
   );
   const requestHandlerAtom = usePreviewAutomationRequestHandlerAtom(handleRequest);
 
-  const automationRequestConsumerAtom = useMemo(
-    () =>
-      createPreviewAutomationRequestConsumerAtom({
-        requestsAtom: automationRequestsAtom,
-        clientId: automationClientId,
-        connectionAtom: automationConnectionAtom,
-        environmentId,
-        requestHandlerAtom,
-        respond: (response) =>
-          respondToAutomation({
-            environmentId,
-            input: response,
-          }),
-        label: `preview:automation-host:${environmentId}:${automationClientId}`,
-      }),
-    [
-      automationClientId,
-      automationConnectionAtom,
-      automationRequestsAtom,
-      requestHandlerAtom,
-      respondToAutomation,
+  const automationRequestConsumerAtom = useMemo(() => {
+    const privacyOwner = {};
+    return createPreviewAutomationRequestConsumerAtom({
+      onSubscribe: () => beginPreviewPrivacyHost(environmentId, privacyOwner),
+      onConnectionChange: (connectionId) => {
+        setPreviewPrivacyHostReady(
+          environmentId,
+          privacyOwner,
+          connectionId !== null &&
+            initialAutomationHost.supportedOperations?.includes("close") === true,
+        );
+      },
+      requestsAtom: automationRequestsAtom,
+      clientId: automationClientId,
+      connectionAtom: automationConnectionAtom,
       environmentId,
-    ],
-  );
+      requestHandlerAtom,
+      respond: (response) =>
+        respondToAutomation({
+          environmentId,
+          input: response,
+        }),
+      label: `preview:automation-host:${environmentId}:${automationClientId}`,
+    });
+  }, [
+    automationClientId,
+    initialAutomationHost,
+    automationConnectionAtom,
+    automationRequestsAtom,
+    requestHandlerAtom,
+    respondToAutomation,
+    environmentId,
+  ]);
   useAtomValue(automationRequestConsumerAtom);
 
   useEffect(() => {

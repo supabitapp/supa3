@@ -69,6 +69,7 @@ export function usePreviewBridge(input: {
       }
       lastDesktopNavStatus.current = state.navStatus;
       applyPreviewDesktopState(stableThreadRef, tabId, projectDesktopState(state));
+      if (state.automationPaused) return;
       if (state.favicon) {
         recordFaviconForThread(stableThreadRef, state.favicon, projectRef, environmentHostname);
       }
@@ -113,6 +114,19 @@ function shouldClearBrowserPointer(
   return current.url !== previous.url;
 }
 
+function privateNavStatus(status: DesktopPreviewTabState["navStatus"]) {
+  if (status.kind === "Idle") return { _tag: "Idle" as const };
+  if (status.kind === "LoadFailed")
+    return {
+      _tag: "LoadFailed" as const,
+      url: status.url,
+      title: status.title,
+      code: status.code,
+      description: status.description,
+    };
+  return { _tag: status.kind, url: status.url, title: status.title };
+}
+
 export function projectDesktopState(state: DesktopPreviewTabState): DesktopPreviewOverlay {
   const navOrigin = state.navStatus.kind === "Idle" ? null : originOf(state.navStatus.url);
   return {
@@ -125,6 +139,8 @@ export function projectDesktopState(state: DesktopPreviewTabState): DesktopPrevi
     colorScheme: state.colorScheme,
     audioMuted: state.audioMuted,
     audible: state.audible,
+    automationPaused: state.automationPaused ?? false,
+    ...(state.automationPaused ? { privateNavStatus: privateNavStatus(state.navStatus) } : {}),
     controller: state.controller,
     favicon: state.favicon && originOf(state.favicon.pageUrl) === navOrigin ? state.favicon : null,
   };

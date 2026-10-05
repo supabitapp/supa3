@@ -5,6 +5,8 @@ import {
   Camera,
   ExternalLink,
   MousePointerClick,
+  Shield,
+  Play,
   PictureInPicture2,
 } from "lucide-react";
 import {
@@ -57,6 +59,9 @@ interface Props {
    * to mount the three-dot menu (hard reload, devtools, zoom, clear data).
    */
   trailingActions?: ReactNode;
+  automationPaused?: boolean | undefined;
+  onToggleAutomationPaused?: (() => void) | undefined;
+  automationPausePending?: boolean | undefined;
   /**
    * Slot between the nav buttons and the URL input. The preview view uses it
    * to name the tab's browser profile, which is otherwise invisible.
@@ -90,6 +95,9 @@ export function PreviewChromeRow({
   pickDisabled,
   pickDisabledReason,
   trailingActions,
+  automationPaused,
+  onToggleAutomationPaused,
+  automationPausePending,
   leadingActions,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -173,6 +181,34 @@ export function PreviewChromeRow({
         </div>
 
         {leadingActions}
+        {onToggleAutomationPaused ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant={automationPaused ? "outline" : "ghost"}
+                  size="icon-xs"
+                  type="button"
+                  aria-label={
+                    automationPaused
+                      ? "Resume automation and capture"
+                      : "Pause automation and capture"
+                  }
+                  aria-pressed={automationPaused ?? false}
+                  disabled={automationPausePending}
+                  onClick={onToggleAutomationPaused}
+                />
+              }
+            >
+              {automationPaused ? <Play /> : <Shield />}
+            </TooltipTrigger>
+            <TooltipPopup>
+              {automationPaused
+                ? "Resume automation and capture"
+                : "Pause automation and capture for private sign-in"}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
 
         <InputGroup variant="ghost" className="group/address h-7 flex-1">
           <Tooltip>

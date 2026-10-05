@@ -1,5 +1,7 @@
 "use client";
 
+import { useAtomValue } from "@effect/atom-react";
+
 import { parseScopedThreadKey, scopedThreadKey } from "@supacode/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -33,6 +35,7 @@ import {
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
+import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
 import {
   browserMiniPlayerSource,
@@ -45,6 +48,8 @@ import { previewBridge } from "./previewBridge";
 import { subscribePreviewAction } from "./previewActionBus";
 import { openPreviewSession } from "./openPreviewSession";
 import { PreviewChromeRow } from "./PreviewChromeRow";
+import { PreviewPrivacyNotice } from "./PreviewPrivacyNotice";
+import { usePreviewPrivacyHostReady } from "./previewPrivacyHostStore";
 import { PreviewEmptyState } from "./PreviewEmptyState";
 import { PreviewMoreMenu } from "./PreviewMoreMenu";
 import {
@@ -147,7 +152,8 @@ export function PreviewView({
       : null;
   const snapshot = tabId ? (previewState.sessions[tabId] ?? null) : null;
   const desktopOverlay = tabId ? (previewState.desktopByTabId[tabId] ?? null) : null;
-  const navStatus = snapshot?.navStatus ?? { _tag: "Idle" as const };
+  const navStatus = desktopOverlay?.privateNavStatus ??
+    snapshot?.navStatus ?? { _tag: "Idle" as const };
   const url = navStatus._tag === "Idle" ? "" : navStatus.url;
   const loading = desktopOverlay?.loading ?? navStatus._tag === "Loading";
   const canGoBack = desktopOverlay?.canGoBack ?? snapshot?.canGoBack ?? false;
@@ -156,6 +162,29 @@ export function PreviewView({
   const isUnreachable = navStatus._tag === "LoadFailed";
   const showEmptyState = shouldShowPreviewEmptyState(snapshot);
   const controller = desktopOverlay?.controller ?? "none";
+  const automationPaused = desktopOverlay?.automationPaused ?? false;
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(threadRef.environmentId));
+  const privacyHostReady = usePreviewPrivacyHostReady(threadRef.environmentId);
+  const privateInputSupported =
+    privacyHostReady &&
+    serverConfig?.environment.capabilities.previewPrivateInput === true &&
+    typeof previewBridge?.setAutomationPaused === "function" &&
+    typeof previewBridge?.automation.close === "function";
+  const [automationPausePending, setAutomationPausePending] = useState(false);
+  const handleToggleAutomationPaused = () => {
+    if (!runtimeTabId || !previewBridge || automationPausePending) return;
+    setAutomationPausePending(true);
+    void previewBridge
+      .setAutomationPaused(runtimeTabId, !automationPaused)
+      .catch((error: unknown) => {
+        toastManager.add({
+          title: "Unable to change browser privacy pause",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      })
+      .finally(() => setAutomationPausePending(false));
+  };
   const viewport = snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT;
   const browserDefaults = useBrowserDefaults();
   // A tab created before profiles existed carries no profile of its own. It
@@ -177,10 +206,10 @@ export function PreviewView({
   useEffect(() => {
     // The thread comes from threadKey because threadRef's identity churns on every thread update.
     const titledThreadRef = parseScopedThreadKey(threadKey);
-    if (!navUrl || !navTitle || !latestHistoryUrl || !titledThreadRef) return;
+    if (automationPaused || !navUrl || !navTitle || !latestHistoryUrl || !titledThreadRef) return;
     // Agent-driven pages only enrich an existing requested URL.
     setTitleForThreadUrl(titledThreadRef, navUrl, navTitle, environmentHostname);
-  }, [environmentHostname, latestHistoryUrl, navTitle, navUrl, threadKey]);
+  }, [automationPaused, environmentHostname, latestHistoryUrl, navTitle, navUrl, threadKey]);
 
   const navigateToResolvedUrl = useCallback(
     async (resolvedUrl: string) => {
@@ -720,7 +749,16 @@ export function PreviewView({
         onSubmit={(next) => void handleSubmitUrl(next)}
         onOpenInBrowser={tabId ? handleOpenInBrowser : undefined}
         onCapture={previewBridge && tabId ? handleCapture : undefined}
-        captureDisabled={!desktopOverlay || isUnreachable}
+        automationPaused={automationPaused}
+        automationPausePending={automationPausePending}
+        onToggleAutomationPaused={
+          previewBridge &&
+          desktopOverlay?.hasWebContents &&
+          (privateInputSupported || automationPaused)
+            ? handleToggleAutomationPaused
+            : undefined
+        }
+        captureDisabled={!desktopOverlay || isUnreachable || automationPaused}
         recording={recordingRuntimeTabId !== null}
         onPictureInPicture={previewBridge && tabId ? handlePictureInPicture : undefined}
         pictureInPicture={miniPlayerTabId === tabId}
@@ -730,7 +768,7 @@ export function PreviewView({
         // Disable when there's no tab (nothing to pick on) OR the page
         // failed to load (a React overlay covers the webview, so the
         // user wouldn't be able to actually click anything underneath).
-        pickDisabled={!tabId || isUnreachable}
+        pickDisabled={!tabId || isUnreachable || automationPaused}
         pickDisabledReason={
           isUnreachable ? "Page didn't load — pick unavailable until the page renders" : undefined
         }
@@ -773,6 +811,7 @@ export function PreviewView({
         }
       />
 
+      {automationPaused ? <PreviewPrivacyNotice /> : null}
       <div className="relative min-h-0 flex-1 overflow-hidden">
         {runtimeTabId && snapshot && !showEmptyState ? (
           <BrowserSurfaceSlot
