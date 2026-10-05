@@ -336,7 +336,7 @@ import {
   getComposerProviderState,
 } from "./chat/composerProviderState";
 import { confirmTerminalClose, isTerminalCloseConfirmPending } from "../lib/terminalCloseConfirm";
-import { confirmRightPanelSurfacesClose } from "./rightPanelCloseConfirm";
+import { confirmRightPanelSurfacesClose } from "../lib/rightPanelCloseConfirm";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import {
@@ -5863,33 +5863,28 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeRightPanelSurface, activeThreadRef, closeTerminalMutation, storeCloseTerminal],
   );
+  const terminalCloseTarget = useCallback(
+    (terminalId: string) => ({
+      label: activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId),
+      hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
+    }),
+    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById],
+  );
   const requestCloseTerminal = useCallback(
     (terminalId: string) => {
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
-      void confirmTerminalClose([
-        {
-          label,
-          hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-        },
-      ]).then((confirmed) => {
+      void confirmTerminalClose([terminalCloseTarget(terminalId)]).then((confirmed) => {
         if (confirmed) closeTerminal(terminalId);
       });
     },
-    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById, closeTerminal],
+    [closeTerminal, terminalCloseTarget],
   );
   const requestClosePanelTerminal = useCallback(
     (terminalId: string) => {
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
-      void confirmTerminalClose([
-        {
-          label,
-          hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-        },
-      ]).then((confirmed) => {
+      void confirmTerminalClose([terminalCloseTarget(terminalId)]).then((confirmed) => {
         if (confirmed) closePanelTerminal(terminalId);
       });
     },
-    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById, closePanelTerminal],
+    [closePanelTerminal, terminalCloseTarget],
   );
   const activateRightPanelSurface = useCallback(
     (surface: RightPanelSurface) => {
@@ -5978,13 +5973,12 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeThreadRef, cleanupRightPanelSurfaces, syncActivePreviewSurface],
   );
-  const closeRightPanelSurfacesAfterConfirmation = useCallback(
+  const closeRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
       void confirmRightPanelSurfacesClose(surfaces, {
         desktopByTabId: activePreviewState.desktopByTabId,
-        terminalLabelsById: activeTerminalLabelsById,
-        terminalHasRunningSubprocessById: activeTerminalHasRunningSubprocessById,
+        terminalCloseTarget,
       }).then((confirmed) => {
         if (confirmed) finishRightPanelSurfaceClose(surfaces);
       });
@@ -5992,40 +5986,31 @@ export default function ChatView(props: ChatViewProps) {
     [
       activeThreadRef,
       activePreviewState.desktopByTabId,
-      activeTerminalHasRunningSubprocessById,
-      activeTerminalLabelsById,
       finishRightPanelSurfaceClose,
+      terminalCloseTarget,
     ],
   );
   const closeRightPanelSurface = useCallback(
-    (surface: RightPanelSurface) => {
-      if (surface.kind === "preview" || surface.kind === "terminal") {
-        closeRightPanelSurfacesAfterConfirmation([surface]);
-        return;
-      }
-      finishRightPanelSurfaceClose([surface]);
-    },
-    [closeRightPanelSurfacesAfterConfirmation, finishRightPanelSurfaceClose],
+    (surface: RightPanelSurface) => closeRightPanelSurfaces([surface]),
+    [closeRightPanelSurfaces],
   );
   const closeOtherRightPanelSurfaces = useCallback(
     (surface: RightPanelSurface) => {
-      closeRightPanelSurfacesAfterConfirmation(
-        rightPanelState.surfaces.filter((entry) => entry.id !== surface.id),
-      );
+      closeRightPanelSurfaces(rightPanelState.surfaces.filter((entry) => entry.id !== surface.id));
     },
-    [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces],
+    [closeRightPanelSurfaces, rightPanelState.surfaces],
   );
   const closeRightPanelSurfacesToRight = useCallback(
     (surface: RightPanelSurface) => {
       const surfaceIndex = rightPanelState.surfaces.findIndex((entry) => entry.id === surface.id);
       if (surfaceIndex < 0) return;
-      closeRightPanelSurfacesAfterConfirmation(rightPanelState.surfaces.slice(surfaceIndex + 1));
+      closeRightPanelSurfaces(rightPanelState.surfaces.slice(surfaceIndex + 1));
     },
-    [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces],
+    [closeRightPanelSurfaces, rightPanelState.surfaces],
   );
   const closeAllRightPanelSurfaces = useCallback(() => {
-    closeRightPanelSurfacesAfterConfirmation(rightPanelState.surfaces);
-  }, [closeRightPanelSurfacesAfterConfirmation, rightPanelState.surfaces]);
+    closeRightPanelSurfaces(rightPanelState.surfaces);
+  }, [closeRightPanelSurfaces, rightPanelState.surfaces]);
   const copyRightPanelFilePath = useCallback((relativePath: string) => {
     if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
       toastManager.add(
@@ -10789,7 +10774,7 @@ export default function ChatView(props: ChatViewProps) {
           surface={renderedRightPanelSurface}
           visible={rightPanelOpen}
           onDismissSetup={() => {
-            closeRightPanelSurface(renderedRightPanelSurface);
+            finishRightPanelSurfaceClose([renderedRightPanelSurface]);
             useRightPanelStore.getState().show(activeThreadRef);
           }}
         />

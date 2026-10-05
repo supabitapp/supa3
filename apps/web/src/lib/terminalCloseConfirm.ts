@@ -7,9 +7,22 @@ export interface TerminalCloseTarget {
   readonly hasRunningSubprocess: boolean;
 }
 
-/** Whether a terminal-close confirmation is currently waiting on the user. */
+/** Whether a close confirmation from this module is currently waiting on the user. */
 export function isTerminalCloseConfirmPending(): boolean {
   return pendingConfirmations > 0;
+}
+
+export async function confirmClose(message: string) {
+  const localApi = readLocalApi();
+  if (!localApi) return true;
+  pendingConfirmations += 1;
+  try {
+    return await localApi.dialogs.confirm(message, { variant: "destructive" });
+  } catch {
+    return false;
+  } finally {
+    pendingConfirmations -= 1;
+  }
 }
 
 /**
@@ -24,27 +37,17 @@ export async function confirmTerminalClose(
   const runningTargets = targets.filter((target) => target.hasRunningSubprocess);
   if (runningTargets.length === 0) return true;
 
-  const localApi = readLocalApi();
-  if (!localApi) return true;
-  pendingConfirmations += 1;
-  try {
-    return await localApi.dialogs.confirm(
-      runningTargets.length === 1
-        ? [
-            `Close terminal "${runningTargets[0]!.label}"?`,
-            "This stops the running process and clears its history.",
-          ].join("\n")
-        : [
-            `Close ${runningTargets.length} terminals?`,
-            `This stops their running processes and clears their histories: ${runningTargets
-              .map((target) => `"${target.label}"`)
-              .join(", ")}.`,
-          ].join("\n"),
-      { variant: "destructive" },
-    );
-  } catch {
-    return false;
-  } finally {
-    pendingConfirmations -= 1;
-  }
+  return confirmClose(
+    runningTargets.length === 1
+      ? [
+          `Close terminal "${runningTargets[0]!.label}"?`,
+          "This stops the running process and clears its history.",
+        ].join("\n")
+      : [
+          `Close ${runningTargets.length} terminals?`,
+          `This stops their running processes and clears their histories: ${runningTargets
+            .map((target) => `"${target.label}"`)
+            .join(", ")}.`,
+        ].join("\n"),
+  );
 }
