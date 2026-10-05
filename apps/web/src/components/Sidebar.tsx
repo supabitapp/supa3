@@ -199,7 +199,6 @@ import {
   sortInboxThreadsByReturn,
   sortPinnedThreadsForSidebar,
   sortSidebarV2ProjectGroups,
-  sortThreadsForSidebar,
   sortWorkingThreadsBySend,
   useThreadJumpHintVisibility,
   useRetainedValue,
@@ -279,7 +278,7 @@ const SETTLED_SHELF_EXPANDED_KEY = "supacode:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "supacode:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "supacode:sidebar:working-expanded";
 
-// Working beta: when this client saw each thread leave the Working shelf.
+// When this client saw each thread leave the Working shelf.
 // Module scope keeps the inbox order across routes that unmount the sidebar.
 const inboxReturns = createInboxReturnTracker();
 
@@ -2041,7 +2040,6 @@ export default function Sidebar() {
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
-  const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -2053,7 +2051,6 @@ export default function Sidebar() {
     confirmAndUnpinThread,
     setThreadAutoSettle,
     reorderPinnedThread,
-    reorderActiveThread,
     markThreadUnread,
     archiveThread,
     deleteThread,
@@ -2384,7 +2381,7 @@ export default function Sidebar() {
     readonly section: "pinned" | "active" | "settled";
     readonly occurredAt: string;
     readonly clearsSnooze: boolean;
-    /** Full destination order for pinned and active drops. */
+    /** Full destination order for pinned drops. */
     readonly order: readonly string[] | null;
     /** Destination order keys before the drop, to recognize concurrent writes. */
     readonly keysAtDrop: ReadonlyMap<string, string | null>;
@@ -2395,7 +2392,6 @@ export default function Sidebar() {
   const {
     pinnedThreads,
     draggableThreadKeys,
-    activeReorderableThreadKeys,
     activeThreads,
     workingThreads,
     snoozedThreads,
@@ -2412,18 +2408,17 @@ export default function Sidebar() {
     // Subagent child threads live in the parent's Agents surface, not the
     // sidebar roster (v2 models them as real threads with lineage).
     const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
-    inboxReturns.observe(workingShelfEnabled ? threads : null);
+    inboxReturns.observe(threads);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const working: EnvironmentThreadShell[] = [];
-    // Working beta: only inbox threads fold away. Pins stay where the user
-    // put them, and snoozed or settled threads keep their shelves.
+    // Only inbox threads fold into Working. Pins stay where the user put them,
+    // and snoozed or settled threads keep their shelves.
     const inbox = (thread: EnvironmentThreadShell) =>
-      workingShelfEnabled && isSidebarThreadWorking(thread) ? working : active;
+      isSidebarThreadWorking(thread) ? working : active;
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
     const draggable = new Set<string>();
-    const activeReorderable = new Set<string>();
     for (const thread of visible) {
       const capabilities = serverConfigs.get(thread.environmentId)?.environment.capabilities;
       // Threads on servers without the settlement capability (old server,
@@ -2433,10 +2428,6 @@ export default function Sidebar() {
       const supportsSettlement = capabilities?.threadSettlement === true;
       const supportsSnooze = capabilities?.threadSnooze === true;
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-      if (serverThreadKeys.has(threadKey) && capabilities?.threadActiveReorder === true)
-        activeReorderable.add(threadKey);
-      // Older servers retain their existing drag actions. Active placement
-      // additionally requires its own ordering capability at the drop target.
       if (
         serverThreadKeys.has(threadKey) &&
         capabilities?.threadPinning === true &&
@@ -2483,9 +2474,6 @@ export default function Sidebar() {
     // sort, or mixed-version fleets would render different pinned orders on
     // web and mobile from the same data.
     const sortedPinned = sortPinnedThreadsForSidebar(pinned);
-    const sortedActive = workingShelfEnabled
-      ? sortInboxThreadsByReturn(active, inboxReturns.returnedAt)
-      : sortThreadsForSidebar(active);
     return {
       pinnedThreads:
         optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
@@ -2496,15 +2484,7 @@ export default function Sidebar() {
               getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
             }),
       draggableThreadKeys: draggable,
-      activeReorderableThreadKeys: activeReorderable,
-      activeThreads:
-        optimisticDrop?.section !== "active" || optimisticDrop.order === null
-          ? sortedActive
-          : orderItemsByPreferredIds({
-              items: sortedActive,
-              preferredIds: optimisticDrop.order,
-              getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-            }),
+      activeThreads: sortInboxThreadsByReturn(active, inboxReturns.returnedAt),
       // Newest send first; finishing and waking again do not move a row.
       workingThreads: sortWorkingThreadsBySend(working),
       // Soonest wake first: "what comes back next" is the shelf's question.
@@ -2524,7 +2504,6 @@ export default function Sidebar() {
     serverConfigs,
     snoozeWakeTickAt,
     threads,
-    workingShelfEnabled,
   ]);
 
   // Arm a timeout for the earliest upcoming wake so the shelf empties the
@@ -2623,7 +2602,7 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
-  // The Working shelf (beta) collapses the same way, with the same route
+  // The Working shelf collapses the same way, with the same route
   // exception: sending a message folds the open thread into the shelf, and
   // its row must stay visible there.
   const [workingShelfExpanded, setWorkingShelfExpanded] = useLocalStorage(
@@ -3181,13 +3160,6 @@ export default function Sidebar() {
       ),
     [pinnedThreads],
   );
-  const activeKeys = useMemo(
-    () =>
-      activeThreads.map((thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-      ),
-    [activeThreads],
-  );
   const optimisticDropLanded = useMemo(() => {
     if (optimisticDrop === null) return false;
     const canonicalByKey = new Map(
@@ -3222,23 +3194,21 @@ export default function Sidebar() {
     }
     if (canonicalSection !== optimisticDrop.section) return false;
     if (optimisticDrop.clearsSnooze && thread.snoozedUntil != null) return false;
-    const destinationKeys = optimisticDrop.section === "pinned" ? pinnedKeys : activeKeys;
-    const canonicalDestination = destinationKeys.flatMap((key) => {
+    const canonicalDestination = pinnedKeys.flatMap((key) => {
       const canonical = canonicalByKey.get(key);
       return canonical === undefined ? [] : [canonical];
     });
     const keyByThread = new Map(
       canonicalDestination.map((thread) => [
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-        (optimisticDrop.section === "pinned" ? thread.pinOrderKey : thread.activeOrderKey) ?? null,
+        thread.pinOrderKey ?? null,
       ]),
     );
     const heldOrder = optimisticDrop.order;
     const heldKeys = new Set(heldOrder);
     const membershipChanged =
-      destinationKeys.length !== heldOrder.length ||
-      destinationKeys.some((key) => !heldKeys.has(key));
-    const foreignKeyLanded = destinationKeys.some((threadKey) => {
+      pinnedKeys.length !== heldOrder.length || pinnedKeys.some((key) => !heldKeys.has(key));
+    const foreignKeyLanded = pinnedKeys.some((threadKey) => {
       const currentKey = keyByThread.get(threadKey) ?? null;
       if (currentKey === (optimisticDrop.keysAtDrop.get(threadKey) ?? null)) return false;
       return currentKey !== optimisticDrop.assignedKeys.get(threadKey);
@@ -3247,7 +3217,7 @@ export default function Sidebar() {
       ([threadKey, orderKey]) => keyByThread.get(threadKey) === orderKey,
     );
     return membershipChanged || foreignKeyLanded || allAssignmentsLanded;
-  }, [activeKeys, optimisticDrop, pinnedKeys, threads]);
+  }, [optimisticDrop, pinnedKeys, threads]);
   if (optimisticDropLanded) {
     setOptimisticDrop(null);
   }
@@ -3444,11 +3414,11 @@ export default function Sidebar() {
       applySidebarThreadDrop(thread, "settled", dragState.occurredAt),
     ]).map(key);
   }, [dragState, settledThreads, threadByKey]);
-  // Working beta: the inbox is time-ordered too, so the preview shows the
-  // slot a drop will land in, not the slot under the pointer.
+  // The inbox is time-ordered too, so the preview shows the slot a drop will
+  // land in, not the slot under the pointer.
   const draggedActiveOrder = useMemo(() => {
     const thread = dragState === null ? undefined : threadByKey.get(dragState.activeKey);
-    if (!workingShelfEnabled || dragState === null || thread === undefined) return undefined;
+    if (dragState === null || thread === undefined) return undefined;
     const key = (candidate: EnvironmentThreadShell) =>
       scopedThreadKey(scopeThreadRef(candidate.environmentId, candidate.id));
     return sortInboxThreadsByReturn(
@@ -3458,7 +3428,7 @@ export default function Sidebar() {
       ],
       inboxReturns.returnedAt,
     ).map(key);
-  }, [activeThreads, dragState, threadByKey, workingShelfEnabled]);
+  }, [activeThreads, dragState, threadByKey]);
   const sidebarSortingStrategy = useMemo(
     () =>
       createSidebarSortingStrategy({
@@ -3485,21 +3455,14 @@ export default function Sidebar() {
   );
   // Hidden and filtered threads keep their keys. Reserve those slots without
   // including the rows in the visible drop order or writing to them.
-  const { pinnedKeysById, activeKeysById } = useMemo(
-    () => ({
-      pinnedKeysById: new Map(
+  const pinnedKeysById = useMemo(
+    () =>
+      new Map(
         threads.map((thread) => [
           scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
           thread.pinOrderKey ?? null,
         ]),
       ),
-      activeKeysById: new Map(
-        threads.map((thread) => [
-          scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-          thread.activeOrderKey ?? null,
-        ]),
-      ),
-    }),
     [threads],
   );
   const draggedThreadKey = dragState?.activeKey;
@@ -3527,10 +3490,6 @@ export default function Sidebar() {
             pinnedOrder: pinnedKeys,
             pinnedKeysById,
             reorderableKeys: draggableThreadKeys,
-            activeOrder: activeKeys,
-            activeKeysById,
-            activeReorderableKeys: activeReorderableThreadKeys,
-            activeTimeOrdered: workingShelfEnabled,
           }).kind !== "none"
         );
       },
@@ -3540,11 +3499,8 @@ export default function Sidebar() {
       },
     );
   }, [
-    activeKeysById,
     pinnedKeysById,
     serverConfigs,
-    activeKeys,
-    activeReorderableThreadKeys,
     draggedThreadKey,
     draggedFromSection,
     dragActivationY,
@@ -3552,7 +3508,6 @@ export default function Sidebar() {
     pinnedKeys,
     sidebarListItems,
     threadByKey,
-    workingShelfEnabled,
   ]);
   const handleThreadDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -3577,10 +3532,6 @@ export default function Sidebar() {
         pinnedOrder: pinnedKeys,
         pinnedKeysById,
         reorderableKeys: draggableThreadKeys,
-        activeOrder: activeKeys,
-        activeKeysById,
-        activeReorderableKeys: activeReorderableThreadKeys,
-        activeTimeOrdered: workingShelfEnabled,
       });
       if (plan.kind === "none") return;
       if (plan.kind === "settle" && settlingThreadKeysRef.current.has(activeKey)) return;
@@ -3590,7 +3541,7 @@ export default function Sidebar() {
               ...(plan.orderKey === undefined ? [] : [{ id: activeKey, orderKey: plan.orderKey }]),
               ...plan.extraAssignments,
             ]
-          : plan.kind === "reorder-pinned" || plan.kind === "move-active"
+          : plan.kind === "reorder-pinned"
             ? plan.assignments
             : [];
       const drop = {
@@ -3602,8 +3553,8 @@ export default function Sidebar() {
           plan.kind === "pin" ||
           plan.kind === "settle" ||
           (plan.kind === "move-active" && plan.unsnooze),
-        order: plan.kind === "settle" ? null : plan.order,
-        keysAtDrop: target.section === "active" ? activeKeysById : pinnedKeysById,
+        order: plan.kind === "pin" || plan.kind === "reorder-pinned" ? plan.order : null,
+        keysAtDrop: pinnedKeysById,
         assignedKeys: new Map(assignments.map(({ id, orderKey }) => [id, orderKey])),
       };
       setOptimisticDrop(drop);
@@ -3657,9 +3608,8 @@ export default function Sidebar() {
               !(await run(unsettleThread(threadRef), "Failed to un-settle thread"))
             )
               return;
-            if (plan.unsnooze && !(await run(unsnoozeThread(threadRef), "Failed to wake thread")))
-              return;
-            break;
+            if (plan.unsnooze) await run(unsnoozeThread(threadRef), "Failed to wake thread");
+            return;
           case "pin":
             if (
               !(await run(
@@ -3682,13 +3632,11 @@ export default function Sidebar() {
           if (thread === undefined) continue;
           if (
             !(await run(
-              (plan.kind === "move-active" ? reorderActiveThread : reorderPinnedThread)(
+              reorderPinnedThread(
                 scopeThreadRef(thread.environmentId, thread.id),
                 assignment.orderKey,
               ),
-              plan.kind === "move-active"
-                ? "Failed to reorder active threads"
-                : "Failed to reorder pinned threads",
+              "Failed to reorder pinned threads",
             ))
           )
             return;
@@ -3696,17 +3644,13 @@ export default function Sidebar() {
       })();
     },
     [
-      activeKeysById,
       pinnedKeysById,
       serverConfigs,
-      activeKeys,
-      activeReorderableThreadKeys,
       draggableThreadKeys,
       pinThread,
       pinnedKeys,
       planForwardNavigation,
       reorderPinnedThread,
-      reorderActiveThread,
       sectionByThreadKey,
       settleThread,
       sidebarListItems,
@@ -3714,7 +3658,6 @@ export default function Sidebar() {
       unpinThread,
       unsettleThread,
       unsnoozeThread,
-      workingShelfEnabled,
     ],
   );
   // One snooze per thread at a time — same double-dispatch guard as settle.

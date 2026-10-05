@@ -35,7 +35,6 @@ import {
   resolveThreadListV2SnoozeGateExpiryMs,
   resolveThreadListV2Status,
   resolveThreadListV2SwipeActions,
-  sortThreadsForListV2,
   threadListV2ListItemsAreEqual,
   threadHasUnseenCompletion,
   type ThreadListV2ListItem,
@@ -343,26 +342,6 @@ describe("resolveThreadListV2SnoozeGateExpiryMs", () => {
         { now: NOW },
       ),
     ).toBe(null);
-  });
-});
-
-describe("sortThreadsForListV2", () => {
-  it("honors a saved active order and leaves new threads above it", () => {
-    const sorted = sortThreadsForListV2([
-      { id: "newer-arranged", createdAt: "2026-06-01T12:00:00.000Z", activeOrderKey: "t" },
-      { id: "older-arranged", createdAt: "2026-06-01T08:00:00.000Z", activeOrderKey: "f" },
-      { id: "new", createdAt: "2026-06-01T13:00:00.000Z" },
-    ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["new", "older-arranged", "newer-arranged"]);
-  });
-
-  it("orders by creation time, newest first, ignoring activity", () => {
-    const sorted = sortThreadsForListV2([
-      { id: "oldest", createdAt: "2026-06-01T08:00:00.000Z" },
-      { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
-      { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
-    ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
   });
 });
 
@@ -1232,30 +1211,28 @@ describe("pending mobile thread moves", () => {
     }).items.map((item) => item.thread.id);
   }
 
-  it.each(["active", "pinned"] as const)(
-    "holds %s order through every intermediate key upsert",
-    (section) => {
-      const { rows, assignments, pending, update } = fixture(section);
-      let current = rows;
-      let hold: PendingThreadOrder | null = pending;
-      const desired = pending.orderedIds.map((id) => id.split(":")[1]);
+  // The inbox is time-ordered, so only pinned holds reach the built layout.
+  it("holds pinned order through every intermediate key upsert", () => {
+    const { rows, assignments, pending, update } = fixture("pinned");
+    let current = rows;
+    let hold: PendingThreadOrder | null = pending;
+    const desired = pending.orderedIds.map((id) => id.split(":")[1]);
+    expect(layout(current, hold)).toEqual(desired);
+    for (const assignment of assignments) {
+      current = update(current, assignment);
+      hold = reconcilePendingThreadOrder(
+        hold!,
+        getThreadListV2OrderedSection({ threads: current, section: "pinned", now: NOW }),
+      );
+      expect(hold).not.toBeNull();
       expect(layout(current, hold)).toEqual(desired);
-      for (const assignment of assignments) {
-        current = update(current, assignment);
-        hold = reconcilePendingThreadOrder(
-          hold!,
-          getThreadListV2OrderedSection({ threads: current, section, now: NOW }),
-        );
-        expect(hold).not.toBeNull();
-        expect(layout(current, hold)).toEqual(desired);
-      }
-      expect(reconcilePendingThreadOrder({ ...hold!, commandsComplete: true }, current)).toBeNull();
-      expect(layout(current, null)).toEqual(desired);
-    },
-  );
+    }
+    expect(reconcilePendingThreadOrder({ ...hold!, commandsComplete: true }, current)).toBeNull();
+    expect(layout(current, null)).toEqual(desired);
+  });
 
   it("keeps the action guard pending when receipts precede canonical shells", () => {
-    const { rows, assignments, pending, update } = fixture();
+    const { rows, assignments, pending, update } = fixture("pinned");
     let hold: PendingThreadOrder | null = { ...pending, commandsComplete: true };
     let current = rows;
     expect(reconcilePendingThreadOrder(hold, current)).toBe(hold);
@@ -1268,7 +1245,7 @@ describe("pending mobile thread moves", () => {
   });
 
   it("keeps search results in the full pending section order", () => {
-    const { rows, assignments, pending, update } = fixture();
+    const { rows, assignments, pending, update } = fixture("pinned");
     const current = update(update(rows, assignments[0]!), assignments[1]!);
     expect(layout(current, pending, "match")).toEqual(["c", "b"]);
   });
@@ -1696,11 +1673,15 @@ function buildTickList(
     environmentId: null,
     searchQuery: "",
     now,
+    workingShelfExpanded: true,
     snoozedShelfExpanded: true,
   });
   return buildThreadListV2ListItems({
     items: layout.items,
     pendingTasks,
+    workingCount: layout.workingCount,
+    workingShelfExpanded: true,
+    workingShelfHeaderIndex: layout.workingShelfHeaderIndex,
     snoozedCount: layout.snoozedCount,
     snoozedShelfExpanded: true,
     snoozedShelfHeaderIndex: layout.snoozedShelfHeaderIndex,
@@ -2172,7 +2153,7 @@ describe("buildThreadListV2ListItems row-state stamps", () => {
   });
 });
 
-describe("Working section beta", () => {
+describe("Working section", () => {
   const running = {
     status: "running" as const,
     activeRunId: null,
@@ -2219,7 +2200,6 @@ describe("Working section beta", () => {
       environmentId: null,
       searchQuery: "",
       now: NOW,
-      workingShelfEnabled: true,
       ...input,
     });
   const ids = (layout: ReturnType<typeof buildThreadListV2Items>) =>
@@ -2235,10 +2215,6 @@ describe("Working section beta", () => {
     ]);
     expect(layout.workingCount).toBe(1);
     expect(layout.workingShelfHeaderIndex).toBe(4);
-
-    const off = build({ workingShelfEnabled: false });
-    expect(ids(off)).toContain("working");
-    expect(off.workingCount).toBe(0);
   });
 
   it("shows working rows as cards when expanded, or only the selected one when collapsed", () => {
@@ -2279,7 +2255,6 @@ describe("Working section beta", () => {
       environmentId: null,
       searchQuery: "",
       now: NOW,
-      workingShelfEnabled: true,
       workingShelfExpanded: true,
       snoozedShelfExpanded: true,
     });

@@ -1,8 +1,8 @@
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 import { toSortableTimestamp } from "./threadSort.ts";
 
-// Working section beta, shared so web and mobile fold and order the inbox the
-// same way. Off by default; each client owns its own toggle.
+// The Working section, shared so web and mobile fold and order the inbox the
+// same way.
 
 type WorkingThreadInput = Pick<
   EnvironmentThreadShell,
@@ -103,9 +103,8 @@ function sortNewestFirst<T extends Pick<EnvironmentThreadShell, "id" | "environm
 /**
  * Remembers when this client saw each thread leave the Working section. Keep
  * one at module scope so the inbox order survives routes that unmount the
- * list. Call `observe` with every thread shell on each list rebuild, or with
- * null to reset while the beta is off. The first call only takes a baseline,
- * so mounting never reshuffles the inbox.
+ * list. Call `observe` with every thread shell on each list rebuild. The first
+ * call only takes a baseline, so mounting never reshuffles the inbox.
  */
 export function createInboxReturnTracker() {
   const keyOf = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
@@ -113,12 +112,7 @@ export function createInboxReturnTracker() {
   let lastWorkingKeys: ReadonlySet<string> | null = null;
   const returns = new Map<string, number>();
   return {
-    observe(threads: ReadonlyArray<WorkingThreadInput & InboxThreadInput> | null): void {
-      if (threads === null) {
-        lastWorkingKeys = null;
-        returns.clear();
-        return;
-      }
+    observe(threads: ReadonlyArray<WorkingThreadInput & InboxThreadInput>): void {
       const working = new Set<string>();
       const present = new Set<string>();
       for (const thread of threads) {

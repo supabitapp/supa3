@@ -312,7 +312,6 @@ function ThreadNavigationSidebarPane(
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
     snoozedShelfExpanded,
-    workingShelfEnabled,
     pinnedShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
@@ -346,7 +345,6 @@ function ThreadNavigationSidebarPane(
     pinningEnvironmentIds,
     autoSettleOptOutEnvironmentIds,
     pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
     titleRegenerationEnvironmentIds,
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
@@ -363,7 +361,6 @@ function ThreadNavigationSidebarPane(
     queuedThreadKeys,
     settledLimit: settledVisibleCount,
     now: listClock.now,
-    workingShelfEnabled,
     pinnedShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
@@ -574,8 +571,6 @@ function ThreadNavigationSidebarPane(
       savedConnectionsById,
       listEnvironments,
       threadSearchMatchByKey,
-      // Rows read it for their reorder menu items.
-      workingShelfEnabled,
     }),
     [
       props.selectedThreadKey,
@@ -584,7 +579,6 @@ function ThreadNavigationSidebarPane(
       savedConnectionsById,
       listEnvironments,
       threadSearchMatchByKey,
-      workingShelfEnabled,
     ],
   );
   useThreadJumpShortcuts(listItems, handleSelectThread);
@@ -704,11 +698,7 @@ function ThreadNavigationSidebarPane(
               snoozeSupported={snoozeEnvironmentIds.has(thread.environmentId)}
               pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
               autoSettleOptOutSupported={autoSettleOptOutEnvironmentIds.has(thread.environmentId)}
-              reorderSupported={
-                item.item.pinned
-                  ? pinReorderEnvironmentIds.has(thread.environmentId)
-                  : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
-              }
+              arrangeSupported={pinReorderEnvironmentIds.has(thread.environmentId)}
               onSnoozeThread={snoozeThread}
               onUnsnoozeThread={unsnoozeThread}
               onUnsettleThread={unsettleThread}
@@ -775,7 +765,6 @@ function ThreadNavigationSidebarPane(
     },
     [
       archiveThread,
-      activeReorderEnvironmentIds,
       confirmDeletePendingTask,
       confirmDeleteThread,
       handleSelectThread,
@@ -815,7 +804,6 @@ function ThreadNavigationSidebarPane(
       unpinThread,
       unsettleThread,
       unsnoozeThread,
-      workingShelfEnabled,
     ],
   );
   // The list ignores sort/group options, so only the environment and project

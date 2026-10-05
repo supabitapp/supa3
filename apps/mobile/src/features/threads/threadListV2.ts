@@ -38,9 +38,9 @@ import {
 
 export { snoozeWakeLabel };
 
-/** Working section beta: when this device saw each thread leave the Working
-    shelf. One instance for Home and the iPad sidebar, so both lists order the
-    inbox the same way and the order survives screens that unmount. */
+/** When this device saw each thread leave the Working shelf. One instance for
+    Home and the iPad sidebar, so both lists order the inbox the same way and
+    the order survives screens that unmount. */
 export const threadListInboxReturns = createInboxReturnTracker();
 
 /**
@@ -212,21 +212,7 @@ function parseTimestampMs(isoDate: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-/** The active order shared by web and native: new/reopened rows, then the
-    saved arrangement. Activity does not move a thread. */
-export function sortThreadsForListV2<
-  T extends {
-    readonly id: string;
-    readonly createdAt: string;
-    readonly unsettledAt?: string | null | undefined;
-    readonly activeOrderKey?: string | null | undefined;
-    readonly environmentId?: string | undefined;
-  },
->(threads: readonly T[]): T[] {
-  return sortActiveThreadsByOrderKey(threads);
-}
-
-/** Canonical card section for Move up/down, independent of search or scope. */
+/** Canonical card section for arranging, independent of search or scope. */
 export function getThreadListV2OrderedSection(input: {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly section: "pinned" | "active";
@@ -281,7 +267,7 @@ export interface ThreadListV2Layout {
   readonly hiddenSettledCount: number;
   /** Pinned threads in scope, including collapsed rows. */
   readonly pinnedCount: number;
-  /** Working threads folded away by the Working section beta. */
+  /** Working threads folded into the Working shelf. */
   readonly workingCount: number;
   /** Index in `items` where the Working shelf header belongs. */
   readonly workingShelfHeaderIndex: number | null;
@@ -494,7 +480,7 @@ function resolveThreadListV2ItemTimeLabel(
 }
 
 /**
- * Builds the shared mobile order: pinned → active → pending → working shelf (beta) →
+ * Builds the shared mobile order: pinned → active → pending → working shelf →
  * snoozed shelf → settled. Pending tasks are waiting rather than asking, and
  * busy or parked work remains reachable without competing with either the
  * inbox or settled history.
@@ -658,14 +644,10 @@ export function buildThreadListV2Items(input: {
   readonly now: string;
   /** Pins are expanded by default. The selected row stays visible when collapsed. */
   readonly pinnedShelfExpanded?: boolean;
-  /** Working section beta: unpinned working threads fold into the Working
-      shelf, and the inbox orders by when each thread came back to the user
-      instead of the saved arrangement. */
-  readonly workingShelfEnabled?: boolean;
   /** Expands the Working shelf into rows. Collapsed is the default. */
   readonly workingShelfExpanded?: boolean;
   /** Returns this device observed but the server does not stamp, such as an
-      approval request mid-turn. Only read while the beta is on. */
+      approval request mid-turn. */
   readonly inboxReturnAt?: (thread: EnvironmentThreadShell) => number | undefined;
   /** Expands the snoozed shelf into rows. Collapsed is the default. */
   readonly snoozedShelfExpanded?: boolean;
@@ -696,7 +678,6 @@ export function buildThreadListV2Items(input: {
     ? new Set(input.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
     : null;
 
-  const workingShelfEnabled = input.workingShelfEnabled === true;
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
   const working: EnvironmentThreadShell[] = [];
@@ -745,18 +726,16 @@ export function buildThreadListV2Items(input: {
       settled.push(thread);
     } else if (thread.pinnedAt != null) {
       pinned.push(thread);
-    } else if (workingShelfEnabled && isThreadWorking(thread)) {
+    } else if (isThreadWorking(thread)) {
       working.push(thread);
     } else {
       active.push(thread);
     }
   }
 
-  // The beta inbox is time-ordered, so the saved arrangement (and any move in
-  // flight) is kept but not applied until the beta is off again.
-  const orderedActive = workingShelfEnabled
-    ? sortInboxThreadsByReturn(active, input.inboxReturnAt)
-    : applyPendingThreadOrder(sortThreadsForListV2(active), "active", pending);
+  // The inbox orders by when each thread came back to the user, not the saved
+  // arrangement.
+  const orderedActive = sortInboxThreadsByReturn(active, input.inboxReturnAt);
   // Newest send first; finishing and waking again do not move a row.
   const orderedWorking = sortWorkingThreadsBySend(working);
   const orderedSnoozed = [...snoozed].sort(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { threadDragAction, threadOrderAfterMove } from "./threadOrder";
+import { canMoveThreadToActive, threadDragAction, threadOrderAfterMove } from "./threadOrder";
 import { threadDragGapOffset } from "./threadDragGap";
 
 describe("live thread insertion gap", () => {
@@ -21,6 +21,38 @@ describe("live thread insertion gap", () => {
   it("moves only crossed rows for an adjacent reorder", () => {
     expect(shifts(168, 312)).toEqual([0, 0, 0, 0, -72]);
     expect(shifts(240, 168)).toEqual([0, 0, 0, 72, 0]);
+  });
+});
+
+describe("moving into the time-ordered inbox", () => {
+  const supported = {
+    threadPinning: true,
+    threadSettlement: true,
+    threadSnooze: true,
+  };
+  const unpinned = { pinnedAt: null };
+  const pinned = { pinnedAt: "2026-06-01T00:00:00.000Z" };
+
+  it("accepts threads from other sections without a slot", () => {
+    expect(canMoveThreadToActive(pinned, "pinned", supported)).toBe(true);
+    expect(canMoveThreadToActive(unpinned, "settled", supported)).toBe(true);
+    expect(canMoveThreadToActive(pinned, "snoozed", supported)).toBe(true);
+    expect(canMoveThreadToActive(unpinned, "active", supported)).toBe(false);
+  });
+  it("requires the capability for each lifecycle change", () => {
+    expect(canMoveThreadToActive(pinned, "pinned", { ...supported, threadPinning: false })).toBe(
+      false,
+    );
+    expect(
+      canMoveThreadToActive(unpinned, "settled", { ...supported, threadSettlement: false }),
+    ).toBe(false);
+    expect(canMoveThreadToActive(unpinned, "snoozed", { ...supported, threadSnooze: false })).toBe(
+      false,
+    );
+    expect(canMoveThreadToActive(pinned, "snoozed", { ...supported, threadPinning: false })).toBe(
+      false,
+    );
+    expect(canMoveThreadToActive(unpinned, "settled", undefined)).toBe(false);
   });
 });
 

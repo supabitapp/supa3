@@ -19,7 +19,6 @@ export function useThreadListV2Layout({
   queuedThreadKeys,
   settledLimit,
   now,
-  workingShelfEnabled,
   pinnedShelfExpanded,
   workingShelfExpanded,
   snoozedShelfExpanded,
@@ -27,7 +26,7 @@ export function useThreadListV2Layout({
   selectedThreadKey,
 }: ThreadListV2LayoutInput) {
   const threadListV2Layout = useMemo(() => {
-    threadListInboxReturns.observe(workingShelfEnabled ? threads : null);
+    threadListInboxReturns.observe(threads);
     // Settled threads remain live shells; archived threads stay hidden.
     return buildThreadListV2Items({
       pendingOrder,
@@ -41,7 +40,6 @@ export function useThreadListV2Layout({
       queuedThreadKeys,
       settledLimit,
       now,
-      workingShelfEnabled,
       pinnedShelfExpanded,
       workingShelfExpanded,
       inboxReturnAt: threadListInboxReturns.returnedAt,
@@ -50,7 +48,6 @@ export function useThreadListV2Layout({
       selectedThreadKey,
     });
   }, [
-    workingShelfEnabled,
     pinnedShelfExpanded,
     workingShelfExpanded,
     pendingOrder,

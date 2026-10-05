@@ -697,8 +697,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly autoSettleOptOutSupported: boolean;
   /** False on servers that predate thread title regeneration. */
   readonly titleRegenerationSupported: boolean;
-  /** Server supports reordering this card's section. */
-  readonly reorderSupported?: boolean;
+  /** Server supports the Arrange threads sheet (pin reordering). */
+  readonly arrangeSupported?: boolean;
   readonly onSwipeableWillOpen: (methods: SwipeableMethods) => void;
   readonly onSwipeableClose: (methods: SwipeableMethods) => void;
   /** List key checked against the Home swipe row activation. */
@@ -846,7 +846,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // hides the card until wake with the pin intact.)
   const arrangementMenuItems = useMemo<MenuAction[]>(
     () => [
-      ...(props.reorderSupported === true
+      ...(props.arrangeSupported === true
         ? [{ id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" }]
         : []),
       ...(props.pinningSupported
@@ -857,7 +857,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           ]
         : []),
     ],
-    [props.reorderSupported, props.pinningSupported, thread.pinnedAt],
+    [props.arrangeSupported, props.pinningSupported, thread.pinnedAt],
   );
   // A submenu with the current option checked, matching web. This is a
   // per-thread setting, not a lifecycle verb.
