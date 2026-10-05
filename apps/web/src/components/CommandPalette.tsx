@@ -45,6 +45,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  CalendarClockIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -450,6 +451,19 @@ function overlayModeForCommand(command: string | null): SearchOverlayMode | null
     : null;
 }
 
+// Shortcuts that open a page work from anywhere, so the palette, which is
+// mounted over every route, handles them.
+const PAGE_BY_COMMAND = {
+  "usage.open": "/usage",
+  "automations.open": "/automations",
+} as const;
+
+function pageForCommand(command: string | null) {
+  return command !== null && command in PAGE_BY_COMMAND
+    ? PAGE_BY_COMMAND[command as keyof typeof PAGE_BY_COMMAND]
+    : null;
+}
+
 const APPEARANCE_OPTIONS = [
   { mode: "system", label: "System", icon: MonitorIcon },
   { mode: "light", label: "Light", icon: SunIcon },
@@ -560,11 +574,12 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         });
         return;
       }
-      if (command === "usage.open") {
+      const page = pageForCommand(command);
+      if (page !== null) {
         event.preventDefault();
         event.stopPropagation();
         setOpen(false);
-        void navigate({ to: "/usage" });
+        void navigate({ to: page });
         return;
       }
       const mode = overlayModeForCommand(command);
@@ -2272,6 +2287,26 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:automations",
+    searchTerms: [
+      "automations",
+      "scheduled tasks",
+      "schedule",
+      "recurring",
+      "cron",
+      "timer",
+      "run automatically",
+    ],
+    title: "Open automations",
+    icon: <CalendarClockIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "automations.open",
+    run: async () => {
+      await navigate({ to: "/automations" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

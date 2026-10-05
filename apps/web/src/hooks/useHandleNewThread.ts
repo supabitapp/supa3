@@ -28,6 +28,7 @@ import {
   hasExplicitComposerModelSelection,
   resolveNewDraftStartFromOrigin,
   resolveNewThreadModelSelectionOverride,
+  startNewThreadFromContext,
 } from "../lib/chatThreadActions";
 import { readSupacodeProjectFile } from "../lib/supacodeProjectFileDefaults";
 import { environmentServerConfigsAtom } from "../state/server";
@@ -434,6 +435,54 @@ export function useNewThreadHandler() {
   );
 }
 
+/** The first project in the user's sidebar order, where a new thread lands without other context. */
+function firstOrderedProjectRef(
+  projects: ReturnType<typeof readProjects>,
+  projectOrder: readonly string[],
+): ScopedProjectRef | null {
+  const [first] = orderItemsByPreferredIds({
+    items: projects,
+    preferredIds: projectOrder,
+    getId: getProjectOrderKey,
+    getPreferenceIds: (project) => [
+      getProjectOrderKey(project),
+      legacyProjectCwdPreferenceKey(project.workspaceRoot),
+    ],
+  });
+  return first ? scopeProjectRef(first.environmentId, first.id) : null;
+}
+
+/**
+ * Starts a thread in the project being viewed. Context is read when called,
+ * not while rendering, so the callback stays stable for memoized children.
+ */
+export function useStartNewThreadInCurrentProject() {
+  const router = useRouter();
+  const handleNewThread = useNewThreadHandler();
+  return useCallback(() => {
+    const params = router.state.matches[router.state.matches.length - 1]?.params ?? {};
+    const routeTarget = resolveThreadRouteTarget(params);
+    const { getDraftSession, getDraftThread } = useComposerDraftStore.getState();
+    return startNewThreadFromContext({
+      activeThread:
+        routeTarget?.kind === "server"
+          ? (readThreadShell(routeTarget.threadRef) ?? undefined)
+          : undefined,
+      activeDraftThread:
+        routeTarget?.kind === "server"
+          ? getDraftThread(routeTarget.threadRef)
+          : routeTarget?.kind === "draft"
+            ? getDraftSession(routeTarget.draftId)
+            : null,
+      defaultProjectRef: firstOrderedProjectRef(
+        readProjects(),
+        useUiStateStore.getState().projectOrder,
+      ),
+      handleNewThread,
+    });
+  }, [handleNewThread, router]);
+}
+
 export function useHandleNewThread() {
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const routeTarget = useParams({
@@ -452,25 +501,16 @@ export function useHandleNewThread() {
       : null,
   );
   const projects = useProjects();
-  const orderedProjects = useMemo(() => {
-    return orderItemsByPreferredIds({
-      items: projects,
-      preferredIds: projectOrder,
-      getId: getProjectOrderKey,
-      getPreferenceIds: (project) => [
-        getProjectOrderKey(project),
-        legacyProjectCwdPreferenceKey(project.workspaceRoot),
-      ],
-    });
-  }, [projectOrder, projects]);
+  const defaultProjectRef = useMemo(
+    () => firstOrderedProjectRef(projects, projectOrder),
+    [projectOrder, projects],
+  );
   const handleNewThread = useNewThreadHandler();
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: orderedProjects[0]
-      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
-      : null,
+    defaultProjectRef,
     handleNewThread,
     routeDraftId,
     routeThreadRef,

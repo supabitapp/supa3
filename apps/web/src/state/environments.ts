@@ -95,7 +95,3 @@ export function usePullRequestsSupported() {
 export function useEnvironmentMachines() {
   return useAtomValue(environmentSummaries.machineByIdAtom);
 }
-
-export function useConnectedEnvironmentIds() {
-  return useAtomValue(environmentSummaries.connectedEnvironmentIdsAtom);
-}

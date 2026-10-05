@@ -9,18 +9,23 @@ import {
 } from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type {
-  SidebarProjectGroupMember,
-  SidebarProjectSnapshot,
+import {
+  projectGroupMemberKeys,
+  type SidebarProjectGroupMember,
+  type SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
-import { resolveSettingsScope, type SettingsScopeSearch } from "./settingsScope";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
+  inProjectFilter,
+  lastRunLabel,
+  nextRunLabel,
+  relativeLabel,
+  scheduleLabel,
   scheduledTaskDefaultModel,
-  matchesScheduledTaskScope,
   taskToDraft,
-} from "./scheduledTasksSettings.logic";
+  validateAutomationsSearch,
+} from "./automations.logic";
 
 const laptopId = EnvironmentId.make("laptop");
 const serverId = EnvironmentId.make("server");
@@ -85,50 +90,24 @@ const tasks = [first, second, third, other, sameIdElsewhere].map((project, index
   projectId: project.id,
 }));
 
-describe("scheduled task settings scope", () => {
-  it.each<{ search: SettingsScopeSearch; expected: string[] }>([
-    { search: {}, expected: ["task-0", "task-1", "task-2", "task-3", "task-4"] },
-    { search: { machine: laptopId }, expected: ["task-0", "task-1"] },
-    { search: { project: "supacode" }, expected: ["task-0", "task-1", "task-2"] },
-    { search: { project: "supacode", machine: serverId }, expected: ["task-2"] },
-    { search: { project: "supacode", checkout: second.physicalProjectKey }, expected: ["task-1"] },
-    { search: { project: "missing" }, expected: [] },
-    { search: { machine: "removed" }, expected: [] },
-    { search: { project: "supacode", checkout: "removed" }, expected: [] },
-    { search: { project: "other", machine: laptopId }, expected: [] },
-  ])("lists only matching tasks for $search", ({ search, expected }) => {
-    const scope = resolveSettingsScope(search, groups, environments);
+describe("automations project filter", () => {
+  it("matches every checkout of a grouped project across environments", () => {
+    const keys = projectGroupMemberKeys(groups[0]!);
     expect(
       tasks.flatMap((task) =>
-        matchesScheduledTaskScope(scope, task.environmentId, task.projectId) ? [task.id] : [],
+        inProjectFilter(keys, task.environmentId, task.projectId) ? [task.id] : [],
       ),
-    ).toEqual(expected);
+    ).toEqual(["task-0", "task-1", "task-2"]);
   });
 
-  it("keeps tasks with removed projects manageable at environment scope", () => {
-    const removedProject = ProjectId.make("removed");
-    expect(
-      matchesScheduledTaskScope(
-        resolveSettingsScope({}, groups, environments),
-        laptopId,
-        removedProject,
-      ),
-    ).toBe(true);
-    expect(
-      matchesScheduledTaskScope(
-        resolveSettingsScope({ project: "supacode" }, groups, environments),
-        laptopId,
-        removedProject,
-      ),
-    ).toBe(false);
+  it("does not match an unrelated environment's project that shares an ID", () => {
+    const keys = projectGroupMemberKeys(groups[0]!);
+    expect(inProjectFilter(keys, laptopId, first.id)).toBe(true);
+    expect(inProjectFilter(keys, serverId, sameIdElsewhere.id)).toBe(false);
   });
 
-  it("does not offer an unrelated environment's same-ID project when creating a task", () => {
-    const scope = resolveSettingsScope({ project: "supacode" }, groups, environments);
-    const serverProjects = [third, other, sameIdElsewhere];
-    expect(
-      serverProjects.filter((project) => matchesScheduledTaskScope(scope, serverId, project.id)),
-    ).toEqual([third]);
+  it("keeps tasks of removed projects when no project is selected", () => {
+    expect(inProjectFilter(null, laptopId, ProjectId.make("removed"))).toBe(true);
   });
 });
 
@@ -263,5 +242,66 @@ describe("scheduled task model defaults", () => {
         null,
       ),
     ).toBeNull();
+  });
+});
+
+describe("automation labels", () => {
+  const now = Date.parse("2026-10-04T12:00:00.000Z");
+  const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+  it("marks fixed times as environment time and leaves intervals unqualified", () => {
+    expect(
+      scheduleLabel({ type: "fixed_time", timeOfDay: "09:00", weekdays: [1, 2, 3, 4, 5] }),
+    ).toBe("Weekdays at 09:00 (environment time)");
+    expect(scheduleLabel({ type: "fixed_time", timeOfDay: "18:30" })).toBe(
+      "Daily at 18:30 (environment time)",
+    );
+    expect(scheduleLabel({ type: "interval", everyMs: 15 * 60_000 })).toBe("Every 15 min");
+  });
+
+  it.each([
+    [at(30_000), "in under a minute"],
+    [at(5 * 60_000), "in 5m"],
+    [at(3 * 3_600_000), "in 3h"],
+    [at(-30_000), "just now"],
+    [at(-5 * 60_000), "5m ago"],
+    [at(-2 * 86_400_000), "2d ago"],
+  ])("labels %s relative to now as %s", (value, expected) => {
+    expect(relativeLabel(value, now)).toBe(expected);
+  });
+
+  it("says when the next run is, or why there is none", () => {
+    expect(nextRunLabel({ enabled: true, nextRunAt: at(5 * 60_000) }, now)).toBe("Next run in 5m");
+    expect(nextRunLabel({ enabled: true, nextRunAt: null }, now)).toBe("Not scheduled");
+    expect(nextRunLabel({ enabled: false, nextRunAt: null }, now)).toBe("Paused");
+  });
+
+  it("describes delivery, not agent completion", () => {
+    expect(lastRunLabel({ lastRunStatus: "never", lastRunAt: null }, now)).toBeNull();
+    expect(lastRunLabel({ lastRunStatus: "running", lastRunAt: at(0) }, now)).toBe("Sending…");
+    expect(lastRunLabel({ lastRunStatus: "succeeded", lastRunAt: at(-5 * 60_000) }, now)).toBe(
+      "Sent 5m ago",
+    );
+    expect(lastRunLabel({ lastRunStatus: "failed", lastRunAt: at(-60_000) }, now)).toBe(
+      "Couldn't send",
+    );
+    // A run that lands between clock ticks has a timestamp after `now`.
+    expect(lastRunLabel({ lastRunStatus: "succeeded", lastRunAt: at(20_000) }, now)).toBe(
+      "Sent just now",
+    );
+  });
+});
+
+describe("automations search", () => {
+  it("keeps the project filter separate from the one-shot task link", () => {
+    expect(
+      validateAutomationsSearch({
+        project: "supacode",
+        environmentId: "laptop",
+        taskId: "task-1",
+        machine: "ignored",
+      }),
+    ).toEqual({ project: "supacode", environmentId: laptopId, taskId: "task-1" });
+    expect(validateAutomationsSearch({ project: " ", taskId: 4 })).toEqual({});
   });
 });

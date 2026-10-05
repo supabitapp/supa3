@@ -1,3 +1,4 @@
+import { scopedProjectKey } from "@supacode/client-runtime/environment";
 import type { EnvironmentId, ScopedProjectRef } from "@supacode/contracts";
 import { buildProjectGroups, type ProjectGroupingSettings } from "./logicalProject";
 import type { Project } from "./types";
@@ -24,6 +25,13 @@ export interface SidebarProjectSnapshot extends Project {
   memberProjects: readonly SidebarProjectGroupMember[];
   memberProjectRefs: readonly ScopedProjectRef[];
   remoteEnvironmentLabels: readonly string[];
+}
+
+/** Every checkout in the group as a `scopedProjectKey`, for filtering what projects own. */
+export function projectGroupMemberKeys(
+  group: Pick<SidebarProjectSnapshot, "memberProjectRefs">,
+): ReadonlySet<string> {
+  return new Set(group.memberProjectRefs.map(scopedProjectKey));
 }
 
 export function projectGroupsSpanEnvironments(
