@@ -11,7 +11,6 @@ export interface V2ItemSupport {
   readonly providerThread: Projection["providerThreads"][number] | null;
   readonly providerTurn: Projection["providerTurns"][number] | null;
   readonly runtimeRequest: Projection["runtimeRequests"][number] | null;
-  readonly checkpoint: Projection["checkpoints"][number] | null;
   readonly subagent: Projection["subagents"][number] | null;
   readonly contextHandoff: Projection["contextHandoffs"][number] | null;
   readonly contextTransfer: Projection["contextTransfers"][number] | null;
@@ -26,7 +25,6 @@ export const EMPTY_V2_ITEM_SUPPORT: V2ItemSupport = Object.freeze({
   providerThread: null,
   providerTurn: null,
   runtimeRequest: null,
-  checkpoint: null,
   subagent: null,
   contextHandoff: null,
   contextTransfer: null,
@@ -80,10 +78,6 @@ export function resolveV2ItemSupport(projection: Projection, itemId: TurnItemId)
     requestId == null
       ? null
       : (projection.runtimeRequests.find((candidate) => candidate.id === requestId) ?? null);
-  const checkpoint =
-    item.type === "checkpoint"
-      ? (projection.checkpoints.find((candidate) => candidate.id === item.checkpointId) ?? null)
-      : null;
   const subagent =
     item.type === "subagent"
       ? (projection.subagents.find((candidate) => candidate.id === item.subagentId) ?? null)
@@ -109,7 +103,6 @@ export function resolveV2ItemSupport(projection: Projection, itemId: TurnItemId)
     providerThread,
     providerTurn,
     runtimeRequest,
-    checkpoint,
     subagent,
     contextHandoff,
     contextTransfer,
@@ -130,7 +123,6 @@ export function v2ItemSupportEqual(left: V2ItemSupport, right: V2ItemSupport): b
     left.providerThread === right.providerThread &&
     left.providerTurn === right.providerTurn &&
     left.runtimeRequest === right.runtimeRequest &&
-    left.checkpoint === right.checkpoint &&
     left.subagent === right.subagent &&
     left.contextHandoff === right.contextHandoff &&
     left.contextTransfer === right.contextTransfer

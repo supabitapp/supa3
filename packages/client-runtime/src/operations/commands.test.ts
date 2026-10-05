@@ -741,47 +741,63 @@ describe("V2 environment commands", () => {
   );
 
   it.effect.each([true, false])(
-    "rolls back an identified checkpoint without fetching the full projection, restoreFiles=%s",
+    "rolls back to a ready run checkpoint, restoreFiles=%s",
     (restoreFiles) =>
       Effect.gen(function* () {
+        const checkpointId = CheckpointId.make("run-checkpoint");
+        const scopeId = CheckpointScopeId.make("run-checkpoint-scope");
         const commands: OrchestrationV2Command[] = [];
-        const projectionRequests: ThreadId[] = [];
-        const supervisor = yield* makeSupervisor({ commands, projects: [], projectionRequests });
+        const supervisor = yield* makeSupervisor({
+          commands,
+          projects: [],
+          projection: {
+            ...v2Projection,
+            checkpoints: [
+              {
+                id: checkpointId,
+                threadId: v2ThreadId,
+                scopeId,
+                runId: null,
+                nodeId: NodeId.make("run-checkpoint-node"),
+                parentCheckpointId: null,
+                ordinalWithinScope: 1,
+                appRunOrdinal: 1,
+                ref: CheckpointRef.make("refs/supacode/run-checkpoint"),
+                status: "ready",
+                files: [],
+                capturedAt: v2Now,
+              },
+            ],
+          },
+        });
 
         yield* revertThreadCheckpoint({
-          commandId: CommandId.make("rollback-known-checkpoint"),
+          commandId: CommandId.make("rollback-run-checkpoint"),
           threadId: v2ThreadId,
-          checkpointId: CheckpointId.make("checkpoint-known"),
-          scopeId: CheckpointScopeId.make("scope-known"),
+          turnCount: 1,
           restoreFiles,
         }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
-        expect(projectionRequests).toEqual([]);
         expect(commands).toEqual([
           {
             type: "checkpoint.rollback",
-            commandId: "rollback-known-checkpoint",
+            commandId: "rollback-run-checkpoint",
             threadId: v2ThreadId,
-            checkpointId: "checkpoint-known",
-            scopeId: "scope-known",
+            checkpointId,
+            scopeId,
             restoreFiles,
           },
         ]);
       }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 
-  it.effect("validates identified checkpoints locally for older servers", () =>
+  it.effect("refuses to roll back to a run checkpoint that is not ready", () =>
     Effect.gen(function* () {
-      const checkpointId = CheckpointId.make("legacy-checkpoint");
-      const scopeId = CheckpointScopeId.make("legacy-checkpoint-scope");
-      for (const status of ["ready", "missing", "error", "stale", null] as const) {
+      for (const status of ["missing", "error", "stale", null] as const) {
         const commands: OrchestrationV2Command[] = [];
-        const projectionRequests: ThreadId[] = [];
         const supervisor = yield* makeSupervisor({
           commands,
           projects: [],
-          projectionRequests,
-          advertiseServerResolvedCommandContext: false,
           projection: {
             ...v2Projection,
             checkpoints:
@@ -789,15 +805,15 @@ describe("V2 environment commands", () => {
                 ? []
                 : [
                     {
-                      id: checkpointId,
+                      id: CheckpointId.make("unready-checkpoint"),
                       threadId: v2ThreadId,
-                      scopeId,
+                      scopeId: CheckpointScopeId.make("unready-checkpoint-scope"),
                       runId: null,
-                      nodeId: NodeId.make("legacy-checkpoint-node"),
+                      nodeId: NodeId.make("unready-checkpoint-node"),
                       parentCheckpointId: null,
-                      ordinalWithinScope: 0,
-                      appRunOrdinal: null,
-                      ref: CheckpointRef.make("refs/supacode/legacy-checkpoint"),
+                      ordinalWithinScope: 1,
+                      appRunOrdinal: 1,
+                      ref: CheckpointRef.make("refs/supacode/unready-checkpoint"),
                       status,
                       files: [],
                       capturedAt: v2Now,
@@ -805,30 +821,18 @@ describe("V2 environment commands", () => {
                   ],
           },
         });
-        const rollback = revertThreadCheckpoint({
-          commandId: CommandId.make(`legacy-rollback-${status}`),
-          threadId: v2ThreadId,
-          checkpointId,
-          scopeId,
-        }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
-        if (status === "ready") {
-          yield* rollback;
-          expect(commands).toEqual([
-            {
-              type: "checkpoint.rollback",
-              commandId: "legacy-rollback-ready",
-              threadId: v2ThreadId,
-              checkpointId,
-              scopeId,
-            },
-          ]);
-        } else {
-          const error = yield* rollback.pipe(Effect.flip);
-          expect(error._tag).toBe("OrchestrationV2CheckpointUnavailableError");
-          expect(commands).toEqual([]);
-        }
-        expect(projectionRequests).toEqual([v2ThreadId]);
+        const error = yield* revertThreadCheckpoint({
+          commandId: CommandId.make(`rollback-unready-${status}`),
+          threadId: v2ThreadId,
+          turnCount: 1,
+        }).pipe(
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+          Effect.flip,
+        );
+
+        expect(error._tag).toBe("OrchestrationV2CheckpointUnavailableError");
+        expect(commands).toEqual([]);
       }
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );

@@ -2,8 +2,6 @@ import { remapComposerContextAttachments } from "@supacode/shared/composerContex
 import {
   type ThreadLinkedPullRequest,
   CommandId,
-  CheckpointId,
-  CheckpointScopeId,
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
   WS_METHODS,
@@ -203,9 +201,7 @@ export interface DismissThreadUserInputInput extends ThreadCommandInput {
 
 export interface RevertThreadCheckpointInput extends ThreadCommandInput {
   readonly restoreFiles?: boolean;
-  readonly checkpointId?: string;
-  readonly scopeId?: string;
-  readonly turnCount?: number;
+  readonly turnCount: number;
 }
 
 export type StopThreadSessionInput = ThreadCommandInput;
@@ -849,38 +845,16 @@ export const dismissThreadUserInput = Effect.fn("EnvironmentCommands.dismissThre
 
 export const revertThreadCheckpoint = Effect.fn("EnvironmentCommands.revertThreadCheckpoint")(
   function* (input: RevertThreadCheckpointInput) {
-    if (
-      input.checkpointId !== undefined &&
-      input.scopeId !== undefined &&
-      (yield* supportsServerResolvedCommandContext())
-    ) {
-      return yield* dispatch({
-        type: "checkpoint.rollback",
-        ...(input.restoreFiles === undefined ? {} : { restoreFiles: input.restoreFiles }),
-        commandId: yield* allocateCommandId(input),
-        threadId: input.threadId,
-        scopeId: CheckpointScopeId.make(input.scopeId),
-        checkpointId: CheckpointId.make(input.checkpointId),
-      });
-    }
     const projection = yield* getProjection(input.threadId);
-    const checkpoint =
-      projection.checkpoints.find(
-        (candidate) => candidate.id === input.checkpointId && candidate.scopeId === input.scopeId,
-      ) ??
-      projection.checkpoints.findLast((candidate) =>
-        input.turnCount === 0
-          ? candidate.ordinalWithinScope === 0 && candidate.appRunOrdinal === null
-          : candidate.appRunOrdinal === input.turnCount,
-      );
+    const checkpoint = projection.checkpoints.findLast((candidate) =>
+      input.turnCount === 0
+        ? candidate.ordinalWithinScope === 0 && candidate.appRunOrdinal === null
+        : candidate.appRunOrdinal === input.turnCount,
+    );
     if (checkpoint === undefined || checkpoint.status !== "ready") {
-      const target =
-        input.checkpointId === undefined
-          ? `run ordinal ${input.turnCount ?? "unknown"}`
-          : `checkpoint ${input.checkpointId}`;
       return yield* new OrchestrationV2CheckpointUnavailableError({
         threadId: input.threadId,
-        target,
+        target: `run ordinal ${input.turnCount}`,
       });
     }
     return yield* dispatch({
