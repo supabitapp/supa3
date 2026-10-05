@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bring Us Upstream"
+  short_description: "Review upstream changes before porting"
+  default_prompt: "Use $bring-us-upstream to review the upstream diff and present the proposed ports and skips before implementation."
