@@ -1,9 +1,9 @@
 import {
+  AudioModule,
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   setIsAudioActiveAsync,
-  useAudioRecorder,
   type RecordingStatus,
 } from "expo-audio";
 import { File } from "expo-file-system";
@@ -14,12 +14,11 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
@@ -29,14 +28,23 @@ import {
   voiceInputBlocksSubmission,
   type VoiceInputState,
 } from "@supacode/client-runtime/voice-input";
+import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 
 const INITIAL_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const VOICE_METERING_INTERVAL_MS = 80;
+// The native constructor takes platform-flattened options, as `useAudioRecorder`
+// builds them with expo-audio's internal `createRecordingOptions`.
+const { ios: IOS_RECORDING_OPTIONS, android: ANDROID_RECORDING_OPTIONS } =
+  RecordingPresets.HIGH_QUALITY;
 const VOICE_RECORDING_OPTIONS = {
-  ...RecordingPresets.HIGH_QUALITY,
+  extension: RecordingPresets.HIGH_QUALITY.extension,
+  sampleRate: RecordingPresets.HIGH_QUALITY.sampleRate,
+  numberOfChannels: RecordingPresets.HIGH_QUALITY.numberOfChannels,
+  bitRate: RecordingPresets.HIGH_QUALITY.bitRate,
   isMeteringEnabled: true,
+  ...(Platform.OS === "ios" ? IOS_RECORDING_OPTIONS : ANDROID_RECORDING_OPTIONS),
 };
 
 async function releaseVoiceRecordingAudio(): Promise<void> {
@@ -103,19 +111,20 @@ function useVoiceInputRuntime() {
   const [initialAudioLevels] = useState(() => Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0));
   const audioLevelsRef = useRef(initialAudioLevels);
   const audioLevels = useSharedValue(initialAudioLevels);
-  const sessionRef = useRef<VoiceInputSession | null>(null);
-  const handleRecorderStatus = useCallback((status: RecordingStatus) => {
-    sessionRef.current?.controller.handleRecorderStatus({
-      isFinished: status.isFinished,
-      hasError: status.hasError || status.mediaServicesDidReset === true,
-      error: status.error,
-      url: status.url,
+  const [{ session, recorder }] = useState(() => {
+    // The native recorder is created when dictation starts, not on app launch.
+    const recorder = createLazyVoiceRecorder({
+      create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
+      onStatus: (status: RecordingStatus) => {
+        session.controller.handleRecorderStatus({
+          isFinished: status.isFinished,
+          hasError: status.hasError || status.mediaServicesDidReset === true,
+          error: status.error,
+          url: status.url,
+        });
+      },
     });
-  }, []);
-  const recorder = useAudioRecorder(VOICE_RECORDING_OPTIONS, handleRecorderStatus);
-
-  const [session] = useState(() => {
-    const created = new VoiceInputSession({
+    const session = new VoiceInputSession({
       recorder,
       getTranscriber: getLocalVoiceTranscriber,
       requestPermission: async () => {
@@ -126,17 +135,10 @@ function useVoiceInputRuntime() {
       releaseRecording: releaseVoiceRecordingAudio,
       deleteRecording: (uri) => new File(uri).delete(),
       onStateChange: (nextState) =>
-        setState({
-          state: nextState,
-          ownerKey: created.ownerKey,
-          label: created.label,
-        }),
+        setState({ state: nextState, ownerKey: session.ownerKey, label: session.label }),
     });
-    return created;
+    return { session, recorder };
   });
-  useLayoutEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
   const controller = session.controller;
 
   useEffect(() => {
@@ -149,7 +151,14 @@ function useVoiceInputRuntime() {
     return () => subscription.remove();
   }, [controller]);
 
-  useEffect(() => () => controller.dispose(), [controller]);
+  useEffect(
+    () => () => {
+      // Dispose first so an active recording is stopped before the recorder is released.
+      controller.dispose();
+      recorder.release();
+    },
+    [controller, recorder],
+  );
 
   useEffect(() => {
     if (state.phase !== "recording") return;
@@ -179,7 +188,7 @@ function useVoiceInputRuntime() {
     const sampleRecording = () => {
       if (controller.currentState.phase !== "recording") return;
       const status = recorder.getStatus();
-      if (!status.isRecording) return;
+      if (!status?.isRecording) return;
 
       const level = normalizeVoiceInputDecibels(status.metering);
       const history = audioLevelsRef.current;

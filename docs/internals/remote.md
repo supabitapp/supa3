@@ -24,6 +24,22 @@ prove that a route works. In particular, a host's loopback address refers to a
 different machine when another device opens it. Endpoint selection must not
 silently fall back to loopback when a shareable endpoint is unavailable.
 
+Saved routes share one environment identity but may have separate credentials.
+The [driver](../../packages/client-runtime/src/connection/driver.ts) verifies a
+direct address against the public environment descriptor before sending its
+credential. A saved LAN address may belong to a different machine after a network
+change. The [supervisor](../../packages/client-runtime/src/connection/supervisor.ts)
+authorizes a preferred route before replacing a working session and applies a
+cooldown after a failed switch.
+
+Learned routes reuse their saved pairing's bearer credential. Removing that
+pairing removes its learned routes; an updated advertisement removes addresses
+the server no longer reports. User-saved routes survive advertisement changes.
+
+[GitHub routing trust](../../packages/client-runtime/src/connection/githubRoutingPermissions.ts)
+covers every user-saved route. Adding or changing an address revokes the grant;
+reordering and learned-address changes preserve it.
+
 ## Hosted web is a client
 
 The hosted web app stores its connection catalog in the browser and connects

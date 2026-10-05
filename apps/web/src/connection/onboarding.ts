@@ -3,7 +3,7 @@ import {
   createAtomCommandScheduler,
   createRuntimeCommand,
 } from "@supacode/client-runtime/state/runtime";
-import type { DesktopSshEnvironmentTarget } from "@supacode/contracts";
+import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 
 import { connectionAtomRuntime } from "./runtime";
@@ -22,6 +22,7 @@ export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
     readonly pairingUrl?: string;
     readonly host?: string;
     readonly pairingCode?: string;
+    readonly expectedEnvironmentId?: EnvironmentId;
   }) =>
     ConnectionOnboarding.ConnectionOnboarding.pipe(
       Effect.flatMap((onboarding) => onboarding.registerPairing(input)),
@@ -35,7 +36,11 @@ export const connectSshEnvironment = createRuntimeCommand(connectionAtomRuntime,
     mode: "serial",
     key: (input: { readonly target: DesktopSshEnvironmentTarget }) => JSON.stringify(input.target),
   },
-  execute: (input: { readonly target: DesktopSshEnvironmentTarget; readonly label?: string }) =>
+  execute: (input: {
+    readonly target: DesktopSshEnvironmentTarget;
+    readonly label?: string;
+    readonly expectedEnvironmentId?: EnvironmentId;
+  }) =>
     ConnectionOnboarding.ConnectionOnboarding.pipe(
       Effect.flatMap((onboarding) => onboarding.registerSsh(input)),
     ),

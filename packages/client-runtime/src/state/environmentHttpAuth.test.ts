@@ -181,6 +181,29 @@ const LOADERS: ReadonlyArray<{
 ];
 
 describe("authenticated environment HTTP requests", () => {
+  it.effect.each(["http://192.168.1.20:4389", "https://remote.example.ts.net"])(
+    "uses the learned route origin %s for authenticated HTTP reads",
+    (origin) =>
+      Effect.gen(function* () {
+        const harness = makeHarness(() => Response.json(SHELL));
+        const prepared: PreparedConnection = {
+          ...PREPARED,
+          target: new BearerConnectionTarget({
+            ...TARGET,
+            connectionId: `learned:${TARGET.environmentId}:${origin}@connection-1`,
+          }),
+          httpBaseUrl: origin,
+          socketUrl: `${origin.replace(/^http/, "ws")}/ws`,
+        };
+        yield* fetchEnvironmentShellSnapshot({ prepared }).pipe(Effect.provide(harness.httpLayer));
+        expect(harness.calls).toHaveLength(1);
+        expect(harness.calls[0]!.url).toBe(`${origin}/api/orchestration/shell`);
+        expect(new Headers(harness.calls[0]!.init.headers).get("authorization")).toBe(
+          "Bearer bearer-token",
+        );
+      }),
+  );
+
   it.effect.each(LOADERS)("rejects an invalid $name response", (loader) =>
     Effect.gen(function* () {
       const harness = makeHarness(() => Response.json({}));

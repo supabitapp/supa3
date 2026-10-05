@@ -3,8 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { AuthEnvironmentScopes, AuthSessionState } from "./auth.ts";
 
-const decodeScopes = Schema.decodeSync(AuthEnvironmentScopes);
-const decodeSessionState = Schema.decodeSync(AuthSessionState);
+const decodeScopes = Schema.decodeUnknownSync(AuthEnvironmentScopes);
+const decodeSessionState = Schema.decodeUnknownSync(AuthSessionState);
 
 describe("AuthEnvironmentScopes", () => {
   it("drops scopes this build no longer knows instead of failing the decode", () => {

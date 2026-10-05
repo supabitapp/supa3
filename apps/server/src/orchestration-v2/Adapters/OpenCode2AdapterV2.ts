@@ -78,6 +78,7 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import { supacodeOrchestrationSystemPrompt } from "../../provider/SupacodeOrchestrationInstructions.ts";
 import { SKILL_MENTION_PATTERN } from "@supacode/shared/composerInlineTokens";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@supacode/shared/model";
 import { causeErrorTag } from "@supacode/shared/observability";
 
@@ -887,18 +888,13 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     const stagedReverts = new Set<string>();
     // Starting a turn and cutting the history take turns on a session: each
     // checks that the other is not running before its own requests yield.
-    const sessionGates = new Map<string, Semaphore.Semaphore>();
+    const sessionGates = yield* KeyedLock.make<string>();
     const exclusive =
       (providerThread: OrchestrationV2ProviderThread) =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) => {
         const sessionId = providerThread.nativeThreadRef?.nativeId;
         if (sessionId == null) return effect;
-        let gate = sessionGates.get(sessionId);
-        if (gate === undefined) {
-          gate = Semaphore.makeUnsafe(1);
-          sessionGates.set(sessionId, gate);
-        }
-        return gate.withPermit(effect);
+        return sessionGates.withLock(sessionId, effect);
       };
     const emit = (event: ProviderAdapter.ProviderAdapterV2Event) =>
       Queue.offer(events, event).pipe(Effect.asVoid);

@@ -183,6 +183,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     listDisabled: Ref.get(storedDisabled).pipe(Effect.map((ids) => [...ids])),
   });
   const registrationStore = Persistence.ConnectionRegistrationStore.of({
+    setRoutes: () => Effect.void,
     register: (registration) =>
       Effect.gen(function* () {
         yield* options?.beforeRegistrationRegister?.(registration) ?? Effect.void;
@@ -327,6 +328,8 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     disconnect: (target) => Ref.update(disconnectedSshTargets, (current) => [...current, target]),
   });
   const driver = ConnectionDriver.ConnectionDriver.of({
+    checkRoute: () => Effect.succeed("unchecked"),
+    preflight: () => Effect.succeed(false),
     connect: (entry, reportProgress) =>
       Effect.gen(function* () {
         const target = entry.target;

@@ -2,7 +2,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { Command } from "effect/unstable/cli";
+import { CliError, Command } from "effect/unstable/cli";
 
 import * as NetService from "@supacode/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
@@ -12,7 +12,7 @@ import { appCommand } from "./cli/app.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
-import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
+import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { updateCommand } from "./cli/update.ts";
 import { uninstallCommand } from "./cli/uninstall.ts";
 import { serviceLauncherCommand } from "./cli/serviceLauncher.ts";
@@ -29,8 +29,14 @@ const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 export const makeCli = () =>
   Command.make("supacode", { ...sharedServerCommandFlags }).pipe(
     Command.withDescription("Run the Supacode server."),
-    Command.withHandler((flags) => runServerCommand(flags)),
+    Command.withHandler(runDefaultServerCommand),
     Command.withSubcommands([
+      Command.make("help").pipe(
+        Command.withDescription("Show command help."),
+        Command.withHandler(() =>
+          Effect.fail(new CliError.ShowHelp({ commandPath: ["supacode"], errors: [] })),
+        ),
+      ),
       acpMcpBridgeCommand,
       acpMcpCallCommand,
       startCommand,

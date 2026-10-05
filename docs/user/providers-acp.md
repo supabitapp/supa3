@@ -23,6 +23,14 @@ work through the same generic integration.
 Search only shows agents that can run on the connected server. Registry agents are third-party
 code; review an agent's source and license before adding it.
 
+## Add a local command
+
+In **Settings → Providers → Add provider**, select **Local ACP command**. Enter the executable
+name or path on the selected environment, add one literal argument per row, and choose a display
+name. Local commands require no registry entry or download; credentials and skills remain managed
+by the installed agent or its wrapper. Supacode launches the executable directly without expanding
+shell expressions.
+
 ## Where agents run
 
 Registry agents always run on the machine that hosts your Supacode server. That stays true when you

@@ -2,6 +2,7 @@ import {
   registerConnectionInCatalog,
   removeConnectionFromCatalog,
   setConnectionEnabledInCatalog,
+  setRoutesInCatalog,
   removeCatalogValue,
   replaceCatalogValue,
   Persistence,
@@ -25,6 +26,7 @@ function targetPersistenceError(
     | "list-targets"
     | "list-disabled-targets"
     | "register-connection"
+    | "set-connection-routes"
     | "remove-connection"
     | "set-connection-enabled",
   error: ConnectionTransientError,
@@ -55,10 +57,14 @@ export const connectionStorageLayer = Layer.effectContext(
       ),
     });
     const registrationStore = Persistence.ConnectionRegistrationStore.of({
-      register: (registration) =>
+      register: (registration, routes) =>
         catalog
-          .update((document) => registerConnectionInCatalog(document, registration))
+          .update((document) => registerConnectionInCatalog(document, registration, routes))
           .pipe(Effect.mapError((error) => targetPersistenceError("register-connection", error))),
+      setRoutes: (environmentId, routes) =>
+        catalog
+          .update((document) => setRoutesInCatalog(document, environmentId, routes))
+          .pipe(Effect.mapError((error) => targetPersistenceError("set-connection-routes", error))),
       remove: (target) =>
         catalog
           .update((document) => removeConnectionFromCatalog(document, target))

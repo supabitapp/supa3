@@ -35,6 +35,28 @@ created in Settings can only be copied from the client that created them while
 its Connections page stays open. If you leave or reload that page, create
 another link to share.
 
+### Reach one machine several ways
+
+A saved machine can keep several routes, including LAN, Tailscale, a public URL,
+and SSH. Pair it again using another address, or choose **Add route** from its
+route list. Both addresses belong to the same machine in your client.
+
+Supacode also learns the LAN and Tailscale addresses reported by a paired
+machine. Enable **Network access** on the host to make its LAN address available.
+Learned addresses follow network changes and use the existing pairing. They go
+away when the host stops reporting them or you remove the pairing they came from.
+
+Routes are tried in preference order. An unavailable LAN address falls back to
+another saved route. Supacode checks for a preferred route when your network
+changes, when you return to the app, and periodically while using a fallback.
+A browser opened over HTTPS needs HTTPS routes; it cannot connect to plain HTTP
+LAN addresses.
+
+On web and desktop, open the machine's routes in **Settings → Connections** to
+reorder or remove them. On mobile, open the machine under
+**Settings → Environments** and choose **Edit**. Learned routes can be reordered,
+but removing their saved pairing also removes the addresses learned through it.
+
 ### Balance new threads across machines
 
 Auto balance is off by default. On web and desktop, enable it in

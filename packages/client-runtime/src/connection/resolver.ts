@@ -43,6 +43,7 @@ import {
   orchestrationProtocolCompatibilityError,
 } from "./compatibility.ts";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
+import { credentialConnectionId } from "./routes.ts";
 
 export class ConnectionResolver extends Context.Service<
   ConnectionResolver,
@@ -137,7 +138,7 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
         actual: profile.environmentId,
       });
     }
-    const credential = yield* credentials.get(target.connectionId).pipe(
+    const credential = yield* credentials.get(credentialConnectionId(target.connectionId)).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.fail(credentialMissingError(target.connectionId)),

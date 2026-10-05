@@ -21,6 +21,8 @@ export class BearerConnectionProfile extends Schema.TaggedClass<BearerConnection
     ...ConnectionProfileBase,
     httpBaseUrl: Schema.String,
     wsBaseUrl: Schema.String,
+    /** Learned from the server's direct endpoint advertisement. */
+    learned: Schema.optionalKey(Schema.Literal(true)),
   },
 ) {}
 
@@ -35,9 +37,16 @@ export class SshConnectionProfile extends Schema.TaggedClass<SshConnectionProfil
 export const ConnectionProfile = Schema.Union([BearerConnectionProfile, SshConnectionProfile]);
 export type ConnectionProfile = typeof ConnectionProfile.Type;
 
+export interface ConnectionRoute {
+  readonly target: ConnectionTarget;
+  readonly profile: Option.Option<ConnectionProfile>;
+}
+
 export interface ConnectionCatalogEntry {
   readonly target: ConnectionTarget;
   readonly profile: Option.Option<ConnectionProfile>;
+  /** Additional direct or SSH routes, in fallback order. */
+  readonly alternateRoutes?: ReadonlyArray<ConnectionRoute>;
   /** False when the user switched the environment off: saved, but never connects. */
   readonly enabled: boolean;
   /** Protocol rejection stays visible while the saved connection is switched off. */
