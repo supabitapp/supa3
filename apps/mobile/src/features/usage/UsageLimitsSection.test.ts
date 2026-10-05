@@ -30,7 +30,7 @@ vi.mock("react", () => ({
   },
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => state.presentations }));
-vi.mock("react-native", () => ({ Alert: {}, Pressable: "button", View: "div" }));
+vi.mock("react-native", () => ({ Pressable: "button", View: "div" }));
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
 vi.mock("../../components/ProviderIcon", () => ({ ProviderIcon: () => null }));
 vi.mock("./usageProviders", () => ({ useProviderColors: () => ({}) }));

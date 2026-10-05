@@ -76,10 +76,7 @@ export function ProjectCloneBanner(props: {
 function BannerAction({
   label,
   ...props
-}: { readonly label: string } & Pick<
-  ComponentProps<typeof Pressable>,
-  "accessibilityHint" | "onPress" | "onTouchStart"
->) {
+}: Omit<ComponentProps<typeof Pressable>, "children"> & { readonly label: string }) {
   return (
     <Pressable
       accessibilityRole="button"

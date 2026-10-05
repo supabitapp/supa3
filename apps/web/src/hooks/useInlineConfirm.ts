@@ -1,5 +1,5 @@
 import { createInlineConfirm } from "@supacode/client-runtime/inline-confirm";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 const TARGET_ATTRIBUTE = "data-inline-confirm";
 
@@ -17,7 +17,6 @@ export function useInlineConfirm<Key extends string>() {
   const scope = useId();
   const [armed, setArmed] = useState<Key | null>(null);
   const [confirm] = useState(() => createInlineConfirm<Key>(setArmed, schedule));
-  const detachRefs = useRef(new Map<Key, () => () => void>());
 
   useEffect(() => () => confirm.disarm(), [confirm]);
 
@@ -43,20 +42,11 @@ export function useInlineConfirm<Key extends string>() {
     };
   }, [armed, confirm, scope]);
 
-  const detachRef = (key: Key) => {
-    let ref = detachRefs.current.get(key);
-    if (ref === undefined) {
-      ref = () => () => confirm.disarm(key);
-      detachRefs.current.set(key, ref);
-    }
-    return ref;
-  };
-
   return {
     armed,
     bind: (key: Key, run: () => void) => ({
       [TARGET_ATTRIBUTE]: `${scope}:${key}`,
-      ref: detachRef(key),
+      ref: confirm.attach(key),
       onClick: (event: PressEvent) => {
         if (!confirm.press(key, event.timeStamp)) {
           event.preventBaseUIHandler?.();

@@ -70,4 +70,15 @@ describe("createInlineConfirm", () => {
     expect(changes).toEqual(["remove", null, "retry", null]);
     expect(timers.size).toBe(0);
   });
+
+  it("hands out one attachment per key whose cleanup disarms only that key", () => {
+    const { changes, confirm } = track();
+    const detachRemove = confirm.attach("remove");
+    expect(confirm.attach("remove")).toBe(detachRemove);
+    confirm.press("remove", 0);
+    confirm.attach("retry")()();
+    expect(changes).toEqual(["remove"]);
+    detachRemove()();
+    expect(changes).toEqual(["remove", null]);
+  });
 });

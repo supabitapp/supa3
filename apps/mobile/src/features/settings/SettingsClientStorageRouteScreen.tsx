@@ -2,7 +2,7 @@ import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollVie
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { type ComponentProps, useMemo } from "react";
+import { useMemo } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,7 +30,7 @@ export function SettingsClientStorageRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const serverConfigs = useServerConfigs();
   const isClearing = clearResult.waiting;
-  const confirm = useInlineConfirm<"all" | `environment:${string}`>();
+  const confirm = useInlineConfirm<"all">();
   const summary = AsyncResult.isSuccess(summaryResult) ? summaryResult.value : null;
   const clearAllLabel = summary ? `Clear ${formatBytes(summary.payloadBytes)}` : "Clear caches";
   const environmentSummaries = useMemo(
@@ -95,13 +95,12 @@ export function SettingsClientStorageRouteScreen() {
                       )}
                       disabled={isClearing}
                       first={index === 0}
-                      armed={confirm.armed === `environment:${environment.environmentId}`}
-                      clear={confirm.bind(`environment:${environment.environmentId}`, () =>
+                      onClear={() =>
                         clearCache({
                           type: "environment",
                           environmentId: environment.environmentId,
-                        }),
-                      )}
+                        })
+                      }
                     />
                   </Animated.View>
                 ))}
@@ -157,12 +156,10 @@ function CacheEnvironmentRow(props: {
   readonly machine: EnvironmentMachineKind;
   readonly disabled: boolean;
   readonly first: boolean;
-  readonly armed: boolean;
-  readonly clear: Pick<
-    ComponentProps<typeof Pressable>,
-    "accessibilityHint" | "onPress" | "onTouchStart"
-  >;
+  readonly onClear: () => void;
 }) {
+  const confirm = useInlineConfirm<"clear">();
+  const armed = confirm.armed === "clear";
   return (
     <View
       className={
@@ -177,20 +174,20 @@ function CacheEnvironmentRow(props: {
       </Text>
       <Pressable
         accessibilityLabel={
-          props.armed
+          armed
             ? `Confirm clearing cache for ${props.environmentLabel}`
             : `Clear cache for ${props.environmentLabel}`
         }
         accessibilityRole="button"
         disabled={props.disabled}
-        {...props.clear}
+        {...confirm.bind("clear", props.onClear)}
         className="rounded-full px-3 py-2 disabled:opacity-40"
       >
         <Text
           className="font-supacode-medium tabular-nums text-danger-foreground"
           numberOfLines={1}
         >
-          {props.armed ? "Confirm clear" : `Clear ${formatBytes(props.environment.payloadBytes)}`}
+          {armed ? "Confirm clear" : `Clear ${formatBytes(props.environment.payloadBytes)}`}
         </Text>
       </Pressable>
     </View>

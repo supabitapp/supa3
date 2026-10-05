@@ -6,6 +6,7 @@ export type InlineConfirmSchedule = (ms: number, run: () => void) => () => void;
 export interface InlineConfirm<Key extends string> {
   readonly press: (key: Key, at: number) => boolean;
   readonly disarm: (key?: Key) => void;
+  readonly attach: (key: Key) => () => () => void;
 }
 
 export function createInlineConfirm<Key extends string>(
@@ -15,6 +16,7 @@ export function createInlineConfirm<Key extends string>(
   let armed: Key | null = null;
   let armedAt = 0;
   let cancelTimeout: (() => void) | undefined;
+  const attachments = new Map<Key, () => () => void>();
 
   const set = (next: Key | null) => {
     cancelTimeout?.();
@@ -22,6 +24,10 @@ export function createInlineConfirm<Key extends string>(
       next === null ? undefined : schedule(INLINE_CONFIRM_TIMEOUT_MS, () => set(null));
     armed = next;
     onChange(next);
+  };
+
+  const disarm = (key?: Key) => {
+    if (armed !== null && (key === undefined || key === armed)) set(null);
   };
 
   return {
@@ -35,8 +41,14 @@ export function createInlineConfirm<Key extends string>(
       set(null);
       return true;
     },
-    disarm: (key) => {
-      if (armed !== null && (key === undefined || key === armed)) set(null);
+    disarm,
+    attach: (key) => {
+      let attachment = attachments.get(key);
+      if (attachment === undefined) {
+        attachment = () => () => disarm(key);
+        attachments.set(key, attachment);
+      }
+      return attachment;
     },
   };
 }
