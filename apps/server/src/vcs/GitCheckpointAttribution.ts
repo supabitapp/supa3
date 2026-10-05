@@ -8,8 +8,6 @@
  * the two HEADs and no commit made during the turn touched it. Every other path
  * stays with the turn.
  */
-import { unquoteGitPatchPath } from "@supacode/shared/gitPatchPath";
-
 import type {
   VcsCheckpointChangeAttribution,
   VcsCheckpointFileChange,
@@ -131,34 +129,21 @@ export function parseRawDiff(
 
 /**
  * Reads `git rev-list --timestamp --parents` output into the commits made at or
- * after `sinceSeconds`, split by whether they are merges.
+ * after `sinceSeconds`. Returns undefined when one of them is an octopus merge,
+ * which `--remerge-diff` skips, so its hand edits could not be seen.
  */
 export function selectTurnCommits(
   stdout: string,
   sinceSeconds: number,
-): { readonly commits: ReadonlyArray<string>; readonly merges: ReadonlyArray<string> } {
+): ReadonlyArray<string> | undefined {
   const commits: string[] = [];
-  const merges: string[] = [];
   for (const line of stdout.split("\n")) {
     const [timestamp, commit, ...parents] = line.split(" ");
     if (commit === undefined || Number(timestamp) < sinceSeconds) continue;
-    (parents.length > 1 ? merges : commits).push(commit);
+    if (parents.length > 2) return undefined;
+    commits.push(commit);
   }
-  return { commits, merges };
-}
-
-/**
- * Reads the file headers of `git diff-tree --cc` patch output. Dense combined
- * diffs drop files a merge took cleanly from either side, leaving only the
- * files someone resolved by hand. Content lines carry one prefix column per
- * parent, so none of them can start a header.
- */
-export function parseCombinedDiffPaths(patch: string): ReadonlyArray<string> {
-  return patch
-    .split("\n")
-    .flatMap((line) =>
-      line.startsWith("diff --cc ") ? [unquoteGitPatchPath(line.slice("diff --cc ".length))] : [],
-    );
+  return commits;
 }
 
 export function attributeCheckpointChanges(input: {

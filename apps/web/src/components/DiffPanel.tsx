@@ -401,7 +401,10 @@ export default function DiffPanel({
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
   const isGitOnlyTurn =
-    selectedTurn?.files.length === 0 && selectedGitUpdate !== undefined && !includeGitChanges;
+    selectedTurn?.files.length === 0 &&
+    selectedGitUpdate !== undefined &&
+    !includeGitChanges &&
+    !selectedPatchError;
   const lazySource =
     !selectedTurn && selectedGitSource?.truncated && selectedGitSource.files
       ? selectedGitSource

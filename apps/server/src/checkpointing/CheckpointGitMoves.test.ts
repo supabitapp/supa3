@@ -331,6 +331,35 @@ it.layer(TestLayer)("checkpoint git move attribution", (it) => {
     }),
   );
 
+  it.effect("keeps a conflict resolved by taking the incoming side", () =>
+    Effect.gen(function* () {
+      const cwd = yield* makeRepo();
+      yield* writeFile(cwd, "conflict.txt", sharedText());
+      yield* commitAll(cwd, "add conflict.txt");
+      yield* runGit(cwd, ["checkout", "--quiet", "-b", "feature"]);
+      yield* writeFile(cwd, "conflict.txt", sharedText({ 10: "ten-feature" }));
+      yield* commitAll(cwd, "feature work");
+      yield* runGit(cwd, ["checkout", "--quiet", "main"]);
+      yield* writeFile(cwd, "conflict.txt", sharedText({ 10: "ten-main" }));
+      yield* commitAll(cwd, "main work");
+      const scope = yield* startThread(cwd);
+
+      yield* runGit(cwd, ["merge", "--quiet", "feature"], {
+        date: DURING_TURN,
+        allowNonZeroExit: true,
+      });
+      // The result matches feature exactly, which a dense combined diff hides,
+      // yet it discards main's committed line.
+      yield* runGit(cwd, ["checkout", "--theirs", "conflict.txt"]);
+      yield* runGit(cwd, ["add", "conflict.txt"]);
+      yield* runGit(cwd, ["commit", "--quiet", "--no-edit"], { date: DURING_TURN });
+      const checkpoint = yield* endTurn(scope);
+
+      assert.deepEqual(paths(checkpoint), ["conflict.txt"]);
+      assert.isUndefined(checkpoint.gitUpdate);
+    }),
+  );
+
   it.effect("keeps a dirty edit carried across a checkout", () =>
     Effect.gen(function* () {
       const cwd = yield* makeRepo();

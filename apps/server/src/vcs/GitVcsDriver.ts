@@ -419,8 +419,8 @@ const CHECKPOINT_RECOVERY_MAX_CANDIDATES = 64;
 const CHECKPOINT_RECOVERY_TIMEOUT = "5 seconds";
 const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
 const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
-/** Pathspec bytes per `git diff`, well inside every platform's argv limit. */
-const CHECKPOINT_DIFF_MAX_PATHSPEC_BYTES = 64 * 1024;
+/** Pathspec bytes per `git diff`, inside Windows' 32,767-character command line. */
+const CHECKPOINT_DIFF_MAX_PATHSPEC_BYTES = 24 * 1024;
 /** Commits between two checkpoint HEADs beyond which attribution gives up. */
 const CHECKPOINT_ATTRIBUTION_MAX_COMMITS = 10_000;
 const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
@@ -1354,41 +1354,45 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           history.stdout,
           Math.floor(DateTime.toEpochMillis(input.turnStartedAt) / 1000),
         );
-        const turnCommitPaths = (commits: ReadonlyArray<string>, combined: boolean) =>
-          commits.length === 0
-            ? Effect.succeed<ReadonlyArray<string>>([])
-            : execute({
-                operation,
-                cwd: input.cwd,
-                args: [
-                  "diff-tree",
-                  "--stdin",
-                  "--no-commit-id",
-                  "-r",
-                  "--root",
-                  "--no-renames",
-                  ...(combined ? ["--cc", "--no-color"] : ["--name-only", "-z"]),
-                ],
-                stdin: `${commits.join("\n")}\n`,
-                maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
-                outputMode: "error",
-              }).pipe(
-                Effect.map((result) =>
-                  combined
-                    ? GitCheckpointAttribution.parseCombinedDiffPaths(result.stdout)
-                    : splitNullSeparatedGitStdoutPaths(result),
-                ),
+        if (turnCommits === undefined) {
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "git rev-list",
+            cwd: input.cwd,
+            exitCode: 0,
+            detail: "The turn made an octopus merge, which attribution cannot read.",
+          });
+        }
+        // --remerge-diff lists a merge's paths that differ from Git's own merge of
+        // its parents: every conflict however it was resolved, and any extra edit.
+        // Clean auto-merges stay out. Other commits list their changed paths.
+        const turnPaths =
+          turnCommits.length === 0
+            ? []
+            : splitNullSeparatedGitStdoutPaths(
+                yield* execute({
+                  operation,
+                  cwd: input.cwd,
+                  args: [
+                    "diff-tree",
+                    "--stdin",
+                    "--no-commit-id",
+                    "-r",
+                    "--root",
+                    "--no-renames",
+                    "--remerge-diff",
+                    "--name-only",
+                    "-z",
+                  ],
+                  stdin: `${turnCommits.join("\n")}\n`,
+                  maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+                  outputMode: "error",
+                }),
               );
-        // A merge counts only for the paths it resolved by hand, which needs the
-        // dense combined patch; `--name-only` would also list clean auto-merges.
-        const [commitPaths, mergePaths] = yield* Effect.all(
-          [turnCommitPaths(turnCommits.commits, false), turnCommitPaths(turnCommits.merges, true)],
-          { concurrency: "unbounded" },
-        );
         return GitCheckpointAttribution.attributeCheckpointChanges({
           tree,
           head,
-          turnPaths: new Set([...commitPaths, ...mergePaths]),
+          turnPaths: new Set(turnPaths),
         });
       },
     ),
