@@ -2,10 +2,12 @@
 
 import type { DesktopPreviewColorScheme, EnvironmentId } from "@supacode/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
+import { useId } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
   Menu,
+  MenuDescription,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -85,6 +87,7 @@ export function PreviewMoreMenu({
   profileName,
 }: Props) {
   const confirm = useInlineConfirm<"cookies" | "cache">();
+  const cookiesHintId = useId();
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
@@ -218,13 +221,14 @@ export function PreviewMoreMenu({
               "cookies",
               () => void bridge.clearCookies(environmentId, profileId).catch(() => undefined),
             )}
+            aria-describedby={confirm.armed === "cookies" ? cookiesHintId : undefined}
           >
             {confirm.armed === "cookies" ? "Confirm clear" : "Clear cookies"}
           </MenuItem>
           {confirm.armed === "cookies" ? (
-            <p className="px-2 py-1 text-xs text-balance text-muted-foreground contain-inline-size">
+            <MenuDescription id={cookiesHintId}>
               Signs you out of every site in this profile.
-            </p>
+            </MenuDescription>
           ) : null}
           <MenuItem
             {...confirm.bind(

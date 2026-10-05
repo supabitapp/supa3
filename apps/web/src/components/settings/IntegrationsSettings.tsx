@@ -40,7 +40,7 @@ import {
 } from "@supacode/contracts";
 import { PREVIEW_VIEWPORT_PRESETS } from "@supacode/shared/previewViewport";
 import { MoreVertical, Plus as PlusIcon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 
 import { ScreenRotationIcon } from "~/browser/ScreenRotationIcon";
 import { AnimatedHeight } from "~/components/AnimatedHeight";
@@ -64,6 +64,7 @@ import { isElectron } from "../../env";
 import { Badge } from "../ui/badge";
 import {
   Menu,
+  MenuDescription,
   MenuGroup,
   MenuGroupLabel,
   MenuItem,
@@ -905,16 +906,26 @@ function ClearBrowserProfileDataItem({
   readonly onClear: () => void;
 }) {
   const confirm = useInlineConfirm<"clear">();
+  const hintId = useId();
   const armed = confirm.armed === "clear";
   return (
     <>
-      <MenuItem {...confirm.bind("clear", onClear)} disabled={disabled}>
-        {armed ? "Confirm clear" : "Clear cookies and cache"}
+      <MenuItem
+        {...confirm.bind("clear", onClear)}
+        disabled={disabled}
+        aria-describedby={armed ? hintId : undefined}
+      >
+        <span className="grid">
+          <span className={cn("col-start-1 row-start-1", armed && "invisible")}>
+            Clear cookies and cache
+          </span>
+          <span className={cn("col-start-1 row-start-1", !armed && "invisible")}>
+            Confirm clear
+          </span>
+        </span>
       </MenuItem>
       {armed ? (
-        <p className="px-2 py-1 text-xs text-balance text-muted-foreground contain-inline-size">
-          Signs you out of every site in this profile.
-        </p>
+        <MenuDescription id={hintId}>Signs you out of every site in this profile.</MenuDescription>
       ) : null}
     </>
   );
