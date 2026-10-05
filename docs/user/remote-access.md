@@ -37,32 +37,25 @@ another link to share.
 
 ### Reach one machine several ways
 
-A machine can have more than one route: LAN, Tailscale, a public URL, SSH, or
-T3 Connect. To add one, choose **Add route** in the machine's route list, or
-next to it in the T3 Connect list. Pairing the same machine again over another
-address also adds a route instead of a second machine. A new route is placed by
-speed, in that order, and you can reorder routes at any time.
+A saved machine can keep several routes, including LAN, Tailscale, a public URL,
+and SSH. Pair it again using another address, or choose **Add route** from its
+route list. Both addresses belong to the same machine in your client.
 
-While connected through T3 Connect or a paired address, T3 Code also learns the
-machine's current LAN and Tailscale addresses and adds them as routes, so
-pairing once through T3 Connect is enough to use the LAN at home. When the
-machine's LAN address changes, for example after it joins another Wi-Fi network,
-the learned route follows it. The machine must allow network access for its LAN
-address to be learned. You can reorder a learned route, but not remove it; it
-goes away with the route it was learned through, or when the machine stops
-reporting that address.
+Supacode also learns the LAN and Tailscale addresses reported by a paired
+machine. Enable **Network access** on the host to make its LAN address available.
+Learned addresses follow network changes and use the existing pairing. They go
+away when the host stops reporting them or you remove the pairing they came from.
 
-T3 Code connects over the first route that answers. Away from home, a LAN
-address that does not answer is checked briefly and skipped. It is only tried
-again, after the other routes, if none of them connect. While connected over a
-later route, T3 Code checks the earlier ones when your network changes, when you
-return to the app, and every minute, and moves back as soon as one works.
+Routes are tried in preference order. An unavailable LAN address falls back to
+another saved route. Supacode checks for a preferred route when your network
+changes, when you return to the app, and periodically while using a fallback.
+A browser opened over HTTPS needs HTTPS routes; it cannot connect to plain HTTP
+LAN addresses.
 
-On web and desktop, select the route count under the machine's name in
-**Settings → Connections** to see its routes. Drag a route to change the order,
-or remove it. On mobile, open the machine under **Settings → Environments** and
-choose **Edit**. Signing out of T3 Connect removes only that route; a machine
-you can still reach another way stays saved.
+On web and desktop, open the machine's routes in **Settings → Connections** to
+reorder or remove them. On mobile, open the machine under
+**Settings → Environments** and choose **Edit**. Learned routes can be reordered,
+but removing their saved pairing also removes the addresses learned through it.
 
 ### Balance new threads across machines
 

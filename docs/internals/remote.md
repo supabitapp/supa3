@@ -24,32 +24,21 @@ prove that a route works. In particular, a host's loopback address refers to a
 different machine when another device opens it. Endpoint selection must not
 silently fall back to loopback when a shareable endpoint is unavailable.
 
-A saved environment holds an ordered list of routes, and the
-[driver](../../packages/client-runtime/src/connection/driver.ts) connects over
-the first that works. Each direct route is first checked with the public
-descriptor, so a saved LAN address that a different machine answers on another
-network receives no credential. That check is not proof of a working route:
-when every route stays silent, each is still tried. A route that fails to
-connect, including a blocked one such as a signed-out T3 Connect, moves on to
-the next; only an incompatible server stops the walk, because it is the same
-server on every route. While connected over a later route the
-[supervisor](../../packages/client-runtime/src/connection/supervisor.ts)
-preflights the earlier ones and replaces the session when one would connect.
-Preflight includes authorization so a route that answers but rejects this
-client never costs a working session; a route that still fails afterwards is
-held back for a cooldown so a flaky network cannot bounce the connection.
+Saved routes share one environment identity but may have separate credentials.
+The [driver](../../packages/client-runtime/src/connection/driver.ts) verifies a
+direct address against the public environment descriptor before sending its
+credential. A saved LAN address may belong to a different machine after a network
+change. The [supervisor](../../packages/client-runtime/src/connection/supervisor.ts)
+authorizes a preferred route before replacing a working session and applies a
+cooldown after a failed switch.
 
-A connected server reports the LAN and tailnet addresses it is bound to, and the
-client saves them as learned routes. A learned route reuses the credential of
-the route it was learned over: the T3 Connect access token, which is not bound
-to an origin because each DPoP proof names the URL it signs, or the paired
-bearer token. Learned routes the server stops reporting are dropped, which is
-how a changed LAN address replaces the old one; routes the user saved are never
-touched. The reported addresses are hints like any advertised endpoint, so a
-learned route still has to answer as this environment before it is used.
+Learned routes reuse their saved pairing's bearer credential. Removing that
+pairing removes its learned routes; an updated advertisement removes addresses
+the server no longer reports. User-saved routes survive advertisement changes.
 
-GitHub routing trust covers the whole route list. Adding or changing a route
-revokes it; reordering does not, because the same addresses remain trusted.
+[GitHub routing trust](../../packages/client-runtime/src/connection/githubRoutingPermissions.ts)
+covers every user-saved route. Adding or changing an address revokes the grant;
+reordering and learned-address changes preserve it.
 
 ## Hosted web is a client
 
