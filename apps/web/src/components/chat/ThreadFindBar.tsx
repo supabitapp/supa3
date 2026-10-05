@@ -81,100 +81,104 @@ export function ThreadFindBar(props: {
 
   return (
     <div
-      className="z-20 shrink-0 border-b border-border bg-background px-3 py-2 sm:px-5"
+      className="chat-composer-lane z-20 shrink-0 border-b border-border bg-background py-2"
       data-thread-find
     >
-      <div className="flex items-center gap-1.5">
-        <div className="min-w-0 flex-1">
-          <Input
-            ref={inputRef}
-            size="compact"
-            type="search"
-            aria-label="Find in thread"
-            placeholder="Find in thread"
-            maxLength={200}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                props.onClose();
-              } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                move(event.shiftKey ? -1 : 1);
-              }
-            }}
-          />
+      <div className="chat-content-lane">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="min-w-0 flex-[1_1_12rem]">
+            <Input
+              ref={inputRef}
+              size="compact"
+              type="search"
+              aria-label="Find in thread"
+              placeholder="Find in thread"
+              maxLength={200}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onClose();
+                } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  move(event.shiftKey ? -1 : 1);
+                }
+              }}
+            />
+          </div>
+          <div className="ms-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
+            <span
+              className="shrink-0 text-xs text-muted-foreground tabular-nums"
+              role="status"
+              aria-live="polite"
+            >
+              {pending
+                ? "Searching…"
+                : normalizedQuery.length === 0
+                  ? ""
+                  : `${match ? index + 1 : 0} of ${total}`}
+            </span>
+            <Button
+              variant="ghost-muted"
+              size="icon-xs"
+              aria-label="Previous match"
+              disabled={total === 0 || pending}
+              onClick={() => move(-1)}
+            >
+              <ChevronUpIcon />
+            </Button>
+            <Button
+              variant="ghost-muted"
+              size="icon-xs"
+              aria-label="Next match"
+              disabled={total === 0 || pending}
+              onClick={() => move(1)}
+            >
+              <ChevronDownIcon />
+            </Button>
+            <Button
+              variant="ghost-muted"
+              size="icon-xs"
+              aria-label="Refresh thread search"
+              disabled={readyQuery.length === 0 || pending}
+              onClick={refreshResults}
+            >
+              <RefreshCwIcon />
+            </Button>
+            <Button
+              variant="ghost-muted"
+              size="icon-xs"
+              aria-label="Close thread search"
+              onClick={props.onClose}
+            >
+              <XIcon />
+            </Button>
+          </div>
         </div>
-        <span
-          className="shrink-0 text-xs text-muted-foreground tabular-nums"
-          role="status"
-          aria-live="polite"
-        >
-          {pending
-            ? "Searching…"
-            : normalizedQuery.length === 0
-              ? ""
-              : `${match ? index + 1 : 0} of ${total}`}
-        </span>
-        <Button
-          variant="ghost-muted"
-          size="icon-xs"
-          aria-label="Previous match"
-          disabled={total === 0 || pending}
-          onClick={() => move(-1)}
-        >
-          <ChevronUpIcon />
-        </Button>
-        <Button
-          variant="ghost-muted"
-          size="icon-xs"
-          aria-label="Next match"
-          disabled={total === 0 || pending}
-          onClick={() => move(1)}
-        >
-          <ChevronDownIcon />
-        </Button>
-        <Button
-          variant="ghost-muted"
-          size="icon-xs"
-          aria-label="Refresh thread search"
-          disabled={readyQuery.length === 0 || pending}
-          onClick={refreshResults}
-        >
-          <RefreshCwIcon />
-        </Button>
-        <Button
-          variant="ghost-muted"
-          size="icon-xs"
-          aria-label="Close thread search"
-          onClick={props.onClose}
-        >
-          <XIcon />
-        </Button>
-      </div>
-      {result.error ? (
-        <p className="mt-1 text-xs text-destructive" role="alert">
-          {result.error}
-        </p>
-      ) : null}
-      {match && !pending ? (
-        <div className="mt-1.5">
-          <p className="text-2xs text-muted-foreground">Showing messages around this match</p>
-          <p
-            className="wrap-anywhere font-mono text-xs text-muted-foreground"
-            aria-label="Selected match excerpt"
-          >
-            {match.snippetStart > 0 ? "…" : ""}
-            {match.snippet.slice(0, start)}
-            <mark className="rounded-sm bg-primary/20 text-foreground">
-              {match.snippet.slice(start, end)}
-            </mark>
-            {match.snippet.slice(end)}
+        {result.error ? (
+          <p className="mt-1 text-xs text-destructive" role="alert">
+            {result.error}
           </p>
-        </div>
-      ) : null}
+        ) : null}
+        {match && !pending ? (
+          <div className="mt-1.5">
+            <p className="text-2xs text-muted-foreground">Showing messages around this match</p>
+            <p
+              className="wrap-anywhere font-mono text-xs text-muted-foreground"
+              aria-label="Selected match excerpt"
+            >
+              {match.snippetStart > 0 ? "…" : ""}
+              {match.snippet.slice(0, start)}
+              <mark className="rounded-sm bg-primary/20 text-foreground">
+                {match.snippet.slice(start, end)}
+              </mark>
+              {match.snippet.slice(end)}
+            </p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
