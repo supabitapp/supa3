@@ -8,7 +8,6 @@ import {
   threadDropLifecycle,
   reconcilePendingThreadOrder,
   type PendingThreadOrder,
-  type ThreadMoveAvailability,
 } from "./threadOrder";
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import { threadSearchMatchKey } from "@supacode/client-runtime/state/thread-search";
@@ -1615,7 +1614,6 @@ function buildTickList(
   options?: {
     readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
     readonly queuedThreadKeys?: ReadonlySet<string>;
-    readonly moveAvailability?: ReadonlyMap<string, ThreadMoveAvailability>;
     readonly shelfPreferencesLoading?: boolean;
   },
 ): ThreadListV2ListItem[] {
@@ -1640,7 +1638,6 @@ function buildTickList(
       ? { snoozeEnvironmentIds: options.snoozeEnvironmentIds }
       : {}),
     ...(options?.queuedThreadKeys ? { queuedThreadKeys: options.queuedThreadKeys } : {}),
-    ...(options?.moveAvailability ? { moveAvailability: options.moveAvailability } : {}),
     ...(options?.shelfPreferencesLoading !== undefined
       ? { shelfPreferencesLoading: options.shelfPreferencesLoading }
       : {}),
@@ -2056,34 +2053,6 @@ describe("buildThreadListV2ListItems row-state stamps", () => {
     expect(threadListV2ListItemsAreEqual(readyQueued, readyPlain)).toBe(false);
     // The neighbour row is untouched by the outbox change.
     expect(threadListV2ListItemsAreEqual(settledQueued, settledPlain)).toBe(true);
-  });
-
-  it("notices move-availability changes on card rows without a shell update", () => {
-    const permissive = new Map([
-      [`${environmentId}:stamp-ready`, { canMoveUp: true, canMoveDown: true }],
-      [`${environmentId}:stamp-settled`, { canMoveUp: true, canMoveDown: true }],
-    ]);
-    const blocked = new Map([
-      [`${environmentId}:stamp-settled`, { canMoveUp: true, canMoveDown: true }],
-    ]);
-    const open = buildTickList([readyThread, settledThread], BASE_MS, [], {
-      moveAvailability: permissive,
-      snoozeEnvironmentIds: allEnvironments,
-    });
-    const closed = buildTickList([readyThread, settledThread], BASE_MS, [], {
-      moveAvailability: blocked,
-      snoozeEnvironmentIds: allEnvironments,
-    });
-    const readyOpen = itemsByThreadKey(open).get(`v2-thread:${environmentId}:stamp-ready`)!;
-    const readyClosed = itemsByThreadKey(closed).get(`v2-thread:${environmentId}:stamp-ready`)!;
-    expect(readyOpen.type === "v2-thread" && readyOpen.canMoveUp).toBe(true);
-    expect(readyClosed.type === "v2-thread" && readyClosed.canMoveUp).toBe(false);
-    expect(threadListV2ListItemsAreEqual(readyOpen, readyClosed)).toBe(false);
-    // Slim rows never carry the move actions, so availability is inert there.
-    const settledOpen = itemsByThreadKey(open).get(`v2-thread:${environmentId}:stamp-settled`)!;
-    const settledClosed = itemsByThreadKey(closed).get(`v2-thread:${environmentId}:stamp-settled`)!;
-    expect(settledOpen.type === "v2-thread" && settledOpen.canMoveUp).toBe(false);
-    expect(threadListV2ListItemsAreEqual(settledOpen, settledClosed)).toBe(true);
   });
 
   it("keeps the settled slim row's swipe snooze menu fresh across a tick", () => {

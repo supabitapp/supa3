@@ -86,8 +86,7 @@ mobile, open a thread's menu and choose **Arrange threads**. Drag a handle withi
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
 or **Settled** to drag a parked thread back into either live section. Each drop saves; **Done** returns to the thread list.
-**Move up** and **Move down** are also available in the thread menu. The server
-saves the order, so it survives a refresh and appears on your other connected devices.
+The server saves the order, so it survives a refresh and appears on your other connected devices.
 
 On web and desktop, the list also animates section changes made with thread actions such as
 **Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion

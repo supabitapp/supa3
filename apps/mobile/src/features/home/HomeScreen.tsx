@@ -1,6 +1,5 @@
 import { useThreadListV2Layout } from "../threads/use-thread-list-v2-layout";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
-import type { ThreadMoveDestination } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
   type EnvironmentProject,
@@ -103,10 +102,6 @@ interface HomeScreenProps {
   readonly onSetThreadAutoSettle: (
     thread: EnvironmentThreadShell,
     enabled: boolean,
-  ) => Promise<boolean>;
-  readonly onMoveThread: (
-    thread: EnvironmentThreadShell,
-    direction: ThreadMoveDestination,
   ) => Promise<boolean>;
   readonly onRenameThread: (thread: EnvironmentThreadShell) => void;
   readonly onRegenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
@@ -395,7 +390,6 @@ export function HomeScreen(props: HomeScreenProps) {
     onSnoozeThread,
     onUnsnoozeThread,
     onPinThread,
-    onMoveThread,
     onUnpinThread,
     onSetThreadAutoSettle,
     onRegenerateThreadTitle,
@@ -418,12 +412,6 @@ export function HomeScreen(props: HomeScreenProps) {
       void onPinThread(thread);
     },
     [onPinThread],
-  );
-  const handleMoveThread = useCallback(
-    (thread: EnvironmentThreadShell, direction: ThreadMoveDestination) => {
-      void onMoveThread(thread, direction);
-    },
-    [onMoveThread],
   );
   const handleUnpinThread = useCallback(
     (thread: EnvironmentThreadShell) => {
@@ -512,7 +500,7 @@ export function HomeScreen(props: HomeScreenProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
-  const { threadMoveAvailability, threadListV2Layout } = useThreadListV2Layout({
+  const { threadListV2Layout } = useThreadListV2Layout({
     threads: props.threads,
     environmentId: props.selectedEnvironmentId,
     projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
@@ -529,8 +517,6 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey: null,
-    pinReorderEnvironmentIds,
-    activeReorderEnvironmentIds,
   });
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
@@ -583,13 +569,11 @@ export function HomeScreen(props: HomeScreenProps) {
         snoozeLabelNow: `${nowMinute}:00.000Z`,
         snoozeEnvironmentIds,
         queuedThreadKeys,
-        moveAvailability: threadMoveAvailability,
         shelfPreferencesLoading: !shelfPreferencesLoaded,
       }),
     [
       nowMinute,
       queuedThreadKeys,
-      threadMoveAvailability,
       settledShelfExpanded,
       shelfPreferencesLoaded,
       snoozedShelfExpanded,
@@ -714,15 +698,12 @@ export function HomeScreen(props: HomeScreenProps) {
               ? pinReorderEnvironmentIds.has(thread.environmentId)
               : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
           }
-          canMoveUp={item.canMoveUp}
-          canMoveDown={item.canMoveDown}
           onSnoozeThread={handleSnoozeThread}
           onUnsnoozeThread={handleUnsnoozeThread}
           onUnsettleThread={handleUnsettleThread}
           onPinThread={handlePinThread}
           onUnpinThread={handleUnpinThread}
           onSetThreadAutoSettle={handleSetThreadAutoSettle}
-          onMoveThread={handleMoveThread}
           onSwipeableClose={handleSwipeableClose}
           onSwipeableWillOpen={handleSwipeableWillOpen}
           activationKey={item.key}
@@ -732,7 +713,6 @@ export function HomeScreen(props: HomeScreenProps) {
     [
       handleDeleteThread,
       activeReorderEnvironmentIds,
-      handleMoveThread,
       handlePinThread,
       handleRegenerateThreadTitle,
       handleRenameThread,
