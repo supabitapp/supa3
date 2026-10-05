@@ -20,6 +20,7 @@ export function useThreadListV2Layout({
   settledLimit,
   now,
   workingShelfEnabled,
+  pinnedShelfExpanded,
   workingShelfExpanded,
   snoozedShelfExpanded,
   settledShelfExpanded,
@@ -41,6 +42,7 @@ export function useThreadListV2Layout({
       settledLimit,
       now,
       workingShelfEnabled,
+      pinnedShelfExpanded,
       workingShelfExpanded,
       inboxReturnAt: threadListInboxReturns.returnedAt,
       snoozedShelfExpanded,
@@ -49,6 +51,7 @@ export function useThreadListV2Layout({
     });
   }, [
     workingShelfEnabled,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     pendingOrder,
     queuedThreadKeys,

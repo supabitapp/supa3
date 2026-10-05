@@ -43,6 +43,8 @@ import {
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
+  ThreadListV2PinnedShelfHeader,
+  ThreadListV2SectionDivider,
   ThreadListV2WorkingShelfHeader,
 } from "../threads/thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
@@ -457,9 +459,11 @@ export function HomeScreen(props: HomeScreenProps) {
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
+    togglePinnedShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the list stays open.
@@ -513,6 +517,7 @@ export function HomeScreen(props: HomeScreenProps) {
     settledLimit: settledVisibleCount,
     now: listClock.now,
     workingShelfEnabled,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
@@ -557,7 +562,9 @@ export function HomeScreen(props: HomeScreenProps) {
       buildThreadListV2ListItems({
         items: threadListV2Layout.items,
         pendingTasks: v2PendingTasks,
+        pinnedCount: threadListV2Layout.pinnedCount,
         workingCount: threadListV2Layout.workingCount,
+        pinnedShelfExpanded,
         workingShelfExpanded,
         workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
         snoozedCount: threadListV2Layout.snoozedCount,
@@ -580,6 +587,7 @@ export function HomeScreen(props: HomeScreenProps) {
       snoozeEnvironmentIds,
       threadListV2Layout,
       v2PendingTasks,
+      pinnedShelfExpanded,
       workingShelfExpanded,
     ],
   );
@@ -615,6 +623,19 @@ export function HomeScreen(props: HomeScreenProps) {
             onSwipeableClose={handleSwipeableClose}
             onSwipeableWillOpen={handleSwipeableWillOpen}
             activationKey={item.key}
+          />
+        );
+      }
+      if (item.type === "v2-active-header") {
+        return <ThreadListV2SectionDivider label="Active" />;
+      }
+      if (item.type === "v2-pinned-shelf") {
+        return (
+          <ThreadListV2PinnedShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={togglePinnedShelf}
           />
         );
       }
@@ -744,6 +765,7 @@ export function HomeScreen(props: HomeScreenProps) {
       titleRegenerationEnvironmentIds,
       toggleSettledShelf,
       toggleSnoozedShelf,
+      togglePinnedShelf,
       toggleWorkingShelf,
       v2ProjectTitleByProjectKey,
       props.searchQuery,

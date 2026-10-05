@@ -486,6 +486,79 @@ describe("buildThreadListV2Items", () => {
     expect(layout.settledCount).toBe(1);
   });
 
+  it("collapses pins without losing the selected thread or their saved order", () => {
+    const threads = [
+      makeThread({
+        id: ThreadId.make("later"),
+        title: "Later pin",
+        pinnedAt: NOW,
+        pinOrderKey: "b",
+      }),
+      makeThread({ id: ThreadId.make("active"), title: "Active" }),
+      makeThread({
+        id: ThreadId.make("first"),
+        title: "First pin",
+        pinnedAt: NOW,
+        pinOrderKey: "a",
+      }),
+    ];
+    const input = { threads, environmentId: null, searchQuery: "", now: NOW };
+    const expanded = buildThreadListV2Items(input);
+    expect(expanded.pinnedCount).toBe(2);
+    expect(expanded.items.map((item) => item.thread.id)).toEqual(["first", "later", "active"]);
+    const collapsed = buildThreadListV2Items({ ...input, pinnedShelfExpanded: false });
+    expect(collapsed.items.map((item) => item.thread.id)).toEqual(["active"]);
+    const collapsedList = buildThreadListV2ListItems({
+      ...collapsed,
+      pendingTasks: [],
+      pinnedShelfExpanded: false,
+    });
+    expect(collapsedList.map((item) => item.type)).toEqual([
+      "v2-pinned-shelf",
+      "v2-active-header",
+      "v2-thread",
+    ]);
+    expect(collapsedList[0]).toMatchObject({ count: 2, expanded: false });
+    const selected = buildThreadListV2Items({
+      ...input,
+      pinnedShelfExpanded: false,
+      selectedThreadKey: `${environmentId}:later`,
+    });
+    expect(selected.items.map((item) => item.thread.id)).toEqual(["later", "active"]);
+    expect(
+      getThreadListV2OrderedSection({ threads, section: "pinned", now: NOW }).map(
+        (thread) => thread.id,
+      ),
+    ).toEqual(["first", "later"]);
+    expect(buildThreadListV2Items({ ...input, pinnedShelfExpanded: true }).items).toEqual(
+      expanded.items,
+    );
+    const filtered = buildThreadListV2Items({
+      ...input,
+      searchQuery: "First",
+      pinnedShelfExpanded: false,
+    });
+    const filteredList = buildThreadListV2ListItems({
+      ...filtered,
+      pendingTasks: [],
+      pinnedShelfExpanded: false,
+    });
+    expect(filteredList).toEqual([
+      {
+        type: "v2-pinned-shelf",
+        key: "v2-pinned-shelf", // gitleaks:allow -- static list item identity
+        count: 1,
+        expanded: false,
+        disabled: false,
+      },
+    ]);
+    const header = collapsedList[0]!;
+    expect(threadListV2ListItemsAreEqual(header, { ...header })).toBe(true);
+    if (header.type !== "v2-pinned-shelf") throw new Error("Expected Pinned header");
+    expect(threadListV2ListItemsAreEqual(header, { ...header, expanded: true })).toBe(false);
+    expect(threadListV2ListItemsAreEqual(header, { ...header, disabled: true })).toBe(false);
+  });
+
   it("keeps active pinned threads in the pinned block", () => {
     const pinned = makeThread({
       id: ThreadId.make("pinned"),
