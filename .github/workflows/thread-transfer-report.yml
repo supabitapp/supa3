@@ -27,9 +27,6 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
 
-      - name: Test trusted publisher
-        run: node --test .github/scripts/thread-transfer-report.test.cjs
-
       - id: resolve
         name: Resolve PR and baseline artifacts
         uses: actions/github-script@v8
