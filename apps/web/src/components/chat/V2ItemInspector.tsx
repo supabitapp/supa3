@@ -14,6 +14,7 @@ import {
 import { ExternalLinkIcon, GitBranchIcon, RotateCcwIcon } from "lucide-react";
 import { memo, Suspense, use, useMemo } from "react";
 
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
 import { resolveDiffThemeName } from "../../lib/diffRendering";
@@ -23,6 +24,7 @@ import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { Button } from "../ui/button";
 import ChatMarkdown from "../ChatMarkdown";
+import { InlineConfirmIcon, InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
 import { RenderErrorBoundary } from "../RenderErrorBoundary";
 import { resolveExternalWebLinkHref } from "./externalLinkContextMenu";
 
@@ -194,6 +196,24 @@ function ToolCallBody(
   );
 }
 
+function CheckpointRollbackButton({ onRollback }: { readonly onRollback: () => void }) {
+  const confirm = useInlineConfirm<"rollback">();
+  const armed = confirm.armed === "rollback";
+  return (
+    <InlineConfirmTooltip
+      armed={armed}
+      tip="Roll back this thread to this checkpoint"
+      armedTip="Click again to roll back this thread to this checkpoint. This can't be undone."
+      render={<Button size="xs" variant="outline" {...confirm.bind("rollback", onRollback)} />}
+    >
+      <InlineConfirmIcon armed={armed}>
+        <RotateCcwIcon className="size-3.5" />
+      </InlineConfirmIcon>
+      <InlineConfirmLabel armed={armed} idle="Roll back" confirm="Confirm roll back" />
+    </InlineConfirmTooltip>
+  );
+}
+
 export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspectorProps) {
   const fetched = useFetchedTurnItem(props.projectedItem, props.environmentId);
   const item = fetched.item;
@@ -344,19 +364,14 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
             {support.checkpoint?.status ?? item.status} · {item.files.length} files
           </span>
           {props.onRollbackCheckpoint && support.checkpoint?.status === "ready" ? (
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() =>
+            <CheckpointRollbackButton
+              onRollback={() =>
                 props.onRollbackCheckpoint?.({
                   checkpointId: item.checkpointId,
                   scopeId: item.scopeId,
                 })
               }
-            >
-              <RotateCcwIcon className="size-3" />
-              Roll back
-            </Button>
+            />
           ) : null}
         </div>
       ) : null}

@@ -567,6 +567,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ServerUpdateAction } from "./ServerUpdateAction";
 import { useAutoBalanceUpdateBanner } from "./chat/useAutoBalanceUpdateBanner";
+import { InlineConfirmButton } from "./InlineConfirm";
 import {
   ComposerServerUpdateIcon,
   ComposerServerUpdateStatus,
@@ -7089,7 +7090,6 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [activeThreadRef, activeThreadShell, unsnoozeThreadMutation, updateThreadMetadata]);
   const [isRestoringThreadBranch, setIsRestoringThreadBranch] = useState(false);
-  const [branchRestoreConfirmOpen, setBranchRestoreConfirmOpen] = useState(false);
   // Once revealed for a given mismatch, the banner stays mounted until the
   // mismatch changes or resolves, so clearing the draft doesn't flicker it.
   const [revealedBranchMismatchKey, setRevealedBranchMismatchKey] = useState<string | null>(null);
@@ -7452,17 +7452,6 @@ export default function ChatView(props: ChatViewProps) {
     resumeCompactionPermanentlyDismissed,
     selectedProvider,
   ]);
-  const handleRestoreThreadBranch = useCallback(() => {
-    if (gitStatusQuery.data?.hasWorkingTreeChanges) {
-      setBranchRestoreConfirmOpen(true);
-      return;
-    }
-    void handleSwitchCheckoutToThread();
-  }, [
-    gitStatusQuery.data?.hasWorkingTreeChanges,
-    handleSwitchCheckoutToThread,
-    setBranchRestoreConfirmOpen,
-  ]);
   const feedbackBannerItems = useMemo(
     () =>
       feedbackSubmissions.flatMap((submission) => {
@@ -7552,14 +7541,21 @@ export default function ChatView(props: ChatViewProps) {
           </span>
         ),
         actions: (
-          <Button
+          <InlineConfirmButton
             size="xs"
             variant="ghost"
             disabled={isRestoringThreadBranch}
-            onClick={handleRestoreThreadBranch}
-          >
-            {isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
-          </Button>
+            required={gitStatusQuery.data?.hasWorkingTreeChanges === true}
+            label={isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
+            confirmLabel="Confirm restore"
+            tooltip={
+              gitStatusQuery.data?.hasWorkingTreeChanges
+                ? `Switch back to ${localCheckoutBranchMismatch.threadBranch}. You have uncommitted changes.`
+                : `Switch back to ${localCheckoutBranchMismatch.threadBranch}`
+            }
+            confirmTooltip={`Click again to switch to ${localCheckoutBranchMismatch.threadBranch}. Your uncommitted changes will carry over, or block the switch if they conflict.`}
+            onConfirm={() => void handleSwitchCheckoutToThread()}
+          />
         ),
         dismissLabel: "Dismiss branch change notice",
         onDismiss: () => {
@@ -7572,8 +7568,9 @@ export default function ChatView(props: ChatViewProps) {
   }, [
     activeBranchMismatchKey,
     feedbackBannerItems,
+    gitStatusQuery.data?.hasWorkingTreeChanges,
     limitRecoveryBanner,
-    handleRestoreThreadBranch,
+    handleSwitchCheckoutToThread,
     isRestoringThreadBranch,
     backgroundWorkBannerItem,
     localCheckoutBranchMismatch,
@@ -8217,14 +8214,6 @@ export default function ChatView(props: ChatViewProps) {
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
-      const localApi = readLocalApi();
-      const confirmed =
-        localApi == null
-          ? window.confirm("Roll back this thread to the selected checkpoint?")
-          : await localApi.dialogs.confirm(
-              "Roll back this thread to the selected checkpoint?\nThis action cannot be undone.",
-            );
-      if (!confirmed) return;
 
       useComposerDraftStore.setState((store) => ({
         rewindingThreadKeys: new Set(store.rewindingThreadKeys).add(routeThreadKey),
@@ -11542,36 +11531,6 @@ export default function ChatView(props: ChatViewProps) {
                 miniPlayer={activePreviewMiniPlayer}
               />
             ) : null}
-
-            <AlertDialog open={branchRestoreConfirmOpen} onOpenChange={setBranchRestoreConfirmOpen}>
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Switch to{" "}
-                    <code className="font-medium">
-                      {localCheckoutBranchMismatch?.threadBranch ?? ""}
-                    </code>
-                    ?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You have uncommitted changes. They'll carry over to the other branch, or block
-                    the switch if they conflict.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-                  <Button
-                    variant="default"
-                    onClick={() => {
-                      setBranchRestoreConfirmOpen(false);
-                      void handleSwitchCheckoutToThread();
-                    }}
-                  >
-                    Switch branch
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
 
             <ThreadDetailsPanel {...threadDetailsPanelProps} />
 

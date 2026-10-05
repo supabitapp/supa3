@@ -120,7 +120,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
-import { InlineConfirmLabel } from "../InlineConfirm";
+import { InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Textarea } from "../ui/textarea";
 import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "../../pairingUrl";
@@ -584,30 +584,27 @@ function RevokeButton({
   const confirm = useInlineConfirm<"revoke">();
   const armed = confirm.armed === "revoke";
   return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <span className="inline-flex">
-            <Button
-              size="xs"
-              variant="destructive-outline"
-              disabled={pending || disabled}
-              {...confirm.bind("revoke", onRevoke)}
-            >
-              <InlineConfirmLabel
-                armed={armed}
-                idle={pending ? "Revoking…" : label}
-                confirm="Confirm revoke"
-              />
-            </Button>
-          </span>
-        }
-      />
-      <TooltipPopup side="top">
-        {pending ? "Revoking…" : armed ? armedTooltip : tooltip}
-      </TooltipPopup>
-    </Tooltip>
+    <InlineConfirmTooltip
+      armed={armed}
+      tip={pending ? "Revoking…" : tooltip}
+      armedTip={armedTooltip}
+      render={
+        <span className="inline-flex">
+          <Button
+            size="xs"
+            variant="destructive-outline"
+            disabled={pending || disabled}
+            {...confirm.bind("revoke", onRevoke)}
+          >
+            <InlineConfirmLabel
+              armed={armed}
+              idle={pending ? "Revoking…" : label}
+              confirm="Confirm revoke"
+            />
+          </Button>
+        </span>
+      }
+    />
   );
 }
 

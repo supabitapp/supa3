@@ -1,5 +1,5 @@
 import { CheckIcon } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { cn } from "~/lib/utils";
@@ -94,10 +94,40 @@ export function InlineConfirmLabel({
   );
 }
 
+export function InlineConfirmTooltip({
+  armed,
+  required = true,
+  render,
+  tip,
+  armedTip,
+  side = "top",
+  children,
+}: {
+  armed: boolean;
+  required?: boolean;
+  render: ComponentProps<typeof TooltipTrigger>["render"];
+  tip: ReactNode;
+  armedTip: ReactNode;
+  side?: ComponentProps<typeof TooltipPopup>["side"];
+  children?: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger closeOnClick={armed || !required} render={render}>
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup key={armed ? "armed" : "idle"} side={side}>
+        {armed ? armedTip : tip}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export function InlineConfirmButton({
   size,
   variant,
   disabled,
+  required = true,
   icon,
   label,
   confirmLabel,
@@ -108,6 +138,7 @@ export function InlineConfirmButton({
   readonly size: ButtonSize;
   readonly variant: ButtonVariant;
   readonly disabled?: boolean;
+  readonly required?: boolean;
   readonly icon?: ReactNode;
   readonly label: string;
   readonly confirmLabel: string;
@@ -118,27 +149,27 @@ export function InlineConfirmButton({
   const confirm = useInlineConfirm<"confirm">();
   const armed = confirm.armed === "confirm";
   return (
-    <Tooltip>
-      <TooltipTrigger
-        closeOnClick={false}
-        render={
-          <Button
-            type="button"
-            size={size}
-            variant={variant}
-            disabled={disabled}
-            {...confirm.bind("confirm", onConfirm)}
-            aria-label={icon === undefined ? undefined : armed ? confirmLabel : label}
-          >
-            {icon === undefined ? (
-              <InlineConfirmLabel armed={armed} idle={label} confirm={confirmLabel} />
-            ) : (
-              <InlineConfirmIcon armed={armed}>{icon}</InlineConfirmIcon>
-            )}
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">{armed ? confirmTooltip : tooltip}</TooltipPopup>
-    </Tooltip>
+    <InlineConfirmTooltip
+      armed={armed}
+      required={required}
+      tip={tooltip}
+      armedTip={confirmTooltip}
+      render={
+        <Button
+          type="button"
+          size={size}
+          variant={variant}
+          disabled={disabled}
+          {...(required ? confirm.bind("confirm", onConfirm) : { onClick: onConfirm })}
+          aria-label={icon === undefined ? undefined : armed ? confirmLabel : label}
+        />
+      }
+    >
+      {icon === undefined ? (
+        <InlineConfirmLabel armed={armed} idle={label} confirm={confirmLabel} />
+      ) : (
+        <InlineConfirmIcon armed={armed}>{icon}</InlineConfirmIcon>
+      )}
+    </InlineConfirmTooltip>
   );
 }
