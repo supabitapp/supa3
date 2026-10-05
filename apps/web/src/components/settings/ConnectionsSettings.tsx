@@ -566,6 +566,51 @@ function endpointShareHint(endpoint: AdvertisedEndpoint, url: string): string {
   }
 }
 
+function RevokeButton({
+  label,
+  pending,
+  disabled = false,
+  tooltip,
+  armedTooltip,
+  onRevoke,
+}: {
+  label: string;
+  pending: boolean;
+  disabled?: boolean;
+  tooltip: string;
+  armedTooltip: string;
+  onRevoke: () => void;
+}) {
+  const confirm = useInlineConfirm<"revoke">();
+  const armed = confirm.armed === "revoke";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        closeOnClick={false}
+        render={
+          <span className="inline-flex">
+            <Button
+              size="xs"
+              variant="destructive-outline"
+              disabled={pending || disabled}
+              {...confirm.bind("revoke", onRevoke)}
+            >
+              <InlineConfirmLabel
+                armed={armed}
+                idle={pending ? "Revoking…" : label}
+                confirm="Confirm revoke"
+              />
+            </Button>
+          </span>
+        }
+      />
+      <TooltipPopup side="top">
+        {pending ? "Revoking…" : armed ? armedTooltip : tooltip}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 type PairingLinkListRowProps = {
   pairingLink: ServerPairingLinkRecord;
   credential: string | undefined;
@@ -588,8 +633,6 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   onRevoke,
 }: PairingLinkListRowProps) {
   const nowMs = useRelativeTimeTick(1_000);
-  const confirm = useInlineConfirm<"revoke">();
-  const isRevoking = revokingPairingLinkId === pairingLink.id;
   const expiresAtMs = useMemo(
     () => new Date(pairingLink.expiresAt).getTime(),
     [pairingLink.expiresAt],
@@ -851,32 +894,13 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
               </DialogFooter>
             </DialogPopup>
           </Dialog>
-          <Tooltip>
-            <TooltipTrigger
-              closeOnClick={false}
-              render={
-                <span className="inline-flex">
-                  <Button
-                    size="xs"
-                    variant="destructive-outline"
-                    disabled={isRevoking}
-                    {...confirm.bind("revoke", () => void onRevoke(pairingLink.id))}
-                  >
-                    <InlineConfirmLabel
-                      armed={confirm.armed === "revoke"}
-                      idle={isRevoking ? "Revoking…" : "Revoke"}
-                      confirm="Confirm revoke"
-                    />
-                  </Button>
-                </span>
-              }
-            />
-            <TooltipPopup side="top">
-              {confirm.armed === "revoke"
-                ? "Click again to revoke this link. It can no longer be used to pair."
-                : "Revoke this pairing link"}
-            </TooltipPopup>
-          </Tooltip>
+          <RevokeButton
+            label="Revoke"
+            pending={revokingPairingLinkId === pairingLink.id}
+            tooltip="Revoke this pairing link"
+            armedTooltip="Click again to revoke this link. It can no longer be used to pair."
+            onRevoke={() => onRevoke(pairingLink.id)}
+          />
         </div>
       </div>
       {isQrPanelOpen && qrPairingUrl !== null ? (
@@ -986,8 +1010,6 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
   onRevokeSession,
 }: ConnectedClientListRowProps) {
   const nowMs = useRelativeTimeTick(1_000);
-  const confirm = useInlineConfirm<"revoke">();
-  const isRevoking = revokingClientSessionId === clientSession.sessionId;
   const isLive = clientSession.current || clientSession.connected;
   const lastConnectedAt = clientSession.lastConnectedAt;
   const statusTooltip = isLive
@@ -1039,35 +1061,13 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
           {!clientSession.current ? (
-            <Tooltip>
-              <TooltipTrigger
-                closeOnClick={false}
-                render={
-                  <span className="inline-flex">
-                    <Button
-                      size="xs"
-                      variant="destructive-outline"
-                      disabled={isRevoking}
-                      {...confirm.bind(
-                        "revoke",
-                        () => void onRevokeSession(clientSession.sessionId),
-                      )}
-                    >
-                      <InlineConfirmLabel
-                        armed={confirm.armed === "revoke"}
-                        idle={isRevoking ? "Revoking…" : "Revoke"}
-                        confirm="Confirm revoke"
-                      />
-                    </Button>
-                  </span>
-                }
-              />
-              <TooltipPopup side="top">
-                {confirm.armed === "revoke"
-                  ? `Click again to revoke ${primaryLabel}. It will need a new pairing link to reconnect.`
-                  : "Revoke this client's access"}
-              </TooltipPopup>
-            </Tooltip>
+            <RevokeButton
+              label="Revoke"
+              pending={revokingClientSessionId === clientSession.sessionId}
+              tooltip="Revoke this client's access"
+              armedTooltip={`Click again to revoke ${primaryLabel}. It will need a new pairing link to reconnect.`}
+              onRevoke={() => onRevokeSession(clientSession.sessionId)}
+            />
           ) : null}
         </div>
       </div>
@@ -1088,7 +1088,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
   isRevokingOtherClients,
   onRevokeOtherClients,
 }: AuthorizedClientsHeaderActionProps) {
-  const confirm = useInlineConfirm<"revoke-others">();
+  const hasOtherClients = clientSessions.some((clientSession) => !clientSession.current);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pairingLabel, setPairingLabel] = useState("");
   const [pairingScopes, setPairingScopes] = useState<ReadonlyArray<AuthEnvironmentScope>>([
@@ -1129,35 +1129,18 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
 
   return (
     <div className="flex items-center gap-2">
-      <Tooltip>
-        <TooltipTrigger
-          closeOnClick={false}
-          render={
-            <span className="inline-flex">
-              <Button
-                size="xs"
-                variant="destructive-outline"
-                disabled={
-                  isRevokingOtherClients ||
-                  clientSessions.every((clientSession) => clientSession.current)
-                }
-                {...confirm.bind("revoke-others", () => void onRevokeOtherClients())}
-              >
-                <InlineConfirmLabel
-                  armed={confirm.armed === "revoke-others"}
-                  idle={isRevokingOtherClients ? "Revoking…" : "Revoke others"}
-                  confirm="Confirm revoke"
-                />
-              </Button>
-            </span>
-          }
-        />
-        <TooltipPopup side="top">
-          {confirm.armed === "revoke-others"
-            ? "Click again to revoke every other client. Each will need a new pairing link to reconnect."
-            : "Revoke access for every client except this one"}
-        </TooltipPopup>
-      </Tooltip>
+      <RevokeButton
+        label="Revoke others"
+        pending={isRevokingOtherClients}
+        disabled={!hasOtherClients}
+        tooltip={
+          hasOtherClients
+            ? "Revoke access for every client except this one"
+            : "No other clients to revoke"
+        }
+        armedTooltip="Click again to revoke every other client. Each will need a new pairing link to reconnect."
+        onRevoke={onRevokeOtherClients}
+      />
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
