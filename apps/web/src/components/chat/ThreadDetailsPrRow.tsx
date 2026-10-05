@@ -19,7 +19,7 @@ import type { EnvironmentProject } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentId, ProjectId, PullRequestRef } from "@supacode/contracts";
 import { sourceControlRepositorySelector } from "@supacode/shared/sourceControl";
 import { ArrowUpRightIcon, FileDiffIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
@@ -38,6 +38,7 @@ import {
   resolveSelectedMergeMethod,
   allowedPullRequestMergeMethods,
   resolveThreadPanelPullRequestAction,
+  withKnownPullRequestState,
 } from "../pullRequest/pullRequestDetail.logic";
 import { PullRequestChecksPopover } from "../pullRequest/PullRequestChecksPopover";
 import {
@@ -115,12 +116,22 @@ export function ThreadDetailsPrRow({
       ? pullRequestEnvironment.checks({ environmentId, input: reference })
       : null,
   );
-  const detail =
+  const fetched =
     detailQuery.data === null
       ? null
       : checksQuery.data !== null && checksQuery.dataUpdatedAt >= detailQuery.dataUpdatedAt
         ? { ...detailQuery.data, ...checksQuery.data }
         : detailQuery.data;
+  const detail = fetched === null ? null : withKnownPullRequestState(fetched, pr);
+  // The thread already knows a newer state; read once more so the checks and actions follow it.
+  const behind = detail !== fetched;
+  const { refresh: refreshDetail } = detailQuery;
+  const { refresh: refreshChecks } = checksQuery;
+  useEffect(() => {
+    if (!behind) return;
+    refreshDetail();
+    refreshChecks();
+  }, [behind, refreshDetail, refreshChecks]);
   const open = reference !== null && (detail?.state ?? pr?.state) === "open";
   const refreshKey = `${environmentId}:${project?.id}:${reference?.host}:${reference?.repository}:${number}`;
   useLiveRefresh(detailQuery.isPending ? null : detailQuery.refresh, {

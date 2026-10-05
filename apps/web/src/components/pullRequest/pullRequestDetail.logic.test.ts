@@ -22,6 +22,7 @@ import {
   groupPullRequestChecks,
   describePullRequestChecks,
   resolveThreadPanelPullRequestAction,
+  withKnownPullRequestState,
   buildAskAboutPullRequestHandoff,
   buildExplainPullRequestHandoff,
   buildPullRequestReferenceContext,
@@ -1607,6 +1608,47 @@ describe("which actions need the host read again after they run", () => {
     ] as const) {
       expect(pullRequestActionNeedsHostRefresh(action)).toBe(false);
     }
+  });
+});
+
+describe("the compact row against the thread's known state", () => {
+  const fetched = {
+    state: "open",
+    isDraft: false,
+    updatedAt: "2026-10-05T16:10:00Z",
+    checks: [],
+  } as const;
+
+  it("shows a merge the thread learned of first, whatever the update times say", () => {
+    expect(
+      withKnownPullRequestState(fetched, { state: "merged", updatedAt: "2026-10-05T16:00:00Z" }),
+    ).toEqual({ ...fetched, state: "merged" });
+  });
+
+  it("takes other changes only from a later host update", () => {
+    expect(
+      withKnownPullRequestState(fetched, { state: "closed", updatedAt: "2026-10-05T16:11:00Z" }),
+    ).toEqual({ ...fetched, state: "closed" });
+    expect(
+      withKnownPullRequestState(fetched, {
+        state: "open",
+        isDraft: true,
+        updatedAt: "2026-10-05T16:11:00Z",
+      }),
+    ).toEqual({ ...fetched, isDraft: true });
+    expect(
+      withKnownPullRequestState(fetched, { state: "closed", updatedAt: "2026-10-05T16:09:00Z" }),
+    ).toBe(fetched);
+    expect(withKnownPullRequestState(fetched, { state: "closed" })).toBe(fetched);
+  });
+
+  it("keeps its own read when it already agrees or is merged", () => {
+    expect(withKnownPullRequestState(fetched, { state: "open" })).toBe(fetched);
+    expect(withKnownPullRequestState(fetched, null)).toBe(fetched);
+    const merged = { ...fetched, state: "merged" } as const;
+    expect(
+      withKnownPullRequestState(merged, { state: "open", updatedAt: "2026-10-05T17:00:00Z" }),
+    ).toBe(merged);
   });
 });
 

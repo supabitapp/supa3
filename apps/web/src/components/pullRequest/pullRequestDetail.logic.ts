@@ -428,6 +428,35 @@ export function resolveThreadPanelPullRequestAction(
     : null;
 }
 
+/**
+ * A row's own host reads with the thread's known state laid over them when that state is newer.
+ * The linked snapshot and branch status refresh on the server's schedule, not the row's, so either
+ * side can learn of a merge first; a row still reading "open" beside a merged thread badge would
+ * contradict it. Merged is final, otherwise the later host update wins.
+ */
+export function withKnownPullRequestState<
+  T extends {
+    readonly state: PullRequestState;
+    readonly isDraft: boolean;
+    readonly updatedAt: string;
+  },
+>(
+  detail: T,
+  known: {
+    readonly state: PullRequestState;
+    readonly isDraft?: boolean | undefined;
+    readonly updatedAt?: string | null | undefined;
+  } | null,
+): T {
+  if (known === null || detail.state === "merged") return detail;
+  const isDraft = known.isDraft === true;
+  if (known.state === detail.state && isDraft === detail.isDraft) return detail;
+  const newer =
+    known.state === "merged" ||
+    (known.updatedAt != null && Date.parse(known.updatedAt) > Date.parse(detail.updatedAt));
+  return newer ? { ...detail, state: known.state, isDraft } : detail;
+}
+
 /** Chronological ascending, oldest to newest — reversed for the "newest" reading order. */
 export function orderPullRequestComments<T extends { readonly createdAt: string }>(
   comments: ReadonlyArray<T>,

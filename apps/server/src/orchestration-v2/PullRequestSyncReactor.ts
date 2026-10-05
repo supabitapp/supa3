@@ -107,6 +107,20 @@ function stacksEqual(
   );
 }
 
+/**
+ * Whether a state another read observed contradicts a link's snapshot. Merged is final, and a
+ * read older than the snapshot is ignored; checks carry no update time, so a differing state is
+ * enough there.
+ */
+export function observationNeedsSync(
+  snapshot: Pick<ThreadPullRequestSnapshot, "state" | "updatedAt">,
+  observation: PullRequestService.PullRequestStateObservation,
+): boolean {
+  if (snapshot.state === "merged" || snapshot.state === observation.state) return false;
+  if (observation.updatedAt === null || snapshot.updatedAt === null) return true;
+  return Date.parse(observation.updatedAt) > Date.parse(snapshot.updatedAt);
+}
+
 function isUnsettled(thread: ProjectionStore.ProjectionThreadPullRequests): boolean {
   return thread.settledOverride !== "settled" && thread.settledAt === null;
 }
@@ -135,6 +149,9 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
 
   const lastSyncedAt = new Map<string, number>();
+  // Each linked pull request's snapshot as of the last sweep, so an observed state can be
+  // compared without reading the projections.
+  const snapshots = new Map<string, Pick<ThreadPullRequestSnapshot, "state" | "updatedAt">>();
   const requested = new Map<string, number>();
   let requestGeneration = 0;
   // Requested keys wait in `requested` for one queued sweep, so a burst of links (an agent
@@ -175,6 +192,11 @@ export const make = Effect.gen(function* () {
       }
     }
 
+    snapshots.clear();
+    for (const [key, entries] of groups) {
+      const snapshot = entries[0]!.link.snapshot;
+      if (snapshot !== null) snapshots.set(key, snapshot);
+    }
     for (const key of lastSyncedAt.keys()) if (!groups.has(key)) lastSyncedAt.delete(key);
     for (const key of retryStacks) if (!groups.has(key)) retryStacks.delete(key);
     for (const key of requested.keys()) if (!groups.has(key)) requested.delete(key);
@@ -294,6 +316,7 @@ export const make = Effect.gen(function* () {
       }
       // The host answered, so the cadence clock ticks even if a dispatch below is rejected.
       lastSyncedAt.set(key, nowMs);
+      snapshots.set(key, fields);
       // A refresh requested while the host read was in flight belongs to the next sweep.
       if (requested.get(key) === generation) requested.delete(key);
       yield* Effect.forEach(
@@ -356,6 +379,17 @@ export const make = Effect.gen(function* () {
     "PullRequestSyncReactor.start",
   )(function* () {
     const events = engine.streamDomainEvents;
+    const observedStates = yield* pullRequests.subscribeObservedStates;
+    // A detail or checks read can see a merge before the sweep does; sync the links it touches
+    // now, so the thread badge catches up with whatever surface noticed first.
+    yield* forkParked(
+      Stream.runForEach(observedStates, (observation) => {
+        const snapshot = snapshots.get(threadPullRequestKeyOf(observation));
+        return snapshot !== undefined && observationNeedsSync(snapshot, observation)
+          ? requestSync(observation)
+          : Effect.void;
+      }).pipe(Effect.catchCause(logSkipped("pull request observation stream failed", {}))),
+    );
     yield* forkParked(
       Stream.runForEach(events, (event) => {
         switch (event.type) {
