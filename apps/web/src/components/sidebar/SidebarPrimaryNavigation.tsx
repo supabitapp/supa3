@@ -56,6 +56,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={isMobile ? "default" : "compact"}
           disabled={projectGroupCount === 0}
           onClick={handleNewThread}
           {...withTooltip(
@@ -78,6 +79,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={isMobile ? "default" : "compact"}
           // The palette is a dialog over the whole app; on narrow screens the
           // sidebar sheet closes first so the two never stack.
           onClick={() => {
@@ -94,6 +96,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
+          size={isMobile ? "default" : "compact"}
           isActive={automationsActive}
           render={<Link to="/automations" onClick={closeMobileSidebar} />}
           {...withTooltip(
