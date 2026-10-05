@@ -377,11 +377,7 @@ function PullRequestBaseFreshnessWarning({
       </PopoverTrigger>
       <PopoverPopup align="start" side="bottom" className="max-w-80" padding="compact">
         <p className="text-xs text-foreground">{summary}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {confirm.armed === "rebase"
-            ? `Click again to rebase onto ${baseBranch}. This rewrites the branch's commits, and checks may restart.`
-            : "Changes can be cleanly merged."}
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Changes can be cleanly merged.</p>
         {/* Each way the host offers and this reader may take, as its own button: a split button
             would need a menu inside a popover, and two buttons say the same thing in one layer. */}
         {freshness.methods.length > 0 ? (
@@ -396,7 +392,7 @@ function PullRequestBaseFreshnessWarning({
                   {...confirm.bind("rebase", () => onUpdate(method))}
                 >
                   <InlineConfirmIcon armed={confirm.armed === "rebase"}>
-                    <PullRequestGlyph.merged aria-hidden className="size-3" />
+                    <PullRequestGlyph.merged aria-hidden className="size-3.5" />
                   </InlineConfirmIcon>
                   <InlineConfirmLabel
                     armed={confirm.armed === "rebase"}
@@ -412,12 +408,18 @@ function PullRequestBaseFreshnessWarning({
                   disabled={pending}
                   onClick={() => onUpdate(method)}
                 >
-                  <PullRequestGlyph.merged aria-hidden className="size-3" />
+                  <PullRequestGlyph.merged aria-hidden className="size-3.5" />
                   Update branch
                 </Button>
               ),
             )}
           </span>
+        ) : null}
+        {confirm.armed === "rebase" ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Click again to rebase onto {baseBranch}. This rewrites the branch's commits, and checks
+            may restart.
+          </p>
         ) : null}
       </PopoverPopup>
     </Popover>

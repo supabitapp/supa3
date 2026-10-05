@@ -14,7 +14,6 @@ import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestCommentForm({
@@ -56,8 +55,8 @@ export function PullRequestCommentForm({
   const disabled = body.trim().length === 0 || submitting !== null || actionPending;
 
   const submit = async (action: "comment" | "close" | "reopen") => {
+    if (disabled) return;
     const trimmed = body.trim();
-    if (trimmed.length === 0 || submitting !== null || actionPending) return;
     setSubmitting(action);
     if (action !== "comment") {
       const result = await onCommentAction(trimmed, action);
@@ -114,34 +113,21 @@ export function PullRequestCommentForm({
       />
       <div className="flex flex-wrap justify-end gap-2">
         {followUpAction === "close" ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span className="inline-flex">
-                  <Button
-                    size="xs"
-                    variant="destructive-outline"
-                    disabled={disabled}
-                    {...confirm.bind("close", () => void submit("close"))}
-                  >
-                    <InlineConfirmIcon armed={confirm.armed === "close"}>
-                      <PullRequestGlyph.closed className="size-3.5" />
-                    </InlineConfirmIcon>
-                    <InlineConfirmLabel
-                      armed={confirm.armed === "close"}
-                      idle={submitting === "close" ? "Closing..." : "Close with comment"}
-                      confirm="Confirm close"
-                    />
-                  </Button>
-                </span>
-              }
+          <Button
+            size="xs"
+            variant="destructive-outline"
+            disabled={disabled}
+            {...confirm.bind("close", () => void submit("close"))}
+          >
+            <InlineConfirmIcon armed={confirm.armed === "close"}>
+              <PullRequestGlyph.closed className="size-3.5" />
+            </InlineConfirmIcon>
+            <InlineConfirmLabel
+              armed={confirm.armed === "close"}
+              idle={submitting === "close" ? "Closing..." : "Close with comment"}
+              confirm="Confirm close"
             />
-            <TooltipPopup side="top">
-              {confirm.armed === "close"
-                ? `Click again to post this comment and close #${reference.number}`
-                : `Post this comment and close #${reference.number}`}
-            </TooltipPopup>
-          </Tooltip>
+          </Button>
         ) : followUpAction === "reopen" ? (
           <Button
             size="xs"

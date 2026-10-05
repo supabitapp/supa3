@@ -46,8 +46,10 @@ export function InlineConfirmLabel({
     }
     const layoutWidth = (element: HTMLElement) =>
       Math.ceil(Number.parseFloat(getComputedStyle(element).width) || 0);
-    const measure = () =>
+    const measure = () => {
+      if (idleLabel.getClientRects().length === 0) return;
       setWidths({ idle: layoutWidth(idleLabel), confirm: layoutWidth(confirmLabel) });
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(idleLabel);
