@@ -1382,6 +1382,7 @@ export function NewTaskDraftScreen(props: {
   }
 
   const isAndroid = Platform.OS === "android";
+  const hasContent = flow.prompt.trim().length > 0 || flow.attachments.length > 0;
   const canStart =
     !isComposerInteractionLocked &&
     !cloneBlocksStart &&
@@ -1785,16 +1786,7 @@ export function NewTaskDraftScreen(props: {
                   ) : null}
                 </>
               )}
-              <ComposerDictationPrimaryAction
-                state={voiceInput.state}
-                presentation={voicePresentation}
-                isAvailable={voiceInput.isAvailable}
-                disabled={isIncomingShareTransferPending || isImportingShare || flow.submitting}
-                onStart={voiceInput.start}
-                onConfirm={voiceInput.stop}
-                onCancel={voiceInput.cancel}
-              />
-              {voicePresentation.showsSend ? (
+              {voicePresentation.showsSend && (hasContent || !voiceInput.isAvailable) ? (
                 <ComposerActionButton
                   accessibilityLabel={
                     attachmentBlockReason ??
@@ -1817,7 +1809,17 @@ export function NewTaskDraftScreen(props: {
                   onPress={() => void handleStart()}
                   variant="primary"
                 />
-              ) : null}
+              ) : (
+                <ComposerDictationPrimaryAction
+                  state={voiceInput.state}
+                  presentation={voicePresentation}
+                  isAvailable={voiceInput.isAvailable}
+                  disabled={isIncomingShareTransferPending || isImportingShare || flow.submitting}
+                  onStart={voiceInput.start}
+                  onConfirm={voiceInput.stop}
+                  onCancel={voiceInput.cancel}
+                />
+              )}
             </ComposerToolbarRow>
           </ComposerDictationToolbar>
         </Animated.View>

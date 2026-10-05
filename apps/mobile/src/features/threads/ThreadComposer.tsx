@@ -752,6 +752,29 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [navigation, settingsSheetPresentation.onStackTransitionsFinished],
   );
 
+  const draftAction = showStopAction ? (
+    <ComposerActionButton
+      accessibilityLabel="Stop agent"
+      icon="stop.fill"
+      variant="danger"
+      onPress={props.onStopThread}
+    />
+  ) : hasContent || !voiceInput.isAvailable ? (
+    <SendActionButton
+      accessibilityLabel={sendBlockedReason ?? sendLabel}
+      presentation={sendPresentation}
+      disabled={!canSend}
+      onSend={handleSend}
+    />
+  ) : (
+    <ComposerDictationStartAction
+      state={voiceInput.state}
+      isAvailable={voiceInput.isAvailable}
+      onStart={voiceInput.start}
+      onCancel={voiceInput.cancel}
+    />
+  );
+
   return (
     <Animated.View
       className="px-[12px]"
@@ -1050,31 +1073,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 ) : null}
               </View>
             ) : null}
-            {!isExpanded ? (
-              <View className="flex-row items-center">
-                <ComposerDictationStartAction
-                  state={voiceInput.state}
-                  isAvailable={voiceInput.isAvailable}
-                  onStart={voiceInput.start}
-                  onCancel={voiceInput.cancel}
-                />
-                {showStopAction ? (
-                  <ComposerActionButton
-                    accessibilityLabel="Stop agent"
-                    icon="stop.fill"
-                    variant="danger"
-                    onPress={props.onStopThread}
-                  />
-                ) : (
-                  <SendActionButton
-                    accessibilityLabel={sendBlockedReason ?? sendLabel}
-                    presentation={sendPresentation}
-                    disabled={!canSend}
-                    onSend={handleSend}
-                  />
-                )}
-              </View>
-            ) : null}
+            {!isExpanded ? draftAction : null}
             {isExpanded ? <View className="h-1" /> : null}
           </ComposerDictationDraftContent>
           <Animated.View
@@ -1144,29 +1143,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     />
                   </>
                 )}
-                <ComposerDictationPrimaryAction
-                  state={voiceInput.state}
-                  presentation={voicePresentation}
-                  isAvailable={voiceInput.isAvailable}
-                  onStart={voiceInput.start}
-                  onConfirm={voiceInput.stop}
-                  onCancel={voiceInput.cancel}
-                />
-                {showStopAction ? (
-                  <ComposerActionButton
-                    accessibilityLabel="Stop agent"
-                    icon="stop.fill"
-                    variant="danger"
-                    onPress={props.onStopThread}
+                {voicePresentation.showsSend ? (
+                  draftAction
+                ) : (
+                  <ComposerDictationPrimaryAction
+                    state={voiceInput.state}
+                    presentation={voicePresentation}
+                    isAvailable={voiceInput.isAvailable}
+                    onStart={voiceInput.start}
+                    onConfirm={voiceInput.stop}
+                    onCancel={voiceInput.cancel}
                   />
-                ) : voicePresentation.showsSend ? (
-                  <SendActionButton
-                    accessibilityLabel={sendBlockedReason ?? sendLabel}
-                    presentation={sendPresentation}
-                    disabled={!canSend}
-                    onSend={handleSend}
-                  />
-                ) : null}
+                )}
               </ComposerToolbarRow>
             </ComposerDictationToolbar>
           </Animated.View>
