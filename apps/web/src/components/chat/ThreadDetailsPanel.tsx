@@ -5,6 +5,7 @@ import type {
   ResolvedKeybindingsConfig,
   ThreadId,
 } from "@supacode/contracts";
+import type { ServerUpdateState } from "@supacode/client-runtime/state/server";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 
 import type { DraftId } from "../../composerDraftStore";
@@ -21,6 +22,11 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import {
+  ServerUpdateAction,
+  ServerUpdateProgress,
+  type ServerUpdateTarget,
+} from "../ServerUpdateAction";
 import { Button } from "../ui/button";
 import type { ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
@@ -33,6 +39,8 @@ interface VersionMismatchIssue {
   readonly clientVersion: string;
   readonly serverVersion: string;
   readonly serverLabel: string;
+  readonly update: Omit<ServerUpdateTarget, "continueThreadsAfterServerUpdate">;
+  readonly updateState: ServerUpdateState;
 }
 
 export interface ThreadDetailsPanelProps extends Pick<
@@ -137,6 +145,22 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                     Client {props.versionMismatch.clientVersion} ·{" "}
                     {props.versionMismatch.serverLabel} {props.versionMismatch.serverVersion}
                   </p>
+                  {props.versionMismatch.updateState.status !== "idle" ? (
+                    <ServerUpdateProgress state={props.versionMismatch.updateState} />
+                  ) : null}
+                  {props.versionMismatch.updateState.status !== "running" ? (
+                    <div className="mt-2">
+                      <ServerUpdateAction
+                        {...props.versionMismatch.update}
+                        label={
+                          props.versionMismatch.updateState.status === "failed"
+                            ? "Retry update"
+                            : "Update server"
+                        }
+                        variant="warning-outline"
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <Button
                   size="icon-xs"
