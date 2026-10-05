@@ -492,6 +492,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
       );
 
       return {
+        skillInstallDirectory: path.join(userHome, ".gemini", "config", "skills"),
         instanceId,
         driverKind: DRIVER,
         continuationIdentity,

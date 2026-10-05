@@ -1,3 +1,4 @@
+import * as OrchestrationSkills from "./provider/OrchestrationSkills.ts";
 import { OrchestrationDispatchCommandError } from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -1251,6 +1252,7 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const orchestrationSkills = yield* OrchestrationSkills.OrchestrationSkills;
       const modelManifest = yield* ModelManifest.ModelManifest;
       const providerVersionCache = yield* ProviderMaintenance.ProviderVersionCache;
       const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
@@ -2469,6 +2471,9 @@ const makeWsRpcLayer = (
             providerAuth.subscribe(input, currentSessionId),
             { "rpc.aggregate": "provider" },
           ),
+        [WS_METHODS.orchestrationSkillsStatus]: () => orchestrationSkills.status,
+        [WS_METHODS.orchestrationSkillsInstall]: () => orchestrationSkills.install,
+        [WS_METHODS.orchestrationSkillsUninstall]: () => orchestrationSkills.uninstall,
         [WS_METHODS.providerInstallStart]: (input) =>
           observeRpcEffect(WS_METHODS.providerInstallStart, providerInstallation.start(input), {
             "rpc.aggregate": "provider",

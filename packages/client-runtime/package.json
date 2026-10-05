@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./orchestrationSkills": {
+      "types": "./src/orchestrationSkills.ts",
+      "default": "./src/orchestrationSkills.ts"
+    },
     "./diagram-rendering": {
       "types": "./src/diagramRendering.ts",
       "default": "./src/diagramRendering.ts"

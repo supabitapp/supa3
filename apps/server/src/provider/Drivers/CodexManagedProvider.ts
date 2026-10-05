@@ -1,3 +1,4 @@
+import * as Path from "effect/Path";
 import { ProviderDriverKind, TextGenerationError, type CodexSettings } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -26,6 +27,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   input: ProviderDriverCreateInput<CodexSettings>,
 ) {
   const { instanceId, enabled, displayName, accentColor, config } = input;
+  const path = yield* Path.Path;
   const http = yield* HttpClient.HttpClient;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const settings = yield* ServerSettingsService;
@@ -259,6 +261,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
       protect("generateThreadTitle", nativeGeneration.generateThreadTitle(value)),
   };
   return {
+    skillInstallDirectory: path.join(runtime.homeLayout.sharedHomePath, "skills"),
     instanceId,
     driverKind: DRIVER,
     continuationIdentity,

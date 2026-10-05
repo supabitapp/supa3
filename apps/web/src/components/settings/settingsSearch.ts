@@ -595,6 +595,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     providerSettingsOnly: true,
   },
   {
+    id: "orchestration-skills",
+    title: "Orchestration skills",
+    to: "/settings/integrations",
+    searchTerms: [
+      "supacode commitee committee advisor install uninstall native skills agents delegation",
+    ],
+  },
+  {
     id: "agent-browser-access",
     title: "Agent browser access",
     to: "/settings/integrations",

@@ -1041,6 +1041,18 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.providerInstallSubscribe,
       idleTtlMs: 0,
     }),
+    orchestrationSkillsStatus: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration-skills:status",
+      tag: WS_METHODS.orchestrationSkillsStatus,
+    }),
+    orchestrationSkillsInstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration-skills:install",
+      tag: WS_METHODS.orchestrationSkillsInstall,
+    }),
+    orchestrationSkillsUninstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration-skills:uninstall",
+      tag: WS_METHODS.orchestrationSkillsUninstall,
+    }),
     startProviderInstall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:provider:install-start",
       tag: WS_METHODS.providerInstallStart,

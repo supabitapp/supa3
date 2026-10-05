@@ -1,3 +1,4 @@
+import { OrchestrationSkillsStatus, OrchestrationSkillsError } from "./orchestrationSkills.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   ChatGptReconnectProfileInput,
@@ -370,6 +371,9 @@ export const WS_METHODS = {
   providerAuthCancel: "provider.auth.cancel",
   providerAuthLogout: "provider.auth.logout",
   providerAuthSubscribe: "provider.auth.subscribe",
+  orchestrationSkillsStatus: "orchestrationSkills.status",
+  orchestrationSkillsInstall: "orchestrationSkills.install",
+  orchestrationSkillsUninstall: "orchestrationSkills.uninstall",
   providerInstallStart: "provider.install.start",
   providerInstallCancel: "provider.install.cancel",
   providerInstallSubscribe: "provider.install.subscribe",
@@ -643,6 +647,24 @@ const WsProviderAuthSubscribeRpc = Rpc.make(WS_METHODS.providerAuthSubscribe, {
   success: ProviderAuthState,
   error: ProviderSetupRpcError,
   stream: true,
+});
+
+const WsOrchestrationSkillsStatusRpc = Rpc.make(WS_METHODS.orchestrationSkillsStatus, {
+  payload: Schema.Struct({}),
+  success: OrchestrationSkillsStatus,
+  error: Schema.Union([OrchestrationSkillsError, EnvironmentAuthorizationError]),
+});
+
+const WsOrchestrationSkillsInstallRpc = Rpc.make(WS_METHODS.orchestrationSkillsInstall, {
+  payload: Schema.Struct({}),
+  success: OrchestrationSkillsStatus,
+  error: Schema.Union([OrchestrationSkillsError, EnvironmentAuthorizationError]),
+});
+
+const WsOrchestrationSkillsUninstallRpc = Rpc.make(WS_METHODS.orchestrationSkillsUninstall, {
+  payload: Schema.Struct({}),
+  success: OrchestrationSkillsStatus,
+  error: Schema.Union([OrchestrationSkillsError, EnvironmentAuthorizationError]),
 });
 
 const WsProviderInstallStartRpc = Rpc.make(WS_METHODS.providerInstallStart, {
@@ -1693,6 +1715,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProviderAuthCancelRpc,
   WsProviderAuthLogoutRpc,
   WsProviderAuthSubscribeRpc,
+  WsOrchestrationSkillsStatusRpc,
+  WsOrchestrationSkillsInstallRpc,
+  WsOrchestrationSkillsUninstallRpc,
   WsProviderInstallStartRpc,
   WsProviderInstallCancelRpc,
   WsProviderInstallSubscribeRpc,

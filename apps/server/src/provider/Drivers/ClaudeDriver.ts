@@ -336,6 +336,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         );
 
       return {
+        skillInstallDirectory: path.join(configDir, "skills"),
         instanceId,
         driverKind: DRIVER_KIND,
         continuationIdentity: {

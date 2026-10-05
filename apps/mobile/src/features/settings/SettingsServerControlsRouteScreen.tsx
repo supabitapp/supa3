@@ -1,3 +1,4 @@
+import { OrchestrationSkillsSection } from "./components/OrchestrationSkillsSection";
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
@@ -379,6 +380,13 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       />
                     ))}
                   </SettingsSection>
+                  {selectedTargets.map((target) => (
+                    <OrchestrationSkillsSection
+                      key={target.environmentId}
+                      environmentId={target.environmentId}
+                      label={target.label}
+                    />
+                  ))}
                   <SettingsSection title="Preview browser">
                     <SettingsSwitchRow
                       icon="globe"

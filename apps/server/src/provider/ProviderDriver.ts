@@ -73,6 +73,8 @@ export type ProviderWorkspaceSnapshot = ServerProvider &
  * state.
  */
 export interface ProviderInstance {
+  /** Native user-skill directory. Absent when this runtime cannot install local skills. */
+  readonly skillInstallDirectory?: string | undefined;
   readonly instanceId: ProviderInstanceId;
   readonly driverKind: ProviderDriverKind;
   readonly continuationIdentity: ProviderContinuationIdentity;

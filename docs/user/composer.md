@@ -193,6 +193,16 @@ menu**, which also stops `/` from suggesting skills later in a message. It is in
 **Settings → General** on web and desktop, and **Settings → Thread behavior** on
 mobile. Only skills enabled for the provider are listed.
 
+To install Supacode's optional `supacode-advisor` and `supacode-commitee` skills,
+choose **Install Skills** in **Settings → Integrations → Orchestration skills**
+on web and desktop, or **Settings → Agent behavior** on mobile. Nothing installs
+automatically. Installation applies to all projects on the chosen environment
+and links the providers' native skill folders to Supacode's bundled skills.
+Installed skills update when the updated app starts. Use **Uninstall Skills** to
+remove those links. Existing skill folders and unrelated links are preserved.
+Create a separate skill if you want to customize the instructions; changes to
+the bundled skills are replaced at the next app start.
+
 After you add or change skills, plugins, or MCP servers, use **Restart agent
 session** in the command palette on web and desktop. The conversation continues,
 and your next message starts the agent again with the new setup.
