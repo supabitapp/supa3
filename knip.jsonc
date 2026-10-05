@@ -8,9 +8,12 @@
     ".": {
       "ignoreDependencies": ["effect"],
       "project": ["*.{js,mjs,cjs,ts,mts,cts}", ".github/**/*.cjs"],
-      "entry": [".github/scripts/thread-transfer-report.cjs"],
-      "vite": { "entry": [".github/**/*.test.cjs"] },
-      "vitest": { "entry": [".github/**/*.test.cjs"] },
+      // GitHub Actions loads these modules from inline github-script steps.
+      "entry": [
+        ".github/scripts/check-nightly-release.cjs",
+        ".github/scripts/mobile-build-history.cjs",
+        ".github/scripts/thread-transfer-report.cjs",
+      ],
     },
     "scripts": {
       // Knip loads its preprocessor through a CLI option; native verification and
