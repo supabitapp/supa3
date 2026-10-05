@@ -559,6 +559,7 @@ export function PullRequestDetailPanel({
   // Each mounted tab remembers its own scroll chrome; short tabs cannot scroll to reopen it.
   const [chromeStateByTab, setChromeStateByTab] = useState<Partial<Record<DetailTab, boolean>>>({});
   const condensed = chromeStateByTab[tab] ?? false;
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const foldRef = useRef<HTMLDivElement | null>(null);
   const condensedRowRef = useRef<HTMLDivElement | null>(null);
@@ -747,8 +748,19 @@ export function PullRequestDetailPanel({
   });
   const handlePanelShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (!shortcutsEnabled || event.defaultPrevented || isCommandPaletteOpen()) return;
+    const shortcutContext = getShortcutContext();
+    const focusedElement = typeof document === "undefined" ? null : document.activeElement;
+    const focusedShell = focusedElement?.closest("[data-preview-panel-mode]");
+    // The shared shell labels PRs as previews too. A separate browser shell or webview
+    // must still own its shortcuts, while this PR's content and tab bar can open its host page.
+    const focusInThisPanel =
+      panelRef.current !== null &&
+      (panelRef.current.contains(focusedElement) || focusedShell?.contains(panelRef.current));
     const command = resolveShortcutCommand(event, keybindings, {
-      context: getShortcutContext(),
+      context: {
+        ...shortcutContext,
+        previewFocus: shortcutContext.previewFocus && !focusInThisPanel,
+      },
     });
     if (command === "pullRequest.openInBrowser") {
       if (!pullRequestBrowserUrl) return;
@@ -1649,32 +1661,34 @@ export function PullRequestDetailPanel({
   // and let the richer detail read replace the remaining placeholders in place.
   if (detailQuery.isPending && !detail) {
     return (
-      <PullRequestDetailGhost
-        seed={matchingListEntry}
-        summary={sharedSummary}
-        checkoutCommand={checkoutCommand}
-        onCheckoutError={onCheckoutCommandError}
-        number={reference.number}
-        tabs={visibleTabs}
-        activeTab={tab}
-        {...(onBack ? { onBack } : {})}
-        {...(onClose ? { onClose } : {})}
-        actions={
-          handoffSummary ? (
-            <TooltipProvider delay={150} closeDelay={150} timeout={400}>
-              {checkoutControl}
-              {handoffSummary.state === "open" && handoffSummary.mergeability === "conflicting"
-                ? resolveConflictsControl
-                : null}
-            </TooltipProvider>
-          ) : undefined
-        }
-      />
+      <div ref={panelRef} className="flex h-full min-h-0 w-full flex-col">
+        <PullRequestDetailGhost
+          seed={matchingListEntry}
+          summary={sharedSummary}
+          checkoutCommand={checkoutCommand}
+          onCheckoutError={onCheckoutCommandError}
+          number={reference.number}
+          tabs={visibleTabs}
+          activeTab={tab}
+          {...(onBack ? { onBack } : {})}
+          {...(onClose ? { onClose } : {})}
+          actions={
+            handoffSummary ? (
+              <TooltipProvider delay={150} closeDelay={150} timeout={400}>
+                {checkoutControl}
+                {handoffSummary.state === "open" && handoffSummary.mergeability === "conflicting"
+                  ? resolveConflictsControl
+                  : null}
+              </TooltipProvider>
+            ) : undefined
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+    <div ref={panelRef} className="relative flex h-full min-h-0 w-full flex-col bg-background">
       {threadPickerOpen && detail ? (
         <PullRequestThreadLinks
           key={`${environmentId}:${detail.url}`}

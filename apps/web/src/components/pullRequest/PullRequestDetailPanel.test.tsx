@@ -10,8 +10,10 @@ import { DEFAULT_CLIENT_SETTINGS } from "@supacode/contracts/settings";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
 import { act, type ReactNode, type ReactElement, type ComponentProps } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { isPreviewFocused } from "~/lib/previewFocus";
 
 const { newThread, prepareThread, refresh, openLink, detailRead, Wrapper, Trigger } = vi.hoisted(
   () => ({
@@ -149,6 +151,9 @@ vi.mock("./PullRequestCodeTab", () => ({
 
 import { PullRequestDetailPanel } from "./PullRequestDetailPanel";
 import { pullRequestPanelContext } from "./pullRequestDetail.logic";
+import { PreviewPanelShell } from "../preview/PreviewPanelShell";
+
+const browserWindow = window;
 
 const detail: PullRequestDetailView = {
   provider: "github",
@@ -212,7 +217,8 @@ let renderer: ReactTestRenderer;
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal("window", browserWindow);
+  browserWindow.localStorage.clear();
   detailRead.data = undefined;
   detailRead.isPending = false;
   detailRead.error = null;
@@ -228,6 +234,105 @@ beforeEach(() => {
 });
 
 describe("open pull request keyboard shortcut", () => {
+  it.each(["loaded", "pending"] as const)(
+    "handles focus in the %s PR shell and yields to a separate browser or terminal",
+    async (readState) => {
+      vi.stubGlobal("window", browserWindow);
+      vi.stubGlobal("navigator", { platform: "MacIntel" });
+      detailRead.data = readState === "pending" ? null : undefined;
+      detailRead.isPending = readState === "pending";
+      const savedUrl = "https://gitlab.example/owner/repo/-/merge_requests/1";
+      let terminalFocus = false;
+      const container = document.createElement("div");
+      document.body.append(container);
+      const root = createRoot(container);
+      const renderPanel = (active: boolean) => (
+        <>
+          <PreviewPanelShell mode="inline" maximized>
+            <button data-testid="pr-tab" type="button">
+              PR tab
+            </button>
+            <PullRequestDetailPanel
+              environmentId={threadRef.environmentId}
+              threadRef={threadRef}
+              reference={surface}
+              url={savedUrl}
+              shortcutsEnabled={active}
+              getShortcutContext={() => ({
+                terminalFocus,
+                terminalOpen: terminalFocus,
+                previewFocus: isPreviewFocused(),
+                previewOpen: true,
+                isWeb: true,
+                isDesktop: false,
+              })}
+            />
+          </PreviewPanelShell>
+          <PreviewPanelShell mode="embedded">
+            <input data-testid="browser-url" aria-label="Browser URL" />
+          </PreviewPanelShell>
+        </>
+      );
+      const pressShortcut = () => {
+        const event = new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ø",
+          code: "KeyO",
+          metaKey: true,
+          altKey: true,
+        });
+        document.activeElement?.dispatchEvent(event);
+        return event;
+      };
+      try {
+        await act(async () => root.render(renderPanel(true)));
+        const tab = container.querySelector<HTMLButtonElement>('[data-testid="pr-tab"]')!;
+        const hostButton = container.querySelector<HTMLButtonElement>(
+          '[aria-label="Open pull request #1 on host"]',
+        );
+        const browser = container.querySelector<HTMLInputElement>('[data-testid="browser-url"]')!;
+        (hostButton ?? tab).focus();
+        expect(isPreviewFocused()).toBe(true);
+        await act(async () => {
+          expect(pressShortcut().defaultPrevented).toBe(true);
+        });
+        expect(openLink.mock.calls).toEqual([
+          [threadRef, readState === "loaded" ? detail.url : savedUrl],
+        ]);
+        openLink.mockClear();
+
+        tab.focus();
+        await act(async () => {
+          expect(pressShortcut().defaultPrevented).toBe(true);
+        });
+        expect(openLink).toHaveBeenCalledOnce();
+        openLink.mockClear();
+
+        browser.focus();
+        expect(isPreviewFocused()).toBe(true);
+        await act(async () => {
+          expect(pressShortcut().defaultPrevented).toBe(false);
+        });
+        terminalFocus = true;
+        tab.focus();
+        await act(async () => {
+          expect(pressShortcut().defaultPrevented).toBe(false);
+        });
+        terminalFocus = false;
+        await act(async () => root.render(renderPanel(false)));
+        tab.focus();
+        await act(async () => {
+          expect(pressShortcut().defaultPrevented).toBe(false);
+        });
+        expect(openLink).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => root.unmount());
+        container.remove();
+      }
+    },
+  );
+
   it.each([
     [
       "pending GitLab MR beside a thread",
@@ -249,7 +354,7 @@ describe("open pull request keyboard shortcut", () => {
       "https://forgejo.example/team/repo/pulls/42",
     ],
   ] as const)("opens the saved URL for a %s", async (_name, pending, targetThreadRef, url) => {
-    const keyboardEvents = new EventTarget();
+    const keyboardEvents = browserWindow;
     vi.stubGlobal("window", keyboardEvents);
     vi.stubGlobal("navigator", { platform: "MacIntel" });
     detailRead.data = null;
@@ -437,3 +542,4 @@ describe.each([
     }
   });
 });
+// @vitest-environment jsdom
