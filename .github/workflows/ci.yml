@@ -345,8 +345,6 @@ jobs:
     # Skip only on an explicit "no": a gate job that failed or errored leaves the
     # output empty, and that must run the lint rather than silently skip it.
     if: ${{ !cancelled() && needs.mobile_native_changes.outputs.changed != 'false' }}
-    # GitHub-hosted: Depot's macOS pool queued this job for 2-16 minutes in a
-    # side-by-side benchmark, while GitHub's started within 15s every time.
     runs-on: macos-26
     timeout-minutes: 10
     steps:
