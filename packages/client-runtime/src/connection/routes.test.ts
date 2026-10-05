@@ -5,7 +5,6 @@ import * as Option from "effect/Option";
 import { BearerConnectionProfile, BearerConnectionTarget, type ConnectionRoute } from "./index.ts";
 import {
   connectionRouteKind,
-  connectionRoutes,
   entryWithRoutes,
   insertRoute,
   isLearned,

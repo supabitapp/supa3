@@ -180,7 +180,7 @@ export function ConnectionsNewRouteScreen({
       };
       await connect().finally(() => setIsSubmitting(false));
     },
-    [navigation, onChangeConnectionPairingUrl, onConnectPress],
+    [navigation, onChangeConnectionPairingUrl, onConnectPress, params.routeFor],
   );
 
   const handleSubmit = useCallback(async () => {

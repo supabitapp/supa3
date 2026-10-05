@@ -11,7 +11,7 @@ import {
 } from "@supacode/client-runtime/connection";
 import type { EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -298,8 +298,7 @@ function RouteRow(props: {
   );
 }
 
-/** Pan recognition wins over the settings scroll view only inside the handle. */
-function DragHandle(props: {
+type DragHandleProps = {
   readonly title: string;
   readonly canMoveUp: boolean;
   readonly canMoveDown: boolean;
@@ -307,29 +306,36 @@ function DragHandle(props: {
   readonly onMove: (translation: number) => void;
   readonly onEnd: (translation: number, cancelled: boolean) => void;
   readonly onStep: (direction: "up" | "down") => void;
-}) {
+};
+
+function createRouteDragPan(latest: RefObject<DragHandleProps>) {
+  let translation = 0;
+  return Gesture.Pan()
+    .minDistance(0)
+    .shouldCancelWhenOutside(false)
+    .runOnJS(true)
+    .onStart(() => {
+      translation = 0;
+      latest.current.onStart();
+    })
+    .onUpdate((event) => {
+      translation = event.translationY;
+      latest.current.onMove(event.translationY);
+    })
+    .onFinalize((_, success) => latest.current.onEnd(translation, !success));
+}
+
+function useRouteDragPan(latest: RefObject<DragHandleProps>) {
+  return useMemo(() => createRouteDragPan(latest), [latest]);
+}
+
+/** Pan recognition wins over the settings scroll view only inside the handle. */
+function DragHandle(props: DragHandleProps) {
   const latest = useRef(props);
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = props;
   });
-  const translation = useRef(0);
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(0)
-        .shouldCancelWhenOutside(false)
-        .runOnJS(true)
-        .onStart(() => {
-          translation.current = 0;
-          latest.current.onStart();
-        })
-        .onUpdate((event) => {
-          translation.current = event.translationY;
-          latest.current.onMove(event.translationY);
-        })
-        .onFinalize((_, success) => latest.current.onEnd(translation.current, !success)),
-    [],
-  );
+  const gesture = useRouteDragPan(latest);
   return (
     <GestureDetector gesture={gesture}>
       <View
