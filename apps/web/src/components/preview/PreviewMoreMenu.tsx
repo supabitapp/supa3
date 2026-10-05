@@ -2,10 +2,12 @@
 
 import type { DesktopPreviewColorScheme, EnvironmentId } from "@supacode/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
+import { useId } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
   Menu,
+  MenuDescription,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -19,6 +21,7 @@ import {
   MenuTrigger,
 } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 
 import { previewBridge } from "./previewBridge";
 
@@ -83,6 +86,8 @@ export function PreviewMoreMenu({
   profileId,
   profileName,
 }: Props) {
+  const confirm = useInlineConfirm<"cookies" | "cache">();
+  const cookiesHintId = useId();
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
@@ -212,16 +217,26 @@ export function PreviewMoreMenu({
             </MenuGroupLabel>
           ) : null}
           <MenuItem
-            onClick={() =>
-              void bridge.clearCookies(environmentId, profileId).catch(() => undefined)
-            }
+            {...confirm.bind(
+              "cookies",
+              () => void bridge.clearCookies(environmentId, profileId).catch(() => undefined),
+            )}
+            aria-describedby={confirm.armed === "cookies" ? cookiesHintId : undefined}
           >
-            Clear cookies
+            {confirm.armed === "cookies" ? "Confirm clear" : "Clear cookies"}
           </MenuItem>
+          {confirm.armed === "cookies" ? (
+            <MenuDescription id={cookiesHintId}>
+              Signs you out of every site in this profile.
+            </MenuDescription>
+          ) : null}
           <MenuItem
-            onClick={() => void bridge.clearCache(environmentId, profileId).catch(() => undefined)}
+            {...confirm.bind(
+              "cache",
+              () => void bridge.clearCache(environmentId, profileId).catch(() => undefined),
+            )}
           >
-            Clear cache
+            {confirm.armed === "cache" ? "Confirm clear" : "Clear cache"}
           </MenuItem>
         </MenuGroup>
       </MenuPopup>

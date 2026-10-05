@@ -354,6 +354,7 @@ function PullRequestBaseFreshnessWarning({
           freshness.behindBy === 1 ? "commit" : "commits"
         }`;
   const summary = `This branch is out-of-date with ${baseBranch}${behind}.`;
+  const confirm = useInlineConfirm<"rebase">();
   return (
     <Popover>
       <PopoverTrigger
@@ -381,19 +382,44 @@ function PullRequestBaseFreshnessWarning({
             would need a menu inside a popover, and two buttons say the same thing in one layer. */}
         {freshness.methods.length > 0 ? (
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
-            {freshness.methods.map((method) => (
-              <Button
-                key={method}
-                size="xs"
-                variant="outline"
-                disabled={pending}
-                onClick={() => onUpdate(method)}
-              >
-                <PullRequestGlyph.merged aria-hidden className="size-3" />
-                {method === "rebase" ? "Update with rebase" : "Update branch"}
-              </Button>
-            ))}
+            {freshness.methods.map((method) =>
+              method === "rebase" ? (
+                <Button
+                  key={method}
+                  size="xs"
+                  variant="outline"
+                  disabled={pending}
+                  {...confirm.bind("rebase", () => onUpdate(method))}
+                >
+                  <InlineConfirmIcon armed={confirm.armed === "rebase"}>
+                    <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                  </InlineConfirmIcon>
+                  <InlineConfirmLabel
+                    armed={confirm.armed === "rebase"}
+                    idle="Update with rebase"
+                    confirm="Confirm rebase"
+                  />
+                </Button>
+              ) : (
+                <Button
+                  key={method}
+                  size="xs"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => onUpdate(method)}
+                >
+                  <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                  Update branch
+                </Button>
+              ),
+            )}
           </span>
+        ) : null}
+        {confirm.armed === "rebase" ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Click again to rebase onto {baseBranch}. This rewrites the branch's commits, and checks
+            may restart.
+          </p>
         ) : null}
       </PopoverPopup>
     </Popover>

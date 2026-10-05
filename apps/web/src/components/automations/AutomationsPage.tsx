@@ -19,8 +19,8 @@ import {
 } from "@supacode/client-runtime/state/runtime";
 
 import { isElectron } from "../../env";
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useNowMinuteMs } from "../../hooks/useNowMinute";
-import { ensureLocalApi } from "../../localApi";
 import { projectGroupMemberKeys, type SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import {
   useEnvironments,
@@ -363,6 +363,7 @@ function AutomationRow({
   );
   const thread = useThreadShell(threadRef);
   const [busy, setBusy] = useState(false);
+  const confirm = useInlineConfirm<"delete">();
   const toggle = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
     label: "scheduled task enabled",
   });
@@ -374,14 +375,6 @@ function AutomationRow({
   });
   const act = async (action: "toggle" | "run" | "delete") => {
     if (busy) return;
-    if (
-      action === "delete" &&
-      !(await ensureLocalApi().dialogs.confirm(`Delete automation "${task.title}"?`, {
-        variant: "destructive",
-      }))
-    ) {
-      return;
-    }
     setBusy(true);
     const result =
       action === "toggle"
@@ -466,9 +459,9 @@ function AutomationRow({
                 </MenuItem>
               ) : null}
               <MenuSeparator />
-              <MenuItem onClick={() => void act("delete")}>
+              <MenuItem {...confirm.bind("delete", () => void act("delete"))} variant="destructive">
                 <Trash2Icon />
-                Delete
+                {confirm.armed === "delete" ? "Confirm delete" : "Delete"}
               </MenuItem>
             </MenuPopup>
           </Menu>

@@ -68,6 +68,7 @@ import {
 import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
 import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
+import { useAppearancePreferences } from "./features/settings/appearance/AppearancePreferencesProvider";
 import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
 import { SettingsDiagnosticsRouteScreen } from "./features/diagnostics/SettingsDiagnosticsRouteScreen";
 import { SettingsProviderAccountsRouteScreen } from "./features/settings/SettingsProviderAccountsRouteScreen";
@@ -649,6 +650,7 @@ const RootStackConfig = createNativeStackNavigator({
   layout: RootStackLayout,
   screenOptions: {
     headerShown: false,
+    statusBarHidden: Platform.OS === "ios" ? false : undefined,
   },
   screens: {
     Home: createNativeStackScreen({
@@ -680,6 +682,7 @@ const RootStackConfig = createNativeStackNavigator({
         gestureEnabled: false,
         autoHideHomeIndicator: true,
         navigationBarHidden: true,
+        statusBarHidden: Platform.OS === "ios" ? true : undefined,
       },
     }),
     ThreadReview: createNativeStackScreen({
@@ -890,6 +893,7 @@ function ScreenRenderFallback(props: RenderFailureProps & { readonly routeName: 
 
 export const RootStack = RootStackConfig.with(function AdaptiveRootStack({ Navigator }) {
   const { width, height } = useWindowDimensions();
+  const { themeAppearance } = useAppearancePreferences();
   const usesWorkspaceFlowScreens =
     Platform.OS === "android" || deriveLayout({ width, height }).usesSplitView;
 
@@ -897,14 +901,17 @@ export const RootStack = RootStackConfig.with(function AdaptiveRootStack({ Navig
     <Navigator
       screenLayout={GuardedScreenLayout}
       screenOptions={({ route }) => {
+        const statusBarStyle = themeAppearance === "dark" ? "light" : "dark";
+        const statusBarOptions = Platform.OS === "ios" ? ({ statusBarStyle } as const) : {};
         if (route.name !== "SettingsSheet" && route.name !== "NewTaskSheet") {
-          return {};
+          return statusBarOptions;
         }
 
         // Follow the workspace viewport as it resizes; compact iOS keeps sheets.
         return usesWorkspaceFlowScreens
-          ? { presentation: "card" }
+          ? { ...statusBarOptions, presentation: "card" }
           : {
+              ...statusBarOptions,
               ...FORM_SHEET_PRESENTATION_OPTIONS,
               sheetAllowedDetents: [0.92],
               sheetGrabberVisible: true,

@@ -1130,6 +1130,7 @@ export function EnvironmentProviderSettings({
           mode === "editor" && row.isDefault && row.isDirty ? (
             <SettingResetButton
               label={`${resetLabel} provider settings`}
+              confirmTooltip={`Click again to reset ${resetLabel} to its defaults. Its variables and custom models are cleared.`}
               onClick={() => resetDefaultInstance(row.driver)}
             />
           ) : null

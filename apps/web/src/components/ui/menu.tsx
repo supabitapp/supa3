@@ -261,6 +261,19 @@ function MenuShortcut({ className, ...props }: React.ComponentProps<"kbd">) {
   );
 }
 
+function MenuDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      className={cn(
+        "px-2 py-1 text-balance text-muted-foreground text-xs contain-inline-size",
+        className,
+      )}
+      data-slot="menu-description"
+      {...props}
+    />
+  );
+}
+
 function MenuSub(props: MenuPrimitive.SubmenuRoot.Props) {
   return <MenuPrimitive.SubmenuRoot data-slot="menu-sub" {...props} />;
 }
@@ -349,6 +362,7 @@ export {
   MenuSeparator as DropdownMenuSeparator,
   MenuShortcut,
   MenuShortcut as DropdownMenuShortcut,
+  MenuDescription,
   MenuSub,
   MenuSub as DropdownMenuSub,
   MenuSubTrigger,

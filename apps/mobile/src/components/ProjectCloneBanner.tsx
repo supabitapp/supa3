@@ -3,9 +3,11 @@ import {
   projectCloneProgressSummary,
   type ProjectCloneSnapshot,
 } from "@supacode/contracts";
+import type { ComponentProps } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
 
 import { cn } from "../lib/cn";
+import { useInlineConfirm } from "../lib/useInlineConfirm";
 import { AppText as Text } from "./AppText";
 
 /**
@@ -21,6 +23,7 @@ export function ProjectCloneBanner(props: {
 }) {
   const { clone } = props;
   const name = projectCloneDisplayName(clone);
+  const confirm = useInlineConfirm<"remove">();
   if (clone.phase === "running") {
     return (
       <View className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3">
@@ -60,22 +63,28 @@ export function ProjectCloneBanner(props: {
         </Text>
       ) : null}
       <View className="mt-2 flex-row justify-end gap-2">
-        <BannerAction label="Remove project" onPress={props.onRemove} />
+        <BannerAction
+          label={confirm.armed === "remove" ? "Confirm removal" : "Remove project"}
+          {...confirm.bind("remove", props.onRemove)}
+        />
         <BannerAction label="Retry" onPress={props.onRetry} />
       </View>
     </View>
   );
 }
 
-function BannerAction(props: { readonly label: string; readonly onPress: () => void }) {
+function BannerAction({
+  label,
+  ...props
+}: Omit<ComponentProps<typeof Pressable>, "children"> & { readonly label: string }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={props.label}
+      accessibilityLabel={label}
       className="rounded-full border border-border bg-background px-3 py-1.5"
-      onPress={props.onPress}
+      {...props}
     >
-      <Text className="font-supacode-medium text-xs">{props.label}</Text>
+      <Text className="font-supacode-medium text-xs">{label}</Text>
     </Pressable>
   );
 }

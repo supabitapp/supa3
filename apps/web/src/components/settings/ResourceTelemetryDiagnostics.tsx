@@ -27,7 +27,7 @@ import type {
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -38,7 +38,6 @@ import {
   useResourceTelemetryHistory,
 } from "../../lib/resourceTelemetryState";
 import { cn } from "../../lib/utils";
-import { ensureLocalApi } from "../../localApi";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatRelativeTime } from "../../timestampFormat";
@@ -532,7 +531,11 @@ function ProcessActions({
   }
   const isSignaling = signalingKeys.has(processIdentityKey(process));
   return (
-    <ProcessSignalActions disabled={isSignaling} onSignal={(signal) => onSignal(process, signal)} />
+    <ProcessSignalActions
+      pid={process.identity.pid}
+      disabled={isSignaling}
+      onSignal={(signal) => onSignal(process, signal)}
+    />
   );
 }
 
@@ -834,60 +837,20 @@ export function ResourceTelemetryDiagnostics({
   });
   const [signalingKeys, setSignalingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const signalingKeysRef = useRef<ReadonlySet<string>>(new Set());
-  const environmentIdRef = useRef(environmentId);
-  useEffect(() => {
-    environmentIdRef.current = environmentId;
-    return () => {
-      environmentIdRef.current = null;
-    };
-  }, [environmentId]);
   const [isRetrying, setIsRetrying] = useState(false);
   const snapshot = telemetry.data;
   const allSupacode = snapshot?.groups.allSupacode;
 
   const signalProcess = useCallback(
-    async (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
-      const targetEnvironmentId = environmentIdRef.current;
-      if (targetEnvironmentId === null) return;
+    (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
+      if (environmentId === null) return;
       const identityKey = processIdentityKey(process);
       if (signalingKeysRef.current.has(identityKey)) return;
       const nextSignalingKeys = new Set(signalingKeysRef.current).add(identityKey);
       signalingKeysRef.current = nextSignalingKeys;
       setSignalingKeys(nextSignalingKeys);
-      const clearSignaling = () => {
-        const next = new Set(signalingKeysRef.current);
-        next.delete(identityKey);
-        signalingKeysRef.current = next;
-        setSignalingKeys(next);
-      };
-
-      if (signal === "SIGKILL") {
-        let confirmed = false;
-        try {
-          confirmed = await ensureLocalApi().dialogs.confirm(
-            `Send SIGKILL to process ${process.identity.pid}? This cannot be handled by the process.`,
-            { variant: "destructive" },
-          );
-        } catch (error) {
-          clearSignaling();
-          toastManager.add({
-            type: "error",
-            title: "Could not confirm signal",
-            description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
-          });
-          return;
-        }
-        if (!confirmed) {
-          clearSignaling();
-          return;
-        }
-      }
-      if (environmentIdRef.current !== targetEnvironmentId) {
-        clearSignaling();
-        return;
-      }
       void signalServerProcess({
-        environmentId: targetEnvironmentId,
+        environmentId,
         input: {
           pid: process.identity.pid,
           startTimeMs: process.identity.startTimeMs,
@@ -917,10 +880,13 @@ export function ResourceTelemetryDiagnostics({
           });
         })
         .finally(() => {
-          clearSignaling();
+          const next = new Set(signalingKeysRef.current);
+          next.delete(identityKey);
+          signalingKeysRef.current = next;
+          setSignalingKeys(next);
         });
     },
-    [signalServerProcess],
+    [environmentId, signalServerProcess],
   );
 
   const retryCollector = useCallback(() => {

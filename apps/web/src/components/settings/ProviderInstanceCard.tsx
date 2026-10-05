@@ -38,6 +38,7 @@ import {
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { normalizeProviderAccentColor } from "../../providerInstances";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -280,15 +281,16 @@ function ProviderEnvironmentFieldRow(props: {
             spellCheck={false}
           />
           {props.variable ? (
-            <Button
-              type="button"
+            <InlineConfirmButton
               size="icon-sm"
               variant="ghost-destructive"
-              onClick={() => props.onRemove(props.field)}
-              aria-label={`Clear ${props.field.label}`}
-            >
-              <XIcon className="size-3.5" />
-            </Button>
+              icon={<XIcon className="size-3.5" />}
+              label={`Clear ${props.field.label}`}
+              confirmLabel={`Confirm clear ${props.field.label}`}
+              tooltip={`Clear ${props.field.label}`}
+              confirmTooltip={`Click again to clear ${props.field.label}.${props.field.sensitive === false ? "" : " The stored secret can't be recovered."}`}
+              onConfirm={() => props.onRemove(props.field)}
+            />
           ) : null}
         </div>
       }
@@ -449,15 +451,16 @@ function ProviderEnvironmentSection(props: {
                   {variable.sensitive ? "Sensitive, stored separately" : "Plain text"}
                 </TooltipPopup>
               </Tooltip>
-              <Button
-                type="button"
+              <InlineConfirmButton
                 size="icon-micro"
                 variant="ghost-destructive"
-                onClick={() => removeVariable(variable.id)}
-                aria-label={`Remove environment variable ${variable.name || index + 1}`}
-              >
-                <XIcon className="size-3" />
-              </Button>
+                icon={<XIcon className="size-3" />}
+                label={`Remove environment variable ${variable.name || index + 1}`}
+                confirmLabel={`Confirm remove environment variable ${variable.name || index + 1}`}
+                tooltip="Remove variable"
+                confirmTooltip={`Click again to remove ${variable.name || "this variable"}.${variable.sensitive ? " Its secret value can't be recovered." : ""}`}
+                onConfirm={() => removeVariable(variable.id)}
+              />
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
@@ -941,16 +944,17 @@ export function ProviderInstanceCard({
       >
         {titleTailNode}
         {onDelete ? (
-          <Button
-            type="button"
+          <InlineConfirmButton
             size="icon-xs"
             variant="ghost-destructive"
             disabled={readOnly}
-            onClick={onDelete}
-            aria-label={`Delete instance ${instanceId}`}
-          >
-            <Trash2Icon />
-          </Button>
+            icon={<Trash2Icon />}
+            label={`Delete instance ${instanceId}`}
+            confirmLabel={`Confirm delete instance ${instanceId}`}
+            tooltip="Delete instance"
+            confirmTooltip={`Click again to delete ${displayName}. Its settings, variables, and custom models are removed${instance.driver === "acpRegistry" ? ", and its agent files are uninstalled unless another instance uses them" : ""}.`}
+            onConfirm={onDelete}
+          />
         ) : null}
       </span>
     </div>

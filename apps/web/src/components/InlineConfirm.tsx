@@ -1,7 +1,11 @@
 import { CheckIcon } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { cn } from "~/lib/utils";
+
+import { Button, type ButtonSize, type ButtonVariant } from "./ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 const ICON_SWAP_CLASS =
   "col-start-1 row-start-1 transition-[opacity,scale,filter] duration-300 ease-drawer motion-reduce:transition-none";
@@ -46,8 +50,10 @@ export function InlineConfirmLabel({
     }
     const layoutWidth = (element: HTMLElement) =>
       Math.ceil(Number.parseFloat(getComputedStyle(element).width) || 0);
-    const measure = () =>
+    const measure = () => {
+      if (idleLabel.getClientRects().length === 0) return;
       setWidths({ idle: layoutWidth(idleLabel), confirm: layoutWidth(confirmLabel) });
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(idleLabel);
@@ -85,5 +91,85 @@ export function InlineConfirmLabel({
         {confirm}
       </span>
     </span>
+  );
+}
+
+export function InlineConfirmTooltip({
+  armed,
+  required = true,
+  render,
+  tip,
+  armedTip,
+  side = "top",
+  children,
+}: {
+  armed: boolean;
+  required?: boolean;
+  render: ComponentProps<typeof TooltipTrigger>["render"];
+  tip: ReactNode;
+  armedTip: ReactNode;
+  side?: ComponentProps<typeof TooltipPopup>["side"];
+  children?: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger closeOnClick={armed || !required} render={render}>
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup key={armed ? "armed" : "idle"} side={side}>
+        {armed ? armedTip : tip}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+export function InlineConfirmButton({
+  size,
+  variant,
+  disabled,
+  required = true,
+  icon,
+  label,
+  confirmLabel,
+  tooltip,
+  confirmTooltip,
+  onConfirm,
+}: {
+  readonly size: ButtonSize;
+  readonly variant: ButtonVariant;
+  readonly disabled?: boolean;
+  readonly required?: boolean;
+  readonly icon?: ReactNode;
+  readonly label: string;
+  readonly confirmLabel: string;
+  readonly tooltip: ReactNode;
+  readonly confirmTooltip: ReactNode;
+  readonly onConfirm: () => void;
+}) {
+  const confirm = useInlineConfirm<"confirm">();
+  const armed = confirm.armed === "confirm";
+  return (
+    <InlineConfirmTooltip
+      armed={armed}
+      required={required}
+      tip={tooltip}
+      armedTip={confirmTooltip}
+      render={
+        <Button
+          type="button"
+          size={size}
+          variant={variant}
+          disabled={disabled}
+          {...(required ? confirm.bind("confirm", onConfirm) : { onClick: onConfirm })}
+          aria-label={icon === undefined ? undefined : armed ? confirmLabel : label}
+        />
+      }
+    >
+      {icon === undefined ? (
+        <InlineConfirmLabel armed={armed} idle={label} confirm={confirmLabel} />
+      ) : (
+        <InlineConfirmIcon armed={armed}>{icon}</InlineConfirmIcon>
+      )}
+    </InlineConfirmTooltip>
   );
 }

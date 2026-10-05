@@ -188,7 +188,9 @@ import {
   setComposerDraftAttachmentUpload,
   waitForComposerDraftsLoaded,
   setStickyComposerModelSelection,
+  setStickyNewTaskProject,
   stickyComposerModelSelectionAtom,
+  stickyNewTaskProjectAtom,
   undoComposerDraftMerge,
   undoComposerDraftMergeState,
 } from "./use-composer-drafts";
@@ -213,6 +215,7 @@ afterEach(() => {
   composerDraftFileMocks.readImage.mockResolvedValue("YWJj");
   appAtomRegistry.set(composerDraftsAtom, {});
   appAtomRegistry.set(stickyComposerModelSelectionAtom, null);
+  appAtomRegistry.set(stickyNewTaskProjectAtom, null);
   appAtomRegistry.set(modelOptionMemoryAtom, {});
   appAtomRegistry.set(threadOutboxManager.queuedMessagesByThreadKeyAtom, {});
   composerAttachmentCleanupMocks.remove.mockClear();
@@ -1684,6 +1687,7 @@ describe("mobile composer drafts", () => {
       drafts: { "environment-1:thread-1": DRAFT },
       modelOptionMemory: {},
       stickyModelSelection: null,
+      stickyNewTaskProject: null,
     });
   });
 
@@ -1802,6 +1806,25 @@ describe("mobile composer drafts", () => {
       instanceId: "codex",
       model: "gpt-5.6-sol",
     });
+  });
+
+  it("restores the sticky new-task project after a restart", async () => {
+    vi.useFakeTimers();
+    await waitForComposerDraftsLoaded();
+    const project = {
+      environmentId: EnvironmentId.make("environment-1"),
+      projectId: ProjectId.make("project-1"),
+    };
+    setStickyNewTaskProject(project);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(JSON.parse(composerDraftFileMocks.getDocument())).toMatchObject({
+      stickyNewTaskProject: project,
+    });
+
+    resetComposerDraftsLoadState();
+    appAtomRegistry.set(stickyNewTaskProjectAtom, null);
+    await waitForComposerDraftsLoaded();
+    expect(appAtomRegistry.get(stickyNewTaskProjectAtom)).toEqual(project);
   });
 
   it("decodes model option memory from the composer document", () => {

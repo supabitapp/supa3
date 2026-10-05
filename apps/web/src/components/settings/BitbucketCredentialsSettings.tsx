@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -203,14 +204,16 @@ export function BitbucketCredentialsSettings({
           </p>
           <div className="flex shrink-0 gap-2">
             {current !== null ? (
-              <Button
+              <InlineConfirmButton
                 size="xs"
                 variant="outline"
                 disabled={saving}
-                onClick={() => void save({ accessToken: "", email: "", apiToken: "" })}
-              >
-                Remove
-              </Button>
+                label="Remove"
+                confirmLabel="Confirm remove"
+                tooltip="Remove the saved credentials"
+                confirmTooltip={`Click again to remove your ${METHODS[current].label.toLowerCase()}. The server falls back to its SUPACODE_BITBUCKET_* environment variables.`}
+                onConfirm={() => void save({ accessToken: "", email: "", apiToken: "" })}
+              />
             ) : null}
             <Button type="submit" size="xs" disabled={!canSave || saving}>
               Save

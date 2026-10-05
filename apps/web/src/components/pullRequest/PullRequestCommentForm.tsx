@@ -6,9 +6,11 @@ import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@supa
 import { SendIcon } from "lucide-react";
 import { useState, type RefObject } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 
+import { InlineConfirmIcon, InlineConfirmLabel } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
@@ -49,10 +51,12 @@ export function PullRequestCommentForm({
           detail.viewerPermissions.actions.includes("reopen")
         ? ("reopen" as const)
         : null;
+  const confirm = useInlineConfirm<"close">();
+  const disabled = body.trim().length === 0 || submitting !== null || actionPending;
 
   const submit = async (action: "comment" | "close" | "reopen") => {
+    if (disabled) return;
     const trimmed = body.trim();
-    if (trimmed.length === 0 || submitting !== null || actionPending) return;
     setSubmitting(action);
     if (action !== "comment") {
       const result = await onCommentAction(trimmed, action);
@@ -108,31 +112,37 @@ export function PullRequestCommentForm({
         }}
       />
       <div className="flex flex-wrap justify-end gap-2">
-        {followUpAction === null ? null : (
+        {followUpAction === "close" ? (
           <Button
             size="xs"
-            variant={followUpAction === "close" ? "destructive-outline" : "outline"}
-            disabled={body.trim().length === 0 || submitting !== null || actionPending}
-            onClick={() => void submit(followUpAction)}
+            variant="destructive-outline"
+            disabled={disabled}
+            {...confirm.bind("close", () => void submit("close"))}
           >
-            {followUpAction === "close" ? (
+            <InlineConfirmIcon armed={confirm.armed === "close"}>
               <PullRequestGlyph.closed className="size-3.5" />
-            ) : (
-              <PullRequestGlyph.reopen className="size-3.5" />
-            )}
-            {submitting === followUpAction
-              ? followUpAction === "close"
-                ? "Closing..."
-                : "Reopening..."
-              : followUpAction === "close"
-                ? "Close with comment"
-                : "Reopen with comment"}
+            </InlineConfirmIcon>
+            <InlineConfirmLabel
+              armed={confirm.armed === "close"}
+              idle={submitting === "close" ? "Closing..." : "Close with comment"}
+              confirm="Confirm close"
+            />
           </Button>
-        )}
+        ) : followUpAction === "reopen" ? (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => void submit("reopen")}
+          >
+            <PullRequestGlyph.reopen className="size-3.5" />
+            {submitting === "reopen" ? "Reopening..." : "Reopen with comment"}
+          </Button>
+        ) : null}
         <Button
           size="xs"
           variant="outline"
-          disabled={body.trim().length === 0 || submitting !== null || actionPending}
+          disabled={disabled}
           onClick={() => void submit("comment")}
         >
           <SendIcon className="size-3.5" />

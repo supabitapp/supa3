@@ -1,16 +1,22 @@
 import type { ServerProcessSignal } from "@supacode/contracts";
 
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
+import { InlineConfirmIcon } from "../InlineConfirm";
 import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-/** Process ownership and confirmation stay with the diagnostics view. */
+/** Process ownership stays with the diagnostics view. */
 export function ProcessSignalActions({
+  pid,
   disabled,
   onSignal,
 }: {
+  pid: number;
   disabled: boolean;
   onSignal: (signal: ServerProcessSignal) => void;
 }) {
+  const confirm = useInlineConfirm<"kill">();
+  const killArmed = confirm.armed === "kill";
   return (
     <div className="flex items-center justify-end gap-1.5">
       <Tooltip>
@@ -33,15 +39,19 @@ export function ProcessSignalActions({
           render={
             <InlineButton
               disabled={disabled}
-              aria-label="Send SIGKILL"
+              aria-label={killArmed ? "Confirm SIGKILL" : "Send SIGKILL"}
               tone="destructive"
-              onClick={() => onSignal("SIGKILL")}
+              {...confirm.bind("kill", () => onSignal("SIGKILL"))}
             >
-              KILL
+              <InlineConfirmIcon armed={killArmed}>KILL</InlineConfirmIcon>
             </InlineButton>
           }
         />
-        <TooltipPopup side="top">Send SIGKILL</TooltipPopup>
+        <TooltipPopup side="top">
+          {killArmed
+            ? `Click again to send SIGKILL to process ${pid}. The process can’t handle it.`
+            : "Send SIGKILL"}
+        </TooltipPopup>
       </Tooltip>
     </div>
   );

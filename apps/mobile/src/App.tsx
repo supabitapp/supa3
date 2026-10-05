@@ -1,7 +1,7 @@
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { StatusBar } from "react-native";
+import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -20,6 +20,7 @@ import { RootStack } from "./Stack";
 import { appAtomRegistry } from "./state/atom-registry";
 import { OverlayPortalHost } from "./components/OverlayPortal";
 import { shouldHandleAppLink } from "./lib/appLinking";
+import { disarmInlineConfirmsOnTouch } from "./lib/useInlineConfirm";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
 import { VoiceInputProvider } from "./features/voice-input/VoiceInputProvider";
@@ -72,11 +73,15 @@ function AppContent() {
     <>
       <SplashScreenCoordinator />
       <SubscriptionUsageCoordinator />
-      <GestureHandlerRootView className="flex-1">
+      <GestureHandlerRootView className="flex-1" onTouchStart={disarmInlineConfirmsOnTouch}>
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
             <VoiceInputProvider>
-              <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />
+              {Platform.OS === "android" ? (
+                <StatusBar
+                  barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"}
+                />
+              ) : null}
               {/* The navigation theme drives the NATIVE header appearance: native-stack
                 forwards `dark` as the nav bar's overrideUserInterfaceStyle. Without
                 this, React Navigation defaults to its light theme and every native

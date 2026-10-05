@@ -388,6 +388,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const selectedThreadKeyRef = useRef(selectedThreadKey);
   const lastScrolledSubmittedMessageIdRef = useRef<MessageId | null>(null);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const handleComposerFocusChange = useCallback(
     (focused: boolean) => {
@@ -1156,6 +1157,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 colorScheme={isDarkMode ? "dark" : "light"}
                 status={floatingStatus}
                 lift={floatingControlLift}
+                // The command popover opens over the pill's slot.
+                hidden={composerMenuOpen}
                 devicePreview={
                   devicePreviews.length > 0
                     ? { count: devicePreviews.length, onPress: openDevicePreview }
@@ -1373,6 +1376,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                       onExpandedChange={setComposerExpanded}
                       onEditorFocusChange={handleComposerFocusChange}
+                      onCommandMenuOpenChange={setComposerMenuOpen}
                     />
                   </>
                 )}

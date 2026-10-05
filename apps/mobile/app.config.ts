@@ -238,6 +238,8 @@ const config: ExpoConfig = {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
     },
     infoPlist: {
+      // Native navigation owns visibility across full-screen preview transitions.
+      UIViewControllerBasedStatusBarAppearance: true,
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },

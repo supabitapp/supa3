@@ -12,6 +12,7 @@ import { type CustomModelDefinition, normalizeCustomModelSlug } from "@supacode/
 import { cn } from "../../lib/utils";
 import { sortModelsForProviderInstance } from "../../modelOrdering";
 import { MAX_CUSTOM_MODEL_LENGTH } from "../../modelSelection";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
@@ -395,21 +396,16 @@ export function ProviderModelsSection({
             </TooltipTrigger>
             <TooltipPopup side="top">Edit name and options</TooltipPopup>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  size="icon-micro"
-                  variant="ghost-muted"
-                  aria-label={`Remove ${model.slug}`}
-                  onClick={() => handleRemove(model.slug)}
-                />
-              }
-            >
-              <XIcon className="size-3" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">Remove custom model</TooltipPopup>
-          </Tooltip>
+          <InlineConfirmButton
+            size="icon-micro"
+            variant="ghost-muted"
+            icon={<XIcon className="size-3" />}
+            label={`Remove ${model.slug}`}
+            confirmLabel={`Confirm remove ${model.slug}`}
+            tooltip="Remove custom model"
+            confirmTooltip={`Click again to remove ${model.name}`}
+            onConfirm={() => handleRemove(model.slug)}
+          />
         </>
       ) : null}
     </span>

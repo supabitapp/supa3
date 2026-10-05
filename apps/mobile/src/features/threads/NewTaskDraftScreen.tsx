@@ -61,9 +61,8 @@ import {
 } from "../../state/composer-attachment-uploads";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
-import { ProviderIcon } from "../../components/ProviderIcon";
 import { ComposerSpeedToggle } from "../../components/ComposerSpeedToggle";
-import { ComposerReasoningControl } from "./ComposerReasoningControl";
+import { ComposerModelControl } from "./ComposerModelControl";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -101,6 +100,7 @@ import {
   composerDraftsAtom,
   mergeComposerDraftContent,
   restoreComposerDraftSnapshot,
+  setStickyNewTaskProject,
   updateComposerDraftSettings,
   scheduleUnusedComposerAttachmentCleanup,
   type ComposerDraft,
@@ -725,6 +725,12 @@ export function NewTaskDraftScreen(props: {
           });
         }
         appliedInitialProjectKeyRef.current = directProjectKey;
+        // Recorded here too: when the route's project is already the
+        // provider's fallback selection, setProject below is skipped.
+        setStickyNewTaskProject({
+          environmentId: directProject.environmentId,
+          projectId: directProject.id,
+        });
         if (
           selectedProject?.environmentId === directProject.environmentId &&
           selectedProject.id === directProject.id
@@ -1716,7 +1722,7 @@ export function NewTaskDraftScreen(props: {
               paddingBottom={0}
               paddingHorizontal={0}
               paddingTop={0}
-              style={{ gap: 0 }}
+              style={{ gap: 0, justifyContent: "space-between" }}
             >
               <ComposerDictationCancelAction
                 presentation={voicePresentation}
@@ -1740,57 +1746,43 @@ export function NewTaskDraftScreen(props: {
                     onPickMedia={handlePickMedia}
                     onPickFiles={handlePickFiles}
                   />
-                  <View className="min-w-0 flex-1 flex-row items-center justify-end gap-2">
-                    <View className="min-w-0 shrink">
-                      <ComposerInlineControl
-                        accessibilityLabel="Model and reasoning settings"
-                        disabled={isComposerInteractionLocked}
-                        emphasized
-                        renderIcon={(size) => (
-                          <ProviderIcon
-                            iconUrl={flow.selectedModelOption?.providerIconUrl}
-                            provider={flow.selectedModelOption?.providerDriver}
-                            size={size}
-                          />
-                        )}
-                        label={flow.selectedModelOption?.label ?? "Choose model"}
-                        maxWidth="100%"
-                        onPress={settingsSheetPresentation.open}
-                      />
-                    </View>
-                    <ComposerReasoningControl
+                  <View className="min-w-0 shrink">
+                    <ComposerModelControl
                       descriptors={providerOptionDescriptors}
                       selectedModel={flow.selectedModel}
+                      modelOption={flow.selectedModelOption}
+                      label={flow.selectedModelOption?.label ?? "Choose model"}
                       disabled={isComposerInteractionLocked}
-                      onChange={flow.setSelectedModelOptions}
+                      onPress={settingsSheetPresentation.open}
                     />
-                    <ComposerSpeedToggle
-                      provider={flow.selectedModelOption?.providerDriver}
-                      descriptors={providerOptionDescriptors}
-                      disabled={isComposerInteractionLocked}
-                      onChange={flow.setSelectedModelOptions}
-                    />
-                    {flow.planModeEnabled ? (
-                      <ComposerInlineControl
-                        accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
-                        accessibilityLabel={`Interaction mode: ${flow.interactionMode === "plan" ? "Plan" : "Build"}`}
-                        disabled={isComposerInteractionLocked}
-                        emphasized
-                        icon={
-                          flow.interactionMode === "plan"
-                            ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
-                            : { ios: "hammer", android: "construction" }
-                        }
-                        label={flow.interactionMode === "plan" ? "Plan" : "Build"}
-                        onPress={() =>
-                          flow.setInteractionMode(
-                            flow.interactionMode === "plan" ? "default" : "plan",
-                          )
-                        }
-                        showChevron={false}
-                      />
-                    ) : null}
                   </View>
+                  <ComposerSpeedToggle
+                    provider={flow.selectedModelOption?.providerDriver}
+                    descriptors={providerOptionDescriptors}
+                    disabled={isComposerInteractionLocked}
+                    onChange={flow.setSelectedModelOptions}
+                  />
+                  {flow.planModeEnabled ? (
+                    <ComposerInlineControl
+                      accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
+                      accessibilityLabel={`Interaction mode: ${flow.interactionMode === "plan" ? "Plan" : "Build"}`}
+                      compact
+                      disabled={isComposerInteractionLocked}
+                      emphasized
+                      icon={
+                        flow.interactionMode === "plan"
+                          ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
+                          : { ios: "hammer", android: "construction" }
+                      }
+                      label={flow.interactionMode === "plan" ? "Plan" : "Build"}
+                      onPress={() =>
+                        flow.setInteractionMode(
+                          flow.interactionMode === "plan" ? "default" : "plan",
+                        )
+                      }
+                      showChevron={false}
+                    />
+                  ) : null}
                 </>
               )}
               <ComposerDictationPrimaryAction

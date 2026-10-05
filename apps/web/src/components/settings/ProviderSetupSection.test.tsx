@@ -337,25 +337,6 @@ describe("Antigravity setup", () => {
     ).toBe(1);
   });
 
-  it("removes an owned damaged runtime only after confirmation", async () => {
-    setup.auth = authState({ phase: "idle", flowId: null, authorizationUrl: null });
-    setup.installation = {
-      ...setup.installation!,
-      phase: "failed",
-      canRemove: true,
-      installedVersion: null,
-    };
-    const view = renderSetup();
-    click(view, "Remove downloaded runtime");
-    await flushPromises();
-    expect(setup.removeInstall).not.toHaveBeenCalled();
-
-    setup.confirm.mockResolvedValue(true);
-    click(view, "Remove downloaded runtime");
-    await flushPromises();
-    expect(setup.removeInstall).toHaveBeenCalledWith({ environmentId, input: { instanceId } });
-  });
-
   it.each([true, false])(
     "can sign out a verified account when its instance is enabled=%s",
     async (enabled) => {

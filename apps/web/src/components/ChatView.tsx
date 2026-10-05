@@ -336,6 +336,7 @@ import {
   getComposerProviderState,
 } from "./chat/composerProviderState";
 import { confirmTerminalClose, isTerminalCloseConfirmPending } from "../lib/terminalCloseConfirm";
+import { confirmRightPanelSurfacesClose } from "../lib/rightPanelCloseConfirm";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import {
@@ -490,7 +491,6 @@ import {
 import type { ComposerDispatchMode } from "@supacode/client-runtime/state/composer-dispatch";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
-  agentControlledBrowserCloseConfirmation,
   branchMismatchKey,
   buildExpiredTerminalContextToastCopy,
   buildLocalDraftThread,
@@ -567,6 +567,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ServerUpdateAction } from "./ServerUpdateAction";
 import { useAutoBalanceUpdateBanner } from "./chat/useAutoBalanceUpdateBanner";
+import { InlineConfirmButton } from "./InlineConfirm";
 import {
   ComposerServerUpdateIcon,
   ComposerServerUpdateStatus,
@@ -5863,33 +5864,28 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeRightPanelSurface, activeThreadRef, closeTerminalMutation, storeCloseTerminal],
   );
+  const terminalCloseTarget = useCallback(
+    (terminalId: string) => ({
+      label: activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId),
+      hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
+    }),
+    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById],
+  );
   const requestCloseTerminal = useCallback(
     (terminalId: string) => {
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
-      void confirmTerminalClose([
-        {
-          label,
-          hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-        },
-      ]).then((confirmed) => {
+      void confirmTerminalClose([terminalCloseTarget(terminalId)]).then((confirmed) => {
         if (confirmed) closeTerminal(terminalId);
       });
     },
-    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById, closeTerminal],
+    [closeTerminal, terminalCloseTarget],
   );
   const requestClosePanelTerminal = useCallback(
     (terminalId: string) => {
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
-      void confirmTerminalClose([
-        {
-          label,
-          hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-        },
-      ]).then((confirmed) => {
+      void confirmTerminalClose([terminalCloseTarget(terminalId)]).then((confirmed) => {
         if (confirmed) closePanelTerminal(terminalId);
       });
     },
-    [activeTerminalHasRunningSubprocessById, activeTerminalLabelsById, closePanelTerminal],
+    [closePanelTerminal, terminalCloseTarget],
   );
   const activateRightPanelSurface = useCallback(
     (surface: RightPanelSurface) => {
@@ -5956,27 +5952,6 @@ export default function ChatView(props: ChatViewProps) {
       storeCloseTerminal,
     ],
   );
-  const closeAfterAgentBrowserConfirmation = useCallback(
-    (surfaces: readonly RightPanelSurface[], closeSurfaces: () => void) => {
-      const message = agentControlledBrowserCloseConfirmation(
-        surfaces,
-        activePreviewState.desktopByTabId,
-      );
-      if (!message) {
-        closeSurfaces();
-        return;
-      }
-      const localApi = readLocalApi();
-      if (!localApi) return;
-      void localApi.dialogs.confirm(message, { variant: "destructive" }).then(
-        (confirmed) => {
-          if (confirmed) closeSurfaces();
-        },
-        () => undefined,
-      );
-    },
-    [activePreviewState.desktopByTabId],
-  );
   const syncActivePreviewSurface = useCallback(() => {
     if (!activeThreadRef) return;
     const nextActiveSurface = selectActiveRightPanelSurface(
@@ -5999,88 +5974,44 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeThreadRef, cleanupRightPanelSurfaces, syncActivePreviewSurface],
   );
-  const closeRightPanelSurface = useCallback(
-    (surface: RightPanelSurface) => {
+  const closeRightPanelSurfaces = useCallback(
+    (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
-      const finishClose = () => finishRightPanelSurfaceClose([surface]);
-      if (surface.kind === "preview") {
-        closeAfterAgentBrowserConfirmation([surface], finishClose);
-        return;
-      }
-      if (surface.kind !== "terminal") {
-        finishClose();
-        return;
-      }
-      const activeLabel =
-        activeTerminalLabelsById.get(surface.activeTerminalId) ??
-        getTerminalLabel(surface.activeTerminalId);
-      const otherTerminalIds = surface.terminalIds.filter(
-        (terminalId) => terminalId !== surface.activeTerminalId,
-      );
-      void confirmTerminalClose([
-        {
-          label: activeLabel,
-          hasRunningSubprocess:
-            activeTerminalHasRunningSubprocessById.get(surface.activeTerminalId) ?? false,
-        },
-        ...otherTerminalIds.map((terminalId) => {
-          return {
-            label: activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId),
-            hasRunningSubprocess: activeTerminalHasRunningSubprocessById.get(terminalId) ?? false,
-          };
-        }),
-      ]).then((confirmed) => {
-        if (confirmed) finishClose();
+      void confirmRightPanelSurfacesClose(surfaces, {
+        desktopByTabId: activePreviewState.desktopByTabId,
+        terminalCloseTarget,
+      }).then((confirmed) => {
+        if (confirmed) finishRightPanelSurfaceClose(surfaces);
       });
     },
     [
       activeThreadRef,
-      activeTerminalHasRunningSubprocessById,
-      activeTerminalLabelsById,
-      closeAfterAgentBrowserConfirmation,
+      activePreviewState.desktopByTabId,
       finishRightPanelSurfaceClose,
+      terminalCloseTarget,
     ],
+  );
+  const closeRightPanelSurface = useCallback(
+    (surface: RightPanelSurface) => closeRightPanelSurfaces([surface]),
+    [closeRightPanelSurfaces],
   );
   const closeOtherRightPanelSurfaces = useCallback(
     (surface: RightPanelSurface) => {
-      if (!activeThreadRef) return;
-      const surfaces = rightPanelState.surfaces.filter((entry) => entry.id !== surface.id);
-      const finishClose = () => finishRightPanelSurfaceClose(surfaces);
-      closeAfterAgentBrowserConfirmation(surfaces, finishClose);
+      closeRightPanelSurfaces(rightPanelState.surfaces.filter((entry) => entry.id !== surface.id));
     },
-    [
-      activeThreadRef,
-      closeAfterAgentBrowserConfirmation,
-      finishRightPanelSurfaceClose,
-      rightPanelState.surfaces,
-    ],
+    [closeRightPanelSurfaces, rightPanelState.surfaces],
   );
   const closeRightPanelSurfacesToRight = useCallback(
     (surface: RightPanelSurface) => {
-      if (!activeThreadRef) return;
       const surfaceIndex = rightPanelState.surfaces.findIndex((entry) => entry.id === surface.id);
       if (surfaceIndex < 0) return;
-      const surfaces = rightPanelState.surfaces.slice(surfaceIndex + 1);
-      const finishClose = () => finishRightPanelSurfaceClose(surfaces);
-      closeAfterAgentBrowserConfirmation(surfaces, finishClose);
+      closeRightPanelSurfaces(rightPanelState.surfaces.slice(surfaceIndex + 1));
     },
-    [
-      activeThreadRef,
-      closeAfterAgentBrowserConfirmation,
-      finishRightPanelSurfaceClose,
-      rightPanelState.surfaces,
-    ],
+    [closeRightPanelSurfaces, rightPanelState.surfaces],
   );
   const closeAllRightPanelSurfaces = useCallback(() => {
-    if (!activeThreadRef) return;
-    const finishClose = () => finishRightPanelSurfaceClose(rightPanelState.surfaces);
-    closeAfterAgentBrowserConfirmation(rightPanelState.surfaces, finishClose);
-  }, [
-    activeThreadRef,
-    closeAfterAgentBrowserConfirmation,
-    finishRightPanelSurfaceClose,
-    rightPanelState.surfaces,
-  ]);
+    closeRightPanelSurfaces(rightPanelState.surfaces);
+  }, [closeRightPanelSurfaces, rightPanelState.surfaces]);
   const copyRightPanelFilePath = useCallback((relativePath: string) => {
     if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
       toastManager.add(
@@ -7159,7 +7090,6 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [activeThreadRef, activeThreadShell, unsnoozeThreadMutation, updateThreadMetadata]);
   const [isRestoringThreadBranch, setIsRestoringThreadBranch] = useState(false);
-  const [branchRestoreConfirmOpen, setBranchRestoreConfirmOpen] = useState(false);
   // Once revealed for a given mismatch, the banner stays mounted until the
   // mismatch changes or resolves, so clearing the draft doesn't flicker it.
   const [revealedBranchMismatchKey, setRevealedBranchMismatchKey] = useState<string | null>(null);
@@ -7522,17 +7452,6 @@ export default function ChatView(props: ChatViewProps) {
     resumeCompactionPermanentlyDismissed,
     selectedProvider,
   ]);
-  const handleRestoreThreadBranch = useCallback(() => {
-    if (gitStatusQuery.data?.hasWorkingTreeChanges) {
-      setBranchRestoreConfirmOpen(true);
-      return;
-    }
-    void handleSwitchCheckoutToThread();
-  }, [
-    gitStatusQuery.data?.hasWorkingTreeChanges,
-    handleSwitchCheckoutToThread,
-    setBranchRestoreConfirmOpen,
-  ]);
   const feedbackBannerItems = useMemo(
     () =>
       feedbackSubmissions.flatMap((submission) => {
@@ -7622,14 +7541,21 @@ export default function ChatView(props: ChatViewProps) {
           </span>
         ),
         actions: (
-          <Button
+          <InlineConfirmButton
             size="xs"
             variant="ghost"
             disabled={isRestoringThreadBranch}
-            onClick={handleRestoreThreadBranch}
-          >
-            {isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
-          </Button>
+            required={gitStatusQuery.data?.hasWorkingTreeChanges === true}
+            label={isRestoringThreadBranch ? "Restoring..." : "Restore branch"}
+            confirmLabel="Confirm restore"
+            tooltip={
+              gitStatusQuery.data?.hasWorkingTreeChanges
+                ? `Switch back to ${localCheckoutBranchMismatch.threadBranch}. You have uncommitted changes.`
+                : `Switch back to ${localCheckoutBranchMismatch.threadBranch}`
+            }
+            confirmTooltip={`Click again to switch to ${localCheckoutBranchMismatch.threadBranch}. Your uncommitted changes will carry over, or block the switch if they conflict.`}
+            onConfirm={() => void handleSwitchCheckoutToThread()}
+          />
         ),
         dismissLabel: "Dismiss branch change notice",
         onDismiss: () => {
@@ -7642,8 +7568,9 @@ export default function ChatView(props: ChatViewProps) {
   }, [
     activeBranchMismatchKey,
     feedbackBannerItems,
+    gitStatusQuery.data?.hasWorkingTreeChanges,
     limitRecoveryBanner,
-    handleRestoreThreadBranch,
+    handleSwitchCheckoutToThread,
     isRestoringThreadBranch,
     backgroundWorkBannerItem,
     localCheckoutBranchMismatch,
@@ -8287,14 +8214,6 @@ export default function ChatView(props: ChatViewProps) {
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
-      const localApi = readLocalApi();
-      const confirmed =
-        localApi == null
-          ? window.confirm("Roll back this thread to the selected checkpoint?")
-          : await localApi.dialogs.confirm(
-              "Roll back this thread to the selected checkpoint?\nThis action cannot be undone.",
-            );
-      if (!confirmed) return;
 
       useComposerDraftStore.setState((store) => ({
         rewindingThreadKeys: new Set(store.rewindingThreadKeys).add(routeThreadKey),
@@ -10844,7 +10763,7 @@ export default function ChatView(props: ChatViewProps) {
           surface={renderedRightPanelSurface}
           visible={rightPanelOpen}
           onDismissSetup={() => {
-            closeRightPanelSurface(renderedRightPanelSurface);
+            finishRightPanelSurfaceClose([renderedRightPanelSurface]);
             useRightPanelStore.getState().show(activeThreadRef);
           }}
         />
@@ -11612,36 +11531,6 @@ export default function ChatView(props: ChatViewProps) {
                 miniPlayer={activePreviewMiniPlayer}
               />
             ) : null}
-
-            <AlertDialog open={branchRestoreConfirmOpen} onOpenChange={setBranchRestoreConfirmOpen}>
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Switch to{" "}
-                    <code className="font-medium">
-                      {localCheckoutBranchMismatch?.threadBranch ?? ""}
-                    </code>
-                    ?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You have uncommitted changes. They'll carry over to the other branch, or block
-                    the switch if they conflict.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-                  <Button
-                    variant="default"
-                    onClick={() => {
-                      setBranchRestoreConfirmOpen(false);
-                      void handleSwitchCheckoutToThread();
-                    }}
-                  >
-                    Switch branch
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
 
             <ThreadDetailsPanel {...threadDetailsPanelProps} />
 

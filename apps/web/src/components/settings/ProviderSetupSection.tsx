@@ -13,10 +13,11 @@ import {
 import { useRef, useState } from "react";
 import { Trash2Icon } from "lucide-react";
 
-import { ensureLocalApi } from "../../localApi";
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { InlineConfirmIcon } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SettingsRow } from "./settingsLayout";
@@ -176,15 +177,6 @@ function ProviderSetupActions({
     }
   }
 
-  async function removeRuntime() {
-    const confirmed = await ensureLocalApi().dialogs.confirm(
-      `Remove the downloaded Antigravity runtime from ${environmentLabel}? Google sign-in and thread history are kept.`,
-    );
-    if (confirmed) {
-      await runCommand("Removing runtime", () => removeInstall(target));
-    }
-  }
-
   return (
     <div className="divide-y divide-border/50">
       <SettingsRow
@@ -269,23 +261,11 @@ function ProviderSetupActions({
                 ) : null}
               </div>
               {installation?.canRemove && !installActive ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className="col-start-1 row-start-1"
-                        aria-label="Remove downloaded runtime"
-                        disabled={actionsDisabled || authActive}
-                        onClick={() => void removeRuntime()}
-                      />
-                    }
-                  >
-                    <Trash2Icon className="size-3.5" />
-                  </TooltipTrigger>
-                  <TooltipPopup>Remove downloaded runtime</TooltipPopup>
-                </Tooltip>
+                <RemoveRuntimeButton
+                  environmentLabel={environmentLabel}
+                  disabled={actionsDisabled || authActive}
+                  onRemove={() => void runCommand("Removing runtime", () => removeInstall(target))}
+                />
               ) : null}
             </div>
           </div>
@@ -324,5 +304,43 @@ function ProviderSetupActions({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function RemoveRuntimeButton({
+  environmentLabel,
+  disabled,
+  onRemove,
+}: {
+  readonly environmentLabel: string;
+  readonly disabled: boolean;
+  readonly onRemove: () => void;
+}) {
+  const confirm = useInlineConfirm<"remove">();
+  const armed = confirm.armed === "remove";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="col-start-1 row-start-1"
+            aria-label={armed ? "Confirm remove downloaded runtime" : "Remove downloaded runtime"}
+            disabled={disabled}
+            {...confirm.bind("remove", onRemove)}
+          />
+        }
+      >
+        <InlineConfirmIcon armed={armed}>
+          <Trash2Icon className="size-3.5" />
+        </InlineConfirmIcon>
+      </TooltipTrigger>
+      <TooltipPopup>
+        {armed
+          ? `Click again to remove the downloaded runtime from ${environmentLabel}. Google sign-in and thread history are kept.`
+          : "Remove downloaded runtime"}
+      </TooltipPopup>
+    </Tooltip>
   );
 }
