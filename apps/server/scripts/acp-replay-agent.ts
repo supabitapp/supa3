@@ -45,6 +45,7 @@ if ((encodedTranscript === undefined && transcriptPath === undefined) || statusP
 }
 
 const replayStatusPath = statusPath;
+const replayStatusTempPath = `${replayStatusPath}.${process.pid}.tmp`;
 const transcript = JSON.parse(
   transcriptPath === undefined
     ? Buffer.from(encodedTranscript ?? "", "base64").toString("utf8")
@@ -58,7 +59,7 @@ const pendingAgentRequestMethods = new Map<string, string>();
 
 function writeStatus(failure?: unknown): void {
   NodeFS.writeFileSync(
-    replayStatusPath,
+    replayStatusTempPath,
     JSON.stringify({
       scenario: transcript.scenario,
       cursor,
@@ -67,6 +68,7 @@ function writeStatus(failure?: unknown): void {
     }),
     "utf8",
   );
+  NodeFS.renameSync(replayStatusTempPath, replayStatusPath);
 }
 
 function stableStringify(value: unknown): string {
@@ -138,11 +140,19 @@ function stopWithFailure(detail: string, actual?: unknown): void {
   process.stdin.pause();
 }
 
+function isCleanRuntimeExit(entry: ReplayEntry | undefined): boolean {
+  return (
+    entry?.type === "runtime_exit" && (entry.status === "success" || entry.status === "cancelled")
+  );
+}
+
 function advance(): void {
   cursor += 1;
+  while (isCleanRuntimeExit(transcript.entries[cursor])) cursor += 1;
   writeStatus();
 }
 
+/** Callers persist status first: the client may kill this process as soon as it reads the line. */
 function send(message: JsonRpcMessage): void {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
@@ -184,42 +194,41 @@ function materializeInbound(value: unknown): unknown {
   );
 }
 
-function emitInbound(recorded: LogicalFrame): void {
+/** Allocates or consumes the frame's request id and returns its message, or undefined after recording a failure. */
+function prepareInboundMessage(recorded: LogicalFrame): JsonRpcMessage | undefined {
   const frame = materializeInbound(recorded) as LogicalFrame;
   switch (frame.kind) {
     case "notification":
-      send({
+      return {
         jsonrpc: "2.0",
         method: frame.method,
         ...(frame.params === undefined ? {} : { params: frame.params }),
-      });
-      return;
+      };
     case "request": {
       const id = nextAgentRequestId;
       nextAgentRequestId += 1;
       pendingAgentRequestMethods.set(String(id), frame.method);
-      send({
+      return {
         jsonrpc: "2.0",
         id,
         method: frame.method,
         ...(frame.params === undefined ? {} : { params: frame.params }),
         headers: [],
-      });
-      return;
+      };
     }
     case "response": {
       const id = pendingClientRequestId(frame.method);
       if (id === undefined) {
         stopWithFailure(`No pending client request for ${frame.method}`, frame);
-        return;
+        return undefined;
       }
       pendingClientRequestIds.delete(frame.method);
-      send({
+      return {
         jsonrpc: "2.0",
         id,
         ...(frame.result === undefined ? {} : { result: frame.result }),
         ...(frame.error === undefined ? {} : { error: frame.error }),
-      });
+      };
     }
   }
 }
@@ -229,7 +238,7 @@ function flushInbound(): void {
     const entry = transcript.entries[cursor];
     if (entry === undefined || entry.type === "expect_outbound") return;
     if (entry.type === "runtime_exit") {
-      if (entry.status !== "success" && entry.status !== "cancelled") {
+      if (!isCleanRuntimeExit(entry)) {
         stopWithFailure(`Recorded runtime exit was ${entry.status ?? "unknown"}`, entry.error);
         return;
       }
@@ -246,9 +255,10 @@ function flushInbound(): void {
       stopWithFailure("Invalid emit_inbound logical ACP frame", entry.frame);
       return;
     }
-    emitInbound(frame);
-    if (stopped) return;
+    const message = prepareInboundMessage(frame);
+    if (message === undefined) return;
     advance();
+    send(message);
   }
 }
 
@@ -261,6 +271,7 @@ function handleMessage(message: JsonRpcMessage): void {
   }
   const entry = transcript.entries[cursor];
   if (entry?.type !== "expect_outbound" || !matchesExpected(entry.frame, actual)) {
+    stopWithFailure("Unexpected outbound ACP frame", actual);
     if (actual.kind === "request" && message.id !== undefined && message.id !== null) {
       send({
         jsonrpc: "2.0",
@@ -268,7 +279,6 @@ function handleMessage(message: JsonRpcMessage): void {
         error: { code: -32603, message: "ACP replay frame mismatch" },
       });
     }
-    stopWithFailure("Unexpected outbound ACP frame", actual);
     return;
   }
   if (actual.kind === "request" && message.id !== undefined && message.id !== null) {
