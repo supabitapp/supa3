@@ -16,6 +16,7 @@ import { useState } from "react";
 import { ensureLocalApi } from "../../localApi";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -150,11 +151,6 @@ export function AcpSessionManagementSection(props: {
   const deleteNativeSession = async (session: AcpRegistrySession) => {
     if (projectId === null || deletingSessionId !== null || session.importedThreadId !== null)
       return;
-    const confirmed = await ensureLocalApi().dialogs.confirm(
-      `Permanently delete native ACP session "${session.title ?? session.sessionId}"?`,
-      { variant: "destructive" },
-    );
-    if (!confirmed) return;
     setDeletingSessionId(session.sessionId);
     const result = await deleteSession({
       environmentId: props.environmentId,
@@ -247,11 +243,6 @@ export function AcpSessionManagementSection(props: {
 
   const disableConfiguredProvider = async (provider: AcpRegistryConfigurableProvider) => {
     if (projectId === null || savingProviderId !== null || provider.required) return;
-    const confirmed = await ensureLocalApi().dialogs.confirm(
-      `Disable ACP provider "${provider.providerId}"?`,
-      { variant: "destructive" },
-    );
-    if (!confirmed) return;
     setSavingProviderId(provider.providerId);
     const result = await disableProvider({
       environmentId: props.environmentId,
@@ -268,6 +259,10 @@ export function AcpSessionManagementSection(props: {
 
   const logoutProvider = async () => {
     if (loggingOut) return;
+    const confirmed = await ensureLocalApi().dialogs.confirm(
+      `Log out of ${props.provider.displayName ?? "this agent"}? This stops running threads that share this sign-in, including other instances of the same agent. Thread history is kept.`,
+    );
+    if (!confirmed) return;
     setLoggingOut(true);
     const result = await logout({
       environmentId: props.environmentId,
@@ -384,8 +379,7 @@ export function AcpSessionManagementSection(props: {
                             : "Import"}
                       </Button>
                       {canDelete ? (
-                        <Button
-                          type="button"
+                        <InlineConfirmButton
                           size="xs"
                           variant="ghost-muted"
                           disabled={
@@ -393,10 +387,12 @@ export function AcpSessionManagementSection(props: {
                             session.importedThreadId !== null ||
                             deletingSessionId !== null
                           }
-                          onClick={() => void deleteNativeSession(session)}
-                        >
-                          {deletingSessionId === session.sessionId ? "Deleting" : "Delete"}
-                        </Button>
+                          label={deletingSessionId === session.sessionId ? "Deleting" : "Delete"}
+                          confirmLabel="Confirm delete"
+                          tooltip="Delete this session from the agent"
+                          confirmTooltip="Click again to permanently delete this session. The agent can't restore it."
+                          onConfirm={() => void deleteNativeSession(session)}
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -507,15 +503,16 @@ export function AcpSessionManagementSection(props: {
                           {savingProviderId === provider.providerId ? "Saving" : "Save"}
                         </Button>
                         {!provider.required && provider.current !== null ? (
-                          <Button
-                            type="button"
+                          <InlineConfirmButton
                             size="xs"
                             variant="ghost-muted"
                             disabled={props.readOnly || savingProviderId !== null}
-                            onClick={() => void disableConfiguredProvider(provider)}
-                          >
-                            Disable
-                          </Button>
+                            label="Disable"
+                            confirmLabel="Confirm disable"
+                            tooltip={`Disable ${provider.providerId}`}
+                            confirmTooltip={`Click again to disable ${provider.providerId}. Turning it back on means entering its base URL and headers again.`}
+                            onConfirm={() => void disableConfiguredProvider(provider)}
+                          />
                         ) : null}
                       </div>
                     </div>

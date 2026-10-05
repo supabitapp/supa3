@@ -1,7 +1,11 @@
 import { CheckIcon } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
+import { useInlineConfirm } from "~/hooks/useInlineConfirm";
 import { cn } from "~/lib/utils";
+
+import { Button, type ButtonSize, type ButtonVariant } from "./ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 const ICON_SWAP_CLASS =
   "col-start-1 row-start-1 transition-[opacity,scale,filter] duration-300 ease-drawer motion-reduce:transition-none";
@@ -85,5 +89,54 @@ export function InlineConfirmLabel({
         {confirm}
       </span>
     </span>
+  );
+}
+
+export function InlineConfirmButton({
+  size,
+  variant,
+  disabled,
+  icon,
+  label,
+  confirmLabel,
+  tooltip,
+  confirmTooltip,
+  onConfirm,
+}: {
+  readonly size: ButtonSize;
+  readonly variant: ButtonVariant;
+  readonly disabled?: boolean;
+  readonly icon?: ReactNode;
+  readonly label: string;
+  readonly confirmLabel: string;
+  readonly tooltip: ReactNode;
+  readonly confirmTooltip: ReactNode;
+  readonly onConfirm: () => void;
+}) {
+  const confirm = useInlineConfirm<"confirm">();
+  const armed = confirm.armed === "confirm";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        closeOnClick={false}
+        render={
+          <Button
+            type="button"
+            size={size}
+            variant={variant}
+            disabled={disabled}
+            {...confirm.bind("confirm", onConfirm)}
+            aria-label={icon === undefined ? undefined : armed ? confirmLabel : label}
+          >
+            {icon === undefined ? (
+              <InlineConfirmLabel armed={armed} idle={label} confirm={confirmLabel} />
+            ) : (
+              <InlineConfirmIcon armed={armed}>{icon}</InlineConfirmIcon>
+            )}
+          </Button>
+        }
+      />
+      <TooltipPopup side="top">{armed ? confirmTooltip : tooltip}</TooltipPopup>
+    </Tooltip>
   );
 }
