@@ -178,6 +178,8 @@ jobs:
   # isolation that flag buys is preserved exactly. One file at a time keeps
   # about 1.5 cores busy, so 4 vCPU runners lose nothing against 8. The shards
   # split files by recorded duration (apps/server/src/testUtils/weightedShardSequencer.ts).
+  # This job sets the workflow's wall time, so it gets more shards than the
+  # release run. Past about ten, AcpAdapterV2.test.ts (~54s alone) is the floor.
   test_server:
     name: Test Server ${{ matrix.shard }}
     runs-on: depot-ubuntu-24.04-4
@@ -185,7 +187,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
