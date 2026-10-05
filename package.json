@@ -17,6 +17,7 @@
     "start:marketing": "vp run --filter @supacode/marketing preview",
     "start:mock-update-server": "node scripts/mock-update-server.ts",
     "screenshots:mobile": "node scripts/mobile-showcase.ts",
+    "screenshots:marketing": "node scripts/marketing-hero.ts",
     "icons:export": "node scripts/export-brand-icons.ts",
     "icons:check": "node scripts/export-brand-icons.ts --check",
     "licenses:sync": "node scripts/sync-third-party-license-notices.ts",
