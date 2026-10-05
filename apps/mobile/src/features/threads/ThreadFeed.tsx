@@ -101,7 +101,18 @@ import { isPdfFile } from "../../lib/filePreview";
 import { flattenThemeColor } from "../../lib/mobileTheme";
 import { PresentationSource } from "../../components/NativePresentation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeIn, FadeInUp, type SharedValue } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { useFontFamily } from "../../lib/useFontFamily";
@@ -188,6 +199,8 @@ import {
 import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
+import { ThreadFeedLoading } from "./thread-feed-loading";
+import { useThreadFeedLoading } from "./use-thread-feed-loading";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
   assetEnvironment,
@@ -2718,6 +2731,28 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // content: the list must still remount, and so open at the end, when they
   // arrive.
   const listMountKey = `${feedThreadKey}:${presentedFeed.some((entry) => entry.type !== "thinking") ? "filled" : "empty"}`;
+  const { loading: feedLoading, onListLoaded } = useThreadFeedLoading({
+    threadKey: feedThreadKey,
+    listMountKey,
+    contentKind: props.contentPresentation.kind,
+    hasContent: presentedFeed.length > 0,
+    hasQueuedMessages: props.queuedMessages.length > 0,
+  });
+  const feedOpacity = useSharedValue(feedLoading ? 0 : 1);
+  const reduceMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    const opacity = feedLoading ? 0 : 1;
+    feedOpacity.set(
+      reduceMotion
+        ? opacity
+        : withTiming(opacity, {
+            duration: feedLoading ? 0 : 180,
+            easing: Easing.out(Easing.cubic),
+            reduceMotion: ReduceMotion.System,
+          }),
+    );
+  }, [feedLoading, feedOpacity, reduceMotion]);
+  const feedRevealStyle = useAnimatedStyle(() => ({ opacity: feedOpacity.value }));
   const seededListMountKeyRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (seededListMountKeyRef.current === listMountKey) return;
@@ -3094,9 +3129,16 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   return (
     <PresentationSource identifier={fileShareSourceIdentifier} style={{ flex: 1 }}>
       <View className="flex-1" onLayout={handleViewportLayout}>
-        <View className="flex-1">
+        <Animated.View
+          className="flex-1"
+          style={reduceMotion ? { opacity: feedLoading ? 0 : 1 } : feedRevealStyle}
+          pointerEvents={feedLoading ? "none" : "auto"}
+          accessibilityElementsHidden={feedLoading}
+          importantForAccessibility={feedLoading ? "no-hide-descendants" : "auto"}
+        >
           <KeyboardAwareLegendList
             ref={listRef}
+            onLoad={onListLoaded}
             // The empty↔filled key remounts the list when messages first
             // arrive. LegendList's maintainScrollAtEnd calls scrollToEnd(),
             // which is blind to UIKit's adjustedContentInset — inserting into
@@ -3224,7 +3266,27 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               paddingHorizontal: contentHorizontalPadding,
             }}
           />
-        </View>
+        </Animated.View>
+        {feedLoading ? (
+          <Animated.View
+            key={feedThreadKey}
+            pointerEvents="none"
+            style={StyleSheet.absoluteFill}
+            exiting={
+              reduceMotion
+                ? undefined
+                : FadeOut.duration(180)
+                    .easing(Easing.out(Easing.cubic))
+                    .reduceMotion(ReduceMotion.System)
+            }
+          >
+            <ThreadFeedLoading
+              topInset={anchorTopInset}
+              bottomInset={bottomContentInset}
+              horizontalPadding={contentHorizontalPadding}
+            />
+          </Animated.View>
+        ) : null}
         {presentedFeed.length === 0 &&
         !props.worktreeSetup &&
         props.activeWorkStartedAt === null &&
