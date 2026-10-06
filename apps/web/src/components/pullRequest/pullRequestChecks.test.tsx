@@ -8,6 +8,7 @@ import { PullRequestRow } from "./PullRequestRow";
 import {
   pullRequestChecksState,
   pullRequestCheckStatusLabel,
+  pullRequestChecksRingSegments,
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
 
@@ -49,6 +50,49 @@ describe("pullRequestChecksState", () => {
     expect(summarizePullRequestChecks([workflow, manualGate])).toBe(
       "1 workflow and 1 check awaiting action",
     );
+  });
+});
+
+describe("pullRequestChecksRingSegments", () => {
+  it("includes every verdict in its proportion of the ring", () => {
+    const segments = pullRequestChecksRingSegments([
+      check("failure"),
+      check("cancelled"),
+      check("pending"),
+      check("action-required"),
+      check("skipped"),
+      check("neutral"),
+      check("success"),
+      check("success"),
+    ]);
+    expect(segments).toEqual([
+      { status: "failure", count: 2, start: 0, length: 25 },
+      { status: "pending", count: 2, start: 25, length: 25 },
+      { status: "skipped", count: 2, start: 50, length: 25 },
+      { status: "success", count: 2, start: 75, length: 25 },
+    ]);
+  });
+
+  it("shows completed checks while the last check is running", () => {
+    const segments = pullRequestChecksRingSegments([
+      ...Array.from({ length: 53 }, () => check("success")),
+      check("pending"),
+    ]);
+    expect(segments.map(({ status, count }) => ({ status, count }))).toEqual([
+      { status: "pending", count: 1 },
+      { status: "success", count: 53 },
+    ]);
+    expect(segments[0]?.length).toBeCloseTo(100 / 54);
+    expect(segments[1]?.length).toBeCloseTo((53 / 54) * 100);
+  });
+
+  it("handles empty and uniform check results", () => {
+    expect(pullRequestChecksRingSegments([])).toEqual([]);
+    for (const status of ["success", "failure", "pending", "skipped"] as const) {
+      expect(pullRequestChecksRingSegments([check(status)])).toEqual([
+        { status, count: 1, start: 0, length: 100 },
+      ]);
+    }
   });
 });
 
