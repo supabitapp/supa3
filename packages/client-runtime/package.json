@@ -394,6 +394,10 @@
     "./authorization/tokenStore": {
       "types": "./src/authorization/tokenStore.ts",
       "import": "./src/authorization/tokenStore.ts"
+    },
+    "./thread-outbox": {
+      "types": "./src/threadOutbox.ts",
+      "default": "./src/threadOutbox.ts"
     }
   },
   "scripts": {

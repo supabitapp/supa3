@@ -887,15 +887,18 @@ export function PullRequestSummaryTab({
                     disabled={!check.url}
                     onClick={() => check.url && openCheck(check.url)}
                     className={cn(
-                      "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 [&>svg]:mt-0.5",
+                      "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 pointer-coarse:min-h-11 [&>svg]:mt-0.5",
                       check.url ? "cursor-pointer" : "cursor-default",
                     )}
                   >
-                    <PullRequestCheckStatusIcon status={check.status} />
+                    <Tooltip>
+                      <TooltipTrigger render={<span className="mt-0.5 shrink-0" />}>
+                        <PullRequestCheckStatusIcon status={check.status} />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">{pullRequestCheckStatusLabel(check)}</TooltipPopup>
+                    </Tooltip>
                     <span className="min-w-0 flex-1 wrap-anywhere">{check.name}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {pullRequestCheckStatusLabel(check)}
-                    </span>
+                    <span className="sr-only">: {pullRequestCheckStatusLabel(check)}</span>
                   </button>
                   {/* Only where there is something to fix. A passing check has no failure to
                       reproduce, and the button would be an invitation to waste a thread. */}

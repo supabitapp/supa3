@@ -3,11 +3,13 @@ import { View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { useForegroundMotion } from "../../lib/useForegroundMotion";
 
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -62,21 +64,19 @@ function usePulseAnimation(pulse: boolean) {
           withTiming(1, {
             duration: 1100,
             easing: Easing.out(Easing.cubic),
+            reduceMotion: ReduceMotion.Never,
           }),
           -1,
           false,
+          undefined,
+          ReduceMotion.Never,
         ),
       );
-      return;
+      return () => cancelAnimation(pulseProgress);
     }
 
     cancelAnimation(pulseProgress);
-    pulseProgress.set(
-      withTiming(0, {
-        duration: 180,
-        easing: Easing.out(Easing.quad),
-      }),
-    );
+    pulseProgress.set(0);
   }, [pulse, pulseProgress]);
 
   return pulseProgress;
@@ -87,7 +87,9 @@ export function ConnectionStatusDot(props: {
   readonly pulse: boolean;
   readonly size?: number;
 }) {
-  const pulseProgress = usePulseAnimation(props.pulse);
+  const motionEnabled = useForegroundMotion();
+  const pulse = props.pulse && motionEnabled;
+  const pulseProgress = usePulseAnimation(pulse);
   const { themeAppearance, themeVariables } = useAppearancePreferences();
   const tone = statusDotTone(props.state, themeVariables, themeAppearance === "dark");
   const dotSize = props.size ?? 10;
@@ -95,7 +97,7 @@ export function ConnectionStatusDot(props: {
   const containerSize = haloSize + 4;
 
   const haloStyle = useAnimatedStyle(() => ({
-    opacity: props.pulse ? 0.14 + (1 - pulseProgress.value) * 0.3 : 0,
+    opacity: pulse ? 0.14 + (1 - pulseProgress.value) * 0.3 : 0,
     transform: [{ scale: 0.78 + pulseProgress.value * 1.16 }],
   }));
 

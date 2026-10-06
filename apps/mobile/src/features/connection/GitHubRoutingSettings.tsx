@@ -13,6 +13,8 @@ import { SymbolView } from "../../components/AppSymbol";
 import { environmentCatalog } from "../../connection/catalog";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "../settings/components/SettingsSection";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
+import { MotionPresence } from "../../components/MotionPresence";
 
 const options: ReadonlyArray<{
   value: GitHubRoutingPermission;
@@ -70,49 +72,49 @@ export function GitHubRoutingSettings() {
                 <Text className="text-sm text-foreground-muted">
                   {options.find((option) => option.value === selected)?.label}
                 </Text>
-                <SymbolView
-                  name={expanded === environmentId ? "chevron.up" : "chevron.down"}
+                <DisclosureChevron
+                  expanded={expanded === environmentId}
                   size={12}
                   tintColorClassName="accent-icon-muted"
                 />
               </Pressable>
-              {expanded === environmentId
-                ? options.map((option) => (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: selected === option.value, disabled }}
-                      disabled={disabled}
-                      className="flex-row items-center gap-4 p-4 disabled:opacity-50"
-                      onPress={() => {
-                        setSaving(true);
-                        void update({ environmentId, permission: option.value }).then((result) => {
-                          setSaving(false);
-                          if (result._tag === "Failure")
-                            Alert.alert(
-                              "Could not save GitHub routing permission",
-                              "Try again before leaving this screen.",
-                            );
-                        });
-                      }}
-                    >
-                      <View className="min-w-0 flex-1 gap-1">
-                        <Text className="text-base text-foreground">{option.label}</Text>
-                        <Text className="text-sm leading-normal text-foreground-muted">
-                          {option.description}
-                        </Text>
-                      </View>
-                      {selected === option.value ? (
-                        <SymbolView
-                          name="checkmark"
-                          size={18}
-                          tintColorClassName="accent-icon"
-                          weight="semibold"
-                        />
-                      ) : null}
-                    </Pressable>
-                  ))
-                : null}
+              <MotionPresence visible={expanded === environmentId}>
+                {options.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected === option.value, disabled }}
+                    disabled={disabled}
+                    className="flex-row items-center gap-4 p-4 disabled:opacity-50"
+                    onPress={() => {
+                      setSaving(true);
+                      void update({ environmentId, permission: option.value }).then((result) => {
+                        setSaving(false);
+                        if (result._tag === "Failure")
+                          Alert.alert(
+                            "Could not save GitHub routing permission",
+                            "Try again before leaving this screen.",
+                          );
+                      });
+                    }}
+                  >
+                    <View className="min-w-0 flex-1 gap-1">
+                      <Text className="text-base text-foreground">{option.label}</Text>
+                      <Text className="text-sm leading-normal text-foreground-muted">
+                        {option.description}
+                      </Text>
+                    </View>
+                    {selected === option.value ? (
+                      <SymbolView
+                        name="checkmark"
+                        size={18}
+                        tintColorClassName="accent-icon"
+                        weight="semibold"
+                      />
+                    ) : null}
+                  </Pressable>
+                ))}
+              </MotionPresence>
             </View>
           );
         })}

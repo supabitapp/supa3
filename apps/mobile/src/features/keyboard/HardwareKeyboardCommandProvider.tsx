@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import { suppressKeyboardMotion } from "../../lib/motionInput";
 import { SupacodeKeyboardCommands } from "../../native/SupacodeKeyboardCommands";
 import { useThreadShell } from "../../state/entities";
 import type { GitActionProgress } from "../../state/use-vcs-action-state";
@@ -132,6 +133,7 @@ export function HardwareKeyboardCommandProvider({
 
   const onCommand = useCallback(
     (command: HardwareKeyboardCommand) => {
+      suppressKeyboardMotion();
       if (command === "commandPalette") {
         setPaletteOpen(true);
         return;

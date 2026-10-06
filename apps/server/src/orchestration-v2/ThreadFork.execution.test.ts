@@ -45,9 +45,19 @@ const forkCases = (["codex", "claudeAgent"] as const).flatMap((driverName) => {
     { runEffectWorker: false },
   );
 
-  return (["failed", "interrupted", "cancelled"] as const).map((status) => ({
+  return [
+    ...(["failed", "interrupted", "cancelled"] as const).map((status) => ({
+      status,
+      sourcePointType: "run" as const,
+    })),
+    ...(["completed", "waiting", "failed", "interrupted", "cancelled"] as const).map((status) => ({
+      status,
+      sourcePointType: "latest_stable" as const,
+    })),
+  ].map(({ status, sourcePointType }) => ({
     driver,
     status,
+    sourcePointType,
     instanceId,
     modelSelection,
     layer,
@@ -55,8 +65,8 @@ const forkCases = (["codex", "claudeAgent"] as const).flatMap((driverName) => {
 });
 
 it.effect.each(forkCases)(
-  "bounds $driver context when continuing a fork of a $status run",
-  ({ driver, status, instanceId, modelSelection, layer }) =>
+  "bounds $driver context when continuing a $sourcePointType fork of a $status run",
+  ({ driver, status, sourcePointType, instanceId, modelSelection, layer }) =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const eventSink = yield* EventSink.EventSinkV2;
@@ -97,7 +107,11 @@ it.effect.each(forkCases)(
               providerSessionId: null,
               appThreadId: sourceThreadId,
               ownerNodeId: null,
-              nativeThreadRef: { driver, nativeId: "native-source", strength: "strong" },
+              nativeThreadRef: {
+                driver,
+                nativeId: "native-source",
+                strength: sourcePointType === "latest_stable" ? "weak" : "strong",
+              },
               nativeConversationHeadRef: null,
               status: "idle",
               firstRunOrdinal: 1,
@@ -176,7 +190,12 @@ it.effect.each(forkCases)(
                 userMessageId: messageId,
                 rootNodeId: null,
                 activeAttemptId: ordinal === 1 && status === "interrupted" ? attemptId : null,
-                status: ordinal === 1 ? status : "completed",
+                status:
+                  ordinal === 1
+                    ? status
+                    : sourcePointType === "latest_stable"
+                      ? "running"
+                      : "completed",
                 queuePosition: null,
                 requestedAt: now,
                 startedAt: now,
@@ -223,7 +242,10 @@ it.effect.each(forkCases)(
         commandId: CommandId.make("fork-source"),
         sourceThreadId,
         targetThreadId,
-        sourcePoint: { type: "run", runId: sourceRunId },
+        sourcePoint:
+          sourcePointType === "latest_stable"
+            ? { type: "latest_stable" }
+            : { type: "run", runId: sourceRunId },
         createdBy: "user",
         creationSource: "web",
       });
@@ -240,6 +262,11 @@ it.effect.each(forkCases)(
         creationSource: "web",
       });
       const target = yield* orchestrator.getThreadProjection(targetThreadId);
+      assert.deepEqual(target.thread.forkedFrom, {
+        type: "run",
+        threadId: sourceThreadId,
+        runId: sourceRunId,
+      });
       assert.equal(target.contextTransfers[0]?.resolution?.strategy, "portable_context");
       assert.lengthOf(target.contextHandoffs, 1);
       const handoff = target.contextHandoffs[0]!;

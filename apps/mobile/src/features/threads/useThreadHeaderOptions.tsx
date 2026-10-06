@@ -4,11 +4,7 @@ import type { AppNativeStackNavigationOptions } from "../../native/StackHeader";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 import { useStartNewTask } from "./use-start-new-task";
-import {
-  ThreadGitControls,
-  useThreadGitCenterHeaderItems,
-  useThreadGitRightHeaderItems,
-} from "./ThreadGitControls";
+import { ThreadGitControls, useThreadGitRightHeaderItems } from "./ThreadGitControls";
 
 type NativeHeaderItems = ReadonlyArray<Record<string, unknown>>;
 
@@ -23,8 +19,7 @@ export function useThreadHeaderOptions(props: {
   const navigation = useNavigation();
   const { layout, panes, togglePrimarySidebar } = useAdaptiveWorkspaceLayout();
   const startNewTask = useStartNewTask();
-  const threadCenterHeaderItems = useThreadGitCenterHeaderItems(props.gitControls);
-  const compactRightHeaderItems = useThreadGitRightHeaderItems(props.gitControls);
+  const rightHeaderItems = useThreadGitRightHeaderItems(props.gitControls);
   const splitLeftHeaderItems = useMemo<NativeHeaderItems>(
     () => [
       {
@@ -86,12 +81,6 @@ export function useThreadHeaderOptions(props: {
   const options: AppNativeStackNavigationOptions = {
     headerShown: true,
     headerTitle: props.title,
-    headerTitleStyle: props.usesNativeHeaderGlass
-      ? {
-          fontSize: 17,
-          fontWeight: "800",
-        }
-      : undefined,
     title: props.title,
     headerBackVisible: !layout.usesSplitView,
     // Compact uses the NATIVE back button when a previous route exists;
@@ -102,11 +91,7 @@ export function useThreadHeaderOptions(props: {
       : canGoBack
         ? undefined
         : () => compactHomeHeaderItems,
-    // Search lives in the persistent sidebar, so the split header keeps
-    // the git controls on the RIGHT (no center items — center space is
-    // reserved for future breadcrumbs/status).
-    unstable_headerRightItems: () =>
-      layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems,
+    unstable_headerRightItems: () => rightHeaderItems,
     unstable_headerSubtitle: props.usesNativeHeaderGlass ? props.subtitle : undefined,
     contentStyle: undefined,
   };

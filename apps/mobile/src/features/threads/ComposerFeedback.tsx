@@ -7,6 +7,8 @@ import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import Animated from "react-native-reanimated";
+import { useNoticeMotion } from "../../lib/useNoticeMotion";
 
 export function ComposerFeedback({
   submission,
@@ -15,10 +17,11 @@ export function ComposerFeedback({
   readonly submission: CodexFeedbackSubmission;
   readonly onDismiss: () => void;
 }) {
+  const motion = useNoticeMotion();
   const notice = codexFeedbackNotice(submission);
   if (!notice) return null;
   return (
-    <View className="px-4 pb-3">
+    <Animated.View {...motion} collapsable={false} className="px-4 pb-3">
       <View className="gap-2 rounded-[20px] border-continuous bg-card p-4">
         <View className="flex-row items-center gap-3">
           <Text accessibilityLiveRegion="polite" className="min-w-0 flex-1 text-sm text-foreground">
@@ -58,6 +61,6 @@ export function ComposerFeedback({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </Animated.View>
   );
 }

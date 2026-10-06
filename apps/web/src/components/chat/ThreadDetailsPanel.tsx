@@ -68,7 +68,7 @@ export interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   contextWindow?: ComponentProps<typeof ThreadDetailsUsage>["usage"];
-  forkFromItem?: ComponentProps<typeof ThreadDetailsForkControl>["projectedItem"] | null;
+  forkSource?: ComponentProps<typeof ThreadDetailsForkControl>["source"] | null;
   forkDisabled?: boolean;
   onForkFromRun?: ComponentProps<typeof ThreadDetailsForkControl>["onForkFromRun"];
 }
@@ -199,11 +199,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
           {!props.draftId ? (
             <ThreadDetailsUsage usage={props.contextWindow ?? null}>
-              {props.forkFromItem && props.onForkFromRun ? (
+              {props.forkSource && props.onForkFromRun ? (
                 <ThreadDetailsForkControl
                   key={props.threadId}
-                  environmentId={props.environmentId}
-                  projectedItem={props.forkFromItem}
+                  source={props.forkSource}
                   disabled={props.forkDisabled ?? false}
                   onForkFromRun={props.onForkFromRun}
                 />

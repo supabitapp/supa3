@@ -4,6 +4,7 @@ import { Platform, Modal, Pressable, TextInput, View } from "react-native";
 import { cn } from "../lib/cn";
 import { AppText } from "./AppText";
 import { MaterialConfirmDialog } from "./MaterialConfirmDialog";
+import { useReducedMotionPreference } from "../lib/useReducedMotionPreference";
 import type { ConfirmDialogRequest, TextInputDialogRequest } from "./ConfirmDialog.types";
 
 export type { ConfirmDialogRequest, TextInputDialogRequest } from "./ConfirmDialog.types";
@@ -35,6 +36,7 @@ export function showTextInputDialog(request: TextInputDialogRequest): void {
  * button color and a dimmer message than the title.
  */
 export function ConfirmDialogHost() {
+  const reducedMotion = useReducedMotionPreference();
   const [presented, setPresented] = useState<DialogRequest | null>(null);
   const [inputValue, setInputValue] = useState("");
   useEffect(() => {
@@ -85,7 +87,7 @@ export function ConfirmDialogHost() {
     <Modal
       visible={presented !== null}
       transparent
-      animationType="fade"
+      animationType={reducedMotion ? "none" : "fade"}
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={handleCancel}

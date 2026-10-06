@@ -9,6 +9,8 @@ import type {
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
+import { useThreadListMotion } from "./use-thread-list-motion";
 import {
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
@@ -111,9 +113,6 @@ const THREAD_SETTINGS_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   data: false,
   size: true,
 } as const;
-const THREAD_SETTINGS_CATALOG_LAYOUT_TRANSITION = LinearTransition.duration(180);
-const THREAD_SETTINGS_CATALOG_ENTER_TRANSITION = FadeIn.duration(140);
-const THREAD_SETTINGS_CATALOG_EXIT_TRANSITION = FadeOut.duration(120);
 const THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION = LinearTransition.duration(180);
 const THREAD_SETTINGS_OPTION_ENTER_TRANSITION = FadeIn.duration(140);
 const THREAD_SETTINGS_OPTION_EXIT_TRANSITION = FadeOut.duration(100);
@@ -148,11 +147,10 @@ function ProviderHeader(props: {
               {props.modelCount}
             </Text>
           ) : null}
-          <SymbolView
-            name={props.collapsed ? "chevron.down" : "chevron.up"}
+          <DisclosureChevron
+            expanded={!props.collapsed}
             size={12}
             tintColorClassName="accent-icon-subtle"
-            type="monochrome"
           />
         </>
       ) : null}
@@ -841,6 +839,13 @@ function ThreadSettingsMainContent(props: {
     ],
     [catalogItems],
   );
+  const catalogMotion = useThreadListMotion({
+    items: listItems,
+    scope: `${session.environmentId}:${session.providerFilter ?? "all"}:${session.searchQuery}`,
+    searching: session.searchQuery.trim().length > 0,
+    scrolling: false,
+    ready: animationsReady,
+  });
   const renderCatalogItem = useCallback(
     (itemProps: LegendListRenderItemProps<ThreadSettingsCatalogItem>) => {
       const item = itemProps.item;
@@ -881,8 +886,8 @@ function ThreadSettingsMainContent(props: {
       return (
         <Animated.View
           key={item.key}
-          entering={animationsReady ? THREAD_SETTINGS_CATALOG_ENTER_TRANSITION : undefined}
-          exiting={animationsReady ? THREAD_SETTINGS_CATALOG_EXIT_TRANSITION : undefined}
+          entering={catalogMotion.entering}
+          exiting={catalogMotion.exiting}
         >
           {content}
         </Animated.View>
@@ -890,6 +895,7 @@ function ThreadSettingsMainContent(props: {
     },
     [
       animationsReady,
+      catalogMotion,
       hasActiveCatalogFilter,
       props.onOpenSubmenu,
       session.providerFilter,
@@ -913,7 +919,7 @@ function ThreadSettingsMainContent(props: {
       estimatedItemSize={Platform.OS === "android" ? 56 : 48}
       extraData={animationsReady}
       getItemType={(item) => item.kind}
-      itemLayoutAnimation={THREAD_SETTINGS_CATALOG_LAYOUT_TRANSITION}
+      itemLayoutAnimation={catalogMotion.layout}
       keyExtractor={(item) => item.key}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"

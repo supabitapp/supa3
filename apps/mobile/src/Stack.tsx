@@ -1,3 +1,4 @@
+import { useAtomMount } from "@effect/atom-react";
 import {
   createPathConfigForStaticNavigation,
   getPathFromState,
@@ -122,6 +123,7 @@ import { nativeHeaderScrollEdgeEffects } from "./native/StackHeader";
 import { FORM_SHEET_PRESENTATION_OPTIONS } from "./native/sheet-surface";
 import { useThreadOutboxDrain } from "./state/use-thread-outbox-drain";
 import { useComposerAttachmentUploadWorker } from "./state/composer-attachment-uploads";
+import { runningThreadKeepAliveAtom } from "./state/threads";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -559,6 +561,13 @@ function ThreadOutboxDrainWorker() {
   return null;
 }
 
+// Keep mounted across backgrounding so foreground recovery also catches up
+// threads that stopped while the app was suspended.
+function RunningThreadKeepAlive() {
+  useAtomMount(runningThreadKeepAliveAtom);
+  return null;
+}
+
 function RootStackLayout(props: {
   readonly children: React.ReactNode;
   readonly state: NavigationState;
@@ -591,6 +600,7 @@ function RootStackLayout(props: {
 
   return (
     <HardwareKeyboardCommandProvider pathname={pathname}>
+      <RunningThreadKeepAlive />
       <ThreadOutboxDrainWorker />
       <ShowcaseCaptureCoordinator pathname={pathname} />
       <ExistingThreadSettingsRouteProvider>
@@ -666,7 +676,10 @@ const RootStackConfig = createNativeStackNavigator({
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
-      options: GLASS_HEADER_OPTIONS,
+      options: {
+        ...GLASS_HEADER_OPTIONS,
+        headerTitleStyle: undefined,
+      },
     }),
     ThreadTerminal: createNativeStackScreen({
       screen: ThreadTerminalRouteScreen,

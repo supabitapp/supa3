@@ -20,6 +20,7 @@ import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-typ
 import { serverEnvironment } from "../../state/server";
 import { ConnectionFormField } from "./ConnectionFormField";
 import { ConnectionStatusDot } from "./ConnectionStatusDot";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
 
 function connectionStatusLabel(environment: ConnectedEnvironmentSummary): string | null {
   if (!environment.isEnabled && environment.connectionState !== "unsupported") {
@@ -137,15 +138,15 @@ export function ConnectionEnvironmentRow(props: {
           onValueChange={(next) => props.onSetEnabled(props.environment.environmentId, next)}
           value={enabled}
         />
-        <SymbolView
-          name={props.opensDetails ? "chevron.right" : "chevron.down"}
-          size={12}
-          tintColorClassName="accent-icon-subtle"
-          type="monochrome"
-          style={{
-            transform: [{ rotate: props.expanded ? "180deg" : "0deg" }],
-          }}
-        />
+        {props.opensDetails ? (
+          <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-subtle" />
+        ) : (
+          <DisclosureChevron
+            expanded={props.expanded}
+            size={12}
+            tintColorClassName="accent-icon-subtle"
+          />
+        )}
       </Pressable>
 
       {props.expanded ? (

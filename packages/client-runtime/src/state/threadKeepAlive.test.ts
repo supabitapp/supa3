@@ -1,7 +1,4 @@
-import {
-  EMPTY_ENVIRONMENT_THREAD_STATE,
-  type EnvironmentThreadState,
-} from "@supacode/client-runtime/state/threads";
+import { EMPTY_ENVIRONMENT_THREAD_STATE, type EnvironmentThreadState } from "./threadState.ts";
 import {
   EnvironmentId,
   MessageId,
@@ -9,12 +6,12 @@ import {
   ThreadId,
   type OrchestrationV2ThreadShell,
 } from "@supacode/contracts";
-import { makeThreadProjectionFixture } from "../test-fixtures";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createRunningThreadKeepAliveAtom } from "./threads";
+import { v2Projection } from "./orchestrationV2TestFixtures.ts";
+import { createRunningThreadKeepAliveAtom } from "./threadKeepAlive.ts";
 
 const LOCAL = EnvironmentId.make("local");
 const REMOTE = EnvironmentId.make("remote");
@@ -27,7 +24,7 @@ function shell(id: string, status: Status | null) {
   >;
 }
 function detail(id: string, status: Status, overrides: Partial<EnvironmentThreadState> = {}) {
-  const projection = makeThreadProjectionFixture();
+  const projection = v2Projection;
   const threadId = ThreadId.make(id);
   const thread = {
     ...projection,
@@ -156,6 +153,21 @@ describe("createRunningThreadKeepAliveAtom", () => {
     h.registry.set(h.stateAtom(LOCAL, "b"), detail("b", "idle", { status: "synchronizing" }));
     expect(h.openStreams()).toEqual(["local:b"]);
     h.registry.set(h.stateAtom(LOCAL, "b"), detail("b", "idle"));
+    expect(h.openStreams()).toEqual([]);
+  });
+
+  it("keeps an open thread subscribed after the background keepalive releases it", () => {
+    const h = makeHarness();
+    h.registry.set(h.threads(LOCAL), [shell("a", "running")]);
+    h.registry.set(h.stateAtom(LOCAL, "a"), detail("a", "running"));
+    const closeView = h.registry.mount(h.stateAtom(LOCAL, "a"));
+
+    h.registry.set(h.threads(LOCAL), [shell("a", "idle")]);
+    h.registry.set(h.stateAtom(LOCAL, "a"), detail("a", "idle"));
+    expect(h.registry.get(h.keepAlive).get(LOCAL)?.size).toBe(0);
+    expect(h.openStreams()).toEqual(["local:a"]);
+
+    closeView();
     expect(h.openStreams()).toEqual([]);
   });
 

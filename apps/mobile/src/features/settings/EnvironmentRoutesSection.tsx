@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   type ConnectionRoute,
   type ConnectionRouteKind,
@@ -11,7 +11,7 @@ import {
 } from "@supacode/client-runtime/connection";
 import type { EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
-import { type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -51,6 +51,7 @@ export function EnvironmentRoutesSection({
   readonly connected: boolean;
   readonly onAddRoute: () => void;
 }) {
+  const registry = useContext(RegistryContext);
   const entry = useAtomValue(environmentCatalog.catalogValueAtom).entries.get(environmentId);
   const prepared = useAtomValue(environmentSession.preparedConnectionValueAtom(environmentId));
   const reorder = useAtomCommand(environmentCatalog.reorderRoutes, "route reorder");
@@ -130,17 +131,33 @@ export function EnvironmentRoutesSection({
     <SettingsSection
       title="Routes"
       trailing={
-        routes.length > 1 ? (
+        <View className="flex-row items-center gap-2">
           <Pressable
             accessibilityRole="button"
-            onPress={() => setEditing((value) => !value)}
+            accessibilityLabel="Refresh route latency"
+            onPress={() => {
+              for (const route of routes) {
+                registry.refresh(environmentSession.routeLatencyAtoms(route).resultAtom);
+              }
+            }}
             className="px-2 py-1 active:opacity-70"
           >
             <Text className="text-sm font-t3-medium text-foreground android:text-primary-text">
-              {editing ? "Done" : "Edit"}
+              Refresh
             </Text>
           </Pressable>
-        ) : undefined
+          {routes.length > 1 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setEditing((value) => !value)}
+              className="px-2 py-1 active:opacity-70"
+            >
+              <Text className="text-sm font-t3-medium text-foreground android:text-primary-text">
+                {editing ? "Done" : "Edit"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       }
     >
       {routes.map((route, index) => {
@@ -208,6 +225,7 @@ function RouteRow(props: {
   const { route, lifted, offset } = props;
   const label = connectionRouteLabel(route);
   const address = connectionRouteAddress(route);
+  const latency = useAtomValue(environmentSession.routeLatencyAtoms(route).labelAtom);
   const style = useAnimatedStyle(() => ({
     transform: [
       {
@@ -249,6 +267,7 @@ function RouteRow(props: {
           address,
           isLearned(route) ? "Found automatically" : null,
           props.inUse ? "In use" : null,
+          `Latency: ${latency}`,
           `Route ${props.position} of ${props.count}`,
         ]
           .filter((part) => part !== null)
@@ -282,6 +301,7 @@ function RouteRow(props: {
             </Text>
           ) : null}
         </View>
+        <Text className="shrink-0 text-sm tabular-nums text-foreground-muted">{latency}</Text>
       </View>
       {props.editing ? (
         <DragHandle

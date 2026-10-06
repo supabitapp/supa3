@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { renderMermaidAscii } from "./ascii/index.ts";
 import { parseMermaid } from "./parser.ts";
 import { convertToAsciiGraph } from "./ascii/converter.ts";
@@ -39,6 +39,14 @@ describe.each([["ascii"], ["unicode"]] as const)("%s reference output", (mode) =
 });
 
 describe.each(["TD", "LR"] as const)("deep %s layout", (graphDirection) => {
+  beforeEach(() => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it.each([25, 26, 100])("renders a %i-node chain with finite coordinates", (nodeCount) => {
     const source = `graph ${graphDirection}\n${Array.from({ length: nodeCount - 1 }, (_, index) => `N${index} --> N${index + 1}`).join("\n")}`;
     const graph = convertToAsciiGraph(parseMermaid(source), {

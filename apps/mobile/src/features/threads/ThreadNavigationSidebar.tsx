@@ -9,7 +9,9 @@ import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
 } from "@supacode/client-runtime/state/thread-search";
-import { LegendList } from "@legendapp/list/react-native";
+import { AnimatedLegendList } from "@legendapp/list/reanimated";
+import Animated from "react-native-reanimated";
+import { useThreadListMotion } from "./use-thread-list-motion";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -21,7 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SearchBarCommands } from "react-native-screens";
 
 import { AppText as Text } from "../../components/AppText";
-import { CompactBrandTitle } from "../../components/CompactBrandTitle";
+import { brandTitleOffset, CompactBrandTitle } from "../../components/CompactBrandTitle";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { SymbolView } from "../../components/AppSymbol";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
@@ -613,7 +615,14 @@ function ThreadNavigationSidebarPane(
     return true;
   }, [nativeChrome, onRequestVisibility, visible]);
   useHardwareKeyboardCommand("focusSearch", focusSearch);
-  const renderListItem = useCallback(
+  const listMotion = useThreadListMotion({
+    items: listItems,
+    scope: settledResetKey,
+    searching: props.searchQuery.trim().length > 0,
+    scrolling: !swipeEnabled,
+    ready: shelfPreferencesLoaded,
+  });
+  const renderListItemContent = useCallback(
     ({ item }: { readonly item: SidebarListItem }) => {
       switch (item.type) {
         case "v2-pending": {
@@ -806,6 +815,19 @@ function ThreadNavigationSidebarPane(
       unsnoozeThread,
     ],
   );
+  const renderListItem = useCallback(
+    (itemProps: Parameters<typeof renderListItemContent>[0]) => (
+      <Animated.View
+        key={itemProps.item.key}
+        collapsable={false}
+        entering={listMotion.entering}
+        exiting={listMotion.exiting}
+      >
+        {renderListItemContent(itemProps)}
+      </Animated.View>
+    ),
+    [listMotion, renderListItemContent],
+  );
   // The list ignores sort/group options, so only the environment and project
   // filters can light the "customized" state.
   const filterCustomized = options.selectedEnvironmentId !== null || selectedProjectKey !== null;
@@ -864,7 +886,7 @@ function ThreadNavigationSidebarPane(
           optionsVersion={[nativeHeaderItems, props.width]}
           options={{
             // Re-applies the shell's static brand slot with the
-            // connection-status swap so reconnects surface in the header
+            // connection subtitle so reconnects surface in the header
             // instead of shifting the list.
             ...getConnectionAwareBrandHeaderOptions({
               headerWidth: props.width,
@@ -895,7 +917,8 @@ function ThreadNavigationSidebarPane(
         <View className="flex-1">
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
-              <LegendList
+              <AnimatedLegendList
+                itemLayoutAnimation={listMotion.layout}
                 data={listItems}
                 drawDistance={500}
                 estimatedItemSize={64}
@@ -961,7 +984,8 @@ function ThreadNavigationSidebarPane(
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
-              <LegendList
+              <AnimatedLegendList
+                itemLayoutAnimation={listMotion.layout}
                 data={listItems}
                 drawDistance={500}
                 estimatedItemSize={64}
@@ -1017,18 +1041,14 @@ function ThreadNavigationSidebarPane(
           style={{ paddingTop: insets.top }}
         >
           <View className="h-[50px] flex-row items-end gap-0.5 pr-2 pl-5">
-            {/* Title slot doubles as the connection status surface: while an
-              environment reconnects, the brand fades to a status label in
-              place (no layout shift in the list below). */}
+            {/* Keep the title and connection subtitle inside the fixed header
+              so reconnects never shift the list below. */}
             <WorkspaceConnectionTitle
               grow
               onPress={props.onOpenEnvironmentSettings}
               size="pageTitle"
-              brand={
-                <View className="h-11 flex-1 justify-center">
-                  <CompactBrandTitle allowFontScaling={false} />
-                </View>
-              }
+              statusOffset={brandTitleOffset()}
+              brand={<CompactBrandTitle allowFontScaling={false} />}
             />
             <View className="flex-row items-center gap-2.5">
               <ControlPillMenu actions={listMenuActions} onPressAction={handleListMenuAction}>

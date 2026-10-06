@@ -2004,7 +2004,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? "Update this server to send files with question answers"
       : null) ??
     fileCapabilityBlockReason ??
-    (supportsAttachmentUploads
+    (questionAttachmentTarget && supportsAttachmentUploads
       ? needsReattachFileCount > 0
         ? needsReattachFileCount === 1
           ? "Attach the interrupted file again or remove it"
@@ -2565,13 +2565,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () =>
       deriveComposerSendState({
         prompt,
-        imageCount: composerImages.length + composerFiles.length,
+        imageCount:
+          composerImages.length + composerFiles.length + (editingQueuedAttachments?.length ?? 0),
         terminalContexts: composerTerminalContexts,
         elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
       }),
     [
       composerFiles.length,
       composerImages.length,
+      editingQueuedAttachments?.length,
       composerPreviewAnnotations.length,
       composerReviewComments.length,
       composerTerminalContexts,
@@ -3060,7 +3062,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isConnecting ||
     noProviderAvailable ||
     projectSelectionRequired ||
-    environmentUnavailable !== null ||
+    (environmentUnavailable !== null && showResumeAction) ||
     (!composerSendState.hasSendableContent && !showResumeAction);
   const collapsedComposerPrimaryActionLabel = showResumeAction ? "Resume thread" : "Send message";
   const showMobilePendingAnswerActions =
@@ -4194,7 +4196,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       isSendDisabled ||
       isConnecting ||
       noProviderAvailable ||
-      environmentUnavailable !== null ||
+      (environmentUnavailable !== null && activePendingProgress !== null) ||
       phase === "running"
     ) {
       return false;
@@ -5188,6 +5190,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // it, so they do not hold the composer open; only surface-internal chrome
   // does.
   const composerHasExpandedChrome =
+    isEditingQueuedMessage ||
     showComposerTopDrawer ||
     isTasksDrawerOpen ||
     composerMenuOpen ||
@@ -7664,7 +7667,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
+                      (environmentUnavailable !== null &&
+                        (activePendingProgress !== null || showResumeAction)) ||
                       noProviderAvailable ||
                       projectSelectionRequired
                     }
