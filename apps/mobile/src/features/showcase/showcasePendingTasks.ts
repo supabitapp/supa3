@@ -13,16 +13,16 @@ import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 export const SHOWCASE_PENDING_TASK_DEFINITIONS = [
   {
     projectId: "supacode",
-    id: "offline-launch-checklist",
-    text: "Ship the offline launch checklist before touchdown ✈️",
-    branch: "feat/offline-launchpad",
+    id: "offline-state-test",
+    text: "Add a test for the signed-out state",
+    branch: "feat/offline-tests",
     minutesAgo: 8,
   },
   {
-    projectId: "react",
-    id: "train-tunnel-suspense",
-    text: "Polish the Suspense handoff for the train tunnel 🚇",
-    branch: "perf/tunnel-handoff",
+    projectId: "tidepool",
+    id: "chart-landscape",
+    text: "Check the tide chart in landscape",
+    branch: "fix/chart-landscape",
     minutesAgo: 27,
   },
 ] as const;

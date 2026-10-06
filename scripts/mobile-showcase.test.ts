@@ -313,11 +313,11 @@ it("selects a reachable LAN IPv4 address", () => {
 it("seeds a playful multi-environment project spectrum", () => {
   assert.deepStrictEqual(
     SHOWCASE_PROJECTS.map((project) => project.title),
-    ["supacode", "React", "Linux"],
+    ["supacode", "tidepool", "lattice"],
   );
   assert.deepStrictEqual(
     SHOWCASE_ENVIRONMENTS.map((environment) => environment.label),
-    ["Moonbase Terminal", "Suspense Station", "Kernel Cabin"],
+    ["Studio Laptop", "Basement Tower", "Helsinki VPS"],
   );
   assert.equal(SHOWCASE_THREADS.length, 9);
   assert.equal(new Set(SHOWCASE_THREADS.map((thread) => thread.projectId)).size, 3);
@@ -325,7 +325,7 @@ it("seeds a playful multi-environment project spectrum", () => {
   assert.equal(snoozedThreads.length, 2);
   assert.deepStrictEqual(
     snoozedThreads.map((thread) => thread.id),
-    ["hydration-haikus", "patient-penguins"],
+    ["forecast-units", "flaky-fsync"],
   );
   assert.equal(new Set(snoozedThreads.map((thread) => thread.snoozeMinutes)).size, 2);
   for (const thread of snoozedThreads) {
@@ -334,7 +334,7 @@ it("seeds a playful multi-environment project spectrum", () => {
     assert.equal("settled" in thread, false, `${thread.title} is settled`);
     assert.equal(thread.snoozeMinutes > 60, true, `${thread.title} wakes too soon`);
   }
-  const primaryThread = SHOWCASE_THREADS.find((thread) => thread.id === "remote-command-center");
+  const primaryThread = SHOWCASE_THREADS.find((thread) => thread.id === "offline-reason");
   assert.equal(primaryThread !== undefined && !("snoozeMinutes" in primaryThread), true);
   // Every project contributes to both the active block and the settled tail,
   // so each list scope screenshots with the same two-part structure.
