@@ -114,8 +114,12 @@ open.
 
 ### Working threads
 
-Threads that are working or monitoring fold into a collapsed **Working** section below the active
-list. A thread returns to the top of the active list when it finishes, fails, or needs an approval
+On web, desktop, and the iPad sidebar, threads that are working or monitoring fold into a collapsed
+**Working** section below the active list. On phones, open **Working** from the dock at the bottom of
+the thread list. The dock also opens **Settled** and, when present, **Snoozed** threads. Select another
+category to switch the drawer, or select the open category again to close it.
+
+A thread returns to the top of the active list when it finishes, fails, or needs an approval
 or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
 in the pinned section.
 
