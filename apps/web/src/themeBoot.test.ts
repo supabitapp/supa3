@@ -261,15 +261,15 @@ describe("index.html boot script", () => {
   );
 
   it.each(["light", "dark"] as const)(
-    "preserves saved Zenbones selections and %s mixes",
+    "preserves saved Graphite selections and %s mixes",
     (appearance) => {
       const colors =
         appearance === "dark" ? SUPACODE_DARK_THEME_COLORS : SUPACODE_LIGHT_THEME_COLORS;
       for (const storage of [
-        { [THEME_STORAGE_KEY]: "zenbones" },
+        { [THEME_STORAGE_KEY]: "graphite" },
         {
           [THEME_STORAGE_KEY]: "grove",
-          "supacode:theme-halves:v1": JSON.stringify({ [appearance]: "zenbones" }),
+          "supacode:theme-halves:v1": JSON.stringify({ [appearance]: "graphite" }),
         },
       ]) {
         const preferences = { ...storage, [THEME_APPEARANCE_MODE_STORAGE_KEY]: appearance };

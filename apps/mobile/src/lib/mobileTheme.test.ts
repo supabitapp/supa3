@@ -241,7 +241,8 @@ describe("mobile themes", () => {
   });
 
   it("normalizes persisted theme preferences", () => {
-    expect(normalizeMobileThemeId("zenbones")).toBe(DEFAULT_MOBILE_THEME_ID);
+    expect(normalizeMobileThemeId("graphite")).toBe(DEFAULT_MOBILE_THEME_ID);
+    expect(normalizeMobileThemeId("zenbones")).toBe("zenbones");
     expect(normalizeMobileThemeId("ocean")).toBe("ocean");
     expect(normalizeMobileThemeId("missing-theme")).toBe(DEFAULT_MOBILE_THEME_ID);
     expect(normalizeMobileThemeMode("dark")).toBe("dark");

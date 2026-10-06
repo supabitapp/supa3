@@ -84,18 +84,34 @@ describe("theme files", () => {
     }
   });
 
-  it("uses Zenbones for the standard palette in both appearances", () => {
+  it("uses Graphite for the standard palette in both appearances", () => {
     expectThemeColors(getStandardThemeColors("light"), {
+      canvas: "#ffffff",
+      sidebar: "#f1f1f3",
+      messageSurface: "#f1f1f3",
+    });
+    expectThemeColors(getStandardThemeColors("dark"), {
+      canvas: "#1d1e22",
+      sidebar: "#18191c",
+      messageSurface: "#2a2b31",
+    });
+    expect(BUILT_IN_THEMES.some((theme) => theme.id === "graphite")).toBe(false);
+  });
+
+  it("keeps the previous standard palette as the Zenbones built-in", () => {
+    const zenbones = getThemeDefinition("zenbones")!;
+    expect(BUILT_IN_THEMES).toContain(zenbones);
+    expect(zenbones.label).toBe("Zenbones");
+    expectThemeColors(getThemeColorsForMode(zenbones, "light")!, {
       canvas: "#f0edec",
       sidebar: "#e7e2e0",
       messageSurface: "#e1dad7",
     });
-    expectThemeColors(getStandardThemeColors("dark"), {
+    expectThemeColors(getThemeColorsForMode(zenbones, "dark")!, {
       canvas: "#1c1917",
       sidebar: "#171412",
       messageSurface: "#302b29",
     });
-    expect(BUILT_IN_THEMES.some((theme) => theme.id === "zenbones")).toBe(false);
   });
 
   it.each(["light", "dark"] as const)(
@@ -116,7 +132,7 @@ describe("theme files", () => {
       expect(variables.get("--app-theme-message-action")).toBe(
         getStandardThemeColors(appearance).messageAction,
       );
-      applyThemePalette("zenbones", appearance);
+      applyThemePalette("graphite", appearance);
       expect(dataset.themeId).toBe("__default");
       expect(variables.get("--app-theme-canvas")).toBe(getStandardThemeColors(appearance).canvas);
       vi.unstubAllGlobals();
@@ -556,12 +572,12 @@ describe("theme files", () => {
       [
         CUSTOM_THEMES_STORAGE_KEY,
         JSON.stringify([
-          { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+          { id: "graphite-custom", label: "Graphite Tweak", appearance: "dark", colors: {} },
           {
-            id: "zenbones",
-            label: "My Zenbones",
+            id: "graphite",
+            label: "My Graphite",
             appearance: "dark",
-            colors: { canvas: "#1c1917" },
+            colors: { canvas: "#1d1e22" },
           },
         ]),
       ],
@@ -575,15 +591,15 @@ describe("theme files", () => {
 
     invalidateCustomThemes();
     expect(getCustomThemes().map((theme) => [theme.id, theme.label])).toEqual([
-      ["zenbones-custom", "Zenbones Tweak"],
-      ["zenbones-custom-2", "My Zenbones"],
+      ["graphite-custom", "Graphite Tweak"],
+      ["graphite-custom-2", "My Graphite"],
     ]);
-    expect(getThemeDefinition("zenbones")?.label).toBe("Supacode");
+    expect(getThemeDefinition("graphite")?.label).toBe("Supacode");
 
-    removeCustomTheme("zenbones-custom-2");
+    removeCustomTheme("graphite-custom-2");
 
     expect(JSON.parse(stored.get(CUSTOM_THEMES_STORAGE_KEY)!)).toEqual([
-      { id: "zenbones-custom", label: "Zenbones Tweak", appearance: "dark", colors: {} },
+      { id: "graphite-custom", label: "Graphite Tweak", appearance: "dark", colors: {} },
     ]);
     invalidateCustomThemes();
     vi.unstubAllGlobals();

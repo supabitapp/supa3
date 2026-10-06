@@ -637,8 +637,8 @@ export function ThemeLibrary({
   const baseCardId = getThemeDefinition(theme)?.id ?? null;
   const lightThemeId = themeHalves?.light ?? baseCardId;
   const darkThemeId = themeHalves?.dark ?? baseCardId;
-  const lightOwner = lightThemeId === "zenbones" ? null : lightThemeId;
-  const darkOwner = darkThemeId === "zenbones" ? null : darkThemeId;
+  const lightOwner = lightThemeId === "graphite" ? null : lightThemeId;
+  const darkOwner = darkThemeId === "graphite" ? null : darkThemeId;
 
   const assignHalf = useCallback(
     (appearance: ThemeAppearance, cardId: string | null) => {
