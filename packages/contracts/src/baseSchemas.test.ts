@@ -21,6 +21,8 @@ const Shape = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("square"), side: Schema.Number }),
 ]);
 const members = Shape.members;
+const Named = ForwardCompatibleArray(Schema.Struct({ name: TrimmedNonEmptyString }));
+const encodeNamedToWire = Schema.encodeUnknownSync(Schema.toCodecJson(Named));
 /** How clients decode: the JSON wire codec over the runtime schema. */
 const fromWire = <S extends Schema.Top>(schema: S) =>
   Schema.decodeUnknownSync(Schema.toCodecJson(schema) as never) as (value: unknown) => S["Type"];
@@ -49,15 +51,8 @@ describe("ForwardCompatibleArray", () => {
   });
 
   it("sends an element it cannot encode as a hole instead of failing the array", () => {
-    const Named = ForwardCompatibleArray(Schema.Struct({ name: TrimmedNonEmptyString }));
     const wire = JSON.parse(
-      JSON.stringify(
-        Schema.encodeUnknownSync(Schema.toCodecJson(Named))([
-          { name: "a" },
-          { name: " " },
-          { name: "b" },
-        ]),
-      ),
+      JSON.stringify(encodeNamedToWire([{ name: "a" }, { name: " " }, { name: "b" }])),
     );
     expect(wire).toEqual([{ name: "a" }, null, { name: "b" }]);
     expect(fromWire(Named)(wire)).toEqual([{ name: "a" }, { name: "b" }]);

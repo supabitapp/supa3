@@ -3610,7 +3610,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       observer.disconnect();
     };
   }, [
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- these inputs change the footer layout, so they re-run the measurement
     activeThreadId,
     composerFooterActionLayoutKey,
     composerFooterHasWideActions,

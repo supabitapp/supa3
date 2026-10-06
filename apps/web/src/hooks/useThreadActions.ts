@@ -289,7 +289,7 @@ export function useThreadActions() {
   // the projects list) and would otherwise cascade new references into every
   // sidebar row via archiveThread → attemptArchiveThread.
   const handleNewThreadRef = useRef(handleNewThread);
-  // oxlint-disable-next-line react/refs
+  // oxlint-disable-next-line react/refs -- latest-callback ref; updating it during render keeps archive callbacks stable
   handleNewThreadRef.current = handleNewThread;
 
   const resolveThreadTarget = useCallback((target: ScopedThreadRef) => {

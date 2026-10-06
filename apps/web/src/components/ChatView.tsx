@@ -4694,7 +4694,7 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     if (editingQueuedRun === null) return;
     if (activeThread?.id !== editingQueuedRun.threadId) {
-      // oxlint-disable-next-line react/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect -- drops a queued-message edit once its thread is no longer active
       setEditingQueuedRun(null);
       return;
     }
@@ -6595,7 +6595,7 @@ export default function ChatView(props: ChatViewProps) {
         timelineEntries,
       })
     ) {
-      // oxlint-disable-next-line react/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect -- follows the newest turn as the timeline grows
       scrollToEnd();
     }
   }, [
@@ -7229,88 +7229,70 @@ export default function ChatView(props: ChatViewProps) {
 
   // Commands such as /compact and /goal clear run as their own turn. The draft
   // and its attachments stay local.
-  const sendStandaloneCommand = useCallback(
-    async (text: string, failureMessage: string) => {
-      if (!activeThread || !clientSettingsHydrated || sendInFlightRef.current) return;
-      const context = composerRef.current?.getSendContext();
-      if (!context?.providerAvailable) return;
+  const sendStandaloneCommand = async (text: string, failureMessage: string) => {
+    if (!activeThread || !clientSettingsHydrated || sendInFlightRef.current) return;
+    const context = composerRef.current?.getSendContext();
+    if (!context?.providerAvailable) return;
 
-      const threadId = activeThread.id;
-      const messageId = newMessageId();
-      const createdAt = new Date().toISOString();
-      sendInFlightRef.current = true;
-      beginLocalDispatch();
-      setThreadError(threadId, null);
-      setOptimisticUserMessages((messages) => [
-        ...messages,
-        {
-          id: messageId,
-          role: "user",
-          text,
-          runId: null,
-          createdAt,
-          updatedAt: createdAt,
-          streaming: false,
-        },
-      ]);
-      scrollToEnd();
-      try {
-        const settingsResult = await persistThreadSettingsForNextTurn({
-          threadId,
-          createdAt,
-          ...(localCheckoutBranchMismatch
-            ? { branch: localCheckoutBranchMismatch.currentBranch }
-            : {}),
-          runtimeMode,
-          interactionMode: context.interactionMode,
-        });
-        const result =
-          settingsResult._tag === "Failure"
-            ? settingsResult
-            : await startThreadTurn({
-                environmentId,
-                input: {
-                  threadId,
-                  message: { messageId, role: "user", text, attachments: [] },
-                  modelSelection: context.selectedModelSelection,
-                  runtimeMode,
-                  interactionMode: context.interactionMode,
-                  createdAt,
-                },
-              });
-        if (result._tag === "Failure") {
-          setOptimisticUserMessages((messages) =>
-            messages.filter((message) => message.id !== messageId),
-          );
-          resetLocalDispatch();
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            setThreadError(threadId, error instanceof Error ? error.message : failureMessage);
-          }
-        } else {
-          clearUsageLimitsFor(routeThreadKey);
+    const threadId = activeThread.id;
+    const messageId = newMessageId();
+    const createdAt = new Date().toISOString();
+    sendInFlightRef.current = true;
+    beginLocalDispatch();
+    setThreadError(threadId, null);
+    setOptimisticUserMessages((messages) => [
+      ...messages,
+      {
+        id: messageId,
+        role: "user",
+        text,
+        runId: null,
+        createdAt,
+        updatedAt: createdAt,
+        streaming: false,
+      },
+    ]);
+    scrollToEnd();
+    try {
+      const settingsResult = await persistThreadSettingsForNextTurn({
+        threadId,
+        createdAt,
+        ...(localCheckoutBranchMismatch
+          ? { branch: localCheckoutBranchMismatch.currentBranch }
+          : {}),
+        runtimeMode,
+        interactionMode: context.interactionMode,
+      });
+      const result =
+        settingsResult._tag === "Failure"
+          ? settingsResult
+          : await startThreadTurn({
+              environmentId,
+              input: {
+                threadId,
+                message: { messageId, role: "user", text, attachments: [] },
+                modelSelection: context.selectedModelSelection,
+                runtimeMode,
+                interactionMode: context.interactionMode,
+                createdAt,
+              },
+            });
+      if (result._tag === "Failure") {
+        setOptimisticUserMessages((messages) =>
+          messages.filter((message) => message.id !== messageId),
+        );
+        resetLocalDispatch();
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          setThreadError(threadId, error instanceof Error ? error.message : failureMessage);
         }
-      } finally {
-        sendInFlightRef.current = false;
+      } else {
+        clearUsageLimitsFor(routeThreadKey);
       }
-    },
-    [
-      activeThread,
-      beginLocalDispatch,
-      clientSettingsHydrated,
-      composerRef,
-      environmentId,
-      localCheckoutBranchMismatch,
-      persistThreadSettingsForNextTurn,
-      resetLocalDispatch,
-      routeThreadKey,
-      runtimeMode,
-      scrollToEnd,
-      sendInFlightRef,
-      setThreadError,
-      startThreadTurn,
-    ],
-  );
+    } finally {
+      sendInFlightRef.current = false;
+    }
+  };
   // A native /goal keeps the agent working across turns. Stop pauses a Codex
   // goal; once the thread is idle the row offers the native follow-ups.
   const activeGoal = activeThreadShell?.goal ?? null;
@@ -10558,7 +10540,7 @@ export default function ChatView(props: ChatViewProps) {
       setDraftThreadContext(composerDraftTarget, { envMode: "local", startFromOrigin: false });
       return;
     }
-    // oxlint-disable-next-line react/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect -- consumes the resend request before sending it
     setWorkLocallyResendDraftId(null);
     void onSendRef.current();
   }, [

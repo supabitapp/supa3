@@ -1006,7 +1006,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   useLayoutEffect(() => {
     cancelContentOverflowFrame();
     onContentOverflowChange?.(measureContentOverflow());
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- rows.length and layout inputs trigger a re-measure; the effect reads them through the DOM
   }, [cancelContentOverflowFrame, measureContentOverflow, onContentOverflowChange, rows.length]);
 
   const handleScroll = useCallback(() => {
@@ -1128,7 +1128,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- rows.length and layout inputs trigger a re-measure; the effect reads them through the DOM
   }, [timelineViewportElement, rows.length, reportContentOverflow, chatWidth]);
 
   const sharedState = useMemo<TimelineRowSharedState>(

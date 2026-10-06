@@ -212,14 +212,14 @@ export function ComposerEditor({
     props.value,
     selection ?? null,
     mostRecentEventCount,
-    // oxlint-disable-next-line react/refs
+    // oxlint-disable-next-line react/refs -- echo detection compares against the native events seen so far, read during render on purpose
     nativeEventSnapshotsRef.current,
   );
   const acknowledgesLatestNativeEvent = isComposerNativeEcho(
     props.value,
     selection ?? null,
     mostRecentEventCount,
-    // oxlint-disable-next-line react/refs
+    // oxlint-disable-next-line react/refs -- echo detection compares against the native events seen so far, read during render on purpose
     nativeEventSnapshotsRef.current,
   );
   const isNativeEcho =
