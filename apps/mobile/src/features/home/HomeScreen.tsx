@@ -604,7 +604,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const listMotion = useThreadListMotion({
     items: threadListV2Items,
     scope: settledResetKey,
-    searching: hasSearchQuery,
+    searching: hasSearchQuery || keyboardVisible,
     scrolling: !swipeEnabled,
     ready: shelfPreferencesLoaded && !props.catalogState.isLoadingConnections,
   });
