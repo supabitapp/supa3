@@ -207,6 +207,18 @@ export function resolveDraftEnvModeAfterBranchChange(input: {
   return "local";
 }
 
+/** Resolve the base once for both the branch picker and worktree submission. */
+export function resolveWorktreeBaseBranch(input: {
+  selectedBranch: string | null;
+  refs: ReadonlyArray<Pick<VcsRef, "name" | "isDefault">>;
+  refsLoading: boolean;
+  currentGitBranch: string | null;
+}): string | null {
+  if (input.selectedBranch) return input.selectedBranch;
+  if (input.refsLoading) return null;
+  return input.refs.find((ref) => ref.isDefault)?.name ?? input.currentGitBranch;
+}
+
 export function resolveBranchToolbarValue(input: {
   envMode: EnvMode;
   activeWorktreePath: string | null;
@@ -215,7 +227,7 @@ export function resolveBranchToolbarValue(input: {
 }): string | null {
   const { envMode, activeWorktreePath, activeThreadBranch, currentGitBranch } = input;
   if (envMode === "worktree" && !activeWorktreePath) {
-    return activeThreadBranch ?? currentGitBranch;
+    return activeThreadBranch;
   }
   return currentGitBranch ?? activeThreadBranch;
 }
