@@ -3434,7 +3434,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   useEffect(() => {
     promptRef.current = prompt;
   }, [prompt, promptRef]);
-  const clampedComposerCursor = clampCollapsedComposerCursor(prompt, composerCursor);
+  const clampedComposerCursor = clampCollapsedComposerCursor(
+    activePendingProgress ? activePendingProgress.customAnswer : prompt,
+    composerCursor,
+  );
   if (clampedComposerCursor !== composerCursor) {
     setComposerCursor(clampedComposerCursor);
   }
