@@ -123,8 +123,11 @@ export function ContextWindowMeter(props: {
               aria-label="Context window usage"
             >
               <div
-                className="h-full rounded-full transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none"
-                style={{ width: `${normalizedPercentage}%`, backgroundColor: usageColor }}
+                className="h-full rounded-full transition-[translate,background-color] duration-500 ease-out motion-reduce:transition-none"
+                style={{
+                  translate: `${normalizedPercentage - 100}% 0`,
+                  backgroundColor: usageColor,
+                }}
               />
             </div>
           ) : null}

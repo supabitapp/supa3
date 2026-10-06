@@ -10,13 +10,18 @@ const Sheet = SheetPrimitive.Root;
 
 const SheetPortal = SheetPrimitive.Portal;
 
+// Backdrop and popup share one duration so `transitionDurationMs` retimes both.
+const SHEET_TRANSITION_TIMING_CLASS =
+  "[--sheet-duration:200ms] duration-(--sheet-duration) ease-drawer data-ending-style:duration-[calc(var(--sheet-duration)*0.75)] data-ending-style:ease-in motion-reduce:transition-none";
+
 // Sheets are docked panels, not dialogs: their layer (--z-sheet) sits under dialogs that open
 // from inside them and under anything the app floats above panels.
 function SheetBackdrop({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   return (
     <SheetPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-(--z-sheet) bg-background/60 backdrop-blur-xs transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        "fixed inset-0 z-(--z-sheet) bg-background/60 backdrop-blur-xs transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0",
+        SHEET_TRANSITION_TIMING_CLASS,
         className,
       )}
       data-slot="sheet-backdrop"
@@ -71,7 +76,7 @@ function SheetPopup({
   const transitionStyle =
     transitionDurationMs === undefined
       ? undefined
-      : ({ transitionDuration: `${transitionDurationMs}ms` } satisfies CSSProperties);
+      : ({ "--sheet-duration": `${transitionDurationMs}ms` } as CSSProperties);
   const instant = transitionDurationMs === 0;
 
   return (
@@ -87,7 +92,8 @@ function SheetPopup({
       <SheetViewport side={side} variant={variant}>
         <SheetPrimitive.Popup
           className={cn(
-            "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover not-dark:bg-clip-padding text-popover-foreground shadow-lg/5 transition-[opacity,translate] duration-200 ease-in-out will-change-transform before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:opacity-0 data-starting-style:opacity-0 max-sm:before:hidden dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover not-dark:bg-clip-padding text-popover-foreground shadow-lg/5 transition-[opacity,translate] will-change-transform before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:opacity-0 data-starting-style:opacity-0 max-sm:before:hidden dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            SHEET_TRANSITION_TIMING_CLASS,
             side === "bottom" &&
               "row-start-2 border-t data-ending-style:translate-y-8 data-starting-style:translate-y-8",
             side === "top" &&

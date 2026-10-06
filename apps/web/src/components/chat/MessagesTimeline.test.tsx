@@ -214,6 +214,13 @@ function matchMedia() {
 
 let MessagesTimeline: typeof import("./MessagesTimeline").MessagesTimeline;
 
+// A collapsible panel needs a DOM node to finish closing; jsdom runs no transition.
+function createPanelNodeMock(element: ReactElement) {
+  return (element.props as { "data-slot"?: string })["data-slot"] === "collapsible-panel"
+    ? document.createElement("div")
+    : null;
+}
+
 beforeEach(() => {
   activityTestState.subagentTooltips = false;
   activityTestState.expanded = false;
@@ -472,6 +479,7 @@ describe("MessagesTimeline", () => {
               },
             ]}
           />,
+          { createNodeMock: createPanelNodeMock },
         );
       });
       const row = renderer!.root.findByProps({ "aria-label": "Example tool" });
@@ -559,7 +567,7 @@ describe("MessagesTimeline", () => {
       const runId = RunId.make("tool-output-run");
       let timelineIsAtEnd = isAtEnd;
       props.listRef.current = {
-        getState: () => ({ isAtEnd: timelineIsAtEnd }),
+        getState: () => ({ isAtEnd: timelineIsAtEnd, indexByKey: () => undefined }),
         getScrollableNode: () => null,
       } as unknown as LegendListRef;
       let isResting = false;
@@ -605,12 +613,13 @@ describe("MessagesTimeline", () => {
       let renderer: ReactTestRenderer | undefined;
       try {
         await act(() => {
-          renderer = create(<ThreadProbe />);
+          renderer = create(<ThreadProbe />, { createNodeMock: createPanelNodeMock });
         });
         // The user scrolled up to read, so the composer is resting.
         await act(() => composerState!.setIsComposerScrollCollapsed(true));
         const toggle = renderer!.root.findByProps({ "aria-expanded": false });
         await act(() => toggle.props.onClick());
+        await flushFrame();
         await flushFrame();
         await flushFrame();
         expect(isResting).toBe(true);
@@ -620,12 +629,154 @@ describe("MessagesTimeline", () => {
         await flushFrame();
         timelineIsAtEnd = isAtEnd;
         await flushFrame();
+        await flushFrame();
         expect(isResting).toBe(!isAtEnd);
       } finally {
         await act(() => renderer?.unmount());
       }
     },
   );
+
+  it.each([
+    { liveFollowEnabled: true, returnsToEnd: true },
+    { liveFollowEnabled: false, returnsToEnd: false },
+  ])(
+    "returns output closed at the live edge to the end after rows stream in: $liveFollowEnabled",
+    async ({ liveFollowEnabled, returnsToEnd }) => {
+      const frames = new Map<number, FrameRequestCallback>();
+      let nextFrame = 0;
+      vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+        frames.set(++nextFrame, callback);
+        return nextFrame;
+      });
+      vi.stubGlobal("cancelAnimationFrame", (frame: number) => frames.delete(frame));
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      const flushFrames = async (count: number) => {
+        for (let index = 0; index < count; index += 1) {
+          await act(() => {
+            const callbacks = [...frames.values()];
+            frames.clear();
+            callbacks.forEach((callback) => callback(0));
+          });
+        }
+      };
+      const props = buildProps();
+      let timelineIsAtEnd = true;
+      const scrollToEnd = vi.fn(() => {
+        timelineIsAtEnd = true;
+      });
+      props.listRef.current = {
+        getState: () => ({ isAtEnd: timelineIsAtEnd, indexByKey: () => undefined }),
+        getScrollableNode: () => null,
+        scrollToEnd,
+      } as unknown as LegendListRef;
+      const onToolOutputCollapsedAtEnd = vi.fn();
+      let renderer: ReactTestRenderer | undefined;
+      try {
+        await act(() => {
+          renderer = create(
+            <MessagesTimeline
+              {...props}
+              liveFollowEnabled={liveFollowEnabled}
+              onToolOutputCollapsedAtEnd={onToolOutputCollapsedAtEnd}
+              timelineEntries={[
+                {
+                  id: "tool-at-end",
+                  kind: "work",
+                  createdAt: MESSAGE_CREATED_AT,
+                  entry: {
+                    id: "tool-at-end",
+                    createdAt: MESSAGE_CREATED_AT,
+                    label: "Run command",
+                    tone: "tool",
+                    toolLifecycleStatus: "completed",
+                    detail: "Command output",
+                  },
+                },
+              ]}
+            />,
+            { createNodeMock: createPanelNodeMock },
+          );
+        });
+        const toggle = renderer!.root.findByProps({ "aria-expanded": false });
+        await act(() => toggle.props.onClick());
+        await flushFrames(3);
+        scrollToEnd.mockClear();
+
+        await act(() => toggle.props.onClick());
+        // A streamed row lands below while end-follow is held.
+        timelineIsAtEnd = false;
+        await flushFrames(3);
+
+        if (returnsToEnd) {
+          expect(scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+        } else {
+          expect(scrollToEnd).not.toHaveBeenCalled();
+        }
+        expect(onToolOutputCollapsedAtEnd).toHaveBeenCalledTimes(returnsToEnd ? 1 : 0);
+      } finally {
+        await act(() => renderer?.unmount());
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it("holds end-follow off until a disclosure nested in a row settles", async () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => frames.delete(frame));
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const flushFrame = () =>
+      act(() => {
+        const callbacks = [...frames.values()];
+        frames.clear();
+        callbacks.forEach((callback) => callback(0));
+      });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const following = () =>
+      container
+        .querySelector('[data-testid="legend-list"]')
+        ?.getAttribute("data-maintain-scroll-at-end") === "enabled";
+    try {
+      await act(() =>
+        root.render(
+          <MessagesTimeline
+            {...buildProps()}
+            timelineEntries={[buildUserTimelineEntry(buildLongUserMessageText())]}
+          />,
+        ),
+      );
+      expect(following()).toBe(true);
+
+      const toggle = [...container.querySelectorAll("button")].find(
+        (button) => button.textContent === "Show full message",
+      )!;
+      await act(() => toggle.click());
+      expect(following()).toBe(false);
+      await flushFrame();
+      await flushFrame();
+      expect(following()).toBe(false);
+      await flushFrame();
+      expect(following()).toBe(true);
+    } finally {
+      await act(() => root.unmount());
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
 
   it("preserves arbitrary XML-like tags and comparisons in rendered user messages", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
@@ -2055,6 +2206,7 @@ describe("MessagesTimeline", () => {
                 } as never,
               }))}
             />,
+            { createNodeMock: createPanelNodeMock },
           );
         });
         const groupLabel = `${count} subagents`;
@@ -2597,6 +2749,7 @@ describe("MessagesTimeline", () => {
                 },
               ]}
             />,
+            { createNodeMock: createPanelNodeMock },
           );
         });
         const previewText = () =>

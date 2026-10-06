@@ -83,6 +83,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   // sending from the composer advances the active question.
   const [collapsedQuestionId, setCollapsedQuestionId] = useState<string | null>(null);
   const isCollapsed = collapsedQuestionId !== null && collapsedQuestionId === activeQuestion?.id;
+  const [summaryFadesIn, setSummaryFadesIn] = useState(false);
 
   useEffect(() => {
     onAdvanceRef.current = onAdvance;
@@ -166,6 +167,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       open={!isCollapsed}
       onOpenChange={(open) => {
         setCollapsedQuestionId(open ? null : activeQuestion.id);
+        setSummaryFadesIn(!open);
       }}
     >
       <CollapsibleTrigger
@@ -181,7 +183,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             {activeQuestion.header}
           </span>
           {isCollapsed ? (
-            <span className="min-w-0 flex-1 truncate text-secondary-label">
+            <span
+              data-enter={summaryFadesIn ? "" : undefined}
+              onTransitionEnd={() => setSummaryFadesIn(false)}
+              className="min-w-0 flex-1 truncate text-secondary-label transition-opacity duration-200 ease-drawer data-enter:starting:opacity-0 motion-reduce:transition-none"
+            >
               {activeQuestion.question}
             </span>
           ) : null}

@@ -447,6 +447,47 @@ describe("ChatMarkdown streaming", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it.each([
+    { fadeInitialBlocks: true, fadesAtMount: true },
+    { fadeInitialBlocks: false, fadesAtMount: false },
+  ])(
+    "arms the block fade at mount only when initial blocks fade: $fadeInitialBlocks",
+    async ({ fadeInitialBlocks, fadesAtMount }) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      let renderer: ReactTestRenderer | undefined;
+      const message = (text: string) => (
+        <ChatMarkdown
+          cwd="/tmp/project"
+          text={text}
+          isStreaming
+          fadeInitialBlocks={fadeInitialBlocks}
+        />
+      );
+      const streaming = () =>
+        renderer!.root.find(
+          (node) =>
+            node.type === "div" &&
+            typeof node.props.className === "string" &&
+            node.props.className.startsWith("chat-markdown"),
+        ).props["data-streaming"];
+
+      try {
+        await act(async () => {
+          renderer = create(message("First thought"));
+        });
+        expect(streaming()).toBe(fadesAtMount ? "" : undefined);
+
+        await act(async () => {
+          renderer!.update(message("First thought\n\nSecond thought"));
+        });
+        expect(streaming()).toBe("");
+      } finally {
+        await act(async () => renderer?.unmount());
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 });
 
 describe("ChatMarkdown diagrams", () => {

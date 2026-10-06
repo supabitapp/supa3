@@ -1,5 +1,6 @@
 import type { OrchestrationV2ProviderFailureClass } from "@supacode/contracts";
-import { memo } from "react";
+import { memo, useMemo } from "react";
+import { usePresence } from "~/hooks/usePresence";
 import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { CircleAlertIcon, XIcon } from "lucide-react";
@@ -47,34 +48,46 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   onDismiss?: () => void;
   chatGptUsageLimit?: boolean;
 }) {
-  if (!error) return null;
-  const variant = errorClass === "usage_limit" ? "warning" : "error";
+  const liveBanner = useMemo(
+    () => (error ? { error, errorClass, chatGptUsageLimit } : null),
+    [error, errorClass, chatGptUsageLimit],
+  );
+  const presence = usePresence(liveBanner);
+  const banner = presence.value;
+  if (!banner) return null;
+  const variant = banner.errorClass === "usage_limit" ? "warning" : "error";
   return (
-    <div className="pointer-events-auto mx-auto w-fit max-w-[min(48rem,calc(100%-2rem))] pt-3">
+    <div
+      {...presence.props}
+      inert={presence.exiting}
+      className="pointer-events-auto mx-auto w-fit max-w-[min(48rem,calc(100%-2rem))] pt-3 transition-[translate] duration-200 ease-drawer data-enter:starting:-translate-y-1 data-ending-style:-translate-y-1 data-ending-style:duration-150 data-ending-style:ease-in motion-reduce:transition-none"
+    >
       <Alert variant={variant} surface="glass" controlAlignment="first-line" data-variant={variant}>
-        {chatGptUsageLimit ? (
+        {banner.chatGptUsageLimit ? (
           <OpenAI className="size-4 text-foreground!" aria-hidden="true" />
         ) : (
           <CircleAlertIcon />
         )}
         <AlertDescription>
-          {chatGptUsageLimit ? (
+          {banner.chatGptUsageLimit ? (
             <div className="space-y-1">
               <p className="font-medium">ChatGPT usage limit reached</p>
               <p>Review your usage settings in ChatGPT to continue.</p>
             </div>
           ) : (
             <Tooltip>
-              <TooltipTrigger render={<div className="line-clamp-3" />}>{error}</TooltipTrigger>
+              <TooltipTrigger render={<div className="line-clamp-3" />}>
+                {banner.error}
+              </TooltipTrigger>
               <TooltipPopup side="top" className="whitespace-pre-wrap">
-                {error}
+                {banner.error}
               </TooltipPopup>
             </Tooltip>
           )}
         </AlertDescription>
-        {(chatGptUsageLimit || onDismiss) && (
+        {(banner.chatGptUsageLimit || onDismiss) && (
           <AlertAction>
-            {chatGptUsageLimit ? <ChatGptUsageButton variant="default" size="sm" /> : null}
+            {banner.chatGptUsageLimit ? <ChatGptUsageButton variant="default" size="sm" /> : null}
             {onDismiss ? (
               <Button variant="ghost" size="icon-xs" aria-label="Dismiss error" onClick={onDismiss}>
                 <XIcon />

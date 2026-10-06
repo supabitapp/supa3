@@ -141,6 +141,11 @@ import {
 } from "./ComposerTasksBadge";
 import { ComposerActivityRow } from "./ComposerActivityStatus";
 import {
+  COMPOSER_ATTACHMENT_PRESENCE_CLASS,
+  useAttachmentExits,
+  useAttachmentTrayMotion,
+} from "./composerAttachmentMotion";
+import {
   reconcileAttachmentContextReferences,
   type RetainedAttachmentContextPayloads,
 } from "./composerContextUndo";
@@ -317,6 +322,7 @@ import {
 } from "../../lib/snapShotAnimation";
 import { resizeSnapShotSource } from "../../lib/snapShotSource";
 import { basenameOfPath } from "../../pierre-icons";
+import { EASE_DRAWER } from "~/lib/motion";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
 import {
   getComposerPromptLengthValidationMessage,
@@ -369,14 +375,12 @@ function SnapShotAttachmentFrame({
   animationId,
   animationSource,
   arrival,
-  animateArrival,
   className,
   ...props
 }: ComponentProps<"div"> & {
   readonly animationId?: string | undefined;
   readonly animationSource?: SnapShotSource | undefined;
   readonly arrival?: boolean | undefined;
-  readonly animateArrival?: boolean | undefined;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
 
@@ -394,12 +398,8 @@ function SnapShotAttachmentFrame({
   return (
     <div
       ref={frameRef}
-      className={cn(
-        animateArrival &&
-          !animationId &&
-          "origin-center transition-[opacity,scale] duration-300 ease-drawer starting:scale-95 starting:opacity-0 motion-reduce:transition-none motion-reduce:starting:scale-100 motion-reduce:starting:opacity-100",
-        className,
-      )}
+      data-composer-attachment=""
+      className={cn(COMPOSER_ATTACHMENT_PRESENCE_CLASS, className)}
       {...props}
     />
   );
@@ -413,7 +413,6 @@ const EMPTY_PULL_REQUEST_LIST_TARGETS: ReadonlyArray<EnvironmentQueryTarget<Pull
 const COMPOSER_SCROLL_COLLAPSE_THRESHOLD_PX = 24;
 const COMPOSER_SCROLL_GESTURE_RESET_MS = 120;
 const COMPOSER_RESTING_TRANSITION_CLEANUP_BUFFER_MS = 50;
-const COMPOSER_RESTING_TRANSITION_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 const COMPOSER_RESTING_CONTROLS_ARRIVAL_DRIFT_PX = 4;
 
 function useComposerRestingTransition(
@@ -678,7 +677,7 @@ function useComposerRestingTransition(
           shell?.setAttribute("data-model-strip-transition", "true");
           stripAnimation = modelStrip.animate(
             [{ height: `${fromHeight}px` }, { height: `${toHeight}px` }],
-            { duration, easing: COMPOSER_RESTING_TRANSITION_EASING, fill: "both" },
+            { duration, easing: EASE_DRAWER, fill: "both" },
           );
         }
 
@@ -686,7 +685,7 @@ function useComposerRestingTransition(
           [{ height: `${previousHeight}px` }, { height: `${nextHeight}px` }],
           {
             duration,
-            easing: COMPOSER_RESTING_TRANSITION_EASING,
+            easing: EASE_DRAWER,
             fill: "both",
           },
         );
@@ -725,7 +724,7 @@ function useComposerRestingTransition(
               [{ transform: `translate(${offsetX}px, ${offset}px)` }, { transform: "none" }],
               {
                 duration,
-                easing: COMPOSER_RESTING_TRANSITION_EASING,
+                easing: EASE_DRAWER,
               },
             ),
           );
@@ -771,7 +770,7 @@ function useComposerRestingTransition(
                 ],
                 {
                   duration,
-                  easing: COMPOSER_RESTING_TRANSITION_EASING,
+                  easing: EASE_DRAWER,
                 },
               ),
             );
@@ -802,7 +801,7 @@ function useComposerRestingTransition(
                   duration: nextIsCollapsed ? duration : duration / 2,
                   delay: nextIsCollapsed ? 0 : duration / 2,
                   fill: "backwards",
-                  easing: COMPOSER_RESTING_TRANSITION_EASING,
+                  easing: EASE_DRAWER,
                 },
               ),
             );
@@ -821,7 +820,7 @@ function useComposerRestingTransition(
                 duration: nextIsCollapsed ? duration : duration / 2,
                 delay: nextIsCollapsed ? 0 : duration / 2,
                 fill: "backwards",
-                easing: COMPOSER_RESTING_TRANSITION_EASING,
+                easing: EASE_DRAWER,
               }),
             );
           }
@@ -5170,7 +5169,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     <ComposerTasksBadge
       expanded={false}
       onToggle={toggleTasksDrawer}
-      placement="inline"
       progress={activeTasksProgress}
       steps={activeTaskSteps}
     />
@@ -5212,6 +5210,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const expandedComposerImages = isComposerResting
     ? standaloneComposerImages.filter((image) => pendingSnapShotIdSet.has(image.id))
     : standaloneComposerImages;
+  const { trayRef: attachmentTrayRef, tray: attachmentTray } = useAttachmentTrayMotion(
+    attachmentTargetKey,
+    [
+      ...(editingQueuedAttachments ?? []).map(({ attachment }) => attachment.id),
+      ...composerImages.map((image) => image.id),
+      ...uncommittedSnapShotIds,
+      ...composerFiles.map((file) => file.id),
+    ],
+    `${isComposerResting}:${isComposerCollapsedMobile}:${isComposerApprovalState}:${pendingUserInputs.length > 0}`,
+    pendingSnapShotIds.length > 0,
+  );
+  const queuedAttachmentExits = useAttachmentExits(
+    attachmentTray,
+    editingQueuedAttachments ?? [],
+    ({ attachment }) => attachment.id,
+  );
+  const imageExits = useAttachmentExits(
+    attachmentTray,
+    expandedComposerImages,
+    (image) => image.id,
+  );
+  const videoExits = useAttachmentExits(attachmentTray, composerVideos, (file) => file.id);
+  const otherFileExits = useAttachmentExits(attachmentTray, composerOtherFiles, (file) => file.id);
   // Keep collapsed controls inside the input when workspace context is hidden.
   const composerControlsCollapsed = isComposerResting || isComposerCollapsedMobile;
   const showInlineRestingControls = composerControlsCollapsed && restingControlsHost === null;
@@ -6066,11 +6087,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const removeComposerImage = (imageId: string) => {
     const image = composerImagesRef.current.find((candidate) => candidate.id === imageId);
+    const remove = () => imageExits.exit(imageId, () => removeComposerImageFromDraft(imageId));
     const referenced = collectInlineContextIds(promptRef.current).includes(
       image ? imageContextReference(image).contextId : "",
     );
     if (!referenced) {
-      removeComposerImageFromDraft(imageId);
+      remove();
       return;
     }
     const confirmation = requestConfirmDialog(
@@ -6078,11 +6100,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       { variant: "destructive" },
     );
     if (!confirmation) {
-      removeComposerImageFromDraft(imageId);
+      remove();
       return;
     }
     void confirmation.then((confirmed) => {
-      if (confirmed) removeComposerImageFromDraft(imageId);
+      if (confirmed) remove();
     });
   };
 
@@ -6713,7 +6735,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         <ComposerBanner.Column>
           {props.queuedRunsControl}
           <ComposerBannerStack
-            key={activeThreadId}
+            key={`stack:${activeThreadId}`}
             className="relative z-0"
             items={bannerStackItems}
           />
@@ -6724,40 +6746,57 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </ComposerBanner.Root>
             </ComposerBanner.Attachment>
           ) : null}
-          {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
-            <ComposerBanner.Attachment>
-              <ComposerBanner.Root
-                data-chat-composer-top-drawer="true"
-                variant={activePendingApproval ? "warning" : "info"}
-                density={activePendingApproval ? "spacious" : "default"}
-              >
-                {activePendingApproval ? (
-                  <ComposerBanner.Row
-                    layout="approval"
-                    data-chat-composer-collapsed-controls="true"
-                  >
-                    <ComposerBanner.Icon>
-                      <ShieldIcon />
-                    </ComposerBanner.Icon>
-                    <ComposerBanner.Content>
-                      <ComposerPendingApprovalPanel
-                        approval={activePendingApproval}
-                        pendingCount={pendingApprovals.length}
-                      />
-                    </ComposerBanner.Content>
-                    <ComposerBanner.Actions>
-                      <ComposerPendingApprovalActions
-                        requestId={activePendingApproval.requestId}
-                        isResponding={respondingRequestIds.includes(
-                          activePendingApproval.requestId,
-                        )}
-                        options={activePendingApproval.options}
-                        canRespond={activePendingApproval.responseCapability === "live"}
-                        onRespondToApproval={onRespondToApproval}
-                      />
-                    </ComposerBanner.Actions>
-                  </ComposerBanner.Row>
-                ) : !isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
+          <ComposerBanner.Drawer
+            key={`top-drawer:${activeThreadId}`}
+            open={showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer)}
+          >
+            <ComposerBanner.Root
+              data-chat-composer-top-drawer="true"
+              variant={activePendingApproval ? "warning" : "info"}
+              density={activePendingApproval ? "spacious" : "default"}
+            >
+              {activePendingApproval ? (
+                <ComposerBanner.Row layout="approval" data-chat-composer-collapsed-controls="true">
+                  <ComposerBanner.Icon>
+                    <ShieldIcon />
+                  </ComposerBanner.Icon>
+                  <ComposerBanner.Content>
+                    <ComposerPendingApprovalPanel
+                      approval={activePendingApproval}
+                      pendingCount={pendingApprovals.length}
+                    />
+                  </ComposerBanner.Content>
+                  <ComposerBanner.Actions>
+                    <ComposerPendingApprovalActions
+                      requestId={activePendingApproval.requestId}
+                      isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
+                      options={activePendingApproval.options}
+                      canRespond={activePendingApproval.responseCapability === "live"}
+                      onRespondToApproval={onRespondToApproval}
+                    />
+                  </ComposerBanner.Actions>
+                </ComposerBanner.Row>
+              ) : !isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
+                <ComposerPendingUserInputPanel
+                  pendingUserInputs={pendingUserInputs}
+                  respondingRequestIds={
+                    activePendingIsResponding && activePendingUserInput
+                      ? [...respondingRequestIds, activePendingUserInput.requestId]
+                      : respondingRequestIds
+                  }
+                  answers={activePendingDraftAnswers}
+                  questionIndex={activePendingQuestionIndex}
+                  onToggleOption={onSelectActivePendingUserInputOption}
+                  onAdvance={onAdvanceActivePendingUserInput}
+                  onDismiss={onDismissActivePendingUserInput}
+                />
+              ) : !isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan ? (
+                <ComposerPlanFollowUpBanner
+                  key={activeProposedPlan.id}
+                  planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
+                />
+              ) : isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
+                <div data-chat-composer-collapsed-controls="true">
                   <ComposerPendingUserInputPanel
                     pendingUserInputs={pendingUserInputs}
                     respondingRequestIds={
@@ -6771,108 +6810,76 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onAdvance={onAdvanceActivePendingUserInput}
                     onDismiss={onDismissActivePendingUserInput}
                   />
-                ) : !isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan ? (
-                  <ComposerPlanFollowUpBanner
-                    key={activeProposedPlan.id}
-                    planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
-                  />
-                ) : isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
-                  <div data-chat-composer-collapsed-controls="true">
-                    <ComposerPendingUserInputPanel
-                      pendingUserInputs={pendingUserInputs}
-                      respondingRequestIds={
-                        activePendingIsResponding && activePendingUserInput
-                          ? [...respondingRequestIds, activePendingUserInput.requestId]
-                          : respondingRequestIds
-                      }
-                      answers={activePendingDraftAnswers}
-                      questionIndex={activePendingQuestionIndex}
-                      onToggleOption={onSelectActivePendingUserInputOption}
-                      onAdvance={onAdvanceActivePendingUserInput}
-                      onDismiss={onDismissActivePendingUserInput}
-                    />
-                    {!isChoiceOnlyPendingQuestion ||
-                    activePendingProgress?.activeQuestion?.multiSelect ? (
-                      <ComposerBanner.Body>
-                        <div
-                          data-chat-composer-mobile-pending-compact="true"
-                          className={cn(
-                            "flex min-w-0 items-center gap-2 rounded-lg border border-border/55 bg-background/55 p-1.5 pl-3 transition-colors hover:bg-background/80",
-                            !activePendingProgress?.activeQuestion?.multiSelect && "p-0",
-                          )}
-                        >
-                          {!isChoiceOnlyPendingQuestion ? (
-                            <button
-                              type="button"
-                              className={cn(
-                                "min-w-0 flex-1 truncate bg-transparent py-1.5 text-left text-sm",
-                                activePendingProgress?.customAnswer
-                                  ? "text-foreground"
-                                  : "text-placeholder",
-                                !activePendingProgress?.activeQuestion?.multiSelect && "px-3 py-2",
-                              )}
-                              onPointerDown={(event) => event.preventDefault()}
-                              onClick={expandMobileComposer}
-                              aria-label="Write custom answer"
-                            >
-                              {activePendingProgress?.customAnswer || "Write custom answer"}
-                            </button>
-                          ) : null}
-                          {activePendingProgress?.activeQuestion?.multiSelect ? (
-                            <ComposerPrimaryActions
-                              compact
-                              keybindings={keybindings}
-                              pendingAction={pendingPrimaryAction}
-                              isRunning={false}
-                              canInterrupt={false}
-                              showPlanFollowUpPrompt={false}
-                              promptHasText={false}
-                              isSendBusy={isSendBusy}
-                              sendDisabledReason={sendDisabledReason}
-                              isConnecting={isConnecting}
-                              isEnvironmentUnavailable={
-                                environmentUnavailable !== null ||
-                                noProviderAvailable ||
-                                projectSelectionRequired
-                              }
-                              isPreparingWorktree={false}
-                              hasSendableContent={false}
-                              preserveComposerFocusOnPointerDown
-                              onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
-                              onInterrupt={handleInterruptPrimaryAction}
-                              onImplementPlanInNewThread={
-                                handleImplementPlanInNewThreadPrimaryAction
-                              }
-                            />
-                          ) : null}
-                        </div>
-                      </ComposerBanner.Body>
-                    ) : null}
-                  </div>
-                ) : null}
-              </ComposerBanner.Root>
-            </ComposerBanner.Attachment>
-          ) : null}
-          {!activityStackItem &&
-          isTasksDrawerOpen &&
-          !hasBlockingComposerTopDrawer &&
-          activeTasksProgress &&
-          activeTaskSteps ? (
+                  {!isChoiceOnlyPendingQuestion ||
+                  activePendingProgress?.activeQuestion?.multiSelect ? (
+                    <ComposerBanner.Body>
+                      <div
+                        data-chat-composer-mobile-pending-compact="true"
+                        className={cn(
+                          "flex min-w-0 items-center gap-2 rounded-lg border border-border/55 bg-background/55 p-1.5 pl-3 transition-colors hover:bg-background/80",
+                          !activePendingProgress?.activeQuestion?.multiSelect && "p-0",
+                        )}
+                      >
+                        {!isChoiceOnlyPendingQuestion ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "min-w-0 flex-1 truncate bg-transparent py-1.5 text-left text-sm",
+                              activePendingProgress?.customAnswer
+                                ? "text-foreground"
+                                : "text-placeholder",
+                              !activePendingProgress?.activeQuestion?.multiSelect && "px-3 py-2",
+                            )}
+                            onPointerDown={(event) => event.preventDefault()}
+                            onClick={expandMobileComposer}
+                            aria-label="Write custom answer"
+                          >
+                            {activePendingProgress?.customAnswer || "Write custom answer"}
+                          </button>
+                        ) : null}
+                        {activePendingProgress?.activeQuestion?.multiSelect ? (
+                          <ComposerPrimaryActions
+                            compact
+                            keybindings={keybindings}
+                            pendingAction={pendingPrimaryAction}
+                            isRunning={false}
+                            canInterrupt={false}
+                            showPlanFollowUpPrompt={false}
+                            promptHasText={false}
+                            isSendBusy={isSendBusy}
+                            sendDisabledReason={sendDisabledReason}
+                            isConnecting={isConnecting}
+                            isEnvironmentUnavailable={
+                              environmentUnavailable !== null ||
+                              noProviderAvailable ||
+                              projectSelectionRequired
+                            }
+                            isPreparingWorktree={false}
+                            hasSendableContent={false}
+                            preserveComposerFocusOnPointerDown
+                            onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
+                            onInterrupt={handleInterruptPrimaryAction}
+                            onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                          />
+                        ) : null}
+                      </div>
+                    </ComposerBanner.Body>
+                  ) : null}
+                </div>
+              ) : null}
+            </ComposerBanner.Root>
+          </ComposerBanner.Drawer>
+          {activeTasksProgress &&
+          activeTaskSteps &&
+          (showTasksTab ||
+            (!activityStackItem && isTasksDrawerOpen && !hasBlockingComposerTopDrawer)) ? (
             <ComposerTasksDrawer
-              onCollapse={toggleTasksDrawer}
+              key={`tasks:${activeThreadId}`}
+              expanded={isTasksDrawerOpen}
+              onToggle={toggleTasksDrawer}
               progress={activeTasksProgress}
               steps={activeTaskSteps}
             />
-          ) : null}
-          {showTasksTab ? (
-            <ComposerBanner.Attachment>
-              <ComposerTasksBadge
-                expanded={false}
-                onToggle={toggleTasksDrawer}
-                progress={activeTasksProgress}
-                steps={activeTaskSteps}
-              />
-            </ComposerBanner.Attachment>
           ) : null}
         </ComposerBanner.Column>
         {!isComposerApprovalState ? (
@@ -6899,7 +6906,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             data-chat-composer-surface="true"
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "rounded-3xl transition-[background-color] duration-200",
+              "rounded-3xl transition-[background-color,box-shadow] duration-200 ease-out motion-reduce:transition-none",
               "in-data-[thread-context-over]:bg-accent/45 in-data-[thread-context-over]:ring-1 in-data-[thread-context-over]:ring-primary/70",
               isDragOverComposer ? "bg-accent/45 ring-1 ring-primary/70" : null,
               projectSelectionRequired ? "opacity-75" : null,
@@ -7017,147 +7024,266 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 </ComposerCommandMenuLayer>
               )}
 
-              {!isComposerCollapsedMobile &&
-                !isComposerApprovalState &&
-                pendingUserInputs.length === 0 &&
-                editingQueuedAttachments !== null &&
-                editingQueuedAttachments.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {editingQueuedAttachments.map(({ attachment, url }) => (
-                      <div
-                        key={attachment.id}
-                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/80 bg-background"
-                      >
-                        {attachment.type === "image" && url ? (
-                          <img
-                            src={url}
-                            alt={attachment.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-3xs text-secondary-label">
-                            {attachment.name}
-                          </div>
-                        )}
-                        <Button
-                          variant="media-close"
-                          size="icon-xs"
-                          className="absolute right-1 top-1"
-                          onClick={() => onRemoveEditingQueuedAttachment(attachment.id)}
-                          aria-label={`Remove ${attachment.name}`}
+              <div
+                ref={attachmentTrayRef}
+                data-composer-attachment-tray=""
+                className="flex flex-col"
+              >
+                {!isComposerCollapsedMobile &&
+                  !isComposerApprovalState &&
+                  pendingUserInputs.length === 0 &&
+                  queuedAttachmentExits.items.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {queuedAttachmentExits.items.map(({ attachment, url }) => (
+                        <div
+                          key={attachment.id}
+                          {...queuedAttachmentExits.presence(attachment.id)}
+                          className={cn(
+                            "relative h-16 w-16 overflow-hidden rounded-lg border border-border/80 bg-background",
+                            COMPOSER_ATTACHMENT_PRESENCE_CLASS,
+                          )}
                         >
-                          <XIcon />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              {!isComposerCollapsedMobile &&
-                !isComposerApprovalState &&
-                pendingUserInputs.length === 0 &&
-                (uncommittedSnapShotIds.length > 0 ||
-                  composerVideos.length > 0 ||
-                  expandedComposerImages.length > 0) && (
-                  <div
-                    className={cn(
-                      "mb-3 flex max-w-full gap-2",
-                      pendingSnapShotIds.length > 0 ||
-                        expandedComposerImages.some((image) => image.source?.kind === "snap-shot")
-                        ? "snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-1 scrollbar-thumb-foreground/18 scrollbar-track-transparent [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-3 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/18 [&::-webkit-scrollbar-thumb]:bg-clip-content [&::-webkit-scrollbar-thumb:hover]:bg-foreground/28 [&::-webkit-scrollbar-track]:mx-1 [&::-webkit-scrollbar-track]:bg-transparent"
-                        : "flex-wrap",
-                    )}
-                  >
-                    {expandedComposerImages
-                      .map((image) => {
-                        const upload = supportsAttachmentUploads
-                          ? uploadsByImageId[image.id]
-                          : undefined;
-                        const snapShotAnimationPending =
-                          image.source?.kind === "snap-shot" && pendingSnapShotIdSet.has(image.id);
-                        const snapShotArrival =
-                          image.source?.kind === "snap-shot" &&
-                          shouldAnimateSnapShotArrival(image.source.capturedAt);
-                        return (
-                          <SnapShotAttachmentFrame
-                            key={image.id}
-                            data-chat-composer-expanded-image="true"
-                            aria-hidden={snapShotAnimationPending || undefined}
-                            inert={snapShotAnimationPending || undefined}
-                            arrival={snapShotArrival}
-                            animateArrival={
-                              settings.snapShotAnimations &&
-                              !snapShotAnimationPending &&
-                              snapShotArrival
+                          {attachment.type === "image" && url ? (
+                            <img
+                              src={url}
+                              alt={attachment.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center px-1 text-center text-3xs text-secondary-label">
+                              {attachment.name}
+                            </div>
+                          )}
+                          <Button
+                            variant="media-close"
+                            size="icon-xs"
+                            className="absolute right-1 top-1"
+                            onClick={() =>
+                              queuedAttachmentExits.exit(attachment.id, () =>
+                                onRemoveEditingQueuedAttachment(attachment.id),
+                              )
                             }
-                            animationId={snapShotAnimationPending ? image.id : undefined}
-                            animationSource={snapShotAnimationPending ? image.source : undefined}
+                            aria-label={`Remove ${attachment.name}`}
+                          >
+                            <XIcon />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                {!isComposerCollapsedMobile &&
+                  !isComposerApprovalState &&
+                  pendingUserInputs.length === 0 &&
+                  (uncommittedSnapShotIds.length > 0 ||
+                    videoExits.items.length > 0 ||
+                    imageExits.items.length > 0) && (
+                    <div
+                      className={cn(
+                        "mb-3 flex max-w-full gap-2",
+                        pendingSnapShotIds.length > 0 ||
+                          imageExits.items.some((image) => image.source?.kind === "snap-shot")
+                          ? "snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-1 scrollbar-thumb-foreground/18 scrollbar-track-transparent [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-3 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/18 [&::-webkit-scrollbar-thumb]:bg-clip-content [&::-webkit-scrollbar-thumb:hover]:bg-foreground/28 [&::-webkit-scrollbar-track]:mx-1 [&::-webkit-scrollbar-track]:bg-transparent"
+                          : "flex-wrap",
+                      )}
+                    >
+                      {imageExits.items
+                        .map((image) => {
+                          const upload = supportsAttachmentUploads
+                            ? uploadsByImageId[image.id]
+                            : undefined;
+                          const snapShotAnimationPending =
+                            image.source?.kind === "snap-shot" &&
+                            pendingSnapShotIdSet.has(image.id);
+                          const snapShotArrival =
+                            image.source?.kind === "snap-shot" &&
+                            shouldAnimateSnapShotArrival(image.source.capturedAt);
+                          const presence = imageExits.presence(image.id);
+                          const entering =
+                            !snapShotAnimationPending &&
+                            (image.source?.kind === "snap-shot"
+                              ? settings.snapShotAnimations && snapShotArrival
+                              : attachmentTray.arrived.has(image.id));
+                          return (
+                            <SnapShotAttachmentFrame
+                              key={image.id}
+                              data-chat-composer-expanded-image="true"
+                              {...presence}
+                              data-enter={entering ? "" : undefined}
+                              aria-hidden={snapShotAnimationPending || undefined}
+                              inert={snapShotAnimationPending || presence.inert}
+                              arrival={snapShotArrival}
+                              animationId={snapShotAnimationPending ? image.id : undefined}
+                              animationSource={snapShotAnimationPending ? image.source : undefined}
+                              className={cn(
+                                "group/attachment shrink-0 snap-start bg-background",
+                                image.source?.kind === "snap-shot"
+                                  ? SNAP_SHOT_ATTACHMENT_FRAME_CLASS
+                                  : "relative h-16 w-16 overflow-hidden rounded-lg border border-border/80",
+                                snapShotAnimationPending && "invisible",
+                              )}
+                            >
+                              {image.previewUrl ? (
+                                <button
+                                  type="button"
+                                  className="h-full w-full cursor-zoom-in"
+                                  aria-label={`Preview ${image.name}`}
+                                  onClick={() => {
+                                    const preview = buildExpandedImagePreview(
+                                      composerImages,
+                                      image.id,
+                                    );
+                                    if (!preview) return;
+                                    onExpandImage(preview);
+                                  }}
+                                >
+                                  <ComposerImageThumbnail
+                                    file={image.file}
+                                    alt={image.name}
+                                    className="h-full w-full object-cover"
+                                    fallback={
+                                      <span className="flex h-full items-center justify-center px-1 text-3xs text-secondary-label">
+                                        {image.name}
+                                      </span>
+                                    }
+                                  />
+                                </button>
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center px-1 text-center text-3xs text-secondary-label">
+                                  {image.name}
+                                </div>
+                              )}
+                              {image.source?.kind === "snap-shot" ? (
+                                <SnapShotAttachmentDetails
+                                  source={image.source}
+                                  className={cn(
+                                    upload?.status === "uploading" && "bottom-4",
+                                    upload?.status === "failed" && "bottom-8",
+                                  )}
+                                />
+                              ) : null}
+                              {nonPersistedComposerImageIdSet.has(image.id) && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <span
+                                        role="img"
+                                        aria-label="Draft attachment may not persist"
+                                        className="absolute left-1 top-1 inline-flex items-center justify-center rounded bg-background/85 p-0.5 text-warning-foreground"
+                                      >
+                                        <CircleAlertIcon className="size-3" />
+                                      </span>
+                                    }
+                                  />
+                                  <TooltipPopup side="top">
+                                    Draft attachment could not be saved locally and may be lost on
+                                    navigation.
+                                  </TooltipPopup>
+                                </Tooltip>
+                              )}
+                              {upload?.status === "uploading" && (
+                                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
+                                  {formatAttachmentUploadProgress(upload.progress)}
+                                </span>
+                              )}
+                              {upload?.status === "failed" && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <Button
+                                        variant="overlay"
+                                        size="icon-xs"
+                                        className="absolute bottom-1 left-1"
+                                        onClick={() =>
+                                          retryAttachmentUpload({
+                                            environmentId,
+                                            image,
+                                            draftTarget: attachmentDraftTarget,
+                                          })
+                                        }
+                                        aria-label={`Retry upload for ${image.name}`}
+                                      />
+                                    }
+                                  >
+                                    <RefreshIcon />
+                                  </TooltipTrigger>
+                                  <TooltipPopup side="top">{upload.reason}</TooltipPopup>
+                                </Tooltip>
+                              )}
+                              <span
+                                className={cn(
+                                  "absolute right-1 top-1 flex",
+                                  image.source?.kind === "snap-shot" &&
+                                    "opacity-0 transition-opacity pointer-coarse:opacity-100 group-hover/attachment:opacity-100 group-focus-within/attachment:opacity-100",
+                                )}
+                              >
+                                <Button
+                                  variant="media-close"
+                                  size="icon-xs"
+                                  onClick={() => removeComposerImage(image.id)}
+                                  aria-label={`Remove ${image.name}`}
+                                >
+                                  <XIcon />
+                                </Button>
+                              </span>
+                            </SnapShotAttachmentFrame>
+                          );
+                        })
+                        .concat(
+                          uncommittedSnapShotIds.map((captureId) => (
+                            <SnapShotAttachmentFrame
+                              key={captureId}
+                              aria-hidden="true"
+                              animationId={captureId}
+                              animationSource={
+                                pendingSnapShotAnimations.find(
+                                  (capture) => capture.id === captureId,
+                                )?.source
+                              }
+                              className={cn(
+                                SNAP_SHOT_ATTACHMENT_FRAME_CLASS,
+                                "invisible shrink-0 snap-start bg-background",
+                              )}
+                            />
+                          )),
+                        )}
+                      {videoExits.items.map((file) => {
+                        const fileCanUpload =
+                          supportsAttachmentUploads &&
+                          maxFileAttachmentBytes !== null &&
+                          file.sizeBytes <= maxFileAttachmentBytes;
+                        const upload = fileCanUpload ? uploadsByImageId[file.id] : undefined;
+                        return (
+                          <div
+                            key={file.id}
+                            {...videoExits.presence(file.id)}
                             className={cn(
-                              "group/attachment shrink-0 snap-start bg-background",
-                              image.source?.kind === "snap-shot"
-                                ? SNAP_SHOT_ATTACHMENT_FRAME_CLASS
-                                : "relative h-16 w-16 overflow-hidden rounded-lg border border-border/80",
-                              snapShotAnimationPending && "invisible",
+                              "relative h-16 w-16 shrink-0 snap-start overflow-hidden rounded-lg border border-border/80 bg-black",
+                              COMPOSER_ATTACHMENT_PRESENCE_CLASS,
                             )}
                           >
-                            {image.previewUrl ? (
-                              <button
-                                type="button"
-                                className="h-full w-full cursor-zoom-in"
-                                aria-label={`Preview ${image.name}`}
-                                onClick={() => {
-                                  const preview = buildExpandedImagePreview(
-                                    composerImages,
-                                    image.id,
-                                  );
-                                  if (!preview) return;
-                                  onExpandImage(preview);
-                                }}
-                              >
-                                <ComposerImageThumbnail
-                                  file={image.file}
-                                  alt={image.name}
-                                  className="h-full w-full object-cover"
-                                  fallback={
-                                    <span className="flex h-full items-center justify-center px-1 text-3xs text-secondary-label">
-                                      {image.name}
-                                    </span>
-                                  }
-                                />
-                              </button>
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center px-1 text-center text-3xs text-secondary-label">
-                                {image.name}
-                              </div>
-                            )}
-                            {image.source?.kind === "snap-shot" ? (
-                              <SnapShotAttachmentDetails
-                                source={image.source}
-                                className={cn(
-                                  upload?.status === "uploading" && "bottom-4",
-                                  upload?.status === "failed" && "bottom-8",
-                                )}
-                              />
-                            ) : null}
-                            {nonPersistedComposerImageIdSet.has(image.id) && (
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <span
-                                      role="img"
-                                      aria-label="Draft attachment may not persist"
-                                      className="absolute left-1 top-1 inline-flex items-center justify-center rounded bg-background/85 p-0.5 text-warning-foreground"
-                                    >
-                                      <CircleAlertIcon className="size-3" />
-                                    </span>
-                                  }
-                                />
-                                <TooltipPopup side="top">
-                                  Draft attachment could not be saved locally and may be lost on
-                                  navigation.
-                                </TooltipPopup>
-                              </Tooltip>
-                            )}
+                            <button
+                              type="button"
+                              className="flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 px-1 text-white"
+                              aria-label={`Play ${file.name}`}
+                              onClick={() => {
+                                if (file.file !== null) {
+                                  const preview = buildExpandedImagePreview([file], file.id);
+                                  if (preview) onExpandImage(preview);
+                                  return;
+                                }
+                                if (!file.uploadedAttachmentId) return;
+                                onFileOpen({ ...file, id: file.uploadedAttachmentId });
+                              }}
+                            >
+                              {file.file && (
+                                <>
+                                  <ComposerVideoThumbnail file={file.file} />
+                                  <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/10" />
+                                </>
+                              )}
+                              <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
+                            </button>
                             {upload?.status === "uploading" && (
                               <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
                                 {formatAttachmentUploadProgress(upload.progress)}
@@ -7174,11 +7300,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                       onClick={() =>
                                         retryAttachmentUpload({
                                           environmentId,
-                                          image,
+                                          image: file,
                                           draftTarget: attachmentDraftTarget,
                                         })
                                       }
-                                      aria-label={`Retry upload for ${image.name}`}
+                                      aria-label={`Retry upload for ${file.name}`}
                                     />
                                   }
                                 >
@@ -7187,196 +7313,108 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 <TooltipPopup side="top">{upload.reason}</TooltipPopup>
                               </Tooltip>
                             )}
-                            {/* Snap-shot frames reveal their remove button on hover or focus. */}
-                            <span
-                              className={cn(
-                                "absolute right-1 top-1 flex",
-                                image.source?.kind === "snap-shot" &&
-                                  "opacity-0 transition-opacity pointer-coarse:opacity-100 group-hover/attachment:opacity-100 group-focus-within/attachment:opacity-100",
-                              )}
-                            >
-                              <Button
-                                variant="media-close"
-                                size="icon-xs"
-                                onClick={() => removeComposerImage(image.id)}
-                                aria-label={`Remove ${image.name}`}
-                              >
-                                <XIcon />
-                              </Button>
-                            </span>
-                          </SnapShotAttachmentFrame>
-                        );
-                      })
-                      .concat(
-                        uncommittedSnapShotIds.map((captureId) => (
-                          <SnapShotAttachmentFrame
-                            key={captureId}
-                            aria-hidden="true"
-                            animationId={captureId}
-                            animationSource={
-                              pendingSnapShotAnimations.find((capture) => capture.id === captureId)
-                                ?.source
-                            }
-                            className={cn(
-                              SNAP_SHOT_ATTACHMENT_FRAME_CLASS,
-                              "invisible shrink-0 snap-start bg-background",
-                            )}
-                          />
-                        )),
-                      )}
-                    {composerVideos.map((file) => {
-                      const fileCanUpload =
-                        supportsAttachmentUploads &&
-                        maxFileAttachmentBytes !== null &&
-                        file.sizeBytes <= maxFileAttachmentBytes;
-                      const upload = fileCanUpload ? uploadsByImageId[file.id] : undefined;
-                      return (
-                        <div
-                          key={file.id}
-                          className="relative h-16 w-16 shrink-0 snap-start overflow-hidden rounded-lg border border-border/80 bg-black"
-                        >
-                          <button
-                            type="button"
-                            className="flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 px-1 text-white"
-                            aria-label={`Play ${file.name}`}
-                            onClick={() => {
-                              if (file.file !== null) {
-                                const preview = buildExpandedImagePreview([file], file.id);
-                                if (preview) onExpandImage(preview);
-                                return;
+                            <Button
+                              variant="media-close"
+                              size="icon-xs"
+                              className="absolute right-1 top-1"
+                              onClick={() =>
+                                videoExits.exit(file.id, () => removeComposerFileFromDraft(file.id))
                               }
-                              if (!file.uploadedAttachmentId) return;
-                              onFileOpen({ ...file, id: file.uploadedAttachmentId });
-                            }}
-                          >
-                            {file.file && (
-                              <>
-                                <ComposerVideoThumbnail file={file.file} />
-                                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/10" />
-                              </>
-                            )}
-                            <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
-                          </button>
-                          {upload?.status === "uploading" && (
-                            <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
-                              {formatAttachmentUploadProgress(upload.progress)}
-                            </span>
-                          )}
-                          {upload?.status === "failed" && (
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <Button
-                                    variant="overlay"
-                                    size="icon-xs"
-                                    className="absolute bottom-1 left-1"
-                                    onClick={() =>
-                                      retryAttachmentUpload({
-                                        environmentId,
-                                        image: file,
-                                        draftTarget: attachmentDraftTarget,
-                                      })
-                                    }
-                                    aria-label={`Retry upload for ${file.name}`}
-                                  />
-                                }
-                              >
-                                <RefreshIcon />
-                              </TooltipTrigger>
-                              <TooltipPopup side="top">{upload.reason}</TooltipPopup>
-                            </Tooltip>
-                          )}
-                          <Button
-                            variant="media-close"
-                            size="icon-xs"
-                            className="absolute right-1 top-1"
-                            onClick={() => removeComposerFileFromDraft(file.id)}
-                            aria-label={`Remove ${file.name}`}
-                          >
-                            <XIcon />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                              aria-label={`Remove ${file.name}`}
+                            >
+                              <XIcon />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-              {!isComposerCollapsedMobile &&
-                !isComposerApprovalState &&
-                composerOtherFiles.length > 0 && (
-                  <div className="mb-3 flex flex-col gap-1">
-                    {composerOtherFiles.map((file) => {
-                      const fileCanUpload =
-                        supportsAttachmentUploads &&
-                        maxFileAttachmentBytes !== null &&
-                        file.sizeBytes <= maxFileAttachmentBytes;
-                      const upload = fileCanUpload ? uploadsByImageId[file.id] : undefined;
-                      const needsReattach = composerFileNeedsReattach(file);
-                      const canReattachFile =
-                        fileStagingLimit !== null && file.sizeBytes <= fileStagingLimit;
-                      return (
-                        <div
-                          key={file.id}
-                          className="flex min-w-0 items-center gap-2 py-1 text-sm text-foreground"
-                        >
-                          <PierreEntryIcon
-                            pathValue={file.name}
-                            kind="file"
-                            theme={resolvedTheme}
-                          />
-                          <button
-                            type="button"
-                            disabled={needsReattach}
-                            className="min-w-0 flex-1 truncate text-left hover:underline focus-visible:outline-2"
-                            onClick={() => setPreviewFileId(file.id)}
+                {!isComposerCollapsedMobile &&
+                  !isComposerApprovalState &&
+                  otherFileExits.items.length > 0 && (
+                    <div className="mb-3 flex flex-col gap-1">
+                      {otherFileExits.items.map((file) => {
+                        const fileCanUpload =
+                          supportsAttachmentUploads &&
+                          maxFileAttachmentBytes !== null &&
+                          file.sizeBytes <= maxFileAttachmentBytes;
+                        const upload = fileCanUpload ? uploadsByImageId[file.id] : undefined;
+                        const needsReattach = composerFileNeedsReattach(file);
+                        const canReattachFile =
+                          fileStagingLimit !== null && file.sizeBytes <= fileStagingLimit;
+                        return (
+                          <div
+                            key={file.id}
+                            {...otherFileExits.presence(file.id)}
+                            className={cn(
+                              "flex min-w-0 origin-left items-center gap-2 py-1 text-sm text-foreground",
+                              COMPOSER_ATTACHMENT_PRESENCE_CLASS,
+                            )}
                           >
-                            {file.name}
-                          </button>
-                          <span className="shrink-0 text-xs text-secondary-label">
-                            {needsReattach
-                              ? canReattachFile
-                                ? "Attach again"
-                                : "Remove to send"
-                              : upload?.status === "uploading"
-                                ? formatAttachmentUploadProgress(upload.progress)
-                                : formatAttachmentSize(file.sizeBytes)}
-                          </span>
-                          {!needsReattach && upload?.status === "failed" ? (
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    onClick={() =>
-                                      retryAttachmentUpload({
-                                        environmentId,
-                                        image: file,
-                                        draftTarget: attachmentDraftTarget,
-                                      })
-                                    }
-                                    aria-label={`Retry upload for ${file.name}`}
-                                  />
-                                }
-                              >
-                                <RefreshIcon />
-                              </TooltipTrigger>
-                              <TooltipPopup side="top">{upload.reason}</TooltipPopup>
-                            </Tooltip>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => removeComposerFileFromDraft(file.id)}
-                            aria-label={`Remove ${file.name}`}
-                          >
-                            <XIcon />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                            <PierreEntryIcon
+                              pathValue={file.name}
+                              kind="file"
+                              theme={resolvedTheme}
+                            />
+                            <button
+                              type="button"
+                              disabled={needsReattach}
+                              className="min-w-0 flex-1 truncate text-left hover:underline focus-visible:outline-2"
+                              onClick={() => setPreviewFileId(file.id)}
+                            >
+                              {file.name}
+                            </button>
+                            <span className="shrink-0 text-xs text-secondary-label">
+                              {needsReattach
+                                ? canReattachFile
+                                  ? "Attach again"
+                                  : "Remove to send"
+                                : upload?.status === "uploading"
+                                  ? formatAttachmentUploadProgress(upload.progress)
+                                  : formatAttachmentSize(file.sizeBytes)}
+                            </span>
+                            {!needsReattach && upload?.status === "failed" ? (
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() =>
+                                        retryAttachmentUpload({
+                                          environmentId,
+                                          image: file,
+                                          draftTarget: attachmentDraftTarget,
+                                        })
+                                      }
+                                      aria-label={`Retry upload for ${file.name}`}
+                                    />
+                                  }
+                                >
+                                  <RefreshIcon />
+                                </TooltipTrigger>
+                                <TooltipPopup side="top">{upload.reason}</TooltipPopup>
+                              </Tooltip>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() =>
+                                otherFileExits.exit(file.id, () =>
+                                  removeComposerFileFromDraft(file.id),
+                                )
+                              }
+                              aria-label={`Remove ${file.name}`}
+                            >
+                              <XIcon />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+              </div>
 
               <div
                 className={cn(

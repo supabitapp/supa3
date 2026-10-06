@@ -100,6 +100,12 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   );
 }
 
+// Opacity runs on the glass layer and arrows, not the popup: an opacity below 1 on an
+// ancestor stops the glass backdrop blur until the fade ends. Scale stays on the popup,
+// which Base UI resets while it aligns the selected item with the trigger.
+const selectPopupFadeClassName =
+  "transition-opacity duration-150 ease-drawer in-data-starting-style:opacity-0 in-data-ending-style:opacity-0 in-data-ending-style:duration-100 in-data-ending-style:ease-in motion-reduce:transition-none";
+
 function SelectPopup({
   className,
   children,
@@ -133,12 +139,15 @@ function SelectPopup({
         sideOffset={sideOffset}
       >
         <SelectPrimitive.Popup
-          className="origin-(--transform-origin) rounded-lg text-foreground outline-none"
+          className="origin-(--transform-origin) rounded-lg text-foreground outline-none transition-[scale] duration-150 ease-drawer data-starting-style:scale-98 data-ending-style:scale-98 data-ending-style:duration-100 data-ending-style:ease-in motion-reduce:transition-none"
           data-slot="select-popup"
           {...props}
         >
           <SelectPrimitive.ScrollUpArrow
-            className="top-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:top-px before:h-[200%] before:rounded-t-[calc(var(--radius-lg)-1px)] before:bg-linear-to-b before:from-50% before:from-popover"
+            className={cn(
+              "top-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:top-px before:h-[200%] before:rounded-t-[calc(var(--radius-lg)-1px)] before:bg-linear-to-b before:from-50% before:from-popover",
+              selectPopupFadeClassName,
+            )}
             data-slot="select-scroll-up-arrow"
           >
             <ChevronUpIcon className="relative size-4.5 sm:size-4" />
@@ -146,6 +155,7 @@ function SelectPopup({
           <div
             className={cn(
               "dropdown-glass relative h-full rounded-lg shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
+              selectPopupFadeClassName,
               matchTriggerWidth && "min-w-(--anchor-width)",
             )}
           >
@@ -157,7 +167,10 @@ function SelectPopup({
             </SelectPrimitive.List>
           </div>
           <SelectPrimitive.ScrollDownArrow
-            className="bottom-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:bottom-px before:h-[200%] before:rounded-b-[calc(var(--radius-lg)-1px)] before:bg-linear-to-t before:from-50% before:from-popover"
+            className={cn(
+              "bottom-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:bottom-px before:h-[200%] before:rounded-b-[calc(var(--radius-lg)-1px)] before:bg-linear-to-t before:from-50% before:from-popover",
+              selectPopupFadeClassName,
+            )}
             data-slot="select-scroll-down-arrow"
           >
             <ChevronDownIcon className="relative size-4.5 sm:size-4" />

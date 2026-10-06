@@ -13,6 +13,8 @@ import {
   stripDisplayedPlanMarkdown,
 } from "../../proposedPlan";
 import ChatMarkdown from "../ChatMarkdown";
+import { AnimatedHeight } from "../AnimatedHeight";
+import { useTimelineDisclosure } from "./timelineDisclosure";
 import { EllipsisIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -46,7 +48,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   cwd: string | undefined;
   workspaceRoot: string | undefined;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, toggleExpanded] = useTimelineDisclosure();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [savePath, setSavePath] = useState("");
   const [isSavingToWorkspace, setIsSavingToWorkspace] = useState(false);
@@ -73,6 +75,22 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   const collapsedPreview = canCollapse
     ? buildCollapsedProposedPlanPreviewMarkdown(planMarkdown, { maxLines: 10 })
     : null;
+  const collapsed = canCollapse && !expanded;
+  const planBody = (
+    <div className={cn("relative", collapsed && "max-h-104 overflow-hidden")}>
+      <ChatMarkdown
+        text={collapsed ? (collapsedPreview ?? "") : displayedPlanMarkdown}
+        cwd={cwd}
+        environmentId={environmentId}
+        threadRef={threadRef}
+        isStreaming={false}
+        headingLevelOffset={3}
+      />
+      {collapsed ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
+      ) : null}
+    </div>
+  );
   const downloadFilename = buildProposedPlanMarkdownFilename(planMarkdown);
   const saveContents = normalizePlanMarkdownForExport(planMarkdown);
 
@@ -172,38 +190,10 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         </Menu>
       </div>
       <div className="mt-4">
-        <div className={cn("relative", canCollapse && !expanded && "max-h-104 overflow-hidden")}>
-          {canCollapse && !expanded ? (
-            <ChatMarkdown
-              text={collapsedPreview ?? ""}
-              cwd={cwd}
-              environmentId={environmentId}
-              threadRef={threadRef}
-              isStreaming={false}
-              headingLevelOffset={3}
-            />
-          ) : (
-            <ChatMarkdown
-              text={displayedPlanMarkdown}
-              cwd={cwd}
-              environmentId={environmentId}
-              threadRef={threadRef}
-              isStreaming={false}
-              headingLevelOffset={3}
-            />
-          )}
-          {canCollapse && !expanded ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
-          ) : null}
-        </div>
+        {canCollapse ? <AnimatedHeight animateKey={expanded}>{planBody}</AnimatedHeight> : planBody}
         {canCollapse ? (
           <div className="mt-4 flex justify-center">
-            <Button
-              size="sm"
-              variant="outline"
-              data-scroll-anchor-ignore
-              onClick={() => setExpanded((value) => !value)}
-            >
+            <Button size="sm" variant="outline" aria-expanded={expanded} onClick={toggleExpanded}>
               {expanded ? "Collapse plan" : "Expand plan"}
             </Button>
           </div>

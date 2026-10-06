@@ -3,6 +3,7 @@ import { memo, type ComponentProps } from "react";
 
 import { formatDuration } from "../../session-logic";
 import { cn } from "~/lib/utils";
+import { Collapsible, CollapsiblePanel } from "../ui/collapsible";
 import { ComposerBanner } from "./ComposerBanner";
 
 export interface ComposerTasksProgress {
@@ -102,19 +103,17 @@ function TaskSummary({
 export const ComposerTasksBadge = memo(function ComposerTasksBadge({
   expanded,
   onToggle,
-  placement = "tab",
   progress,
   steps,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
-  readonly placement?: "inline" | "tab";
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
 }) {
   if (progress.totalSteps <= 0) return null;
 
-  const row = (
+  return (
     <ComposerBanner.Row
       render={<button type="button" />}
       aria-expanded={expanded}
@@ -125,13 +124,6 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
     >
       <TaskSummary expanded={expanded} progress={progress} steps={steps} />
     </ComposerBanner.Row>
-  );
-  return placement === "inline" ? (
-    row
-  ) : (
-    <ComposerBanner.Root density="comfortable" data-composer-shoulder-tab>
-      {row}
-    </ComposerBanner.Root>
   );
 });
 
@@ -154,81 +146,82 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
       <ComposerTasksBadge
         expanded={expanded}
         onToggle={onToggle}
-        placement="inline"
         progress={progress}
         steps={steps}
       />
-      {expanded ? (
-        <ComposerBanner.Scroll data-composer-tasks-scroll="true">
-          <ComposerBanner.Children
-            render={<ul role="list" />}
-            aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}
-            data-composer-tasks-list="true"
-          >
-            {keyedTaskSteps(steps).map(({ key, step }) => (
-              <ComposerBanner.Row key={key} render={<li />} className="items-start py-1 pe-2">
-                <ComposerBanner.Icon
-                  className={cn(
-                    "h-4",
-                    step.status === "completed"
-                      ? "text-success"
-                      : step.status === "inProgress"
-                        ? "text-primary"
-                        : "text-muted-foreground/40",
-                  )}
-                >
-                  {step.status === "completed" ? (
-                    <CheckIcon />
-                  ) : step.status === "inProgress" ? (
-                    <CircleDotIcon />
-                  ) : (
-                    <CircleIcon />
-                  )}
-                </ComposerBanner.Icon>
-                <ComposerBanner.Content
-                  className={cn(
-                    "block wrap-anywhere",
-                    step.status === "completed"
-                      ? "text-muted-foreground/55"
-                      : step.status === "inProgress"
-                        ? "text-foreground/90"
-                        : "text-muted-foreground/70",
-                  )}
-                >
-                  <span className="sr-only">{taskStatusLabels[step.status]}: </span>
-                  {step.step}
-                </ComposerBanner.Content>
-                <ComposerBanner.Actions>
-                  <span
-                    className="w-12 text-right text-3xs/4 text-muted-foreground/45 tabular-nums"
-                    data-composer-task-duration="true"
+      <Collapsible open={expanded}>
+        <CollapsiblePanel>
+          <ComposerBanner.Scroll data-composer-tasks-scroll="true">
+            <ComposerBanner.Children
+              render={<ul role="list" />}
+              aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}
+              data-composer-tasks-list="true"
+            >
+              {keyedTaskSteps(steps).map(({ key, step }) => (
+                <ComposerBanner.Row key={key} render={<li />} className="items-start py-1 pe-2">
+                  <ComposerBanner.Icon
+                    className={cn(
+                      "h-4",
+                      step.status === "completed"
+                        ? "text-success"
+                        : step.status === "inProgress"
+                          ? "text-primary"
+                          : "text-muted-foreground/40",
+                    )}
                   >
-                    {step.durationMs !== undefined
-                      ? formatDuration(step.durationMs)
-                      : step.status === "inProgress"
-                        ? "now"
-                        : null}
-                  </span>
-                </ComposerBanner.Actions>
-              </ComposerBanner.Row>
-            ))}
-          </ComposerBanner.Children>
-        </ComposerBanner.Scroll>
-      ) : null}
+                    {step.status === "completed" ? (
+                      <CheckIcon />
+                    ) : step.status === "inProgress" ? (
+                      <CircleDotIcon />
+                    ) : (
+                      <CircleIcon />
+                    )}
+                  </ComposerBanner.Icon>
+                  <ComposerBanner.Content
+                    className={cn(
+                      "block wrap-anywhere",
+                      step.status === "completed"
+                        ? "text-muted-foreground/55"
+                        : step.status === "inProgress"
+                          ? "text-foreground/90"
+                          : "text-muted-foreground/70",
+                    )}
+                  >
+                    <span className="sr-only">{taskStatusLabels[step.status]}: </span>
+                    {step.step}
+                  </ComposerBanner.Content>
+                  <ComposerBanner.Actions>
+                    <span
+                      className="w-12 text-right text-3xs/4 text-muted-foreground/45 tabular-nums"
+                      data-composer-task-duration="true"
+                    >
+                      {step.durationMs !== undefined
+                        ? formatDuration(step.durationMs)
+                        : step.status === "inProgress"
+                          ? "now"
+                          : null}
+                    </span>
+                  </ComposerBanner.Actions>
+                </ComposerBanner.Row>
+              ))}
+            </ComposerBanner.Children>
+          </ComposerBanner.Scroll>
+        </CollapsiblePanel>
+      </Collapsible>
     </div>
   );
 });
 
-export const ComposerTasksDrawer = memo(function ComposerTasksDrawer({
-  onCollapse,
-  ...props
-}: Omit<ComponentProps<typeof ComposerTasksContent>, "expanded" | "onToggle"> & {
-  readonly onCollapse: () => void;
-}) {
+export const ComposerTasksDrawer = memo(function ComposerTasksDrawer(
+  props: ComponentProps<typeof ComposerTasksContent>,
+) {
   return (
     <ComposerBanner.Attachment>
-      <ComposerBanner.Root>
-        <ComposerTasksContent {...props} expanded onToggle={onCollapse} />
+      <ComposerBanner.Root
+        density={props.expanded ? "default" : "comfortable"}
+        data-composer-shoulder-tab={props.expanded ? undefined : true}
+      >
+        <ComposerTasksContent {...props} />
       </ComposerBanner.Root>
     </ComposerBanner.Attachment>
   );

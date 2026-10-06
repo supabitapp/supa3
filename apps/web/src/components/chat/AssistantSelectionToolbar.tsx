@@ -5,7 +5,7 @@ import {
   type ScopedThreadRef,
 } from "@supacode/contracts";
 import { QuoteIcon } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   captureAssistantTextSelection,
@@ -17,6 +17,8 @@ import {
   type SelectionActionPoint,
 } from "~/lib/selectionActions";
 import { Button } from "../ui/button";
+import { usePresence } from "~/hooks/usePresence";
+import { EASE_DRAWER, EASE_IN, prefersReducedMotion } from "~/lib/motion";
 
 export function AssistantSelectionToolbar({
   viewport,
@@ -32,16 +34,41 @@ export function AssistantSelectionToolbar({
     position: SelectionActionPoint;
     sourceAnchor: AssistantCitationSourceAnchor;
   } | null>(null);
-  const toolbarRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLButtonElement | null>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
+  const presence = usePresence(selection);
+  const presenceRef = presence.props.ref;
+  const setToolbar = useCallback(
+    (node: HTMLButtonElement | null) => {
+      toolbarRef.current = node;
+      presenceRef(node);
+    },
+    [presenceRef],
+  );
+  const shown = presence.value !== null;
 
   useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
     if (!toolbar || !selection) return;
-    const rect = toolbar.getBoundingClientRect();
-    toolbar.style.left = `${Math.max(8, Math.min(selection.position.x, window.innerWidth - rect.width - 8))}px`;
-    toolbar.style.top = `${Math.max(8, Math.min(selection.position.y, window.innerHeight - rect.height - 8))}px`;
+    // Layout size, not the rect, which the entrance scale shrinks.
+    toolbar.style.left = `${Math.max(8, Math.min(selection.position.x, window.innerWidth - toolbar.offsetWidth - 8))}px`;
+    toolbar.style.top = `${Math.max(8, Math.min(selection.position.y, window.innerHeight - toolbar.offsetHeight - 8))}px`;
   }, [selection]);
+
+  // The glass button animates itself: fading a parent would drop its backdrop
+  // blur. Timing matches POPUP_MOTION_CLASS.
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!shown || !toolbar || prefersReducedMotion()) return;
+    const hidden = { opacity: 0, scale: 0.98 };
+    const animation = presence.exiting
+      ? toolbar.animate(hidden, { duration: 100, easing: EASE_IN, fill: "forwards" })
+      : toolbar.animate([hidden, { opacity: 1, scale: 1 }], {
+          duration: 150,
+          easing: EASE_DRAWER,
+        });
+    return () => animation.cancel();
+  }, [shown, presence.exiting]);
 
   useEffect(() => {
     if (!viewport) return;
@@ -99,7 +126,7 @@ export function AssistantSelectionToolbar({
       ) {
         return;
       }
-      if (toolbar.disabled) return;
+      if (toolbar.disabled || toolbar.inert) return;
       event.preventDefault();
       event.stopPropagation();
       toolbar.focus({ preventScroll: true });
@@ -114,28 +141,30 @@ export function AssistantSelectionToolbar({
     };
   }, [threadRef, viewport]);
 
-  if (!selection) return null;
-  const tooLong = selection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
+  const shownSelection = presence.value;
+  if (!shownSelection) return null;
+  const tooLong = shownSelection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
   const dismiss = () => {
     actionsRef.current?.cancel();
     setSelection(null);
   };
   const cite = () => {
-    if (tooLong || !onCite(selection.citation, selection.sourceAnchor)) return false;
+    if (tooLong || !onCite(shownSelection.citation, shownSelection.sourceAnchor)) return false;
     window.getSelection()?.removeAllRanges();
     dismiss();
     return true;
   };
   return createPortal(
     <Button
-      ref={toolbarRef}
+      ref={setToolbar}
       type="button"
       size="xs"
       variant="glass"
       disabled={tooLong}
+      inert={presence.exiting}
       aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
-      className="fixed z-50 max-w-[calc(100vw-1rem)]"
-      style={{ left: selection.position.x, top: selection.position.y }}
+      className="fixed z-50 max-w-[calc(100vw-1rem)] origin-top-left"
+      style={{ left: shownSelection.position.x, top: shownSelection.position.y }}
       onPointerDown={(event) => event.preventDefault()}
       onClick={cite}
       onKeyDown={(event) => {

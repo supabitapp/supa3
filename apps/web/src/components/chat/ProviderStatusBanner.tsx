@@ -5,6 +5,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button, InlineButton } from "../ui/button";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { usePresence } from "~/hooks/usePresence";
 
 /** Unsupported and broken versions fail mid-turn, so they warn even when ready. */
 function getIncompatibleVersion(status: ServerProvider) {
@@ -91,15 +92,17 @@ export function getProviderStatusMessage(status: ServerProvider): string {
 export const ProviderStatusBanner = memo(function ProviderStatusBanner({
   onDismiss,
   onOpenProviderSetup,
-  status,
+  status: liveStatus,
 }: {
   onDismiss: () => void;
   onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   status: ServerProvider | null;
 }) {
-  if (!status || getProviderStatusBannerKey(status) === null) {
-    return null;
-  }
+  const presence = usePresence(
+    liveStatus && getProviderStatusBannerKey(liveStatus) !== null ? liveStatus : null,
+  );
+  const status = presence.value;
+  if (!status) return null;
 
   const providerName = status.displayName?.trim() || formatProviderDriverKindLabel(status.driver);
   const isUnauthenticated = status.status === "error" && status.auth.status === "unauthenticated";
@@ -114,7 +117,11 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
     incompatible?.status !== "broken" && (status.status === "warning" || incompatible !== null);
 
   return (
-    <div className="pointer-events-auto mx-auto w-fit max-w-[calc(100%-2rem)] pt-3">
+    <div
+      {...presence.props}
+      inert={presence.exiting}
+      className="pointer-events-auto mx-auto w-fit max-w-[calc(100%-2rem)] pt-3 transition-[translate] duration-200 ease-drawer data-enter:starting:-translate-y-1 data-ending-style:-translate-y-1 data-ending-style:duration-150 data-ending-style:ease-in motion-reduce:transition-none"
+    >
       <Alert
         variant={isWarning ? "warning" : "error"}
         role={incompatible && incompatible.status !== "broken" ? "status" : "alert"}

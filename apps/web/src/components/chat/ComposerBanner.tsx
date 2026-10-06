@@ -1,10 +1,11 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { ChevronDownIcon, XIcon } from "lucide-react";
-import type { ComponentProps } from "react";
+import { memo, type ComponentProps, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import { Collapsible, CollapsiblePanel } from "../ui/collapsible";
 import { ScrollArea } from "../ui/scroll-area";
 
 export type ComposerBannerVariant = "default" | "error" | "info" | "success" | "warning";
@@ -94,7 +95,7 @@ function Peek({
         "absolute inset-x-0 bottom-0 z-0 mx-auto h-3 w-[96%] cursor-pointer rounded-t-2xl border border-b-0 shadow-md",
         "bg-(--chat-composer-attached-surface)/(--glass-opacity) backdrop-blur-(--glass-blur) backdrop-saturate-(--glass-saturation)",
         "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:bg-(--chat-composer-attached-surface)",
-        "transition-opacity duration-150 ease-out focus-visible:outline-2 focus-visible:outline-ring",
+        "transition-[opacity,visibility] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none",
         peekBorder[variant],
         className,
       )}
@@ -116,6 +117,40 @@ function Attachment({ className, ...props }: ComponentProps<"div">) {
       )}
       {...props}
     />
+  );
+}
+
+const LastOpenContent = memo(
+  function LastOpenContent({ children }: { open: boolean; children: ReactNode }) {
+    return children;
+  },
+  (_, next) => !next.open,
+);
+
+/**
+ * An attachment that opens out of the composer and closes back into it. While
+ * closing it keeps showing (inert) the content it last had open, so a drawer
+ * whose subject disappears still animates away.
+ */
+function Drawer({
+  open,
+  children,
+  ...props
+}: Omit<ComponentProps<"div">, "children"> & { open: boolean; children: ReactNode }) {
+  return (
+    // The panel is the attachment itself; the root adds no element that would
+    // break the column's attachment selectors.
+    <Collapsible open={open} render={({ children: panel }) => <>{panel}</>}>
+      <CollapsiblePanel
+        // Open from, and close into, the seam the composer already covers, so the
+        // dock's height (and the timeline inset that follows it) never dips.
+        className="data-ending-style:h-[calc(1rem+1px)] data-starting-style:h-[calc(1rem+1px)]"
+        inert={!open || undefined}
+        render={<Attachment data-slot="composer-banner-attachment" {...props} />}
+      >
+        <LastOpenContent open={open}>{children}</LastOpenContent>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 
@@ -145,6 +180,15 @@ function Column({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
+// For `data-enter` / `data-ending-style` set by a presence owner. The glass and the content
+// fade separately: opacity on the surface or an ancestor turns the glass's backdrop blur off.
+const presenceFade = cn(
+  "data-enter:before:transition-opacity data-enter:before:duration-200 data-enter:before:ease-drawer data-enter:before:starting:opacity-0",
+  "data-enter:*:transition-opacity data-enter:*:duration-200 data-enter:*:ease-drawer data-enter:*:starting:opacity-0",
+  "data-ending-style:before:transition-opacity data-ending-style:before:duration-150 data-ending-style:before:ease-in data-ending-style:before:opacity-0",
+  "data-ending-style:*:transition-opacity data-ending-style:*:duration-150 data-ending-style:*:ease-in data-ending-style:*:opacity-0",
+);
+
 function Root({
   className,
   density = "default",
@@ -165,6 +209,7 @@ function Root({
         density === "comfortable" && "[--composer-banner-padding-block:--spacing(1.25)]",
         density === "spacious" && "px-3 [--composer-banner-padding-block:--spacing(3)]",
         width === "content" ? "w-fit max-w-full flex-none" : "@container",
+        presenceFade,
         className,
       )}
       data-slot="composer-banner"
@@ -325,7 +370,12 @@ function ToggleIcon({ expanded }: { expanded: boolean }) {
       tabIndex={-1}
       className="pointer-events-none"
     >
-      <ChevronDownIcon className={cn("size-3.5", !expanded && "rotate-180")} />
+      <ChevronDownIcon
+        className={cn(
+          "size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
+          !expanded && "rotate-180",
+        )}
+      />
     </Button>
   );
 }
@@ -342,6 +392,7 @@ export const ComposerBanner = {
   Surface,
   Peek,
   Attachment,
+  Drawer,
   Dock,
   Column,
   Root,

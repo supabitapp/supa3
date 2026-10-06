@@ -39,8 +39,9 @@ export const MessageCopyButton = memo(function MessageCopyButton({
         render={
           <Button
             aria-label="Copy message"
-            disabled={isCopied}
-            onClick={() => copyToClipboard(text)}
+            onClick={() => {
+              if (!isCopied) copyToClipboard(text);
+            }}
             ref={ref}
             type="button"
             size={size}

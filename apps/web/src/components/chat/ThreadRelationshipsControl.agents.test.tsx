@@ -1,4 +1,4 @@
-import { act, cloneElement, type ReactElement, type ReactNode } from "react";
+import { act, cloneElement, createContext, use, type ReactElement, type ReactNode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { EnvironmentId, ThreadId, type OrchestrationV2ContextTransfer } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
@@ -24,6 +24,16 @@ vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => ({ snapshots: [] }),
 }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+vi.mock("../ui/collapsible", () => {
+  const OpenContext = createContext(false);
+  return {
+    Collapsible: ({ open, children }: { open: boolean; children: ReactNode }) => (
+      <OpenContext value={open}>{children}</OpenContext>
+    ),
+    CollapsiblePanel: ({ children }: { children: ReactNode }) =>
+      use(OpenContext) ? children : null,
+  };
+});
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
   TooltipTrigger: ({ render, children }: { render: ReactElement; children: ReactNode }) =>

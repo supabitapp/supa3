@@ -1,7 +1,16 @@
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import {
+  useLayoutEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { ScopedThreadRef } from "@supacode/contracts";
 import { ScrollArea } from "../ui/scroll-area";
+import { TooltipProvider } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
+import { usePresence } from "../../hooks/usePresence";
+import { animationsSettled } from "../../lib/motion";
 import { Popover, PopoverPopup, PopoverCreateHandle } from "../ui/popover";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
@@ -48,8 +57,9 @@ export function ThreadDetailsCard({
   const popoverOpen = useRightPanelStore((state) =>
     selectThreadPanelOpen(state.threadPanelVisibilityByThreadKey, threadRef, "popover"),
   );
+  const threadKey = `${threadRef.environmentId}:${threadRef.threadId}`;
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
-  const measurementKey = `${threadRef.environmentId}:${threadRef.threadId}:${preferredPlacement?.width ?? "popup"}`;
+  const measurementKey = `${threadKey}:${preferredPlacement?.width ?? "popup"}`;
   const [measurements, setMeasurements] = useState({
     key: measurementKey,
     heights: { full: 0, compact: 0 },
@@ -85,6 +95,8 @@ export function ThreadDetailsCard({
     if (!element || density === "essential") return;
     // Measure the single content tree before the scroll viewport clips it. Retain each
     // observed height so increasing available space restores the detail it can hold.
+    // A disclosure resizes the content every frame while it animates, so a resize measures
+    // once its transitions settle instead of re-rendering the panel per frame.
     const measure = () => {
       const frame = element.closest<HTMLElement>("[data-thread-details-card]");
       const next = element.offsetHeight + (frame ? frame.offsetHeight - frame.clientHeight : 0);
@@ -95,24 +107,41 @@ export function ThreadDetailsCard({
           : { key: measurementKey, heights: { ...heights, [density]: next } };
       });
     };
+    let settling = false;
+    let disposed = false;
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(() => {
+      if (settling) return;
+      settling = true;
+      void animationsSettled(element, { subtree: true }).then(() => {
+        settling = false;
+        if (!disposed) measure();
+      });
+    });
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
   }, [contentElement, density, measurementKey]);
-  const card = (
+  const renderCard = (motionProps?: PresenceProps) => (
     <div
+      {...motionProps}
       className={cn(
         "dropdown-glass isolate contain-paint grid max-h-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-3xl",
         mode === "popover" &&
           "max-h-[min(calc(100dvh-6.5rem),calc(var(--available-height,100dvh)-1rem))]",
+        motionProps &&
+          "transition-[opacity,translate] duration-200 ease-drawer data-enter:starting:translate-x-2 data-enter:starting:opacity-0 data-ending-style:translate-x-2 data-ending-style:opacity-0 data-ending-style:duration-150 data-ending-style:ease-in motion-reduce:transition-none",
       )}
       style={placement ? { maxHeight: height } : undefined}
       data-thread-details-card
     >
-      <ScrollArea scrollFade className="min-h-0">
-        <div ref={setContentElement}>{children(density)}</div>
-      </ScrollArea>
+      <TooltipProvider>
+        <ScrollArea scrollFade className="min-h-0">
+          <div ref={setContentElement}>{children(density)}</div>
+        </ScrollArea>
+      </TooltipProvider>
     </div>
   );
   return (
@@ -124,22 +153,19 @@ export function ThreadDetailsCard({
       }
     >
       {placement ? (
-        inlineOpen ? (
-          <aside
-            aria-label="Thread details"
-            className="absolute z-20"
-            style={{
-              left: placement.x,
-              top: placement.y,
-              width: placement.width,
-              maxHeight: height,
-            }}
-            data-density={density}
-            data-thread-details-panel="inline"
-          >
-            {card}
-          </aside>
-        ) : null
+        <InlineThreadDetails
+          key={threadKey}
+          open={inlineOpen}
+          density={density}
+          style={{
+            left: placement.x,
+            top: placement.y,
+            width: placement.width,
+            maxHeight: height,
+          }}
+        >
+          {renderCard}
+        </InlineThreadDetails>
       ) : (
         <PopoverPopup
           anchor={anchor}
@@ -152,10 +178,40 @@ export function ThreadDetailsCard({
           padding="none"
         >
           <div data-density={density} data-thread-details-panel="popover">
-            {card}
+            {renderCard()}
           </div>
         </PopoverPopup>
       )}
     </Popover>
+  );
+}
+
+type PresenceProps = ReturnType<typeof usePresence>["props"];
+
+/** Keyed by thread, so switching threads shows or removes the card without an entrance. */
+function InlineThreadDetails({
+  open,
+  density,
+  style,
+  children,
+}: {
+  open: boolean;
+  density: "full" | "compact" | "essential";
+  style: CSSProperties;
+  children: (motionProps: PresenceProps) => ReactNode;
+}) {
+  const presence = usePresence(open ? true : null);
+  if (!presence.value) return null;
+  return (
+    <aside
+      aria-label="Thread details"
+      inert={presence.exiting}
+      className="absolute z-20"
+      style={style}
+      data-density={density}
+      data-thread-details-panel="inline"
+    >
+      {children(presence.props)}
+    </aside>
   );
 }

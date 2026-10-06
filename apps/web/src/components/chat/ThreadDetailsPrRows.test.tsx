@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
+
 import { EnvironmentId, ThreadId, type ThreadPullRequestLink } from "@supacode/contracts";
 import { act } from "react";
-import { create, type ReactTestRenderer } from "react-test-renderer";
-import { afterEach, expect, it, vi } from "vite-plus/test";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const watchCommand = vi.hoisted(() => vi.fn());
 
@@ -60,16 +62,23 @@ const bottom = link(1, "layer-one", "main", "2026-01-01T00:00:10.000Z");
 const top = link(2, "layer-two", "layer-one", "2026-01-01T00:00:20.000Z");
 const other = link(3, "unrelated", "main", "2026-01-01T00:00:05.000Z");
 
-let renderer: ReactTestRenderer;
+let root: Root;
+let container: HTMLDivElement;
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
 afterEach(() => {
-  act(() => renderer?.unmount());
+  act(() => root.unmount());
+  container.remove();
   vi.unstubAllGlobals();
 });
 
 function render(links: ReadonlyArray<ThreadPullRequestLink>, current: ThreadPullRequestLink) {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   act(() => {
-    renderer = create(
+    root.render(
       <ThreadDetailsPrRows
         threadRef={{
           environmentId: EnvironmentId.make("environment"),
@@ -92,30 +101,28 @@ function render(links: ReadonlyArray<ThreadPullRequestLink>, current: ThreadPull
   });
 }
 
-const rows = () => renderer.root.findAllByType("span").map((node) => node.props["data-row"]);
-const toggleLabel = () =>
-  renderer.root
-    .findAllByType("button")
-    .at(-1)
-    ?.children.filter((child) => typeof child === "string")
-    .join("");
+const rows = () =>
+  Array.from(container.querySelectorAll("[data-row]"), (node) => node.getAttribute("data-row"));
+const toggleButton = () => Array.from(container.querySelectorAll("button")).at(-1);
+const toggleLabel = () => toggleButton()?.textContent;
 
-function toggle() {
-  act(() => {
-    (renderer.root.findAllByType("button").at(-1)!.props as { onClick: () => void }).onClick();
+async function toggle() {
+  await act(async () => {
+    toggleButton()!.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
   });
 }
 
-it("shows only the current pull request until the rest are asked for", () => {
+it("shows only the current pull request until the rest are asked for", async () => {
   render([other, bottom, top], top);
   expect(rows()).toEqual(["2"]);
   expect(toggleLabel()).toBe("Show 2 more");
 
-  toggle();
+  await toggle();
   expect(rows()).toEqual(["2", "1", "3"]);
   expect(toggleLabel()).toBe("Show less");
 
-  toggle();
+  await toggle();
   expect(rows()).toEqual(["2"]);
   expect(toggleLabel()).toBe("Show 2 more");
 });
@@ -126,7 +133,7 @@ it("keeps the single row untouched when the thread links one pull request", () =
   expect(toggleLabel()).toBeUndefined();
 });
 
-it("lets only watched pull requests stop their watch", () => {
+it("lets only watched pull requests stop their watch", async () => {
   const watched: ThreadPullRequestLink = {
     ...bottom,
     watch: {
@@ -142,15 +149,14 @@ it("lets only watched pull requests stop their watch", () => {
     },
   };
   render([other, watched, top], top);
-  toggle();
-  const spans = renderer.root.findAllByType("span");
+  await toggle();
   expect(
-    spans
-      .filter((node) => node.props["data-watched"] !== undefined)
-      .map((node) => node.props["data-row"]),
+    Array.from(container.querySelectorAll("[data-watched]"), (node) =>
+      node.getAttribute("data-row"),
+    ),
   ).toEqual(["1"]);
 
-  act(() => spans.find((node) => node.props["data-row"] === "1")!.props.onClick());
+  act(() => container.querySelector<HTMLElement>('[data-row="1"]')!.click());
   expect(watchCommand).toHaveBeenCalledWith({
     environmentId: EnvironmentId.make("environment"),
     input: {

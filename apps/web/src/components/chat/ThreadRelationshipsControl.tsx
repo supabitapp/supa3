@@ -2,6 +2,7 @@ import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
+import { Collapsible, CollapsiblePanel } from "../ui/collapsible";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { scopedThreadKey, scopeThreadRef } from "@supacode/client-runtime/environment";
@@ -125,7 +126,7 @@ function ThreadLineageGroup(props: {
   ).length;
   if (props.rows.length === 0) return null;
   return (
-    <div>
+    <Collapsible open={expanded}>
       {props.label ? (
         <CollapsibleSectionHeader
           expanded={expanded}
@@ -138,15 +139,15 @@ function ThreadLineageGroup(props: {
           {!expanded && ` (${props.rows.length})`}
         </CollapsibleSectionHeader>
       ) : null}
-      {expanded ? (
+      <CollapsiblePanel>
         <ThreadLineageRowList
           hiddenCount={hiddenCount}
           onShowMore={() => setVisibleCount((count) => count + THREAD_LINEAGE_PAGE_COUNT)}
         >
           {props.children(visibleRows)}
         </ThreadLineageRowList>
-      ) : null}
-    </div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 

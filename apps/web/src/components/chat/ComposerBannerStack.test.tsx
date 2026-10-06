@@ -1,6 +1,6 @@
-import { cloneElement, type ReactElement, type ReactNode } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { afterEach, expect, it, vi } from "vite-plus/test";
+import { cloneElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ComposerBannerStack } from "./ComposerBannerStack";
 
@@ -100,4 +100,94 @@ it("only offers notice details when the description cannot fit", async () => {
   position = "static";
   await act(() => resize());
   expect(details()).toHaveLength(0);
+});
+
+describe("notice exits", () => {
+  const notice = (id: string) => ({ id, variant: "info" as const, icon: null, title: id });
+  const a = notice("a");
+  const b = notice("b");
+  const c = notice("c");
+  let finishExits = () => {};
+
+  async function mountStack(items: ComponentProps<typeof ComposerBannerStack>["items"]) {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const finished = new Promise<void>((resolve) => {
+      finishExits = resolve;
+    });
+    await act(() => {
+      renderer = create(<ComposerBannerStack items={items} />, {
+        createNodeMock: () => ({ getAnimations: () => [{ finished }] }),
+      });
+    });
+  }
+
+  const textOf = (node: ReactTestInstance): string =>
+    node.children.map((child) => (typeof child === "string" ? child : textOf(child))).join("");
+  const banners = () =>
+    renderer.root
+      .findAll((node) => node.type === "div" && node.props["data-slot"] === "composer-banner")
+      .map((node) => [
+        textOf(node),
+        node.props["data-ending-style"] === ""
+          ? "exiting"
+          : node.props["data-enter"] === ""
+            ? "entering"
+            : "shown",
+      ]);
+
+  it("keeps a removed notice in its place until its exit finishes", async () => {
+    await mountStack([a, b, c]);
+    await act(() => renderer.update(<ComposerBannerStack items={[a, c]} />));
+    expect(banners()).toEqual([
+      ["a", "shown"],
+      ["b", "exiting"],
+      ["c", "shown"],
+    ]);
+
+    await act(async () => finishExits());
+    expect(banners()).toEqual([
+      ["a", "shown"],
+      ["c", "shown"],
+    ]);
+  });
+
+  it("raises the next notice only once the departing front has left", async () => {
+    await mountStack([a, b]);
+    await act(() => renderer.update(<ComposerBannerStack items={[b]} />));
+    expect(banners()).toEqual([
+      ["a", "exiting"],
+      ["b", "shown"],
+    ]);
+
+    await act(async () => finishExits());
+    expect(banners()).toEqual([["b", "entering"]]);
+  });
+
+  it("swaps the activity row without motion", async () => {
+    const activity = {
+      id: "activity",
+      variant: "default" as const,
+      priority: "activity" as const,
+      content: "activity",
+    };
+    await mountStack([activity, a]);
+    await act(() => renderer.update(<ComposerBannerStack items={[a]} />));
+    expect(banners()).toEqual([["a", "shown"]]);
+  });
+
+  it("reports a dismissal at once and unmounts the notice after its exit", async () => {
+    const onDismiss = vi.fn();
+    await mountStack([{ ...notice("notice"), onDismiss }]);
+    const dismiss = () =>
+      renderer.root.find(
+        (node) => node.type === "button" && node.props["aria-label"] === "Dismiss warning",
+      );
+
+    await act(() => dismiss().props.onClick());
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(dismiss().props.disabled).toBe(true);
+
+    await act(async () => finishExits());
+    expect(renderer.toJSON()).toBeNull();
+  });
 });

@@ -22,7 +22,9 @@ import { Spinner } from "~/components/ui/spinner";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";
 import { cn } from "~/lib/utils";
+import { Collapsible, CollapsiblePanel } from "../ui/collapsible";
 import { WorkLogRow } from "./WorkLog";
+import { useTimelineDisclosure } from "./timelineDisclosure";
 
 interface WorktreeSetupCardProps {
   snapshot: WorktreeSetupSnapshot;
@@ -256,7 +258,7 @@ function OutputTail({ lines, failed }: { lines: ReadonlyArray<string>; failed: b
 
 function SetupDetails({ snapshot }: { snapshot: WorktreeSetupSnapshot }) {
   return (
-    <dl className="mt-1 mb-1.5 ml-8 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+    <dl className="ml-8 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 pt-1 pb-1.5 text-xs text-muted-foreground">
       {snapshot.branch ? (
         <>
           <dt className="text-foreground/80">Branch</dt>
@@ -347,7 +349,7 @@ export function WorktreeSetupCard({
 }) {
   const running = snapshot.phase === "running";
   const nowMs = useNowWhile(running);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, toggleDetails] = useTimelineDisclosure();
   const totalElapsed = (() => {
     const start = Date.parse(snapshot.startedAt);
     const end = snapshot.endedAt ? Date.parse(snapshot.endedAt) : nowMs;
@@ -397,7 +399,11 @@ export function WorktreeSetupCard({
         <p className="mt-1 ml-8 text-xs text-muted-foreground">{snapshot.error}</p>
       ) : null}
 
-      {detailsOpen ? <SetupDetails snapshot={snapshot} /> : null}
+      <Collapsible open={detailsOpen}>
+        <CollapsiblePanel>
+          <SetupDetails snapshot={snapshot} />
+        </CollapsiblePanel>
+      </Collapsible>
 
       {/* Indented so the first label lines up with the stage labels: the icon
           column, minus the xs button's own horizontal padding. */}
@@ -407,7 +413,7 @@ export function WorktreeSetupCard({
           size="xs"
           variant="ghost-muted"
           aria-expanded={detailsOpen}
-          onClick={() => setDetailsOpen((open) => !open)}
+          onClick={toggleDetails}
         >
           <MorphIcon aria-hidden icon={detailsOpen ? ChevronDown : ChevronRight} />
           Details

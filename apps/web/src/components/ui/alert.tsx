@@ -10,10 +10,12 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
     variant: "default",
   },
   variants: {
-    // "glass" floats the alert over content; alert-glass tints from data-variant.
+    // "glass" floats the alert over content; alert-glass tints from data-variant. It fades
+    // itself for an ancestor's usePresence state: fading the ancestor would drop the blur.
     surface: {
       default: "",
-      glass: "alert-glass",
+      glass:
+        "alert-glass transition-opacity duration-200 ease-drawer in-data-enter:starting:opacity-0 in-data-ending-style:opacity-0 in-data-ending-style:duration-150 in-data-ending-style:ease-in motion-reduce:transition-none",
     },
     variant: {
       default: "bg-transparent dark:bg-input/32 [&_svg]:text-muted-foreground",
