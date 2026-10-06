@@ -7,6 +7,13 @@ import type { HttpClient } from "effect/http";
 import { AsyncResult, Atom } from "effect/reactivity";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
+import type { ConnectionRoute } from "../connection/catalog.ts";
+import {
+  connectionRouteLatencyLabel,
+  measureConnectionRouteLatency,
+  type ConnectionRouteLatency,
+} from "../connection/routeLatency.ts";
+import { connectionRouteId } from "../connection/routes.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
@@ -135,6 +142,67 @@ export function createEnvironmentSessionAtoms<R, E>(
     ).pipe(Atom.withLabel(`environment-session-state-value:${environmentId}`)),
   );
 
+  // Structural keys keep a reorder or a newly allocated route wrapper from rechecking it.
+  const routeLatencyAtoms = Atom.family((route: ConnectionRoute) => {
+    const resultAtom = runtime
+      .atom((get) => {
+        if (route.target._tag !== "SshConnectionTarget") {
+          return measureConnectionRouteLatency({ route });
+        }
+        const environmentId = route.target.environmentId;
+        const config = get(initialConfigValueAtom(environmentId));
+        const prepared = get(preparedConnectionValueAtom(environmentId));
+        if (
+          config === null ||
+          Option.isNone(prepared) ||
+          connectionRouteId(prepared.value.target) !== connectionRouteId(route.target)
+        ) {
+          return Effect.succeed<ConnectionRouteLatency>({ status: "unmeasured" });
+        }
+        return EnvironmentRegistry.EnvironmentRegistry.pipe(
+          Effect.flatMap((registry) =>
+            registry.run(
+              environmentId,
+              Effect.gen(function* () {
+                const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+                const session = yield* SubscriptionRef.get(supervisor.session);
+                const current = yield* SubscriptionRef.get(supervisor.prepared);
+                if (
+                  Option.isNone(session) ||
+                  Option.isNone(current) ||
+                  connectionRouteId(current.value.target) !== connectionRouteId(route.target)
+                ) {
+                  return { status: "unmeasured" } as const;
+                }
+                return yield* measureConnectionRouteLatency({
+                  route,
+                  sshProbe: session.value.probe,
+                });
+              }),
+            ),
+          ),
+        );
+      })
+      .pipe(
+        Atom.swr({ staleTime: 30_000, revalidateOnMount: true }),
+        Atom.setIdleTTL(30_000),
+        Atom.withLabel(
+          `environment-route-latency:${route.target.environmentId}:${connectionRouteId(route.target)}`,
+        ),
+      );
+    const labelAtom = Atom.make((get) => {
+      const result = get(resultAtom);
+      return connectionRouteLatencyLabel(
+        result.waiting || result._tag === "Initial"
+          ? null
+          : Option.getOrElse(AsyncResult.value(result), (): ConnectionRouteLatency => ({
+              status: "unreachable",
+            })),
+      );
+    });
+    return { resultAtom, labelAtom };
+  });
+
   return {
     initialConfigAtom,
     initialConfigValueAtom,
@@ -142,5 +210,6 @@ export function createEnvironmentSessionAtoms<R, E>(
     preparedConnectionValueAtom,
     sessionStateAtom,
     sessionStateValueAtom,
+    routeLatencyAtoms,
   };
 }

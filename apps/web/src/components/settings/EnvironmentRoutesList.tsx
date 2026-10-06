@@ -16,6 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   type ConnectionRoute,
   connectionRouteAddress,
@@ -24,14 +25,14 @@ import {
   connectionRoutes,
   isLearned,
 } from "@supacode/client-runtime/connection";
-import { GripVerticalIcon, PlusIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { GripVerticalIcon, PlusIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import { useContext, useState } from "react";
 
 import { requestConfirmDialog } from "~/confirmDialog";
 import { environmentCatalog } from "~/connection/catalog";
 import { cn } from "~/lib/utils";
 import type { EnvironmentPresentation } from "~/state/environments";
-import { usePreparedConnection } from "~/state/session";
+import { environmentSession, usePreparedConnection } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -47,6 +48,7 @@ export function EnvironmentRoutesList({
   readonly environment: EnvironmentPresentation;
   readonly onAddRoute: () => void;
 }) {
+  const registry = useContext(RegistryContext);
   const saved = connectionRoutes(environment.entry);
   const savedIds = saved.map((route) => connectionRouteId(route.target));
   // A dropped order shows until the catalog matches it, so the row does not
@@ -126,10 +128,23 @@ export function EnvironmentRoutesList({
           </ol>
         </SortableContext>
       </DndContext>
-      <div className="border-t border-border/70 px-1 py-1">
+      <div className="flex items-center justify-between border-t border-border/70 px-1 py-1">
         <Button size="xs" variant="ghost-muted" onClick={onAddRoute}>
           <PlusIcon className="size-3" />
           Add route
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost-muted"
+          aria-label="Refresh route latency"
+          onClick={() => {
+            for (const route of routes) {
+              registry.refresh(environmentSession.routeLatencyAtoms(route).resultAtom);
+            }
+          }}
+        >
+          <RefreshCwIcon className="size-3" />
+          Refresh
         </Button>
       </div>
     </div>
@@ -152,6 +167,7 @@ function SortableRouteRow({
   const id = connectionRouteId(route.target);
   const label = connectionRouteLabel(route);
   const address = connectionRouteAddress(route);
+  const latency = useAtomValue(environmentSession.routeLatencyAtoms(route).labelAtom);
   const {
     attributes,
     listeners,
@@ -197,6 +213,12 @@ function SortableRouteRow({
           </p>
         ) : null}
       </div>
+      <span
+        aria-label={`${label} route latency: ${latency}`}
+        className="shrink-0 px-1 text-2xs tabular-nums text-muted-foreground"
+      >
+        {latency}
+      </span>
       {removable ? (
         <Tooltip>
           <TooltipTrigger
