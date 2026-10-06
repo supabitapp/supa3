@@ -432,22 +432,19 @@ function GitActionProgressButtonContent({
       aria-live="polite"
       className={cn(
         "grid min-w-0 flex-1 items-center",
-        // Pin the title row to the button's minimum content height (min-height
-        // minus vertical padding and border) so revealing the output row
-        // extends the button downward without re-centering — the title must
-        // not shift. No row gap: the collapsed output row must contribute zero
-        // height so the single-line running button matches the static button
-        // exactly. The panel column gap matches the static row's icon-to-label
-        // distance (gap-2.5 plus the label's ml-0.5). In the panel the elapsed
-        // counter renders outside the button (in the menu-chevron slot), so
-        // there is no trailing column.
+        // The panel keeps a fixed row; the toolbar can reveal command output below it.
         isPanel
-          ? "grid-cols-[auto_minmax(0,1fr)] grid-rows-[1.75rem] gap-x-3"
+          ? "grid-cols-[auto_minmax(0,1fr)] grid-rows-[1.25rem] gap-x-2.5"
           : "grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[1.25rem] gap-x-2.5 sm:grid-rows-[1rem]",
       )}
       role="status"
     >
-      <Spinner aria-hidden="true" className="row-start-1 -mx-0.5 shrink-0" />
+      <Spinner
+        aria-hidden="true"
+        size={isPanel ? "md" : "sm"}
+        tone={isPanel ? "muted" : "current"}
+        className={isPanel ? "row-start-1 shrink-0" : "row-start-1 -mx-0.5 shrink-0"}
+      />
       <p className="row-start-1 min-w-0 truncate text-left">{progress.status}</p>
       {!isPanel ? (
         <GitActionElapsedTime
@@ -455,64 +452,44 @@ function GitActionProgressButtonContent({
           className="row-start-1 text-2xs font-normal tabular-nums text-muted-foreground"
         />
       ) : null}
-      <div
-        className={cn(
-          "col-start-2 grid min-w-0 transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-          !isPanel && "col-span-2",
-          hasOutput ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <p className="truncate pt-0.5 text-left text-2xs font-normal text-muted-foreground" />
-              }
-            >
-              {progress.output}
-            </TooltipTrigger>
-            <TooltipPopup side="bottom" className="max-w-96 break-words">
-              {progress.output}
-            </TooltipPopup>
-          </Tooltip>
+      {!isPanel ? (
+        <div
+          className={cn(
+            "col-start-2 grid min-w-0 transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+            "col-span-2",
+            hasOutput ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+          )}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <p className="truncate pt-0.5 text-left text-2xs font-normal text-muted-foreground" />
+                }
+              >
+                {progress.output}
+              </TooltipTrigger>
+              <TooltipPopup side="bottom" className="max-w-96 break-words">
+                {progress.output}
+              </TooltipPopup>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
 
 function GitActionSuccessButtonContent({ success }: { success: InlineGitActionSuccess }) {
-  const hasDescription = success.description !== null;
-
   return (
     <div
       aria-live="polite"
-      className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[1.75rem] items-center gap-x-3"
+      aria-label={success.description ? `${success.title}: ${success.description}` : success.title}
+      className="flex min-w-0 flex-1 items-center gap-2.5"
       role="status"
     >
-      <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-success" />
+      <CheckIcon aria-hidden="true" className="size-4 shrink-0 text-success" />
       <p className="min-w-0 truncate text-left">{success.title}</p>
-      <div
-        className={cn(
-          "col-start-2 grid min-w-0 transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-          hasDescription ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <p className="truncate pt-0.5 text-left text-2xs font-normal text-muted-foreground" />
-              }
-            >
-              {success.description}
-            </TooltipTrigger>
-            <TooltipPopup side="bottom" className="max-w-96 break-words">
-              {success.description}
-            </TooltipPopup>
-          </Tooltip>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1791,26 +1768,40 @@ export default function GitActionsControl({
           )}
         >
           {gitActionProgress ? (
-            <ThreadDetailsControl
-              aria-label={
-                gitActionProgress.output
-                  ? `${gitActionProgress.status} ${gitActionProgress.output}`
-                  : gitActionProgress.status
-              }
-              part="primary"
-              panel={isPanel}
-              multiline
-              className={isPanel ? undefined : "max-w-72"}
-              disabled
-              size="xs"
-              variant={isPanel ? "ghost" : "outline"}
-            >
-              <GitActionProgressButtonContent isPanel={isPanel} progress={gitActionProgress} />
-            </ThreadDetailsControl>
+            <Tooltip>
+              <TooltipTrigger render={<span className="flex min-w-0 flex-1" />}>
+                <ThreadDetailsControl
+                  aria-label={
+                    gitActionProgress.output
+                      ? `${gitActionProgress.status} ${gitActionProgress.output}`
+                      : gitActionProgress.status
+                  }
+                  part="primary"
+                  panel={isPanel}
+                  multiline={!isPanel}
+                  className={isPanel ? undefined : "max-w-72"}
+                  disabled
+                  size="xs"
+                  variant={isPanel ? "ghost" : "outline"}
+                >
+                  <GitActionProgressButtonContent isPanel={isPanel} progress={gitActionProgress} />
+                </ThreadDetailsControl>
+              </TooltipTrigger>
+              <TooltipPopup side="bottom" className="max-w-96 break-words">
+                {gitActionProgress.output ?? gitActionProgress.status}
+              </TooltipPopup>
+            </Tooltip>
           ) : isPanel && visibleInlineSuccess ? (
-            <ThreadDetailsControl part="primary" multiline disabled size="xs" variant="ghost">
-              <GitActionSuccessButtonContent success={visibleInlineSuccess} />
-            </ThreadDetailsControl>
+            <Tooltip>
+              <TooltipTrigger render={<span className="flex min-w-0 flex-1" />}>
+                <ThreadDetailsControl part="primary" disabled size="xs" variant="ghost">
+                  <GitActionSuccessButtonContent success={visibleInlineSuccess} />
+                </ThreadDetailsControl>
+              </TooltipTrigger>
+              <TooltipPopup side="bottom" className="max-w-96 break-words">
+                {visibleInlineSuccess.description ?? visibleInlineSuccess.title}
+              </TooltipPopup>
+            </Tooltip>
           ) : quickActionDisabledReason ? (
             <Popover>
               <PopoverTrigger
@@ -1868,13 +1859,10 @@ export default function GitActionsControl({
             </ThreadDetailsControl>
           )}
           {isPanel && gitActionProgress ? (
-            // The menu is disabled while an action runs, so its chevron slot
-            // hosts the elapsed counter instead, leaving the full row width to
-            // the status text. Pinned to the title row so it stays put when
-            // the output row expands below.
+            // Use the disabled menu's slot for elapsed time, preserving the status label's width.
             <GitActionElapsedTime
               startedAtMs={gitActionProgress.startedAtMs}
-              className="flex h-8 shrink-0 items-center self-start pe-2.5 text-2xs font-normal tabular-nums text-muted-foreground"
+              className="flex h-7 shrink-0 items-center self-start pe-2 text-2xs font-normal tabular-nums text-muted-foreground pointer-coarse:h-11"
             />
           ) : (
             <>

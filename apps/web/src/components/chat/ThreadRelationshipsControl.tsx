@@ -58,8 +58,8 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS,
-  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
+  THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS,
 } from "./threadDetailsPanelStyles";
 
 // Lineage paging: a busy thread can accumulate dozens of forks and subagents,
@@ -99,14 +99,10 @@ export function ThreadLineageRowList(props: {
         {props.children}
       </ul>
       {props.hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={props.onShowMore}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
-        >
+        <ThreadDetailsControl onClick={props.onShowMore} tone="muted">
           <PlusIcon aria-hidden className="size-4 shrink-0" />
           Show {Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)} more
-        </button>
+        </ThreadDetailsControl>
       ) : null}
     </>
   );
@@ -129,6 +125,7 @@ function ThreadLineageGroup(props: {
     <Collapsible open={expanded}>
       {props.label ? (
         <CollapsibleSectionHeader
+          size="sm"
           expanded={expanded}
           onClick={() => setExpanded(!expanded)}
           accessory={
@@ -408,9 +405,7 @@ export function ThreadRelationshipsPanel(props: {
                     status={status}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
-                      {threadTitle}
-                    </span>
+                    <span className="block truncate text-left">{threadTitle}</span>
                   </span>
                   {agent ? (
                     agent.startedAt ? (
@@ -429,7 +424,10 @@ export function ThreadRelationshipsPanel(props: {
                 </>
               );
               return (
-                <li key={threadId} className="group flex h-8 items-center rounded-lg">
+                <li
+                  key={threadId}
+                  className={`group flex items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS}`}
+                >
                   {isMergeTarget ? (
                     <div className={THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS}>
                       <Tooltip>
