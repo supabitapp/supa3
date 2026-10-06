@@ -29,7 +29,7 @@ import {
   buildInitialPiProviderSnapshot,
   checkPiProviderStatus,
   enrichPiSnapshot,
-} from "../Layers/PiProvider.ts";
+} from "../PiProvider.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import {
   defaultProviderContinuationIdentity,
