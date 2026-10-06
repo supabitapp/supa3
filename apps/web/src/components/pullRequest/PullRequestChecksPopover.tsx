@@ -169,10 +169,7 @@ export function PullRequestChecksPopover({
         onClick={(event) => event.stopPropagation()}
       >
         {checks !== undefined && checks.length > 0 && !stale ? (
-          <PullRequestChecksRing
-            checks={checks}
-            className={variant === "button" ? "size-5" : "size-4"}
-          />
+          <PullRequestChecksRing checks={checks} />
         ) : (
           <presentation.Icon aria-hidden className={cn("size-3.5", presentation.toneClassName)} />
         )}

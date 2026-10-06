@@ -293,7 +293,7 @@ export function PullRequestChecksRing({
   const gap = segments.length === 1 ? 0 : 7;
   const proportionalLength = 100 - gap * segments.length;
   return (
-    <svg aria-hidden viewBox="0 0 100 100" className={cn("size-4 shrink-0", className)}>
+    <svg aria-hidden viewBox="0 0 100 100" className={cn("size-3.5 shrink-0", className)}>
       {segments.map(({ status, start, length }, index) => {
         return (
           <circle
