@@ -14,8 +14,9 @@ import {
 } from "@supacode/client-runtime/state/thread-search";
 import { type EnvironmentId, type SidebarProjectGroupingMode } from "@supacode/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { HeaderHeightContext } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -25,6 +26,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
+import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cn } from "../../lib/cn";
@@ -222,11 +224,17 @@ export function HomeScreen(props: HomeScreenProps) {
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
+  const navigationHeaderHeight = useContext(HeaderHeightContext) ?? insets.top + 44;
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const { fabClearance } = useAndroidControlSizing();
   const iosBottomToolbarClearance =
     Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
       ? PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT
       : 0;
+  const listTopInset =
+    Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0;
+  const listBottomInset =
+    Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 72 + iosBottomToolbarClearance : 0;
   const searchEnvironmentIds = useMemo(
     () =>
       props.selectedEnvironmentId === null
@@ -600,7 +608,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const listMotion = useThreadListMotion({
     items: threadListV2Items,
     scope: settledResetKey,
-    searching: hasSearchQuery,
+    searching: hasSearchQuery || keyboardVisible,
     scrolling: !swipeEnabled,
     ready: shelfPreferencesLoaded && !props.catalogState.isLoadingConnections,
   });
@@ -928,8 +936,9 @@ export function HomeScreen(props: HomeScreenProps) {
         className={
           Platform.OS === "android"
             ? "flex-1 overflow-hidden rounded-t-[28px] bg-screen"
-            : "flex-1 bg-screen"
+            : "flex-1 overflow-hidden bg-screen"
         }
+        style={{ marginTop: listTopInset, marginBottom: listBottomInset }}
       >
         {/* Shared with the iPad sidebar: cells are reused across data
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
@@ -962,8 +971,11 @@ export function HomeScreen(props: HomeScreenProps) {
             }
             ListEmptyComponent={v2ListEmpty}
             style={{ flex: 1 }}
+            sharedValues={listMotion.sharedValues}
+            itemsContainerStyle={listMotion.alignmentStyle}
+            alignItemsAtEnd={!hasSearchQuery && !keyboardVisible}
             automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+            contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
@@ -972,7 +984,7 @@ export function HomeScreen(props: HomeScreenProps) {
             contentContainerStyle={{
               paddingBottom:
                 Platform.OS === "ios"
-                  ? Math.max(insets.bottom, 24) + 96 + iosBottomToolbarClearance
+                  ? 16
                   : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
             }}
           />

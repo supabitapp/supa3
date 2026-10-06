@@ -1,4 +1,5 @@
 const MAX_CHANGED_ROWS = 20;
+export const THREAD_LIST_MOTION_DURATION = 220;
 
 /** Content-only updates and bulk replacements stay immediate, as do search and scope changes. */
 export function shouldAnimateThreadList(input: {
