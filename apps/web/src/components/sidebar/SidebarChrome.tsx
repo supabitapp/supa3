@@ -13,9 +13,9 @@ import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
-  resolveSidebarStageBackdropVariant,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
+  useSidebarStageBackdropVariant,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
 import {
@@ -41,10 +41,9 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }) {
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const backdropVariant =
-    environmentIdentificationMode === "artwork"
-      ? resolveSidebarStageBackdropVariant(stageLabel)
-      : null;
+  const backdropVariant = useSidebarStageBackdropVariant(
+    environmentIdentificationMode === "artwork",
+  );
   const pillLabel =
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)

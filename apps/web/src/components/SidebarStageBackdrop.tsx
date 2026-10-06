@@ -4,7 +4,9 @@ import { type ComponentType, useId } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
+import type { ThemeAppearance } from "../themePalette";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "release";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
@@ -21,6 +23,15 @@ export function resolveSidebarStageBackdropVariant(
   if (normalized === "dev") return "dev";
   if (normalized === undefined || normalized === "latest") return "release";
   return null;
+}
+
+/** The release sleigh is a night scene, so it only renders under dark themes. */
+export function resolveVisibleSidebarStageBackdropVariant(
+  stageLabel: string | null,
+  appearance: ThemeAppearance,
+): SidebarStageBackdropVariant | null {
+  const variant = resolveSidebarStageBackdropVariant(stageLabel);
+  return variant === "release" && appearance !== "dark" ? null : variant;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
@@ -55,7 +66,8 @@ export function useEnvironmentStageLabel(): string | null {
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
-  return enabled ? resolveSidebarStageBackdropVariant(stageLabel) : null;
+  const { resolvedTheme } = useTheme();
+  return enabled ? resolveVisibleSidebarStageBackdropVariant(stageLabel, resolvedTheme) : null;
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */
@@ -470,33 +482,33 @@ const SLEIGH_SPARKLES: ReadonlyArray<StageSparkle> = [
 ];
 
 const SLEIGH_MOON_CRATERS: ReadonlyArray<{ cx: number; cy: number; r: number }> = [
-  { cx: 252, cy: 24, r: 4.4 },
-  { cx: 272, cy: 40, r: 3.2 },
-  { cx: 268, cy: 20, r: 2.2 },
-  { cx: 250, cy: 42, r: 2.6 },
-  { cx: 279, cy: 28, r: 1.8 },
+  { cx: 268, cy: 24, r: 4.4 },
+  { cx: 288, cy: 40, r: 3.2 },
+  { cx: 284, cy: 20, r: 2.2 },
+  { cx: 266, cy: 42, r: 2.6 },
+  { cx: 295, cy: 28, r: 1.8 },
 ];
 
 const SLEIGH_TRAIL_STARS: ReadonlyArray<{ x: number; y: number; size: number; opacity: number }> = [
-  { x: 236, y: 41, size: 1.8, opacity: 0.85 },
-  { x: 219.6, y: 46.8, size: 1.6, opacity: 0.71 },
-  { x: 203.2, y: 48.9, size: 1.4, opacity: 0.57 },
-  { x: 186.8, y: 49.9, size: 1.2, opacity: 0.43 },
-  { x: 170.4, y: 54, size: 1, opacity: 0.29 },
-  { x: 154, y: 60.4, size: 0.8, opacity: 0.15 },
+  { x: 252, y: 41, size: 1.8, opacity: 0.85 },
+  { x: 235.6, y: 46.8, size: 1.6, opacity: 0.71 },
+  { x: 219.2, y: 48.9, size: 1.4, opacity: 0.57 },
+  { x: 202.8, y: 49.9, size: 1.2, opacity: 0.43 },
+  { x: 186.4, y: 54, size: 1, opacity: 0.29 },
+  { x: 170, y: 60.4, size: 0.8, opacity: 0.15 },
 ];
 
 const SLEIGH_TRAIL_DUST: ReadonlyArray<{ cx: number; cy: number; r: number; opacity: number }> = [
-  { cx: 230.5, cy: 43.2, r: 0.58, opacity: 0.76 },
-  { cx: 225.1, cy: 45.2, r: 0.56, opacity: 0.71 },
-  { cx: 214.1, cy: 47.9, r: 0.52, opacity: 0.63 },
-  { cx: 208.7, cy: 48.6, r: 0.5, opacity: 0.58 },
-  { cx: 197.7, cy: 49.1, r: 0.46, opacity: 0.5 },
-  { cx: 192.3, cy: 49.4, r: 0.44, opacity: 0.45 },
-  { cx: 181.3, cy: 50.8, r: 0.4, opacity: 0.37 },
-  { cx: 175.9, cy: 52.2, r: 0.38, opacity: 0.32 },
-  { cx: 164.9, cy: 56.1, r: 0.34, opacity: 0.24 },
-  { cx: 159.5, cy: 58.3, r: 0.32, opacity: 0.19 },
+  { cx: 246.5, cy: 43.2, r: 0.58, opacity: 0.76 },
+  { cx: 241.1, cy: 45.2, r: 0.56, opacity: 0.71 },
+  { cx: 230.1, cy: 47.9, r: 0.52, opacity: 0.63 },
+  { cx: 224.7, cy: 48.6, r: 0.5, opacity: 0.58 },
+  { cx: 213.7, cy: 49.1, r: 0.46, opacity: 0.5 },
+  { cx: 208.3, cy: 49.4, r: 0.44, opacity: 0.45 },
+  { cx: 197.3, cy: 50.8, r: 0.4, opacity: 0.37 },
+  { cx: 191.9, cy: 52.2, r: 0.38, opacity: 0.32 },
+  { cx: 180.9, cy: 56.1, r: 0.34, opacity: 0.24 },
+  { cx: 175.5, cy: 58.3, r: 0.32, opacity: 0.19 },
 ];
 
 const SLEIGH_REINDEER: ReadonlyArray<{ x: number; y: number }> = [
@@ -525,7 +537,7 @@ function SleighRideArt({ compact = false }: { compact?: boolean }) {
       className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
-      viewBox={compact ? "128 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}
+      viewBox={compact ? "144 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
@@ -535,7 +547,7 @@ function SleighRideArt({ compact = false }: { compact?: boolean }) {
           cx="0"
           cy="0"
           r="1"
-          gradientTransform="translate(262 32) scale(72 64)"
+          gradientTransform="translate(278 32) scale(72 64)"
           gradientUnits="userSpaceOnUse"
         >
           <stop style={{ stopColor: "var(--stage-sleigh-halo)" }} stopOpacity="0.34" />
@@ -566,7 +578,7 @@ function SleighRideArt({ compact = false }: { compact?: boolean }) {
       <rect width="100%" height="96" fill={`url(#${starsId})`} />
       <rect width="768" height="96" fill={`url(#${haloId})`} />
 
-      <circle cx="262" cy="32" r="27" fill={`url(#${moonId})`} />
+      <circle cx="278" cy="32" r="27" fill={`url(#${moonId})`} />
       <g style={{ fill: "var(--stage-sleigh-crater)" }} fillOpacity="0.32">
         {SLEIGH_MOON_CRATERS.map((crater) => (
           <circle key={`${crater.cx}-${crater.cy}`} cx={crater.cx} cy={crater.cy} r={crater.r} />
@@ -574,7 +586,7 @@ function SleighRideArt({ compact = false }: { compact?: boolean }) {
       </g>
 
       <g
-        transform="translate(237 41) rotate(-15) scale(0.78)"
+        transform="translate(253 41) rotate(-15) scale(0.78)"
         style={{ color: "var(--stage-sleigh-ink)" }}
         strokeLinecap="round"
       >
