@@ -15,6 +15,7 @@ import {
   BearerConnectionTarget,
   ConnectionTransientError,
   PrimaryConnectionTarget,
+  RelayConnectionTarget,
   SshConnectionTarget,
 } from "../connection/model.ts";
 import {
@@ -237,7 +238,7 @@ describe("ConnectionCatalogDocument", () => {
     expect(decoded.disabledEnvironmentIds).toEqual([]);
   });
 
-  it("drops retired relay targets and DPoP tokens from a stored catalog", () => {
+  it("restores relay targets while discarding old token cache formats", () => {
     const schema = Schema.fromJsonString(ConnectionCatalogDocument);
     const relayEnvironmentId = "environment-relay";
     const decoded = Schema.decodeSync(schema)(
@@ -282,7 +283,13 @@ describe("ConnectionCatalogDocument", () => {
       }),
     );
 
-    expect(decoded.targets).toEqual([BEARER_TARGET]);
+    expect(decoded.targets).toEqual([
+      new RelayConnectionTarget({
+        environmentId: EnvironmentId.make(relayEnvironmentId),
+        label: "Relay",
+      }),
+      BEARER_TARGET,
+    ]);
     expect(decoded.profiles).toEqual([BEARER_PROFILE]);
     expect(decoded.credentials).toEqual([
       { connectionId: BEARER_TARGET.connectionId, credential: BEARER_CREDENTIAL },
@@ -290,7 +297,7 @@ describe("ConnectionCatalogDocument", () => {
     expect(Schema.encodeSync(schema)(decoded)).not.toContain("remoteDpopTokens");
   });
 
-  it("re-pairs a retired relay environment as enabled", () => {
+  it("re-pairs an unavailable relay environment as an enabled direct connection", () => {
     const decoded = decodeCatalogDocument({
       schemaVersion: 1,
       targets: [{ _tag: "RelayConnectionTarget", environmentId: ENVIRONMENT_ID, label: "Relay" }],

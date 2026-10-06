@@ -16,10 +16,13 @@ import {
   type ServerAuthDescriptor,
   type ServerAuthSessionMethod,
   type AuthWebSocketTicketResult,
+  DpopFailureReason,
+  type DpopFailureReason as DpopFailureReasonType,
 } from "@supacode/contracts";
 import { encodeOAuthScope } from "@supacode/shared/oauthScope";
 import { buildPairingUrl } from "@supacode/shared/remote";
 import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -35,6 +38,7 @@ import * as PairingGrantStore from "./PairingGrantStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
 import { REUSABLE_DEV_SESSION_EXPIRES_AT, resolveReusableDevAuth } from "./ReusableDevAuth.ts";
+import { verifyRequestDpopProof } from "./dpop.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 
 const DEFAULT_SESSION_SUBJECT = "cli-issued-session";
@@ -65,6 +69,7 @@ export interface AuthenticatedSession {
   readonly subject: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
+  readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
 }
 
@@ -204,6 +209,110 @@ export class ServerAuthWebSocketTokenIssueError extends Schema.TaggedError<Serve
   }
 }
 
+export class ServerAuthDpopReplayStateRecordError extends Schema.TaggedError<ServerAuthDpopReplayStateRecordError>()(
+  "ServerAuthDpopReplayStateRecordError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Failed to record DPoP proof replay state.";
+  }
+}
+
+export class ServerAuthDpopReplayKeyCalculationError extends Schema.TaggedError<ServerAuthDpopReplayKeyCalculationError>()(
+  "ServerAuthDpopReplayKeyCalculationError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Failed to calculate DPoP replay key.";
+  }
+}
+
+export class ServerAuthLinkedCloudAccountVerificationError extends Schema.TaggedError<ServerAuthLinkedCloudAccountVerificationError>()(
+  "ServerAuthLinkedCloudAccountVerificationError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Could not verify the linked cloud account.";
+  }
+}
+
+export class ServerAuthLinkedCloudAccountReadError extends Schema.TaggedError<ServerAuthLinkedCloudAccountReadError>()(
+  "ServerAuthLinkedCloudAccountReadError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Could not read the linked cloud account.";
+  }
+}
+
+export class ServerAuthLinkedCloudAccountMissingError extends Schema.TaggedError<ServerAuthLinkedCloudAccountMissingError>()(
+  "ServerAuthLinkedCloudAccountMissingError",
+  {},
+) {
+  override get message(): string {
+    return "Cloud linked user is not installed for this environment.";
+  }
+}
+
+export class ServerAuthCloudLinkJwtSigningError extends Schema.TaggedError<ServerAuthCloudLinkJwtSigningError>()(
+  "ServerAuthCloudLinkJwtSigningError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Failed to sign cloud link JWT.";
+  }
+}
+
+export class ServerAuthCloudMintPublicKeyMissingError extends Schema.TaggedError<ServerAuthCloudMintPublicKeyMissingError>()(
+  "ServerAuthCloudMintPublicKeyMissingError",
+  {},
+) {
+  override get message(): string {
+    return "Cloud mint public key is not installed for this environment.";
+  }
+}
+
+export class ServerAuthCloudRelayIssuerMissingError extends Schema.TaggedError<ServerAuthCloudRelayIssuerMissingError>()(
+  "ServerAuthCloudRelayIssuerMissingError",
+  {},
+) {
+  override get message(): string {
+    return "Cloud relay issuer is not installed for this environment.";
+  }
+}
+
+export class ServerAuthCloudHealthJwtSigningError extends Schema.TaggedError<ServerAuthCloudHealthJwtSigningError>()(
+  "ServerAuthCloudHealthJwtSigningError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Failed to sign cloud health JWT.";
+  }
+}
+
+export class ServerAuthCloudMintJwtSigningError extends Schema.TaggedError<ServerAuthCloudMintJwtSigningError>()(
+  "ServerAuthCloudMintJwtSigningError",
+  {
+    ...serverAuthInternalErrorContext,
+  },
+) {
+  override get message(): string {
+    return "Failed to sign cloud mint JWT.";
+  }
+}
+
 export const ServerAuthInternalError = Schema.Union([
   ServerAuthBootstrapCredentialValidationError,
   ServerAuthSessionCredentialValidationError,
@@ -217,6 +326,16 @@ export const ServerAuthInternalError = Schema.Union([
   ServerAuthSessionRevocationError,
   ServerAuthOtherSessionsRevocationError,
   ServerAuthWebSocketTokenIssueError,
+  ServerAuthDpopReplayStateRecordError,
+  ServerAuthDpopReplayKeyCalculationError,
+  ServerAuthLinkedCloudAccountVerificationError,
+  ServerAuthLinkedCloudAccountReadError,
+  ServerAuthLinkedCloudAccountMissingError,
+  ServerAuthCloudLinkJwtSigningError,
+  ServerAuthCloudMintPublicKeyMissingError,
+  ServerAuthCloudRelayIssuerMissingError,
+  ServerAuthCloudHealthJwtSigningError,
+  ServerAuthCloudMintJwtSigningError,
 ]);
 export type ServerAuthInternalError = typeof ServerAuthInternalError.Type;
 export const isServerAuthInternalError = Schema.is(ServerAuthInternalError);
@@ -234,6 +353,7 @@ export class ServerAuthInvalidCredentialError extends Schema.TaggedError<ServerA
   "ServerAuthInvalidCredentialError",
   {
     diagnostic: Schema.optional(Schema.String),
+    dpopFailureReason: Schema.optionalKey(DpopFailureReason),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -252,6 +372,11 @@ export const serverAuthCredentialReason = (
   error: ServerAuthCredentialError,
 ): "missing_credential" | "invalid_credential" =>
   error._tag === "ServerAuthMissingCredentialError" ? "missing_credential" : "invalid_credential";
+
+export const serverAuthDpopFailureReason = (
+  error: ServerAuthCredentialError,
+): DpopFailureReasonType | undefined =>
+  error._tag === "ServerAuthInvalidCredentialError" ? error.dpopFailureReason : undefined;
 
 export class ServerAuthInvalidScopeError extends Schema.TaggedError<ServerAuthInvalidScopeError>()(
   "ServerAuthInvalidScopeError",
@@ -314,6 +439,9 @@ export class EnvironmentAuth extends Context.Service<
       credential: string,
       requestedScopes: ReadonlyArray<AuthEnvironmentScope> | undefined,
       requestMetadata: AuthClientMetadata,
+      input?: {
+        readonly proofKeyThumbprint?: string;
+      },
     ) => Effect.Effect<
       AuthAccessTokenResult,
       ServerAuthInvalidCredentialError | ServerAuthInvalidRequestError | ServerAuthInternalError
@@ -323,6 +451,7 @@ export class EnvironmentAuth extends Context.Service<
       readonly label?: string;
       readonly scopes?: ReadonlyArray<AuthEnvironmentScope>;
       readonly subject?: string;
+      readonly proofKeyThumbprint?: string;
       readonly purpose?: "startup";
     }) => Effect.Effect<IssuedPairingLink, ServerAuthInternalError>;
     readonly issuePairingCredential: (
@@ -386,6 +515,7 @@ type BootstrapExchangeResult = {
 };
 
 const AUTHORIZATION_PREFIX = "Bearer ";
+const DPOP_AUTHORIZATION_PREFIX = "DPoP ";
 const WEBSOCKET_TICKET_QUERY_PARAM = "wsTicket";
 
 const bySessionPriority = (left: AuthClientSession, right: AuthClientSession) => {
@@ -432,6 +562,15 @@ function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string 
   return token.length > 0 ? token : null;
 }
 
+function parseDpopToken(request: HttpServerRequest.HttpServerRequest): string | null {
+  const header = request.headers["authorization"];
+  if (typeof header !== "string" || !header.startsWith(DPOP_AUTHORIZATION_PREFIX)) {
+    return null;
+  }
+  const token = header.slice(DPOP_AUTHORIZATION_PREFIX.length).trim();
+  return token.length > 0 ? token : null;
+}
+
 export function selectRequestCredential(
   request: HttpServerRequest.HttpServerRequest,
   cookieName: string,
@@ -447,6 +586,11 @@ export function selectRequestCredential(
     return { token: bearerToken, source: "bearer" } as const;
   }
 
+  const dpopToken = parseDpopToken(request);
+  if (dpopToken !== null) {
+    return { token: dpopToken, source: "dpop" } as const;
+  }
+
   const legacyToken = legacyCookieName ? request.cookies[legacyCookieName] : undefined;
   if (legacyToken !== undefined) {
     return { token: legacyToken, source: "legacy-cookie" } as const;
@@ -460,6 +604,8 @@ export const make = Effect.gen(function* () {
   const policy = yield* EnvironmentAuthPolicy.EnvironmentAuthPolicy;
   const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
   const sessions = yield* SessionStore.SessionStore;
+  const secretStore = yield* ServerSecretStore.ServerSecretStore;
+  const crypto = yield* Crypto.Crypto;
   const descriptor = yield* policy.getDescriptor();
   const config = yield* ServerConfig.ServerConfig;
   const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
@@ -486,6 +632,7 @@ export const make = Effect.gen(function* () {
         subject: session.subject,
         method: session.method,
         scopes: session.scopes,
+        ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
         ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
       })),
       mapSessionVerificationErrors,
@@ -499,6 +646,7 @@ export const make = Effect.gen(function* () {
       sessions.cookieName,
       sessions.legacyCookieName,
     );
+    const dpopToken = parseDpopToken(request);
     const hasAuthorization = request.headers.authorization !== undefined;
     const devCookieToken = devAuth ? request.cookies[devAuth.cookieName] : undefined;
     const credential =
@@ -509,7 +657,38 @@ export const make = Effect.gen(function* () {
     if (!credential?.token) {
       return Effect.fail(new ServerAuthMissingCredentialError({}));
     }
-    return authenticateToken(credential.token);
+    return authenticateToken(credential.token).pipe(
+      Effect.flatMap((session) => {
+        if (session.proofKeyThumbprint) {
+          if (!dpopToken || dpopToken !== credential.token) {
+            return Effect.fail(
+              new ServerAuthInvalidCredentialError({
+                diagnostic: "DPoP-bound access token requires DPoP authorization.",
+                dpopFailureReason: "invalid_proof",
+              }),
+            );
+          }
+          return verifyRequestDpopProof({
+            request,
+            expectedThumbprint: session.proofKeyThumbprint,
+            expectedAccessToken: dpopToken,
+          }).pipe(
+            Effect.provideService(ServerSecretStore.ServerSecretStore, secretStore),
+            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.as(session),
+          );
+        }
+        if (dpopToken) {
+          return Effect.fail(
+            new ServerAuthInvalidCredentialError({
+              diagnostic: "DPoP authorization requires a proof-bound access token.",
+              dpopFailureReason: "invalid_proof",
+            }),
+          );
+        }
+        return Effect.succeed(session);
+      }),
+    );
   };
 
   const getSessionState: EnvironmentAuth["Service"]["getSessionState"] = (request) =>
@@ -602,13 +781,14 @@ export const make = Effect.gen(function* () {
   };
   const resolveBootstrapGrant = (
     credential: string,
+    input?: { readonly proofKeyThumbprint?: string },
   ): Effect.Effect<
     ResolvedBootstrapGrant,
     ServerAuthInvalidCredentialError | ServerAuthInternalError
   > => {
     if (!devAuth?.matches(credential)) {
       return bootstrapCredentials
-        .consume(credential)
+        .consume(credential, input)
         .pipe(Effect.mapError(toBootstrapExchangeError));
     }
     return sessions.verify(credential).pipe(
@@ -625,8 +805,8 @@ export const make = Effect.gen(function* () {
   };
 
   const exchangeBootstrapCredentialForAccessToken: EnvironmentAuth["Service"]["exchangeBootstrapCredentialForAccessToken"] =
-    (credential, requestedScopes, requestMetadata) =>
-      resolveBootstrapGrant(credential).pipe(
+    (credential, requestedScopes, requestMetadata, input) =>
+      resolveBootstrapGrant(credential, input).pipe(
         Effect.flatMap((grant) =>
           Effect.gen(function* () {
             const grantedScopes = requestedScopes ?? grant.scopes;
@@ -635,9 +815,15 @@ export const make = Effect.gen(function* () {
             }
             return yield* sessions
               .issue({
-                method: "bearer-access-token",
+                method: input?.proofKeyThumbprint ? "dpop-access-token" : "bearer-access-token",
                 subject: grant.subject,
                 scopes: grantedScopes,
+                ...(input?.proofKeyThumbprint
+                  ? {
+                      proofKeyThumbprint: input.proofKeyThumbprint,
+                      ttl: Duration.hours(1),
+                    }
+                  : {}),
                 // Desktop restarts forget the previous bearer token. Replace
                 // its session, including stale entries left by older versions.
                 replaceActiveForSubjectAndMethod: grant.method === "desktop-bootstrap",
@@ -660,7 +846,7 @@ export const make = Effect.gen(function* () {
                 ({
                   access_token: session.token,
                   issued_token_type: AuthAccessTokenType,
-                  token_type: "Bearer",
+                  token_type: input?.proofKeyThumbprint ? "DPoP" : "Bearer",
                   expires_in: Math.max(
                     0,
                     Math.floor(
@@ -708,6 +894,7 @@ export const make = Effect.gen(function* () {
         subject: input?.subject ?? "one-time-token",
         ...(input?.ttl ? { ttl: input.ttl } : {}),
         ...(input?.label ? { label: input.label } : {}),
+        ...(input?.proofKeyThumbprint ? { proofKeyThumbprint: input.proofKeyThumbprint } : {}),
         ...(input?.purpose ? { purpose: input.purpose } : {}),
       });
       return {

@@ -1,3 +1,6 @@
+import { lazy, Suspense } from "react";
+import { hasCloudPublicConfig } from "../../cloud/publicConfig";
+const RelayAccountSettings = lazy(() => import("../../cloud/RelayAccountSettings"));
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
@@ -3581,6 +3584,11 @@ export function ConnectionsSettings() {
   return (
     <SettingsPageContainer width="wide">
       {primarySettings}
+      {hasCloudPublicConfig() ? (
+        <Suspense fallback={null}>
+          <RelayAccountSettings />
+        </Suspense>
+      ) : null}
       <SettingsSection
         {...searchableSetting("remote-environments")}
         title="Environments"

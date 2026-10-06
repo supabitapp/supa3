@@ -378,6 +378,18 @@
     "./device/duo-control": {
       "types": "./src/device/duoControl.ts",
       "default": "./src/device/duoControl.ts"
+    },
+    "./relay": {
+      "types": "./src/relay/index.ts",
+      "import": "./src/relay/index.ts"
+    },
+    "./state/relay": {
+      "types": "./src/state/relayDiscovery.ts",
+      "import": "./src/state/relayDiscovery.ts"
+    },
+    "./authorization/tokenStore": {
+      "types": "./src/authorization/tokenStore.ts",
+      "import": "./src/authorization/tokenStore.ts"
     }
   },
   "scripts": {

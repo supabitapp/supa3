@@ -69,8 +69,8 @@ export type ServerAuthBootstrapMethod = typeof ServerAuthBootstrapMethod.Type;
  *   app after bootstrap/pairing
  * - `bearer-access-token`: scoped token suitable for non-cookie or
  *   non-browser clients
- * - `dpop-access-token`: retired; decoded only because older servers and
- *   stored sessions may still carry it
+ * - `dpop-access-token`: scoped proof-of-possession token used by managed
+ *   relay connections
  */
 export const ServerAuthSessionMethod = Schema.Literals([
   "browser-session-cookie",
@@ -85,6 +85,8 @@ export const AuthTerminalOperateScope = "terminal:operate" as const;
 export const AuthReviewWriteScope = "review:write" as const;
 export const AuthAccessReadScope = "access:read" as const;
 export const AuthAccessWriteScope = "access:write" as const;
+export const AuthRelayReadScope = "relay:read" as const;
+export const AuthRelayWriteScope = "relay:write" as const;
 export const AuthEnvironmentScope = Schema.Literals([
   AuthOrchestrationReadScope,
   AuthOrchestrationOperateScope,
@@ -92,6 +94,8 @@ export const AuthEnvironmentScope = Schema.Literals([
   AuthReviewWriteScope,
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthRelayReadScope,
+  AuthRelayWriteScope,
 ]);
 export type AuthEnvironmentScope = typeof AuthEnvironmentScope.Type;
 export const AuthEnvironmentScopes = ForwardCompatibleArray(AuthEnvironmentScope);
@@ -102,11 +106,13 @@ export const AuthStandardClientScopes = [
   AuthOrchestrationOperateScope,
   AuthTerminalOperateScope,
   AuthReviewWriteScope,
+  AuthRelayReadScope,
 ] as const;
 export const AuthAdministrativeScopes = [
   ...AuthStandardClientScopes,
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthRelayWriteScope,
 ] as const;
 
 export const AuthTokenExchangeGrantType =
@@ -193,7 +199,7 @@ export type AuthTokenExchangeRequest = typeof AuthTokenExchangeRequest.Type;
 export const AuthAccessTokenResult = Schema.Struct({
   access_token: TrimmedNonEmptyString,
   issued_token_type: Schema.Literal(AuthAccessTokenType),
-  token_type: Schema.Literal("Bearer"),
+  token_type: Schema.Literals(["Bearer", "DPoP"]),
   expires_in: Schema.Number,
   scope: TrimmedNonEmptyString,
 });

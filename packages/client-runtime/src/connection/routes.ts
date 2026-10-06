@@ -20,6 +20,8 @@ export function connectionRouteId(target: ConnectionTarget): string {
   switch (target._tag) {
     case "PrimaryConnectionTarget":
       return "primary";
+    case "RelayConnectionTarget":
+      return "relay";
     case "BearerConnectionTarget":
     case "SshConnectionTarget":
       return target.connectionId;
@@ -130,6 +132,8 @@ export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind
   switch (route.target._tag) {
     case "SshConnectionTarget":
       return "ssh";
+    case "RelayConnectionTarget":
+      return "public";
     case "PrimaryConnectionTarget":
     case "BearerConnectionTarget": {
       const hostname = routeHostname(route);

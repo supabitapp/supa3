@@ -1,3 +1,16 @@
+import { lazy, Suspense, type ReactNode } from "react";
+import { hasCloudPublicConfig } from "./cloud/publicConfig";
+const RelayProfile = lazy(() => import("./cloud/RelayProfile"));
+function OptionalRelayProfile({ children }: { readonly children: ReactNode }) {
+  return hasCloudPublicConfig() ? (
+    <Suspense fallback={null}>
+      <RelayProfile>{children}</RelayProfile>
+    </Suspense>
+  ) : (
+    children
+  );
+}
+
 import { RouterProvider } from "@tanstack/react-router";
 
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
@@ -14,7 +27,9 @@ import type { AppRouter } from "./router";
 export function AppRoot({ router }: { readonly router: AppRouter }) {
   return (
     <AppAtomRegistryProvider>
-      <RouterProvider router={router} />
+      <OptionalRelayProfile>
+        <RouterProvider router={router} />
+      </OptionalRelayProfile>
       <PreviewAutomationHosts />
       <ElectronBrowserHost />
       <QuitHoldOverlay />

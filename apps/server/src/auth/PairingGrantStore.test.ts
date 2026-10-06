@@ -91,6 +91,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
+        "relay:read",
       ]);
       expect(first.subject).toBe("one-time-token");
       expect(first.label).toBe("Julius iPhone");
@@ -125,7 +126,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
     }).pipe(Effect.provide(layerPairingGrantStore())),
   );
 
-  it.effect("refuses legacy pairing links bound to a proof key", () =>
+  it.effect("requires a matching proof key for proof-bound pairing links", () =>
     Effect.gen(function* () {
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sql = yield* SqlClient.SqlClient;
@@ -138,7 +139,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
 
       const error = yield* Effect.flip(bootstrapCredentials.consume(token.credential));
 
-      expect(error._tag).toBe("UnavailableBootstrapCredentialError");
+      expect(error._tag).toBe("BootstrapCredentialProofKeyMismatchError");
     }).pipe(
       Effect.provide(
         PairingGrantStore.layer.pipe(
@@ -162,8 +163,10 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
+        "relay:read",
         "access:read",
         "access:write",
+        "relay:write",
       ]);
       expect(first.subject).toBe("desktop-bootstrap");
       expect(second.method).toBe("desktop-bootstrap");

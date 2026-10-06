@@ -1,3 +1,5 @@
+import { hasCloudPublicConfig } from "../cloud/publicConfig";
+import * as RelayConnection from "../cloud/connectionLayer";
 import { Connection } from "@supacode/client-runtime/connection";
 import { ShellSnapshotLoader } from "@supacode/client-runtime/state/shell";
 import {
@@ -35,7 +37,7 @@ const layerProvidedClientConnection = layerSnapshotLoader.pipe(
       environmentThemes: true,
       usageLimitSources: true,
       usageLimitsCommand: true,
-    }),
+    }).pipe(Layer.provideMerge(hasCloudPublicConfig() ? RelayConnection.layer : Layer.empty)),
   ),
   Layer.provideMerge(
     Layer.mergeAll(

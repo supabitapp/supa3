@@ -1,3 +1,4 @@
+import { connectionRoutes } from "./routes.ts";
 import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
@@ -25,6 +26,7 @@ import {
   BearerConnectionRegistration,
   type ConnectionRegistration,
   PrimaryConnectionRegistration,
+  RelayConnectionRegistration,
   SshConnectionProfile,
   type ConnectionCredential,
   type ConnectionProfile,
@@ -37,6 +39,7 @@ import {
   ConnectionBlockedError,
   BearerConnectionTarget,
   PrimaryConnectionTarget,
+  RelayConnectionTarget,
   SshConnectionTarget,
   type ConnectionTarget,
   type PreparedConnection,
@@ -1401,3 +1404,29 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 });
+
+it.effect("signing out removes relay routes while retaining independently paired routes", () =>
+  Effect.gen(function* () {
+    const harness = yield* makeHarness([]);
+    yield* Effect.gen(function* () {
+      const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+      yield* registry.start;
+      yield* registry.register(
+        new RelayConnectionRegistration({
+          target: new RelayConnectionTarget({
+            environmentId: REMOTE_TARGET.environmentId,
+            label: "Relay",
+          }),
+        }),
+      );
+      yield* registry.register(remoteRegistration(REMOTE_TARGET));
+      yield* registry.removeRelayEnvironments();
+      const entry = (yield* SubscriptionRef.get(registry.entries)).get(REMOTE_TARGET.environmentId);
+      expect(entry?.target._tag).toBe("BearerConnectionTarget");
+      expect(connectionRoutes(entry!).map((route) => route.target._tag)).toEqual([
+        "BearerConnectionTarget",
+      ]);
+      expect(yield* Ref.get(harness.ownedDataClears)).toEqual([]);
+    }).pipe(Effect.provide(harness.layer), Effect.scoped);
+  }),
+);

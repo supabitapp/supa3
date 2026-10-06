@@ -204,7 +204,9 @@ const registerPairing = Effect.fnUntraced(function* (options: {
     entries,
     register: (registration: ConnectionRegistration) =>
       Effect.sync(() => {
-        events.push(`register:${registration.target.connectionId}`);
+        events.push(
+          `register:${registration.target._tag === "RelayConnectionTarget" ? registration.target.environmentId : registration.target.connectionId}`,
+        );
       }),
   } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
   const credentialStore = CredentialStore.make({

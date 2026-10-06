@@ -27,7 +27,7 @@ import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "./config.ts";
 import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
-import * as ServiceLauncherClient from "./service/serviceLauncherClient.ts";
+import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import { flushCompileCache } from "./compileCache.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";

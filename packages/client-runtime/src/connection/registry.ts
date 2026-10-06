@@ -133,6 +133,12 @@ export class EnvironmentRegistry extends Context.Service<
       | PlatformEnvironmentRemovalError
       | ConnectionBlockedError
     >;
+    readonly removeRelayEnvironments: () => Effect.Effect<
+      void,
+      | Persistence.ConnectionPersistenceError
+      | ConnectionAttemptError
+      | PlatformEnvironmentRemovalError
+    >;
     readonly retryNow: (environmentId: EnvironmentId) => Effect.Effect<void>;
     /**
      * Switches a saved environment on or off. Off drops the socket, stops the
@@ -933,6 +939,27 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const removeRelayEnvironments = Effect.fn("EnvironmentRegistry.removeRelayEnvironments")(
+    function* () {
+      const relayRoutes = [...(yield* SubscriptionRef.get(entries)).values()].flatMap((entry) =>
+        connectionRoutes(entry)
+          .filter((route) => route.target._tag === "RelayConnectionTarget")
+          .map((route) => ({
+            environmentId: entry.target.environmentId,
+            routeId: connectionRouteId(route.target),
+          })),
+      );
+      yield* Effect.forEach(
+        relayRoutes,
+        ({ environmentId, routeId }) =>
+          removeRoute(environmentId, routeId).pipe(
+            Effect.catchTags({ EnvironmentNotRegisteredError: () => Effect.void }),
+          ),
+        { concurrency: "unbounded", discard: true },
+      );
+    },
+  );
+
   const retryNow = (environmentId: EnvironmentId) =>
     acquireSupervisor(environmentId).pipe(
       Effect.flatMap((supervisor) => supervisor.retryNow),
@@ -1083,6 +1110,7 @@ export const make = Effect.gen(function* () {
     remove,
     removeRoute,
     reorderRoutes,
+    removeRelayEnvironments,
     retryNow,
     setEnabled,
     setCompatibility,

@@ -347,11 +347,12 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         "orchestration:operate",
         "terminal:operate",
         "review:write",
+        "relay:read",
       ]);
     }).pipe(Effect.provide(Layer.merge(layerSessionStore(), TestClock.layer()))),
   );
 
-  it.effect("rejects session tokens minted for the retired DPoP method", () =>
+  it.effect("recognizes proof-bound DPoP session claims", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
       const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -369,8 +370,9 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       const legacyToken = `${legacyPayload}.${signPayload(legacyPayload, signingSecret)}`;
 
       expect(yield* sessions.verify(issued.token)).toMatchObject({ sessionId: issued.sessionId });
-      expect(yield* Effect.flip(sessions.verify(legacyToken))).toMatchObject({
-        _tag: "InvalidSessionTokenPayloadError",
+      expect(yield* sessions.verify(legacyToken)).toMatchObject({
+        method: "dpop-access-token",
+        proofKeyThumbprint: "legacy-proof-key-thumbprint",
       });
     }).pipe(
       Effect.provide(
@@ -384,7 +386,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     ),
   );
 
-  it.effect("lists stored sessions that carry the retired DPoP method and relay scopes", () =>
+  it.effect("lists stored sessions with DPoP methods and relay scopes", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
       const sql = yield* SqlClient.SqlClient;
@@ -402,7 +404,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(listed[0]).toMatchObject({
         sessionId: issued.sessionId,
         method: "dpop-access-token",
-        scopes: ["orchestration:read"],
+        scopes: ["orchestration:read", "relay:read", "relay:write"],
       });
     }).pipe(
       Effect.provide(

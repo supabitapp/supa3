@@ -24,7 +24,12 @@ import {
   AuthWebSocketTicketResult,
   ServerAuthSessionMethod,
 } from "./auth.ts";
-import { AuthSessionId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  DpopFailureReason,
+  AuthSessionId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 import {
   ExecutionEnvironmentDescriptor,
   ORCHESTRATION_PROTOCOL_HEADER,
@@ -43,9 +48,23 @@ import {
   PullRequestOperationError,
   PullRequestUnavailableError,
 } from "./pullRequest.ts";
+import {
+  RelayCloudEnvironmentHealthRequest,
+  RelayCloudMintCredentialRequest,
+  RelayEnvironmentConfigRequest,
+  RelayEnvironmentHealthResponse,
+  RelayEnvironmentLinkProof,
+  RelayEnvironmentMintResponse,
+  RelayLinkProofRequest,
+} from "./relay.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
+  dpop: Schema.optionalKey(Schema.String),
+});
+
+const OptionalDpopProofHeaders = Schema.Struct({
+  dpop: Schema.optionalKey(Schema.String),
 });
 
 const OrchestrationProtocolHeaders = Schema.Struct({
@@ -116,6 +135,8 @@ export class EnvironmentAuthInvalidError extends Schema.TaggedError<EnvironmentA
   {
     code: Schema.Literal("auth_invalid"),
     reason: EnvironmentAuthInvalidReason,
+    // Older servers do not send a DPoP failure category.
+    dpopFailureReason: Schema.optionalKey(DpopFailureReason),
     traceId: TrimmedNonEmptyString,
   },
   { httpApiStatus: 401 },
@@ -219,6 +240,80 @@ const EnvironmentAuthenticationErrors = [
   EnvironmentInternalError,
 ] as const;
 
+export class EnvironmentHttpBadRequestError extends Schema.TaggedError<EnvironmentHttpBadRequestError>()(
+  "EnvironmentHttpBadRequestError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 400 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentHttpBadRequestError)(this, { status: 400 });
+  }
+}
+
+export class EnvironmentHttpUnauthorizedError extends Schema.TaggedError<EnvironmentHttpUnauthorizedError>()(
+  "EnvironmentHttpUnauthorizedError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 401 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentHttpUnauthorizedError)(this, { status: 401 });
+  }
+}
+
+export class EnvironmentHttpForbiddenError extends Schema.TaggedError<EnvironmentHttpForbiddenError>()(
+  "EnvironmentHttpForbiddenError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 403 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentHttpForbiddenError)(this, { status: 403 });
+  }
+}
+
+export class EnvironmentHttpInternalServerError extends Schema.TaggedError<EnvironmentHttpInternalServerError>()(
+  "EnvironmentHttpInternalServerError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 500 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentHttpInternalServerError)(this, { status: 500 });
+  }
+}
+
+export class EnvironmentHttpConflictError extends Schema.TaggedError<EnvironmentHttpConflictError>()(
+  "EnvironmentHttpConflictError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentHttpConflictError)(this, { status: 409 });
+  }
+}
+
+export class EnvironmentCloudEndpointUnavailableError extends Schema.TaggedError<EnvironmentCloudEndpointUnavailableError>()(
+  "EnvironmentCloudEndpointUnavailableError",
+  {
+    message: Schema.String,
+    endpointRuntimeStatus: Schema.Unknown,
+  },
+  { httpApiStatus: 503 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentCloudEndpointUnavailableError)(this, {
+      status: 503,
+    });
+  }
+}
 const EnvironmentSessionCreationErrors = [
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
@@ -265,6 +360,7 @@ export interface EnvironmentSessionPrincipalShape {
   readonly subject: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlySet<AuthEnvironmentScope>;
+  readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
 }
 
@@ -279,6 +375,45 @@ export class EnvironmentAuthenticatedAuth extends HttpApiMiddleware.Service<
 >()("EnvironmentAuthenticatedAuth", {
   error: EnvironmentAuthenticationErrors,
 }) {}
+
+const EnvironmentHttpCloudErrors = [
+  EnvironmentHttpBadRequestError,
+  EnvironmentHttpUnauthorizedError,
+  EnvironmentHttpForbiddenError,
+  EnvironmentHttpConflictError,
+  EnvironmentHttpInternalServerError,
+  EnvironmentScopeRequiredError,
+] as const;
+
+export const EnvironmentCloudRelayConfigResult = Schema.Struct({
+  ok: Schema.Boolean,
+  endpointRuntimeStatus: Schema.Unknown,
+});
+export type EnvironmentCloudRelayConfigResult = typeof EnvironmentCloudRelayConfigResult.Type;
+
+export const EnvironmentCloudLinkStateResult = Schema.Struct({
+  linked: Schema.Boolean,
+  cloudUserId: Schema.NullOr(Schema.String),
+  relayUrl: Schema.NullOr(Schema.String),
+  relayIssuer: Schema.NullOr(Schema.String),
+  // A managed Cloudflare tunnel is provisioned for this link. False for a
+  // publish-only link (activity publishing without a relay-managed tunnel), so
+  // clients can present the two capabilities as independent settings.
+  // Optional so newer clients tolerate older environment servers.
+  managedTunnelActive: Schema.optional(Schema.Boolean),
+  publishAgentActivity: Schema.Boolean,
+  // Opt-in: T3 Connect holds webhook requests while this environment is
+  // offline. Optional so newer clients tolerate older environment servers.
+  holdWebhooksWhileOffline: Schema.optional(Schema.Boolean),
+});
+export type EnvironmentCloudLinkStateResult = typeof EnvironmentCloudLinkStateResult.Type;
+
+export const EnvironmentCloudPreferencesRequest = Schema.Struct({
+  publishAgentActivity: Schema.Boolean,
+  // Omit to leave the current value unchanged.
+  holdWebhooksWhileOffline: Schema.optional(Schema.Boolean),
+});
+export type EnvironmentCloudPreferencesRequest = typeof EnvironmentCloudPreferencesRequest.Type;
 
 export const AuthPairingLinkRevokeResult = Schema.Struct({
   revoked: Schema.Boolean,
@@ -318,6 +453,7 @@ class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.post("token", "/oauth/token", {
+      headers: OptionalDpopProofHeaders,
       payload: AuthTokenExchangeRequest,
       success: AuthAccessTokenResult,
       error: EnvironmentTokenExchangeErrors,
@@ -458,9 +594,71 @@ class EnvironmentPullRequestsHttpApi extends HttpApiGroup.make("pullRequests").a
   }).middleware(EnvironmentAuthenticatedAuth),
 ) {}
 
+class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
+  .add(
+    HttpApiEndpoint.post("linkProof", "/api/connect/link-proof", {
+      headers: OptionalBearerHeaders,
+      payload: RelayLinkProofRequest,
+      success: RelayEnvironmentLinkProof,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("relayConfig", "/api/connect/relay-config", {
+      headers: OptionalBearerHeaders,
+      payload: RelayEnvironmentConfigRequest,
+      success: EnvironmentCloudRelayConfigResult,
+      error: [...EnvironmentHttpCloudErrors, EnvironmentCloudEndpointUnavailableError],
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("linkState", "/api/connect/link-state", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentCloudLinkStateResult,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("unlink", "/api/connect/unlink", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentCloudRelayConfigResult,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("preferences", "/api/connect/preferences", {
+      headers: OptionalBearerHeaders,
+      payload: EnvironmentCloudPreferencesRequest,
+      success: EnvironmentCloudLinkStateResult,
+      error: EnvironmentHttpCloudErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("health", "/api/t3-connect/health", {
+      payload: RelayCloudEnvironmentHealthRequest,
+      success: RelayEnvironmentHealthResponse,
+      error: EnvironmentHttpCloudErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("mintCredential", "/api/connect/mint-credential", {
+      payload: RelayCloudMintCredentialRequest,
+      success: RelayEnvironmentMintResponse,
+      error: EnvironmentHttpCloudErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("t3MintCredential", "/api/t3-connect/mint-credential", {
+      payload: RelayCloudMintCredentialRequest,
+      success: RelayEnvironmentMintResponse,
+      error: EnvironmentHttpCloudErrors,
+    }),
+  ) {}
+
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
   .add(EnvironmentPullRequestsHttpApi)
-  .add(EnvironmentProjectsHttpApi) {}
+  .add(EnvironmentProjectsHttpApi)
+  .add(EnvironmentConnectHttpApi) {}

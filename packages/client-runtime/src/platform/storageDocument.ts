@@ -56,6 +56,7 @@ export function removeCatalogValue<A>(
 function connectionIdOf(target: ConnectionTarget): string | null {
   switch (target._tag) {
     case "PrimaryConnectionTarget":
+    case "RelayConnectionTarget":
       return null;
     case "BearerConnectionTarget":
     case "SshConnectionTarget":
@@ -115,7 +116,9 @@ export function registerConnectionInCatalog(
   routes: ReadonlyArray<PersistedConnectionTarget> = [registration.target],
 ): ConnectionCatalogDocument {
   const hadExisting = document.targets.some(
-    (target) => target.environmentId === registration.target.environmentId,
+    (target) =>
+      target.environmentId === registration.target.environmentId &&
+      target._tag !== "RelayConnectionTarget",
   );
   const saved = setRoutesInCatalog(document, registration.target.environmentId, routes);
   const next = hadExisting
@@ -129,6 +132,8 @@ export function registerConnectionInCatalog(
         ),
       };
   switch (registration._tag) {
+    case "RelayConnectionRegistration":
+      return next;
     case "BearerConnectionRegistration":
       return {
         ...next,

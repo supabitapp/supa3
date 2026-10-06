@@ -51,6 +51,7 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@supacode/contracts": "workspace:*",
+    "@supacode/relay": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@supacode/ssh": "workspace:*",
     "@supacode/tailscale": "workspace:*",

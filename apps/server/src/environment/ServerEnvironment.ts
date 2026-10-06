@@ -15,8 +15,8 @@ import * as Schema from "effect/Schema";
 
 import packageJson from "../../package.json" with { type: "json" };
 import { resolveServerInstallation } from "../cli/invocation.ts";
-import { resolveServerSelfUpdateCapability } from "../service/selfUpdate.ts";
-import { resolveServiceLauncherMode } from "../service/serviceLauncherClient.ts";
+import { resolveServerSelfUpdateCapability } from "../cloud/selfUpdate.ts";
+import { resolveServiceLauncherMode } from "../cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { resolveServerEnvironmentLabel } from "./ServerEnvironmentLabel.ts";

@@ -11,7 +11,7 @@ import {
   isExactServiceVersion,
   SERVICE_LAUNCHER_PROTOCOL,
   SERVICE_RESTART_PENDING_FILE,
-} from "./service/serviceProtocol.ts";
+} from "./cloud/serviceProtocol.ts";
 
 it("accepts only exact semantic versions", () => {
   for (const version of ["0.0.0", "1.2.3", "1.2.3-alpha.1", "1.2.3-0", "1.2.3+001"]) {

@@ -17,8 +17,8 @@ import { cli } from "../binCli.ts";
 import {
   SERVICE_LAUNCHER_CONTEXT_ENV,
   SERVICE_LAUNCHER_PROTOCOL,
-} from "../service/serviceProtocol.ts";
-import * as ServiceLauncherClient from "../service/serviceLauncherClient.ts";
+} from "../cloud/serviceProtocol.ts";
+import * as ServiceLauncherClient from "../cloud/serviceLauncherClient.ts";
 import {
   makePersistedServerRuntimeState,
   persistServerRuntimeState,

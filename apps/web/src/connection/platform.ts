@@ -1,3 +1,5 @@
+import { managedRelaySessionAtom } from "@supacode/client-runtime/relay";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   ClientCapabilities,
   PlatformConnectionSource,
@@ -140,6 +142,16 @@ const layerWakeups = Wakeups.layer({
             Effect.sync(() => {
               document.removeEventListener("visibilitychange", listener);
             }),
+        ).pipe(Effect.asVoid),
+      ),
+      Stream.callback<"credentials-changed">((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() =>
+            appAtomRegistry.subscribe(managedRelaySessionAtom, () =>
+              Queue.offerUnsafe(queue, "credentials-changed"),
+            ),
+          ),
+          (unsubscribe) => Effect.sync(unsubscribe),
         ).pipe(Effect.asVoid),
       ),
       networkPathChanges,

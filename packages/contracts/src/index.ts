@@ -61,3 +61,5 @@ export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
 
 export * from "./orchestrationSkills.ts";
+
+export * from "./relayClient.ts";
