@@ -9,7 +9,9 @@ import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
 } from "@supacode/client-runtime/state/thread-search";
-import { LegendList } from "@legendapp/list/react-native";
+import { AnimatedLegendList } from "@legendapp/list/reanimated";
+import Animated from "react-native-reanimated";
+import { useThreadListMotion } from "./use-thread-list-motion";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -613,7 +615,14 @@ function ThreadNavigationSidebarPane(
     return true;
   }, [nativeChrome, onRequestVisibility, visible]);
   useHardwareKeyboardCommand("focusSearch", focusSearch);
-  const renderListItem = useCallback(
+  const listMotion = useThreadListMotion({
+    items: listItems,
+    scope: settledResetKey,
+    searching: props.searchQuery.trim().length > 0,
+    scrolling: !swipeEnabled,
+    ready: shelfPreferencesLoaded,
+  });
+  const renderListItemContent = useCallback(
     ({ item }: { readonly item: SidebarListItem }) => {
       switch (item.type) {
         case "v2-pending": {
@@ -806,6 +815,19 @@ function ThreadNavigationSidebarPane(
       unsnoozeThread,
     ],
   );
+  const renderListItem = useCallback(
+    (itemProps: Parameters<typeof renderListItemContent>[0]) => (
+      <Animated.View
+        key={itemProps.item.key}
+        collapsable={false}
+        entering={listMotion.entering}
+        exiting={listMotion.exiting}
+      >
+        {renderListItemContent(itemProps)}
+      </Animated.View>
+    ),
+    [listMotion, renderListItemContent],
+  );
   // The list ignores sort/group options, so only the environment and project
   // filters can light the "customized" state.
   const filterCustomized = options.selectedEnvironmentId !== null || selectedProjectKey !== null;
@@ -895,7 +917,8 @@ function ThreadNavigationSidebarPane(
         <View className="flex-1">
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
-              <LegendList
+              <AnimatedLegendList
+                itemLayoutAnimation={listMotion.layout}
                 data={listItems}
                 drawDistance={500}
                 estimatedItemSize={64}
@@ -961,7 +984,8 @@ function ThreadNavigationSidebarPane(
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
-              <LegendList
+              <AnimatedLegendList
+                itemLayoutAnimation={listMotion.layout}
                 data={listItems}
                 drawDistance={500}
                 estimatedItemSize={64}

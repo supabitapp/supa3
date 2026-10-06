@@ -72,6 +72,7 @@ import {
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -175,8 +176,8 @@ function ThreadListV2Section(props: {
         )}
       />
       {props.disclosure ? (
-        <SymbolView
-          name="chevron.down"
+        <DisclosureChevron
+          expanded={props.disclosure.expanded}
           size={10}
           tintColorClassName={
             sidebarPane
@@ -185,8 +186,6 @@ function ThreadListV2Section(props: {
                 ? "accent-icon-muted"
                 : "accent-foreground-muted"
           }
-          type="monochrome"
-          style={{ transform: [{ rotate: props.disclosure.expanded ? "180deg" : "0deg" }] }}
         />
       ) : null}
     </>

@@ -3,6 +3,8 @@ import { AccessibilityInfo, Platform, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
+import Animated from "react-native-reanimated";
+import { useNoticeMotion } from "../../lib/useNoticeMotion";
 
 /** Why the thread's last message did not send, above the composer until dismissed. */
 export function ComposerErrorNotice({
@@ -12,6 +14,7 @@ export function ComposerErrorNotice({
   readonly message: string;
   readonly onDismiss: () => void;
 }) {
+  const motion = useNoticeMotion();
   // accessibilityLiveRegion below only reaches TalkBack; VoiceOver needs an
   // explicit announcement.
   useEffect(() => {
@@ -20,7 +23,7 @@ export function ComposerErrorNotice({
     }
   }, [message]);
   return (
-    <View className="px-4 pb-3">
+    <Animated.View {...motion} collapsable={false} className="px-4 pb-3">
       <View className="flex-row items-start gap-3 rounded-[20px] border-continuous bg-card p-4">
         <SymbolView
           name="exclamationmark.circle"
@@ -50,6 +53,6 @@ export function ComposerErrorNotice({
           />
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }

@@ -1,6 +1,14 @@
 import { SymbolView } from "../components/AppSymbol";
-import { memo, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, type ColorValue } from "react-native";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Alert, Pressable, View, type ColorValue } from "react-native";
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useReducedMotionPreference } from "../lib/useReducedMotionPreference";
 
 import { tryCopyTextWithHaptic } from "../lib/copyTextWithHaptic";
 
@@ -18,6 +26,29 @@ export const CopyTextButton = memo(function CopyTextButton(props: {
   readonly buttonSize?: number;
 }) {
   const [copied, setCopied] = useState(false);
+  const reducedMotion = useReducedMotionPreference();
+  const feedback = useSharedValue(0);
+  useLayoutEffect(() => {
+    feedback.set(
+      reducedMotion
+        ? copied
+          ? 1
+          : 0
+        : withTiming(copied ? 1 : 0, {
+            duration: 120,
+            easing: Easing.out(Easing.cubic),
+            reduceMotion: ReduceMotion.Never,
+          }),
+    );
+  }, [copied, feedback, reducedMotion]);
+  const copyStyle = useAnimatedStyle(() => ({
+    opacity: 1 - feedback.value,
+    transform: [{ scale: 1 - feedback.value * 0.03 }],
+  }));
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: feedback.value,
+    transform: [{ scale: 0.97 + feedback.value * 0.03 }],
+  }));
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -68,17 +99,29 @@ export const CopyTextButton = memo(function CopyTextButton(props: {
         opacity: pressed ? 0.52 : 1,
       })}
     >
-      <SymbolView
-        name={
-          copied
-            ? { ios: "checkmark", android: "check" }
-            : { ios: "doc.on.doc", android: "content_copy" }
-        }
-        size={props.iconSize ?? 13}
-        tintColor={copied ? (props.copiedTintColor ?? props.tintColor) : props.tintColor}
-        tintColorClassName={props.tintColor ? undefined : "accent-foreground"}
-        type="monochrome"
-      />
+      <View
+        pointerEvents="none"
+        style={{ width: props.iconSize ?? 13, height: props.iconSize ?? 13 }}
+      >
+        <Animated.View style={[{ position: "absolute", inset: 0 }, copyStyle]}>
+          <SymbolView
+            name={{ ios: "doc.on.doc", android: "content_copy" }}
+            size={props.iconSize ?? 13}
+            tintColor={props.tintColor}
+            tintColorClassName={props.tintColor ? undefined : "accent-foreground"}
+            type="monochrome"
+          />
+        </Animated.View>
+        <Animated.View style={[{ position: "absolute", inset: 0 }, checkStyle]}>
+          <SymbolView
+            name={{ ios: "checkmark", android: "check" }}
+            size={props.iconSize ?? 13}
+            tintColor={props.copiedTintColor ?? props.tintColor}
+            tintColorClassName={props.tintColor ? undefined : "accent-foreground"}
+            type="monochrome"
+          />
+        </Animated.View>
+      </View>
     </Pressable>
   );
 });
