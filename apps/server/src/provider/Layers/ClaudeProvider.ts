@@ -2,6 +2,7 @@ import {
   type ClaudeSettings,
   type ModelCapabilities,
   type ServerProvider,
+  type ServerProviderModel,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
 } from "@supacode/contracts";
@@ -17,6 +18,7 @@ import { createModelCapabilities } from "@supacode/shared/model";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 import {
   query as claudeQuery,
+  type FastModeDisabledReason,
   type Options as ClaudeQueryOptions,
   type SlashCommand as ClaudeSlashCommand,
   type SDKControlGetUsageResponse,
@@ -198,8 +200,10 @@ export function buildClaudeCapabilitiesProbeQueryOptions(input: {
     settingSources: [...CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES],
     // The probe keeps filesystem setting sources for slash-command discovery,
     // but must not run the user's hooks: it fires every few minutes, so
-    // SessionStart hooks would run on every health check.
-    settings: { disableAllHooks: true },
+    // SessionStart hooks would run on every health check. Opting into fast
+    // mode makes Claude check whether the account can use it instead of
+    // answering `sdk_opt_in_required`.
+    settings: { disableAllHooks: true, fastMode: true },
     allowedTools: [],
     // Ignore MCP definitions from every filesystem setting source above. The
     // SDK combines this empty explicit map with --strict-mcp-config.
@@ -244,7 +248,35 @@ type ClaudeCapabilitiesProbe = {
    * otherwise successful response mean the account has none (API key).
    */
   readonly usage?: Pick<SDKControlGetUsageResponse, "rate_limits_available" | "rate_limits">;
+  readonly fastModeDisabledReason?: FastModeDisabledReason;
 };
+
+// Blocks that hold for every model until the account or environment changes.
+const ACCOUNT_FAST_MODE_BLOCKS: ReadonlySet<FastModeDisabledReason> = new Set([
+  "free",
+  "preference",
+  "extra_usage_disabled",
+  "not_first_party",
+  "disabled_by_env",
+]);
+
+function withoutFastMode(
+  models: ReadonlyArray<ServerProviderModel>,
+): ReadonlyArray<ServerProviderModel> {
+  return models.map((model) =>
+    model.capabilities?.optionDescriptors
+      ? {
+          ...model,
+          capabilities: {
+            ...model.capabilities,
+            optionDescriptors: model.capabilities.optionDescriptors.filter(
+              (descriptor) => descriptor.id !== "fastMode",
+            ),
+          },
+        }
+      : model,
+  );
+}
 
 function parseClaudeInitializationCommands(
   commands: ReadonlyArray<ClaudeSlashCommand> | undefined,
@@ -330,12 +362,16 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
  *
  * This is used as a fallback when `claude auth status` does not include
  * subscription type information.
+ *
+ * Fast mode availability is re-read after usage because Claude resolves the
+ * account's fast mode status asynchronously, after the first initialization
+ * response has already been sent.
  */
 const probeClaudeCapabilities = (
   claudeSettings: ClaudeSettings,
   environment?: NodeJS.ProcessEnv,
   cwd?: string,
-  includeUsage = true,
+  includeAccountState = true,
 ) => {
   const abort = new AbortController();
   return Effect.gen(function* () {
@@ -367,11 +403,20 @@ const probeClaudeCapabilities = (
     Effect.flatMap(({ q, init }) =>
       Effect.gen(function* () {
         // Usage has its own deadline so a slow optional request cannot discard initialization.
-        const usageResult = includeUsage
+        const usageResult = includeAccountState
           ? yield* Effect.tryPromise(() =>
               q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(),
             ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
           : undefined;
+        const reinitResult = includeAccountState
+          ? yield* Effect.tryPromise(() => q.reinitialize()).pipe(
+              Effect.timeout(DEFAULT_TIMEOUT_MS),
+              Effect.result,
+            )
+          : undefined;
+        const fastModeDisabledReason = (
+          reinitResult && Result.isSuccess(reinitResult) ? reinitResult.success : init
+        ).fast_mode_disabled_reason;
         const usage =
           usageResult && Result.isSuccess(usageResult)
             ? {
@@ -394,6 +439,7 @@ const probeClaudeCapabilities = (
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
           ...(usage ? { usage } : {}),
+          ...(fastModeDisabledReason ? { fastModeDisabledReason } : {}),
         } satisfies ClaudeCapabilitiesProbe;
       }),
     ),
@@ -605,11 +651,14 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     parsedVersion
       ? yield* resolveResetCredits(parsedVersion)
       : undefined;
+  const fastModeBlocked =
+    capabilities.fastModeDisabledReason !== undefined &&
+    ACCOUNT_FAST_MODE_BLOCKS.has(capabilities.fastModeDisabledReason);
   return buildServerProvider({
     presentation: CLAUDE_PRESENTATION,
     enabled: claudeSettings.enabled,
     checkedAt,
-    models,
+    models: fastModeBlocked ? withoutFastMode(models) : models,
     slashCommands: dedupedSlashCommands,
     skills,
     probe: {

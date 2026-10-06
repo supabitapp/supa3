@@ -25,6 +25,7 @@ NodeFS.writeFileSync(
   }),
 );
 const lines = NodeReadline.createInterface({ input: process.stdin });
+let initializeCount = 0;
 lines.on("line", (line) => {
   const message = JSON.parse(line);
   if (message.type !== "control_request") return;
@@ -36,6 +37,8 @@ lines.on("line", (line) => {
       }) + "\n",
     );
   if (message.request?.subtype === "initialize") {
+    // Claude resolves the account's fast mode status after the first response.
+    const fastModeResolved = initializeCount++ > 0;
     reply({
       commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],
       agents: [],
@@ -43,6 +46,8 @@ lines.on("line", (line) => {
       available_output_styles: ["default"],
       models: [],
       account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
+      fast_mode_state: fastModeResolved ? "off" : "on",
+      ...(fastModeResolved ? { fast_mode_disabled_reason: "extra_usage_disabled" } : {}),
     });
   }
   // The probe follows initialize with get_usage on the same process.

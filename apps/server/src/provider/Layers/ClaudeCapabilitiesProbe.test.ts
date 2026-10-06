@@ -47,7 +47,7 @@ it("isolates Claude capability probes without dropping workspace setting sources
   assert.equal(options.strictMcpConfig, true);
   assert.equal(options.cwd, "/workspace/project");
   assert.deepEqual(options.settingSources, [...CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES]);
-  assert.deepEqual(options.settings, { disableAllHooks: true });
+  assert.deepEqual(options.settings, { disableAllHooks: true, fastMode: true });
   assert.deepEqual(options.allowedTools, []);
   assert.equal(options.persistSession, false);
   assert.equal(options.pathToClaudeCodeExecutable, "/usr/bin/claude");
@@ -293,6 +293,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
           rate_limits_available: true,
           rate_limits: { five_hour: { utilization: 12, resets_at: "2026-07-18T14:39:00Z" } },
         },
+        fastModeDisabledReason: "extra_usage_disabled",
       });
 
       // @effect-diagnostics-next-line preferSchemaOverJson:off
@@ -315,8 +316,10 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       const flagSettings = JSON.parse(invocation.args[settingsFlagIndex + 1] ?? "{}") as {
         readonly disableAllHooks?: boolean;
+        readonly fastMode?: boolean;
       };
       assert.equal(flagSettings.disableAllHooks, true);
+      assert.equal(flagSettings.fastMode, true);
     }).pipe(Effect.scoped),
   );
 });

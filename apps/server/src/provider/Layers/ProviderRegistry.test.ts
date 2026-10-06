@@ -18,6 +18,7 @@ import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as CodexErrors from "effect-codex-app-server/errors";
+import type { FastModeDisabledReason } from "@anthropic-ai/claude-agent-sdk";
 import {
   EnvironmentId,
   ClaudeSettings,
@@ -158,6 +159,7 @@ type TestClaudeCapabilities = {
   readonly tokenSource: string | undefined;
   readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
+  readonly fastModeDisabledReason?: FastModeDisabledReason;
 };
 
 function claudeCapabilities(overrides: Partial<TestClaudeCapabilities> = {}) {
@@ -3045,6 +3047,40 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
                   stderr: "",
                   code: 0,
                 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+      );
+
+      it.effect("hides fast mode only when the account cannot use it", () =>
+        Effect.gen(function* () {
+          const fastModeModels = (fastModeDisabledReason?: FastModeDisabledReason) =>
+            checkClaudeProviderStatus(
+              defaultClaudeSettings,
+              claudeCapabilities(fastModeDisabledReason ? { fastModeDisabledReason } : {}),
+            ).pipe(
+              Effect.map((status) =>
+                status.models
+                  .filter((model) =>
+                    model.capabilities?.optionDescriptors?.some(
+                      (descriptor) => descriptor.id === "fastMode",
+                    ),
+                  )
+                  .map((model) => model.slug),
+              ),
+            );
+          const available = yield* fastModeModels();
+          assert.include(available, "claude-opus-4-6");
+          assert.deepStrictEqual(yield* fastModeModels("network_error"), available);
+          assert.deepStrictEqual(yield* fastModeModels("model_not_allowed"), available);
+          assert.deepStrictEqual(yield* fastModeModels("extra_usage_disabled"), []);
+          assert.deepStrictEqual(yield* fastModeModels("not_first_party"), []);
+        }).pipe(
+          Effect.provide(
+            mockSpawnerLayer((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
               throw new Error(`Unexpected args: ${joined}`);
             }),
           ),
