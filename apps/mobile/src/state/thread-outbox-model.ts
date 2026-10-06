@@ -1,4 +1,8 @@
-import { isTransportConnectionErrorMessage } from "@supacode/client-runtime/errors";
+import { shouldRetryThreadOutboxDelivery } from "@supacode/client-runtime/thread-outbox";
+export {
+  shouldRetryThreadOutboxDelivery,
+  threadOutboxRetryDelayMs,
+} from "@supacode/client-runtime/thread-outbox";
 import {
   clampFileAttachmentUploadBytes,
   fileAttachmentTooLargeMessage,
@@ -31,7 +35,6 @@ import { resolveProviderInteractionMode } from "./legacy-plan-mode";
 
 // Keep current writes until a compatible native baseline includes the v4 reader.
 const THREAD_OUTBOX_SCHEMA_VERSION = 3;
-const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
   projectId: ProjectId,
@@ -171,10 +174,6 @@ export function flattenQueuedThreadMessages(
   return Object.values(queues).flat();
 }
 
-export function threadOutboxRetryDelayMs(attempt: number): number {
-  return Math.min(1_000 * 2 ** Math.max(0, attempt - 1), THREAD_OUTBOX_MAX_RETRY_DELAY_MS);
-}
-
 export type ThreadOutboxDeliveryAction = "wait" | "remove" | "send";
 
 export function resolveThreadOutboxDeliveryAction(input: {
@@ -253,44 +252,6 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
     Boolean(message.creation.branch) ||
     message.creation.useDefaultBranch === true
   );
-}
-
-function errorMessage(error: unknown): string | null {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return typeof error.message === "string" ? error.message : null;
-  }
-  return typeof error === "string" ? error : null;
-}
-
-/**
- * Only a failure the server actually decided (`OrchestrationDispatchCommandError`,
- * or an authorization rejection) means the payload itself is bad. The other
- * typed failures a queued send can hit are transport-shaped: a socket that
- * dropped mid-request (`RpcClientError` wrapping a Socket read/write/close
- * reason), or an environment that is not connected or not registered. Those
- * are matched by tag, not by message text, because a `SocketReadError` message
- * is just "An error occurred during Read". A wrong answer here restores the
- * pending task into a draft and it disappears from the list.
- */
-export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "_tag" in error) {
-    switch (error._tag) {
-      case "OrchestrationDispatchCommandError":
-      case "EnvironmentAuthorizationError":
-        return false;
-      case "ConnectionTransientError":
-      case "RpcClientError":
-      case "EnvironmentRpcUnavailableError":
-      case "EnvironmentNotRegisteredError":
-        return true;
-      default:
-        break;
-    }
-  }
-  return isTransportConnectionErrorMessage(errorMessage(error));
 }
 
 export type ThreadOutboxCommandStage = "settings-sync" | "branch-resolution" | "start-turn";

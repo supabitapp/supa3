@@ -7,7 +7,6 @@ import {
   createEnvironmentThreadStateAtoms,
   EMPTY_ENVIRONMENT_THREAD_STATE,
   type EnvironmentThreadState,
-  createThreadEnvironmentAtoms,
 } from "@supacode/client-runtime/state/threads";
 import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@supacode/contracts";
 import * as Option from "effect/Option";
@@ -15,10 +14,9 @@ import { AsyncResult, Atom } from "effect/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
-import { environmentSnapshotAtom } from "./shell";
+import { directThreadEnvironment } from "./threadCommands";
 
-export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> =
-  createThreadEnvironmentAtoms(connectionAtomRuntime, environmentSnapshotAtom);
+export const threadEnvironment = directThreadEnvironment;
 const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,

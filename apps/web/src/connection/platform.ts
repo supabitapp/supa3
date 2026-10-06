@@ -692,7 +692,9 @@ const layerEnvironmentOwnedDataCleanup = Layer.succeed(
   Persistence.EnvironmentOwnedDataCleanup,
   Persistence.EnvironmentOwnedDataCleanup.of({
     clear: (environmentId) =>
-      Effect.sync(() => {
+      Effect.promise(async () => {
+        const { clearThreadOutboxEnvironment } = await import("../state/threadOutbox");
+        await clearThreadOutboxEnvironment(environmentId);
         clearComposerDraftsEnvironment(environmentId);
       }),
   }),

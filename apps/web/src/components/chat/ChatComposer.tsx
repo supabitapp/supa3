@@ -2004,7 +2004,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? "Update this server to send files with question answers"
       : null) ??
     fileCapabilityBlockReason ??
-    (supportsAttachmentUploads
+    (questionAttachmentTarget && supportsAttachmentUploads
       ? needsReattachFileCount > 0
         ? needsReattachFileCount === 1
           ? "Attach the interrupted file again or remove it"
@@ -3060,7 +3060,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isConnecting ||
     noProviderAvailable ||
     projectSelectionRequired ||
-    environmentUnavailable !== null ||
+    (environmentUnavailable !== null && showResumeAction) ||
     (!composerSendState.hasSendableContent && !showResumeAction);
   const collapsedComposerPrimaryActionLabel = showResumeAction ? "Resume thread" : "Send message";
   const showMobilePendingAnswerActions =
@@ -4194,7 +4194,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       isSendDisabled ||
       isConnecting ||
       noProviderAvailable ||
-      environmentUnavailable !== null ||
+      (environmentUnavailable !== null && activePendingProgress !== null) ||
       phase === "running"
     ) {
       return false;
@@ -7664,7 +7664,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
+                      (environmentUnavailable !== null &&
+                        (activePendingProgress !== null || showResumeAction)) ||
                       noProviderAvailable ||
                       projectSelectionRequired
                     }
