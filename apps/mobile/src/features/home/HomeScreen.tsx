@@ -12,9 +12,16 @@ import {
 import { type EnvironmentId, type SidebarProjectGroupingMode } from "@supacode/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { HeaderHeightContext } from "@react-navigation/elements";
-import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Platform, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  View,
+  type GestureResponderEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,9 +42,12 @@ import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
+  ThreadListV2SnoozedShelfHeader,
   ThreadListV2PinnedShelfHeader,
   ThreadListV2SectionDivider,
+  ThreadListV2WorkingShelfHeader,
 } from "../threads/thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
 import {
@@ -54,12 +64,9 @@ import {
   sortHomeProjectScopes,
   type HomeProjectSortOrder,
 } from "./homeThreadList";
-import { useThreadListSwipeActivation } from "./use-thread-list-swipe-activation";
+import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useMaterialFabScroll } from "./MaterialFabScrollContext";
-import { HomeThreadDock, HomeThreadDrawer } from "./HomeThreadDock";
-import { splitHomeThreadSections, type HomeThreadSection } from "./home-thread-sections";
-import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
@@ -213,50 +220,9 @@ function HomeTopContentSpacer() {
 export function HomeScreen(props: HomeScreenProps) {
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
-  const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const [drawer, setDrawer] = useState<{ section: HomeThreadSection; open: boolean } | null>(null);
-  const scopeKey = JSON.stringify([
-    props.searchQuery,
-    props.selectedEnvironmentId,
-    props.selectedProjectKey,
-    keyboardVisible,
-  ]);
-  const [drawerScopeKey, setDrawerScopeKey] = useState(scopeKey);
-  if (drawerScopeKey !== scopeKey) {
-    setDrawerScopeKey(scopeKey);
-    setDrawer(null);
-  }
-  const focused = useIsFocused();
-  const [listHeight, setListHeight] = useState(0);
-  const closeDrawer = useCallback(() => {
-    openSwipeableRef.current?.close();
-    setDrawer((current) => (current ? { ...current, open: false } : null));
-  }, []);
-  const clearClosedDrawer = useCallback(() => {
-    setDrawer((current) => (current?.open ? current : null));
-  }, []);
-  const toggleDrawer = useCallback((section: HomeThreadSection) => {
-    openSwipeableRef.current?.close();
-    setDrawer((current) => ({ section, open: current?.section !== section || !current.open }));
-  }, []);
-  const dismissDrawerWithKeyboard = useCallback(() => {
-    if (!focused || !drawer?.open) return false;
-    setDrawer(null);
-    return true;
-  }, [drawer?.open, focused]);
-  useHardwareKeyboardCommand("back", dismissDrawerWithKeyboard);
-  useFocusEffect(
-    useCallback(() => {
-      if (!drawer?.open) return;
-      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        closeDrawer();
-        return true;
-      });
-      return () => subscription.remove();
-    }, [closeDrawer, drawer?.open]),
-  );
   const insets = useSafeAreaInsets();
   const navigationHeaderHeight = useContext(HeaderHeightContext) ?? insets.top + 44;
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const { fabClearance } = useAndroidControlSizing();
   const iosBottomToolbarClearance =
     Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
@@ -309,20 +275,44 @@ export function HomeScreen(props: HomeScreenProps) {
   }, []);
   const onMaterialFabScroll = useMaterialFabScroll();
   const listRef = useRef<LegendListRef>(null);
-  const {
-    activation: swipeRowActivation,
-    activateVisibleRows,
-    handleScroll: handleListScroll,
-    trackTouches: trackListTouches,
-  } = useThreadListSwipeActivation(listRef, onMaterialFabScroll ?? undefined);
-  const drawerListRef = useRef<LegendListRef>(null);
-  const drawerActivation = useThreadListSwipeActivation(drawerListRef);
+  const swipeRowActivation = useMemo(() => createSwipeRowActivation(), []);
+  const activateVisibleRows = useCallback(
+    (rows: ReadonlyArray<ThreadListV2ListItem>) => {
+      const state = listRef.current?.getState();
+      if (state === undefined || !(state.end >= 0)) return;
+      swipeRowActivation.activate(
+        rows.slice(Math.max(0, state.start - 2), state.end + 3).map((row) => row.key),
+      );
+    },
+    [swipeRowActivation],
+  );
+  // Status-bar, accessibility and programmatic scrolls never arm the scroll
+  // gate, so every scroll also activates the visible rows once it settles.
+  const activationTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(activationTimerRef.current), []);
+  const handleListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onMaterialFabScroll?.(event);
+      clearTimeout(activationTimerRef.current);
+      activationTimerRef.current = setTimeout(
+        () => activateVisibleRows(listRef.current?.getState().data ?? []),
+        200,
+      );
+    },
+    [activateVisibleRows, onMaterialFabScroll],
+  );
+  const trackListTouches = useCallback(
+    (event: GestureResponderEvent, started: boolean) => {
+      const { changedTouches, touches } = event.nativeEvent;
+      swipeRowActivation.trackTouches(
+        started ? changedTouches.map((touch) => String(touch.identifier)) : [],
+        touches.map((touch) => String(touch.identifier)),
+      );
+    },
+    [swipeRowActivation],
+  );
   const { swipeEnabled, scrollGateHandlers } = useSwipeableScrollGate({
     onScroll: handleListScroll,
-    onScrollBeginDrag: handleScrollBeginDrag,
-  });
-  const drawerScrollGate = useSwipeableScrollGate({
-    onScroll: drawerActivation.handleScroll,
     onScrollBeginDrag: handleScrollBeginDrag,
   });
 
@@ -336,7 +326,6 @@ export function HomeScreen(props: HomeScreenProps) {
     [props.projectGroupingMode, props.projects, props.selectedEnvironmentId],
   );
   const hasSearchQuery = props.searchQuery.trim().length > 0;
-  const showDock = !hasSearchQuery && !keyboardVisible;
   const projectByKey = useMemo(() => {
     const map = new Map<string, EnvironmentProject>();
     for (const project of props.projects) {
@@ -471,12 +460,15 @@ export function HomeScreen(props: HomeScreenProps) {
   );
   const {
     loaded: shelfPreferencesLoaded,
+    settledShelfExpanded,
+    snoozedShelfExpanded,
     pinnedShelfExpanded,
+    workingShelfExpanded,
+    toggleSettledShelf,
+    toggleSnoozedShelf,
     togglePinnedShelf,
+    toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
-  const workingShelfExpanded = hasSearchQuery || drawer?.section === "working";
-  const snoozedShelfExpanded = hasSearchQuery || drawer?.section === "snoozed";
-  const settledShelfExpanded = hasSearchQuery || drawer?.section === "settled";
   // The queued-start and snooze helpers need a clock while the list stays open.
   const [nowMinute, setNowMinute] = useState(() => new Date().toISOString().slice(0, 16));
   // Snooze wake times are second-precise; a counter bumped exactly at the
@@ -526,7 +518,7 @@ export function HomeScreen(props: HomeScreenProps) {
     queuedThreadKeys,
     settledLimit: settledVisibleCount,
     now: listClock.now,
-    pinnedShelfExpanded: hasSearchQuery || pinnedShelfExpanded,
+    pinnedShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
@@ -573,7 +565,7 @@ export function HomeScreen(props: HomeScreenProps) {
         pendingTasks: v2PendingTasks,
         pinnedCount: threadListV2Layout.pinnedCount,
         workingCount: threadListV2Layout.workingCount,
-        pinnedShelfExpanded: hasSearchQuery || pinnedShelfExpanded,
+        pinnedShelfExpanded,
         workingShelfExpanded,
         workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
         snoozedCount: threadListV2Layout.snoozedCount,
@@ -589,7 +581,6 @@ export function HomeScreen(props: HomeScreenProps) {
       }),
     [
       nowMinute,
-      hasSearchQuery,
       queuedThreadKeys,
       settledShelfExpanded,
       shelfPreferencesLoaded,
@@ -602,17 +593,10 @@ export function HomeScreen(props: HomeScreenProps) {
     ],
   );
 
-  const sections = useMemo(() => splitHomeThreadSections(threadListV2Items), [threadListV2Items]);
-  const mainItems = hasSearchQuery ? threadListV2Items : sections.active;
-  const drawerItems = drawer ? sections[drawer.section] : [];
-  useThreadJumpShortcuts(drawer?.open ? drawerItems : mainItems, props.onSelectThread);
+  useThreadJumpShortcuts(threadListV2Items, props.onSelectThread);
   useEffect(() => {
-    if (swipeEnabled) activateVisibleRows(mainItems);
-  }, [activateVisibleRows, swipeEnabled, mainItems]);
-  const activateDrawerRows = drawerActivation.activateVisibleRows;
-  useEffect(() => {
-    if (drawerScrollGate.swipeEnabled) activateDrawerRows(drawerItems);
-  }, [activateDrawerRows, drawerScrollGate.swipeEnabled, drawerItems]);
+    if (swipeEnabled) activateVisibleRows(threadListV2Items);
+  }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
 
   const renderV2Item = useCallback(
     ({ item }: { readonly item: ThreadListV2ListItem }) => {
@@ -647,7 +631,6 @@ export function HomeScreen(props: HomeScreenProps) {
         return <ThreadListV2SectionDivider label="Active" />;
       }
       if (item.type === "v2-pinned-shelf") {
-        if (hasSearchQuery) return <ThreadListV2SectionDivider label={`Pinned (${item.count})`} />;
         return (
           <ThreadListV2PinnedShelfHeader
             count={item.count}
@@ -658,13 +641,34 @@ export function HomeScreen(props: HomeScreenProps) {
         );
       }
       if (item.type === "v2-working-shelf") {
-        return <ThreadListV2SectionDivider label={`Working (${item.count})`} />;
+        return (
+          <ThreadListV2WorkingShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleWorkingShelf}
+          />
+        );
       }
       if (item.type === "v2-snoozed-shelf") {
-        return <ThreadListV2SectionDivider label={`Snoozed (${item.count})`} />;
+        return (
+          <ThreadListV2SnoozedShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleSnoozedShelf}
+          />
+        );
       }
       if (item.type === "v2-settled-shelf") {
-        return <ThreadListV2SectionDivider label={`Settled (${item.count})`} />;
+        return (
+          <ThreadListV2SettledShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleSettledShelf}
+          />
+        );
       }
       const thread = item.item.thread;
       return (
@@ -755,10 +759,12 @@ export function HomeScreen(props: HomeScreenProps) {
       snoozeEnvironmentIds,
       threadSearchMatchByKey,
       titleRegenerationEnvironmentIds,
+      toggleSettledShelf,
+      toggleSnoozedShelf,
       togglePinnedShelf,
+      toggleWorkingShelf,
       v2ProjectTitleByProjectKey,
       props.searchQuery,
-      hasSearchQuery,
     ],
   );
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
@@ -855,18 +861,14 @@ export function HomeScreen(props: HomeScreenProps) {
   // mobile — the menu is the one filter surface).
   const v2ListHeader = listHeader;
 
-  // Secondary categories remain reachable in the dock even when the inbox is empty.
+  // Use the v2 project scope for its empty state. Snoozed threads need no
+  // special empty state: their shelf header is a list row even while collapsed.
   const v2ListEmpty =
     hasSearchQuery && threadSearch.isPending ? undefined : hasSearchQuery ? (
       <EmptyState
         title="No results"
         detail={`No threads matching "${props.searchQuery}".`}
         variant={Platform.OS === "android" ? "plain" : undefined}
-      />
-    ) : threadListV2Items.length > 0 ? (
-      <EmptyState
-        title="All caught up"
-        detail="Working and settled threads are in the dock below."
       />
     ) : v2ScopedProjectGroup !== null ? (
       <EmptyState
@@ -888,22 +890,18 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
 
-  const bottomClearance =
-    Platform.OS === "ios"
-      ? Math.max(insets.bottom, 24) + 48 + iosBottomToolbarClearance
-      : Math.max(insets.bottom, 16) + fabClearance;
-  const drawerCounts = {
-    working: threadListV2Layout.workingCount,
-    snoozed: threadListV2Layout.snoozedCount,
-    settled: threadListV2Layout.settledCount,
-  };
-  const showMoreSettledFooter =
-    threadListV2Layout.hiddenSettledCount > 0 ? (
-      <ThreadListV2ShowMoreRow
-        hiddenCount={threadListV2Layout.hiddenSettledCount}
-        onPress={showMoreSettled}
-      />
-    ) : null;
+  if (Platform.OS === "android" && threadListV2Items.length === 0) {
+    return (
+      <View className="flex-1 bg-header">
+        <View
+          className="flex-1 items-center justify-center overflow-hidden rounded-t-[28px] bg-screen px-4"
+          style={{ paddingBottom: insets.bottom }}
+        >
+          {v2ListEmpty}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-screen android:bg-header">
@@ -913,120 +911,56 @@ export function HomeScreen(props: HomeScreenProps) {
             ? "flex-1 overflow-hidden rounded-t-[28px] bg-screen"
             : "flex-1 bg-screen"
         }
-        style={{ paddingBottom: bottomClearance }}
       >
         {/* Shared with the iPad sidebar: cells are reused across data
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
-        <View
-          className="flex-1 overflow-hidden"
-          onLayout={(event) => setListHeight(event.nativeEvent.layout.height)}
-        >
-          <View
-            className="flex-1"
-            pointerEvents={drawer?.open ? "none" : "auto"}
-            accessibilityElementsHidden={drawer?.open === true}
-            importantForAccessibility={drawer?.open ? "no-hide-descendants" : "auto"}
-          >
-            <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
-              <LegendList
-                ref={listRef}
-                onLoad={() => activateVisibleRows(mainItems)}
-                onTouchStart={(event) => trackListTouches(event, true)}
-                onTouchEnd={(event) => trackListTouches(event, false)}
-                onTouchCancel={(event) => trackListTouches(event, false)}
-                data={mainItems}
-                renderItem={renderV2Item}
-                keyExtractor={v2KeyExtractor}
-                getItemType={(item) => item.type}
-                itemsAreEqual={threadListV2ListItemsAreEqual}
-                estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
-                drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
-                recycleItems
-                extraData={v2ExtraData}
-                alignItemsAtEnd={showDock && mainItems.length > 0}
-                maintainVisibleContentPosition
-                ListHeaderComponent={v2ListHeader}
-                ListFooterComponent={hasSearchQuery ? showMoreSettledFooter : null}
-                ListEmptyComponent={v2ListEmpty}
-                style={{ flex: 1 }}
-                automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-                contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
-                // UIKit's transparent-header inset is outside the recycler's
-                // measurements; account for it when bottom-aligning short lists.
-                contentInsetStartAdjustment={
-                  NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0
-                }
-                showsVerticalScrollIndicator={false}
-                keyboardDismissMode="on-drag"
-                keyboardShouldPersistTaps="handled"
-                {...scrollGateHandlers}
-                scrollEventThrottle={16}
-                contentContainerStyle={{ paddingBottom: 8 }}
-              />
-            </SwipeableScrollGateProvider>
-          </View>
-          {drawer && showDock && listHeight > 0 ? (
-            <HomeThreadDrawer
-              section={drawer.section}
-              count={drawerCounts[drawer.section]}
-              open={drawer.open}
-              height={Math.min(listHeight * 0.75, 560)}
-              onClose={closeDrawer}
-              onClosed={clearClosedDrawer}
-            >
-              <SwipeableScrollGateProvider
-                enabled={drawerScrollGate.swipeEnabled}
-                activation={drawerActivation.activation}
-              >
-                <LegendList
-                  ref={drawerListRef}
-                  key={drawer.section}
-                  onLoad={() => activateDrawerRows(drawerItems)}
-                  onTouchStart={(event) => drawerActivation.trackTouches(event, true)}
-                  onTouchEnd={(event) => drawerActivation.trackTouches(event, false)}
-                  onTouchCancel={(event) => drawerActivation.trackTouches(event, false)}
-                  data={drawerItems}
-                  renderItem={renderV2Item}
-                  keyExtractor={v2KeyExtractor}
-                  getItemType={(item) => item.type}
-                  itemsAreEqual={threadListV2ListItemsAreEqual}
-                  estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
-                  drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
-                  recycleItems
-                  extraData={v2ExtraData}
-                  style={{ flex: 1 }}
-                  contentInsetAdjustmentBehavior="never"
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  {...drawerScrollGate.scrollGateHandlers}
-                  scrollEventThrottle={16}
-                  contentContainerStyle={{ paddingBottom: 16 }}
-                  ListFooterComponent={drawer.section === "settled" ? showMoreSettledFooter : null}
-                  ListEmptyComponent={
-                    <EmptyState
-                      title={`No ${drawer.section} threads`}
-                      detail={
-                        drawer.section === "working"
-                          ? "Threads appear here while agents are working."
-                          : drawer.section === "snoozed"
-                            ? "Snoozed threads appear here until they wake."
-                            : "Threads appear here when you settle them."
-                      }
-                    />
-                  }
+        <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
+          <LegendList
+            ref={listRef}
+            onLoad={() => activateVisibleRows(threadListV2Items)}
+            onTouchStart={(event) => trackListTouches(event, true)}
+            onTouchEnd={(event) => trackListTouches(event, false)}
+            onTouchCancel={(event) => trackListTouches(event, false)}
+            data={threadListV2Items}
+            renderItem={renderV2Item}
+            keyExtractor={v2KeyExtractor}
+            getItemType={(item) => item.type}
+            itemsAreEqual={threadListV2ListItemsAreEqual}
+            estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
+            drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
+            recycleItems
+            extraData={v2ExtraData}
+            ListHeaderComponent={v2ListHeader}
+            ListFooterComponent={
+              settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
+                <ThreadListV2ShowMoreRow
+                  hiddenCount={threadListV2Layout.hiddenSettledCount}
+                  onPress={showMoreSettled}
                 />
-              </SwipeableScrollGateProvider>
-            </HomeThreadDrawer>
-          ) : null}
-        </View>
-        {showDock ? (
-          <HomeThreadDock
-            counts={drawerCounts}
-            selectedSection={drawer?.open ? drawer.section : null}
-            onToggle={toggleDrawer}
+              ) : null
+            }
+            ListEmptyComponent={v2ListEmpty}
+            style={{ flex: 1 }}
+            alignItemsAtEnd={!hasSearchQuery && !keyboardVisible}
+            // UIKit's transparent header inset is outside the recycler's
+            // measured viewport; include it so bottom alignment clears the toolbar.
+            contentInsetStartAdjustment={NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0}
+            automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
+            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            {...scrollGateHandlers}
+            scrollEventThrottle={16}
+            contentContainerStyle={{
+              paddingBottom:
+                Platform.OS === "ios"
+                  ? Math.max(insets.bottom, 24) + 48 + iosBottomToolbarClearance
+                  : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
+            }}
           />
-        ) : null}
+        </SwipeableScrollGateProvider>
       </View>
     </View>
   );
