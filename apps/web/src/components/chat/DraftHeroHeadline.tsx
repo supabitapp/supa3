@@ -8,6 +8,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
+import { useComposerHandleContext } from "~/composerHandleContext";
 import { shortcutLabelForCommand } from "~/keybindings";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { useScratchProject } from "~/hooks/useScratchProject";
@@ -38,6 +39,7 @@ import {
 } from "../ui/combobox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
+import { useComposerMenuProps } from "./composerEventScope";
 import { resolveProjectSettings } from "@supacode/shared/projectSettings";
 import { normalizeSearchQuery, scoreQueryMatch } from "@supacode/shared/searchRanking";
 
@@ -73,6 +75,9 @@ export function DraftHeroHeadline({
   const projectPickerShortcut = shortcutLabelForCommand(keybindings, "projectPicker.toggle");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
+  const composerRef = useComposerHandleContext();
+  const composerMenuProps = useComposerMenuProps();
+  const headlineRef = useRef<HTMLDivElement>(null);
 
   const environmentLabelById = useMemo(
     () =>
@@ -209,9 +214,11 @@ export function DraftHeroHeadline({
       }
     }
   };
-  const startScratch = async (): Promise<boolean> => {
+  // Moves the draft to No project. The control that triggered it unmounts, so
+  // focus goes to the prompt unless the user has already moved it elsewhere.
+  const startScratch = async () => {
     if (scratchTargetEnvironmentId === null || isScratchDraft) {
-      return false;
+      return;
     }
     const requested = { draftId, activeProjectKey, scratchTargetEnvironmentId };
     const project = await openScratchProject(scratchTargetEnvironmentId);
@@ -222,10 +229,13 @@ export function DraftHeroHeadline({
       latest.activeProjectKey !== requested.activeProjectKey ||
       latest.scratchTargetEnvironmentId !== requested.scratchTargetEnvironmentId
     ) {
-      return false;
+      return;
     }
     selectProject(project, deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings));
-    return true;
+    const activeElement = document.activeElement;
+    if (activeElement === document.body || headlineRef.current?.contains(activeElement)) {
+      composerRef?.current?.focusAtEnd();
+    }
   };
 
   const pickerItems = [
@@ -313,7 +323,7 @@ export function DraftHeroHeadline({
           Select project{projectPickerShortcut ? ` · ${projectPickerShortcut}` : ""}
         </TooltipPopup>
       </Tooltip>
-      <ComboboxPopup align="center">
+      <ComboboxPopup align="center" {...composerMenuProps}>
         <ComboboxSearchInput
           autoFocus
           aria-label="Search projects"
@@ -371,7 +381,7 @@ export function DraftHeroHeadline({
         : "Add a project to start";
 
   // One click out of the project, phrased as the alternative to the question
-  // above it. Focus moves to the project picker once this line has gone.
+  // above it.
   const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
   const orStartWithoutProject =
     scratchWorkspaceRoot !== null && !isScratchDraft && (hasResolvedProject || canChooseProject) ? (
@@ -381,13 +391,7 @@ export function DraftHeroHeadline({
             <InlineButton
               tone="muted"
               className="pointer-events-auto"
-              onClick={() =>
-                void startScratch().then((started) => {
-                  if (started) {
-                    document.querySelector<HTMLElement>("[data-draft-project-trigger]")?.focus();
-                  }
-                })
-              }
+              onClick={() => void startScratch()}
             />
           }
         >
@@ -398,7 +402,7 @@ export function DraftHeroHeadline({
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
+    <div ref={headlineRef} className="mx-auto flex w-full max-w-5xl flex-col items-center">
       <h1
         aria-label={headingLabel}
         className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl"
