@@ -78,7 +78,7 @@ export class OrchestrationEffectExecutorV2 extends Context.Service<
   OrchestrationEffectExecutorV2Shape
 >()("supacode/orchestration-v2/EffectWorker/OrchestrationEffectExecutorV2") {}
 
-export const executorLayer: Layer.Layer<
+export const layerExecutor: Layer.Layer<
   OrchestrationEffectExecutorV2,
   never,
   | ProviderSessionManager.ProviderSessionManagerV2

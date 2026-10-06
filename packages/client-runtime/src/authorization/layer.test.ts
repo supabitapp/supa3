@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
-import { remoteHttpClientLayer } from "../rpc/http.ts";
+import { layerRemoteHttpClient } from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import * as RemoteEnvironmentAuthorization from "./service.ts";
 
@@ -50,7 +50,7 @@ function makeHarness(responses: ReadonlyArray<Response>) {
   const layer = RemoteEnvironmentAuthorization.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
-        remoteHttpClientLayer(fetch.fetchFn),
+        layerRemoteHttpClient(fetch.fetchFn),
         Layer.succeed(
           ClientCapabilities.ClientPresentation,
           ClientCapabilities.ClientPresentation.of({

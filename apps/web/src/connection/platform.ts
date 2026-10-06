@@ -39,7 +39,7 @@ import { FetchHttpClient } from "effect/http";
 
 import { APP_VERSION } from "../branding";
 import { readDesktopPrimaryBearerToken } from "../environments/primary/desktopAuth";
-import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
+import * as PrimaryEnvironmentHttpLayer from "../environments/primary/httpLayer";
 import {
   readPrimaryEnvironmentTarget,
   type PrimaryEnvironmentTarget,
@@ -53,7 +53,7 @@ import {
   readDesktopSecondaryBootstrapsResult,
   type DesktopSecondaryBootstrapsRead,
 } from "./desktopLocal";
-import { connectionStorageLayer } from "./storage";
+import * as ConnectionStorage from "./storage";
 import { clientPresentationMetadata } from "./clientMetadata";
 
 let nextObservedRpcRequestId = 0;
@@ -65,7 +65,7 @@ function currentNetworkStatus(): "unknown" | "offline" | "online" {
   return navigator.onLine ? "online" : "offline";
 }
 
-const connectivityLayer = Connectivity.layer({
+const layerConnectivity = Connectivity.layer({
   status: Effect.sync(currentNetworkStatus),
   changes: Stream.callback((queue) =>
     Effect.acquireRelease(
@@ -121,7 +121,7 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
   ).pipe(Effect.asVoid),
 );
 
-const wakeupsLayer = Wakeups.layer({
+const layerWakeups = Wakeups.layer({
   changes: Stream.mergeAll(
     [
       Stream.callback<"application-active">((queue) =>
@@ -207,7 +207,7 @@ export const provisionDesktopSshEnvironment = Effect.fn(
   };
 });
 
-const capabilitiesLayer = Layer.effectContext(
+const layerCapabilities = Layer.effectContext(
   Effect.sync(() => {
     const presentation = ClientCapabilities.ClientPresentation.of({
       metadata: clientMetadata(),
@@ -293,7 +293,10 @@ const loadPrimaryConnectionRegistration = Effect.fn(
 )(function* (resolved: PrimaryEnvironmentTarget) {
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
     httpBaseUrl: resolved.target.httpBaseUrl,
-  }).pipe(Effect.provide(primaryEnvironmentHttpLayer), Effect.mapError(mapRemoteEnvironmentError));
+  }).pipe(
+    Effect.provide(PrimaryEnvironmentHttpLayer.layer),
+    Effect.mapError(mapRemoteEnvironmentError),
+  );
   return new PrimaryConnectionRegistration({
     target: new PrimaryConnectionTarget({
       environmentId: descriptor.environmentId,
@@ -458,7 +461,7 @@ export function secondaryRegistrationsToRetainAfterTopologyRead(
   );
 }
 
-const platformConnectionSourceLayer = Layer.effect(
+const layerPlatformConnectionSource = Layer.effect(
   PlatformConnectionSource.PlatformConnectionSource,
   Effect.gen(function* () {
     if (isHostedStaticApp() || isLocalEnvironmentDisabled()) {
@@ -578,7 +581,7 @@ const platformConnectionSourceLayer = Layer.effect(
   }),
 );
 
-const environmentOwnedDataCleanupLayer = Layer.succeed(
+const layerEnvironmentOwnedDataCleanup = Layer.succeed(
   Persistence.EnvironmentOwnedDataCleanup,
   Persistence.EnvironmentOwnedDataCleanup.of({
     clear: (environmentId) =>
@@ -588,7 +591,7 @@ const environmentOwnedDataCleanupLayer = Layer.succeed(
   }),
 );
 
-const rpcRequestObserverLayer = Layer.succeed(
+const layerRpcRequestObserver = Layer.succeed(
   EnvironmentRpcRequestObserver,
   EnvironmentRpcRequestObserver.of({
     observe: ({ environmentId, method }) =>
@@ -604,24 +607,24 @@ const rpcRequestObserverLayer = Layer.succeed(
 );
 
 type ConnectionPlatformLayerSource =
-  | typeof connectionStorageLayer
-  | typeof connectivityLayer
-  | typeof wakeupsLayer
-  | typeof capabilitiesLayer
-  | typeof platformConnectionSourceLayer
-  | typeof environmentOwnedDataCleanupLayer
-  | typeof rpcRequestObserverLayer;
+  | typeof ConnectionStorage.layer
+  | typeof layerConnectivity
+  | typeof layerWakeups
+  | typeof layerCapabilities
+  | typeof layerPlatformConnectionSource
+  | typeof layerEnvironmentOwnedDataCleanup
+  | typeof layerRpcRequestObserver;
 
-export const connectionPlatformLayer: Layer.Layer<
+export const layer: Layer.Layer<
   Layer.Success<ConnectionPlatformLayerSource>,
   Layer.Error<ConnectionPlatformLayerSource>,
   Layer.Services<ConnectionPlatformLayerSource>
 > = Layer.mergeAll(
-  connectionStorageLayer,
-  connectivityLayer,
-  wakeupsLayer,
-  capabilitiesLayer,
-  platformConnectionSourceLayer,
-  environmentOwnedDataCleanupLayer,
-  rpcRequestObserverLayer,
+  ConnectionStorage.layer,
+  layerConnectivity,
+  layerWakeups,
+  layerCapabilities,
+  layerPlatformConnectionSource,
+  layerEnvironmentOwnedDataCleanup,
+  layerRpcRequestObserver,
 );

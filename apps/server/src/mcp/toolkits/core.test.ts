@@ -136,7 +136,7 @@ it.effect("checks capability before accessing services through the production re
     expect(declaredFailure(result)).toMatchObject({ code: "capability_denied" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -161,7 +161,7 @@ it.effect("returns a bounded public failure without serializing storage causes",
     });
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
@@ -202,7 +202,7 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     ).toEqual(reference);
   }).pipe(
     Effect.provide(
-      McpHttpServer.HtmlToolkitRegistrationLive.pipe(
+      McpHttpServer.layerHtmlToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(
           ServerConfig.layerTest(process.cwd(), { prefix: "supacode-mcp-html-render-" }),
@@ -337,7 +337,7 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
     expect(declaredFailure(forked)).toMatchObject({ code: "target_required" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
@@ -384,7 +384,7 @@ it.effect("refuses act-as-caller tools to a client caller", () =>
     expect(declaredFailure(result)).toMatchObject({ code: "thread_credential_required" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -421,7 +421,7 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
     expect(allowed.isError).toBe(false);
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -489,7 +489,7 @@ it.effect("a caller cannot interrupt a thread that runs above its own modes", ()
     expect(declaredFailure(result)).toMatchObject({ code: "runtime_mode_escalation_denied" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(

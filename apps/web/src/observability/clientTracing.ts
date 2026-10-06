@@ -12,7 +12,7 @@ import {
 import { safeErrorLogAttributes } from "@supacode/client-runtime/errors";
 import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import * as ClientTracer from "./clientTracer";
-import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
+import * as PrimaryEnvironmentHttpLayer from "../environments/primary/httpLayer";
 import { isElectron } from "../env";
 import { APP_VERSION } from "~/branding";
 
@@ -27,8 +27,8 @@ const CLIENT_TRACING_RESOURCE = {
   },
 } as const;
 
-const delegateRuntimeLayer = Layer.mergeAll(
-  primaryEnvironmentHttpLayer,
+const layerDelegateRuntime = Layer.mergeAll(
+  PrimaryEnvironmentHttpLayer.layer,
   OtlpExporter.layerFlusher,
   OtlpSerialization.layerJson,
   Layer.succeed(HttpClient.TracerDisabledWhen, () => true),
@@ -73,7 +73,7 @@ async function applyClientTracingConfig(config: ClientTracingConfig): Promise<vo
 
   await disposeTracerRuntime(previousRuntime, previousScope);
 
-  const runtime = ManagedRuntime.make(delegateRuntimeLayer);
+  const runtime = ManagedRuntime.make(layerDelegateRuntime);
   const scope = runtime.runSync(Scope.make());
 
   const delegateResult = await settleAsyncResult(() =>

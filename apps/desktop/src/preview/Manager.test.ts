@@ -229,7 +229,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-const browserSessionLayer = Layer.succeed(
+const layerBrowserSession = Layer.succeed(
   BrowserSession.BrowserSession,
   BrowserSession.BrowserSession.of({
     getPartition: () => Effect.succeed("persist:supacode-preview-test"),
@@ -240,7 +240,7 @@ const browserSessionLayer = Layer.succeed(
   }),
 );
 
-const environmentLayer = Layer.succeed(
+const layerEnvironment = Layer.succeed(
   DesktopEnvironment.DesktopEnvironment,
   DesktopEnvironment.DesktopEnvironment.of({
     browserArtifactsDir: "/tmp/supacode/dev/browser-artifacts",
@@ -251,7 +251,7 @@ const environmentLayer = Layer.succeed(
   } as DesktopEnvironment.DesktopEnvironment["Service"]),
 );
 
-const fileSystemLayer = FileSystem.layerNoop({
+const layerFileSystem = FileSystem.layerNoop({
   makeDirectory: (path) =>
     Effect.sync(() => {
       mkdir(path);
@@ -263,9 +263,9 @@ const fileSystemLayer = FileSystem.layerNoop({
 });
 
 const layer = PreviewManager.layer.pipe(
-  Layer.provideMerge(browserSessionLayer),
-  Layer.provideMerge(environmentLayer),
-  Layer.provideMerge(fileSystemLayer),
+  Layer.provideMerge(layerBrowserSession),
+  Layer.provideMerge(layerEnvironment),
+  Layer.provideMerge(layerFileSystem),
   Layer.provideMerge(Path.layer),
   Layer.provideMerge(Layer.succeed(HostProcessPlatform, "darwin")),
 );

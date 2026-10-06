@@ -363,7 +363,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
       }),
   });
 
-  const cacheLayer = Layer.succeed(Persistence.EnvironmentCacheStore, cacheStore);
+  const layerCache = Layer.succeed(Persistence.EnvironmentCacheStore, cacheStore);
   const layer = EnvironmentRegistry.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -378,7 +378,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
           ConnectionWakeups.ConnectionWakeups.of({ changes: Stream.never }),
         ),
         Layer.succeed(ConnectionDriver.ConnectionDriver, driver),
-        cacheLayer,
+        layerCache,
         Layer.succeed(Persistence.EnvironmentOwnedDataCleanup, ownedDataCleanup),
       ),
     ),

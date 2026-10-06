@@ -21,7 +21,7 @@ import { clearThreadOutboxEnvironment } from "../state/thread-outbox-removal";
 import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
 import { clearThreadComposerErrorsForEnvironment } from "../state/thread-composer-error";
 import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
-import { connectionStorageLayer } from "./storage";
+import * as ConnectionStorage from "./storage";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
   if (state.isConnected === false) {
@@ -33,7 +33,7 @@ function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "on
   return "unknown";
 }
 
-const connectivityLayer = Connectivity.layer({
+const layerConnectivity = Connectivity.layer({
   status: Effect.tryPromise({
     try: () => Network.getNetworkStateAsync(),
     catch: () => undefined,
@@ -114,7 +114,7 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
   ).pipe(Effect.asVoid),
 );
 
-const wakeupsLayer = Wakeups.layer({
+const layerWakeups = Wakeups.layer({
   changes: Stream.mergeAll(
     [
       Stream.callback<"application-active-probe" | "application-active-reconnect">((queue) =>
@@ -144,7 +144,7 @@ const wakeupsLayer = Wakeups.layer({
   ),
 });
 
-const capabilitiesLayer = Layer.succeedContext(
+const layerCapabilities = Layer.succeedContext(
   Context.make(
     ClientCapabilities.PrimaryEnvironmentAuth,
     ClientCapabilities.PrimaryEnvironmentAuth.of({ bearerToken: Effect.succeed(Option.none()) }),
@@ -179,18 +179,16 @@ const capabilitiesLayer = Layer.succeedContext(
   ),
 );
 
-const platformConnectionSourceLayer = Layer.succeed(
+const layerPlatformConnectionSource = Layer.succeed(
   PlatformConnectionSource.PlatformConnectionSource,
   PlatformConnectionSource.PlatformConnectionSource.of({
     registrations: Stream.empty,
   }),
 );
 
-const providedConnectionStorageLayer = connectionStorageLayer.pipe(
-  Layer.provide(Runtime.runtimeContextLayer),
-);
+const layerProvidedConnectionStorage = ConnectionStorage.layer.pipe(Layer.provide(Runtime.layer));
 
-const environmentOwnedDataCleanupLayer = Layer.succeed(
+const layerEnvironmentOwnedDataCleanup = Layer.succeed(
   Persistence.EnvironmentOwnedDataCleanup,
   Persistence.EnvironmentOwnedDataCleanup.of({
     clear: (environmentId) =>
@@ -213,24 +211,24 @@ const environmentOwnedDataCleanupLayer = Layer.succeed(
 );
 
 type ConnectionPlatformLayerSource =
-  | typeof providedConnectionStorageLayer
-  | typeof Runtime.runtimeContextLayer
-  | typeof connectivityLayer
-  | typeof wakeupsLayer
-  | typeof capabilitiesLayer
-  | typeof platformConnectionSourceLayer
-  | typeof environmentOwnedDataCleanupLayer;
+  | typeof layerProvidedConnectionStorage
+  | typeof Runtime.layer
+  | typeof layerConnectivity
+  | typeof layerWakeups
+  | typeof layerCapabilities
+  | typeof layerPlatformConnectionSource
+  | typeof layerEnvironmentOwnedDataCleanup;
 
-export const connectionPlatformLayer: Layer.Layer<
+export const layer: Layer.Layer<
   Layer.Success<ConnectionPlatformLayerSource>,
   Layer.Error<ConnectionPlatformLayerSource>,
   Layer.Services<ConnectionPlatformLayerSource>
 > = Layer.mergeAll(
-  providedConnectionStorageLayer,
-  Runtime.runtimeContextLayer,
-  connectivityLayer,
-  wakeupsLayer,
-  capabilitiesLayer,
-  platformConnectionSourceLayer,
-  environmentOwnedDataCleanupLayer,
+  layerProvidedConnectionStorage,
+  Runtime.layer,
+  layerConnectivity,
+  layerWakeups,
+  layerCapabilities,
+  layerPlatformConnectionSource,
+  layerEnvironmentOwnedDataCleanup,
 );

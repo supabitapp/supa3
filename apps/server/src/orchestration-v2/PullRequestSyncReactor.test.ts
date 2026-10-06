@@ -214,7 +214,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
     return Effect.die(new Error(`Unexpected command: ${command.type}`));
   };
 
-  const dependencies = Layer.mergeAll(
+  const layerDependencies = Layer.mergeAll(
     Layer.mock(PullRequestService.PullRequestService)({
       summary,
       stack,
@@ -270,7 +270,7 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
     summaryCalls,
     stackCalls,
     domainEvents,
-    layer: PullRequestSyncReactor.layer.pipe(Layer.provide(dependencies)),
+    layer: PullRequestSyncReactor.layer.pipe(Layer.provide(layerDependencies)),
   };
 });
 
