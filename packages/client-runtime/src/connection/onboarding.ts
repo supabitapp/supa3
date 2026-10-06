@@ -2,13 +2,15 @@ import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contr
 import { resolveRemotePairingTarget } from "@supacode/shared/remote";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as HttpClient from "effect/http/HttpClient";
 
-import { bootstrapRemoteBearerSession } from "../authorization/remote.ts";
+import { bootstrapRemoteBearerSession, fetchRemoteSessionState } from "../authorization/remote.ts";
 import { deriveWsBaseUrl, normalizeHttpBaseUrl } from "../environment/endpoint.ts";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
@@ -22,6 +24,7 @@ import {
   SshConnectionRegistration,
 } from "./catalog.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
+import { ROUTE_CHECK_TIMEOUT_MS } from "./driver.ts";
 import { mapRemoteEnvironmentError } from "./errors.ts";
 import {
   BearerConnectionTarget,
@@ -32,7 +35,14 @@ import {
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
-import { connectionRoutes, isLearned, routeEntry, sshTargetKey } from "./routes.ts";
+import {
+  connectionRoutes,
+  credentialConnectionId,
+  isLearned,
+  pairingFallbackRoutes,
+  routeEntry,
+  sshTargetKey,
+} from "./routes.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -99,18 +109,51 @@ function differentMachineError(label: string) {
   });
 }
 
+/**
+ * Reaches the server behind a pairing link. When the link's address belongs to
+ * a saved environment, that environment's other routes are tried once the
+ * address misses the route check, so a LAN link still pairs over Tailscale.
+ */
+const reachPairingServer = Effect.fn("clientRuntime.connection.onboarding.reachPairingServer")(
+  function* (httpBaseUrl: string, saved: ReadonlyArray<ConnectionCatalogEntry>) {
+    const reach = (url: string) =>
+      fetchRemoteEnvironmentDescriptor({ httpBaseUrl: url }).pipe(
+        Effect.map((descriptor) => ({ httpBaseUrl: url, descriptor })),
+      );
+    const linkedAddress = reach(httpBaseUrl).pipe(Effect.mapError(mapRemoteEnvironmentError));
+    const fallback = pairingFallbackRoutes(saved, httpBaseUrl);
+    if (fallback === null) return yield* linkedAddress;
+    const linked = yield* Effect.forkChild(linkedAddress);
+    const savedRoutes = Effect.raceAll(
+      fallback.httpBaseUrls.map((url) =>
+        reach(url).pipe(
+          Effect.filterOrFail(
+            (reached) => reached.descriptor.environmentId === fallback.environmentId,
+          ),
+        ),
+      ),
+    );
+    const early = yield* Fiber.await(linked).pipe(Effect.timeoutOption(ROUTE_CHECK_TIMEOUT_MS));
+    if (Option.isSome(early) && Exit.isSuccess(early.value)) return early.value.value;
+    return yield* Effect.raceAll([Fiber.join(linked), savedRoutes]).pipe(
+      Effect.catch(() => Fiber.join(linked)),
+    );
+  },
+);
+
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
-)(function* (input: PairingConnectionInput) {
+)(function* (input: PairingConnectionInput, saved: ReadonlyArray<ConnectionCatalogEntry> = []) {
   const target = yield* resolvePairingTarget(input);
   const presentation = yield* ClientCapabilities.ClientPresentation;
-  const descriptor = yield* fetchRemoteEnvironmentDescriptor({
-    httpBaseUrl: target.httpBaseUrl,
-  }).pipe(Effect.mapError(mapRemoteEnvironmentError));
-  if (
-    input.expectedEnvironmentId !== undefined &&
-    descriptor.environmentId !== input.expectedEnvironmentId
-  ) {
+  const expected = input.expectedEnvironmentId;
+  const { httpBaseUrl: reachedHttpBaseUrl, descriptor } = yield* reachPairingServer(
+    target.httpBaseUrl,
+    expected === undefined
+      ? saved
+      : saved.filter((entry) => entry.target.environmentId === expected),
+  );
+  if (expected !== undefined && descriptor.environmentId !== expected) {
     return yield* differentMachineError(descriptor.label);
   }
   const compatibilityError = orchestrationProtocolCompatibilityError(descriptor);
@@ -119,14 +162,14 @@ export const preparePairingRegistration = Effect.fn(
     return yield* compatibilityError;
   }
   const access = yield* bootstrapRemoteBearerSession({
-    httpBaseUrl: target.httpBaseUrl,
+    httpBaseUrl: reachedHttpBaseUrl,
     credential: target.credential,
     scopes: presentation.scopes,
     clientMetadata: presentation.metadata,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
   const connectionId = bearerConnectionId(descriptor.environmentId, target.httpBaseUrl);
 
-  return new BearerConnectionRegistration({
+  const registration = new BearerConnectionRegistration({
     target: new BearerConnectionTarget({
       environmentId: descriptor.environmentId,
       label: descriptor.label,
@@ -143,18 +186,67 @@ export const preparePairingRegistration = Effect.fn(
       token: access.access_token,
     }),
   });
+  return { registration, reachedHttpBaseUrl };
+});
+
+const isBearerCredential = Schema.is(BearerConnectionCredential);
+
+/**
+ * Each route of a saved environment keeps the credential it was paired with,
+ * so re-pairing after a revoked session would otherwise fix only the linked
+ * address. Credentials the server no longer accepts take the new one.
+ */
+const replaceRejectedCredentials = Effect.fn(
+  "clientRuntime.connection.onboarding.replaceRejectedCredentials",
+)(function* (
+  entry: ConnectionCatalogEntry,
+  registration: BearerConnectionRegistration,
+  httpBaseUrl: string,
+) {
+  const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
+  const connectionIds = new Set(
+    connectionRoutes(entry).flatMap((route) =>
+      route.target._tag === "BearerConnectionTarget"
+        ? [credentialConnectionId(route.target.connectionId)]
+        : [],
+    ),
+  );
+  connectionIds.delete(registration.target.connectionId);
+  yield* Effect.forEach(
+    connectionIds,
+    (connectionId) =>
+      Effect.gen(function* () {
+        const saved = Option.getOrUndefined(yield* credentials.get(connectionId));
+        if (saved !== undefined && isBearerCredential(saved)) {
+          const session = yield* fetchRemoteSessionState({ httpBaseUrl, bearerToken: saved.token });
+          if (session.authenticated) return;
+        }
+        yield* credentials.put(connectionId, registration.credential);
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Could not refresh a saved credential.", { connectionId, error }),
+        ),
+      ),
+    { concurrency: "unbounded", discard: true },
+  );
 });
 
 const registerPairingConnection = Effect.fn(
   "clientRuntime.connection.onboarding.registerPairingConnection",
 )(function* (input: PairingConnectionInput) {
-  const registration = yield* preparePairingRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+  const saved = yield* SubscriptionRef.get(registry.entries);
+  const { registration, reachedHttpBaseUrl } = yield* preparePairingRegistration(input, [
+    ...saved.values(),
+  ]);
+  const previous = saved.get(registration.target.environmentId);
+  if (previous !== undefined) {
+    yield* replaceRejectedCredentials(previous, registration, reachedHttpBaseUrl);
+  }
   yield* registry.register(registration);
   return registration.target.environmentId;
 });
 
-const isBearerCredential = Schema.is(BearerConnectionCredential);
 const isBearerProfile = Schema.is(BearerConnectionProfile);
 
 const updateBearerConnection = Effect.fn(
@@ -300,6 +392,7 @@ export const make = Effect.gen(function* () {
         Effect.provideService(EnvironmentRegistry.EnvironmentRegistry, registry),
         Effect.provideService(ClientCapabilities.ClientPresentation, presentation),
         Effect.provideService(HttpClient.HttpClient, httpClient),
+        Effect.provideService(ConnectionCredentialStore.ConnectionCredentialStore, credentials),
       ),
     registerSsh: (input) =>
       registerSshConnection(input).pipe(

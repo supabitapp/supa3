@@ -40,7 +40,7 @@ export interface EnvironmentConnectionLease {
 export type RouteCheck = "answered" | "silent" | "unchecked";
 
 /** How long a direct route has to answer before it counts as unreachable from here. */
-const ROUTE_CHECK_TIMEOUT_MS = 2_500;
+export const ROUTE_CHECK_TIMEOUT_MS = 2_500;
 /** How long a connection attempt keeps listening for a route that missed the first check. */
 export const LATE_ROUTE_CHECK_TIMEOUT_MS = 15_000;
 

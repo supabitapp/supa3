@@ -9,15 +9,20 @@ import {
   insertRoute,
   isLearned,
   mergeLearnedRoutes,
+  pairingFallbackRoutes,
   routesAfterRemoving,
 } from "./routes.ts";
 
 const environmentId = EnvironmentId.make("environment-routes");
 const credential = "bearer:environment-routes";
 
-function route(httpBaseUrl: string, connectionId = credential): ConnectionRoute {
+function route(
+  httpBaseUrl: string,
+  connectionId = credential,
+  environment = environmentId,
+): ConnectionRoute {
   const target = new BearerConnectionTarget({
-    environmentId,
+    environmentId: environment,
     label: "Remote",
     connectionId,
   });
@@ -26,7 +31,7 @@ function route(httpBaseUrl: string, connectionId = credential): ConnectionRoute 
     profile: Option.some(
       new BearerConnectionProfile({
         connectionId,
-        environmentId,
+        environmentId: environment,
         label: "Remote",
         httpBaseUrl,
         wsBaseUrl: httpBaseUrl.replace(/^http/, "ws"),
@@ -96,5 +101,45 @@ describe("connection routes", () => {
       ),
     ).toHaveLength(1);
     expect(routesAfterRemoving(learned, credential)).toHaveLength(0);
+  });
+
+  it("offers the other addresses of the saved environment a pairing link points at", () => {
+    const tailnet = route("https://minim5.tail.ts.net/");
+    const base = { target: tailnet.target, profile: tailnet.profile, enabled: true };
+    const entry = entryWithRoutes(
+      base,
+      mergeLearnedRoutes({
+        entry: base,
+        activeRoute: tailnet,
+        reported: [
+          { httpBaseUrl: "http://192.168.1.20:4389/" },
+          { httpBaseUrl: "http://100.100.10.2:4389/" },
+        ],
+        allowInsecure: true,
+      })!,
+    );
+
+    expect(pairingFallbackRoutes([entry], "http://192.168.1.20:4389/")).toEqual({
+      environmentId,
+      httpBaseUrls: ["https://minim5.tail.ts.net/", "http://100.100.10.2:4389/"],
+    });
+    expect(pairingFallbackRoutes([entry], "http://192.168.1.30:4389/")).toBeNull();
+  });
+
+  it("offers no fallback when two saved environments share the address", () => {
+    const lan = route("http://192.168.1.20:4389/", "lan");
+    const home = entryWithRoutes({ target: lan.target, profile: lan.profile, enabled: true }, [
+      lan,
+      route("https://minim5.tail.ts.net/", "tailnet"),
+    ]);
+    const officeLan = route(
+      "http://192.168.1.20:4389/",
+      "office-lan",
+      EnvironmentId.make("environment-office"),
+    );
+    const office = { target: officeLan.target, profile: officeLan.profile, enabled: true };
+
+    expect(pairingFallbackRoutes([home], "http://192.168.1.20:4389/")).not.toBeNull();
+    expect(pairingFallbackRoutes([home, office], "http://192.168.1.20:4389/")).toBeNull();
   });
 });

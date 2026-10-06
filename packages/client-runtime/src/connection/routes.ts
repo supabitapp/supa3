@@ -3,7 +3,7 @@ import {
   isPrivateNetworkHost,
   isTailnetHost,
 } from "@supacode/shared/hostClassification";
-import type { DesktopSshEnvironmentTarget } from "@supacode/contracts";
+import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
 
 import {
@@ -58,14 +58,45 @@ export function routeHttpBaseUrl(route: ConnectionRoute): string | null {
   return profile?._tag === "BearerConnectionProfile" ? profile.httpBaseUrl : null;
 }
 
-function routeHostname(route: ConnectionRoute): string | null {
+function routeUrl(route: ConnectionRoute): URL | null {
   const httpBaseUrl = routeHttpBaseUrl(route);
   if (httpBaseUrl === null) return null;
   try {
-    return new URL(httpBaseUrl).hostname;
+    return new URL(httpBaseUrl);
   } catch {
     return null;
   }
+}
+
+function routeHostname(route: ConnectionRoute): string | null {
+  return routeUrl(route)?.hostname ?? null;
+}
+
+/**
+ * The other saved addresses of the one environment that already has
+ * `httpBaseUrl` as a route. A pairing link carries a single address, often a
+ * LAN one this device cannot reach right now, but its token is accepted on
+ * every address of that server.
+ */
+export function pairingFallbackRoutes(
+  entries: Iterable<ConnectionCatalogEntry>,
+  httpBaseUrl: string,
+): { readonly environmentId: EnvironmentId; readonly httpBaseUrls: ReadonlyArray<string> } | null {
+  const origin = new URL(httpBaseUrl).origin;
+  const [owner, ...others] = [...entries].filter((entry) =>
+    connectionRoutes(entry).some((route) => routeUrl(route)?.origin === origin),
+  );
+  // A private address can belong to a different machine on each network.
+  if (owner === undefined || others.length > 0) return null;
+  const fallbacks = new Map<string, string>();
+  for (const route of connectionRoutes(owner)) {
+    const url = routeUrl(route);
+    if (url === null || url.origin === origin || fallbacks.has(url.origin)) continue;
+    fallbacks.set(url.origin, url.href);
+  }
+  return fallbacks.size === 0
+    ? null
+    : { environmentId: owner.target.environmentId, httpBaseUrls: [...fallbacks.values()] };
 }
 
 export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind {
