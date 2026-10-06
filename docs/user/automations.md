@@ -17,10 +17,11 @@ Other automations start a new thread each run.
 
 ## Manage automations
 
-Use the project filter at the top of the page to see one project's automations.
-From a row you can pause or resume an automation, run it now, edit it, open its
-thread, or delete it. **Run now** also works while an automation is paused, and an
-interval restarts from that run.
+Use the project and environment pickers at the top of the page to see one
+project's or one environment's automations. New automations start in that
+selection. From a row you can pause or resume an automation, run it now, edit it,
+open its thread, or delete it. **Run now** also works while an automation is
+paused, and an interval restarts from that run.
 
 **Sent** means Supacode delivered the prompt, not that the agent finished. If the
 automation's thread is still working, the prompt joins that turn.

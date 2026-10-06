@@ -1,4 +1,3 @@
-import { scopedProjectKey, scopeProjectRef } from "@supacode/client-runtime/environment";
 import {
   EnvironmentId,
   type ProjectId,
@@ -18,30 +17,36 @@ import {
 } from "@supacode/shared/projectSettings";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
+import type { ResolvedSettingsScope, SettingsScopeSearch } from "../settings/settingsScope";
 
 /**
- * `projectKeys` holds the filtered project group's checkouts (see
- * `projectGroupMemberKeys`); null is every project. Project IDs are local to
- * an environment, so a match needs both.
+ * Project IDs are local to an environment, so a project scope matches a task
+ * only on the environment of one of its checkouts. Unscoped pages keep tasks
+ * whose project was removed.
  */
-export function inProjectFilter(
-  projectKeys: ReadonlySet<string> | null,
+export function matchesAutomationScope(
+  scope: ResolvedSettingsScope,
   environmentId: EnvironmentId,
   projectId: ProjectId,
 ): boolean {
-  return (
-    projectKeys === null ||
-    projectKeys.has(scopedProjectKey(scopeProjectRef(environmentId, projectId)))
-  );
+  if (scope.kind === "unavailable" || !scope.environmentIds.includes(environmentId)) return false;
+  if (scope.kind === "project" || scope.kind === "checkout") {
+    return scope.members.some(
+      (member) => member.environmentId === environmentId && member.id === projectId,
+    );
+  }
+  return true;
 }
 
 /**
- * `project` is the page's filter, a sidebar project key. `environmentId` and
- * `taskId` are a one-shot deep link that opens the editor; the page drops them
- * once the editor closes so Back never reopens it.
+ * `project` (a sidebar project key) and `machine` (an environment ID) are the
+ * page's scope, named like the settings scope. `environmentId` and `taskId`
+ * are a one-shot deep link that opens the editor; the page drops them once the
+ * editor closes so Back never reopens it.
  */
 export interface AutomationsSearch {
   readonly project?: string;
+  readonly machine?: string;
   readonly environmentId?: EnvironmentId;
   readonly taskId?: ScheduledTaskId;
 }
@@ -49,6 +54,7 @@ export interface AutomationsSearch {
 export function validateAutomationsSearch(raw: Record<string, unknown>): AutomationsSearch {
   return {
     ...(typeof raw.project === "string" && raw.project.trim() ? { project: raw.project } : {}),
+    ...(typeof raw.machine === "string" && raw.machine.trim() ? { machine: raw.machine } : {}),
     ...(typeof raw.environmentId === "string" && raw.environmentId.trim()
       ? { environmentId: EnvironmentId.make(raw.environmentId) }
       : {}),
@@ -58,10 +64,18 @@ export function validateAutomationsSearch(raw: Record<string, unknown>): Automat
   };
 }
 
+/** The page's scope, without a task link. */
+export function automationsScopeSearch(search: SettingsScopeSearch): AutomationsSearch {
+  return {
+    ...(search.project === undefined ? {} : { project: search.project }),
+    ...(search.machine === undefined ? {} : { machine: search.machine }),
+  };
+}
+
 /**
  * Scheduled tasks moved from Settings to Automations. Old links keep their
- * project filter and task; settings machine and checkout scopes have no
- * equivalent there.
+ * project, environment, and task; a settings checkout scope has no equivalent
+ * there.
  */
 export function redirectScheduledTasksToAutomations({
   search,

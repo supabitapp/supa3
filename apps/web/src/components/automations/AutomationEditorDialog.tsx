@@ -55,8 +55,9 @@ import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { ToggleGroup, Toggle } from "../ui/toggle-group";
+import type { ResolvedSettingsScope } from "../settings/settingsScope";
 import {
-  inProjectFilter,
+  matchesAutomationScope,
   scheduledTaskDefaultModel,
   taskToDraft,
   WEEKDAY_LABELS,
@@ -136,19 +137,19 @@ function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
 }
 
 /**
- * Creates or edits one automation. `projectKeys` narrows the projects it
- * offers, so a project-filtered page creates into that project by default.
+ * Creates or edits one automation. `scope` narrows the projects it offers, so
+ * a project-scoped page creates into that project by default.
  */
 export function AutomationEditorDialog({
   initialEnvironmentId,
   task,
-  projectKeys,
+  scope,
   connectedEnvironments,
   onClose,
 }: {
   readonly initialEnvironmentId: EnvironmentId;
   readonly task: ScheduledTask | null;
-  readonly projectKeys: ReadonlySet<string> | null;
+  readonly scope: ResolvedSettingsScope;
   readonly connectedEnvironments: readonly EnvironmentPresentation[];
   readonly onClose: () => void;
 }) {
@@ -165,9 +166,9 @@ export function AutomationEditorDialog({
       allProjects.filter(
         (project) =>
           project.environmentId === environmentId &&
-          inProjectFilter(projectKeys, environmentId, project.id),
+          matchesAutomationScope(scope, environmentId, project.id),
       ),
-    [allProjects, environmentId, projectKeys],
+    [allProjects, environmentId, scope],
   );
   const settings = useEnvironmentSettings(environmentId);
   const providers =

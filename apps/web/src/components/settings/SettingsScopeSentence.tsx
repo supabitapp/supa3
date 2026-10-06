@@ -18,7 +18,11 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
-import { resolveSettingsScope, type SettingsScopeSearch } from "./settingsScope";
+import {
+  resolveSettingsScope,
+  type ResolvedSettingsScope,
+  type SettingsScopeSearch,
+} from "./settingsScope";
 import {
   ALL_ENVIRONMENTS_VALUE,
   ALL_PROJECTS_VALUE,
@@ -36,7 +40,7 @@ export const SETTINGS_DEVICE_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/settings/connections",
 ]);
 
-interface SettingsScopeMenuProps {
+interface ScopeSentenceProps {
   readonly value: SettingsScopeSearch;
   readonly groups: readonly SidebarProjectSnapshot[];
   readonly environments: readonly EnvironmentPresentation[];
@@ -55,26 +59,34 @@ export function SettingsScopeSentence() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { environments } = useEnvironments();
   if (scope === null || SETTINGS_DEVICE_ONLY_PATHS.has(pathname)) return null;
-  const props: SettingsScopeMenuProps = {
-    value: scope.search,
-    singleEnvironment: scope.singleEnvironment,
-    groups: scope.groups,
-    environments,
-    onChange: scope.selectScope,
-  };
+  return (
+    <ScopeSentence
+      lead="Applying settings for"
+      value={scope.search}
+      singleEnvironment={scope.singleEnvironment}
+      groups={scope.groups}
+      environments={environments}
+      onChange={scope.selectScope}
+    />
+  );
+}
+
+/** "<lead> <project> across <environment>", with a picker for each axis. */
+export function ScopeSentence({ lead, ...props }: ScopeSentenceProps & { readonly lead: string }) {
+  const resolved = resolveSettingsScope(props.value, props.groups, props.environments);
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 px-3 text-base text-muted-foreground sm:px-4">
       {/* Each connective stays with its picker so a wrap never strands "on". */}
       <span className="flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0">Applying settings for</span>
+        <span className="shrink-0">{lead}</span>
         <ProjectScopeMenu {...props} />
       </span>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="shrink-0">
           {/* A legacy checkout link names one environment without `machine`. */}
-          {scope.search.machine || scope.scope.kind === "checkout" ? "on" : "across"}
+          {props.value.machine || resolved.kind === "checkout" ? "on" : "across"}
         </span>
-        <EnvironmentScopeMenu {...props} />
+        <EnvironmentScopeMenu {...props} resolved={resolved} />
       </span>
     </p>
   );
@@ -109,12 +121,11 @@ function ScopeMenu({
 
 function EnvironmentScopeMenu({
   value,
-  groups,
+  resolved,
   environments,
   onChange,
   singleEnvironment,
-}: SettingsScopeMenuProps) {
-  const resolved = resolveSettingsScope(value, groups, environments);
+}: ScopeSentenceProps & { readonly resolved: ResolvedSettingsScope }) {
   const environmentValue = environmentAxisValue(
     value,
     resolved.kind === "checkout" ? resolved.environmentId : null,
@@ -185,7 +196,7 @@ function EnvironmentScopeMenu({
   );
 }
 
-function ProjectScopeMenu({ value, groups, onChange }: SettingsScopeMenuProps) {
+function ProjectScopeMenu({ value, groups, onChange }: ScopeSentenceProps) {
   const selected = groups.find((group) => group.projectKey === value.project);
   return (
     <ScopeMenu
