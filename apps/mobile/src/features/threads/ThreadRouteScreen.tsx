@@ -4,7 +4,7 @@ import { useWorktreeSetup } from "./use-worktree-setup";
 import { worktreeSetupAgentStarted } from "@supacode/client-runtime/worktree-setup";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ScreenHeaderButton } from "../../components/ScreenHeaderButton";
-import type { ScreenHeaderAction } from "../../components/ScreenHeader.types";
+import type { ScreenHeaderMenu, ScreenHeaderMenuItem } from "../../components/ScreenHeader.types";
 import { useThreadHeaderOptions } from "./useThreadHeaderOptions";
 import {
   StackActions,
@@ -107,44 +107,37 @@ function ThreadHeader(
   const { layout, panes, toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const { onOpenTerminal, onMergeBack } = props.gitControls;
   const native = useThreadHeaderOptions(props);
-  const androidHeaderActions = useMemo<ReadonlyArray<ScreenHeaderAction>>(() => {
-    const actions: ScreenHeaderAction[] = [];
-    if (props.onReturnToThread) {
-      actions.push({
-        accessibilityLabel: "Return to chat",
-        icon: "chevron.left",
-        onPress: props.onReturnToThread,
+  const androidHeaderMenu = useMemo<ScreenHeaderMenu>(() => {
+    const items: ScreenHeaderMenuItem[] = [];
+    if (props.hasWorkspaceRoot) {
+      items.push({
+        id: "thread-terminal",
+        title: "Terminal",
+        onPress: () => onOpenTerminal(null),
       });
     }
     if (props.hasThreadCwd) {
       const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
-      actions.push({
-        accessibilityLabel: filesVisible ? "Close files" : "Open files",
+      items.push({
+        id: "thread-files",
+        title: filesVisible ? "Close files" : "Files",
         selected: filesVisible,
-        icon: "folder",
         onPress: filesVisible ? toggleAuxiliaryPane : props.onOpenFilesInspector,
       });
     }
-    if (props.hasWorkspaceRoot) {
-      actions.push({
-        accessibilityLabel: "Open terminal",
-        icon: "terminal",
-        onPress: () => onOpenTerminal(null),
-      });
-    }
-    actions.push({
-      accessibilityLabel: "Open git controls",
-      icon: "point.topleft.down.curvedto.point.bottomright.up",
+    items.push({
+      id: "thread-git",
+      title: "Git",
       onPress: props.onOpenGitInspector,
     });
     if (onMergeBack) {
-      actions.push({
-        accessibilityLabel: "Merge back to source",
-        icon: "arrow.triangle.merge",
+      items.push({
+        id: "thread-merge-back",
+        title: "Merge back to source",
         onPress: onMergeBack,
       });
     }
-    return actions;
+    return { title: "More actions", icon: "ellipsis", items };
   }, [
     props.inspectorMode,
     panes.auxiliaryPaneVisible,
@@ -153,7 +146,6 @@ function ThreadHeader(
     onMergeBack,
     props.onOpenGitInspector,
     toggleAuxiliaryPane,
-    props.onReturnToThread,
     props.hasThreadCwd,
     props.hasWorkspaceRoot,
   ]);
@@ -190,7 +182,18 @@ function ThreadHeader(
                 else navigation.dispatch(StackActions.replace("Home"));
               }
         }
-        actions={androidHeaderActions}
+        actions={
+          props.onReturnToThread
+            ? [
+                {
+                  accessibilityLabel: "Return to chat",
+                  icon: "chevron.left",
+                  onPress: props.onReturnToThread,
+                },
+              ]
+            : undefined
+        }
+        menus={[androidHeaderMenu]}
         hideBottomBorder
       />
       {native.fallback}
@@ -848,7 +851,6 @@ function ThreadRouteContent(
         )
       : [],
     terminalSessions: terminalMenuSessions,
-    showDirectFileControl: layout.usesSplitView,
     onOpenTerminal: handleOpenTerminal,
     onOpenNewTerminal: handleOpenNewTerminal,
     onRunProjectScript: handleRunProjectScript,
