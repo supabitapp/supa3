@@ -11,6 +11,8 @@ import { RowPressable } from "../../components/RowPressable";
 import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentPresentation } from "@supacode/client-runtime/connection";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -45,6 +47,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
+import { environmentPresentations } from "../../state/presentation";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
@@ -92,6 +95,9 @@ const STATUS_LABEL_BY_STATUS: Partial<
   failed: { label: "Failed", className: "text-danger-foreground" },
   limited: { label: "Limited", className: "text-warning-foreground" },
 };
+
+const selectEnvironmentConnected = (presentation: EnvironmentPresentation | null) =>
+  presentation?.connection.phase === "connected";
 
 /** Waiting (parked on subagents or monitors) stays grey like the web sidebar:
     not the user's turn yet, but not active progress either. */
@@ -744,6 +750,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
+  const environmentConnected = useAtomValue(
+    environmentPresentations.presentationAtom(thread.environmentId),
+    selectEnvironmentConnected,
+  );
   const dormant = useSwipeRowDormant(props.activationKey);
 
   const { providerDrivers, providerIconUrl } = useMemo(() => {
@@ -1300,14 +1310,21 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         style={rowAppearance.cardStyle}
       >
         {sidebarPane ? (
-          cardContent
+          <View className={cn(!environmentConnected && "opacity-50")}>{cardContent}</View>
         ) : (
           /* Flat native list rows: no tonal containers — colored status
              labels and text hierarchy carry state, an inset hairline
              separates rows. The opaque screen background stays so swipe
              actions reveal behind the row. */
           <View>
-            <View className={THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME}>{cardContent}</View>
+            <View
+              className={cn(
+                THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
+                !environmentConnected && "opacity-50",
+              )}
+            >
+              {cardContent}
+            </View>
             {THREAD_LIST_V2_ROW_DIVIDERS && props.showTrailingDivider !== false ? (
               <View className="ml-5 h-px bg-border-subtle" />
             ) : null}
@@ -1337,6 +1354,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           className={cn(
             "min-h-[44px] flex-row items-center gap-2.5 py-2",
             sidebarPane ? "px-3" : "px-5",
+            !environmentConnected && "opacity-50",
           )}
         >
           {props.project ? (
