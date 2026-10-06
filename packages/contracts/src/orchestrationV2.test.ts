@@ -23,6 +23,7 @@ import {
   TurnItemId,
 } from "./index.ts";
 import {
+  latestForkableRun,
   latestProviderTurnForAttempt,
   OrchestrationV2Checkpoint,
   OrchestrationV2CheckpointScope,
@@ -1407,6 +1408,29 @@ describe("limit recovery choice updates", () => {
   ])("accepts an explicit independent choice %j", (choice) => {
     expect(decode({ ...identity, ...choice })).toEqual({ ...identity, ...choice });
   });
+});
+
+describe("latestForkableRun", () => {
+  it.each(["completed", "waiting", "failed", "interrupted", "cancelled"] as const)(
+    "selects the newest %s run without requiring a checkpoint or assistant message",
+    (status) => {
+      const runs = [
+        { id: "latest", ordinal: 2, status },
+        { id: "older", ordinal: 1, status: "completed" as const },
+      ];
+      expect(latestForkableRun(runs)?.id).toBe("latest");
+    },
+  );
+
+  it.each(["preparing", "queued", "starting", "running", "rolled_back"] as const)(
+    "falls back past a newer %s run",
+    (status) => {
+      const older = { id: "older", ordinal: 1, status: "completed" as const };
+      const newer = { id: "newer", ordinal: 2, status };
+      expect(latestForkableRun([newer, older])).toBe(older);
+      expect(latestForkableRun([newer])).toBeNull();
+    },
+  );
 });
 
 describe("latestProviderTurnForAttempt", () => {

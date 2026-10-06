@@ -15,6 +15,7 @@ import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
   type ChatAttachment,
   CommandId,
+  isForkableSourceRunStatus,
   isProviderNativeSubagentThread,
   MessageId,
   type ModelSelection,
@@ -43,6 +44,7 @@ import {
   type OrchestrationV2Subagent,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
+  latestForkableRun,
   latestProviderTurnForAttempt,
   orchestrationV2RunWorkStartedAt,
   ProviderInstanceId,
@@ -112,11 +114,7 @@ import {
   delegatedTaskProgress,
   subagentThreadTitle,
 } from "./SubagentProjection.ts";
-import {
-  forkableSourceRunStatusError,
-  isForkableSourceRunStatus,
-  ThreadForkServiceV2,
-} from "./ThreadForkService.ts";
+import { forkableSourceRunStatusError, ThreadForkServiceV2 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
@@ -3446,7 +3444,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ),
       );
 
-    const sourceRun = runForSourcePoint(sourceProjection, command.sourcePoint);
+    const sourceRun =
+      command.sourcePoint.type === "latest_stable"
+        ? latestForkableRun(sourceProjection.runs)
+        : runForSourcePoint(sourceProjection, command.sourcePoint);
 
     if (sourceRun === null) {
       return yield* new OrchestratorDispatchError({

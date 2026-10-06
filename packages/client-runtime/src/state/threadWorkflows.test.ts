@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationV2ThreadProjection } from "@supacode/contracts";
+import { RunId, ThreadId, type OrchestrationV2ThreadProjection } from "@supacode/contracts";
 
 import {
   canDetachThreadProviderSession,
   canForkProjectedAssistantItem,
   deriveThreadQueueWorkflowState,
   resolveLatestMergeBackRun,
+  resolveThreadForkSource,
   threadSupportsProviderHandoff,
 } from "./threadWorkflows.ts";
 
@@ -31,6 +32,59 @@ const capabilities = (input?: {
   }) as never;
 
 describe("thread workflows", () => {
+  it("forks the newest finished run while newer work is running", () => {
+    const threadId = ThreadId.make("thread:fork-source");
+    const finishedRunId = RunId.make("run:fork-finished");
+    expect(
+      resolveThreadForkSource({
+        thread: { id: threadId, forkedFrom: null },
+        runs: [
+          { id: RunId.make("run:fork-running"), ordinal: 3, status: "running" },
+          { id: finishedRunId, ordinal: 2, status: "waiting" },
+          { id: RunId.make("run:fork-older"), ordinal: 1, status: "completed" },
+        ],
+      }),
+    ).toEqual({ sourceThreadId: threadId, runId: finishedRunId });
+  });
+
+  it("forks inherited history until a fork has finished a local run", () => {
+    const sourceThreadId = ThreadId.make("thread:original");
+    const sourceRunId = RunId.make("run:original");
+    const forkThreadId = ThreadId.make("thread:fork");
+    const localRunId = RunId.make("run:fork");
+    const thread = {
+      id: forkThreadId,
+      forkedFrom: { type: "run" as const, threadId: sourceThreadId, runId: sourceRunId },
+    };
+    expect(resolveThreadForkSource({ thread, runs: [] })).toEqual({
+      sourceThreadId,
+      runId: sourceRunId,
+    });
+    expect(
+      resolveThreadForkSource({
+        thread,
+        runs: [{ id: localRunId, ordinal: 1, status: "running" }],
+      }),
+    ).toEqual({ sourceThreadId, runId: sourceRunId });
+    expect(
+      resolveThreadForkSource({
+        thread,
+        runs: [{ id: localRunId, ordinal: 1, status: "failed" }],
+      }),
+    ).toEqual({ sourceThreadId: forkThreadId, runId: localRunId });
+  });
+
+  it("has no fork source before the first provider-finished run", () => {
+    const thread = { id: ThreadId.make("thread:new"), forkedFrom: null };
+    expect(resolveThreadForkSource({ thread, runs: [] })).toBeNull();
+    expect(
+      resolveThreadForkSource({
+        thread,
+        runs: [{ id: RunId.make("run:first"), ordinal: 1, status: "running" }],
+      }),
+    ).toBeNull();
+  });
+
   it("allows a completed thread to switch providers after its session detaches", () => {
     const projection = {
       thread: {

@@ -199,7 +199,7 @@ const transferResult = Schema.Struct({ sequence: NonNegativeInt, targetThreadId:
 const ThreadForkTool = Tool.make("supacode_thread_fork", {
   ...commandTool,
   description:
-    "Fork a thread from a stable run or checkpoint using the existing fork command. Omit threadId to fork this thread. The fork inherits the source configuration. Acceptance does not mean a provider turn has completed.",
+    "Fork a thread from a finished run or checkpoint. Use latest_stable for the newest provider-finished run, even while a newer run is active or checkpoint capture is pending. Omit threadId to fork this thread. The fork inherits the source configuration. Acceptance does not mean a provider turn has completed.",
   parameters: Schema.Struct({
     threadId: Schema.optional(ThreadId),
     sourcePoint: OrchestrationV2ThreadForkSourcePoint,

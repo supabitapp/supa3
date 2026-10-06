@@ -92,7 +92,10 @@ import {
   presentPendingBackgroundWork,
   presentProviderGoal,
 } from "@supacode/client-runtime/state/thread-execution";
-import { threadSupportsProviderHandoff } from "@supacode/client-runtime/state/thread-workflows";
+import {
+  resolveThreadForkSource,
+  threadSupportsProviderHandoff,
+} from "@supacode/client-runtime/state/thread-workflows";
 import {
   codexFeedbackMessage,
   parseCodexFeedbackCommand,
@@ -10282,13 +10285,8 @@ export default function ChatView(props: ChatViewProps) {
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
     contextWindow: activeContextWindow,
-    forkFromItem:
-      serverVisibleTurnItems.findLast(
-        ({ item }) =>
-          item.type === "assistant_message" && item.status === "completed" && item.runId !== null,
-      ) ?? null,
-    forkDisabled:
-      isWorking || isRevertingCheckpoint || threadDetailLoading || activeEnvironmentUnavailable,
+    forkSource: serverProjection === null ? null : resolveThreadForkSource(serverProjection),
+    forkDisabled: isRevertingCheckpoint || threadDetailLoading || activeEnvironmentUnavailable,
     onForkFromRun,
   };
   const panelToggleControlProps = {
