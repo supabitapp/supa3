@@ -72,39 +72,58 @@ function ChecksBody({
     return <p className="text-muted-foreground text-xs">No checks reported</p>;
   }
   return (
-    <ScrollArea className="max-h-64">
-      <ul className="flex flex-col gap-1">
+    <ScrollArea className="max-h-60">
+      <ul className="flex flex-col">
         {/* Keyed by name and occurrence: the host is the one that decides how many runs
           share a name, and a repeated key is a rendering fault rather than a wrong list. */}
-        {withOccurrenceKeys(orderedChecks, (check) => check.name).map(({ item: check, key }) => (
-          <li key={key} className="flex items-center gap-2 text-xs">
-            <PullRequestCheckStatusIcon status={check.status} />
-            <Tooltip>
-              <TooltipTrigger
-                render={<span className="min-w-0 flex-1 truncate">{check.name}</span>}
-              />
-              <TooltipPopup side="top">{check.description ?? check.name}</TooltipPopup>
-            </Tooltip>
-            <span className="shrink-0 text-muted-foreground">
-              {pullRequestCheckStatusLabel(check)}
-            </span>
-            {check.url === null ? null : (
-              <button
-                type="button"
-                className="shrink-0 text-primary hover:underline"
-                onClick={() => {
-                  if (!check.url) return;
-                  void openLink(check.url).catch((error: unknown) => {
-                    console.error(error);
-                    toastManager.add({ type: "error", title: "Unable to open check details" });
-                  });
-                }}
-              >
-                Details
-              </button>
-            )}
-          </li>
-        ))}
+        {withOccurrenceKeys(orderedChecks, (check) => check.name).map(({ item: check, key }) => {
+          const rowClassName = cn(
+            "flex min-h-5 w-full min-w-0 items-center gap-2 rounded-sm py-0.5 text-left text-xs leading-4 pointer-coarse:min-h-11",
+            check.url !== null &&
+              "cursor-pointer transition-[background-color,scale] duration-150 ease-out hover:bg-accent/60 active:scale-[0.96] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+          );
+          return (
+            <li key={key}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    check.url === null ? (
+                      <span className={rowClassName} />
+                    ) : (
+                      <button
+                        type="button"
+                        className={rowClassName}
+                        onClick={(event) => {
+                          if (!check.url) return;
+                          void openLink(check.url, { event }).catch((error: unknown) => {
+                            console.error(error);
+                            toastManager.add({
+                              type: "error",
+                              title: "Unable to open check details",
+                            });
+                          });
+                        }}
+                      />
+                    )
+                  }
+                >
+                  <PullRequestCheckStatusIcon status={check.status} />
+                  <span className="min-w-0 flex-1 truncate">{check.name}</span>
+                  <span className="sr-only">: {pullRequestCheckStatusLabel(check)}</span>
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  <div className="flex flex-col gap-1">
+                    <span>{check.name}</span>
+                    <span className="text-muted-foreground">
+                      {pullRequestCheckStatusLabel(check)}
+                    </span>
+                    {check.description ? <span>{check.description}</span> : null}
+                  </div>
+                </TooltipPopup>
+              </Tooltip>
+            </li>
+          );
+        })}
       </ul>
     </ScrollArea>
   );
@@ -176,8 +195,10 @@ export function PullRequestChecksPopover({
         {variant === "button" ? <ChevronDownIcon aria-hidden className="size-3" /> : null}
       </PopoverTrigger>
       <PopoverPopup align="start" width="md" side="bottom">
-        <p className="mb-2 font-medium text-sm">{presentation.label}</p>
-        {summary === null ? null : <p className="mb-2 text-muted-foreground text-xs">{summary}</p>}
+        <p className="mb-1 font-medium text-sm">{presentation.label}</p>
+        {summary === null ? null : (
+          <p className="mb-2 text-muted-foreground text-xs tabular-nums">{summary}</p>
+        )}
         {stale ? (
           <p className="text-muted-foreground text-xs">
             Check details are out of date. Refresh the pull request to update them.
