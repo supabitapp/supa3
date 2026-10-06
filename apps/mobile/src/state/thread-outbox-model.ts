@@ -1,9 +1,18 @@
-import { isTransportConnectionErrorMessage } from "@supacode/client-runtime/errors";
 import {
-  clampFileAttachmentUploadBytes,
-  fileAttachmentTooLargeMessage,
-} from "@supacode/client-runtime/state/attachments";
-import type { EnvironmentShellStatus } from "@supacode/client-runtime/state/shell";
+  groupThreadOutboxMessages,
+  flattenThreadOutboxMessages,
+} from "@supacode/client-runtime/thread-outbox";
+export {
+  shouldRetryThreadOutboxDelivery,
+  threadOutboxRetryDelayMs,
+} from "@supacode/client-runtime/thread-outbox";
+export {
+  resolveThreadOutboxDeliveryAction,
+  resolveThreadOutboxDispatchStep,
+  resolveThreadOutboxFailureAction,
+  type ThreadOutboxCommandStage,
+  type ThreadOutboxFailureAction,
+} from "@supacode/client-runtime/thread-outbox";
 import {
   CommandId,
   EnvironmentId,
@@ -26,12 +35,10 @@ import * as Schema from "effect/Schema";
 import { DraftComposerAttachmentSchema } from "../lib/composer-image-schema";
 import type { ComposerDispatchMode } from "@supacode/client-runtime/state/composer-dispatch";
 import type { DraftComposerAttachment } from "../lib/composerImages";
-import { scopedThreadKey } from "../lib/scopedEntities";
 import { resolveProviderInteractionMode } from "./legacy-plan-mode";
 
 // Keep current writes until a compatible native baseline includes the v4 reader.
 const THREAD_OUTBOX_SCHEMA_VERSION = 3;
-const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
   projectId: ProjectId,
@@ -149,97 +156,10 @@ export function decodeQueuedThreadMessage(value: unknown): QueuedThreadMessage {
 export function groupQueuedThreadMessages(
   messages: ReadonlyArray<QueuedThreadMessage>,
 ): Record<string, ReadonlyArray<QueuedThreadMessage>> {
-  const deduplicated = new Map<MessageId, QueuedThreadMessage>();
-  for (const message of messages) {
-    deduplicated.set(message.messageId, message);
-  }
-
-  const grouped: Record<string, Array<QueuedThreadMessage>> = {};
-  for (const message of deduplicated.values()) {
-    const threadKey = scopedThreadKey(message.environmentId, message.threadId);
-    (grouped[threadKey] ??= []).push(message);
-  }
-  for (const queue of Object.values(grouped)) {
-    queue.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  }
-  return grouped;
+  return groupThreadOutboxMessages(messages, (message) => message);
 }
 
-export function flattenQueuedThreadMessages(
-  queues: Record<string, ReadonlyArray<QueuedThreadMessage>>,
-): ReadonlyArray<QueuedThreadMessage> {
-  return Object.values(queues).flat();
-}
-
-export function threadOutboxRetryDelayMs(attempt: number): number {
-  return Math.min(1_000 * 2 ** Math.max(0, attempt - 1), THREAD_OUTBOX_MAX_RETRY_DELAY_MS);
-}
-
-export type ThreadOutboxDeliveryAction = "wait" | "remove" | "send";
-
-export function resolveThreadOutboxDeliveryAction(input: {
-  readonly isCreation: boolean;
-  readonly threadExists: boolean;
-  readonly shellStatus: EnvironmentShellStatus;
-  readonly environmentConnected: boolean;
-  readonly threadBusy: boolean;
-}): ThreadOutboxDeliveryAction {
-  if (input.isCreation) {
-    // A pending task creates its thread on delivery. If the thread already
-    // exists the creation command went through and only cleanup remains.
-    if (input.threadExists) {
-      return "remove";
-    }
-    // Wait for the shell to be live before sending: until the thread list has
-    // synchronized, a previously delivered creation whose cleanup failed would
-    // look missing and get re-issued, duplicating the thread.
-    return input.environmentConnected && input.shellStatus === "live" ? "send" : "wait";
-  }
-  if (!input.threadExists) {
-    return input.shellStatus === "live" ? "remove" : "wait";
-  }
-  return input.environmentConnected ? "send" : "wait";
-}
-
-export type ThreadOutboxDispatchStep =
-  | { readonly step: "wait" }
-  | { readonly step: "remove" }
-  | { readonly step: "retry" }
-  | { readonly step: "restore"; readonly reason: string }
-  | { readonly step: "send" };
-
-/**
- * Wait for provider and file capabilities before sending. Cleanup does not
- * need config: a creation whose thread exists, or a message whose thread is
- * gone, can still be removed while config loads.
- */
-export function resolveThreadOutboxDispatchStep(input: {
-  readonly deliveryAction: ThreadOutboxDeliveryAction;
-  readonly fileAttachments: ReadonlyArray<{ readonly name: string; readonly sizeBytes: number }>;
-  /** Null while the environment's server config has not synced yet. */
-  readonly serverConfig: { readonly maxFileUploadBytes: number | undefined } | null;
-}): ThreadOutboxDispatchStep {
-  if (input.deliveryAction !== "send") {
-    return { step: input.deliveryAction };
-  }
-  if (input.serverConfig === null) {
-    return { step: "retry" };
-  }
-  if (input.fileAttachments.length === 0) {
-    return { step: "send" };
-  }
-  const maxBytes = input.serverConfig.maxFileUploadBytes;
-  if (maxBytes === undefined) {
-    return { step: "restore", reason: "This server does not support file attachments." };
-  }
-  const effectiveMaxBytes = clampFileAttachmentUploadBytes(maxBytes);
-  const oversized = input.fileAttachments.find(
-    (attachment) => attachment.sizeBytes > effectiveMaxBytes,
-  );
-  return oversized
-    ? { step: "restore", reason: fileAttachmentTooLargeMessage(oversized.name, effectiveMaxBytes) }
-    : { step: "send" };
-}
+export const flattenQueuedThreadMessages = flattenThreadOutboxMessages<QueuedThreadMessage>;
 
 export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): boolean {
   if (!message.creation) {
@@ -253,60 +173,4 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
     Boolean(message.creation.branch) ||
     message.creation.useDefaultBranch === true
   );
-}
-
-function errorMessage(error: unknown): string | null {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return typeof error.message === "string" ? error.message : null;
-  }
-  return typeof error === "string" ? error : null;
-}
-
-/**
- * Only a failure the server actually decided (`OrchestrationDispatchCommandError`,
- * or an authorization rejection) means the payload itself is bad. The other
- * typed failures a queued send can hit are transport-shaped: a socket that
- * dropped mid-request (`RpcClientError` wrapping a Socket read/write/close
- * reason), or an environment that is not connected or not registered. Those
- * are matched by tag, not by message text, because a `SocketReadError` message
- * is just "An error occurred during Read". A wrong answer here restores the
- * pending task into a draft and it disappears from the list.
- */
-export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "_tag" in error) {
-    switch (error._tag) {
-      case "OrchestrationDispatchCommandError":
-      case "EnvironmentAuthorizationError":
-        return false;
-      case "ConnectionTransientError":
-      case "RpcClientError":
-      case "EnvironmentRpcUnavailableError":
-      case "EnvironmentNotRegisteredError":
-        return true;
-      default:
-        break;
-    }
-  }
-  return isTransportConnectionErrorMessage(errorMessage(error));
-}
-
-export type ThreadOutboxCommandStage = "settings-sync" | "branch-resolution" | "start-turn";
-export type ThreadOutboxFailureAction = "retry" | "restore";
-
-export function resolveThreadOutboxFailureAction(input: {
-  readonly stage: ThreadOutboxCommandStage;
-  readonly error: unknown;
-  readonly interrupted: boolean;
-}): ThreadOutboxFailureAction {
-  if (
-    input.stage === "settings-sync" ||
-    input.interrupted ||
-    shouldRetryThreadOutboxDelivery(input.error)
-  ) {
-    return "retry";
-  }
-  return "restore";
 }

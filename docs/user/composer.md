@@ -21,9 +21,10 @@ receives them on the environment's machine. Provider and model limits still
 apply, including images already in the conversation. A video attachment gives
 the agent a file path; it does not enable native video input.
 
-Uploads begin when you add an attachment. All uploads must finish before the
-message can send. Retry or remove a failed upload. On web and desktop, reloading
-before an upload finishes requires you to attach that file again.
+Uploads begin when you add an attachment. Sending saves a local copy of the
+message and its attachments while uploads finish. Pending messages keep their
+attachments across app restarts. On web and desktop, reloading an unfinished
+file upload before sending still requires you to attach that file again.
 
 You can drag or paste images into the web or desktop composer. HEIC and HEIF
 photos are converted to JPEG there and when selected from the mobile photo
@@ -55,16 +56,21 @@ running the send button shows which action it will take. Long-press it to use th
 other action for a single message, or hold `Cmd` while sending from a hardware
 keyboard. The button only offers Steer when the running agent supports it.
 
-## Queue messages offline on mobile
+## Queue messages offline
 
-Mobile keeps local copies of draft attachments, so you can preview them and queue
-messages while disconnected. Uploads resume when you reconnect. Drafts and queued
-messages survive app restarts.
+Web, desktop, and mobile save sent messages locally until the environment accepts
+them. You can queue messages in an existing thread or start a new task in a project
+you have already opened. Pending messages and their attachments survive app restarts
+and send automatically after reconnecting.
 
-You can also queue a new thread in a project you have already opened. If a worktree's
-base branch is unavailable while offline, the task uses the repository's default
-branch after reconnecting, or its current branch when no default is available.
-An explicit branch choice stays selected.
+Edit or cancel a pending message before delivery starts. If a connection drops during
+sending, Supacode keeps that message until it can confirm delivery. Approvals and
+question answers require a live connection.
+
+Mobile also keeps local copies of draft attachments. When an offline worktree task's
+base branch is unavailable on mobile, it uses the repository's default branch after
+reconnecting, or its current branch when no default is available. An explicit branch
+choice stays selected.
 
 ## Custom models
 
