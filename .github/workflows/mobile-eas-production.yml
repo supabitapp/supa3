@@ -152,7 +152,6 @@ jobs:
             }
             fs.writeFileSync(path, next);
           '
-          vp fmt apps/mobile/app.config.ts
 
           if git diff --quiet -- apps/mobile/app.config.ts; then
             echo "app.config.ts is already at $RELEASE_VERSION; no version commit needed."
