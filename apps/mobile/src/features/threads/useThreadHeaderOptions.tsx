@@ -81,12 +81,6 @@ export function useThreadHeaderOptions(props: {
   const options: AppNativeStackNavigationOptions = {
     headerShown: true,
     headerTitle: props.title,
-    headerTitleStyle: props.usesNativeHeaderGlass
-      ? {
-          fontSize: 16,
-          fontWeight: "800",
-        }
-      : undefined,
     title: props.title,
     headerBackVisible: !layout.usesSplitView,
     // Compact uses the NATIVE back button when a previous route exists;
