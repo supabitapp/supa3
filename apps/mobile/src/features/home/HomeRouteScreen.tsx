@@ -161,8 +161,8 @@ export function HomeRouteScreen() {
     <AndroidHomeFabLayout onStartNewTask={startNewTask}>
       <>
         {/* Restore the header after leaving split view; screen options are
-            shallow-merged. The brand slot also doubles as the connection
-            status surface while an environment reconnects. */}
+            shallow-merged. Connection status appears beneath the brand
+            while an environment reconnects. */}
         <NativeStackScreenOptions
           optionsVersion={windowWidth}
           options={{

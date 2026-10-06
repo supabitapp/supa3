@@ -9,7 +9,7 @@ import { useAndroidControlSizing } from "./useAndroidControlSizing";
 
 /**
  * Horizontal correction applied to content rendered in the brand title slot,
- * shared with the connection-status swap so both align identically.
+ * shared with the connection subtitle so both align identically.
  */
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
