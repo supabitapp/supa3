@@ -11,6 +11,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
+import { buildPairingUrl } from "@supacode/shared/remote";
 
 import * as RpcHttp from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
@@ -142,6 +143,10 @@ const LAN = "http://192.168.1.10:3773";
 const TAILNET = "https://minim5.tail.ts.net";
 const TAILNET_CONNECTION = `bearer:environment-paired:${TAILNET}`;
 const PAIRING_LINK = `${LAN}/#token=pairing-token`;
+const ROUTED_PAIRING_LINK = buildPairingUrl(LAN, "pairing-token", {
+  environmentId: SAVED_ENVIRONMENT_ID,
+  routes: [TAILNET],
+});
 
 function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true): ConnectionRoute {
   return {
@@ -234,6 +239,159 @@ const registerPairing = Effect.fnUntraced(function* (options: {
 });
 
 describe("connection onboarding", () => {
+  it.effect("pairs a new device through a link route and saves the reachable address", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const { registration } = yield* preparePairingRegistration(
+        { pairingUrl: ROUTED_PAIRING_LINK },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+          ),
+        ),
+      );
+      expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+      expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+        `${TAILNET}/oauth/token`,
+      ]);
+    }),
+  );
+
+  it.effect("skips a different server at the LAN address without sending it the token", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      yield* preparePairingRegistration(
+        { pairingUrl: ROUTED_PAIRING_LINK },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, {
+              [LAN]: pairingServer({ environmentId: "other" }),
+              [TAILNET]: pairingServer(),
+            }),
+          ),
+        ),
+      );
+      expect(urls(calls)).not.toContain(`${LAN}/oauth/token`);
+      expect(urls(calls)).toContain(`${TAILNET}/oauth/token`);
+    }),
+  );
+
+  it.effect("does not probe alternatives when the identified link address answers", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      yield* preparePairingRegistration(
+        { pairingUrl: ROUTED_PAIRING_LINK },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [LAN]: pairingServer(), [TAILNET]: pairingServer() }),
+          ),
+        ),
+      );
+      expect(urls(calls)).toEqual([
+        `${LAN}/.well-known/supacode/environment`,
+        `${LAN}/oauth/token`,
+      ]);
+    }),
+  );
+
+  it.effect("races link routes after the head start even when a saved route hangs", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const silenced = yield* Deferred.make<void>();
+      const saved = "https://saved.test";
+      const fiber = yield* preparePairingRegistration(
+        { pairingUrl: ROUTED_PAIRING_LINK },
+        savedEnvironment(savedRoute(saved, "saved")),
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(
+              calls,
+              { [LAN]: "silent", [saved]: "silent", [TAILNET]: pairingServer() },
+              silenced,
+            ),
+          ),
+        ),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(silenced);
+      expect(urls(calls)).toEqual([`${LAN}/.well-known/supacode/environment`]);
+      yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+      const { registration } = yield* Fiber.join(fiber);
+      expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+      expect(calls.find((call) => call.url.startsWith(LAN))?.init.signal?.aborted).toBe(true);
+      expect(calls.find((call) => call.url.startsWith(saved))?.init.signal?.aborted).toBe(true);
+    }),
+  );
+
+  it.effect("uses saved-route provenance when the same origin is in the link", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const { registration } = yield* preparePairingRegistration(
+        { pairingUrl: ROUTED_PAIRING_LINK },
+        PAIRED_OVER_TAILNET,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+          ),
+        ),
+      );
+      expect(registration.profile.httpBaseUrl).toBe(`${LAN}/`);
+      expect(
+        urls(calls).filter((url) => url === `${TAILNET}/.well-known/supacode/environment`),
+      ).toHaveLength(1);
+    }),
+  );
+
+  it.effect("rejects malformed or conflicting identities before requesting any address", () =>
+    Effect.gen(function* () {
+      for (const input of [
+        { pairingUrl: `${PAIRING_LINK}&env=` },
+        { pairingUrl: `${PAIRING_LINK}&env=one&env=two` },
+        { pairingUrl: ROUTED_PAIRING_LINK, expectedEnvironmentId: EnvironmentId.make("other") },
+      ]) {
+        const calls: Array<Call> = [];
+        const error = yield* preparePairingRegistration(input, NO_SAVED_ENVIRONMENTS).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              layerClientPresentation,
+              layerRoutedHttp(calls, { [LAN]: pairingServer() }),
+            ),
+          ),
+          Effect.flip,
+        );
+        expect(error).toMatchObject({ reason: "configuration" });
+        expect(calls).toEqual([]);
+      }
+    }),
+  );
+
+  it.effect("adds a link-only route without checking or replacing existing credentials", () =>
+    Effect.gen(function* () {
+      const { calls, token, events } = yield* registerPairing({
+        pairingUrl: ROUTED_PAIRING_LINK,
+        entries: savedEnvironment(savedRoute(REMOTE, "existing")),
+        credentials: [["existing", "saved-admin-token"]],
+        servers: { [TAILNET]: pairingServer() },
+      });
+      expect(token("existing")).toBe("saved-admin-token");
+      expect(urls(calls).some((url) => url.endsWith("/api/auth/session"))).toBe(false);
+      expect(events).toEqual([`register:bearer:environment-paired:${TAILNET}`]);
+    }),
+  );
+
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
       const calls: Array<Call> = [];

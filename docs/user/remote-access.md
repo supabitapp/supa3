@@ -29,6 +29,15 @@ in the receiving app. Connection settings are under **Settings → Connections**
 on web and desktop and **Settings → Environments** on mobile. A loopback address
 such as `127.0.0.1` reaches only the device opening the link.
 
+Pairing links include alternative host addresses when available. The in-app
+scanner and **Add environment** can use a reachable alternative when the main
+address is unavailable, including when pairing a new device away from the LAN.
+Older links can use another saved route when the main address belongs to one
+saved machine. Each alternative must identify the intended environment before
+receiving the token. A phone camera opening an unreachable LAN URL in a browser
+cannot load the app to try those alternatives; use the in-app scanner or paste
+the link instead.
+
 Pairing authorizes that device for future connections. Use a fresh one-time link
 for each new device; you do not need the original token to reconnect. Links
 created in Settings can only be copied from the client that created them while

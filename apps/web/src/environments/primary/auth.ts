@@ -11,7 +11,8 @@ import { EnvironmentHttpCommonError, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@supac
 import type { EnvironmentHttpCommonError as EnvironmentHttpCommonErrorType } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HttpClientError } from "effect/http";
+import { FetchHttpClient, HttpClientError } from "effect/http";
+import { readPairingEnvironmentId } from "@supacode/shared/remote";
 
 import {
   getPairingTokenFromUrl,
@@ -224,6 +225,10 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBrow
       return await runPrimaryHttp(
         PrimaryEnvironmentHttpClient.pipe(
           Effect.flatMap((client) => client.auth.browserSession({ payload: { credential } })),
+          Effect.provideService(FetchHttpClient.RequestInit, {
+            credentials: "include",
+            redirect: "error",
+          }),
         ),
       );
     } catch (error) {
@@ -307,7 +312,28 @@ function isTransientBootstrapError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-async function bootstrapServerAuth(urlCredential: string | null): Promise<ServerAuthGateState> {
+async function verifyPairingEnvironment(pairingUrl?: string): Promise<void> {
+  const expected =
+    pairingUrl === undefined ? undefined : readPairingEnvironmentId(new URL(pairingUrl));
+  if (expected === undefined) return;
+  const descriptor = await runPrimaryHttp(
+    PrimaryEnvironmentHttpClient.pipe(
+      Effect.flatMap((client) => client.metadata.descriptor()),
+      Effect.provideService(FetchHttpClient.RequestInit, {
+        credentials: "include",
+        redirect: "error",
+      }),
+    ),
+  );
+  if (descriptor.environmentId !== expected) {
+    throw new Error("This pairing link belongs to a different environment.");
+  }
+}
+
+async function bootstrapServerAuth(
+  urlCredential: string | null,
+  pairingUrl?: string,
+): Promise<ServerAuthGateState> {
   const currentSession = await fetchSessionState();
   if (currentSession.authenticated && !urlCredential) {
     return { status: "authenticated" };
@@ -322,6 +348,7 @@ async function bootstrapServerAuth(urlCredential: string | null): Promise<Server
   }
 
   try {
+    await verifyPairingEnvironment(pairingUrl);
     await exchangeBootstrapCredential(bootstrapCredential);
     await waitForAuthenticatedSessionAfterBootstrap();
     return { status: "authenticated" };
@@ -334,7 +361,10 @@ async function bootstrapServerAuth(urlCredential: string | null): Promise<Server
   }
 }
 
-export async function submitServerAuthCredential(credential: string): Promise<void> {
+export async function submitServerAuthCredential(
+  credential: string,
+  pairingUrl?: string,
+): Promise<void> {
   const trimmedCredential = credential.trim();
   if (!trimmedCredential) {
     throw new PrimaryEnvironmentPairingCredentialRequiredError({
@@ -343,6 +373,7 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
   }
 
   resolvedAuthenticatedGateState = null;
+  await verifyPairingEnvironment(pairingUrl);
   await exchangeBootstrapCredential(trimmedCredential);
   await waitForAuthenticatedSessionAfterBootstrap();
   resolvedAuthenticatedGateState = { status: "authenticated" };
@@ -428,6 +459,7 @@ export async function revokeOtherServerClientSessions(): Promise<number> {
 }
 
 export async function resolveInitialServerAuthGateState(): Promise<ServerAuthGateState> {
+  const pairingUrl = peekPairingTokenFromUrl() ? window.location.href : undefined;
   const urlCredential = takePairingTokenFromUrl();
   const previousPromise = bootstrapPromise;
   if (urlCredential) {
@@ -447,9 +479,9 @@ export async function resolveInitialServerAuthGateState(): Promise<ServerAuthGat
         .catch(() => undefined)
         .then(() => {
           resolvedAuthenticatedGateState = null;
-          return bootstrapServerAuth(urlCredential);
+          return bootstrapServerAuth(urlCredential, pairingUrl);
         })
-    : bootstrapServerAuth(urlCredential);
+    : bootstrapServerAuth(urlCredential, pairingUrl);
   bootstrapPromise = nextPromise;
   return nextPromise
     .then((result) => {

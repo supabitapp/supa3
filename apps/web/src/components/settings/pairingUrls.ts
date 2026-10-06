@@ -1,13 +1,19 @@
 import { buildHostedPairingUrl } from "../../hostedPairing";
-import { setPairingTokenOnUrl } from "../../pairingUrl";
+import { buildPairingUrl, type PairingRouteHints } from "@supacode/shared/remote";
 
-export function resolveDesktopPairingUrl(endpointUrl: string, credential: string): string {
-  const url = new URL(endpointUrl);
-  url.pathname = "/pair";
-  return setPairingTokenOnUrl(url, credential).toString();
+export function resolveDesktopPairingUrl(
+  endpointUrl: string,
+  credential: string,
+  hints: PairingRouteHints = {},
+): string {
+  return buildPairingUrl(endpointUrl, credential, hints);
 }
 
-export function resolveHostedPairingUrl(endpointUrl: string, credential: string): string | null {
+export function resolveHostedPairingUrl(
+  endpointUrl: string,
+  credential: string,
+  hints: PairingRouteHints = {},
+): string | null {
   const url = new URL(endpointUrl);
   if (url.protocol !== "https:") {
     return null;
@@ -16,5 +22,6 @@ export function resolveHostedPairingUrl(endpointUrl: string, credential: string)
   return buildHostedPairingUrl({
     host: endpointUrl,
     token: credential,
+    ...hints,
   });
 }

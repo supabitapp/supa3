@@ -17,7 +17,7 @@ import { AppText as Text } from "../../components/AppText";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { ConnectionFormField } from "./ConnectionFormField";
 import { ConnectionSheetButton } from "./ConnectionSheetButton";
-import { buildPairingUrl, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
+import { pairingUrlForFields, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 
 type ConnectionsNewRouteParams = {
@@ -49,6 +49,7 @@ export function ConnectionsNewRouteScreen({
   const insets = useSafeAreaInsets();
   const [hostInput, setHostInput] = useState("");
   const [codeInput, setCodeInput] = useState("");
+  const [originalPairingUrl, setOriginalPairingUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScanner, setShowScanner] = useState(params.mode === "scan_qr");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -75,6 +76,7 @@ export function ConnectionsNewRouteScreen({
           ? connectionPairingUrl
           : null;
     if (prefillUrl !== null) {
+      setOriginalPairingUrl(prefillUrl);
       const { host, code } = parsePairingUrl(prefillUrl);
       setHostInput(host);
       setCodeInput(code);
@@ -91,6 +93,13 @@ export function ConnectionsNewRouteScreen({
   }
 
   const handleHostChange = useCallback((value: string) => {
+    const parsed = parsePairingUrl(value);
+    if (parsed.code) {
+      setOriginalPairingUrl(value.trim());
+      setHostInput(parsed.host);
+      setCodeInput(parsed.code);
+      return;
+    }
     setHostInput(value);
   }, []);
 
@@ -146,6 +155,7 @@ export function ConnectionsNewRouteScreen({
       try {
         const pairingUrl = extractPairingUrlFromQrPayload(data);
         const { host, code } = parsePairingUrl(pairingUrl);
+        setOriginalPairingUrl(pairingUrl);
         setHostInput(host);
         setCodeInput(code);
         onChangeConnectionPairingUrl(pairingUrl);
@@ -184,8 +194,8 @@ export function ConnectionsNewRouteScreen({
   );
 
   const handleSubmit = useCallback(async () => {
-    await connectAndClose(buildPairingUrl(hostInput, codeInput), false);
-  }, [codeInput, connectAndClose, hostInput]);
+    await connectAndClose(pairingUrlForFields(hostInput, codeInput, originalPairingUrl), false);
+  }, [codeInput, connectAndClose, hostInput, originalPairingUrl]);
 
   useEffect(() => {
     if (!shouldAutoConnect || attemptedAutoConnectRef.current === routePairingUrl) {

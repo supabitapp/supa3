@@ -1,11 +1,16 @@
-import { DEFAULT_HOSTED_APP_URL } from "@supacode/shared/remote";
+import {
+  DEFAULT_HOSTED_APP_URL,
+  readHostedPairingRequest as readSharedHostedPairingRequest,
+} from "@supacode/shared/remote";
+import type {
+  HostedPairingRequest as SharedHostedPairingRequest,
+  PairingRouteHints,
+} from "@supacode/shared/remote";
 
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "./pairingUrl";
+import { setPairingTokenOnUrl } from "./pairingUrl";
 
-export interface HostedPairingRequest {
-  readonly host: string;
-  readonly token: string;
-  readonly label: string;
+export interface HostedPairingRequest extends SharedHostedPairingRequest {
+  readonly pairingUrl: string;
 }
 
 export type HostedAppChannel = "latest" | "nightly";
@@ -51,30 +56,26 @@ export function isHostedStaticApp(url?: URL): boolean {
 }
 
 export function readHostedPairingRequest(url: URL = new URL(window.location.href)) {
-  const host = url.searchParams.get("host")?.trim() ?? "";
-  const token = getPairingTokenFromUrl(url)?.trim() ?? "";
-  const label = url.searchParams.get("label")?.trim() ?? "";
-
-  if (!host || !token) {
-    return null;
-  }
-
-  return {
-    host,
-    token,
-    label,
-  } satisfies HostedPairingRequest;
+  const request = readSharedHostedPairingRequest(url);
+  return request === null
+    ? null
+    : ({
+        ...request,
+        pairingUrl: url.toString(),
+      } satisfies HostedPairingRequest);
 }
 
 export function hasHostedPairingRequest(url: URL = new URL(window.location.href)): boolean {
   return readHostedPairingRequest(url) !== null;
 }
 
-export function buildHostedPairingUrl(input: {
-  readonly host: string;
-  readonly token: string;
-  readonly label?: string | null;
-}): string {
+export function buildHostedPairingUrl(
+  input: {
+    readonly host: string;
+    readonly token: string;
+    readonly label?: string | null;
+  } & PairingRouteHints,
+): string {
   const url = new URL("/pair", configuredHostedAppUrl());
   url.searchParams.set("host", input.host);
 
@@ -83,7 +84,7 @@ export function buildHostedPairingUrl(input: {
     url.searchParams.set("label", label);
   }
 
-  return setPairingTokenOnUrl(url, input.token).toString();
+  return setPairingTokenOnUrl(url, input.token, input).toString();
 }
 
 export function buildHostedChannelSelectionUrl(input: {

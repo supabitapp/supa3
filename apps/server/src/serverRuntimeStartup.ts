@@ -26,6 +26,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "./config.ts";
+import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
 import * as ServiceLauncherClient from "./service/serviceLauncherClient.ts";
 import { flushCompileCache } from "./compileCache.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -323,9 +324,12 @@ const resolveStartupBrowserTarget = Effect.gen(function* () {
       ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
       : localUrl;
   const baseTarget = serverConfig.devUrl?.toString() ?? bindUrl;
-  return serverConfig.mode === "desktop"
-    ? baseTarget
-    : yield* serverAuth.issueStartupPairingUrl(baseTarget);
+  if (serverConfig.mode === "desktop") return baseTarget;
+  const endpoints = yield* DirectEndpoints.DirectEndpoints;
+  return yield* serverAuth.issueStartupPairingUrl(
+    baseTarget,
+    (yield* endpoints.resolve()).map((endpoint) => endpoint.httpBaseUrl),
+  );
 });
 
 const maybeOpenBrowser = (target: string) =>
@@ -354,6 +358,7 @@ const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>)
 interface StartupOptions {
   readonly activate?: Effect.Effect<void>;
   readonly awaitAuxiliaryParked?: Effect.Effect<void>;
+  readonly awaitPairingEndpoints?: Effect.Effect<void>;
   readonly abort?: (error: ServerRuntimeStartupError) => Effect.Effect<void>;
 }
 
@@ -569,6 +574,7 @@ const make = (options?: StartupOptions) =>
             Effect.withSpan("server.startup.heartbeat.record"),
             Effect.ignoreCause({ log: true }),
           );
+          yield* (options?.awaitPairingEndpoints ?? Effect.void).pipe(Effect.timeoutOption(10_000));
           if (serverConfig.startupPresentation === "headless") {
             yield* Effect.logDebug("startup phase: headless access info");
             const accessInfo = yield* issueHeadlessServeAccessInfo();

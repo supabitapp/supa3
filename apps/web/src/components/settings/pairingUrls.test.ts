@@ -1,8 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { EnvironmentId } from "@supacode/contracts";
+import { resolveRemotePairingTarget } from "@supacode/shared/remote";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
 
 describe("settings pairing URL helpers", () => {
+  it("carries the same identity and routes through direct and hosted links", () => {
+    const hints = {
+      environmentId: EnvironmentId.make("machine"),
+      routes: ["https://machine.ts.net", "http://100.64.1.2:3773"],
+    };
+    for (const pairingUrl of [
+      resolveDesktopPairingUrl("https://public.test", "code", hints),
+      resolveHostedPairingUrl("https://public.test", "code", hints),
+    ]) {
+      expect(resolveRemotePairingTarget({ pairingUrl: pairingUrl! })).toMatchObject({
+        environmentId: hints.environmentId,
+        routes: ["https://machine.ts.net/", "http://100.64.1.2:3773/"],
+      });
+    }
+  });
   afterEach(() => {
     vi.unstubAllEnvs();
   });

@@ -600,6 +600,7 @@ const layerMakeServer = Layer.unwrap(
     const layerActivation = Layer.succeed(ServerActivation.ServerActivation, awaitActivation);
     const runtimeStateParked = yield* Deferred.make<void>();
     const tailscaleParked = yield* Deferred.make<void>();
+    const tailscaleSettled = yield* Deferred.make<void>();
     const routesReady = yield* Deferred.make<void>();
     const layerLauncher = ServiceLauncherClient.layer;
 
@@ -679,7 +680,7 @@ const layerMakeServer = Layer.unwrap(
                   }).pipe(Effect.as(null)),
                 ),
               );
-            }),
+            }).pipe(Effect.ensuring(Deferred.succeed(tailscaleSettled, undefined))),
             (configured) =>
               configured
                 ? disableTailscaleServe({ servePort: configured.servePort }).pipe(
@@ -700,6 +701,9 @@ const layerMakeServer = Layer.unwrap(
         )
       : Layer.empty;
     const layerRuntimeServices = ServerRuntimeStartup.layerWithOptions({
+      awaitPairingEndpoints: config.tailscaleServeEnabled
+        ? Deferred.await(tailscaleSettled)
+        : Effect.void,
       activate: Deferred.succeed(activation, undefined).pipe(Effect.asVoid),
       abort: (error) => Deferred.die(activation, error).pipe(Effect.asVoid),
       awaitAuxiliaryParked: Effect.all(

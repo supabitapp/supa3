@@ -70,6 +70,13 @@ export function parsePairingUrl(url: string): { host: string; code: string } {
   }
 }
 
+export function pairingUrlForFields(host: string, code: string, originalUrl: string): string {
+  const original = parsePairingUrl(originalUrl);
+  return originalUrl && original.host === host.trim() && original.code === code.trim()
+    ? originalUrl
+    : buildPairingUrl(host, code);
+}
+
 export function extractPairingUrlFromQrPayload(payload: string): string {
   const trimmed = payload.trim();
   if (!trimmed) {

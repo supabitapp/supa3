@@ -20,6 +20,7 @@ describe("hostedPairing", () => {
       host: "100.64.1.2:3773",
       token: "ABCD1234",
       label: "",
+      pairingUrl: url.toString(),
     });
     expect(hasHostedPairingRequest(url)).toBe(true);
   });

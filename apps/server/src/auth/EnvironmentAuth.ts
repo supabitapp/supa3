@@ -18,6 +18,7 @@ import {
   type AuthWebSocketTicketResult,
 } from "@supacode/contracts";
 import { encodeOAuthScope } from "@supacode/shared/oauthScope";
+import { buildPairingUrl } from "@supacode/shared/remote";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -372,6 +373,7 @@ export class EnvironmentAuth extends Context.Service<
     ) => Effect.Effect<AuthWebSocketTicketResult, ServerAuthInternalError>;
     readonly issueStartupPairingUrl: (
       baseUrl: string,
+      routes?: ReadonlyArray<string>,
     ) => Effect.Effect<string, ServerAuthInternalError>;
   }
 >()("supacode/auth/EnvironmentAuth") {}
@@ -460,6 +462,7 @@ export const make = Effect.gen(function* () {
   const sessions = yield* SessionStore.SessionStore;
   const descriptor = yield* policy.getDescriptor();
   const config = yield* ServerConfig.ServerConfig;
+  const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
   const devAuth = resolveReusableDevAuth(config);
 
   const authenticateToken = (
@@ -855,17 +858,15 @@ export const make = Effect.gen(function* () {
       Effect.withSpan("EnvironmentAuth.revokeOtherClientSessions"),
     );
 
-  const issueStartupPairingUrl: EnvironmentAuth["Service"]["issueStartupPairingUrl"] = (baseUrl) =>
-    issueStartupPairingCredential().pipe(
-      Effect.map((issued) => {
-        const url = new URL(baseUrl);
-        url.pathname = "/pair";
-        url.searchParams.delete("token");
-        url.hash = new URLSearchParams([["token", issued.credential]]).toString();
-        return url.toString();
-      }),
-      Effect.withSpan("EnvironmentAuth.issueStartupPairingUrl"),
-    );
+  const issueStartupPairingUrl: EnvironmentAuth["Service"]["issueStartupPairingUrl"] = Effect.fn(
+    "EnvironmentAuth.issueStartupPairingUrl",
+  )(function* (baseUrl, routes) {
+    const issued = yield* issueStartupPairingCredential();
+    return buildPairingUrl(baseUrl, issued.credential, {
+      environmentId: yield* environment.getEnvironmentId,
+      routes,
+    });
+  });
 
   const issueWebSocketTicket: EnvironmentAuth["Service"]["issueWebSocketTicket"] = (session) =>
     sessions.issueWebSocketToken(session.sessionId).pipe(

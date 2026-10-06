@@ -14,6 +14,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServiceLauncherClient from "./service/serviceLauncherClient.ts";
 import * as ServerConfig from "./config.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as LegacyV1ThreadImporter from "./orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
@@ -40,6 +41,9 @@ it.effect("parks automatic pull until activation without delaying command readin
       const commitTrial = yield* Deferred.make<void>();
       const statusCalled = yield* Deferred.make<string>();
       const statusInterrupted = yield* Deferred.make<void>();
+      const pairingEndpointsReady = yield* Deferred.make<void>();
+      const pairingEndpointsWaiting = yield* Deferred.make<void>();
+      const pairingIssued = yield* Deferred.make<void>();
       const cwd = "/auto-pull-project";
       const updatedAt = "2026-01-01T00:00:00.000Z";
       const snapshot = {
@@ -69,6 +73,10 @@ it.effect("parks automatic pull until activation without delaying command readin
       const dependencies: Layer.Layer<
         Layer.Services<ReturnType<typeof ServerRuntimeStartup.layerWithOptions>>
       > = Layer.mergeAll(
+        Layer.mock(DirectEndpoints.DirectEndpoints)({ resolve: () => Effect.succeed([]) }),
+        Layer.mock(ServerEnvironment.ServerEnvironmentIdentity)({
+          getEnvironmentId: Effect.succeed(EnvironmentId.make("auto-pull-environment")),
+        }),
         Layer.mock(ServerConfig.ServerConfig)({
           ...(yield* ServerConfig.deriveServerPaths(cwd, undefined).pipe(
             Effect.provide(Path.layer),
@@ -93,7 +101,7 @@ it.effect("parks automatic pull until activation without delaying command readin
           logWebSocketEvents: false,
           tailscaleServeEnabled: false,
           tailscaleServePort: 443,
-          mode: "desktop",
+          mode: "web",
           cwd,
           host: "localhost",
           port: 3773,
@@ -162,7 +170,12 @@ it.effect("parks automatic pull until activation without delaying command readin
         }),
         Layer.mock(AnalyticsService.AnalyticsService)({ record: () => Effect.void }),
         NodeCrypto.layer,
-        Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
+        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+          issueStartupPairingUrl: () =>
+            Deferred.succeed(pairingIssued, undefined).pipe(
+              Effect.as("http://localhost/pair#token=test"),
+            ),
+        }),
         Layer.mock(ExternalLauncher.ExternalLauncher)({}),
         Layer.mock(HttpServer.HttpServer)({
           address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 3773),
@@ -186,11 +199,18 @@ it.effect("parks automatic pull until activation without delaying command readin
         expect(yield* Deferred.await(statusCalled)).toBe(cwd);
         // statusDetails can never finish; readiness must not depend on it.
         yield* startup.awaitCommandReady;
+        yield* Deferred.await(pairingEndpointsWaiting);
+        expect(yield* Deferred.isDone(pairingIssued)).toBe(false);
+        yield* Deferred.succeed(pairingEndpointsReady, undefined);
+        yield* Deferred.await(pairingIssued);
       }).pipe(
         Effect.provide(
           ServerRuntimeStartup.layerWithOptions({
             activate: Deferred.succeed(activation, undefined).pipe(Effect.asVoid),
             awaitAuxiliaryParked: Effect.void,
+            awaitPairingEndpoints: Deferred.succeed(pairingEndpointsWaiting, undefined).pipe(
+              Effect.andThen(Deferred.await(pairingEndpointsReady)),
+            ),
           }).pipe(Layer.provide(dependencies)),
         ),
         Effect.provideService(ServerActivation, Deferred.await(activation)),

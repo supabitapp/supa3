@@ -38,17 +38,18 @@ export function PairingRouteSurface({
   onAuthenticated: () => void;
 }) {
   const [autoPairToken] = useState<string | null>(peekPairingTokenFromUrl);
+  const [autoPairingUrl] = useState(() => window.location.href);
   const [credential, setCredential] = useState(() => autoPairToken ?? "");
   const [errorMessage, setErrorMessage] = useState(initialErrorMessage ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
 
   const submitCredential = useCallback(
-    async (nextCredential: string) => {
+    async (nextCredential: string, pairingUrl?: string) => {
       setIsSubmitting(true);
       setErrorMessage("");
 
-      const submitError = await submitServerAuthCredential(nextCredential).then(
+      const submitError = await submitServerAuthCredential(nextCredential, pairingUrl).then(
         () => null,
         (error) => errorMessageFromUnknown(error),
       );
@@ -83,8 +84,8 @@ export function PairingRouteSurface({
 
     autoSubmitAttemptedRef.current = true;
     stripPairingTokenFromUrl();
-    void submitCredential(token);
-  }, [autoPairToken, submitCredential]);
+    void submitCredential(token, autoPairingUrl);
+  }, [autoPairToken, autoPairingUrl, submitCredential]);
 
   return (
     <StandalonePage tone="pairing">
@@ -181,8 +182,7 @@ export function HostedPairingRouteSurface() {
     tokenSubmittedRef.current = true;
 
     const result = await connectPairingEnvironment({
-      host: request.host,
-      pairingCode: request.token,
+      pairingUrl: request.pairingUrl,
     });
     if (result._tag === "Success") {
       setStatus("paired");

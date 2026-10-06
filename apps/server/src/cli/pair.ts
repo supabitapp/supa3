@@ -15,6 +15,8 @@ import {
   PortSchema,
 } from "@supacode/contracts";
 import { resolveWorktreeSupacodeHome } from "@supacode/shared/devHome";
+import { buildPairingUrl } from "@supacode/shared/remote";
+import * as NodeOS from "node:os";
 import { DEFAULT_SIGNAL_EXPORT } from "@supacode/shared/observability";
 import * as OtelEnvironment from "@supacode/shared/otelEnvironment";
 import {
@@ -37,6 +39,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
+import { resolveBoundEndpoints } from "../environment/DirectEndpoints.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import {
   type PersistedServerRuntimeState,
@@ -44,7 +47,6 @@ import {
   readPersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
 import {
-  buildPairingUrl,
   formatHostForUrl,
   isLoopbackHost,
   isWildcardHost,
@@ -515,7 +517,14 @@ export const pairCommand = Command.make("pair", {
 
       const config = yield* makePairServerConfig({ target, logLevel });
       const issued = yield* mintPairingLink({ config, ttl: flags.ttl, label: flags.label });
-      const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential);
+      const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential, {
+        environmentId: target.descriptor.environmentId,
+        routes: resolveBoundEndpoints({
+          host: target.state.host,
+          port: target.state.port,
+          interfaces: NodeOS.networkInterfaces(),
+        }).map((endpoint) => endpoint.httpBaseUrl),
+      });
 
       yield* Console.log(
         formatPairOutput({
