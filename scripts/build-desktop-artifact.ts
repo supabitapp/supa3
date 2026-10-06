@@ -32,7 +32,10 @@ import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
-import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
+import {
+  DESKTOP_RUNTIME_FILE_EXCLUSIONS,
+  selectDesktopRuntimeExternalDependencies,
+} from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -889,6 +892,7 @@ interface StagePackageJson {
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
+  ...DESKTOP_RUNTIME_FILE_EXCLUSIONS,
   // Cursor finds platform assets by walking up from argv[1]. Keep them outside
   // asar so spawning helpers and loading native addons both use real paths.
   "!**/node_modules/@cursor/sdk-*/**/*",
@@ -958,6 +962,7 @@ export const WINDOWS_NATIVE_ASAR_UNPACK_GLOB =
 // are never spawned at runtime (and are symlinks on POSIX build hosts, which
 // the asar extraction path deliberately does not support).
 export const WINDOWS_SERVER_ASAR_IGNORE_GLOBS = [
+  "**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
   "**/node_modules/@cursor/sdk-*",
   "**/node_modules/@cursor/sdk-*/**",
   "**/node_modules/@anthropic-ai/claude-agent-sdk-*",

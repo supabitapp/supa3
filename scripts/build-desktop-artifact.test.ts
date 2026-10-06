@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
+import { statFile } from "@electron/asar";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -536,6 +537,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }
 
     assert.deepStrictEqual(DESKTOP_FILE_EXCLUSIONS, [
+      "!**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
+      "!**/node_modules/playwright-core/!(package.json|LICENSE|NOTICE|ThirdPartyNotices.txt|lib){,/**/*}",
+      "!**/node_modules/playwright-core/lib/!(coreBundle.js){,/**/*}",
       "!**/node_modules/@cursor/sdk-*/**/*",
       "!apps/desktop/prod-resources/cursor-sdk",
       "!apps/desktop/prod-resources/cursor-sdk/**/*",
@@ -608,6 +612,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(win.nsis, { differentialPackage: true });
       // The Claude SDK platform packages and .bin shims never ship.
       assert.deepStrictEqual(WINDOWS_SERVER_ASAR_IGNORE_GLOBS, [
+        "**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
         "**/node_modules/@cursor/sdk-*",
         "**/node_modules/@cursor/sdk-*/**",
         "**/node_modules/@anthropic-ai/claude-agent-sdk-*",
@@ -799,7 +804,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ]);
   });
 
-  it.effect("keeps target native files while excluding the other Windows architecture", () =>
+  it.effect("keeps target Windows natives and Cursor CommonJS", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -808,21 +813,35 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           prefix: "supacode-windows-architecture-test-",
         });
         const sourceDir = path.join(tempDir, "server");
-        const nativeFiles = [
+        const files = [
           "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
           "node_modules/node-pty/prebuilds/win32-arm64/conpty/OpenConsole.exe",
           "node_modules/node-pty/third_party/conpty/1.0.0/win10-x64/OpenConsole.exe",
           "node_modules/node-pty/third_party/conpty/1.0.0/win10-arm64/OpenConsole.exe",
+          "node_modules/@cursor/sdk/dist/cjs/index.js",
+          "node_modules/@cursor/sdk/dist/esm/index.js",
+          "node_modules/@cursor/sdk/dist/bundled/index.js",
         ];
 
-        for (const nativeFile of nativeFiles) {
-          const nativePath = path.join(sourceDir, nativeFile);
-          yield* fs.makeDirectory(path.dirname(nativePath), { recursive: true });
-          yield* fs.writeFileString(nativePath, "native");
+        for (const file of files) {
+          const filePath = path.join(sourceDir, file);
+          yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
+          yield* fs.writeFileString(filePath, "fixture");
         }
 
         const asarPath = path.join(tempDir, "server.asar");
         yield* packWindowsServerAsar({ sourceDir, asarPath, arch: "x64" });
+        assert.propertyVal(
+          statFile(asarPath, "node_modules/@cursor/sdk/dist/cjs/index.js"),
+          "size",
+          7,
+        );
+        for (const omitted of [
+          "node_modules/@cursor/sdk/dist/esm/index.js",
+          "node_modules/@cursor/sdk/dist/bundled/index.js",
+        ]) {
+          assert.throws(() => statFile(asarPath, omitted));
+        }
         const unpackedRoot = `${asarPath}.unpacked`;
 
         assert.isTrue(

@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import { build } from "vite-plus/pack";
 
 import serverPackage from "../../apps/server/package.json" with { type: "json" };
+import { DESKTOP_RUNTIME_FILE_EXCLUSIONS } from "./desktop-external-packages.ts";
 import {
   isExternalCliDependency,
   selectCliRuntimeExternalDependencies,
@@ -57,7 +58,14 @@ async function stagePackage(name: string, from: string, destination: string): Pr
   await NodeFSP.mkdir(NodePath.dirname(target), { recursive: true });
   await NodeFSP.cp(source, target, {
     recursive: true,
-    filter: (entry) => NodePath.basename(entry) !== "node_modules",
+    filter: (entry) =>
+      NodePath.basename(entry) !== "node_modules" &&
+      !DESKTOP_RUNTIME_FILE_EXCLUSIONS.some((pattern) =>
+        NodePath.matchesGlob(
+          `node_modules/${name}/${NodePath.relative(source, entry).replaceAll("\\", "/")}`,
+          pattern.slice(1),
+        ),
+      ),
   });
   const dependencies = { ...manifest.dependencies, ...manifest.peerDependencies };
   for (const dependency of Object.keys(dependencies)) {

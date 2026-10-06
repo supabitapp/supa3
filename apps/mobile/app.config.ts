@@ -9,6 +9,8 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+// Metro can remove the other variants' image imports before collecting assets.
+process.env.EXPO_PUBLIC_APP_VARIANT = APP_VARIANT;
 const isIosPersonalTeamBuild = repoEnv.SUPACODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
