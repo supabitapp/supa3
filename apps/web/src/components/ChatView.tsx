@@ -5910,9 +5910,9 @@ export default function ChatView(props: ChatViewProps) {
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
   }, [activeThreadRef, closePreviewPanel, rightPanelOpen]);
   const toggleThreadPanel = useCallback(() => {
-    if (!activeThreadRef) return;
+    if (!activeThreadRef || routeKind === "draft") return;
     useRightPanelStore.getState().toggleThreadPanel(activeThreadRef, threadPanelPresentation);
-  }, [activeThreadRef, threadPanelPresentation]);
+  }, [activeThreadRef, routeKind, threadPanelPresentation]);
   const toggleRightPanelMaximized = useCallback(() => {
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
@@ -10836,6 +10836,7 @@ export default function ChatView(props: ChatViewProps) {
     onDeleteProjectScript: deleteProjectScript,
   };
   const panelToggleControlProps = {
+    showThreadPanelControl: routeKind === "server",
     terminalAvailable: activeProject !== null,
     terminalOpen: terminalUiState.terminalOpen,
     terminalShortcutLabel: shortcutLabelForCommand(keybindings, "terminal.toggle"),
@@ -10854,7 +10855,7 @@ export default function ChatView(props: ChatViewProps) {
   const panelToggleControls = (
     <PanelLayoutControls
       {...panelToggleControlProps}
-      showThreadPanelControl={!inlineRightPanelOwnsTitleBar}
+      showThreadPanelControl={routeKind === "server" && !inlineRightPanelOwnsTitleBar}
     />
   );
   const threadPanelHeaderControl = (
@@ -11490,7 +11491,7 @@ export default function ChatView(props: ChatViewProps) {
               />
             ) : null}
 
-            <ThreadDetailsPanel {...threadDetailsPanelProps} />
+            {routeKind === "server" ? <ThreadDetailsPanel {...threadDetailsPanelProps} /> : null}
 
             {pullRequestDialogState ? (
               <PullRequestThreadDialog
