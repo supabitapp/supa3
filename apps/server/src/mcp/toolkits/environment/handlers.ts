@@ -1,3 +1,4 @@
+import * as SelfHostedEndpoint from "../../../cloud/SelfHostedEndpoint.ts";
 import { OrchestratorMcpFailure, type ServerSettings } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
@@ -45,6 +46,27 @@ const access = (writable = false) =>
     return { ...context, descriptor, settings: yield* Settings.ServerSettingsService };
   });
 export const layer = EnvironmentToolkit.toLayer({
+  supacode_remote_access: (input) =>
+    Effect.gen(function* () {
+      yield* access(input.action !== "status" && input.action !== "setup");
+      const endpoint = yield* SelfHostedEndpoint.SelfHostedEndpoint;
+      switch (input.action) {
+        case "status":
+          return yield* endpoint.getStatus;
+        case "setup":
+          return yield* endpoint.setup;
+        case "configure":
+          return yield* endpoint.configure(input).pipe(Effect.mapError(unavailable));
+        case "enable":
+          return yield* endpoint.setEnabled(true).pipe(Effect.mapError(unavailable));
+        case "disable":
+          return yield* endpoint.setEnabled(false).pipe(Effect.mapError(unavailable));
+        case "repair":
+          return yield* endpoint.repair.pipe(Effect.mapError(unavailable));
+        case "remove":
+          return yield* endpoint.remove.pipe(Effect.mapError(unavailable));
+      }
+    }),
   supacode_environment_read: () =>
     Effect.gen(function* () {
       const { descriptor, settings } = yield* access();

@@ -2,6 +2,12 @@
   "name": "@supacode/relay",
   "private": true,
   "type": "module",
+  "exports": {
+    "./provisioner": {
+      "types": "./src/local/provisioner.ts",
+      "import": "./src/local/provisioner.ts"
+    }
+  },
   "scripts": {
     "deploy": "alchemy deploy",
     "push:android:smoke": "node scripts/android-push-smoke.ts",

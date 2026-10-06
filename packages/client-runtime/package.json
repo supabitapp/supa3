@@ -387,6 +387,10 @@
       "types": "./src/state/relayDiscovery.ts",
       "import": "./src/state/relayDiscovery.ts"
     },
+    "./state/remote-access": {
+      "types": "./src/state/remoteAccess.ts",
+      "import": "./src/state/remoteAccess.ts"
+    },
     "./authorization/tokenStore": {
       "types": "./src/authorization/tokenStore.ts",
       "import": "./src/authorization/tokenStore.ts"

@@ -1,3 +1,7 @@
+import * as SelfHostedEndpoint from "./cloud/SelfHostedEndpoint.ts";
+import * as ManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
+import * as CloudflareCredentials from "./cloud/CloudflareCredentials.ts";
+import * as RemoteAccessHttp from "./cloud/selfHostedHttp.ts";
 import * as ConnectComposition from "./cloud/composition.ts";
 import * as RelayClientRuntime from "./cloud/RelayClientRuntime.ts";
 import * as OrchestrationSkills from "./provider/OrchestrationSkills.ts";
@@ -536,7 +540,16 @@ const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
   Layer.provideMerge(ServerSecretStore.layer),
 );
 
+const layerSelfHostedEndpoint = SelfHostedEndpoint.layer.pipe(
+  Layer.provide(ManagedEndpointRuntime.layer.pipe(Layer.provide(RelayClientRuntime.layer))),
+  Layer.provide(CloudflareCredentials.layer),
+  Layer.provide(ServerSecretStore.layer),
+  Layer.provide(layerRuntimeCoreDependencies),
+);
+
 const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
+  Layer.provideMerge(DirectEndpoints.layer.pipe(Layer.provide(layerSelfHostedEndpoint))),
+  Layer.provideMerge(layerSelfHostedEndpoint),
   // Misc.
   Layer.provideMerge(layerBackground),
   Layer.provideMerge(layerResourceDiagnostics),
@@ -545,7 +558,6 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(AnalyticsService.layer),
   Layer.provideMerge(ExternalLauncher.layer),
   Layer.provideMerge(RemoteOpenTargets.layer),
-  Layer.provideMerge(DirectEndpoints.layer),
   Layer.provideMerge(RelayClientRuntime.layer),
   Layer.provideMerge(ServerLifecycleEvents.layer),
   Layer.provide(NetService.layer),
@@ -567,6 +579,7 @@ const layerMakeRoutes = Layer.mergeAll(
       Layer.provide(PullRequestHttp.layer),
       Layer.provide(ProjectHttp.layer),
       Layer.provide(ConnectComposition.layer),
+      Layer.provide(RemoteAccessHttp.layer),
       Layer.provide(ServerHttp.layerServerEnvironmentHttpApi),
       Layer.provide(AuthHttp.layerAuthenticatedAuth),
     ),

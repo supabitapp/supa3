@@ -1,3 +1,4 @@
+import * as SelfHostedEndpoint from "./cloud/SelfHostedEndpoint.ts";
 import * as RelayClient from "@supacode/shared/relayClient";
 import * as OrchestrationSkills from "./provider/OrchestrationSkills.ts";
 import { OrchestrationDispatchCommandError } from "@supacode/contracts";
@@ -325,6 +326,8 @@ export const withLateEditorConfig = <E, R>(
       (): ClientServerConfig => config,
       (current, event): readonly [ClientServerConfig, ReadonlyArray<ServerConfigStreamEvent>] => {
         switch (event.type) {
+          case "snapshot":
+            return [event.config, [event]];
           case "editorsResolved": {
             const {
               availableEditors: _editors,
@@ -1248,6 +1251,7 @@ const layerWsRpc = (
       const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const directEndpoints = yield* DirectEndpoints.DirectEndpoints;
       const relayClient = yield* RelayClient.RelayClient;
+      const selfHostedEndpoint = yield* SelfHostedEndpoint.SelfHostedEndpoint;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
@@ -1791,6 +1795,13 @@ const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        [WS_METHODS.remoteAccessGetStatus]: () => selfHostedEndpoint.getStatus,
+        [WS_METHODS.remoteAccessGetSetup]: () => selfHostedEndpoint.setup,
+        [WS_METHODS.remoteAccessConfigure]: (input) => selfHostedEndpoint.configure(input),
+        [WS_METHODS.remoteAccessSetEnabled]: (input) =>
+          selfHostedEndpoint.setEnabled(input.enabled),
+        [WS_METHODS.remoteAccessRepair]: () => selfHostedEndpoint.repair,
+        [WS_METHODS.remoteAccessRemove]: () => selfHostedEndpoint.remove,
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
@@ -3657,8 +3668,25 @@ const layerWsRpc = (
                 })),
               );
 
+              const initialPublicEndpoint =
+                config.directEndpoints?.find((endpoint) => endpoint.kind === "tunnel")
+                  ?.httpBaseUrl ?? null;
+              const endpointUpdates = Stream.concat(
+                Stream.succeed(initialPublicEndpoint),
+                selfHostedEndpoint.publicEndpointChanges,
+              ).pipe(
+                Stream.changes,
+                Stream.drop(1),
+                Stream.mapEffect(() => loadServerConfig({ usageLimitsCommand })),
+                Stream.map((config) => ({
+                  version: 1 as const,
+                  type: "snapshot" as const,
+                  config,
+                })),
+              );
+
               const liveUpdates = Stream.merge(
-                keybindingsUpdates,
+                Stream.merge(keybindingsUpdates, endpointUpdates),
                 Stream.merge(
                   providerStatuses,
                   Stream.merge(

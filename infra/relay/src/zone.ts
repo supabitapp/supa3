@@ -1,3 +1,4 @@
+import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import * as Alchemy from "alchemy";
 import { adopt } from "alchemy/AdoptPolicy";
 import * as Cloudflare from "alchemy/Cloudflare";
@@ -21,6 +22,7 @@ function withLogicalId<Resource extends object>(resource: Resource, logicalId: s
 
 export const RelayDeploymentConfig = Effect.gen(function* () {
   const { stage } = yield* Alchemy.Stack;
+  const standalone = yield* Config.Boolean("RELAY_STANDALONE").pipe(Config.withDefault(true));
   const relayApiZoneName = yield* Config.NonEmptyString("RELAY_API_ZONE_NAME");
   const managedEndpointZoneName = yield* Config.NonEmptyString("RELAY_TUNNEL_ZONE_NAME");
   const relayPublicDomainOverride = yield* Config.String("RELAY_DOMAIN").pipe(
@@ -38,6 +40,7 @@ export const RelayDeploymentConfig = Effect.gen(function* () {
 
   return {
     stage,
+    standalone,
     relayPublicDomain,
     relayPublicOrigin: `https://${relayPublicDomain}`,
     relayApiZoneName,
@@ -46,10 +49,11 @@ export const RelayDeploymentConfig = Effect.gen(function* () {
 });
 
 export const ManagedEndpointZone = RelayDeploymentConfig.pipe(
-  Effect.flatMap(({ stage, managedEndpointZoneName }) =>
-    relayOwnsManagedEndpointZone(stage)
+  Effect.flatMap(({ stage, standalone, managedEndpointZoneName }) =>
+    standalone || relayOwnsManagedEndpointZone(stage)
       ? Cloudflare.Zone.Zone("ManagedEndpointZone", { name: managedEndpointZoneName }).pipe(
           adopt(true),
+          RemovalPolicy.retain(),
         )
       : Cloudflare.Zone.Zone.ref("ManagedEndpointZone", {
           stage: MANAGED_ENDPOINT_ZONE_OWNER_STAGE,
@@ -62,11 +66,14 @@ export const ManagedEndpointZone = RelayDeploymentConfig.pipe(
 );
 
 export const RelayApiZone = RelayDeploymentConfig.pipe(
-  Effect.flatMap(({ stage, relayApiZoneName, managedEndpointZoneName }) =>
+  Effect.flatMap(({ stage, standalone, relayApiZoneName, managedEndpointZoneName }) =>
     relayApiZoneName === managedEndpointZoneName
       ? ManagedEndpointZone
-      : relayOwnsManagedEndpointZone(stage)
-        ? Cloudflare.Zone.Zone("RelayApiZone", { name: relayApiZoneName }).pipe(adopt(true))
+      : standalone || relayOwnsManagedEndpointZone(stage)
+        ? Cloudflare.Zone.Zone("RelayApiZone", { name: relayApiZoneName }).pipe(
+            adopt(true),
+            RemovalPolicy.retain(),
+          )
         : Cloudflare.Zone.Zone.ref("RelayApiZone", {
             stage: MANAGED_ENDPOINT_ZONE_OWNER_STAGE,
           }),

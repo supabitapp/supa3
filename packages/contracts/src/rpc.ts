@@ -1,3 +1,10 @@
+import {
+  SelfHostedRemoteAccessStatus,
+  SelfHostedRemoteAccessConfigureInput,
+  SelfHostedRemoteAccessSetEnabledInput,
+  SelfHostedRemoteAccessSetup,
+  SelfHostedRemoteAccessError,
+} from "./selfHostedRemoteAccess.ts";
 import { OrchestrationSkillsStatus, OrchestrationSkillsError } from "./orchestrationSkills.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
@@ -478,6 +485,12 @@ export const WS_METHODS = {
   scheduledTasksSetEnabled: "scheduledTasks.setEnabled",
   scheduledTasksDelete: "scheduledTasks.delete",
   scheduledTasksRunNow: "scheduledTasks.runNow",
+  remoteAccessGetStatus: "remoteAccess.getStatus",
+  remoteAccessGetSetup: "remoteAccess.getSetup",
+  remoteAccessConfigure: "remoteAccess.configure",
+  remoteAccessSetEnabled: "remoteAccess.setEnabled",
+  remoteAccessRepair: "remoteAccess.repair",
+  remoteAccessRemove: "remoteAccess.remove",
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -871,6 +884,41 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
+});
+
+const remoteAccessErrors = Schema.Union([
+  EnvironmentAuthorizationError,
+  SelfHostedRemoteAccessError,
+]);
+const WsRemoteAccessGetStatusRpc = Rpc.make(WS_METHODS.remoteAccessGetStatus, {
+  payload: Schema.Struct({}),
+  success: SelfHostedRemoteAccessStatus,
+  error: EnvironmentAuthorizationError,
+});
+const WsRemoteAccessGetSetupRpc = Rpc.make(WS_METHODS.remoteAccessGetSetup, {
+  payload: Schema.Struct({}),
+  success: SelfHostedRemoteAccessSetup,
+  error: EnvironmentAuthorizationError,
+});
+const WsRemoteAccessConfigureRpc = Rpc.make(WS_METHODS.remoteAccessConfigure, {
+  payload: SelfHostedRemoteAccessConfigureInput,
+  success: SelfHostedRemoteAccessStatus,
+  error: remoteAccessErrors,
+});
+const WsRemoteAccessSetEnabledRpc = Rpc.make(WS_METHODS.remoteAccessSetEnabled, {
+  payload: SelfHostedRemoteAccessSetEnabledInput,
+  success: SelfHostedRemoteAccessStatus,
+  error: remoteAccessErrors,
+});
+const WsRemoteAccessRepairRpc = Rpc.make(WS_METHODS.remoteAccessRepair, {
+  payload: Schema.Struct({}),
+  success: SelfHostedRemoteAccessStatus,
+  error: remoteAccessErrors,
+});
+const WsRemoteAccessRemoveRpc = Rpc.make(WS_METHODS.remoteAccessRemove, {
+  payload: Schema.Struct({}),
+  success: SelfHostedRemoteAccessStatus,
+  error: remoteAccessErrors,
 });
 
 const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
@@ -1780,6 +1828,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsRemoteAccessGetStatusRpc,
+  WsRemoteAccessGetSetupRpc,
+  WsRemoteAccessConfigureRpc,
+  WsRemoteAccessSetEnabledRpc,
+  WsRemoteAccessRepairRpc,
+  WsRemoteAccessRemoveRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,

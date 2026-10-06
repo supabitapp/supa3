@@ -1,3 +1,4 @@
+import * as ManagedEndpointCloudflareBindings from "./ManagedEndpointCloudflareBindings.ts";
 import * as NodeCrypto from "node:crypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
@@ -278,12 +279,11 @@ function makeAllocations(calls: AllocationCall[] = []) {
       }),
     listByTunnelNames: (tunnelNames) =>
       Effect.sync(() =>
-        [...allocations.values()]
-          .filter((allocation) => tunnelNames.includes(allocation.tunnelName))
-          .map((allocation) => ({
-            ...allocation,
-            recoveryEnabled: recoveryEnabled.has(allocationKey(allocation)),
-          })),
+        [...allocations.values()].flatMap((allocation) =>
+          tunnelNames.includes(allocation.tunnelName)
+            ? [{ ...allocation, recoveryEnabled: recoveryEnabled.has(allocationKey(allocation)) }]
+            : [],
+        ),
       ),
     claimRelease: (input) =>
       Effect.sync(() => {
@@ -399,7 +399,7 @@ describe("ManagedEndpointProvider", () => {
       deleteDnsRecord: () => Effect.void,
     } as unknown as Cloudflare.DNS.ReadWriteDnsClient;
     const runtimeContext = {} as Alchemy.BaseRuntimeContext;
-    const layer = ManagedEndpointProvider.layerCloudflareBindings(
+    const layer = ManagedEndpointCloudflareBindings.layerCloudflareBindings(
       tunnelClient,
       dnsClient,
       runtimeContext,
@@ -1780,7 +1780,7 @@ describe("ManagedEndpointProvider", () => {
       });
 
       expect(
-        tunnelCalls.filter((call) => call.operation === "list").map((call) => call.input),
+        tunnelCalls.flatMap((call) => (call.operation === "list" ? [call.input] : [])),
       ).toEqual([
         { name: expectedManagedTunnelName("env_shared", "user_ABC"), isDeleted: false },
         { name: expectedManagedTunnelName("env_shared", "user_DEF"), isDeleted: false },

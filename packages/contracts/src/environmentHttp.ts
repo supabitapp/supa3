@@ -1,3 +1,10 @@
+import {
+  SelfHostedRemoteAccessStatus,
+  SelfHostedRemoteAccessConfigureInput,
+  SelfHostedRemoteAccessSetEnabledInput,
+  SelfHostedRemoteAccessSetup,
+  SelfHostedRemoteAccessError,
+} from "./selfHostedRemoteAccess.ts";
 import * as Context from "effect/Context";
 import type * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
@@ -655,10 +662,58 @@ class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
     }),
   ) {}
 
+class EnvironmentRemoteAccessHttpApi extends HttpApiGroup.make("remoteAccess")
+  .add(
+    HttpApiEndpoint.get("status", "/api/remote-access", {
+      headers: OptionalBearerHeaders,
+      success: SelfHostedRemoteAccessStatus,
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("setup", "/api/remote-access/setup", {
+      headers: OptionalBearerHeaders,
+      success: SelfHostedRemoteAccessSetup,
+      error: EnvironmentScopedOperationErrors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("configure", "/api/remote-access/configure", {
+      headers: OptionalBearerHeaders,
+      payload: SelfHostedRemoteAccessConfigureInput,
+      success: SelfHostedRemoteAccessStatus,
+      error: [...EnvironmentScopedOperationErrors, SelfHostedRemoteAccessError],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("setEnabled", "/api/remote-access/enabled", {
+      headers: OptionalBearerHeaders,
+      payload: SelfHostedRemoteAccessSetEnabledInput,
+      success: SelfHostedRemoteAccessStatus,
+      error: [...EnvironmentScopedOperationErrors, SelfHostedRemoteAccessError],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("repair", "/api/remote-access/repair", {
+      headers: OptionalBearerHeaders,
+      success: SelfHostedRemoteAccessStatus,
+      error: [...EnvironmentScopedOperationErrors, SelfHostedRemoteAccessError],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("remove", "/api/remote-access/remove", {
+      headers: OptionalBearerHeaders,
+      success: SelfHostedRemoteAccessStatus,
+      error: [...EnvironmentScopedOperationErrors, SelfHostedRemoteAccessError],
+    }),
+  )
+  .middleware(EnvironmentAuthenticatedAuth) {}
+
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
   .add(EnvironmentPullRequestsHttpApi)
   .add(EnvironmentProjectsHttpApi)
-  .add(EnvironmentConnectHttpApi) {}
+  .add(EnvironmentConnectHttpApi)
+  .add(EnvironmentRemoteAccessHttpApi) {}

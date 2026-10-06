@@ -10,6 +10,7 @@ import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { appCommand } from "./cli/app.ts";
 import { connectCommand } from "./cli/connect.ts";
+import { remoteCommand } from "./cli/remote.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
@@ -44,6 +45,7 @@ export const makeCli = () =>
       serveCommand,
       appCommand,
       pairCommand,
+      remoteCommand,
       connectCommand,
       authCommand,
       projectCommand,

@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import * as RelayDb from "../db.ts";
+import * as RelayDb from "../dbServices.ts";
 import {
   relayEnvironmentLinks,
   relayManagedEndpointAllocations,
@@ -52,7 +52,7 @@ export class ManagedTunnelLimits extends Context.Service<
       readonly environmentId: string;
     }) => Effect.Effect<void, ManagedTunnelLimitExceeded | ManagedTunnelLimitPersistenceError>;
   }
->()("t3code-relay/environments/ManagedTunnelLimits") {}
+>()("@supacode/relay/environments/ManagedTunnelLimits") {}
 
 export const make = Effect.gen(function* () {
   const db = yield* RelayDb.RelayDb;

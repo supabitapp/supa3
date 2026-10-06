@@ -603,7 +603,7 @@ export function environmentThemeFileHasColors(file: EnvironmentThemeFile): boole
   );
 }
 
-export const ServerDirectEndpointKind = Schema.Literals(["lan", "tailnet"]);
+export const ServerDirectEndpointKind = Schema.Literals(["lan", "tailnet", "tunnel"]);
 export type ServerDirectEndpointKind = typeof ServerDirectEndpointKind.Type;
 
 export const ServerDirectEndpoint = Schema.Struct({
@@ -630,10 +630,10 @@ export const ServerConfig = Schema.Struct({
    */
   remoteOpenTargets: Schema.optionalKey(ForwardCompatibleArray(RemoteOpenTarget)),
   /**
-   * Direct addresses this server listens on right now (LAN and tailnet), so a
+   * Direct addresses this server accepts right now (LAN, tailnet, and verified tunnels), so a
    * client connected one way can learn the others. Hints only: the client
    * checks each address answers as this environment before using it. Absent on
-   * servers that predate the feature; empty when bound to loopback only.
+   * servers that predate the feature. A loopback-only server can advertise a verified tunnel.
    */
   directEndpoints: Schema.optionalKey(ForwardCompatibleArray(ServerDirectEndpoint)),
   observability: ServerObservability,

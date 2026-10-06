@@ -1,3 +1,4 @@
+import * as SelfHostedEndpoint from "../cloud/SelfHostedEndpoint.ts";
 /**
  * DirectEndpoints - the LAN and tailnet addresses this server listens on now.
  *
@@ -96,6 +97,7 @@ export const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const httpClient = yield* HttpClient.HttpClient;
+  const selfHostedEndpoint = yield* Effect.serviceOption(SelfHostedEndpoint.SelfHostedEndpoint);
 
   const resolve = Effect.gen(function* () {
     const endpoints = [
@@ -133,6 +135,10 @@ export const make = Effect.gen(function* () {
         endpoints.push({ kind: "tailnet", httpBaseUrl: servedUrl.value });
       }
     }
+    const publicUrl = Option.isSome(selfHostedEndpoint)
+      ? yield* selfHostedEndpoint.value.publicEndpoint
+      : null;
+    if (publicUrl !== null) endpoints.push({ kind: "tunnel", httpBaseUrl: publicUrl });
     return endpoints;
   });
 

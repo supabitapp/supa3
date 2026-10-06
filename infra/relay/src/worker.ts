@@ -1,3 +1,4 @@
+import * as ManagedEndpointCloudflareBindings from "./environments/ManagedEndpointCloudflareBindings.ts";
 import * as Alchemy from "alchemy";
 import * as Axiom from "alchemy/Axiom";
 import * as Cloudflare from "alchemy/Cloudflare";
@@ -60,7 +61,6 @@ import * as ApnsDeliveries from "./agentActivity/ApnsDeliveries.ts";
 import * as EnvironmentConnector from "./environments/EnvironmentConnector.ts";
 import * as EnvironmentLinker from "./environments/EnvironmentLinker.ts";
 import * as EnvironmentPublishSignatures from "./environments/EnvironmentPublishSignatures.ts";
-import * as ManagedEndpointProvider from "./environments/ManagedEndpointProvider.ts";
 import * as ManagedEndpointReaper from "./environments/ManagedEndpointReaper.ts";
 import * as ManagedTunnelLimits from "./environments/ManagedTunnelLimits.ts";
 import * as MobileRegistrations from "./agentActivity/MobileRegistrations.ts";
@@ -139,7 +139,7 @@ export const layer = Api.make(
     //
     // 2. Create bindings
     //
-    const apnsEnabled = yield* Config.Boolean("APNS_ENABLED").pipe(Config.withDefault(true));
+    const apnsEnabled = yield* Config.Boolean("APNS_ENABLED").pipe(Config.withDefault(false));
     const apnsCredentials = apnsEnabled
       ? {
           environment: yield* Config.schema(RelayConfiguration.ApnsEnvironment, "APNS_ENVIRONMENT"),
@@ -265,7 +265,7 @@ export const layer = Api.make(
         ),
       ),
       Layer.provideMerge(
-        ManagedEndpointProvider.layerCloudflareBindings(
+        ManagedEndpointCloudflareBindings.layerCloudflareBindings(
           managedEndpointTunnelBinding,
           managedEndpointDnsBinding,
           alchemyRuntimeContext,

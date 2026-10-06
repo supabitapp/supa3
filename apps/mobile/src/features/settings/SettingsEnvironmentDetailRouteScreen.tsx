@@ -1,3 +1,4 @@
+import { RemoteAccessSection } from "./RemoteAccessSection";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { EnvironmentId, ServerProvider } from "@supacode/contracts";
@@ -158,6 +159,12 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
           </Text>
         ) : (
           <>
+            {capabilities?.remoteAccess ? (
+              <RemoteAccessSection
+                environmentId={environmentId}
+                scopes={session?.authenticated ? (session.scopes ?? null) : null}
+              />
+            ) : null}
             <SettingsSection title="Connection">
               <ConnectionEnvironmentRow
                 environment={environment}

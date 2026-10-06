@@ -28,3 +28,5 @@ export const DesktopBackendBootstrap = Schema.Struct({
 });
 
 export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;
+
+export const DESKTOP_UPDATE_RESTART_MARKER_FILE = "desktop-update-restart";

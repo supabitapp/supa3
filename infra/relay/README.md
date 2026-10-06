@@ -1,168 +1,70 @@
-# T3 Connect Relay
+# User-owned relay
 
-> [!NOTE]
-> Sign in to T3 Connect from the app under Settings > Connections.
+Most users should start with [Cloudflare remote access](../../docs/user/remote-access.md#use-your-cloudflare-account).
+That path provisions a named tunnel from the environment itself and uses normal
+pairing. It needs no Worker, account relay, Clerk deployment, or hosted Supacode
+control plane.
 
-The relay is the hosted control plane for T3 Connect. It helps clients discover and connect to
-remote environments, manages the cloud-side records needed for those connections, and delivers
-optional mobile notifications and Live Activities.
+This package also retains T3 Connect's account control plane for source deployments.
+It provides account discovery, environment linking, proof-bound credentials,
+managed tunnel allocation, and optional activity delivery. Application HTTP and
+WebSocket traffic goes directly to the selected environment.
 
-The relay is intentionally not in the hot path for normal T3 Code traffic. After a client connects,
-regular API and WebSocket traffic goes directly between that client and the selected environment.
-See the [T3 Connect architecture note](../../docs/internals/t3-connect.md) for the larger system
-design.
+The restored implementation follows [upstream 76d3c96](https://github.com/pingdotgg/t3code/tree/76d3c96fd5b89cca2c06aeaceaea16100c75084a/infra/relay).
+The local allocation and Cloudflare adapters reuse the same provisioner and
+connector protocol. Deployment bindings live beside the provisioner so installing
+remote access in a packaged Supacode server does not load Alchemy or PlanetScale.
+The database service identities stay shared between the two compositions.
 
-## Responsibilities
+## Local verification
 
-The relay currently owns:
-
-- Linking T3 Code environments to a cloud account.
-- Provisioning and tracking managed environment endpoints.
-- Issuing short-lived credentials used to connect clients to linked environments.
-- Listing linked environments and registered mobile devices for an account.
-- Registering mobile notification preferences and APNs or FCM tokens.
-- Receiving published agent activity and delivering notifications or Live Activity updates.
-- Persisting relay state and exposing relay-specific traces for diagnostics.
-
-The environment server and relay have separate credentials and trust boundaries. Read
-[Environment Authentication Profile](../../docs/internals/environment-auth.md) before changing token,
-credential, or authorization behavior.
-
-## Code Map
-
-- [`alchemy.run.ts`](./alchemy.run.ts) defines the deployed Alchemy stack.
-- [`src/worker.ts`](./src/worker.ts) wires Cloudflare bindings, runtime layers, queues, and HTTP APIs.
-- [`src/http/Api.ts`](./src/http/Api.ts) contains the relay HTTP handlers and authentication
-  boundaries.
-- [`src/environments`](./src/environments) contains environment linking, credentials, endpoint
-  provisioning, and connection flows.
-- [`src/agentActivity`](./src/agentActivity) contains mobile device registration, activity state,
-  APNs and FCM delivery, and queue processing.
-- [`src/auth`](./src/auth) contains relay token and DPoP proof handling.
-- [`src/persistence/schema.ts`](./src/persistence/schema.ts) defines persisted relay state. Keep
-  schema and migration changes together.
-
-Shared request and response schemas live in
-[`packages/contracts/src/relay.ts`](../../packages/contracts/src/relay.ts). Shared client-side relay
-calls live in
-[`packages/client-runtime/src/relay/managedRelay.ts`](../../packages/client-runtime/src/relay/managedRelay.ts).
-
-## Working Locally
-
-Install dependencies from the repository root, then run relay-focused checks from this directory:
+From the repository root:
 
 ```sh
-vp install
-cd infra/relay
-vp test run
-vp run typecheck
+vp i
+vp test run infra/relay/src/local/provisioner.test.ts infra/relay/src/environments/ManagedEndpointProvider.test.ts
+vp exec tsc --noEmit -p infra/relay/tsconfig.json
 ```
 
-To run a smaller test set while iterating:
+The local tests use isolated SQLite files and mocked Cloudflare HTTP responses.
+They cover resource reuse, changed local ports, lost creation responses, ownership
+conflicts, and cleanup retries. They do not prove a live Cloudflare deployment.
 
-```sh
-vp test run src/environments/EnvironmentLinker.test.ts
-```
+## Source deployment configuration
 
-Before considering a change complete, run the repository-wide checks from the root:
+The retained Alchemy deployment is an operator profile. Its cloud deployment has
+not been exercised against a user account in this change. Review the resources
+and provider costs before running it: it includes a Cloudflare Worker, queues,
+Hyperdrive, and PlanetScale Postgres, with the upstream `PS_80` cluster and two
+replicas. It also requires your own Clerk application and keys. Native account
+sign-in, push notifications, and Live Activities in stock Supacode mobile clients
+are outside this profile.
 
-```sh
-vp check
-vp run typecheck
-```
+`.env.example` lists the relay settings. `RELAY_STANDALONE=true` is the default:
+each stage owns its database and adopts DNS zones in your account, without a
+reference to an upstream production stage. Set `APNS_ENABLED=true` only when you
+have configured your own Apple push credentials. APNs is disabled by default.
 
-Backend changes should include tests. Prefer testing the real business logic with external
-dependencies represented at their boundary rather than mocking internal behavior.
+The source deployment retains `alchemy deploy` and `alchemy destroy` package
+scripts. Use your own Cloudflare and PlanetScale authentication and your own
+`RELAY_API_ZONE_NAME`, `RELAY_TUNNEL_ZONE_NAME`, and Clerk JWT audience. Database
+retention follows the upstream removal policy. Destroying the stack therefore
+requires a separate review of retained database resources.
 
-## Deployment
+An environment enables the account profile with
+`SUPACODE_CONNECT_RELAY_ENABLED=true`. Configure `T3CODE_RELAY_URL`,
+`T3CODE_CLERK_PUBLISHABLE_KEY`, and `T3CODE_CLERK_CLI_OAUTH_CLIENT_ID` for your
+installation. Headless account authorization additionally requires an explicit
+`T3CODE_HOSTED_APP_URL`; there is no upstream hosted-app fallback.
 
-The relay deploys with the Alchemy CLI (`vp run --filter t3code-relay deploy` is `alchemy deploy`
-in this directory):
+A web source build supplies `VITE_T3CODE_RELAY_URL`,
+`VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_CLI_OAUTH_CLIENT_ID`, and
+`VITE_CLERK_JWT_TEMPLATE` for the same deployment.
+Only a fully configured build acquires Clerk and shows the relay account controls
+in Connections. Browser access tokens are cached in memory for that session.
+These names retain the upstream configuration boundary for subsequent imports.
 
-```sh
-vp run --filter t3code-relay deploy
-```
-
-The stack provisions the Cloudflare Worker and queues, managed endpoint resources, database
-connectivity, and relay tracing resources. Copy [`infra/relay/.env.example`](./.env.example) to
-`infra/relay/.env` and fill in the deployment-specific values before deploying. Alchemy loads that
-file from the relay directory. Runtime secrets include Clerk, APNs, and optional FCM credentials. Set
-`APNS_ENABLED=false` for an Android-only development deployment without Apple credentials. Production adopts
-the configured API and tunnel DNS zones as retained Cloudflare resources. Personal stages reference
-the production-owned zones.
-
-The `prod` Alchemy stage owns the retained PlanetScale database and is the shared hosted relay for
-stable and nightly clients. Every other stage references that database and provisions an isolated
-PlanetScale branch and runtime role for local development, so deploy `prod` before creating
-developer stages:
-
-```sh
-vp run --filter t3code-relay deploy -- --stage prod
-vp run --filter t3code-relay deploy -- --env-file .env.local
-```
-
-Alchemy defaults personal deployments to the `dev_$USER` stage. Relay custom domains apply the same
-DNS-safe sanitization as Alchemy physical resource names, so `prod` uses
-`relay.<RELAY_API_ZONE_NAME>` and `dev_julius` uses
-`relay-dev-julius.<RELAY_API_ZONE_NAME>`. Managed environment endpoints are provisioned below
-`RELAY_TUNNEL_ZONE_NAME`, which may be a different Cloudflare zone. Production tunnel hostnames use
-`prod-<digest>.<RELAY_TUNNEL_ZONE_NAME>`; personal stages use
-`<stage>-<digest>.<RELAY_TUNNEL_ZONE_NAME>`. `RELAY_DOMAIN` remains available as an explicit API
-domain override.
-
-The stack's `PublishClientConfig` action ([`src/clientConfig.ts`](./src/clientConfig.ts)) writes the
-deployed relay URL and tracing configuration into the repository-root `.env`, so subsequent source
-builds point at the relay that was just deployed without copying values manually. It runs only when
-one of those outputs changed, and `T3CODE_RELAY_CLIENT_CONFIG_ENV` redirects it to another file.
-
-### Deployment CI
-
-The relay is versioned separately from client releases. `.github/workflows/deploy-relay.yml` deploys
-the shared Alchemy `prod` stage on every push to `main`. Stable and nightly release builds both
-resolve their static public config from the same
-`production` GitHub environment. Pull requests do not deploy relay stages. Developers can
-deploy personal non-production stages locally with any stage name other than `prod`.
-
-The repository must define these Actions variables shared by relay deployments:
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `PLANETSCALE_ORGANIZATION`
-- `AXIOM_ORG_ID`
-
-The repository must define these Actions secrets shared by relay deployments:
-
-- `CLOUDFLARE_API_TOKEN`
-- `PLANETSCALE_API_TOKEN_ID`
-- `PLANETSCALE_API_TOKEN`
-- `AXIOM_TOKEN`
-
-The `production` GitHub environment must define these Actions variables:
-
-- `RELAY_API_ZONE_NAME`
-- `RELAY_TUNNEL_ZONE_NAME`
-- `RELAY_DOMAIN` if overriding the derived production relay domain
-- `CLERK_PUBLISHABLE_KEY`
-- `CLERK_JWT_AUDIENCE`
-- `CLERK_JWT_TEMPLATE`
-- `APNS_ENVIRONMENT`
-- `APNS_TEAM_ID`
-- `APNS_KEY_ID`
-- `APNS_BUNDLE_ID`
-
-The `production` GitHub environment must define these Actions secrets:
-
-- `CLERK_SECRET_KEY`
-- `APNS_PRIVATE_KEY`
-- `FCM_SERVICE_ACCOUNT` when Android push is enabled
-
-The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
-are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
-so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The release workflow reads the production relay's
-derived public URL and Clerk publishable key from the same environment for downstream desktop, CLI,
-and hosted web builds.
-
-See:
-
-- [T3 Connect setup](../../docs/operations/connect-setup.md) for Clerk keys, JWT templates, and sign-up restrictions.
-- [Relay Observability](../../docs/operations/relay-observability.md) for deployment tracing and diagnostics.
-- [T3 Connect architecture](../../docs/internals/t3-connect.md) for environment linking and trust boundaries.
+The restored `supacode connect` CLI links, inspects, unlinks, and signs out of this
+configured account profile. A headless link authorizes through your source-built
+web client's `/connect` route. Configure the environment's relay profile before
+using these commands; the stock `supacode remote` setup uses direct pairing.

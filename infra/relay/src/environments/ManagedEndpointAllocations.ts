@@ -9,7 +9,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlError from "effect/sql/SqlError";
 
-import * as RelayDb from "../db.ts";
+import * as RelayDb from "../dbServices.ts";
 import { isManagedEndpointHostname, managedEndpointForHostname } from "../deploymentConfig.ts";
 import { relayEnvironmentLinks, relayManagedEndpointAllocations } from "../persistence/schema.ts";
 
@@ -193,7 +193,7 @@ export class ManagedEndpointAllocations extends Context.Service<
       input: RemoveClaimedManagedEndpointAllocationInput,
     ) => Effect.Effect<boolean, ManagedEndpointAllocationPersistenceError>;
   }
->()("t3code-relay/environments/ManagedEndpointAllocations") {}
+>()("@supacode/relay/environments/ManagedEndpointAllocations") {}
 
 const allocationSelection = {
   userId: relayManagedEndpointAllocations.userId,

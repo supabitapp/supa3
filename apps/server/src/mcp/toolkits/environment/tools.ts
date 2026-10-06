@@ -1,4 +1,10 @@
 import {
+  SelfHostedRemoteAccessStatus,
+  SelfHostedRemoteAccessConfigureInput,
+  SelfHostedRemoteAccessSetup,
+} from "@supacode/contracts";
+import * as SelfHostedEndpoint from "../../../cloud/SelfHostedEndpoint.ts";
+import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
   ExecutionEnvironmentDescriptor,
@@ -64,4 +70,27 @@ const EnvironmentPreferencesTool = Tool.make("supacode_environment_preferences_u
   }),
   success: Schema.Struct(PreferenceFields),
 }).annotate(Tool.Destructive, true);
-export const EnvironmentToolkit = Toolkit.make(EnvironmentReadTool, EnvironmentPreferencesTool);
+const RemoteAccessTool = Tool.make("supacode_remote_access", {
+  ...shared,
+  description:
+    "Manage this environment's self-owned Cloudflare endpoint. Use setup for the agent-guided installation prompt, then configure after official cloudflared login. Credentials stay on the host. Status/setup are read-only; other actions require full-access/default. Disable keeps resources; remove deletes only owned resources and retains retry information on failure.",
+  parameters: Schema.Struct({
+    action: Schema.Literals([
+      "status",
+      "setup",
+      "configure",
+      "enable",
+      "disable",
+      "repair",
+      "remove",
+    ]),
+    certificatePath: SelfHostedRemoteAccessConfigureInput.fields.certificatePath,
+  }),
+  success: Schema.Union([SelfHostedRemoteAccessStatus, SelfHostedRemoteAccessSetup]),
+  dependencies: [...shared.dependencies, SelfHostedEndpoint.SelfHostedEndpoint],
+}).annotate(Tool.Destructive, true);
+export const EnvironmentToolkit = Toolkit.make(
+  EnvironmentReadTool,
+  EnvironmentPreferencesTool,
+  RemoteAccessTool,
+);

@@ -1,6 +1,10 @@
 import { lazy, Suspense } from "react";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 const RelayAccountSettings = lazy(() => import("../../cloud/RelayAccountSettings"));
+import { RemoteAccessSettings } from "./RemoteAccessSettings";
+import { remoteAccess } from "../../state/remoteAccess";
+import { remoteAccessEndpoint } from "@supacode/client-runtime/state/remote-access";
+import { AsyncResult } from "effect/reactivity";
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
@@ -194,6 +198,9 @@ import {
 } from "../../keybindings";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
+const EMPTY_REMOTE_ACCESS_STATUS = Atom.make<Atom.Type<ReturnType<typeof remoteAccess.statusAtom>>>(
+  AsyncResult.initial(),
+);
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
 const EMPTY_DISCOVERED_SSH_HOSTS: ReadonlyArray<DesktopDiscoveredSshHost> = [];
 
@@ -1716,6 +1723,15 @@ export function ConnectionsSettings() {
   });
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   const primarySessionState = usePrimarySessionState();
+  const remoteStatus = useAtomValue(
+    primaryEnvironmentId && primaryEnvironment?.serverConfig?.environment.capabilities.remoteAccess
+      ? remoteAccess.statusAtom({ environmentId: primaryEnvironmentId, input: {} })
+      : EMPTY_REMOTE_ACCESS_STATUS,
+  );
+  const cloudflareEndpoint = useMemo(
+    () => remoteAccessEndpoint(AsyncResult.isSuccess(remoteStatus) ? remoteStatus.value : null),
+    [remoteStatus],
+  );
   const currentSessionScopes = desktopBridge
     ? AuthAdministrativeScopes
     : primarySessionState.data?.authenticated
@@ -2454,11 +2470,12 @@ export function ConnectionsSettings() {
     [desktopAdvertisedEndpoints, isLocalBackendNetworkAccessible],
   );
   const visibleDesktopAdvertisedEndpoints = useMemo(
-    () =>
-      tailscaleHttpsEndpoint
-        ? [...visibleDesktopNetworkAdvertisedEndpoints, tailscaleHttpsEndpoint]
-        : visibleDesktopNetworkAdvertisedEndpoints,
-    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
+    () => [
+      ...visibleDesktopNetworkAdvertisedEndpoints,
+      ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+      ...(cloudflareEndpoint ? [cloudflareEndpoint] : []),
+    ],
+    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints, cloudflareEndpoint],
   );
   const pairingHints = useMemo(
     () => ({
@@ -2473,7 +2490,9 @@ export function ConnectionsSettings() {
     [primaryServerConfig, visibleDesktopAdvertisedEndpoints],
   );
   const isLocalBackendRemotelyReachable =
-    isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
+    isLocalBackendNetworkAccessible ||
+    tailscaleHttpsEndpoint?.status === "available" ||
+    cloudflareEndpoint !== null;
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),
@@ -3588,6 +3607,9 @@ export function ConnectionsSettings() {
         <Suspense fallback={null}>
           <RelayAccountSettings />
         </Suspense>
+      ) : null}
+      {primaryEnvironmentId && primaryServerConfig?.environment.capabilities.remoteAccess ? (
+        <RemoteAccessSettings environmentId={primaryEnvironmentId} scopes={currentSessionScopes} />
       ) : null}
       <SettingsSection
         {...searchableSetting("remote-environments")}

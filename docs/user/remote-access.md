@@ -3,6 +3,48 @@
 Connect a phone, browser, or another desktop app to Supacode running on a different
 machine. That machine must stay running and reachable while you work.
 
+## Use your Cloudflare account
+
+For access away from your local network, open **Settings → Connections → Remote
+access** and choose **Set up with my agent**. Select a project on the host, then
+send the prepared conversation. On mobile, open the environment under
+**Settings → Environments** to start the same setup.
+
+The agent runs the host's bundled installer and opens Cloudflare's sign-in page.
+Choose an account and domain in Cloudflare DNS. You need that domain for the
+persistent address; this setup does not use temporary Quick Tunnel URLs.
+No token copying or Supacode account is required.
+
+Cloudflare saves its management certificate on the host. That certificate can
+manage tunnels across the chosen account, so treat it as a credential. Supacode
+reads it locally and calls Cloudflare directly. Certificates and connector tokens
+are not sent to a Supacode-operated service. See [Cloudflare tunnel permissions](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/tunnel-permissions/)
+for the certificate's scope and revocation instructions.
+
+The server must listen on loopback or all interfaces. If it is bound to one
+specific LAN or tailnet address, restart it with a loopback-capable binding before
+setup.
+
+Keep Supacode and the host running. The server supervises the connector after
+setup, including after an agent exits or Supacode restarts. Wait for **Connected**,
+then create a pairing link and choose **Cloudflare** in its QR menu. The normal
+one-time pairing and device revocation rules still apply.
+
+Administrators can **Disable** the connector while keeping its address, **Enable**
+it again, or **Repair** its configuration. **Remove** deletes this installation's
+tunnel and DNS record while retaining your Cloudflare login and unrelated
+resources. If removal fails, retry it; its saved installation remains available
+for cleanup. If Cloudflare authorization expires or is revoked, ask the setup
+agent to repeat login using `remote login --renew`, then repair. Renewal retains a
+backup of the previous certificate.
+
+For headless hosts, the same installer is available as `supacode remote login`,
+followed by `supacode remote configure`. Run these on the environment's host. Use
+`--base-dir` when that environment has a custom Supacode home. `supacode remote
+status`, `repair`, `enable`, `disable`, and `remove` operate on the running server.
+Updating Supacode supplies its connector version; the Cloudflare allocation and
+saved address remain in the environment's state.
+
 ## Pair over a LAN or private network
 
 Use direct pairing when the other device can reach the host's network address.
@@ -50,7 +92,7 @@ A saved machine can keep several routes, including LAN, Tailscale, a public URL,
 and SSH. Pair it again using another address, or choose **Add route** from its
 route list. Both addresses belong to the same machine in your client.
 
-Supacode also learns the LAN and Tailscale addresses reported by a paired
+Supacode also learns the LAN, Tailscale, and verified Cloudflare addresses reported by a paired
 machine. Enable **Network access** on the host to make its LAN address available.
 Learned addresses follow network changes and use the existing pairing. They go
 away when the host stops reporting them or you remove the pairing they came from.
