@@ -540,7 +540,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
       "!**/node_modules/playwright-core/!(package.json|LICENSE|NOTICE|ThirdPartyNotices.txt|lib){,/**/*}",
       "!**/node_modules/playwright-core/lib/!(coreBundle.js){,/**/*}",
-      "!**/bundle-modules.json",
       "!**/node_modules/@cursor/sdk-*/**/*",
       "!apps/desktop/prod-resources/cursor-sdk",
       "!apps/desktop/prod-resources/cursor-sdk/**/*",
@@ -614,7 +613,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // The Claude SDK platform packages and .bin shims never ship.
       assert.deepStrictEqual(WINDOWS_SERVER_ASAR_IGNORE_GLOBS, [
         "**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
-        "**/bundle-modules.json",
         "**/node_modules/@cursor/sdk-*",
         "**/node_modules/@cursor/sdk-*/**",
         "**/node_modules/@anthropic-ai/claude-agent-sdk-*",
@@ -823,7 +821,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "node_modules/@cursor/sdk/dist/cjs/index.js",
           "node_modules/@cursor/sdk/dist/esm/index.js",
           "node_modules/@cursor/sdk/dist/bundled/index.js",
-          "bundle-modules.json",
         ];
 
         for (const file of files) {
@@ -842,7 +839,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         for (const omitted of [
           "node_modules/@cursor/sdk/dist/esm/index.js",
           "node_modules/@cursor/sdk/dist/bundled/index.js",
-          "bundle-modules.json",
         ]) {
           assert.throws(() => statFile(asarPath, omitted));
         }

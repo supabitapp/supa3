@@ -212,43 +212,68 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
 });
 
 // Configuring the bundler is not the same as checking what it emitted. These
-// exercise the scanner against the module IDs Rolldown reports.
+// exercise the scanner against the marker shape rolldown actually produces.
 describe("findInlinedExternalPackages", () => {
-  it("flags runtime-external packages in emitted module IDs", () => {
-    const result = findInlinedExternalPackages([
-      "../../node_modules/.pnpm/node-addon-api@7.1.1/node_modules/node-addon-api/index.js",
-      "../../node_modules/node-gyp-build-optional-packages/index.js",
-      "../../node_modules/@ff-labs/fff-node/dist/src/index.js",
-    ]);
-    assert.deepStrictEqual(result.inlined, [
-      "@ff-labs/fff-node",
-      "node-addon-api",
-      "node-gyp-build-optional-packages",
-    ]);
-    assert.strictEqual(result.moduleCount, 3);
+  const region = (path: string) => `//#region ${path}
+var x = 1;
+//#endregion
+`;
+
+  it("flags an external package that was inlined", () => {
+    const source =
+      region("../../node_modules/.pnpm/node-addon-api@7.1.1/node_modules/node-addon-api/index.js") +
+      region(
+        "../../node_modules/.pnpm/node-gyp-build-optional-packages@5.2.2/node_modules/node-gyp-build-optional-packages/index.js",
+      );
+    const result = findInlinedExternalPackages(source);
+
+    assert.deepStrictEqual(result.inlined, ["node-addon-api", "node-gyp-build-optional-packages"]);
+    assert.strictEqual(result.regionCount, 2);
   });
 
-  it("records ordinary bundled packages without mistaking the pnpm store for one", () => {
-    const result = findInlinedExternalPackages([
-      "../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js",
-      "../../node_modules/.pnpm/yaml@2.4.0/node_modules/yaml/dist/index.js",
-      "../../src/server/main.ts",
-    ]);
+  it("flags scoped external packages", () => {
+    const result = findInlinedExternalPackages(
+      region("../../node_modules/@ff-labs/fff-node/dist/src/index.js"),
+    );
+    assert.deepStrictEqual(result.inlined, ["@ff-labs/fff-node"]);
+  });
+
+  it("ignores packages that are meant to be bundled", () => {
+    const source =
+      region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js") +
+      region("../../src/server/main.ts");
+    const result = findInlinedExternalPackages(source);
+
+    assert.deepStrictEqual(result.inlined, []);
+    assert.strictEqual(result.regionCount, 2);
+  });
+
+  // regionCount is what separates "clean" from "this scan went blind because the
+  // marker format changed". A caller that ignores it gets a vacuous pass.
+  // The scan has to answer both directions. Checking only that externals are
+  // absent still passes on a bundle that externalized everything, which is the
+  // failure this whole change prevents.
+  it("reports the packages that were inlined, not just the violations", () => {
+    const source =
+      region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js") +
+      region("../../node_modules/.pnpm/yaml@2.4.0/node_modules/yaml/dist/index.js") +
+      region("../../src/server/main.ts");
+    const result = findInlinedExternalPackages(source);
+
     assert.deepStrictEqual(result.inlinedPackages, ["effect", "yaml"]);
     assert.deepStrictEqual(result.inlined, []);
-    assert.strictEqual(result.moduleCount, 3);
   });
 
-  it("recognizes Windows module paths", () => {
-    const result = findInlinedExternalPackages([
-      String.raw`C:\repo\node_modules\node-pty\lib\index.js`,
-    ]);
-    assert.deepStrictEqual(result.inlined, ["node-pty"]);
+  it("does not report the pnpm store directory as a package", () => {
+    const result = findInlinedExternalPackages(
+      region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js"),
+    );
+    assert.deepStrictEqual(result.inlinedPackages, ["effect"]);
   });
 
-  it("reports empty metadata so packaging can reject a blind scan", () => {
-    const result = findInlinedExternalPackages([]);
-    assert.strictEqual(result.moduleCount, 0);
+  it("reports no regions when the marker format is absent", () => {
+    const result = findInlinedExternalPackages("var x = 1; // node_modules/node-pty/lib.js");
+    assert.strictEqual(result.regionCount, 0);
     assert.deepStrictEqual(result.inlined, []);
   });
 });

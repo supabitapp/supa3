@@ -11,7 +11,6 @@ import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-ex
 const isMainProcessExternal = (id: string) =>
   id === "electron" || id.startsWith("electron/") || isDesktopRuntimeExternalDependency(id);
 const shouldLaunchElectronAfterPack = process.env.SUPACODE_DESKTOP_DEV === "1";
-const minifyBundles = !process.argv.includes("--watch");
 
 export default defineConfig({
   run: {
@@ -46,9 +45,8 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { codeSplitting: false, keepNames: true },
+      outputOptions: { codeSplitting: false },
       entry: ["src/main.ts"],
       clean: true,
       deps: {
@@ -63,9 +61,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: [
         "src/electron/WindowsForegroundFocusWorker.ts",
         "src/snapShot/GlobalShiftShortcutWorker.ts",
@@ -85,9 +81,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: ["src/boot.ts", "src/compileCache.ts"],
       clean: false,
       deps: {
@@ -99,9 +93,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: ["src/preload.ts"],
     },
     {
@@ -109,9 +101,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: ["src/preview-pick-preload.ts"],
       deps: {
         alwaysBundle: (id) => id === "react-grab" || id.startsWith("react-grab/"),
@@ -122,9 +112,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: ["src/preview-pip-preload.ts"],
     },
     {
@@ -133,9 +121,7 @@ export default defineConfig({
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
-      minify: minifyBundles,
       outExtensions: () => ({ js: ".cjs" }),
-      outputOptions: { keepNames: true },
       entry: ["src/mac-permission-preload.ts"],
     },
   ],

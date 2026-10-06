@@ -29,7 +29,6 @@ import {
 } from "./lib/brand-assets.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
-  CLI_BUNDLE_MODULES_FILE_NAME,
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
@@ -90,9 +89,6 @@ const RepoRoot = Effect.service(Path.Path).pipe(
 );
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeWorkspaceConfig = Schema.decodeEffect(fromYaml(WorkspaceConfig));
-const decodeBundleModules = Schema.decodeEffect(
-  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-);
 const encodeStageWorkspaceConfig = Schema.encodeEffect(fromYaml(StageWorkspaceConfig));
 
 const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* () {
@@ -897,7 +893,6 @@ export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
   ...DESKTOP_RUNTIME_FILE_EXCLUSIONS,
-  "!**/bundle-modules.json",
   // Cursor finds platform assets by walking up from argv[1]. Keep them outside
   // asar so spawning helpers and loading native addons both use real paths.
   "!**/node_modules/@cursor/sdk-*/**/*",
@@ -968,7 +963,6 @@ export const WINDOWS_NATIVE_ASAR_UNPACK_GLOB =
 // the asar extraction path deliberately does not support).
 export const WINDOWS_SERVER_ASAR_IGNORE_GLOBS = [
   "**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
-  "**/bundle-modules.json",
   "**/node_modules/@cursor/sdk-*",
   "**/node_modules/@cursor/sdk-*/**",
   "**/node_modules/@anthropic-ai/claude-agent-sdk-*",
@@ -3181,21 +3175,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const chunkNames = (yield* fs.readDirectory(distDirs.serverDist)).filter((entry) =>
       entry.endsWith(".mjs"),
     );
-    const modulesByChunk = yield* decodeBundleModules(
-      yield* fs.readFileString(path.join(distDirs.serverDist, CLI_BUNDLE_MODULES_FILE_NAME)),
-    );
-    let totalModules = 0;
+    let totalRegions = 0;
     const inlined = new Set<string>();
     const inlinedPackages = new Set<string>();
     for (const chunkName of chunkNames) {
-      const moduleIds = modulesByChunk[chunkName];
-      if (moduleIds === undefined) {
-        return yield* new InlinedExternalPackageError({
-          packages: [`<no module metadata for ${chunkName}; rebuild the server bundle>`],
-        });
-      }
-      const scan = findInlinedExternalPackages(moduleIds);
-      totalModules += scan.moduleCount;
+      const source = yield* fs.readFileString(path.join(distDirs.serverDist, chunkName));
+      const scan = findInlinedExternalPackages(source);
+      totalRegions += scan.regionCount;
       for (const name of scan.inlined) inlined.add(name);
       for (const name of scan.inlinedPackages) inlinedPackages.add(name);
     }
@@ -3204,14 +3190,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         packages: [...inlined].sort(),
       });
     }
-    if (totalModules === 0) {
+    // No regions at all means the scan went blind (marker format changed), not
+    // that the bundle is clean.
+    if (totalRegions === 0) {
       return yield* new InlinedExternalPackageError({
-        packages: ["<no bundled modules found; rebuild the server bundle>"],
+        packages: ["<no module regions found; the bundle scan needs updating>"],
       });
     }
     // The check above is one-directional: it only proves nothing external got
     // inlined. A regression to externalizing everything would also pass it,
-    // since bundled application modules still exist -- and that is the failure this
+    // since source-file regions still exist -- and that is the failure this
     // whole change exists to prevent, because those packages are not in the
     // selected sidecar closure and both backends would die on ERR_MODULE_NOT_FOUND.
     // `effect` is imported by every server module, so it is inlined in any
