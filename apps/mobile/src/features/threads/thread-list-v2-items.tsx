@@ -93,6 +93,23 @@ const STATUS_LABEL_BY_STATUS: Partial<
   limited: { label: "Limited", className: "text-warning-foreground" },
 };
 
+/** Waiting (parked on subagents or monitors) stays grey like the web sidebar:
+    not the user's turn yet, but not active progress either. */
+function resolveRowStatusLabel(input: {
+  readonly status: ThreadListV2Status;
+  readonly isUnread: boolean;
+  readonly goalActive: boolean;
+  readonly mutedClassName: string;
+}): { label: string; className: string } | undefined {
+  const label = STATUS_LABEL_BY_STATUS[input.status];
+  // A native /goal keeps the agent going across turns until it is met.
+  if (label && input.status === "working" && input.goalActive) return { ...label, label: "Goal" };
+  if (label) return label;
+  if (input.status === "waiting") return { label: "Waiting", className: input.mutedClassName };
+  if (input.isUnread) return { label: "Done", className: "text-adaptive-emerald-700-300" };
+  return undefined;
+}
+
 // Menus keep lifecycle and title regeneration together. Archive keeps its
 // own surface (thread screen / settings) rather than crowding v2 rows.
 const CARD_MENU_ACTIONS: MenuAction[] = [
@@ -754,13 +771,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // label as the web sidebar, sourced from the server-side visited watermark
   // so checking a thread on any device clears it everywhere.
   const isUnread = status === "ready" && threadHasUnseenCompletion(thread);
-  const workingLabel = STATUS_LABEL_BY_STATUS[status];
-  const statusLabel =
-    // A native /goal keeps the agent going across turns until it is met.
-    (status === "working" && workingLabel !== undefined && thread.goal?.status === "active"
-      ? { ...workingLabel, label: "Goal" }
-      : workingLabel) ??
-    (isUnread ? { label: "Done", className: "text-adaptive-emerald-700-300" } : undefined);
+  const statusLabel = resolveRowStatusLabel({
+    status,
+    isUnread,
+    goalActive: thread.goal?.status === "active",
+    mutedClassName: selected
+      ? selectedThreadRowColors.mutedForegroundClassName
+      : rowAppearance.mutedForegroundClassName,
+  });
   // The timestamp is precomputed on the list item (same stamps the settled
   // tail sorts by) so a minute tick only re-renders rows that draw it.
   const timeLabel = props.timeLabel;

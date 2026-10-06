@@ -1,5 +1,4 @@
 import {
-  ChevronDownIcon,
   Clock3Icon,
   MessageSquareIcon,
   MoreHorizontalIcon,
@@ -21,7 +20,7 @@ import {
 import { isElectron } from "../../env";
 import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useNowMinuteMs } from "../../hooks/useNowMinute";
-import { projectGroupMemberKeys, type SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
+import { projectGroupMemberKeys } from "../../sidebarProjectGrouping";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -33,36 +32,31 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../WorkspaceBreadcrumb";
+import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { ScopeSentence } from "../settings/ScopeSentence";
+import { selectScopedSettingsEnvironments } from "../settings/scopedSettings";
+import { resolveSettingsScope, type ResolvedSettingsScope } from "../settings/settingsScope";
 import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { Badge } from "../ui/badge";
-import { Button, InlineButton } from "../ui/button";
+import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarInset } from "../ui/sidebar";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AutomationEditorDialog } from "./AutomationEditorDialog";
-import { inProjectFilter, lastRunLabel, nextRunLabel, scheduleLabel } from "./automations.logic";
+import {
+  automationsScopeSearch,
+  lastRunLabel,
+  matchesAutomationScope,
+  nextRunLabel,
+  scheduleLabel,
+} from "./automations.logic";
 
 const route = getRouteApi("/_chat/automations");
-
-const ALL_PROJECTS = "";
 
 function statusVariant(status: ScheduledTask["lastRunStatus"]) {
   if (status === "failed") return "error";
@@ -72,8 +66,8 @@ function statusVariant(status: ScheduledTask["lastRunStatus"]) {
 }
 
 /**
- * Every environment's scheduled tasks in one list. The optional project filter
- * narrows both the list and the projects a new automation can target.
+ * Every environment's scheduled tasks in one list. The project and environment
+ * scope narrows both the list and where a new automation can be created.
  */
 export function AutomationsPage() {
   const search = route.useSearch();
@@ -81,28 +75,15 @@ export function AutomationsPage() {
   const groups = useSettingsProjectGroups();
   const { environments: availableEnvironments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const filteredGroup = groups.find((group) => group.projectKey === search.project) ?? null;
-  const filteredProjectMissing = search.project !== undefined && filteredGroup === null;
-  const projectKeys = useMemo(
-    () => (filteredGroup ? projectGroupMemberKeys(filteredGroup) : null),
-    [filteredGroup],
+  const scope = useMemo(
+    () => resolveSettingsScope(search, groups, availableEnvironments),
+    [availableEnvironments, groups, search],
   );
-  // A filtered project's environments; none when the project is gone.
-  const environments = availableEnvironments.filter(
-    (environment) =>
-      search.project === undefined ||
-      filteredGroup?.memberProjectRefs.some(
-        (ref) => ref.environmentId === environment.environmentId,
-      ) === true,
-  );
-  const connectedEnvironments = environments.filter(
-    (environment) =>
-      environment.connection.phase === "connected" && environment.serverConfig !== null,
-  );
-  const defaultEnvironment =
-    connectedEnvironments.find(
-      (environment) => environment.environmentId === primaryEnvironmentId,
-    ) ?? connectedEnvironments[0];
+  const {
+    environments,
+    connectedEnvironments,
+    environment: defaultEnvironment,
+  } = selectScopedSettingsEnvironments(scope, availableEnvironments, primaryEnvironmentId);
   const projectNameByKey = useMemo(
     () =>
       new Map(
@@ -123,10 +104,7 @@ export function AutomationsPage() {
   const closeEditor = () => {
     setEditor(null);
     if (!hasTaskLink) return;
-    void navigate({
-      search: (previous) => (previous.project === undefined ? {} : { project: previous.project }),
-      replace: true,
-    });
+    void navigate({ search: automationsScopeSearch, replace: true });
   };
   const linkEnvironmentId = search.environmentId ?? defaultEnvironment?.environmentId;
 
@@ -135,18 +113,8 @@ export function AutomationsPage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <WorkspacePageHeader electron={isElectron}>
           <WorkspaceBreadcrumb ariaLabel="Automations breadcrumb" className="min-w-0 flex-1">
-            <WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbItem current>
               <h1>Automations</h1>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator />
-            <WorkspaceBreadcrumbItem current className="min-w-10">
-              <AutomationProjectFilter
-                groups={groups}
-                value={search.project}
-                onChange={(project) =>
-                  void navigate({ search: project === undefined ? {} : { project } })
-                }
-              />
             </WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
           <Button
@@ -165,8 +133,16 @@ export function AutomationsPage() {
 
         <div className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto">
           <WorkspacePageContainer className="gap-8">
-            {filteredProjectMissing ? (
-              <p className="text-sm text-muted-foreground">This project is no longer available.</p>
+            <ScopeSentence
+              lead="Showing automations for"
+              value={search}
+              scope={scope}
+              groups={groups}
+              environments={availableEnvironments}
+              onChange={(next) => void navigate({ search: automationsScopeSearch(next) })}
+            />
+            {scope.kind === "unavailable" ? (
+              <p className="text-sm text-muted-foreground">{scope.message}</p>
             ) : environments.length === 0 ? (
               <Empty>
                 <EmptyHeader>
@@ -182,7 +158,7 @@ export function AutomationsPage() {
                 <AutomationEnvironmentSection
                   key={`${entry.environmentId}:${search.taskId ?? ""}`}
                   environment={entry}
-                  projectKeys={projectKeys}
+                  scope={scope}
                   showEnvironmentHeading={environments.length > 1}
                   projectNameByKey={projectNameByKey}
                   taskId={linkEnvironmentId === entry.environmentId ? search.taskId : undefined}
@@ -198,7 +174,7 @@ export function AutomationsPage() {
           key={`${editor.environmentId}:${editor.task?.id ?? "new"}`}
           initialEnvironmentId={editor.environmentId}
           task={editor.task}
-          projectKeys={projectKeys}
+          scope={scope}
           connectedEnvironments={connectedEnvironments}
           onClose={closeEditor}
         />
@@ -207,61 +183,16 @@ export function AutomationsPage() {
   );
 }
 
-function AutomationProjectFilter({
-  groups,
-  value,
-  onChange,
-}: {
-  readonly groups: readonly SidebarProjectSnapshot[];
-  readonly value: string | undefined;
-  readonly onChange: (project: string | undefined) => void;
-}) {
-  const selected = groups.find((group) => group.projectKey === value);
-  return (
-    <Menu>
-      <MenuTrigger
-        render={<InlineButton />}
-        aria-label="Filter automations by project"
-        className="group/automation-project min-w-0 max-w-full"
-      >
-        <span className="min-w-0 truncate">
-          {value === undefined ? "All projects" : (selected?.displayName ?? "Unavailable project")}
-        </span>
-        <ChevronDownIcon
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/automation-project:opacity-100 group-focus-visible/automation-project:opacity-100 group-data-popup-open/automation-project:opacity-100"
-        />
-      </MenuTrigger>
-      <MenuPopup align="start">
-        <MenuRadioGroup
-          value={value ?? ALL_PROJECTS}
-          onValueChange={(next: string) => onChange(next === ALL_PROJECTS ? undefined : next)}
-        >
-          <MenuRadioItem value={ALL_PROJECTS} closeOnClick>
-            All projects
-          </MenuRadioItem>
-          {groups.length > 0 ? <MenuSeparator /> : null}
-          {groups.map((group) => (
-            <MenuRadioItem key={group.projectKey} value={group.projectKey} closeOnClick>
-              <span className="min-w-0 truncate">{group.displayName}</span>
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-      </MenuPopup>
-    </Menu>
-  );
-}
-
 function AutomationEnvironmentSection({
   environment,
-  projectKeys,
+  scope,
   showEnvironmentHeading,
   projectNameByKey,
   taskId,
   onEdit,
 }: {
   readonly environment: EnvironmentPresentation;
-  readonly projectKeys: ReadonlySet<string> | null;
+  readonly scope: ResolvedSettingsScope;
   readonly showEnvironmentHeading: boolean;
   readonly projectNameByKey: ReadonlyMap<string, string>;
   readonly taskId?: ScheduledTaskId | undefined;
@@ -278,7 +209,7 @@ function AutomationEnvironmentSection({
       : null,
   );
   const tasks = tasksQuery.data?.tasks.filter((task) =>
-    inProjectFilter(projectKeys, environment.environmentId, task.projectId),
+    matchesAutomationScope(scope, environment.environmentId, task.projectId),
   );
   const linkedTask = tasks?.find((task) => task.id === taskId);
   const openedLink = useRef(false);
