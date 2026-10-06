@@ -293,6 +293,29 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
+  it.effect("reports a fork's own remote as origin next to the upstream identity", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "supacode-repository-identity-fork-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/supacode-fork.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:SupacodeTools/supacode.git"]);
+
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity?.canonicalKey).toBe("github.com/supabitapp/supacode-next");
+      expect(identity?.displayName).toBe("supabitapp/supacode-next");
+      expect(identity?.origin).toEqual({
+        canonicalKey: "github.com/julius/supacode-fork",
+        displayName: "julius/supacode-fork",
+      });
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
   it.effect("uses the last remote path segment as the repository name for nested groups", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
