@@ -308,21 +308,16 @@ type DragHandleProps = {
   readonly onStep: (direction: "up" | "down") => void;
 };
 
+// Gesture callbacks are separate worklets with their own copies of captured
+// variables, so the drop reads its translation from the event, not a closure.
 function createRouteDragPan(latest: RefObject<DragHandleProps>) {
-  let translation = 0;
   return Gesture.Pan()
     .minDistance(0)
     .shouldCancelWhenOutside(false)
     .runOnJS(true)
-    .onStart(() => {
-      translation = 0;
-      latest.current.onStart();
-    })
-    .onUpdate((event) => {
-      translation = event.translationY;
-      latest.current.onMove(event.translationY);
-    })
-    .onFinalize((_, success) => latest.current.onEnd(translation, !success));
+    .onStart(() => latest.current.onStart())
+    .onUpdate((event) => latest.current.onMove(event.translationY))
+    .onFinalize((event, success) => latest.current.onEnd(event.translationY, !success));
 }
 
 function useRouteDragPan(latest: RefObject<DragHandleProps>) {
