@@ -13,30 +13,21 @@ export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
 // more horizontal canvas instead of zooming the scene.
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
-const APP_LOADED_AT = new Date();
-
-const isChristmasSeason = (date: Date) => date.getMonth() === 11;
-
 export function resolveSidebarStageBackdropVariant(
   stageLabel: string | null,
-  now = APP_LOADED_AT,
 ): SidebarStageBackdropVariant | null {
   const normalized = stageLabel?.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
-  const isReleaseStage = normalized === undefined || normalized === "latest";
-  if (isReleaseStage && isChristmasSeason(now)) return "release";
+  if (normalized === undefined || normalized === "latest") return "release";
   return null;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
 
-export function resolveEnvironmentIdentificationModes(
-  stageLabel: string | null,
-  now = APP_LOADED_AT,
-) {
+export function resolveEnvironmentIdentificationModes(stageLabel: string | null) {
   const available = {
-    artwork: resolveSidebarStageBackdropVariant(stageLabel, now) !== null,
+    artwork: resolveSidebarStageBackdropVariant(stageLabel) !== null,
     pill: resolveEnvironmentIdentificationPillLabel(stageLabel) !== null,
     none: true,
   } satisfies Record<EnvironmentIdentificationMode, boolean>;
