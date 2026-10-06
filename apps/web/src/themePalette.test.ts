@@ -7,7 +7,7 @@ import {
   getThemeColorsForMode,
   getThemeDefinition,
   getThemeModes,
-  getThemePreviewSidebarArtwork,
+  getThemePreviewAppearance,
   isKnownThemePreference,
   getCustomThemes,
   getStandardThemeColors,
@@ -354,7 +354,7 @@ describe("theme files", () => {
     expect(parseThemeFile(JSON.parse(serialized)).collection).toEqual(theme.collection);
   });
 
-  it("keeps sidebar artwork disabled for custom theme files", () => {
+  it("ignores built-in artwork metadata in custom theme files", () => {
     const theme = parseThemeFile({
       version: THEME_FILE_VERSION,
       name: "Art sidebar",
@@ -367,7 +367,7 @@ describe("theme files", () => {
     expect(JSON.parse(serializeThemeFile(theme))).not.toHaveProperty("sidebarArtwork");
   });
 
-  it("suppresses sidebar artwork during a live custom-theme preview", () => {
+  it("publishes the live preview appearance and clears it when restoring a theme", () => {
     const listener = vi.fn();
     const unsubscribe = subscribeToThemePreview(listener);
     vi.stubGlobal("document", {
@@ -379,12 +379,19 @@ describe("theme files", () => {
     });
 
     applyThemeColorPreview(SUPACODE_CHAT_THEME.colors, "light");
-    expect(getThemePreviewSidebarArtwork()).toBe(false);
+    expect(getThemePreviewAppearance()).toBe("light");
     expect(listener).toHaveBeenCalledTimes(1);
 
-    applyThemePalette("system");
-    expect(getThemePreviewSidebarArtwork()).toBeNull();
+    applyThemeColorPreview(SUPACODE_CHAT_THEME.variants!.dark!, "dark");
+    expect(getThemePreviewAppearance()).toBe("dark");
     expect(listener).toHaveBeenCalledTimes(2);
+
+    applyThemeColorPreview(SUPACODE_CHAT_THEME.variants!.dark!, "dark");
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    applyThemePalette("system");
+    expect(getThemePreviewAppearance()).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(3);
 
     unsubscribe();
     vi.unstubAllGlobals();

@@ -18,12 +18,26 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveSidebarStageBackdropVariant("Preview")).toBeNull();
   });
 
-  it("shows release artwork only under dark themes", () => {
-    expect(resolveVisibleSidebarStageBackdropVariant(null, "dark")).toBe("release");
+  it.each([null, "Latest", "Nightly", "Dev"])(
+    "shows the sleigh under dark themes for the %s channel",
+    (stageLabel) => {
+      expect(resolveVisibleSidebarStageBackdropVariant(stageLabel, "dark")).toBe("release");
+    },
+  );
+
+  it("keeps channel artwork under light themes", () => {
     expect(resolveVisibleSidebarStageBackdropVariant(null, "light")).toBeNull();
+    expect(resolveVisibleSidebarStageBackdropVariant("Latest", "light")).toBeNull();
     expect(resolveVisibleSidebarStageBackdropVariant("Nightly", "light")).toBe("nightly");
     expect(resolveVisibleSidebarStageBackdropVariant("Dev", "light")).toBe("dev");
   });
+
+  it.each(["light", "dark"] as const)(
+    "keeps unsupported stage labels hidden under %s themes",
+    (appearance) => {
+      expect(resolveVisibleSidebarStageBackdropVariant("Preview", appearance)).toBeNull();
+    },
+  );
 
   it("offers only the identification modes that change something", () => {
     expect(resolveEnvironmentIdentificationModes("Dev")).toEqual(["artwork", "pill", "none"]);

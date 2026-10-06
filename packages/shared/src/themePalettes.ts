@@ -118,7 +118,7 @@ export type ThemeDefinition = Readonly<{
   variants?: ThemeVariants;
   /** Groups related imported variants into one library card. */
   collection?: Readonly<{ id: string; label: string }>;
-  /** Allows reviewed built-ins to render product artwork over their sidebar. */
+  /** Allows reviewed built-ins to render sidebar artwork in light appearances. */
   sidebarArtwork?: boolean;
   /** Generated from the guided editor's canvas and accent roles. */
   managed?: boolean;
