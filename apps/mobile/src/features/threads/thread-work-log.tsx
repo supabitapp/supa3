@@ -1,6 +1,7 @@
 import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { SubagentStatusDot } from "./SubagentStatusDot";
 import { ThreadSubagentGroup } from "./thread-subagent-group";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
 import {
   WorkLogLabel,
   WorkLogBlock,
@@ -153,38 +154,7 @@ export function ThreadDisclosureChevron(props: {
   readonly size: number;
   readonly tintColor: ColorValue;
 }) {
-  const expandedAngle = props.collapsedDirection === "right" ? 90 : 180;
-  const rotation = useSharedValue(props.expanded ? expandedAngle : 0);
-
-  useLayoutEffect(() => {
-    rotation.set(
-      withTiming(props.expanded ? expandedAngle : 0, {
-        duration: THREAD_DISCLOSURE_TRANSITION_MS,
-        reduceMotion: ReduceMotion.System,
-      }),
-    );
-  }, [expandedAngle, props.expanded, rotation]);
-
-  const rotationStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  return (
-    <Animated.View
-      accessible={false}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      pointerEvents="none"
-      style={[{ width: props.size, height: props.size }, rotationStyle]}
-    >
-      <SymbolView
-        name={props.collapsedDirection === "right" ? "chevron.right" : "chevron.down"}
-        size={props.size}
-        tintColor={props.tintColor}
-        type="monochrome"
-      />
-    </Animated.View>
-  );
+  return <DisclosureChevron {...props} />;
 }
 
 function ShimmerWorkContent(props: {

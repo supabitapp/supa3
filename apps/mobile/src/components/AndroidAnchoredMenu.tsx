@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StyleProp, ViewInstance, ViewStyle } from "react-native";
 import { BackHandler, Pressable, ScrollView, View } from "react-native";
 import { useKeyboardState } from "react-native-keyboard-controller";
-import Animated, { FadeIn } from "react-native-reanimated";
+import { MotionPresence } from "./MotionPresence";
 
 import { OverlayPortal } from "./OverlayPortal";
 import { useAndroidControlSizing } from "./useAndroidControlSizing";
@@ -64,6 +64,7 @@ function AnchorChildren(props: {
 export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
   const { scale, menuWidth: desiredMenuWidth } = useAndroidControlSizing();
   const [anchor, setAnchor] = useState<AnchorSnapshot | null>(null);
+  const [closing, setClosing] = useState(false);
   const [path, setPath] = useState<readonly MenuAction[]>([]);
   // Height of the modal's root view, in the modal's own coordinate space.
   // Menus that flip above their anchor are pinned by their BOTTOM edge
@@ -85,15 +86,21 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
 
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const keyboardHeight = useKeyboardState((state) => state.height);
-  const close = useCallback(() => {
+  const reset = useCallback(() => {
     setAnchor(null);
     setPath([]);
     setOverlay(null);
     setRootHeight(null);
+    setClosing(false);
   }, []);
+  const close = useCallback(() => {
+    if (anchor?.keyboardWasVisible) setClosing(true);
+    else reset();
+  }, [anchor, reset]);
 
   const open = useCallback(() => {
     anchorRef.current?.measureInWindow((x, y, width, height) => {
+      setClosing(false);
       setAnchor({ x, y, width, height, keyboardWasVisible: keyboardVisible });
     });
   }, [keyboardVisible]);
@@ -205,6 +212,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
             ref={overlayRef}
             collapsable={false}
             className="absolute inset-0"
+            pointerEvents={closing ? "none" : "auto"}
             onLayout={measureOverlay}
           >
             <Pressable accessible={false} className="absolute inset-0" onPress={close} />
@@ -220,8 +228,11 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                 onClose={close}
               />
             ) : (
-              <Animated.View
-                entering={FadeIn.duration(120)}
+              <MotionPresence
+                visible={!closing}
+                appear
+                offsetY={opensDown ? -4 : 4}
+                onHidden={reset}
                 className="absolute overflow-hidden bg-card-alt shadow-md"
                 style={{
                   left,
@@ -257,7 +268,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                     onClose={close}
                   />
                 </ScrollView>
-              </Animated.View>
+              </MotionPresence>
             )}
           </View>
         </OverlayPortal>

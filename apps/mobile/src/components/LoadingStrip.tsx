@@ -3,11 +3,13 @@ import { View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { useForegroundMotion } from "../lib/useForegroundMotion";
 
 const INDICATOR_WIDTH_FRACTION = 0.3;
 const MIN_INDICATOR_WIDTH = 48;
@@ -36,27 +38,36 @@ function LoadingStripFrame(props: {
 }
 
 function IndeterminateLoadingStrip() {
+  const motionEnabled = useForegroundMotion();
   const [containerWidth, setContainerWidth] = useState(0);
   const travelProgress = useSharedValue(0);
   const indicatorWidth = Math.max(MIN_INDICATOR_WIDTH, containerWidth * INDICATOR_WIDTH_FRACTION);
 
   useEffect(() => {
+    cancelAnimation(travelProgress);
+    if (!motionEnabled) {
+      travelProgress.set(0.5);
+      return;
+    }
     travelProgress.set(0);
     travelProgress.set(
       withRepeat(
         withTiming(1, {
           duration: 1100,
           easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.Never,
         }),
         -1,
         false,
+        undefined,
+        ReduceMotion.Never,
       ),
     );
 
     return () => {
       cancelAnimation(travelProgress);
     };
-  }, [travelProgress]);
+  }, [motionEnabled, travelProgress]);
 
   const indicatorStyle = useAnimatedStyle(
     () => ({

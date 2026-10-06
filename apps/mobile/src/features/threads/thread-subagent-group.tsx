@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import { AppState, Pressable, View, type ColorValue } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
-import { SymbolView } from "../../components/AppSymbol";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { cn } from "../../lib/cn";
 import type { ThreadFeedActivity } from "../../lib/threadActivity";
@@ -21,6 +20,8 @@ import { environmentThreadDetails } from "../../state/threads";
 import { subagentCardElapsed } from "./subagent-card-presentation";
 import { SubagentRow } from "./SubagentRow";
 import { WorkLogBlock } from "./work-log-layout";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
+import { MotionPresence } from "../../components/MotionPresence";
 
 type SubagentItem = Extract<OrchestrationV2TurnItem, { type: "subagent" }>;
 type AgentTiming = Pick<OrchestrationV2Subagent, "status" | "startedAt" | "completedAt">;
@@ -137,49 +138,47 @@ export function ThreadSubagentGroup(props: {
             </Text>
           </View>
           <SubagentElapsed agents={agents} />
-          <SymbolView
-            name={expanded ? "chevron.up" : "chevron.down"}
-            size={11}
-            tintColor={props.iconSubtleColor}
-          />
+          <DisclosureChevron expanded={expanded} size={11} tintColor={props.iconSubtleColor} />
         </Pressable>
       ) : null}
-      {!grouped || expanded ? (
-        <View className="mb-1 gap-px rounded-xl border border-border bg-card/30 p-1">
-          {agents.map((agent) => {
-            const threadId = agent.childThreadId;
-            return (
-              <Pressable
-                key={agent.item.id}
-                accessible
-                accessibilityRole={threadId === null ? undefined : "link"}
-                accessibilityHint={
-                  threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
-                }
-                disabled={threadId === null}
-                onPress={() => {
-                  // Push, not navigate: navigate reuses this Thread route, so back
-                  // would skip the parent thread.
-                  if (threadId !== null)
-                    navigation.dispatch(
-                      StackActions.push("Thread", {
-                        environmentId: String(props.environmentId),
-                        threadId: String(threadId),
-                      }),
-                    );
-                }}
-                className="rounded-lg px-3 py-3 active:bg-subtle"
-              >
-                <SubagentRow
-                  environmentId={props.environmentId}
-                  subagent={agent}
-                  elapsed={<SubagentElapsed agents={[agent]} />}
-                />
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+      <MotionPresence visible={!grouped || expanded}>
+        {() => (
+          <View className="mb-1 gap-px rounded-xl border border-border bg-card/30 p-1">
+            {agents.map((agent) => {
+              const threadId = agent.childThreadId;
+              return (
+                <Pressable
+                  key={agent.item.id}
+                  accessible
+                  accessibilityRole={threadId === null ? undefined : "link"}
+                  accessibilityHint={
+                    threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
+                  }
+                  disabled={threadId === null}
+                  onPress={() => {
+                    // Push, not navigate: navigate reuses this Thread route, so back
+                    // would skip the parent thread.
+                    if (threadId !== null)
+                      navigation.dispatch(
+                        StackActions.push("Thread", {
+                          environmentId: String(props.environmentId),
+                          threadId: String(threadId),
+                        }),
+                      );
+                  }}
+                  className="rounded-lg px-3 py-3 active:bg-subtle"
+                >
+                  <SubagentRow
+                    environmentId={props.environmentId}
+                    subagent={agent}
+                    elapsed={<SubagentElapsed agents={[agent]} />}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </MotionPresence>
     </WorkLogBlock>
   );
 }
