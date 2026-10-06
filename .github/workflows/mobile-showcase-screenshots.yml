@@ -143,14 +143,16 @@ jobs:
 
       - name: Capture Android showcase
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
         with:
           api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_7_pro
           avd-name: Pixel_10_Pro
-          cores: 8
-          ram-size: 4096M
+          cores: 2
+          ram-size: 2048M
           disable-animations: false
           script: pnpm screenshots:mobile --platform android --appearance "${{ inputs.appearance }}" --theme "${{ inputs.theme }}"
 
