@@ -1,10 +1,12 @@
 # Brand icons
 
-The three Icon Composer projects are the source of truth for full application icons:
+The three shared Icon Composer projects are the source of truth for exported application icons:
 
 - `dev/app-icon.icon`
 - `nightly/app-icon.icon`
 - `prod/app-icon.icon`
+
+Production iOS uses the native icon bundle at [`apps/mobile/assets/AppIcon.icon`](../apps/mobile/assets/AppIcon.icon). The shared production PNG remains the source for its splash screen and fallback exports. The export and check scripts below cover the shared projects.
 
 Each project uses `text.svg` for the Supacode mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
 
