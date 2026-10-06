@@ -41,15 +41,56 @@ describe("pullRequestChecksState", () => {
     expect(pullRequestCheckStatusLabel(workflow)).toBe("Awaiting approval");
     expect(pullRequestCheckStatusLabel(manualGate)).toBe("Awaiting action");
     expect(summarizePullRequestChecks([check("success"), workflow])).toBe(
-      "1 workflow awaiting approval",
+      "1 successful check, 1 workflow awaiting approval",
     );
-    expect(summarizePullRequestChecks([check("failure"), workflow])).toBe("1 of 2 failing");
+    expect(summarizePullRequestChecks([check("failure"), workflow])).toBe(
+      "1 failing check, 1 workflow awaiting approval",
+    );
     expect(summarizePullRequestChecks([check("success"), manualGate])).toBe(
-      "1 check awaiting action",
+      "1 successful check, 1 check awaiting action",
     );
     expect(summarizePullRequestChecks([workflow, manualGate])).toBe(
-      "1 workflow and 1 check awaiting action",
+      "1 workflow awaiting approval, 1 check awaiting action",
     );
+  });
+});
+
+describe("summarizePullRequestChecks", () => {
+  it("shows GitHub-style counts for every reported outcome", () => {
+    expect(
+      summarizePullRequestChecks([
+        ...Array.from({ length: 2 }, () => check("failure")),
+        ...Array.from({ length: 3 }, () => check("skipped")),
+        ...Array.from({ length: 25 }, () => check("success")),
+      ]),
+    ).toBe("2 failing, 3 skipped, 25 successful checks");
+    expect(
+      summarizePullRequestChecks([
+        ...Array.from({ length: 13 }, () => check("pending")),
+        ...Array.from({ length: 40 }, () => check("success")),
+      ]),
+    ).toBe("13 pending, 40 successful checks");
+  });
+
+  it("keeps pending and neutral results visible when another check fails", () => {
+    expect(
+      summarizePullRequestChecks([
+        check("failure"),
+        check("cancelled"),
+        check("pending"),
+        check("neutral"),
+        check("success"),
+      ]),
+    ).toBe("2 failing, 1 pending, 1 neutral, 1 successful checks");
+  });
+
+  it("omits absent outcomes and handles single checks and an empty list", () => {
+    expect(summarizePullRequestChecks([])).toBe("No checks reported");
+    expect(summarizePullRequestChecks([check("success")])).toBe("1 successful check");
+    expect(summarizePullRequestChecks([check("skipped"), check("skipped")])).toBe(
+      "2 skipped checks",
+    );
+    expect(summarizePullRequestChecks([check("neutral")])).toBe("1 neutral check");
   });
 });
 
