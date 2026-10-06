@@ -24,6 +24,9 @@ import {
   retryComposerAttachmentUpload,
   useComposerAttachmentUploadState,
 } from "../state/composer-attachment-uploads";
+import { MotionPresence } from "./MotionPresence";
+import { MotionSwap } from "./MotionSwap";
+import { useListChangeMotion } from "../lib/useListChangeMotion";
 
 export interface ComposerAttachmentStripProps {
   readonly environmentId?: EnvironmentId;
@@ -63,39 +66,96 @@ type ComposerAttachmentThumbnailProps = {
 
 export function ComposerAttachmentThumbnail(props: ComposerAttachmentThumbnailProps) {
   const upload = useComposerAttachmentUploadState(props.environmentId, props.attachment.id);
+  const progress = upload?.status === "uploading" ? upload.progress : 1;
   return (
     <View style={{ width: props.size, height: props.size }}>
       <ComposerAttachmentContent {...props} />
-      {upload && upload.status !== "ready" ? (
+      <MotionPresence
+        visible={Boolean(upload && upload.status !== "ready")}
+        offsetY={0}
+        style={{ position: "absolute", bottom: 1.75, left: 1.75 }}
+      >
         <Pressable
-          accessibilityRole={upload.status === "failed" ? "button" : "text"}
+          accessibilityRole={upload?.status === "failed" ? "button" : "text"}
           accessibilityLabel={
-            upload.status === "failed"
+            upload?.status === "failed"
               ? `Retry uploading ${props.attachment.name}`
-              : `Uploading ${props.attachment.name}, ${Math.floor(upload.progress * 100)}%`
+              : `Uploading ${props.attachment.name}, ${Math.floor(progress * 100)}%`
           }
-          accessibilityHint={upload.status === "failed" ? upload.reason : undefined}
-          disabled={upload.status !== "failed"}
+          accessibilityHint={upload?.status === "failed" ? upload.reason : undefined}
+          disabled={upload?.status !== "failed"}
           onPress={() =>
             props.environmentId &&
             retryComposerAttachmentUpload(props.environmentId, props.attachment.id)
           }
-          className="absolute bottom-0.5 left-0.5 flex-row items-center gap-0.5 rounded-full bg-black/70 px-1 py-0.5"
+          className="rounded-full bg-black/70 px-1 py-0.5"
         >
-          <SymbolView
-            name={upload.status === "failed" ? "arrow.clockwise" : "arrow.up"}
-            size={props.compact ? 8 : 10}
-            tintColor="#ffffff"
-            type="monochrome"
-          />
-          {!props.compact ? (
-            <Text className="text-2xs text-white">
-              {upload.status === "failed" ? "Retry" : `${Math.floor(upload.progress * 100)}%`}
-            </Text>
-          ) : null}
+          <MotionSwap stateKey={upload?.status === "failed" ? "failed" : "uploading"}>
+            <View className="flex-row items-center gap-0.5">
+              <SymbolView
+                name={upload?.status === "failed" ? "arrow.clockwise" : "arrow.up"}
+                size={props.compact ? 8 : 10}
+                tintColor="#ffffff"
+                type="monochrome"
+              />
+              {!props.compact ? (
+                <Text className="text-2xs text-white">
+                  {upload?.status === "failed" ? "Retry" : `${Math.floor(progress * 100)}%`}
+                </Text>
+              ) : null}
+            </View>
+          </MotionSwap>
         </Pressable>
-      ) : null}
+      </MotionPresence>
     </View>
+  );
+}
+
+/** The collapsed composer keeps the same attachment feedback as the expanded strip. */
+export function ComposerCompactAttachmentStrip(
+  props: Pick<
+    ComposerAttachmentStripProps,
+    "environmentId" | "attachments" | "onPressPreview" | "onPressVideo"
+  > & { readonly scope: string },
+) {
+  const shown = props.attachments.slice(0, 3);
+  const overflow = props.attachments.length - shown.length;
+  const motion = useListChangeMotion({
+    items: [
+      ...shown.map((attachment) => ({ key: attachment.id })),
+      ...(overflow > 0 ? [{ key: "overflow" }] : []),
+    ],
+    scope: props.scope,
+    searching: false,
+    scrolling: false,
+    ready: true,
+    includeEmpty: true,
+  });
+  return (
+    <MotionPresence visible={props.attachments.length > 0} offsetY={0}>
+      <View className="flex-row gap-1 pl-1">
+        {shown.map((attachment) => (
+          <Animated.View key={attachment.id} {...motion}>
+            <ComposerAttachmentThumbnail
+              environmentId={props.environmentId}
+              attachment={attachment}
+              size={30}
+              borderRadius={8}
+              compact
+              onPressPreview={props.onPressPreview}
+              onPressVideo={props.onPressVideo}
+            />
+          </Animated.View>
+        ))}
+        {overflow > 0 ? (
+          <Animated.View key="overflow" {...motion}>
+            <View className="size-[30px] items-center justify-center rounded-lg bg-subtle-strong">
+              <Text className="text-foreground-muted text-2xs font-supacode-bold">+{overflow}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
+      </View>
+    </MotionPresence>
   );
 }
 

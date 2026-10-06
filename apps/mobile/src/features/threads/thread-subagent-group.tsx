@@ -22,6 +22,8 @@ import { SubagentRow } from "./SubagentRow";
 import { WorkLogBlock } from "./work-log-layout";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { MotionPresence } from "../../components/MotionPresence";
+import Animated from "react-native-reanimated";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 
 type SubagentItem = Extract<OrchestrationV2TurnItem, { type: "subagent" }>;
 type AgentTiming = Pick<OrchestrationV2Subagent, "status" | "startedAt" | "completedAt">;
@@ -79,6 +81,14 @@ export function ThreadSubagentGroup(props: {
     environmentThreadDetails.threadAtom(scopeThreadRef(props.environmentId, members[0]!.threadId)),
     (thread) => thread?.projection.subagents,
   );
+  const motion = useListChangeMotion({
+    items: members.map((item) => ({ key: item.id })),
+    scope: `${props.environmentId}:${props.anchorKey}`,
+    searching: false,
+    scrolling: false,
+    ready: true,
+    includeEmpty: true,
+  });
   const agents = members.map((item) => {
     const live = liveAgents?.find((agent) => agent.id === item.subagentId);
     return {
@@ -147,33 +157,35 @@ export function ThreadSubagentGroup(props: {
             {agents.map((agent) => {
               const threadId = agent.childThreadId;
               return (
-                <Pressable
-                  key={agent.item.id}
-                  accessible
-                  accessibilityRole={threadId === null ? undefined : "link"}
-                  accessibilityHint={
-                    threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
-                  }
-                  disabled={threadId === null}
-                  onPress={() => {
-                    // Push, not navigate: navigate reuses this Thread route, so back
-                    // would skip the parent thread.
-                    if (threadId !== null)
-                      navigation.dispatch(
-                        StackActions.push("Thread", {
-                          environmentId: String(props.environmentId),
-                          threadId: String(threadId),
-                        }),
-                      );
-                  }}
-                  className="rounded-lg px-3 py-3 active:bg-subtle"
-                >
-                  <SubagentRow
-                    environmentId={props.environmentId}
-                    subagent={agent}
-                    elapsed={<SubagentElapsed agents={[agent]} />}
-                  />
-                </Pressable>
+                <Animated.View key={agent.item.id} {...motion}>
+                  <Pressable
+                    key={agent.item.id}
+                    accessible
+                    accessibilityRole={threadId === null ? undefined : "link"}
+                    accessibilityHint={
+                      threadId === null ? "Provider-managed agent" : "Opens this agent's thread"
+                    }
+                    disabled={threadId === null}
+                    onPress={() => {
+                      // Push, not navigate: navigate reuses this Thread route, so back
+                      // would skip the parent thread.
+                      if (threadId !== null)
+                        navigation.dispatch(
+                          StackActions.push("Thread", {
+                            environmentId: String(props.environmentId),
+                            threadId: String(threadId),
+                          }),
+                        );
+                    }}
+                    className="rounded-lg px-3 py-3 active:bg-subtle"
+                  >
+                    <SubagentRow
+                      environmentId={props.environmentId}
+                      subagent={agent}
+                      elapsed={<SubagentElapsed agents={[agent]} />}
+                    />
+                  </Pressable>
+                </Animated.View>
               );
             })}
           </View>

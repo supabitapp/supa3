@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanim
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
+import { MotionSwap } from "../../components/MotionSwap";
 import { APP_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
@@ -77,19 +78,30 @@ function OverlayContent(props: { readonly progress: GitActionProgress }) {
   const glassBorder = themeColorWithAlpha(String(foreground), isDarkMode ? 0.18 : 0.12);
   const content = (
     <>
-      <OverlayIcon phase={progress.phase} />
+      <MotionSwap
+        stateKey={progress.phase}
+        style={{ width: 24, height: 24, justifyContent: "center", alignItems: "center" }}
+      >
+        <View style={{ width: 24, height: 24, justifyContent: "center", alignItems: "center" }}>
+          <OverlayIcon phase={progress.phase} />
+        </View>
+      </MotionSwap>
 
-      <View className="flex-1 gap-0.5">
-        {progress.label ? (
-          <Text className="text-sm font-supacode-bold text-foreground" numberOfLines={1}>
-            {progress.label}
-          </Text>
-        ) : null}
-        {progress.description ? (
-          <Text className="text-2xs text-foreground-muted" numberOfLines={1}>
-            {progress.description}
-          </Text>
-        ) : null}
+      <View className="flex-1">
+        <MotionSwap stateKey={progress.phase}>
+          <View className="gap-0.5">
+            {progress.label ? (
+              <Text className="text-sm font-supacode-bold text-foreground" numberOfLines={1}>
+                {progress.label}
+              </Text>
+            ) : null}
+            {progress.description ? (
+              <Text className="text-2xs text-foreground-muted" numberOfLines={1}>
+                {progress.description}
+              </Text>
+            ) : null}
+          </View>
+        </MotionSwap>
       </View>
 
       {progress.prUrl ? (

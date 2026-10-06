@@ -9,19 +9,20 @@ import {
   type LayoutAnimationFunction,
 } from "react-native-reanimated";
 
-import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
-import { shouldAnimateThreadList } from "./thread-list-motion";
-import { isKeyboardMotionSuppressed } from "../../lib/motionInput";
+import { useReducedMotionPreference } from "./useReducedMotionPreference";
+import { shouldAnimateListChange } from "./listChangeMotion";
+import { isKeyboardMotionSuppressed } from "./motionInput";
 
 /** Uses LegendList's recycling guards while animating only visible cells' transforms and opacity. */
-export function useThreadListMotion(input: {
+export function useListChangeMotion(input: {
   readonly items: ReadonlyArray<{ readonly key: string }>;
   readonly scope: string;
   readonly searching: boolean;
   readonly scrolling: boolean;
   readonly ready: boolean;
+  readonly includeEmpty?: boolean;
 }) {
-  const { items, scope, searching, scrolling, ready } = input;
+  const { items, scope, searching, scrolling, ready, includeEmpty = false } = input;
   const reducedMotion = useReducedMotionPreference();
   const frame = useMemo(() => ({ keys: items.map((item) => item.key), scope }), [items, scope]);
   const previous = useRef<typeof frame | null>(null);
@@ -31,12 +32,13 @@ export function useThreadListMotion(input: {
       ready &&
       previous.current !== null &&
       !isKeyboardMotionSuppressed() &&
-      shouldAnimateThreadList({
+      shouldAnimateListChange({
         keys: frame.keys,
         scope: frame.scope,
         previousKeys: previous.current.keys,
         previousScope: previous.current.scope,
         searching,
+        includeEmpty,
       });
     previous.current = ready ? frame : null;
     enabled.set(animate && !reducedMotion && !scrolling ? 1 : 0);
@@ -44,7 +46,7 @@ export function useThreadListMotion(input: {
       // Newly recycled rows reached by a later scroll must never play an entrance.
       enabled.set(withTiming(0, { duration: 220, reduceMotion: ReduceMotion.Never }));
     }
-  }, [enabled, frame, scrolling, searching, reducedMotion, ready]);
+  }, [enabled, frame, scrolling, searching, reducedMotion, ready, includeEmpty]);
 
   return useMemo(() => {
     const timing = {
@@ -62,6 +64,8 @@ export function useThreadListMotion(input: {
         values.targetGlobalOriginY < values.windowHeight;
       const offset =
         enabled.value > 0 && visible ? values.currentOriginY - values.targetOriginY : 0;
+      const offsetX =
+        enabled.value > 0 && visible ? values.currentOriginX - values.targetOriginX : 0;
       const geometry = {
         originX: values.targetOriginX,
         originY: values.targetOriginY,
@@ -69,10 +73,16 @@ export function useThreadListMotion(input: {
         height: values.targetHeight,
       };
       return {
-        initialValues: { ...geometry, transform: [{ translateY: offset }] },
+        initialValues: {
+          ...geometry,
+          transform: [{ translateX: offsetX }, { translateY: offset }],
+        },
         animations: {
           ...geometry,
-          transform: [{ translateY: offset === 0 ? 0 : withTiming(0, timing) }],
+          transform: [
+            { translateX: offsetX === 0 ? 0 : withTiming(0, timing) },
+            { translateY: offset === 0 ? 0 : withTiming(0, timing) },
+          ],
         },
       };
     };

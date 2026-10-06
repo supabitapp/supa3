@@ -10,7 +10,7 @@ import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
-import { useThreadListMotion } from "./use-thread-list-motion";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 import {
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
@@ -839,7 +839,7 @@ function ThreadSettingsMainContent(props: {
     ],
     [catalogItems],
   );
-  const catalogMotion = useThreadListMotion({
+  const catalogMotion = useListChangeMotion({
     items: listItems,
     scope: `${session.environmentId}:${session.providerFilter ?? "all"}:${session.searchQuery}`,
     searching: session.searchQuery.trim().length > 0,

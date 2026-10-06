@@ -1,18 +1,18 @@
 const MAX_CHANGED_ROWS = 20;
 
 /** Content-only updates and bulk replacements stay immediate, as do search and scope changes. */
-export function shouldAnimateThreadList(input: {
+export function shouldAnimateListChange(input: {
   readonly previousKeys: ReadonlyArray<string>;
   readonly keys: ReadonlyArray<string>;
   readonly previousScope: string;
   readonly scope: string;
   readonly searching: boolean;
+  readonly includeEmpty?: boolean;
 }) {
   if (
     input.searching ||
     input.previousScope !== input.scope ||
-    input.previousKeys.length === 0 ||
-    input.keys.length === 0
+    (!input.includeEmpty && (input.previousKeys.length === 0 || input.keys.length === 0))
   ) {
     return false;
   }

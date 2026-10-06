@@ -13,6 +13,8 @@ import { useEnvironmentServerConfig, useProject, useThreadShell } from "../../st
 import { subagentCardDetail } from "./subagent-card-presentation";
 import { SUBAGENT_TONE_TEXT_CLASS, SubagentStatusDot } from "./SubagentStatusDot";
 import { resolveSubagentRowPresentation } from "./threadAgentsPresentation";
+import { MotionPresence } from "../../components/MotionPresence";
+import { MotionSwap } from "../../components/MotionSwap";
 
 type SubagentRowSubagent = Pick<
   OrchestrationV2Subagent,
@@ -43,7 +45,9 @@ export function SubagentRow(props: {
   return (
     <View className="flex-row gap-3">
       <View className="h-5 justify-center">
-        <SubagentStatusDot tone={presentation.tone} placement="sheet" />
+        <MotionSwap stateKey={presentation.tone}>
+          <SubagentStatusDot tone={presentation.tone} placement="sheet" />
+        </MotionSwap>
       </View>
       <View className="min-w-0 flex-1 gap-1">
         <View className="min-h-5 flex-row items-center gap-2">
@@ -61,14 +65,16 @@ export function SubagentRow(props: {
             >
               ·
             </Text>
-            <Text
-              className={cn(
-                "shrink-0 text-xs font-supacode-medium",
-                SUBAGENT_TONE_TEXT_CLASS[presentation.tone],
-              )}
-            >
-              {presentation.statusLabel}
-            </Text>
+            <MotionSwap stateKey={presentation.tone}>
+              <Text
+                className={cn(
+                  "shrink-0 text-xs font-supacode-medium",
+                  SUBAGENT_TONE_TEXT_CLASS[presentation.tone],
+                )}
+              >
+                {presentation.statusLabel}
+              </Text>
+            </MotionSwap>
           </View>
           {props.elapsed}
           {presentation.canOpenThread ? (
@@ -76,17 +82,21 @@ export function SubagentRow(props: {
           ) : null}
         </View>
         <SubagentMetadata environmentId={props.environmentId} subagent={props.subagent} />
-        {detail ? (
-          <Text
-            numberOfLines={3}
-            className={cn(
-              "text-xs text-foreground-muted",
-              presentation.tone === "failed" && SUBAGENT_TONE_TEXT_CLASS.failed,
-            )}
-          >
-            {detail}
-          </Text>
-        ) : null}
+        <MotionPresence visible={detail !== null} offsetY={0}>
+          <MotionSwap stateKey={presentation.tone}>
+            {detail ? (
+              <Text
+                numberOfLines={3}
+                className={cn(
+                  "text-xs text-foreground-muted",
+                  presentation.tone === "failed" && SUBAGENT_TONE_TEXT_CLASS.failed,
+                )}
+              >
+                {detail}
+              </Text>
+            ) : null}
+          </MotionSwap>
+        </MotionPresence>
       </View>
     </View>
   );

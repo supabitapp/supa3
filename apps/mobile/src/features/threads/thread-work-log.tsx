@@ -88,6 +88,8 @@ import { notificationChildThreadId } from "@supacode/client-runtime/state/thread
 import type { MarkdownImageRenderer } from "../../native/SelectableMarkdownText";
 import type { FilePreviewSource } from "../../components/FilePreviewModal";
 import { ThreadMarkdownImage } from "./ThreadMarkdownImage";
+import { MotionPresence } from "../../components/MotionPresence";
+import { MotionSwap } from "../../components/MotionSwap";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -873,11 +875,7 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
             >
               {label}
             </Text>
-            {props.copied ? (
-              <Text className="pr-1 font-supacode-medium text-3xs text-adaptive-emerald-600-400">
-                Copied
-              </Text>
-            ) : null}
+            <WorkLogCopyFeedback copied={props.copied} />
             <Text
               accessibilityLabel={timestamp.toLocaleString()}
               className="shrink-0 text-xs text-foreground-subtle"
@@ -1067,11 +1065,7 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
         )}
 
         <View className="shrink-0 flex-row items-center gap-px">
-          {props.copied ? (
-            <Text className="pr-1 font-supacode-medium text-3xs text-adaptive-emerald-600-400">
-              Copied
-            </Text>
-          ) : null}
+          <WorkLogCopyFeedback copied={props.copied} />
           {failed && toolIcon !== undefined ? (
             <View
               className="h-4 w-4 items-center justify-center"
@@ -1165,17 +1159,29 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
                 {fullDetail}
               </Text>
             ) : null}
-            {fetchedOutput ? (
-              <Text
-                selectable
-                className={cn(
-                  "font-mono text-2xs leading-normal text-foreground-muted",
-                  (!call || call.command || call.args || call.argsText) && "mt-1.5",
-                )}
-              >
-                {fetchedOutput}
-              </Text>
-            ) : null}
+            <MotionSwap
+              stateKey={
+                fetchedDetail.error
+                  ? "error"
+                  : fetchedDetail.data
+                    ? "ready"
+                    : row.fetchesDetail
+                      ? "loading"
+                      : "local"
+              }
+            >
+              {fetchedOutput ? (
+                <Text
+                  selectable
+                  className={cn(
+                    "font-mono text-2xs leading-normal text-foreground-muted",
+                    (!call || call.command || call.args || call.argsText) && "mt-1.5",
+                  )}
+                >
+                  {fetchedOutput}
+                </Text>
+              ) : null}
+            </MotionSwap>
             {failedExitCode !== null ? (
               <Text className="mt-1.5 font-mono text-2xs leading-normal text-danger-foreground">
                 exit {failedExitCode}
@@ -1378,6 +1384,26 @@ export const ThreadAgentSpawnCard = memo(function ThreadAgentSpawnCard(props: {
     </Animated.View>
   );
 });
+
+function WorkLogCopyFeedback({ copied }: { readonly copied: boolean }) {
+  return (
+    <View>
+      <Text
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        className="pr-1 font-supacode-medium text-3xs opacity-0"
+      >
+        Copied
+      </Text>
+      <MotionPresence visible={copied} offsetY={0} style={{ position: "absolute", inset: 0 }}>
+        <Text className="pr-1 font-supacode-medium text-3xs text-adaptive-emerald-600-400">
+          Copied
+        </Text>
+      </MotionPresence>
+    </View>
+  );
+}
 
 export function ThreadThinkingRow(props: {
   readonly rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;

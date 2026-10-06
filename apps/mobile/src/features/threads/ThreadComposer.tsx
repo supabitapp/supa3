@@ -68,7 +68,7 @@ import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentButton } from "../../components/ComposerAttachmentButton";
 import {
   ComposerAttachmentStrip,
-  ComposerAttachmentThumbnail,
+  ComposerCompactAttachmentStrip,
 } from "../../components/ComposerAttachmentStrip";
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { GlassSurface } from "../../components/GlassSurface";
@@ -1050,28 +1050,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 }}
               />
             </Animated.View>
-            {!isExpanded && stripAttachments.length > 0 ? (
-              <View className="flex-row gap-1 pl-1">
-                {stripAttachments.slice(0, 3).map((attachment) => (
-                  <ComposerAttachmentThumbnail
-                    environmentId={props.environmentId}
-                    key={attachment.id}
-                    attachment={attachment}
-                    size={30}
-                    borderRadius={8}
-                    compact
-                    onPressPreview={onPressPreview}
-                    onPressVideo={onPressVideo}
-                  />
-                ))}
-                {stripAttachments.length > 3 ? (
-                  <View className="size-[30px] items-center justify-center rounded-lg bg-subtle-strong">
-                    <Text className="text-foreground-muted text-2xs font-supacode-bold">
-                      +{stripAttachments.length - 3}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+            {!isExpanded ? (
+              <ComposerCompactAttachmentStrip
+                scope={composerDraftKey}
+                environmentId={props.environmentId}
+                attachments={stripAttachments}
+                onPressPreview={onPressPreview}
+                onPressVideo={onPressVideo}
+              />
             ) : null}
             {!isExpanded ? draftAction : null}
             {isExpanded ? <View className="h-1" /> : null}

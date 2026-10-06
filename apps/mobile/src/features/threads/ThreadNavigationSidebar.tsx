@@ -11,7 +11,7 @@ import {
 } from "@supacode/client-runtime/state/thread-search";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import Animated from "react-native-reanimated";
-import { useThreadListMotion } from "./use-thread-list-motion";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -615,7 +615,7 @@ function ThreadNavigationSidebarPane(
     return true;
   }, [nativeChrome, onRequestVisibility, visible]);
   useHardwareKeyboardCommand("focusSearch", focusSearch);
-  const listMotion = useThreadListMotion({
+  const listMotion = useListChangeMotion({
     items: listItems,
     scope: settledResetKey,
     searching: props.searchQuery.trim().length > 0,

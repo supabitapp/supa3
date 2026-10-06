@@ -14,6 +14,8 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
+import { MotionPresence } from "../../components/MotionPresence";
+import { MotionSwap } from "../../components/MotionSwap";
 import { mobileHtmlRenderTheme } from "../../lib/htmlRenderTheme";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { useAssetUrlState, useRefreshAssetUrl } from "../../state/assets";
@@ -173,11 +175,16 @@ export function HtmlRenderWebView(props: {
             }
           : {})}
       />
-      {loaded ? null : (
-        <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
+      <MotionPresence
+        visible={!loaded}
+        offsetY={0}
+        pointerEvents="none"
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <View pointerEvents="none" className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
-      )}
+      </MotionPresence>
     </View>
   );
 }
@@ -230,7 +237,17 @@ export function ThreadHtmlRender(props: {
 
   return (
     <View style={{ marginBottom: ROW_BOTTOM_MARGIN }}>
-      <View style={{ height }}>
+      <MotionSwap
+        fill
+        stateKey={
+          uri !== null && !failed
+            ? "ready"
+            : failed || asset._tag === "Failure"
+              ? "error"
+              : "loading"
+        }
+        style={{ height }}
+      >
         {uri !== null && !failed ? (
           <HtmlRenderWebView
             key={`${uri}:${attempt}`}
@@ -283,7 +300,7 @@ export function ThreadHtmlRender(props: {
             />
           </Pressable>
         ) : null}
-      </View>
+      </MotionSwap>
     </View>
   );
 }

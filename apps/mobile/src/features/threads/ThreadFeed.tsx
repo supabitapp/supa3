@@ -1,11 +1,7 @@
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
-import {
-  WorktreeWorkingHeader,
-  WorktreeSetupCard,
-  type WorktreeSetupCardProps,
-} from "./worktree-setup-card";
+import { WorktreeSetupSlot, type WorktreeSetupCardProps } from "./worktree-setup-card";
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
@@ -142,6 +138,8 @@ import {
   type MediaVideoPreviewSource,
 } from "../../lib/videoPreviewSource";
 import { CopyTextButton } from "../../components/CopyTextButton";
+import { MotionPresence } from "../../components/MotionPresence";
+import { MotionSwap } from "../../components/MotionSwap";
 import { parseReviewCommentMessageSegments } from "../review/reviewCommentSelection";
 import type { ReviewDiffTheme } from "../review/shikiReviewHighlighter";
 import {
@@ -1810,52 +1808,68 @@ function renderFeedEntry(
             ) : null}
           </View>
           <View className="mt-1 flex-row items-center justify-end gap-1 pr-0.5">
-            {intentBadge ? (
-              <View
-                accessible
-                accessibilityRole="text"
-                accessibilityLabel={intentBadge.accessibilityLabel}
-                className={cn(
-                  "rounded-full border px-1.5 py-0.5",
-                  intentBadge.tone === "queued"
-                    ? "border-adaptive-amber-500-a25-400-a25 bg-adaptive-amber-500-a10-400-a10"
-                    : "border-adaptive-sky-500-a25-400-a25 bg-adaptive-sky-500-a10-400-a10",
-                )}
-              >
-                <Text
-                  className={cn(
-                    "font-supacode-medium text-2xs tracking-wide",
-                    intentBadge.tone === "queued"
-                      ? "text-adaptive-amber-700-300"
-                      : "text-adaptive-sky-700-300",
-                  )}
+            <MotionPresence visible={intentBadge !== null} offsetY={0}>
+              {intentBadge ? (
+                <MotionSwap stateKey={intentBadge.label}>
+                  <View
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel={intentBadge.accessibilityLabel}
+                    className={cn(
+                      "rounded-full border px-1.5 py-0.5",
+                      intentBadge.tone === "queued"
+                        ? "border-adaptive-amber-500-a25-400-a25 bg-adaptive-amber-500-a10-400-a10"
+                        : "border-adaptive-sky-500-a25-400-a25 bg-adaptive-sky-500-a10-400-a10",
+                    )}
+                  >
+                    <Text
+                      className={cn(
+                        "font-supacode-medium text-2xs tracking-wide",
+                        intentBadge.tone === "queued"
+                          ? "text-adaptive-amber-700-300"
+                          : "text-adaptive-sky-700-300",
+                      )}
+                    >
+                      {intentBadge.label}
+                    </Text>
+                  </View>
+                </MotionSwap>
+              ) : null}
+            </MotionPresence>
+            <MotionSwap
+              stateKey={entry.pendingMessage && !entry.acknowledged ? "pending" : "acknowledged"}
+            >
+              <Text className="font-supacode-medium text-xs tabular-nums text-foreground-secondary">
+                {entry.pendingMessage && !entry.acknowledged ? "Pending" : timestampLabel}
+              </Text>
+            </MotionSwap>
+            <MotionPresence
+              offsetY={0}
+              visible={Boolean(
+                props.onEditPendingMessage !== null &&
+                entry.pendingMessage &&
+                !entry.acknowledged &&
+                !entry.pendingMessage.creation &&
+                entry.pendingMessage.messageId !== props.dispatchingMessageId,
+              )}
+            >
+              {(visible) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit pending message"
+                  disabled={!visible}
+                  hitSlop={8}
+                  className="size-7 items-center justify-center"
+                  onPress={() => {
+                    if (entry.pendingMessage && props.onEditPendingMessage) {
+                      props.onEditPendingMessage(entry.pendingMessage);
+                    }
+                  }}
                 >
-                  {intentBadge.label}
-                </Text>
-              </View>
-            ) : null}
-            <Text className="font-supacode-medium text-xs tabular-nums text-foreground-secondary">
-              {entry.pendingMessage && !entry.acknowledged ? "Pending" : timestampLabel}
-            </Text>
-            {props.onEditPendingMessage !== null &&
-            entry.pendingMessage &&
-            !entry.acknowledged &&
-            !entry.pendingMessage.creation &&
-            entry.pendingMessage.messageId !== props.dispatchingMessageId ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Edit pending message"
-                hitSlop={8}
-                className="size-7 items-center justify-center"
-                onPress={() => {
-                  if (entry.pendingMessage && props.onEditPendingMessage) {
-                    props.onEditPendingMessage(entry.pendingMessage);
-                  }
-                }}
-              >
-                <SymbolView name="pencil" size={14} tintColor={iconSubtleColor} />
-              </Pressable>
-            ) : null}
+                  <SymbolView name="pencil" size={14} tintColor={iconSubtleColor} />
+                </Pressable>
+              )}
+            </MotionPresence>
             {presentation.text.trim().length > 0 ? (
               <CopyTextButton
                 accessibilityLabel="Copy message"
@@ -3085,10 +3099,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             skills: props.skills,
             workspaceRoot: props.workspaceRoot,
           })}
-          {props.worktreeSetup && info.index === setupAnchorIndex ? (
-            <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
-          ) : props.setupWorkingStartedAt && info.index === setupAnchorIndex ? (
-            <WorktreeWorkingHeader startedAt={props.setupWorkingStartedAt} />
+          {info.index === setupAnchorIndex ? (
+            <WorktreeSetupSlot
+              key={props.threadId}
+              setup={props.worktreeSetup ?? null}
+              workingStartedAt={props.setupWorkingStartedAt ?? null}
+            />
           ) : null}
         </ThreadMediaVisibility>
       </Animated.View>
@@ -3276,8 +3292,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             ListHeaderComponent={
               <>
                 {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
-                {setupAnchorIndex < 0 && props.worktreeSetup ? (
-                  <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
+                {setupAnchorIndex < 0 ? (
+                  <WorktreeSetupSlot
+                    key={props.threadId}
+                    setup={props.worktreeSetup ?? null}
+                    workingStartedAt={props.setupWorkingStartedAt ?? null}
+                  />
                 ) : null}
                 {props.historyControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />
@@ -3310,20 +3330,25 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             />
           </Animated.View>
         ) : null}
-        {presentedFeed.length === 0 &&
-        !props.worktreeSetup &&
-        props.activeWorkStartedAt === null &&
-        props.contentPresentation.kind === "ready" ? (
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <ThreadFeedPlaceholder
-              title="No conversation yet"
-              detail="Ask the agent to inspect the repo, run a command, or continue the active thread."
-              topInset={topContentInset}
-              bottomInset={bottomContentInset}
-              horizontalPadding={horizontalPadding}
-            />
-          </View>
-        ) : null}
+        <MotionPresence
+          offsetY={0}
+          visible={
+            presentedFeed.length === 0 &&
+            !props.worktreeSetup &&
+            props.activeWorkStartedAt === null &&
+            props.contentPresentation.kind === "ready"
+          }
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+        >
+          <ThreadFeedPlaceholder
+            title="No conversation yet"
+            detail="Ask the agent to inspect the repo, run a command, or continue the active thread."
+            topInset={topContentInset}
+            bottomInset={bottomContentInset}
+            horizontalPadding={horizontalPadding}
+          />
+        </MotionPresence>
         <VideoPreviewModal source={expandedVideo} onRequestClose={() => setExpandedVideo(null)} />
         <FilePreviewModal source={expandedFile} onRequestClose={() => setExpandedFile(null)} />
       </View>
@@ -3335,34 +3360,42 @@ function ThreadFeedLoadEarlierControl(props: ThreadFeedHistoryControls) {
   const theme = useUniwindTheme();
   const mutedColor = theme["--color-icon-subtle"];
   const accentColor = theme["--color-primary"];
-  if (!props.hasMoreHistory && props.error === null) {
-    return null;
-  }
   return (
-    <View className="mb-3 items-center gap-1.5 px-2">
-      {props.hasMoreHistory ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Load earlier activity"
-          disabled={props.loading}
-          onPress={props.onLoadEarlier}
-          className="min-h-9 flex-row items-center justify-center gap-2 rounded-full border border-border/60 bg-surface/80 px-4 py-2 disabled:opacity-50"
-        >
-          {props.loading ? (
-            <ActivityIndicator size="small" color={accentColor} />
-          ) : (
-            <SymbolView name="chevron.up" size={12} tintColor={accentColor} type="monochrome" />
-          )}
-          <Text className="text-sm font-medium text-foreground">
-            {props.loading ? "Loading earlier activity…" : "Load earlier activity"}
+    <MotionPresence visible={props.hasMoreHistory || props.error !== null} offsetY={0}>
+      <View className="mb-3 items-center gap-1.5 px-2">
+        {props.hasMoreHistory ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Load earlier activity"
+            disabled={props.loading}
+            onPress={props.onLoadEarlier}
+            className="min-h-9 flex-row items-center justify-center gap-2 rounded-full border border-border/60 bg-surface/80 px-4 py-2 disabled:opacity-50"
+          >
+            <MotionSwap stateKey={props.loading ? "loading" : "ready"}>
+              <View className="flex-row items-center gap-2">
+                {props.loading ? (
+                  <ActivityIndicator size="small" color={accentColor} />
+                ) : (
+                  <SymbolView
+                    name="chevron.up"
+                    size={12}
+                    tintColor={accentColor}
+                    type="monochrome"
+                  />
+                )}
+                <Text className="text-sm font-medium text-foreground">
+                  {props.loading ? "Loading earlier activity…" : "Load earlier activity"}
+                </Text>
+              </View>
+            </MotionSwap>
+          </Pressable>
+        ) : null}
+        <MotionPresence visible={props.error !== null} offsetY={0}>
+          <Text className="text-center text-xs" style={{ color: mutedColor }}>
+            {props.error}
           </Text>
-        </Pressable>
-      ) : null}
-      {props.error !== null ? (
-        <Text className="text-center text-xs" style={{ color: mutedColor }}>
-          {props.error}
-        </Text>
-      ) : null}
-    </View>
+        </MotionPresence>
+      </View>
+    </MotionPresence>
   );
 }

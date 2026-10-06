@@ -43,6 +43,10 @@ import { useSelectedThreadWorktree } from "../../../state/use-selected-thread-wo
 import { vcsEnvironment } from "../../../state/vcs";
 import { resolveGitOverviewReviewNavigationAction } from "./git-overview-navigation";
 import { MetaCard, SheetListRow, menuItemIconName, statusSummary } from "./gitSheetComponents";
+import Animated from "react-native-reanimated";
+import { MotionPresence } from "../../../components/MotionPresence";
+import { MotionSwap } from "../../../components/MotionSwap";
+import { useListChangeMotion } from "../../../lib/useListChangeMotion";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -115,6 +119,20 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
       })),
     [busy, gitStatus.data, hasPrimaryRemote, menuItems],
   );
+  const listMotion = useListChangeMotion({
+    items: [
+      ...sheetMenuItems.map(({ item }) => ({ key: item.id })),
+      ...((gitStatus.data?.behindCount ?? 0) > 0 ? [{ key: "pull-latest" }] : []),
+      ...linkedPrChains.flatMap((chain) =>
+        chain.layers.map((link) => ({ key: threadPullRequestKeyOf(link) })),
+      ),
+    ],
+    scope: `${environmentId}:${threadId}`,
+    searching: false,
+    scrolling: false,
+    ready: gitStatus.data !== undefined && gitStatus.data !== null,
+    includeEmpty: true,
+  });
 
   useEffect(() => {
     void gitActions.refreshSelectedThreadGitStatus({ quiet: true });
@@ -251,7 +269,7 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
         }`}
       >
         {sheetMenuItems.map(({ item, disabledReason }, index) => (
-          <View key={`${item.id}-${item.label}`}>
+          <Animated.View key={item.id} {...listMotion}>
             {index > 0 && Platform.OS !== "android" ? (
               <View className="ml-12 h-px bg-border" />
             ) : null}
@@ -262,9 +280,9 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
               disabled={item.disabled}
               onPress={() => void onPressMenuItem(item)}
             />
-          </View>
+          </Animated.View>
         ))}
-        {behindCount > 0 ? (
+        <MotionPresence visible={behindCount > 0} offsetY={0} layout={listMotion.layout}>
           <>
             {Platform.OS !== "android" ? <View className="ml-12 h-px bg-border" /> : null}
             <SheetListRow
@@ -275,7 +293,7 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
               onPress={() => void gitActions.onPullSelectedThreadBranch()}
             />
           </>
-        ) : null}
+        </MotionPresence>
         {Platform.OS !== "android" ? <View className="ml-12 h-px bg-border" /> : null}
         <SheetListRow
           icon="text.bubble"
@@ -306,14 +324,15 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
         />
       </View>
 
-      {linkedPrChains.length > 0 ? (
+      <MotionPresence visible={linkedPrChains.length > 0} offsetY={0}>
         <View className="gap-2">
           <Text className="px-1 text-xs font-supacode-bold text-foreground-muted">
             Linked pull requests
           </Text>
           {linkedPrChains.map((chain) => (
-            <View
+            <Animated.View
               key={threadPullRequestKeyOf(chain.layers[0]!)}
+              {...listMotion}
               className="overflow-hidden bg-card android:rounded-[20px] ios:rounded-2xl ios:border ios:border-border ios:px-3 ios:py-1"
             >
               {chain.layers.length > 1 ? (
@@ -330,27 +349,34 @@ export function GitOverviewSheet(props: GitOverviewSheetProps) {
                 </View>
               ) : null}
               {chain.layers.map((link, index) => (
-                <View key={threadPullRequestKeyOf(link)}>
+                <Animated.View key={threadPullRequestKeyOf(link)} {...listMotion}>
                   {index > 0 && Platform.OS !== "android" ? (
                     <View className="ml-12 h-px bg-border" />
                   ) : null}
-                  <SheetListRow
-                    icon="arrow.triangle.pull"
-                    title={`#${link.number} ${link.snapshot?.title ?? "Pull request"}`}
-                    subtitle={`${link.repository} · ${link.snapshot === null ? "Status pending" : link.snapshot.isDraft && link.snapshot.state === "open" ? "Draft" : link.snapshot.state}${link.watch === undefined ? "" : " · Watching"}`}
-                    onPress={() => {
-                      void tryOpenExternalUrl(link.url, "pull-request").then((opened) => {
-                        if (!opened)
-                          Alert.alert("Unable to open PR", "The pull request could not be opened.");
-                      });
-                    }}
-                  />
-                </View>
+                  <MotionSwap
+                    stateKey={`${link.snapshot?.state ?? "pending"}:${link.snapshot?.isDraft ?? false}:${link.watch !== undefined}`}
+                  >
+                    <SheetListRow
+                      icon="arrow.triangle.pull"
+                      title={`#${link.number} ${link.snapshot?.title ?? "Pull request"}`}
+                      subtitle={`${link.repository} · ${link.snapshot === null ? "Status pending" : link.snapshot.isDraft && link.snapshot.state === "open" ? "Draft" : link.snapshot.state}${link.watch === undefined ? "" : " · Watching"}`}
+                      onPress={() => {
+                        void tryOpenExternalUrl(link.url, "pull-request").then((opened) => {
+                          if (!opened)
+                            Alert.alert(
+                              "Unable to open PR",
+                              "The pull request could not be opened.",
+                            );
+                        });
+                      }}
+                    />
+                  </MotionSwap>
+                </Animated.View>
               ))}
-            </View>
+            </Animated.View>
           ))}
         </View>
-      ) : null}
+      </MotionPresence>
 
       {currentWorktreePath ? <MetaCard label="Worktree" value={currentWorktreePath} /> : null}
     </ScrollView>

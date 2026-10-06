@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText as Text } from "../../components/AppText";
+import { MotionPresence } from "../../components/MotionPresence";
+import { MotionSwap } from "../../components/MotionSwap";
 import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
 import { WorktreeSetupSheet } from "./worktree-setup-sheet";
 import { ShimmeringWorkContent } from "./thread-work-log";
@@ -20,6 +22,35 @@ export interface WorktreeSetupCardProps {
   working: boolean;
   onCancel: () => void;
   onWorkLocally: (() => void) | null;
+}
+
+/** Retires the setup card before handing its timeline slot to the working header. */
+export function WorktreeSetupSlot(props: {
+  readonly setup: WorktreeSetupCardProps | null;
+  readonly workingStartedAt: string | null;
+}) {
+  const [showingSetup, setShowingSetup] = useState(props.setup !== null);
+  if (props.setup !== null && !showingSetup) setShowingSetup(true);
+  return (
+    <View>
+      <MotionPresence
+        visible={props.setup !== null}
+        offsetY={0}
+        onHidden={() => setShowingSetup(false)}
+      >
+        {props.setup === null ? null : <WorktreeSetupCard {...props.setup} />}
+      </MotionPresence>
+      <MotionPresence
+        visible={!showingSetup && props.workingStartedAt !== null}
+        offsetY={0}
+        enterDurationMs={140}
+      >
+        {props.workingStartedAt === null ? null : (
+          <WorktreeWorkingHeader startedAt={props.workingStartedAt} />
+        )}
+      </MotionPresence>
+    </View>
+  );
 }
 
 function elapsed(start: string | null, end: string | null, now: number) {
@@ -65,11 +96,16 @@ export function WorktreeSetupCard(props: WorktreeSetupCardProps) {
   return (
     <View accessibilityLabel="Worktree setup" className="py-1">
       <View className="min-h-11 flex-row items-center gap-2 border-b border-border px-1">
-        <HeaderLabel
-          label={label}
-          active={(running || working) && !detailsOpen}
-          failed={failed && !working}
-        />
+        <MotionSwap
+          className="min-w-0 flex-1"
+          stateKey={`${handedOff}:${snapshot.phase}:${working}:${failed}`}
+        >
+          <HeaderLabel
+            label={label}
+            active={(running || working) && !detailsOpen}
+            failed={failed && !working}
+          />
+        </MotionSwap>
         {!handedOff ? (
           <Text
             className="text-2xs text-foreground-secondary"
@@ -89,36 +125,38 @@ export function WorktreeSetupCard(props: WorktreeSetupCardProps) {
           onPress={() => setDetailsOpen(true)}
           className="min-h-11 max-w-[55%] justify-center px-2"
         >
-          <View
-            className={
-              backgroundSetup
-                ? "min-w-0 flex-row items-center gap-1 rounded-full border border-border px-2 py-1"
-                : "flex-row items-center gap-1"
-            }
-          >
-            {backgroundSetup ? (
-              <ActivityIndicator
-                size="small"
-                colorClassName="accent-icon-muted"
-                style={{ width: 12, height: 12, transform: [{ scale: 0.65 }] }}
-              />
-            ) : failed ? (
-              <SymbolView
-                name="exclamationmark.circle"
-                size={12}
-                tintColorClassName="accent-danger-foreground"
-              />
-            ) : null}
-            <Text numberOfLines={1} className="shrink text-2xs text-foreground-secondary">
-              {backgroundSetup ? scriptName : "Details"}
-            </Text>
-            {!backgroundSetup ? (
-              <SymbolView name="chevron.right" size={10} tintColorClassName="accent-icon-muted" />
-            ) : null}
-          </View>
+          <MotionSwap stateKey={backgroundSetup ? "background" : failed ? "failed" : "details"}>
+            <View
+              className={
+                backgroundSetup
+                  ? "min-w-0 flex-row items-center gap-1 rounded-full border border-border px-2 py-1"
+                  : "flex-row items-center gap-1"
+              }
+            >
+              {backgroundSetup ? (
+                <ActivityIndicator
+                  size="small"
+                  colorClassName="accent-icon-muted"
+                  style={{ width: 12, height: 12, transform: [{ scale: 0.65 }] }}
+                />
+              ) : failed ? (
+                <SymbolView
+                  name="exclamationmark.circle"
+                  size={12}
+                  tintColorClassName="accent-danger-foreground"
+                />
+              ) : null}
+              <Text numberOfLines={1} className="shrink text-2xs text-foreground-secondary">
+                {backgroundSetup ? scriptName : "Details"}
+              </Text>
+              {!backgroundSetup ? (
+                <SymbolView name="chevron.right" size={10} tintColorClassName="accent-icon-muted" />
+              ) : null}
+            </View>
+          </MotionSwap>
         </Pressable>
       </View>
-      {!handedOff ? (
+      <MotionPresence visible={!handedOff} offsetY={0}>
         <View className="pt-1 pb-2">
           {snapshot.stages
             .filter((stage) => stage.id !== "agent")
@@ -133,7 +171,7 @@ export function WorktreeSetupCard(props: WorktreeSetupCardProps) {
               />
             ))}
         </View>
-      ) : null}
+      </MotionPresence>
       {detailsOpen ? (
         <SetupDetailsSheet {...props} now={now} onClose={() => setDetailsOpen(false)} />
       ) : null}
@@ -301,25 +339,27 @@ function StageRow({
       style={{ columnGap: 8, opacity: stage.status === "pending" ? 0.4 : 1 }}
     >
       <View className="w-6 items-center">
-        {stage.status === "running" && animate ? (
-          <ActivityIndicator
-            size="small"
-            colorClassName="accent-icon-muted"
-            style={{ transform: [{ scale: 0.75 }] }}
-          />
-        ) : (
-          <SymbolView
-            name={icons[stage.status]}
-            size={14}
-            tintColorClassName={
-              stage.status === "failed"
-                ? "accent-danger-foreground"
-                : stage.status === "warning"
-                  ? "accent-warning-foreground"
-                  : "accent-icon-muted"
-            }
-          />
-        )}
+        <MotionSwap stateKey={stage.status}>
+          {stage.status === "running" && animate ? (
+            <ActivityIndicator
+              size="small"
+              colorClassName="accent-icon-muted"
+              style={{ transform: [{ scale: 0.75 }] }}
+            />
+          ) : (
+            <SymbolView
+              name={icons[stage.status]}
+              size={14}
+              tintColorClassName={
+                stage.status === "failed"
+                  ? "accent-danger-foreground"
+                  : stage.status === "warning"
+                    ? "accent-warning-foreground"
+                    : "accent-icon-muted"
+              }
+            />
+          )}
+        </MotionSwap>
       </View>
       {stage.status === "running" && animate ? (
         <ShimmeringWorkContent

@@ -3,7 +3,7 @@ import { useAndroidControlSizing } from "../../components/useAndroidControlSizin
 import { type LegendListRef } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import Animated from "react-native-reanimated";
-import { useThreadListMotion } from "../threads/use-thread-list-motion";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
@@ -597,7 +597,7 @@ export function HomeScreen(props: HomeScreenProps) {
     if (swipeEnabled) activateVisibleRows(threadListV2Items);
   }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
 
-  const listMotion = useThreadListMotion({
+  const listMotion = useListChangeMotion({
     items: threadListV2Items,
     scope: settledResetKey,
     searching: hasSearchQuery,

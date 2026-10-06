@@ -114,6 +114,7 @@ import type {
 import { PendingApprovalCard } from "./PendingApprovalCard";
 import { ComposerErrorNotice } from "./ComposerErrorNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
+import { MotionSwap } from "../../components/MotionSwap";
 import { ComposerUsageLimits } from "./ComposerUsageLimits";
 import { PendingUserInputCard } from "./PendingUserInputCard";
 import { ProviderSubagentBar } from "./ProviderSubagentBar";
@@ -1076,6 +1077,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     feedTouchStartRef.current = null;
   }, []);
 
+  const approval = props.activePendingApproval;
+  const userInput = props.activePendingUserInput;
   return (
     <View className="flex-1">
       {showContent ? (
@@ -1280,32 +1283,44 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                     entering={FadeInDown.duration(220)}
                     exiting={FadeOut.duration(140)}
                   >
-                    {props.activePendingApproval ? (
-                      <PendingApprovalCard
-                        approval={props.activePendingApproval}
-                        respondingApprovalId={props.respondingApprovalId}
-                        onRespond={props.onRespondToApproval}
-                      />
-                    ) : null}
-                    {props.activePendingUserInput ? (
-                      <PendingUserInputCard
-                        pendingUserInput={props.activePendingUserInput}
-                        maxHeight={pendingUserInputMaxHeight}
-                        collapsed={userInputCollapsed}
-                        onToggleCollapsed={handleToggleUserInputCollapsed}
-                        onStopThread={props.onStopThread}
-                        cardProgress={userInputCardProgress}
-                        cardCoverage={userInputCardCoverage}
-                        onInputFocusChange={handleOwnedInputFocusChange}
-                        drafts={props.activePendingUserInputDrafts}
-                        answers={props.activePendingUserInputAnswers}
-                        respondingUserInputId={props.respondingUserInputId}
-                        onSelectOption={props.onSelectUserInputOption}
-                        onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
-                        onSubmit={props.onSubmitUserInput}
-                        onDismiss={props.onDismissUserInput}
-                      />
-                    ) : null}
+                    <MotionSwap
+                      stateKey={JSON.stringify([approval?.requestId, userInput?.requestId])}
+                    >
+                      {(active) => (
+                        <View className="gap-3">
+                          {approval ? (
+                            <PendingApprovalCard
+                              approval={approval}
+                              respondingApprovalId={
+                                active ? props.respondingApprovalId : approval.requestId
+                              }
+                              onRespond={props.onRespondToApproval}
+                            />
+                          ) : null}
+                          {userInput ? (
+                            <PendingUserInputCard
+                              pendingUserInput={userInput}
+                              maxHeight={pendingUserInputMaxHeight}
+                              collapsed={userInputCollapsed}
+                              onToggleCollapsed={handleToggleUserInputCollapsed}
+                              onStopThread={props.onStopThread}
+                              cardProgress={userInputCardProgress}
+                              cardCoverage={userInputCardCoverage}
+                              onInputFocusChange={handleOwnedInputFocusChange}
+                              drafts={props.activePendingUserInputDrafts}
+                              answers={props.activePendingUserInputAnswers}
+                              respondingUserInputId={
+                                active ? props.respondingUserInputId : userInput.requestId
+                              }
+                              onSelectOption={props.onSelectUserInputOption}
+                              onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
+                              onSubmit={props.onSubmitUserInput}
+                              onDismiss={props.onDismissUserInput}
+                            />
+                          ) : null}
+                        </View>
+                      )}
+                    </MotionSwap>
                   </Animated.View>
                 ) : null}
               </View>

@@ -20,6 +20,8 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { MotionPresence } from "../../components/MotionPresence";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 import { withUniwind } from "uniwind";
 
 import { AppText as Text } from "../../components/AppText";
@@ -88,6 +90,19 @@ export function FloatingWorkingControl(props: {
   const [deviceWidth, setDeviceWidth] = useState(0);
   const agents = props.agents;
   const hasAgents = agents !== null;
+  const segmentMotion = useListChangeMotion({
+    items: [
+      props.status !== null ? "status" : null,
+      hasDevicePreview ? "device" : null,
+      hasAgents ? "agents" : null,
+      hasQueue ? "queue" : null,
+    ].flatMap((key) => (key === null ? [] : [{ key }])),
+    scope: "floating-segments",
+    searching: false,
+    scrolling: false,
+    ready: true,
+    includeEmpty: true,
+  });
   // Segments keep their measured width; only the status label absorbs the
   // remainder, so a long "Working 12m 04s" truncates before a count does.
   const labelWidth = Math.max(
@@ -168,8 +183,9 @@ export function FloatingWorkingControl(props: {
   // comes from the overlay, independent of the capsule's current width.
   const statusContent =
     props.status !== null ? (
-      <View
+      <Animated.View
         pointerEvents={props.status.kind === "connection" ? "box-none" : "none"}
+        layout={segmentMotion.layout}
         className="h-11 items-center justify-center"
       >
         <Animated.View className="h-11" style={capsuleSizerStyle} />
@@ -188,7 +204,7 @@ export function FloatingWorkingControl(props: {
             onLayout={handleLabelLayout}
           />
         </View>
-      </View>
+      </Animated.View>
     ) : null;
 
   const capsuleContent = (
@@ -197,35 +213,39 @@ export function FloatingWorkingControl(props: {
       style={NATIVE_LIQUID_GLASS_SUPPORTED ? hiddenStyle : undefined}
     >
       {statusContent}
-      {props.devicePreview !== null ? (
-        <View
-          className="h-11 flex-row items-center"
-          onLayout={(event) => setDeviceWidth(event.nativeEvent.layout.width)}
-        >
-          {hasStatus ? <View className="h-4 w-px bg-border" /> : null}
-          <DevicePreviewButton
-            {...props.devicePreview}
-            compact={hasStatus || hasAgents || hasQueue}
-          />
-        </View>
-      ) : null}
-      {agents !== null ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Open agents, ${agents.accessibilityLabel}`}
-          accessibilityHint="Opens this turn's subagents"
-          onPress={props.onOpenAgents}
-          onLayout={(event) => setAgentsWidth(event.nativeEvent.layout.width)}
-          className="h-11 flex-row items-center gap-1.5 px-3 active:opacity-70"
-        >
-          {hasStatus || hasDevicePreview ? <View className="mr-1 h-4 w-px bg-border" /> : null}
-          <SymbolView name="person.2" size={13} tintColorClassName="accent-foreground-muted" />
-          <Text className="font-supacode-medium text-xs tabular-nums" numberOfLines={1}>
-            {agents.label}
-          </Text>
-        </Pressable>
-      ) : null}
-      {hasQueue ? (
+      <MotionPresence visible={hasDevicePreview} offsetY={0} layout={segmentMotion.layout}>
+        {props.devicePreview !== null ? (
+          <View
+            className="h-11 flex-row items-center"
+            onLayout={(event) => setDeviceWidth(event.nativeEvent.layout.width)}
+          >
+            {hasStatus ? <View className="h-4 w-px bg-border" /> : null}
+            <DevicePreviewButton
+              {...props.devicePreview}
+              compact={hasStatus || hasAgents || hasQueue}
+            />
+          </View>
+        ) : null}
+      </MotionPresence>
+      <MotionPresence visible={hasAgents} offsetY={0} layout={segmentMotion.layout}>
+        {agents !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open agents, ${agents.accessibilityLabel}`}
+            accessibilityHint="Opens this turn's subagents"
+            onPress={props.onOpenAgents}
+            onLayout={(event) => setAgentsWidth(event.nativeEvent.layout.width)}
+            className="h-11 flex-row items-center gap-1.5 px-3 active:opacity-70"
+          >
+            {hasStatus || hasDevicePreview ? <View className="mr-1 h-4 w-px bg-border" /> : null}
+            <SymbolView name="person.2" size={13} tintColorClassName="accent-foreground-muted" />
+            <Text className="font-supacode-medium text-xs tabular-nums" numberOfLines={1}>
+              {agents.label}
+            </Text>
+          </Pressable>
+        ) : null}
+      </MotionPresence>
+      <MotionPresence visible={hasQueue} offsetY={0} layout={segmentMotion.layout}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open queue, ${props.queuedCount} messages`}
@@ -243,7 +263,7 @@ export function FloatingWorkingControl(props: {
             {props.queuedCount} queued
           </Text>
         </Pressable>
-      ) : null}
+      </MotionPresence>
     </View>
   );
 

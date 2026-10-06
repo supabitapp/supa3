@@ -11,12 +11,7 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Reanimated, {
-  FadeOut,
-  ReduceMotion,
-  useAnimatedStyle,
-  withTiming,
-} from "react-native-reanimated";
+import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
 
 import { MaterialButton } from "../../components/MaterialButton";
 import { AndroidSheetHeader } from "../../components/AndroidScreenHeader";
@@ -39,6 +34,7 @@ import {
 } from "./threadQueueControlPresentation";
 import { threadDragGapOffset } from "./threadDragGap";
 import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 const REMOVE_ACTION_WIDTH = 76;
@@ -80,6 +76,14 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   const [translation] = useState(() => new Animated.Value(0));
   const reducedMotion = useReducedMotionPreference();
   const queuedRuns = workflow?.queuedRuns ?? [];
+  const listMotion = useListChangeMotion({
+    items: queuedRuns.map(({ run }) => ({ key: run.id })),
+    scope: threadKey,
+    searching: false,
+    scrolling: draggedRunId !== null,
+    ready: workflow !== null,
+    includeEmpty: true,
+  });
   const order = queuedRuns.map(({ run }) => run.id).join(",");
 
   useEffect(() => {
@@ -235,6 +239,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
         return (
           <QueueShiftedRow
             key={run.id}
+            motion={listMotion}
             offset={offset}
             dragging={draggedRunId !== null}
             lifted={draggedRunId === run.id}
@@ -461,6 +466,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
 }
 
 function QueueShiftedRow(props: {
+  readonly motion: ReturnType<typeof useListChangeMotion>;
   readonly offset: number;
   readonly dragging: boolean;
   readonly lifted: boolean;
@@ -479,7 +485,7 @@ function QueueShiftedRow(props: {
   }));
   return (
     <Reanimated.View
-      exiting={FadeOut.duration(120)}
+      {...props.motion}
       onLayout={props.onLayout}
       style={[style, { zIndex: props.lifted ? 1 : 0 }]}
     >

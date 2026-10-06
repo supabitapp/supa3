@@ -16,21 +16,26 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "../lib/useReducedMotionPreference";
+import { isKeyboardMotionSuppressed } from "../lib/motionInput";
 
 /** Keeps closing content mounted for its fade; another press retargets the live transition. */
 export function MotionPresence({
   visible,
   appear = false,
   offsetY = -4,
+  enterDurationMs = 180,
+  exitDurationMs = 140,
   onHidden,
   children,
   style,
   ...props
 }: Omit<ComponentProps<typeof Animated.View>, "children"> & {
-  readonly children: ReactNode | (() => ReactNode);
+  readonly children: ReactNode | ((visible: boolean) => ReactNode);
   readonly visible: boolean;
   readonly appear?: boolean;
   readonly offsetY?: number;
+  readonly enterDurationMs?: number;
+  readonly exitDurationMs?: number;
   readonly onHidden?: () => void;
 }) {
   const reducedMotion = useReducedMotionPreference();
@@ -39,6 +44,8 @@ export function MotionPresence({
   const visibility = useSharedValue(visible && !appear ? 1 : 0);
   const visibleRef = useRef(visible);
   const onHiddenRef = useRef(onHidden);
+  const [lastVisibleChildren, setLastVisibleChildren] = useState(() => children);
+  if (visible && lastVisibleChildren !== children) setLastVisibleChildren(() => children);
   useLayoutEffect(() => {
     visibleRef.current = visible;
     onHiddenRef.current = onHidden;
@@ -50,7 +57,7 @@ export function MotionPresence({
   }, []);
   useLayoutEffect(() => {
     if (!mounted) return;
-    if (reducedMotion) {
+    if (reducedMotion || isKeyboardMotionSuppressed()) {
       visibility.set(visible ? 1 : 0);
       if (!visible) hide();
       return;
@@ -59,7 +66,7 @@ export function MotionPresence({
       withTiming(
         visible ? 1 : 0,
         {
-          duration: visible ? 180 : 140,
+          duration: visible ? enterDurationMs : exitDurationMs,
           easing: Easing.bezier(0.32, 0.72, 0, 1),
           reduceMotion: ReduceMotion.Never,
         },
@@ -68,12 +75,13 @@ export function MotionPresence({
         },
       ),
     );
-  }, [hide, mounted, reducedMotion, visibility, visible]);
+  }, [enterDurationMs, exitDurationMs, hide, mounted, reducedMotion, visibility, visible]);
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: visibility.value,
     transform: [{ translateY: (1 - visibility.value) * offsetY }],
   }));
   if (!mounted) return null;
+  const renderedChildren = visible ? children : lastVisibleChildren;
   return (
     <Animated.View
       {...props}
@@ -83,7 +91,7 @@ export function MotionPresence({
       importantForAccessibility={visible ? props.importantForAccessibility : "no-hide-descendants"}
       style={[style, animatedStyle]}
     >
-      {typeof children === "function" ? children() : children}
+      {typeof renderedChildren === "function" ? renderedChildren(visible) : renderedChildren}
     </Animated.View>
   );
 }

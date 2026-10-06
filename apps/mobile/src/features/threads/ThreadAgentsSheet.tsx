@@ -21,6 +21,8 @@ import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { environmentThreadDetails } from "../../state/threads";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
 import { SubagentRow } from "./SubagentRow";
+import Animated from "react-native-reanimated";
+import { useListChangeMotion } from "../../lib/useListChangeMotion";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -38,6 +40,14 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
   const turn = useThreadTurnSubagents(target);
   const subagents = turn?.subagents ?? [];
   const hasLiveAgent = (turn?.liveCount ?? 0) > 0;
+  const motion = useListChangeMotion({
+    items: subagents.map((agent) => ({ key: agent.id })),
+    scope: `${target.environmentId}:${target.threadId}:${turn?.runId ?? ""}`,
+    searching: false,
+    scrolling: false,
+    ready: turn !== null,
+    includeEmpty: true,
+  });
 
   const openChildThread = (childThreadId: ThreadId) => {
     void Haptics.selectionAsync();
@@ -66,13 +76,15 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
         </Text>
       ) : (
         subagents.map((subagent) => (
-          <AgentRow
-            key={subagent.id}
-            subagent={subagent}
-            environmentId={target.environmentId}
-            tickSeconds={hasLiveAgent}
-            onOpen={openChildThread}
-          />
+          <Animated.View key={subagent.id} {...motion}>
+            <AgentRow
+              key={subagent.id}
+              subagent={subagent}
+              environmentId={target.environmentId}
+              tickSeconds={hasLiveAgent}
+              onOpen={openChildThread}
+            />
+          </Animated.View>
         ))
       )}
     </ScrollView>

@@ -7,6 +7,7 @@ import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { MotionPresence } from "../../components/MotionPresence";
 
 export function UsageLimitRecoveryCard({
   thread,
@@ -36,12 +37,10 @@ export function UsageLimitRecoveryCard({
   const recovery = thread.limitRecovery;
   const scheduled =
     recovery?.runId === runId && recovery?.resetAt === resetAt && recovery?.autoResume;
-  if (
-    thread.runtime?.status !== "failed" ||
-    thread.runtime.lastErrorClass !== "usage_limit" ||
-    !runId
-  )
-    return null;
+  const visible =
+    thread.runtime?.status === "failed" &&
+    thread.runtime.lastErrorClass === "usage_limit" &&
+    Boolean(runId);
   const snoozed =
     recovery?.snooze === true &&
     recovery.runId === runId &&
@@ -77,41 +76,43 @@ export function UsageLimitRecoveryCard({
     }
   }
   return (
-    <View className="mx-3 mb-2 gap-2 rounded-xl border border-warning-foreground/25 bg-background p-3">
-      <Text className="text-sm text-warning-foreground">
-        {resetAt
-          ? `Usage limit resets ${DateTime.toDateUtc(DateTime.makeUnsafe(resetAt)).toLocaleString()}.`
-          : "The provider did not report a reset time. Retry manually when your limit is available."}
-      </Text>
-      {canSchedule ? (
-        <View className="flex-row flex-wrap gap-2">
-          <Pressable
-            accessibilityRole="button"
-            disabled={pending}
-            onPress={() => void toggle("resume")}
-            className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
-          >
-            <Text className="text-sm text-foreground">
-              {scheduled ? "Cancel auto-resume" : "Resume at reset"}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={pending || (!snoozed && Date.parse(resetAt!) <= nowMs)}
-            onPress={() => void toggle("snooze")}
-            className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
-          >
-            <Text className="text-sm text-foreground">
-              {snoozed ? "Wake now" : "Snooze until reset"}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" className="text-sm text-destructive">
-          {error}
+    <MotionPresence visible={visible}>
+      <View className="mx-3 mb-2 gap-2 rounded-xl border border-warning-foreground/25 bg-background p-3">
+        <Text className="text-sm text-warning-foreground">
+          {resetAt
+            ? `Usage limit resets ${DateTime.toDateUtc(DateTime.makeUnsafe(resetAt)).toLocaleString()}.`
+            : "The provider did not report a reset time. Retry manually when your limit is available."}
         </Text>
-      ) : null}
-    </View>
+        {canSchedule ? (
+          <View className="flex-row flex-wrap gap-2">
+            <Pressable
+              accessibilityRole="button"
+              disabled={pending}
+              onPress={() => void toggle("resume")}
+              className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
+            >
+              <Text className="text-sm text-foreground">
+                {scheduled ? "Cancel auto-resume" : "Resume at reset"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={pending || (!snoozed && Date.parse(resetAt!) <= nowMs)}
+              onPress={() => void toggle("snooze")}
+              className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
+            >
+              <Text className="text-sm text-foreground">
+                {snoozed ? "Wake now" : "Snooze until reset"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+        <MotionPresence visible={error !== null} offsetY={0}>
+          <Text accessibilityRole="alert" className="text-sm text-destructive">
+            {error}
+          </Text>
+        </MotionPresence>
+      </View>
+    </MotionPresence>
   );
 }
