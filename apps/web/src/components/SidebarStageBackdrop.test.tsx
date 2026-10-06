@@ -2,17 +2,37 @@ import { describe, expect, it } from "vite-plus/test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  resolveEnvironmentIdentificationModes,
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
   StageBackdropArt,
 } from "./SidebarStageBackdrop";
 
 describe("SidebarStageBackdrop", () => {
-  it("resolves stage artwork only when enabled", () => {
-    expect(resolveSidebarStageBackdropVariant("Dev")).toBe("dev");
-    expect(resolveSidebarStageBackdropVariant("Nightly")).toBe("nightly");
-    expect(resolveSidebarStageBackdropVariant("Dev", false)).toBeNull();
-    expect(resolveSidebarStageBackdropVariant(null)).toBeNull();
+  const november = new Date(2026, 10, 30, 23, 59);
+  const december = new Date(2026, 11, 1);
+
+  it("resolves stage artwork for Dev and Nightly", () => {
+    expect(resolveSidebarStageBackdropVariant("Dev", november)).toBe("dev");
+    expect(resolveSidebarStageBackdropVariant("Nightly", november)).toBe("nightly");
+    expect(resolveSidebarStageBackdropVariant(null, november)).toBeNull();
+  });
+
+  it("gives release builds sleigh artwork through December only", () => {
+    expect(resolveSidebarStageBackdropVariant(null, december)).toBe("release");
+    expect(resolveSidebarStageBackdropVariant("Latest", december)).toBe("release");
+    expect(resolveSidebarStageBackdropVariant("Nightly", december)).toBe("nightly");
+    expect(resolveSidebarStageBackdropVariant("Latest", new Date(2027, 0, 1))).toBeNull();
+  });
+
+  it("offers only the identification modes that change something", () => {
+    expect(resolveEnvironmentIdentificationModes("Dev", november)).toEqual([
+      "artwork",
+      "pill",
+      "none",
+    ]);
+    expect(resolveEnvironmentIdentificationModes(null, december)).toEqual(["artwork", "none"]);
+    expect(resolveEnvironmentIdentificationModes("Latest", november)).toEqual(["none"]);
   });
 
   it("resolves supported environment pill labels", () => {
@@ -22,7 +42,7 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveEnvironmentIdentificationPillLabel(null)).toBeNull();
   });
 
-  it.each(["nightly", "dev"] as const)(
+  it.each(["nightly", "dev", "release"] as const)(
     "uses unique SVG definition ids when %s artwork is rendered more than once",
     (variant) => {
       const markup = renderToStaticMarkup(

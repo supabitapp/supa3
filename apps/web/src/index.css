@@ -655,6 +655,13 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     --stage-night-glow-highlight: oklch(0.553749 0.176543 271.958);
     --stage-night-glow-secondary: oklch(0.345571 0.117466 273.568);
     --stage-night-sparkle: oklch(0.880867 0.057747 269.011);
+    --stage-sleigh-halo: oklch(0.88 0.07 92);
+    --stage-sleigh-moon-highlight: oklch(0.99 0.02 95);
+    --stage-sleigh-moon: oklch(0.88 0.045 85);
+    --stage-sleigh-crater: oklch(0.8 0.04 80);
+    --stage-sleigh-ink: oklch(0.17 0.05 266);
+    --stage-sleigh-nose: oklch(0.66 0.25 28);
+    --stage-sleigh-dust: oklch(0.92 0.1 88);
 
     @variant dark {
       --stage-art-top: oklch(0.581473 0.149124 256.9);
