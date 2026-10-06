@@ -414,7 +414,7 @@ export function ThreadDetailsPrRow({
               <PullRequestChecksPopover
                 checksState={checksRollup}
                 checks={detail.checks}
-                variant="count"
+                variant="button"
                 render={<ThreadDetailsControl part="checks" />}
               />
             </>

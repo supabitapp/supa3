@@ -257,6 +257,66 @@ export function PullRequestCheckStatusIcon({ status }: { status: PullRequestChec
   );
 }
 
+const CHECK_RING_STATUS = {
+  failure: "failure",
+  cancelled: "failure",
+  pending: "pending",
+  "action-required": "pending",
+  skipped: "skipped",
+  neutral: "skipped",
+  success: "success",
+} as const satisfies Record<PullRequestCheckStatus, string>;
+
+export function pullRequestChecksRingSegments(checks: ReadonlyArray<PullRequestCheck>) {
+  const counts = { failure: 0, pending: 0, skipped: 0, success: 0 };
+  for (const check of checks) counts[CHECK_RING_STATUS[check.status]] += 1;
+  let start = 0;
+  return (["failure", "pending", "skipped", "success"] as const).flatMap((status) => {
+    if (counts[status] === 0) return [];
+    const length = (counts[status] / checks.length) * 100;
+    const segment = { status, count: counts[status], start, length };
+    start += length;
+    return [segment];
+  });
+}
+
+/** A static ring: small groups stay visible as rounded dots, with gaps between verdicts. */
+export function PullRequestChecksRing({
+  checks,
+  className,
+}: {
+  checks: ReadonlyArray<PullRequestCheck>;
+  className?: string;
+}) {
+  const segments = pullRequestChecksRingSegments(checks);
+  // Reserve enough space for each color's rounded ends so rare verdicts cannot cover each other.
+  const gap = segments.length === 1 ? 0 : 7;
+  const proportionalLength = 100 - gap * segments.length;
+  return (
+    <svg aria-hidden viewBox="0 0 100 100" className={cn("size-3.5 shrink-0", className)}>
+      {segments.map(({ status, start, length }, index) => {
+        return (
+          <circle
+            key={status}
+            cx="50"
+            cy="50"
+            r="40"
+            pathLength="100"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={`${(length / 100) * proportionalLength} 100`}
+            strokeDashoffset={-(index * gap + (start / 100) * proportionalLength + gap / 2)}
+            transform="rotate(-90 50 50)"
+            className={CHECK_STATUS_PRESENTATION[status].toneClassName}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 /**
  * The rollup a listing row carries, which is one word rather than the checks behind it. The
  * headline is GitHub's own wording, so a reader who knows that page reads this one the same way.

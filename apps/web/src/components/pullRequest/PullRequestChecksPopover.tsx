@@ -8,7 +8,6 @@ import type {
 } from "@supacode/contracts";
 import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
 
 import { useOpenLink } from "~/browser/useOpenLink";
 import { cn } from "~/lib/utils";
@@ -23,6 +22,7 @@ import { toastManager } from "../ui/toast";
 import { groupPullRequestChecks } from "./pullRequestDetail.logic";
 import {
   PullRequestCheckStatusIcon,
+  PullRequestChecksRing,
   pullRequestCheckStatusLabel,
   pullRequestChecksStatePresentation,
   summarizePullRequestChecks,
@@ -66,61 +66,47 @@ function ChecksBody({
   threadRef: ScopedThreadRef | null;
 }) {
   const openLink = useOpenLink(threadRef);
-  const [showAll, setShowAll] = useState(false);
   const { attention, running, completed } = groupPullRequestChecks(checks);
-  const canCollapse = attention.length + running.length > 0 && completed.length > 0;
-  const visibleChecks = [...attention, ...running, ...(showAll || !canCollapse ? completed : [])];
+  const orderedChecks = [...attention, ...running, ...completed];
   if (checks.length === 0) {
     return <p className="text-muted-foreground text-xs">No checks reported</p>;
   }
   return (
-    <>
-      <ScrollArea className="max-h-64">
-        <ul className="flex flex-col gap-1">
-          {/* Keyed by name and occurrence: the host is the one that decides how many runs
+    <ScrollArea className="max-h-64">
+      <ul className="flex flex-col gap-1">
+        {/* Keyed by name and occurrence: the host is the one that decides how many runs
           share a name, and a repeated key is a rendering fault rather than a wrong list. */}
-          {withOccurrenceKeys(visibleChecks, (check) => check.name).map(({ item: check, key }) => (
-            <li key={key} className="flex items-center gap-2 text-xs">
-              <PullRequestCheckStatusIcon status={check.status} />
-              <Tooltip>
-                <TooltipTrigger
-                  render={<span className="min-w-0 flex-1 truncate">{check.name}</span>}
-                />
-                <TooltipPopup side="top">{check.description ?? check.name}</TooltipPopup>
-              </Tooltip>
-              <span className="shrink-0 text-muted-foreground">
-                {pullRequestCheckStatusLabel(check)}
-              </span>
-              {check.url === null ? null : (
-                <button
-                  type="button"
-                  className="shrink-0 text-primary hover:underline"
-                  onClick={() => {
-                    if (!check.url) return;
-                    void openLink(check.url).catch((error: unknown) => {
-                      console.error(error);
-                      toastManager.add({ type: "error", title: "Unable to open check details" });
-                    });
-                  }}
-                >
-                  Details
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </ScrollArea>
-      {canCollapse ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          aria-expanded={showAll}
-          onClick={() => setShowAll(!showAll)}
-        >
-          {showAll ? "Show less" : "Show all"}
-        </Button>
-      ) : null}
-    </>
+        {withOccurrenceKeys(orderedChecks, (check) => check.name).map(({ item: check, key }) => (
+          <li key={key} className="flex items-center gap-2 text-xs">
+            <PullRequestCheckStatusIcon status={check.status} />
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="min-w-0 flex-1 truncate">{check.name}</span>}
+              />
+              <TooltipPopup side="top">{check.description ?? check.name}</TooltipPopup>
+            </Tooltip>
+            <span className="shrink-0 text-muted-foreground">
+              {pullRequestCheckStatusLabel(check)}
+            </span>
+            {check.url === null ? null : (
+              <button
+                type="button"
+                className="shrink-0 text-primary hover:underline"
+                onClick={() => {
+                  if (!check.url) return;
+                  void openLink(check.url).catch((error: unknown) => {
+                    console.error(error);
+                    toastManager.add({ type: "error", title: "Unable to open check details" });
+                  });
+                }}
+              >
+                Details
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </ScrollArea>
   );
 }
 
@@ -150,13 +136,12 @@ export function PullRequestChecksPopover({
   reference?: PullRequestRef;
   /** Thread the popover sits beside; a listing row has none. */
   threadRef?: ScopedThreadRef | null;
-  variant?: "icon" | "count";
+  variant?: "icon" | "button";
   className?: string;
   render?: React.ReactElement;
 }) {
   const presentation = pullRequestChecksStatePresentation(checksState);
   // Counts beat the rollup's own wording where they are known, the way GitHub's own header reads.
-  const runningCount = checks?.filter((check) => check.status === "pending").length ?? 0;
   const summary = checks === undefined || stale ? null : summarizePullRequestChecks(checks);
   return (
     <Popover>
@@ -164,14 +149,14 @@ export function PullRequestChecksPopover({
           not valid inside one. The click is stopped here so opening the checks does not also
           select the row it sits on. */}
       <PopoverTrigger
-        nativeButton={variant === "count"}
+        nativeButton={variant === "button"}
         aria-label={
-          variant === "count"
+          variant === "button"
             ? `Open checks: ${summary ?? presentation.label}`
             : `Checks: ${presentation.label}`
         }
         render={
-          variant === "count" ? (
+          variant === "button" ? (
             (render ?? <Button variant="ghost" size="sm" className={className} />)
           ) : (
             <span
@@ -183,17 +168,12 @@ export function PullRequestChecksPopover({
         }
         onClick={(event) => event.stopPropagation()}
       >
-        <presentation.Icon aria-hidden className={cn("size-3.5", presentation.toneClassName)} />
-        {variant === "count" ? (
-          <>
-            {checks !== undefined && runningCount > 0 ? (
-              <span className="tabular-nums">
-                {runningCount}/{checks.length}
-              </span>
-            ) : null}
-            <ChevronDownIcon aria-hidden className="size-3" />
-          </>
-        ) : null}
+        {checks !== undefined && checks.length > 0 && !stale ? (
+          <PullRequestChecksRing checks={checks} />
+        ) : (
+          <presentation.Icon aria-hidden className={cn("size-3.5", presentation.toneClassName)} />
+        )}
+        {variant === "button" ? <ChevronDownIcon aria-hidden className="size-3" /> : null}
       </PopoverTrigger>
       <PopoverPopup align="start" width="md" side="bottom">
         <p className="mb-2 font-medium text-sm">{presentation.label}</p>
