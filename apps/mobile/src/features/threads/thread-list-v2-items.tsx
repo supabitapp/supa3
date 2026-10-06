@@ -98,9 +98,12 @@ const STATUS_LABEL_BY_STATUS: Partial<
 function resolveRowStatusLabel(input: {
   readonly status: ThreadListV2Status;
   readonly isUnread: boolean;
+  readonly goalActive: boolean;
   readonly mutedClassName: string;
 }): { label: string; className: string } | undefined {
   const label = STATUS_LABEL_BY_STATUS[input.status];
+  // A native /goal keeps the agent going across turns until it is met.
+  if (label && input.status === "working" && input.goalActive) return { ...label, label: "Goal" };
   if (label) return label;
   if (input.status === "waiting") return { label: "Waiting", className: input.mutedClassName };
   if (input.isUnread) return { label: "Done", className: "text-adaptive-emerald-700-300" };
@@ -771,6 +774,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const statusLabel = resolveRowStatusLabel({
     status,
     isUnread,
+    goalActive: thread.goal?.status === "active",
     mutedClassName: selected
       ? selectedThreadRowColors.mutedForegroundClassName
       : rowAppearance.mutedForegroundClassName,

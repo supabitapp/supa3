@@ -133,7 +133,7 @@ export function FontFamilyPicker({
     if (initialOpen) setOpen(true);
   });
   useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect -- opens the picker on mount when the caller asked for it
     openIfRequestedAtMount();
   }, []);
   const listRef = useRef<LegendListRef | null>(null);

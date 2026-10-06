@@ -58,7 +58,9 @@ export type SupacodeMcpToolSummaryAction =
   | "watch-pr"
   | "unwatch-pr"
   | "browser"
-  | "device";
+  | "device"
+  | "html-preview"
+  | "html-render";
 
 export interface SupacodeMcpToolDefinition {
   readonly displayName: string;
@@ -327,6 +329,8 @@ const SUPACODE_MCP_TOOLS: Readonly<Record<string, SupacodeMcpToolDefinition>> = 
     ["Send", "Sending", "Sent", "attachments"],
     "attachment-send",
   ),
+  html_preview: tool(["Preview", "Previewing", "Previewed", "an HTML page"], "html-preview"),
+  html_render: tool(["Render", "Rendering", "Rendered", "an HTML page"], "html-render"),
 };
 
 /**
@@ -367,7 +371,22 @@ function resolveSupacodeMcpToolName(value: string): string | null {
 
   const candidate = /^(?:mcp[-_]{1,2})?supacode(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label)?.groups
     ?.tool;
-  return candidate !== undefined && Object.hasOwn(SUPACODE_MCP_TOOLS, candidate) ? candidate : null;
+  if (candidate !== undefined && Object.hasOwn(SUPACODE_MCP_TOOLS, candidate)) return candidate;
+  // OpenCode 2 registers one server per thread, `supacode-<thread>`, and joins
+  // it to the tool with `_`. Thread ids can hold `_` too, so take the longest
+  // known tool name that ends the label.
+  if (!/^supacode-/i.test(label)) return null;
+  let longest: string | null = null;
+  for (const tool of Object.keys(SUPACODE_MCP_TOOLS)) {
+    if (label.endsWith(`_${tool}`) && tool.length > (longest?.length ?? 0)) longest = tool;
+  }
+  return longest;
+}
+
+/** The bare Supacode tool name (`html_render`) for any provider's spelling of it. */
+export function resolveSupacodeMcpToolId(toolName: string | null | undefined): string | null {
+  const name = toolName == null ? null : resolveSupacodeMcpToolName(toolName);
+  return name !== null && Object.hasOwn(SUPACODE_MCP_TOOLS, name) ? name : null;
 }
 
 export function resolveSupacodeMcpToolDefinition(

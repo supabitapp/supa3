@@ -895,7 +895,7 @@ interface SidebarDraftRowData {
 }
 
 function readSidebarDraftRow(routeDraftId: string | null) {
-  if (routeDraftId === null) return null;
+  if (routeDraftId === null || routeDraftId.trim() === "") return null;
   const draftId = DraftId.make(routeDraftId);
   const store = useComposerDraftStore.getState();
   const session = store.getDraftSession(draftId);
@@ -1236,7 +1236,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     ? { label: "Preparing", icon: null, className: "text-info" }
     : status === "working"
       ? {
-          label: "Working",
+          // A native /goal keeps the agent going across turns until it is met.
+          label: thread.goal?.status === "active" ? "Goal" : "Working",
           icon: "working" as const,
           // No shimmer: a label that animates forever is noise in a sidebar
           // full of them (and repaints every vsync on high-refresh displays).

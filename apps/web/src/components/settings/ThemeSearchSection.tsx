@@ -193,7 +193,7 @@ export function ThemeSearchSection({
       lastSearchKeyRef.current = null;
       requestRef.current?.abort();
       requestRef.current = null;
-      // oxlint-disable-next-line react/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect -- an emptied query clears the previous search results
       setResults(null);
       setError(null);
       setIsSearching(false);

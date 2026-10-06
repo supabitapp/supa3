@@ -4,7 +4,7 @@ import type {
   OrchestrationV2ThreadShell,
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import type { StartThreadTurnInput } from "../operations/commands.ts";
 import type { AtomCommand } from "./runtime.ts";

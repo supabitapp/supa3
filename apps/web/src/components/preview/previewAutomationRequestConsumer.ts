@@ -4,7 +4,7 @@ import type {
   PreviewAutomationResponse,
   PreviewAutomationStreamEvent,
 } from "@supacode/contracts";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import {
   PreviewAutomationOperationError,

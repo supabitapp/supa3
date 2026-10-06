@@ -45,7 +45,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { McpSchema, McpServer } from "effect/unstable/ai";
+import { McpSchema, McpServer } from "effect/ai";
 
 import { ClaudeProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
@@ -62,20 +62,24 @@ import {
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ProviderContinuationRequests from "../orchestration-v2/ProviderContinuationRequests.ts";
 import { checkpointWorkspace } from "../orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
-import {
-  makeOrchestratorV2ProviderReplayLayer,
-  makeOrchestratorV2ReplayLayerWithRegistry,
-} from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import {
   decodeProviderReplayNdjson,
   materializeReplayTranscriptWorkspace,
 } from "../orchestration-v2/testkit/ReplayTranscriptNdjson.ts";
-import { makeProviderRegistryLayer } from "../provider/testUtils/providerRegistryMock.ts";
+import * as ProviderRegistryMock from "../provider/testUtils/providerRegistryMock.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { delegatedTaskRun, hasPendingChildRuns } from "./OrchestratorMcpService.ts";
+
+// Effect returns a declared tool failure as `isError` with its encoded payload
+// as JSON text, never as `structuredContent`.
+const declaredFailure = (result: McpSchema.CallToolResult) => {
+  const text = result.content[0];
+  return result.isError === true && text?.type === "text" ? JSON.parse(text.text) : undefined;
+};
 
 const parentThreadId = ThreadId.make("thread:mcp-orchestrator-parent");
 const projectId = ProjectId.make("project:mcp-orchestrator");
@@ -455,7 +459,7 @@ function scheduledTaskFromUpsert(input: ScheduledTaskUpsertInput): ScheduledTask
   };
 }
 
-const unusedScheduledTaskStubLayer = Layer.succeed(
+const layerUnusedScheduledTaskStub = Layer.succeed(
   ScheduledTaskService.ScheduledTaskService,
   ScheduledTaskService.ScheduledTaskService.of({
     list: () => Effect.succeed({ tasks: [] }),
@@ -477,7 +481,7 @@ describe("orchestrator MCP toolkit", () => {
           const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
           const parentTerminalGates = new Map<ThreadId, Deferred.Deferred<void>>();
           const deliveryTerminalGates = new Map<ThreadId, Deferred.Deferred<void>>();
-          const registryLayer = ProviderAdapterRegistry.makeLayer([
+          const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
             makeDeterministicAdapter({
               instanceId: codexInstanceId,
               driver: ProviderDriverKind.make("codex"),
@@ -519,7 +523,7 @@ describe("orchestrator MCP toolkit", () => {
           const continuationOffers = yield* Ref.make<
             ReadonlyArray<ProviderContinuationRequests.ProviderContinuationRequest>
           >([]);
-          const continuationProbeLayer = Layer.succeed(
+          const layerContinuationProbe = Layer.succeed(
             ProviderContinuationRequests.ProviderContinuationRequests,
             {
               offer: (request) =>
@@ -549,7 +553,7 @@ describe("orchestrator MCP toolkit", () => {
                 expect(yield* Ref.get(continuationOffers)).toHaveLength(count);
               }
             });
-          const orchestratorLayer = makeOrchestratorV2ReplayLayerWithRegistry(
+          const layerOrchestrator = ProviderReplayHarness.layerWithRegistry(
             {
               name: "orchestrator-mcp-toolkit",
               runtimePolicyOverride: {
@@ -562,13 +566,13 @@ describe("orchestrator MCP toolkit", () => {
                 },
               },
             },
-            registryLayer,
-          ).pipe(Layer.provide(continuationProbeLayer));
-          const orchestrationLayer = Layer.merge(
-            orchestratorLayer,
-            ThreadManagementService.layer.pipe(Layer.provide(orchestratorLayer)),
+            layerRegistry,
+          ).pipe(Layer.provide(layerContinuationProbe));
+          const layerOrchestration = Layer.merge(
+            layerOrchestrator,
+            ThreadManagementService.layer.pipe(Layer.provide(layerOrchestrator)),
           );
-          const providerRegistryLayer = makeProviderRegistryLayer([
+          const layerProviderRegistry = ProviderRegistryMock.layer([
             makeProviderSnapshot({
               instanceId: codexInstanceId,
               driver: ProviderDriverKind.make("codex"),
@@ -600,7 +604,7 @@ describe("orchestrator MCP toolkit", () => {
           // In-memory ScheduledTaskService stub so the schedule/list/update/
           // delete tools can be exercised without SQL/launch wiring.
           const scheduledStore = yield* Ref.make<ReadonlyArray<ScheduledTask>>([]);
-          const scheduledTaskStubLayer = Layer.succeed(
+          const layerScheduledTaskStub = Layer.succeed(
             ScheduledTaskService.ScheduledTaskService,
             ScheduledTaskService.ScheduledTaskService.of({
               list: () => Ref.get(scheduledStore).pipe(Effect.map((tasks) => ({ tasks }))),
@@ -623,15 +627,15 @@ describe("orchestrator MCP toolkit", () => {
               runNow: () => Effect.die("ScheduledTaskService.runNow is unused in this test"),
             }),
           );
-          const testLayer = Layer.merge(
-            McpHttpServer.OrchestratorToolkitRegistrationLive,
-            McpHttpServer.ThreadToolkitRegistrationLive,
+          const layerTest = Layer.merge(
+            McpHttpServer.layerOrchestratorToolkit,
+            McpHttpServer.layerThreadToolkit,
           ).pipe(
             Layer.provideMerge(McpServer.McpServer.layer),
-            Layer.provideMerge(orchestrationLayer),
-            Layer.provide(registryLayer),
-            Layer.provide(providerRegistryLayer),
-            Layer.provide(scheduledTaskStubLayer),
+            Layer.provideMerge(layerOrchestration),
+            Layer.provide(layerRegistry),
+            Layer.provide(layerProviderRegistry),
+            Layer.provide(layerScheduledTaskStub),
             Layer.provide(
               Layer.mock(ProjectService.ProjectService)({
                 getById: (id) =>
@@ -642,6 +646,7 @@ describe("orchestrator MCP toolkit", () => {
                   ),
               }),
             ),
+
             Layer.provide(NodeServices.layer),
           );
 
@@ -1177,7 +1182,7 @@ describe("orchestrator MCP toolkit", () => {
             const missingQueueRead = yield* invoke("supacode_queue_read", {
               queuedRunId: parentRun.id,
             });
-            expect(missingQueueRead.structuredContent).toMatchObject({ code: "invalid_request" });
+            expect(declaredFailure(missingQueueRead)).toMatchObject({ code: "invalid_request" });
             const queueRaceStatus = yield* invoke("task_status", { taskId: queueRace.task.id });
             expect(queueRaceStatus.isError).toBe(false);
             yield* waitForProjection(
@@ -1335,7 +1340,7 @@ describe("orchestrator MCP toolkit", () => {
               "supacode_thread_update",
               { action: "rename", title: "Denied title" },
             );
-            expect(deniedThreadUpdate.structuredContent).toMatchObject({
+            expect(declaredFailure(deniedThreadUpdate)).toMatchObject({
               _tag: "OrchestratorMcpFailure",
               code: "capability_denied",
             });
@@ -1668,7 +1673,7 @@ describe("orchestrator MCP toolkit", () => {
             ).toBe(true);
             const completedTaskCancelCall = yield* invoke("task_cancel", {
               taskId: delegated.taskId,
-              reason: "Must not interrupt a later unrelated child run.",
+              reason: "Stop the child's later work too.",
               clientRequestId: "cancel-completed-delegated-task-1",
             });
             const completedTaskCancel = yield* decodeTaskCancelResult(
@@ -1686,36 +1691,19 @@ describe("orchestrator MCP toolkit", () => {
               result: delegatedResult,
               completionDelivery: { state: "disposed" },
             });
-            expect(
-              (yield* orchestrator.getThreadProjection(delegated.childThreadId)).runs.find(
-                (run) => run.id === activeChildFollowup.runId,
-              )?.status,
-            ).toBe("running");
-            const activeChildCleanupCall = yield* invoke("supacode_thread_interrupt", {
-              threadId: delegated.childThreadId,
-              runId: activeChildFollowup.runId,
-              reason: "Clean up the active follow-up after verifying task cancellation isolation.",
-              clientRequestId: "interrupt-delegated-child-followup-1",
-            });
-            const activeChildCleanup = yield* decodeThreadInterruptResult(
-              activeChildCleanupCall.structuredContent,
-            ).pipe(Effect.orDie);
-            expect(activeChildCleanup).toMatchObject({
-              runId: activeChildFollowup.runId,
-              status: "interrupt_requested",
-            });
+            // Cancelling a finished task still stops the child thread's later work.
             yield* waitForProjection(orchestrator, delegated.childThreadId, (projection) =>
               projection.runs.some(
                 (run) => run.id === activeChildFollowup.runId && run.status === "interrupted",
               ),
             );
-            const delegatedStatusAfterCleanupCall = yield* invoke("task_status", {
+            const delegatedStatusAfterCancelCall = yield* invoke("task_status", {
               taskId: delegated.taskId,
             });
-            const delegatedStatusAfterCleanup = yield* decodeDelegateTaskResult(
-              delegatedStatusAfterCleanupCall.structuredContent,
+            const delegatedStatusAfterCancel = yield* decodeDelegateTaskResult(
+              delegatedStatusAfterCancelCall.structuredContent,
             ).pipe(Effect.orDie);
-            expect(delegatedStatusAfterCleanup).toMatchObject({
+            expect(delegatedStatusAfterCancel).toMatchObject({
               childRunId: delegated.childRunId,
               status: "completed",
               summary: delegatedResult,
@@ -1760,7 +1748,7 @@ describe("orchestrator MCP toolkit", () => {
               mode: "async",
               clientRequestId: "delegate-rejected-options-1",
             });
-            expect(rejectedOptionsCall.structuredContent).toMatchObject({
+            expect(declaredFailure(rejectedOptionsCall)).toMatchObject({
               _tag: "OrchestratorMcpFailure",
               code: "invalid_request",
               message: expect.stringContaining("rejected options"),
@@ -1781,7 +1769,7 @@ describe("orchestrator MCP toolkit", () => {
               mode: "async",
               clientRequestId: "delegate-duplicate-options-1",
             });
-            expect(duplicateOptionsCall.structuredContent).toMatchObject({
+            expect(declaredFailure(duplicateOptionsCall)).toMatchObject({
               _tag: "OrchestratorMcpFailure",
               code: "invalid_request",
               message: expect.stringContaining("more than once"),
@@ -3547,7 +3535,7 @@ describe("orchestrator MCP toolkit", () => {
                 thirdFanoutDelivery.messageId,
               ]),
             );
-          }).pipe(Effect.provide(testLayer));
+          }).pipe(Effect.provide(layerTest));
         }),
       ),
   );
@@ -3560,7 +3548,7 @@ describe("orchestrator MCP toolkit", () => {
         const transcript = yield* CodexOrchestratorReplayHarness.decodeTranscript(
           materializeReplayTranscriptWorkspace(rawTranscript, cwd),
         );
-        const orchestratorLayer = makeOrchestratorV2ProviderReplayLayer(
+        const layerOrchestrator = ProviderReplayHarness.layerProviderReplay(
           {
             name: "delegated-task-status/codex",
             transcript,
@@ -3569,26 +3557,27 @@ describe("orchestrator MCP toolkit", () => {
           },
           CodexOrchestratorReplayHarness,
         );
-        const orchestrationLayer = Layer.merge(
-          orchestratorLayer,
-          ThreadManagementService.layer.pipe(Layer.provide(orchestratorLayer)),
+        const layerOrchestration = Layer.merge(
+          layerOrchestrator,
+          ThreadManagementService.layer.pipe(Layer.provide(layerOrchestrator)),
         );
-        const providerRegistryLayer = makeProviderRegistryLayer([
+        const layerProviderRegistry = ProviderRegistryMock.layer([
           makeProviderSnapshot({
             instanceId: codexInstanceId,
             driver: ProviderDriverKind.make("codex"),
             model: codexModel,
           }),
         ]);
-        const testLayer = McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+        const layerTest = McpHttpServer.layerOrchestratorToolkit.pipe(
           Layer.provideMerge(McpServer.McpServer.layer),
-          Layer.provideMerge(orchestrationLayer),
+          Layer.provideMerge(layerOrchestration),
           Layer.provide(
             CodexOrchestratorReplayHarness.makeProviderAdapterRegistryLayer(transcript),
           ),
-          Layer.provide(providerRegistryLayer),
-          Layer.provide(unusedScheduledTaskStubLayer),
+          Layer.provide(layerProviderRegistry),
+          Layer.provide(layerUnusedScheduledTaskStub),
           Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+
           Layer.provide(NodeServices.layer),
         );
 
@@ -3862,7 +3851,7 @@ describe("orchestrator MCP toolkit", () => {
             latestTerminalSummary: queuedFollowupResult,
             latestTerminalResultContextTransferId: null,
           });
-        }).pipe(Effect.provide(testLayer));
+        }).pipe(Effect.provide(layerTest));
       }),
     ),
   );

@@ -6,7 +6,7 @@ import {
 } from "@supacode/client-runtime/state/runtime";
 import type { VcsSwitchRefInput, VcsSwitchRefResult } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import { shouldCheckoutNewTaskBranch } from "./new-task-context-presentation";
 

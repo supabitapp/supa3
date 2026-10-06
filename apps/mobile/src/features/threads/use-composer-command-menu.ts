@@ -323,7 +323,7 @@ export function useComposerCommandMenu({
       }
     }, retryLater);
   }, [
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- draftMessage changes retry the workspace refresh
     draftMessage,
     environmentId,
     hasWorkspaceSnapshot,

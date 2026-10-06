@@ -14,20 +14,21 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Fiber from "effect/Fiber";
 import { TestClock } from "effect/testing";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 
 import {
   BearerConnectionTarget,
   type PreparedConnection,
   type PreparedHttpAuthorization,
 } from "../connection/model.ts";
-import { remoteHttpClientLayer, type RemoteEnvironmentRequestError } from "../rpc/http.ts";
+import { layerRemoteHttpClient, type RemoteEnvironmentRequestError } from "../rpc/http.ts";
 import * as PullRequestDiffLoader from "./pullRequestDiffHttp.ts";
 import { withOrchestrationProtocolHeader } from "./environmentHttpAuth.ts";
 import { fetchEnvironmentSessionState } from "./session.ts";
 import { fetchEnvironmentShellSnapshot } from "./shellSnapshotHttp.ts";
 import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
 import { fetchEnvironmentBoundedThreadSnapshot } from "./boundedThreadSnapshotHttp.ts";
+
 import { fetchEnvironmentThreadHistoryPage } from "./threadHistoryHttp.ts";
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 
@@ -100,7 +101,7 @@ function makeHarness(reply: (requestNumber: number) => Response | Promise<Respon
   return {
     calls,
     input: { prepared: PREPARED },
-    httpLayer: remoteHttpClientLayer(fetchFn),
+    layerHttp: layerRemoteHttpClient(fetchFn),
   };
 }
 
@@ -195,7 +196,7 @@ describe("authenticated environment HTTP requests", () => {
           httpBaseUrl: origin,
           socketUrl: `${origin.replace(/^http/, "ws")}/ws`,
         };
-        yield* fetchEnvironmentShellSnapshot({ prepared }).pipe(Effect.provide(harness.httpLayer));
+        yield* fetchEnvironmentShellSnapshot({ prepared }).pipe(Effect.provide(harness.layerHttp));
         expect(harness.calls).toHaveLength(1);
         expect(harness.calls[0]!.url).toBe(`${origin}/api/orchestration/shell`);
         expect(new Headers(harness.calls[0]!.init.headers).get("authorization")).toBe(
@@ -209,7 +210,7 @@ describe("authenticated environment HTTP requests", () => {
       const harness = makeHarness(() => Response.json({}));
       const result = yield* loader
         .load(harness.input)
-        .pipe(Effect.provide(harness.httpLayer), Effect.asVoid, Effect.flip);
+        .pipe(Effect.provide(harness.layerHttp), Effect.asVoid, Effect.flip);
       expect(result._tag).toBe("RemoteEnvironmentAuthInvalidJsonError");
       expect(harness.calls).toHaveLength(1);
     }),
@@ -220,7 +221,7 @@ describe("authenticated environment HTTP requests", () => {
     (loader) =>
       Effect.gen(function* () {
         const harness = makeHarness(() => Response.json(loader.response));
-        const result = yield* loader.load(harness.input).pipe(Effect.provide(harness.httpLayer));
+        const result = yield* loader.load(harness.input).pipe(Effect.provide(harness.layerHttp));
 
         expect(result).toEqual(loader.response);
         expect(harness.calls).toHaveLength(1);
@@ -247,7 +248,7 @@ describe("authenticated environment HTTP requests", () => {
         const harness = makeHarness(() => Response.json(UNAUTHENTICATED_SESSION));
         const result = yield* fetchEnvironmentSessionState({
           prepared: { ...PREPARED, httpAuthorization: authorization },
-        }).pipe(Effect.provide(harness.httpLayer));
+        }).pipe(Effect.provide(harness.layerHttp));
 
         expect(result).toEqual(UNAUTHENTICATED_SESSION);
         expect(harness.calls).toHaveLength(1);
@@ -271,7 +272,7 @@ describe("authenticated environment HTTP requests", () => {
       const pending = yield* fetchEnvironmentSessionState({
         ...harness.input,
         timeoutMs: 100,
-      }).pipe(Effect.provide(harness.httpLayer), Effect.flip, Effect.forkChild);
+      }).pipe(Effect.provide(harness.layerHttp), Effect.flip, Effect.forkChild);
       yield* Effect.promise(() => requested.promise);
       yield* TestClock.adjust(100);
 

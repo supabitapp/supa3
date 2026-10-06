@@ -1,7 +1,7 @@
 import type { AtomCommandResult } from "@supacode/client-runtime/state/runtime";
 import type { VcsListRefsInput, VcsListRefsResult } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import { resolveDefaultWorktreeBaseBranch } from "../lib/worktree-base-branch";
 import { appAtomRegistry } from "./atom-registry";

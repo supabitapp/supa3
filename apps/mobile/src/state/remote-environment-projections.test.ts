@@ -7,7 +7,7 @@ import type { ServerConfig } from "@supacode/contracts";
 import { EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
 
 import { createRemoteEnvironmentProjectionAtoms } from "./remote-environment-projections";
 

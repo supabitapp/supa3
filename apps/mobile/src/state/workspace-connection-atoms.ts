@@ -2,7 +2,7 @@ import type { EnvironmentPresentation, NetworkStatus } from "@supacode/client-ru
 import type { EnvironmentCatalogState } from "@supacode/client-runtime/state/connections";
 import type { EnvironmentId } from "@supacode/contracts";
 import { createEnvironmentSummaryAtoms } from "@supacode/client-runtime/state/presentation";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import { projectWorkspaceConnectionState } from "./workspaceModel";
 

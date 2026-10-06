@@ -19,7 +19,7 @@ vi.mock("electron", () => ({
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
 
-const protocolLayer = ElectronProtocol.layer.pipe(Layer.provide(NodeServices.layer));
+const layerProtocol = ElectronProtocol.layer.pipe(Layer.provide(NodeServices.layer));
 
 describe("ElectronProtocol", () => {
   beforeEach(() => {
@@ -64,7 +64,7 @@ describe("ElectronProtocol", () => {
       assert.equal((yield* request("/%invalid")).status, 400);
       assert.equal((yield* request("/", { method: "POST" })).status, 405);
       assert.equal(netFetchMock.mock.calls.length, 0);
-    }).pipe(Effect.provide(Layer.merge(protocolLayer, NodeServices.layer)), Effect.scoped),
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
 
   it.effect("proxies the stable renderer origin to the current app server", () =>
@@ -127,7 +127,7 @@ describe("ElectronProtocol", () => {
       assert.isNull(forwardedHeaders.get("referer"));
       assert.isNull(forwardedHeaders.get("sec-fetch-site"));
       assert.deepEqual(unhandleMock.mock.calls, [["supacode-dev"]]);
-    }).pipe(Effect.provide(protocolLayer)),
+    }).pipe(Effect.provide(layerProtocol)),
   );
 
   it.effect("rejects custom protocol requests for another host", () =>
@@ -150,7 +150,7 @@ describe("ElectronProtocol", () => {
 
       assert.equal(response.status, 404);
       assert.equal(netFetchMock.mock.calls.length, 0);
-    }).pipe(Effect.provide(protocolLayer)),
+    }).pipe(Effect.provide(layerProtocol)),
   );
 
   it.effect("retries transient renderer target failures", () =>
@@ -176,7 +176,7 @@ describe("ElectronProtocol", () => {
 
       assert.equal(yield* Effect.promise(() => response.text()), "ready");
       assert.equal(netFetchMock.mock.calls.length, 2);
-    }).pipe(Effect.provide(protocolLayer)),
+    }).pipe(Effect.provide(layerProtocol)),
   );
 
   it.effect("preserves protocol registration failures", () =>
@@ -198,7 +198,7 @@ describe("ElectronProtocol", () => {
       assert.equal(error.scheme, "supacode-dev");
       assert.strictEqual(error.cause, cause);
       assert.equal(error.message, 'Failed to register Electron protocol scheme "supacode-dev".');
-    }).pipe(Effect.provide(protocolLayer)),
+    }).pipe(Effect.provide(layerProtocol)),
   );
 
   it.effect("preserves protocol unregistration failures", () =>
@@ -226,7 +226,7 @@ describe("ElectronProtocol", () => {
         assert.strictEqual(error.cause, cause);
         assert.equal(error.message, 'Failed to unregister Electron protocol scheme "supacode".');
       }
-    }).pipe(Effect.provide(protocolLayer)),
+    }).pipe(Effect.provide(layerProtocol)),
   );
 
   it("keeps executable sources host-restricted while allowing runtime network resources", () => {

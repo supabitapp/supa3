@@ -51,7 +51,7 @@ import { inlineCodeFilePathCandidate } from "@supacode/client-runtime/markdown-l
 import { mediaFileReference, mediaUrlReference } from "@supacode/client-runtime/media-reference";
 import { mediaKindFromPath, mediaMimeTypeFromExtension } from "@supacode/shared/filePreview";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import React, {
   Children,
   Suspense,
@@ -1670,7 +1670,14 @@ export const ChatMarkdownAssetImage = memo(function ChatMarkdownAssetImage(props
   readonly environmentId: EnvironmentId;
   readonly resource: Extract<
     AssetResource,
-    { readonly _tag: "attachment" | "workspace-file" | "media-file" | "github-media" }
+    {
+      readonly _tag:
+        | "attachment"
+        | "workspace-file"
+        | "media-file"
+        | "github-media"
+        | "tool-output-image";
+    }
   >;
   readonly kind?: "image" | "video";
   readonly alt: string;

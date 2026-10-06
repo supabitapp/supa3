@@ -525,7 +525,7 @@ const program = doWork().pipe(
 
 ### Runtime Wiring
 
-The server observability layer is assembled in `apps/server/src/observability/Layers/Observability.ts`.
+The server observability layer is assembled in `apps/server/src/observability/Observability.ts`.
 
 It provides:
 
@@ -552,7 +552,7 @@ Local trace file:
 - `SUPACODE_TRACE_FILE`: override trace file path
 - `SUPACODE_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
 - `SUPACODE_TRACE_MAX_FILES`: rotated file count, default `10`
-- `SUPACODE_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
+- `SUPACODE_TRACE_BATCH_WINDOW_MS`: flush window, default `1000`
 - `SUPACODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
 - `SUPACODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
 

@@ -168,7 +168,7 @@ describe("DesktopPreReadyPlatform", () => {
           events.push("pre-ready");
         });
 
-        const preReadyLayer = DesktopPreReadyPlatform.layer.pipe(
+        const layerPreReady = DesktopPreReadyPlatform.layer.pipe(
           Layer.provide(Layer.succeed(HostProcessPlatform, "darwin")),
         );
 
@@ -182,15 +182,15 @@ describe("DesktopPreReadyPlatform", () => {
           ),
         );
 
-        const runtimeLayer = deepLinkShapedLayer.pipe(
+        const layerRuntime = deepLinkShapedLayer.pipe(
           Layer.flatMap((deepLinksContext) => Layer.succeedContext(deepLinksContext)),
-          Layer.provideMerge(preReadyLayer),
+          Layer.provideMerge(layerPreReady),
         );
 
         const result = yield* Effect.all({
           deepLinks: DeepLinkShaped,
           preReady: DesktopPreReadyPlatform.DesktopPreReadyElectronOptions,
-        }).pipe(Effect.provide(runtimeLayer));
+        }).pipe(Effect.provide(layerRuntime));
 
         assert.deepEqual(result, {
           deepLinks: { ready: true },

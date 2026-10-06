@@ -13,7 +13,7 @@ import {
   type ThreadPullRequestLink,
   type VcsStatusResult,
 } from "@supacode/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { FolderGit2Icon, TerminalIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";

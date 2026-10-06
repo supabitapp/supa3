@@ -488,7 +488,7 @@ function ManagedCodexSetup({
       !provider?.setup?.canInstall
     )
       return;
-    // oxlint-disable-next-line react/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect -- the flag consumes the auto-start request so setup runs once
     setAutoStartHandled(true);
     onAutoStartConsumed();
     void setup();

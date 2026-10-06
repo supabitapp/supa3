@@ -313,7 +313,7 @@ export function DraftHeroHeadline({
             <ComboboxTrigger
               render={<InlineButton tone="picker" />}
               data-draft-project-trigger=""
-              className="pointer-events-auto max-w-full align-baseline whitespace-normal break-words"
+              className="pointer-events-auto max-w-full align-baseline break-words [--inline-button-white-space:normal]"
             />
           }
         >

@@ -19,7 +19,7 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as DesktopTelemetryPublisher from "./DesktopTelemetryPublisher.ts";
 
-function makeElectronAppLayer(
+function layerElectronApp(
   metrics: ReadonlyArray<Electron.ProcessMetric>,
   onMetricsRead: () => void = () => undefined,
 ) {
@@ -56,7 +56,7 @@ describe("DesktopTelemetryPublisher", () => {
     Effect.gen(function* () {
       const pollStarted = yield* Deferred.make<void>();
       const blockPoll = yield* Deferred.make<void>();
-      const powerLayer = Layer.succeed(
+      const layerPower = Layer.succeed(
         ElectronPowerMonitor.ElectronPowerMonitor,
         ElectronPowerMonitor.ElectronPowerMonitor.of({
           isOnBatteryPower: Effect.succeed(false),
@@ -72,7 +72,7 @@ describe("DesktopTelemetryPublisher", () => {
         }),
       );
       const layer = DesktopTelemetryPublisher.layer.pipe(
-        Layer.provide(Layer.mergeAll(makeElectronAppLayer([]), powerLayer)),
+        Layer.provide(Layer.mergeAll(layerElectronApp([]), layerPower)),
       );
       const scope = yield* Scope.make();
 
@@ -114,7 +114,7 @@ describe("DesktopTelemetryPublisher", () => {
           },
         } as Electron.ProcessMetric,
       ];
-      const powerLayer = Layer.succeed(
+      const layerPower = Layer.succeed(
         ElectronPowerMonitor.ElectronPowerMonitor,
         ElectronPowerMonitor.ElectronPowerMonitor.of({
           isOnBatteryPower: Ref.get(onBattery),
@@ -139,10 +139,10 @@ describe("DesktopTelemetryPublisher", () => {
       const layer = DesktopTelemetryPublisher.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
-            makeElectronAppLayer(metrics, () => {
+            layerElectronApp(metrics, () => {
               metricsReadCount += 1;
             }),
-            powerLayer,
+            layerPower,
           ),
         ),
       );
@@ -393,7 +393,7 @@ describe("DesktopTelemetryPublisher", () => {
 
   it.effect("routes requestDesktopUpdate control messages and replays update reports", () =>
     Effect.gen(function* () {
-      const powerLayer = Layer.succeed(
+      const layerPower = Layer.succeed(
         ElectronPowerMonitor.ElectronPowerMonitor,
         ElectronPowerMonitor.ElectronPowerMonitor.of({
           isOnBatteryPower: Effect.succeed(false),
@@ -406,7 +406,7 @@ describe("DesktopTelemetryPublisher", () => {
         }),
       );
       const layer = DesktopTelemetryPublisher.layer.pipe(
-        Layer.provide(Layer.mergeAll(makeElectronAppLayer([]), powerLayer)),
+        Layer.provide(Layer.mergeAll(layerElectronApp([]), layerPower)),
       );
 
       yield* Effect.gen(function* () {

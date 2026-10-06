@@ -3,7 +3,7 @@ import * as DateTime from "effect/DateTime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import {
   animateSidebarLayoutChanges,
   archiveSelectedThreadEntries,
@@ -2093,6 +2093,46 @@ describe("Working shelf", () => {
         activeOrder: ["a1", "a2", "p1"],
       });
       expect(resolveSidebarDropVerb("active", "working")).toBeNull();
+    });
+
+    it("arranges the pinned rows it can write when another row's server cannot store an order", () => {
+      // None of the rows has a key yet, so the drop needs keys for its
+      // neighbors too. "offline" sits on a server that cannot take them.
+      const plan = planSidebarThreadDrop({
+        activeKey: "a2",
+        activeSection: "pinned",
+        target: {
+          section: "pinned",
+          pinnedOrder: ["offline", "a2", "a1"],
+          activeOrder: [],
+        },
+        pinnedOrder: ["offline", "a1", "a2"],
+        pinnedKeysById: new Map([
+          ["offline", null],
+          ["a1", null],
+          ["a2", null],
+        ]),
+        reorderableKeys: new Set(["a1", "a2"]),
+      });
+      expect(plan.kind).toBe("reorder-pinned");
+      if (plan.kind !== "reorder-pinned") return;
+      expect(plan.assignments.map(({ id }) => id)).toEqual(["a2", "a1"]);
+      const [a2, a1] = plan.assignments.map(({ orderKey }) => orderKey);
+      expect(a2! < a1!).toBe(true);
+
+      // A keyed row on that server still sorts by its key, so it stays a bound.
+      const above = planSidebarThreadDrop({
+        activeKey: "a2",
+        activeSection: "pinned",
+        target: { section: "pinned", pinnedOrder: ["a2", "offline"], activeOrder: [] },
+        pinnedOrder: ["offline", "a2"],
+        pinnedKeysById: new Map([
+          ["offline", "m"],
+          ["a2", "t"],
+        ]),
+        reorderableKeys: new Set(["a2"]),
+      });
+      expect(above.kind === "reorder-pinned" && above.assignments[0]!.orderKey < "m").toBe(true);
     });
 
     it("only changes lifecycle when dropping into the time-ordered inbox", () => {

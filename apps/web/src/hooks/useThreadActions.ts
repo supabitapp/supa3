@@ -11,7 +11,7 @@ import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@supacode/contrac
 import { resolveWorktreeCleanup } from "@supacode/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef } from "react";
 
@@ -289,7 +289,7 @@ export function useThreadActions() {
   // the projects list) and would otherwise cascade new references into every
   // sidebar row via archiveThread → attemptArchiveThread.
   const handleNewThreadRef = useRef(handleNewThread);
-  // oxlint-disable-next-line react/refs
+  // oxlint-disable-next-line react/refs -- latest-callback ref; updating it during render keeps archive callbacks stable
   handleNewThreadRef.current = handleNewThread;
 
   const resolveThreadTarget = useCallback((target: ScopedThreadRef) => {

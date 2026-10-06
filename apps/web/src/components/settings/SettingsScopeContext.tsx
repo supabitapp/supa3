@@ -2,7 +2,7 @@ import { SUPACODE_PROJECT_FILE_NAME, type SupacodeProjectFile } from "@supacode/
 import { parseSupacodeProjectFile } from "@supacode/shared/supacodeProjectFile";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";

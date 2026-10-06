@@ -964,7 +964,7 @@ function PullRequestsRouteView() {
     // workspace after the search was cleared.
     if (!listQuery.data || listQuery.isPending) return;
     const data = listQuery.data;
-    // oxlint-disable-next-line react/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect -- the list query lands asynchronously; its answer is recorded once it arrives
     setLoaded((current) => {
       // The partitions arrive on their own clock, so this records whichever have landed by
       // now and runs again when the rest do. Until then the ones already held for this scope
@@ -1074,7 +1074,7 @@ function PullRequestsRouteView() {
   // own answer.
   useEffect(() => {
     if (!answered || listQuery.isPending || (listQuery.error && listQuery.data === null)) return;
-    // oxlint-disable-next-line react/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect -- the list query lands asynchronously; its answer is recorded once it arrives
     setOrdered((previous) => {
       if (previous === null || previous.key !== filterKey) {
         return {

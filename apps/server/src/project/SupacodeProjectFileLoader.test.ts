@@ -8,7 +8,7 @@ import * as Path from "effect/Path";
 
 import * as SupacodeProjectFileLoader from "./SupacodeProjectFileLoader.ts";
 
-const TestLayer = Layer.empty.pipe(
+const layerTest = Layer.empty.pipe(
   Layer.provideMerge(SupacodeProjectFileLoader.layer),
   Layer.provideMerge(NodeServices.layer),
 );
@@ -26,7 +26,7 @@ const writeProjectFile = Effect.fn("writeProjectFile")(function* (cwd: string, c
   yield* fileSystem.writeFileString(path.join(cwd, "supacode.json"), contents).pipe(Effect.orDie);
 });
 
-it.layer(TestLayer)("SupacodeProjectFileLoader", (it) => {
+it.layer(layerTest)("SupacodeProjectFileLoader", (it) => {
   describe("load", () => {
     it.effect("loads and decodes a valid supacode.json", () =>
       Effect.gen(function* () {
