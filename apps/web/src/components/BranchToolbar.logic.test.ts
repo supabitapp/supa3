@@ -12,6 +12,7 @@ import {
   resolveBranchTriggerLabel,
   resolveBranchToolbarPrBranch,
   resolveBranchToolbarValue,
+  resolveWorktreeBaseBranch,
   resolveLockedWorkspaceLabel,
   resolveWorkspaceDisplayName,
   resolveLocalCheckoutBranchMismatch,
@@ -143,8 +144,71 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
   });
 });
 
+describe("resolveWorktreeBaseBranch", () => {
+  const refs = [{ name: "origin/main", isDefault: true }];
+
+  it("resolves the repository default before the current checkout without a saved selection", () => {
+    const branch = resolveWorktreeBaseBranch({
+      selectedBranch: null,
+      refs,
+      refsLoading: false,
+      currentGitBranch: "feature/current",
+    });
+    expect(branch).toBe("origin/main");
+    expect(
+      resolveBranchToolbarValue({
+        envMode: "worktree",
+        activeWorktreePath: null,
+        activeThreadBranch: branch,
+        currentGitBranch: "feature/current",
+      }),
+    ).toBe(branch);
+  });
+
+  it("keeps an explicit base even while refs load", () => {
+    expect(
+      resolveWorktreeBaseBranch({
+        selectedBranch: "upstream/release",
+        refs,
+        refsLoading: true,
+        currentGitBranch: "feature/current",
+      }),
+    ).toBe("upstream/release");
+  });
+
+  it("waits for the default branch before falling back to the current checkout", () => {
+    expect(
+      resolveWorktreeBaseBranch({
+        selectedBranch: null,
+        refs: [],
+        refsLoading: true,
+        currentGitBranch: "feature/current",
+      }),
+    ).toBeNull();
+    expect(
+      resolveWorktreeBaseBranch({
+        selectedBranch: null,
+        refs: [],
+        refsLoading: false,
+        currentGitBranch: "feature/current",
+      }),
+    ).toBe("feature/current");
+  });
+
+  it("requires a selection when neither a default nor a checkout branch is known", () => {
+    expect(
+      resolveWorktreeBaseBranch({
+        selectedBranch: null,
+        refs: [],
+        refsLoading: false,
+        currentGitBranch: null,
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("resolveBranchToolbarValue", () => {
-  it("defaults new-worktree mode to current git ref when no explicit base ref is set", () => {
+  it("does not display an unresolved checkout fallback as a worktree base", () => {
     expect(
       resolveBranchToolbarValue({
         envMode: "worktree",
@@ -152,7 +216,7 @@ describe("resolveBranchToolbarValue", () => {
         activeThreadBranch: null,
         currentGitBranch: "main",
       }),
-    ).toBe("main");
+    ).toBeNull();
   });
 
   it("keeps an explicitly selected worktree base ref", () => {

@@ -391,6 +391,7 @@ import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnect
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useEnvironmentQuery } from "../state/query";
+import { usePaginatedBranches } from "../state/queries";
 import {
   environmentServerConfigsAtom,
   primaryServerAvailableEditorsAtom,
@@ -451,6 +452,7 @@ import {
   type EnvironmentOption,
   resolveEffectiveEnvMode,
   resolveLocalCheckoutBranchMismatch,
+  resolveWorktreeBaseBranch,
   shouldShowComposerContextStrip,
   shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
@@ -6773,7 +6775,7 @@ export default function ChatView(props: ChatViewProps) {
   const envMode: DraftThreadEnvMode = canOverrideServerThreadEnvMode
     ? (pendingServerThreadEnvMode ?? draftThread?.envMode ?? derivedEnvMode)
     : derivedEnvMode;
-  const activeThreadBranch =
+  const selectedThreadBranch =
     canOverrideServerThreadEnvMode && pendingServerThreadBranch !== undefined
       ? pendingServerThreadBranch
       : (activeThread?.branch ?? null);
@@ -6787,6 +6789,22 @@ export default function ChatView(props: ChatViewProps) {
     requestedEnvMode: envMode,
     isGitRepo,
   });
+  const isSelectingWorktreeBase =
+    !activeWorktreePath && (sendEnvMode === "worktree" || multipleModelSelections !== null);
+  // Keep the default lookup unfiltered: searching the picker must not change
+  // the base branch submitted by an otherwise untouched draft.
+  const worktreeBaseRefs = usePaginatedBranches({
+    environmentId,
+    cwd: isSelectingWorktreeBase && !selectedThreadBranch ? gitStatusCwd : null,
+  });
+  const activeThreadBranch = isSelectingWorktreeBase
+    ? resolveWorktreeBaseBranch({
+        selectedBranch: selectedThreadBranch,
+        refs: worktreeBaseRefs.refs,
+        refsLoading: worktreeBaseRefs.data === null && worktreeBaseRefs.error === null,
+        currentGitBranch: gitStatusQuery.data?.refName ?? null,
+      })
+    : selectedThreadBranch;
   const localCheckoutBranchMismatch = useMemo(
     () =>
       isServerThread
@@ -8981,7 +8999,7 @@ export default function ChatView(props: ChatViewProps) {
         ? activeThreadBranch
         : null;
 
-    // In worktree mode, require an explicit base branch so we don't silently
+    // In worktree mode, require a resolved base branch so we don't silently
     // fall back to local execution when branch selection is missing.
     const shouldCreateWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath;
@@ -10862,9 +10880,9 @@ export default function ChatView(props: ChatViewProps) {
     onEnvironmentChange,
     onEnvModeChange,
     envMode,
+    activeThreadBranchOverride: activeThreadBranch,
     ...(canOverrideServerThreadEnvMode
       ? {
-          activeThreadBranchOverride: activeThreadBranch,
           onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
         }
       : {}),
@@ -11478,9 +11496,9 @@ export default function ChatView(props: ChatViewProps) {
                                 startFromOrigin={startFromOrigin}
                                 onStartFromOriginChange={onStartFromOriginChange}
                                 envMode={envMode}
+                                activeThreadBranchOverride={activeThreadBranch}
                                 {...(canOverrideServerThreadEnvMode
                                   ? {
-                                      activeThreadBranchOverride: activeThreadBranch,
                                       onActiveThreadBranchOverrideChange:
                                         setPendingServerThreadBranch,
                                     }
