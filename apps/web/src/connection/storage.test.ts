@@ -54,7 +54,7 @@ describe("ConnectionStorage.makeCatalogStore", () => {
     () =>
       Effect.gen(function* () {
         const quarantined: string[] = [];
-        const store = yield* makeCatalogStore({
+        const store = yield* ConnectionStorage.makeCatalogStore({
           read: Effect.succeed(
             encodeJson({
               schemaVersion: 1,
