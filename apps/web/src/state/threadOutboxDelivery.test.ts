@@ -1,11 +1,13 @@
+import { shouldRetryThreadOutboxDelivery } from "@supacode/client-runtime/thread-outbox";
+import { AtomRegistry } from "effect/reactivity";
+import { EnvironmentId, ThreadId } from "@supacode/contracts";
 import { describe, expect, it, vi } from "@effect/vitest";
 
 import {
-  createThreadOutbox,
+  createBrowserThreadOutbox,
   type ThreadOutboxEntry,
-  type ThreadOutboxStorage,
-  shouldRetryThreadOutboxDelivery,
-} from "./threadOutbox.ts";
+  type BrowserThreadOutboxStorage,
+} from "./threadOutboxDelivery";
 
 function deferred() {
   let resolve = () => {};
@@ -15,7 +17,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-type Payload = { commandId: string; text: string; bytes: string };
+type Payload = { commandId: string; text: string; bytes: string; threadId: string };
 
 function harness() {
   const records = new Map<string, ThreadOutboxEntry<Payload>>();
@@ -23,7 +25,7 @@ function harness() {
   let now = 0;
   let online = false;
   const delivered: ThreadOutboxEntry<Payload>[] = [];
-  const storage: ThreadOutboxStorage<Payload> = {
+  const storage: BrowserThreadOutboxStorage<Payload> = {
     load: vi.fn(async () => [...records.values()]),
     write: vi.fn(async (entry) => {
       if (!records.has(entry.id)) return false;
@@ -50,7 +52,17 @@ function harness() {
     delivered.push(entry);
   });
   const create = () =>
-    createThreadOutbox({ storage, now: () => now, canDeliver: () => online, deliver });
+    createBrowserThreadOutbox({
+      registry: AtomRegistry.make(),
+      identify: (payload) => ({
+        environmentId: EnvironmentId.make("environment"),
+        threadId: ThreadId.make(payload.threadId),
+      }),
+      storage,
+      now: () => now,
+      canDeliver: () => online,
+      deliver,
+    });
   return {
     records,
     storage,
@@ -71,11 +83,40 @@ function message(id: string, scope = "environment:thread", createdAt = "2026-10-
     id,
     scope,
     createdAt,
-    payload: { commandId: `command:${id}`, text: id, bytes: `attachment:${id}` },
+    payload: { commandId: `command:${id}`, text: id, bytes: `attachment:${id}`, threadId: scope },
   };
 }
 
 describe("durable thread outbox", () => {
+  it("keeps an unchanged offline snapshot stable when IndexedDB returns cloned records", async () => {
+    const h = harness();
+    const outbox = h.create();
+    await outbox.enqueue(message("prompt"));
+    vi.mocked(h.storage.load).mockImplementation(async () =>
+      structuredClone([...h.records.values()]),
+    );
+    const snapshot = outbox.getSnapshot();
+    const changed = vi.fn();
+    const unsubscribe = outbox.subscribe(changed);
+    await outbox.drain();
+    await outbox.reload();
+    expect(outbox.getSnapshot()).toBe(snapshot);
+    expect(changed).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("retains pending messages and reports a failed environment cleanup", async () => {
+    const h = harness();
+    const outbox = h.create();
+    await outbox.enqueue(message("prompt"));
+    vi.mocked(h.storage.remove).mockRejectedValueOnce(new Error("disk unavailable"));
+    await expect(outbox.clearEnvironment(EnvironmentId.make("environment"))).rejects.toThrow(
+      "Some pending messages could not be removed.",
+    );
+    expect(outbox.getSnapshot().map((entry) => entry.id)).toEqual(["prompt"]);
+    expect(h.records.has("prompt")).toBe(true);
+  });
+
   it("accepts a send only after its durable transaction commits", async () => {
     const h = harness();
     const outbox = h.create();
@@ -133,7 +174,12 @@ describe("durable thread outbox", () => {
     expect(await first.drain()).toBe(1_000);
     expect(await first.cancel("prompt")).toBe(false);
     expect(
-      await first.edit("prompt", { commandId: "changed", text: "changed", bytes: "changed" }),
+      await first.edit("prompt", {
+        commandId: "changed",
+        text: "changed",
+        bytes: "changed",
+        threadId: "thread",
+      }),
     ).toBe(false);
     const recovered = h.create();
     await recovered.load();
@@ -176,6 +222,7 @@ describe("durable thread outbox", () => {
       commandId: "command:prompt",
       text: "edited",
       bytes: "attachment:prompt",
+      threadId: "environment:thread",
     });
   });
 

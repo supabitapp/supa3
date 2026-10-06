@@ -1,9 +1,9 @@
-import { createThreadOutbox, type ThreadOutboxEntry } from "@supacode/client-runtime/thread-outbox";
+import { resolveThreadOutboxDispatchStep } from "@supacode/client-runtime/thread-outbox";
+import { createBrowserThreadOutbox, type ThreadOutboxEntry } from "./threadOutboxDelivery";
 import { scopedThreadKey, scopeThreadRef } from "@supacode/client-runtime/environment";
 import type { StartThreadTurnInput } from "@supacode/client-runtime/operations";
 import { runAtomCommand, squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
 import {
-  clampFileAttachmentUploadBytes,
   runAttachmentUploadCycle,
   verifyPersistedAttachmentUpload,
 } from "@supacode/client-runtime/state/attachments";
@@ -114,8 +114,13 @@ async function uploadAttachment(
   });
 }
 
-export const webThreadOutbox = createThreadOutbox<OutboxTurn>({
+export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
   storage: browserThreadOutboxStorage,
+  registry: appAtomRegistry,
+  identify: (payload) => ({
+    environmentId: payload.environmentId,
+    threadId: payload.input.threadId,
+  }),
   now: () => Date.now(),
   canDeliver: (entry) => {
     const environmentId = entry.payload.environmentId;
@@ -152,12 +157,14 @@ export const webThreadOutbox = createThreadOutbox<OutboxTurn>({
       }
       if (!supportsUploads) continue;
       if (attachment.type === "file") {
-        const limit = config.environment.capabilities.fileAttachments?.maxUploadBytes;
-        if (limit === undefined || attachment.sizeBytes > clampFileAttachmentUploadBytes(limit)) {
-          throw new Error(
-            `'${attachment.name}' cannot be sent to this server. Remove it or choose a smaller file.`,
-          );
-        }
+        const step = resolveThreadOutboxDispatchStep({
+          deliveryAction: "send",
+          fileAttachments: [attachment],
+          serverConfig: {
+            maxFileUploadBytes: config.environment.capabilities.fileAttachments?.maxUploadBytes,
+          },
+        });
+        if (step.step === "restore") throw new Error(step.reason);
       }
       const uploaded = await uploadAttachment(environmentId, attachment);
       payload.localAttachments[index] = { ...attachment, uploaded };
@@ -347,11 +354,5 @@ export function usePendingThreadCreation(ref: ScopedThreadRef) {
 }
 
 export async function clearThreadOutboxEnvironment(environmentId: EnvironmentId) {
-  const entries = (await browserThreadOutboxStorage.load()).filter(
-    (entry) => entry.payload.environmentId === environmentId,
-  );
-  for (const entry of entries) {
-    await browserThreadOutboxStorage.remove(entry.id);
-  }
-  await webThreadOutbox.reload();
+  await webThreadOutbox.clearEnvironment(environmentId);
 }

@@ -9,7 +9,7 @@ import {
   ProjectId,
   ThreadId,
 } from "@supacode/contracts";
-import type { ThreadOutboxEntry } from "@supacode/client-runtime/thread-outbox";
+import type { ThreadOutboxEntry } from "./threadOutboxDelivery";
 import { DraftId } from "../composerDraftStore";
 import type { OutboxTurn } from "./threadOutboxSchema";
 
@@ -24,42 +24,50 @@ const harness = vi.hoisted(() => ({
   existingThread: false,
 }));
 
-vi.mock("../rpc/atomRegistry", () => ({
-  appAtomRegistry: {
-    get: (atom: string) => {
-      if (atom === "presentation")
-        return { connection: { phase: harness.online ? "connected" : "offline" } };
-      if (atom === "shell") return { status: harness.online ? "live" : "cached" };
-      if (atom === "snapshot")
-        return {
-          threads: harness.existingThread
-            ? [
-                {
-                  id: "thread",
-                  branch: "old",
-                  runtimeMode: "approval-required",
-                  interactionMode: "plan",
+vi.mock("../rpc/atomRegistry", async () => {
+  const { AtomRegistry } = await import("effect/reactivity");
+  const registry = AtomRegistry.make();
+  return {
+    appAtomRegistry: {
+      set: registry.set.bind(registry),
+      subscribe: registry.subscribe.bind(registry),
+      get: (...args: Parameters<typeof registry.get>) => {
+        const atom: unknown = args[0];
+        if (typeof atom !== "string") return registry.get(...args);
+        if (atom === "presentation")
+          return { connection: { phase: harness.online ? "connected" : "offline" } };
+        if (atom === "shell") return { status: harness.online ? "live" : "cached" };
+        if (atom === "snapshot")
+          return {
+            threads: harness.existingThread
+              ? [
+                  {
+                    id: "thread",
+                    branch: "old",
+                    runtimeMode: "approval-required",
+                    interactionMode: "plan",
+                  },
+                ]
+              : [],
+          };
+        return new Map([
+          [
+            "environment",
+            {
+              environment: {
+                capabilities: {
+                  attachmentUploads: harness.supportsUploads,
+                  inlineMessageContext: true,
+                  fileAttachments: { maxUploadBytes: 1_000 },
                 },
-              ]
-            : [],
-        };
-      return new Map([
-        [
-          "environment",
-          {
-            environment: {
-              capabilities: {
-                attachmentUploads: harness.supportsUploads,
-                inlineMessageContext: true,
-                fileAttachments: { maxUploadBytes: 1_000 },
               },
             },
-          },
-        ],
-      ]);
+          ],
+        ]);
+      },
     },
-  },
-}));
+  };
+});
 vi.mock("./presentation", () => ({
   environmentPresentations: { presentationAtom: () => "presentation" },
 }));

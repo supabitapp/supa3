@@ -1,4 +1,4 @@
-import type { ThreadOutboxStorage } from "@supacode/client-runtime/thread-outbox";
+import type { BrowserThreadOutboxStorage } from "./threadOutboxDelivery";
 import * as Schema from "effect/Schema";
 
 import { OutboxTurn, StoredOutboxEntry } from "./threadOutboxSchema";
@@ -74,7 +74,7 @@ const Lease = Schema.Struct({
 const decodeLease = Schema.decodeUnknownSync(Lease);
 
 /** IndexedDB also works on HTTP LAN origins where Web Locks are unavailable. */
-export const browserThreadOutboxStorage: ThreadOutboxStorage<OutboxTurn> = {
+export const browserThreadOutboxStorage: BrowserThreadOutboxStorage<OutboxTurn> = {
   load: async () => {
     const values = await transaction<unknown[]>("messages", "readonly", (store, complete) => {
       const request = store.getAll();
