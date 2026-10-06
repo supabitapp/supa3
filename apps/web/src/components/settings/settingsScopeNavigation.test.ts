@@ -271,7 +271,7 @@ describe("settings scope navigation", () => {
 });
 
 describe("scheduled task settings redirect", () => {
-  it("opens a task link on Automations", async () => {
+  it("opens a task link on Automations, scoped to its environment", async () => {
     const router = createSettingsRouter();
     await router.navigate({
       to: "/settings/scheduled-tasks",
@@ -284,18 +284,22 @@ describe("scheduled task settings redirect", () => {
     await router.navigate(router.state.redirect!.options);
     expect(router.state.location.pathname).toBe("/automations");
     expect(router.state.location.search).toEqual({
+      machine: "remote-server",
       environmentId: "remote-server",
       taskId: "task-1",
     });
   });
 
-  it("keeps the settings project as the Automations filter and drops machine and checkout", async () => {
+  it("keeps the settings project and environment as the Automations scope and drops checkout", async () => {
     const router = createSettingsRouter();
     await router.navigate({ to: "/settings/projects", search: checkoutSearch });
     await router.navigate({ to: "/settings/scheduled-tasks" });
     expect(router.state.redirect).not.toBeUndefined();
     await router.navigate(router.state.redirect!.options);
     expect(router.state.location.pathname).toBe("/automations");
-    expect(router.state.location.search).toEqual({ project: checkoutSearch.project });
+    expect(router.state.location.search).toEqual({
+      project: checkoutSearch.project,
+      machine: checkoutSearch.machine,
+    });
   });
 });

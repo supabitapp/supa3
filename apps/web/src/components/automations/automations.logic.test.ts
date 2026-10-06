@@ -9,16 +9,16 @@ import {
 } from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  projectGroupMemberKeys,
-  type SidebarProjectGroupMember,
-  type SidebarProjectSnapshot,
+import type {
+  SidebarProjectGroupMember,
+  SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
+import { resolveSettingsScope, type SettingsScopeSearch } from "../settings/settingsScope";
 import {
-  inProjectFilter,
   lastRunLabel,
+  matchesAutomationScope,
   nextRunLabel,
   relativeLabel,
   scheduleLabel,
@@ -90,24 +90,56 @@ const tasks = [first, second, third, other, sameIdElsewhere].map((project, index
   projectId: project.id,
 }));
 
-describe("automations project filter", () => {
+function matchingTaskIds(search: SettingsScopeSearch) {
+  const scope = resolveSettingsScope(search, groups, environments);
+  return tasks.flatMap((task) =>
+    matchesAutomationScope(scope, task.environmentId, task.projectId) ? [task.id] : [],
+  );
+}
+
+describe("automations scope", () => {
   it("matches every checkout of a grouped project across environments", () => {
-    const keys = projectGroupMemberKeys(groups[0]!);
-    expect(
-      tasks.flatMap((task) =>
-        inProjectFilter(keys, task.environmentId, task.projectId) ? [task.id] : [],
-      ),
-    ).toEqual(["task-0", "task-1", "task-2"]);
+    expect(matchingTaskIds({ project: "supacode" })).toEqual(["task-0", "task-1", "task-2"]);
   });
 
   it("does not match an unrelated environment's project that shares an ID", () => {
-    const keys = projectGroupMemberKeys(groups[0]!);
-    expect(inProjectFilter(keys, laptopId, first.id)).toBe(true);
-    expect(inProjectFilter(keys, serverId, sameIdElsewhere.id)).toBe(false);
+    const scope = resolveSettingsScope({ project: "supacode" }, groups, environments);
+    expect(matchesAutomationScope(scope, laptopId, first.id)).toBe(true);
+    expect(matchesAutomationScope(scope, serverId, sameIdElsewhere.id)).toBe(false);
+  });
+
+  it("narrows to one environment, alone or within a project", () => {
+    expect(matchingTaskIds({ machine: serverId })).toEqual(["task-2", "task-3", "task-4"]);
+    expect(matchingTaskIds({ project: "supacode", machine: serverId })).toEqual(["task-2"]);
+  });
+
+  it("matches a stale duplicate record at a checkout's path, on that environment only", () => {
+    const stale = member("stale-first", laptopId);
+    const withStale = {
+      ...groups[0]!,
+      memberProjectRefs: [
+        ...groups[0]!.memberProjectRefs,
+        { environmentId: laptopId, projectId: stale.id },
+      ],
+    };
+    const scope = resolveSettingsScope({ project: "supacode" }, [withStale], environments);
+    expect(matchesAutomationScope(scope, laptopId, stale.id)).toBe(true);
+    const serverScope = resolveSettingsScope(
+      { project: "supacode", machine: serverId },
+      [withStale],
+      environments,
+    );
+    expect(matchesAutomationScope(serverScope, laptopId, stale.id)).toBe(false);
   });
 
   it("keeps tasks of removed projects when no project is selected", () => {
-    expect(inProjectFilter(null, laptopId, ProjectId.make("removed"))).toBe(true);
+    const scope = resolveSettingsScope({}, groups, environments);
+    expect(matchesAutomationScope(scope, laptopId, ProjectId.make("removed"))).toBe(true);
+  });
+
+  it("matches nothing when the selection is gone", () => {
+    expect(matchingTaskIds({ project: "removed" })).toEqual([]);
+    expect(matchingTaskIds({ machine: "removed" })).toEqual([]);
   });
 });
 
@@ -293,15 +325,21 @@ describe("automation labels", () => {
 });
 
 describe("automations search", () => {
-  it("keeps the project filter separate from the one-shot task link", () => {
+  it("keeps the scope separate from the one-shot task link", () => {
     expect(
       validateAutomationsSearch({
         project: "supacode",
+        machine: "server",
+        checkout: "ignored",
         environmentId: "laptop",
         taskId: "task-1",
-        machine: "ignored",
       }),
-    ).toEqual({ project: "supacode", environmentId: laptopId, taskId: "task-1" });
-    expect(validateAutomationsSearch({ project: " ", taskId: 4 })).toEqual({});
+    ).toEqual({
+      project: "supacode",
+      machine: "server",
+      environmentId: laptopId,
+      taskId: "task-1",
+    });
+    expect(validateAutomationsSearch({ project: " ", machine: "", taskId: 4 })).toEqual({});
   });
 });
