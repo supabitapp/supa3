@@ -19,7 +19,7 @@ function inputAttachmentId(entry: PendingThreadTurn, index: number) {
   return entry.payload.input.message.attachments[index]!.id ?? `outbox:${entry.id}:${index}`;
 }
 
-export function threadOutboxEditAttachments(entry: PendingThreadTurn) {
+function threadOutboxEditAttachments(entry: PendingThreadTurn) {
   return [
     ...entry.payload.localAttachments.map((attachment) => ({
       attachment: decodeAttachment({ ...attachment, id: attachment.id }),
