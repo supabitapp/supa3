@@ -25,17 +25,17 @@ function environment(
 
 it("presents showcase transports as remote endpoints", () => {
   const environments = applyShowcaseLocalEnvironmentDisplayUrls([
-    environment("runtime-id-1", "Moonbase Terminal"),
-    environment("runtime-id-2", "Suspense Station"),
-    environment("runtime-id-3", "Kernel Cabin"),
+    environment("runtime-id-1", "Studio Laptop"),
+    environment("runtime-id-2", "Basement Tower"),
+    environment("runtime-id-3", "Helsinki VPS"),
   ]);
 
   assert.deepStrictEqual(
     environments.map(({ displayUrl }) => displayUrl),
     [
-      "https://moonbase.tail9f3a.ts.net/",
-      "https://suspense-vps.hel1.next.supacode.sh/",
-      "http://100.82.16.5:3773/",
+      "https://studio.tailb37e.ts.net/",
+      "http://192.168.1.40:3773/",
+      "https://vps.next.supacode.sh/",
     ],
   );
 });
@@ -54,15 +54,15 @@ it("does not persist a cosmetic showcase URL when only the label is saved", () =
   assert.equal(
     resolveShowcaseEnvironmentUpdateDisplayUrl({
       actualDisplayUrl: "http://127.0.0.1:3773/",
-      presentedDisplayUrl: "https://moonbase.tail9f3a.ts.net/",
-      submittedDisplayUrl: "https://moonbase.tail9f3a.ts.net/",
+      presentedDisplayUrl: "https://studio.tailb37e.ts.net/",
+      submittedDisplayUrl: "https://studio.tailb37e.ts.net/",
     }),
     "http://127.0.0.1:3773/",
   );
   assert.equal(
     resolveShowcaseEnvironmentUpdateDisplayUrl({
       actualDisplayUrl: "http://127.0.0.1:3773/",
-      presentedDisplayUrl: "https://moonbase.tail9f3a.ts.net/",
+      presentedDisplayUrl: "https://studio.tailb37e.ts.net/",
       submittedDisplayUrl: "https://new-host.example.com/",
     }),
     "https://new-host.example.com/",

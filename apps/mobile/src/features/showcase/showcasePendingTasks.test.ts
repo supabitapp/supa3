@@ -9,7 +9,7 @@ import {
 
 const projects: ReadonlyArray<EnvironmentProject> = [
   {
-    environmentId: EnvironmentId.make("moonbase-terminal"),
+    environmentId: EnvironmentId.make("studio-laptop"),
     id: ProjectId.make("supacode"),
     title: "supacode",
     workspaceRoot: "/workspace/supacode",
@@ -20,10 +20,10 @@ const projects: ReadonlyArray<EnvironmentProject> = [
     updatedAt: "2026-07-16T08:00:00.000Z",
   },
   {
-    environmentId: EnvironmentId.make("suspense-station"),
-    id: ProjectId.make("react"),
-    title: "React",
-    workspaceRoot: "/workspace/react",
+    environmentId: EnvironmentId.make("basement-tower"),
+    id: ProjectId.make("tidepool"),
+    title: "tidepool",
+    workspaceRoot: "/workspace/tidepool",
     repositoryIdentity: null,
     defaultModelSelection: null,
     scripts: [],
@@ -46,17 +46,17 @@ it("builds sendable-looking pending tasks against real showcase projects", () =>
     })),
     [
       {
-        environmentId: "moonbase-terminal",
+        environmentId: "studio-laptop",
         projectId: "supacode",
         title: "supacode",
-        branch: "feat/offline-launchpad",
+        branch: "feat/offline-tests",
         createdAt: "2026-07-16T08:52:00.000Z",
       },
       {
-        environmentId: "suspense-station",
-        projectId: "react",
-        title: "React",
-        branch: "perf/tunnel-handoff",
+        environmentId: "basement-tower",
+        projectId: "tidepool",
+        title: "tidepool",
+        branch: "fix/chart-landscape",
         createdAt: "2026-07-16T08:33:00.000Z",
       },
     ],

@@ -39,7 +39,7 @@ import {
 } from "./showcaseRenderSignal";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
-const SHOWCASE_THREAD_ID = "remote-command-center";
+const SHOWCASE_THREAD_ID = "offline-reason";
 
 type ShowcaseResetRoute = PartialState<NavigationState>["routes"][number];
 
