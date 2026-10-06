@@ -113,6 +113,25 @@ describe("automations scope", () => {
     expect(matchingTaskIds({ project: "supacode", machine: serverId })).toEqual(["task-2"]);
   });
 
+  it("matches a stale duplicate record at a checkout's path, on that environment only", () => {
+    const stale = member("stale-first", laptopId);
+    const withStale = {
+      ...groups[0]!,
+      memberProjectRefs: [
+        ...groups[0]!.memberProjectRefs,
+        { environmentId: laptopId, projectId: stale.id },
+      ],
+    };
+    const scope = resolveSettingsScope({ project: "supacode" }, [withStale], environments);
+    expect(matchesAutomationScope(scope, laptopId, stale.id)).toBe(true);
+    const serverScope = resolveSettingsScope(
+      { project: "supacode", machine: serverId },
+      [withStale],
+      environments,
+    );
+    expect(matchesAutomationScope(serverScope, laptopId, stale.id)).toBe(false);
+  });
+
   it("keeps tasks of removed projects when no project is selected", () => {
     const scope = resolveSettingsScope({}, groups, environments);
     expect(matchesAutomationScope(scope, laptopId, ProjectId.make("removed"))).toBe(true);

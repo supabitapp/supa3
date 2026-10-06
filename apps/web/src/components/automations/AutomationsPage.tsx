@@ -35,7 +35,8 @@ import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { ScopeSentence } from "../settings/SettingsScopeSentence";
+import { ScopeSentence } from "../settings/ScopeSentence";
+import { selectScopedSettingsEnvironments } from "../settings/scopedSettings";
 import { resolveSettingsScope, type ResolvedSettingsScope } from "../settings/settingsScope";
 import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
@@ -74,25 +75,15 @@ export function AutomationsPage() {
   const groups = useSettingsProjectGroups();
   const { environments: availableEnvironments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const scopeSearch = useMemo(
-    () => ({ project: search.project, machine: search.machine }),
-    [search.machine, search.project],
-  );
   const scope = useMemo(
-    () => resolveSettingsScope(scopeSearch, groups, availableEnvironments),
-    [availableEnvironments, groups, scopeSearch],
+    () => resolveSettingsScope(search, groups, availableEnvironments),
+    [availableEnvironments, groups, search],
   );
-  const environments = availableEnvironments.filter((environment) =>
-    scope.environmentIds.includes(environment.environmentId),
-  );
-  const connectedEnvironments = environments.filter(
-    (environment) =>
-      environment.connection.phase === "connected" && environment.serverConfig !== null,
-  );
-  const defaultEnvironment =
-    connectedEnvironments.find(
-      (environment) => environment.environmentId === primaryEnvironmentId,
-    ) ?? connectedEnvironments[0];
+  const {
+    environments,
+    connectedEnvironments,
+    environment: defaultEnvironment,
+  } = selectScopedSettingsEnvironments(scope, availableEnvironments, primaryEnvironmentId);
   const projectNameByKey = useMemo(
     () =>
       new Map(
@@ -144,10 +135,10 @@ export function AutomationsPage() {
           <WorkspacePageContainer className="gap-8">
             <ScopeSentence
               lead="Showing automations for"
-              value={scopeSearch}
+              value={search}
+              scope={scope}
               groups={groups}
               environments={availableEnvironments}
-              singleEnvironment={false}
               onChange={(next) => void navigate({ search: automationsScopeSearch(next) })}
             />
             {scope.kind === "unavailable" ? (
