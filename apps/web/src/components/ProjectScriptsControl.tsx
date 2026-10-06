@@ -102,6 +102,9 @@ export default function ProjectScriptsControl({
     }
     return primaryProjectScript(scripts);
   }, [preferredScriptId, scripts]);
+  const primaryScriptShortcut = primaryScript
+    ? shortcutLabelForCommand(keybindings, commandForProjectScript(primaryScript.id))
+    : null;
   const importableScripts = useMemo(
     () =>
       fileScripts.filter(
@@ -196,15 +199,7 @@ export default function ProjectScriptsControl({
               {script.runOnWorktreeCreate ? `${script.name} (setup)` : script.name}
             </MenuItemLabel>
             <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
-              {shortcutLabel &&
-                (presentation === "menu" ? (
-                  <MenuShortcut className="ms-0 mr-7">{shortcutLabel}</MenuShortcut>
-                ) : (
-                  // The shortcut yields its slot to the edit button on hover.
-                  <span className="transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
-                    <MenuShortcut className="ms-0">{shortcutLabel}</MenuShortcut>
-                  </span>
-                ))}
+              {shortcutLabel && <MenuShortcut className="ms-0 mr-7">{shortcutLabel}</MenuShortcut>}
               <span
                 className={`absolute right-0 top-1/2 flex -translate-y-1/2 ${presentation === "menu" ? "" : "opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:pointer-events-auto"}`}
               >
@@ -250,9 +245,7 @@ export default function ProjectScriptsControl({
             >
               <ScriptIcon icon={primaryScript.icon} className="size-4" />
               <MenuItemLabel>Run {primaryScript.name}</MenuItemLabel>
-              <MenuShortcut>
-                {shortcutLabelForCommand(keybindings, commandForProjectScript(primaryScript.id))}
-              </MenuShortcut>
+              <MenuShortcut>{primaryScriptShortcut}</MenuShortcut>
             </MenuItem>
           )}
           {primaryScript || importableScripts.length > 0 ? (
@@ -316,7 +309,9 @@ export default function ProjectScriptsControl({
                 {primaryScript.name}
               </span>
             </TooltipTrigger>
-            <TooltipPopup side="top">Run {primaryScript.name}</TooltipPopup>
+            <TooltipPopup side="top" shortcut={primaryScriptShortcut}>
+              Run {primaryScript.name}
+            </TooltipPopup>
           </Tooltip>
           {isPanel ? (
             <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />

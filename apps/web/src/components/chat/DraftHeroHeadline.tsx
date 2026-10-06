@@ -39,6 +39,7 @@ import {
 } from "../ui/combobox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
+import { Kbd } from "../ui/kbd";
 import { useComposerMenuProps } from "./composerEventScope";
 import { resolveProjectSettings } from "@supacode/shared/projectSettings";
 import { normalizeSearchQuery, scoreQueryMatch } from "@supacode/shared/searchRanking";
@@ -73,6 +74,7 @@ export function DraftHeroHeadline({
   const { scratchEnvironmentId, scratchWorkspaceRootFor, openScratchProject } = useScratchProject();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const projectPickerShortcut = shortcutLabelForCommand(keybindings, "projectPicker.toggle");
+  const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
   const composerRef = useComposerHandleContext();
@@ -319,8 +321,8 @@ export function DraftHeroHeadline({
             {isScratchDraft ? "No project" : (activeProjectDisplayName ?? "Choose a project")}
           </span>
         </TooltipTrigger>
-        <TooltipPopup side="top">
-          Select project{projectPickerShortcut ? ` · ${projectPickerShortcut}` : ""}
+        <TooltipPopup side="top" shortcut={projectPickerShortcut}>
+          Select project
         </TooltipPopup>
       </Tooltip>
       <ComboboxPopup align="center" {...composerMenuProps}>
@@ -345,6 +347,11 @@ export function DraftHeroHeadline({
                   <FolderPlusIcon className="size-4 shrink-0" />
                 )}
                 <span className="min-w-0 truncate">{item.label}</span>
+                {item.value === NO_PROJECT_VALUE && noProjectShortcut ? (
+                  <Kbd variant="plain" className="ms-auto" aria-hidden>
+                    {noProjectShortcut}
+                  </Kbd>
+                ) : null}
                 {entry && showProjectEnvironments ? (
                   <ProjectEnvironmentBadge
                     group={entry.group}
@@ -382,7 +389,6 @@ export function DraftHeroHeadline({
 
   // One click out of the project, phrased as the alternative to the question
   // above it.
-  const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
   const orStartWithoutProject =
     scratchWorkspaceRoot !== null && !isScratchDraft && (hasResolvedProject || canChooseProject) ? (
       <Tooltip>
@@ -397,7 +403,11 @@ export function DraftHeroHeadline({
         >
           or start without a project
         </TooltipTrigger>
-        {noProjectShortcut ? <TooltipPopup side="bottom">{noProjectShortcut}</TooltipPopup> : null}
+        {noProjectShortcut ? (
+          <TooltipPopup side="bottom" shortcut={noProjectShortcut}>
+            New thread without a project
+          </TooltipPopup>
+        ) : null}
       </Tooltip>
     ) : null;
 

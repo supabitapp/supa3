@@ -7,10 +7,12 @@ import { InlineConfirmIcon, InlineConfirmTooltip } from "../InlineConfirm";
 
 export function SidebarPinButton({
   pinned,
+  shortcut,
   onPin,
   onUnpin,
 }: {
   pinned: boolean;
+  shortcut: string | null;
   onPin: () => void;
   onUnpin: () => void;
 }) {
@@ -28,6 +30,7 @@ export function SidebarPinButton({
       required={pinned && confirmThreadUnpin}
       tip={label}
       armedTip="Click again to unpin"
+      shortcut={shortcut}
       render={
         <button
           type="button"

@@ -876,7 +876,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     >
                       {jumpLabel}
                     </TooltipTrigger>
-                    <TooltipPopup side="top">{jumpLabel}</TooltipPopup>
+                    <TooltipPopup side="top" shortcut={jumpLabel}>
+                      Jump to thread
+                    </TooltipPopup>
                   </Tooltip>
                 ) : (
                   <span
@@ -2381,8 +2383,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               </div>
             }
           />
-          <TooltipPopup side="top">
-            {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
+          <TooltipPopup side="top" shortcut={newThreadShortcutLabel}>
+            New thread
           </TooltipPopup>
         </Tooltip>
       </div>
@@ -2974,7 +2976,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                         }
                         openPullRequestsInRightPanel={openPullRequestsInRightPanel}
-                        newThreadShortcutLabel={newThreadShortcutLabel}
+                        newThreadShortcutLabel={
+                          activeRouteProjectKey === project.projectKey
+                            ? newThreadShortcutLabel
+                            : null
+                        }
                         handleNewThread={handleNewThread}
                         navigateToThread={navigateToThread}
                         archiveThread={archiveThread}
@@ -3009,7 +3015,9 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                 }
                 openPullRequestsInRightPanel={openPullRequestsInRightPanel}
-                newThreadShortcutLabel={newThreadShortcutLabel}
+                newThreadShortcutLabel={
+                  activeRouteProjectKey === project.projectKey ? newThreadShortcutLabel : null
+                }
                 handleNewThread={handleNewThread}
                 navigateToThread={navigateToThread}
                 archiveThread={archiveThread}

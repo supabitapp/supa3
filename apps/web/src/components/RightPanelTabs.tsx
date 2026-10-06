@@ -61,6 +61,7 @@ import { useBrowserDefaults } from "~/browser/browserDefaults";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { faviconUrlForOrigin } from "~/lib/favicon";
+import { useShortcutLabel } from "~/hooks/useShortcutLabel";
 import { useTheme } from "~/hooks/useTheme";
 import { useDeviceState } from "~/state/device";
 import type { PreviewPanelInlineSize } from "~/hooks/usePreviewPanelInlineSize";
@@ -792,6 +793,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
+  const closeTabShortcut = useShortcutLabel("rightPanel.close");
   const tabListRef = useRef<HTMLDivElement>(null);
   const [renamingDevice, setRenamingDevice] = useState<string | null>(null);
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
@@ -1116,6 +1118,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   <PanelTabCloseButton
                     label={`Close ${title}`}
                     onClick={() => props.onCloseSurface(surface)}
+                    tooltip="Close tab"
+                    shortcut={active ? closeTabShortcut : null}
                   >
                     <SurfaceIcon
                       surface={surface}

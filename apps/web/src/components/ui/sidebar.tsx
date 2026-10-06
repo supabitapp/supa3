@@ -6,6 +6,7 @@ import * as React from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { Input, type InputProps } from "~/components/ui/input";
+import { Kbd } from "~/components/ui/kbd";
 import { MorphIcon } from "~/components/MorphIcon";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import {
@@ -668,7 +669,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full cursor-pointer items-center gap-[var(--sidebar-control-gap)] overflow-hidden text-left outline-hidden ring-ring transition-[width,height,padding] hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 active:bg-sidebar-row-active active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-64 aria-disabled:pointer-events-none aria-disabled:opacity-64 data-[active=true]:bg-sidebar-row-selected data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground data-[state=open]:hover:bg-sidebar-row-hover data-[state=open]:hover:text-sidebar-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-[var(--sidebar-content-inset)]! [&>span:last-child]:truncate [&>svg:not([class*='size-'])]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--sidebar-icon-color)] hover:[&>svg]:text-sidebar-foreground active:[&>svg]:text-sidebar-foreground data-[active=true]:[&>svg]:text-sidebar-foreground",
+  "peer/menu-button flex w-full cursor-pointer items-center gap-[var(--sidebar-control-gap)] overflow-hidden text-left outline-hidden ring-ring transition-[width,height,padding] hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 active:bg-sidebar-row-active active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-64 aria-disabled:pointer-events-none aria-disabled:opacity-64 data-[active=true]:bg-sidebar-row-selected data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground data-[state=open]:hover:bg-sidebar-row-hover data-[state=open]:hover:text-sidebar-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-[var(--sidebar-content-inset)]! [&>span:last-of-type]:truncate [&>svg:not([class*='size-'])]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--sidebar-icon-color)] hover:[&>svg]:text-sidebar-foreground active:[&>svg]:text-sidebar-foreground data-[active=true]:[&>svg]:text-sidebar-foreground",
   {
     compoundVariants: [{ size: "compact", variant: "default", class: "font-normal" }],
     defaultVariants: {
@@ -698,12 +699,16 @@ function SidebarMenuButton({
   variant = "default",
   size = "default",
   tooltip,
+  shortcut,
   className,
   render,
+  children,
   ...props
 }: useRender.ComponentProps<"button"> & {
   isActive?: boolean;
   tooltip?: string | React.ComponentProps<typeof TooltipPopup>;
+  /** Shortcut label for the row's action. Touch layouts and disabled rows omit it. */
+  shortcut?: string | null | undefined;
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar();
 
@@ -715,7 +720,25 @@ function SidebarMenuButton({
     "data-slot": "sidebar-menu-button",
   };
 
-  const buttonProps = mergeProps<"button">(defaultProps, props);
+  const buttonProps = mergeProps<"button">(defaultProps, {
+    ...props,
+    children:
+      shortcut && !isMobile && !props.disabled ? (
+        <>
+          {children}
+          <Kbd
+            variant="raised"
+            className="ms-auto text-sidebar-muted-foreground opacity-0 transition-opacity group-hover/menu-item:opacity-100 in-focus-visible:opacity-100"
+            data-sidebar="menu-shortcut"
+            aria-hidden
+          >
+            {shortcut}
+          </Kbd>
+        </>
+      ) : (
+        children
+      ),
+  });
 
   const buttonElement = useRender({
     defaultTagName: "button",

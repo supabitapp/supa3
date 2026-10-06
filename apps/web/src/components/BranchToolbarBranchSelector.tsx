@@ -25,6 +25,7 @@ import {
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { readLocalApi } from "../localApi";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { usePaginatedBranches } from "../state/queries";
@@ -63,6 +64,7 @@ import {
 import { ComboboxItem, ComboboxTrigger } from "./ui/combobox";
 import { ComposerControl } from "./chat/ComposerControl";
 import { MiddleTruncate } from "./ui/middle-truncate";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { BranchPicker, BranchPickerRefItem } from "./BranchPicker";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
@@ -110,6 +112,7 @@ export function BranchToolbarBranchSelector({
   onComposerFocusRequest,
 }: BranchToolbarBranchSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
+  const branchShortcut = useShortcutLabel(displayMode === "toolbar" ? "composer.branch" : null);
   const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, "thread session stop");
   const updateThreadMetadata = useAtomCommand(
     threadEnvironment.updateMetadata,
@@ -718,34 +721,45 @@ export function BranchToolbarBranchSelector({
           }}
           onContextMenu={(event) => handleBranchContextMenu(event, resolvedActiveBranch)}
         >
-          <ComboboxTrigger
-            render={
-              displayMode === "panel" ? (
-                <ThreadDetailsControl part="select" />
+          <Tooltip disabled={displayMode === "panel"}>
+            <TooltipTrigger
+              render={
+                <ComboboxTrigger
+                  render={
+                    displayMode === "panel" ? (
+                      <ThreadDetailsControl part="select" />
+                    ) : (
+                      <ComposerControl size="xs" />
+                    )
+                  }
+                  className="min-w-0 max-w-full active:scale-100"
+                  disabled={isInitialBranchesLoadPending || isBranchActionPending}
+                />
+              }
+            >
+              <GitBranchIcon
+                className={cn(
+                  "size-3 shrink-0 opacity-70",
+                  displayMode === "panel" && THREAD_DETAILS_PANEL_ICON_CLASS,
+                )}
+              />
+              <ComposerContextLabel displayMode={displayMode}>
+                <MiddleTruncate
+                  value={triggerLabel}
+                  showTitle={displayMode === "panel"}
+                  className="w-full"
+                />
+              </ComposerContextLabel>
+              {displayMode === "panel" ? (
+                <span data-slot="select-icon">
+                  <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
+                </span>
               ) : (
-                <ComposerControl size="xs" />
-              )
-            }
-            className="min-w-0 max-w-full active:scale-100"
-            disabled={isInitialBranchesLoadPending || isBranchActionPending}
-          >
-            <GitBranchIcon
-              className={cn(
-                "size-3 shrink-0 opacity-70",
-                displayMode === "panel" && THREAD_DETAILS_PANEL_ICON_CLASS,
+                <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
               )}
-            />
-            <ComposerContextLabel displayMode={displayMode}>
-              <MiddleTruncate value={triggerLabel} className="w-full" />
-            </ComposerContextLabel>
-            {displayMode === "panel" ? (
-              <span data-slot="select-icon">
-                <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
-              </span>
-            ) : (
-              <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-            )}
-          </ComboboxTrigger>
+            </TooltipTrigger>
+            <TooltipPopup shortcut={branchShortcut}>{triggerLabel}</TooltipPopup>
+          </Tooltip>
         </span>
         {displayMode === "panel" && prNumber !== undefined && prUrl !== undefined ? (
           <ThreadDetailsPrRows

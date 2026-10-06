@@ -100,6 +100,7 @@ export function InlineConfirmTooltip({
   render,
   tip,
   armedTip,
+  shortcut,
   side = "top",
   children,
 }: {
@@ -108,6 +109,8 @@ export function InlineConfirmTooltip({
   render: ComponentProps<typeof TooltipTrigger>["render"];
   tip: ReactNode;
   armedTip: ReactNode;
+  /** The key for the unarmed action; the armed confirmation shows none. */
+  shortcut?: string | null | undefined;
   side?: ComponentProps<typeof TooltipPopup>["side"];
   children?: ReactNode;
 }) {
@@ -116,7 +119,7 @@ export function InlineConfirmTooltip({
       <TooltipTrigger closeOnClick={armed || !required} render={render}>
         {children}
       </TooltipTrigger>
-      <TooltipPopup key={armed ? "armed" : "idle"} side={side}>
+      <TooltipPopup key={armed ? "armed" : "idle"} side={side} shortcut={armed ? null : shortcut}>
         {armed ? armedTip : tip}
       </TooltipPopup>
     </Tooltip>

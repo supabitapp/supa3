@@ -23,6 +23,7 @@ import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { Button } from "~/components/ui/button";
 import { toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useShortcutLabel } from "~/hooks/useShortcutLabel";
 import { cn } from "~/lib/utils";
 import { useThreadPreviewState } from "~/previewStateStore";
 import {
@@ -109,6 +110,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
     recordingTabIds.has(runtimeTabId) ||
     findActiveBrowserRecordingRuntimeTabId(threadRef, tabId) !== null;
   const desktopOverlay = previewState.desktopByTabId[tabId] ?? null;
+  const togglePreviewShortcut = useShortcutLabel("preview.toggle");
   const fittedSourceContent = useBrowserSurfaceStore(
     (state) => state.byTabId[runtimeTabId]?.fittedSourceContent ?? null,
   );
@@ -147,6 +149,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
       label="Floating browser preview"
       recording={recording}
       onOpenInPanel={openInPanel}
+      openInPanelShortcut={togglePreviewShortcut}
       pillActions={
         <Tooltip>
           <TooltipTrigger
@@ -267,6 +270,7 @@ function MiniPlayerShell({
   sourceSize,
   label,
   onOpenInPanel,
+  openInPanelShortcut,
   pillActions,
   recording = false,
   cornerRadius = frameCornerRadius,
@@ -277,6 +281,8 @@ function MiniPlayerShell({
   readonly sourceSize: PreviewMiniPlayerSize;
   readonly label: string;
   readonly onOpenInPanel: () => void;
+  /** Only the browser source docks the way the preview toggle shortcut does. */
+  readonly openInPanelShortcut?: string | null;
   readonly pillActions?: ReactNode;
   readonly recording?: boolean;
   /** The clip radius for a given frame; the pill stays inside the curve. */
@@ -431,7 +437,9 @@ function MiniPlayerShell({
                 >
                   <PanelRightIcon />
                 </TooltipTrigger>
-                <TooltipPopup side="top">Open in right panel</TooltipPopup>
+                <TooltipPopup side="top" shortcut={openInPanelShortcut}>
+                  Open in right panel
+                </TooltipPopup>
               </Tooltip>
               {pillActions}
               <Tooltip>

@@ -7313,29 +7313,40 @@ export default function ChatView(props: ChatViewProps) {
       return null;
     }
     const isSnoozed = activeThreadSnoozed;
+    const unsettleShortcut = isSnoozed
+      ? null
+      : shortcutLabelForCommand(keybindings, "thread.settle");
+    const action = (
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={isSnoozed ? isUnsnoozing : isUnsettling}
+        onClick={() =>
+          void (isSnoozed ? handleUnsnoozeActiveThread() : handleUnsettleActiveThread())
+        }
+      >
+        {isSnoozed
+          ? isUnsnoozing
+            ? "Waking..."
+            : "Wake now"
+          : isUnsettling
+            ? "Un-settling..."
+            : "Un-settle"}
+      </Button>
+    );
     return {
       id: `thread-${isSnoozed ? "snoozed" : "settled"}:${activeThread?.id ?? "unknown"}`,
       variant: "info",
       icon: isSnoozed ? <AlarmClockIcon /> : <CheckCircle2Icon />,
       title: `This thread is ${isSnoozed ? "snoozed" : "settled"}`,
       description: `Send a message to ${isSnoozed ? "wake" : "unsettle"}`,
-      actions: (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={isSnoozed ? isUnsnoozing : isUnsettling}
-          onClick={() =>
-            void (isSnoozed ? handleUnsnoozeActiveThread() : handleUnsettleActiveThread())
-          }
-        >
-          {isSnoozed
-            ? isUnsnoozing
-              ? "Waking..."
-              : "Wake now"
-            : isUnsettling
-              ? "Un-settling..."
-              : "Un-settle"}
-        </Button>
+      actions: unsettleShortcut ? (
+        <Tooltip>
+          <TooltipTrigger render={action} />
+          <TooltipPopup shortcut={unsettleShortcut}>Un-settle thread</TooltipPopup>
+        </Tooltip>
+      ) : (
+        action
       ),
     };
   }, [
@@ -7346,6 +7357,7 @@ export default function ChatView(props: ChatViewProps) {
     handleUnsettleActiveThread,
     isUnsnoozing,
     isUnsettling,
+    keybindings,
   ]);
   // Session-scoped dismissals, one key per (thread, snapshot). A set rather
   // than a single slot so dismissing the banner on one thread does not

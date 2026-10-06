@@ -48,7 +48,7 @@ interface ShortcutMatchOptions {
   context?: Partial<ShortcutMatchContext>;
 }
 
-interface ResolvedShortcutLabelOptions extends ShortcutMatchOptions {
+export interface ResolvedShortcutLabelOptions extends ShortcutMatchOptions {
   platform?: string;
 }
 

@@ -440,8 +440,14 @@ export function QueuedRunsControl({
                           >
                             <PencilIcon />
                           </TooltipTrigger>
-                          <TooltipPopup>
-                            {`Edit in the composer${item.serverIndex === queued.length - 1 && props.editShortcutLabel ? ` (${props.editShortcutLabel})` : ""}`}
+                          <TooltipPopup
+                            shortcut={
+                              item.serverIndex === queued.length - 1
+                                ? props.editShortcutLabel
+                                : null
+                            }
+                          >
+                            Edit in the composer
                           </TooltipPopup>
                         </Tooltip>
                         <Tooltip>
@@ -464,10 +470,16 @@ export function QueuedRunsControl({
                               Steer
                             </Button>
                           </TooltipTrigger>
-                          <TooltipPopup>
+                          <TooltipPopup
+                            shortcut={
+                              activeRun !== null && item.serverIndex === 0
+                                ? props.steerShortcutLabel
+                                : null
+                            }
+                          >
                             {activeRun === null
                               ? "There is no active run to steer"
-                              : `Send as a steer instead${item.serverIndex === 0 && props.steerShortcutLabel ? ` (${props.steerShortcutLabel})` : ""}`}
+                              : "Send as a steer instead"}
                           </TooltipPopup>
                         </Tooltip>
                         <InlineConfirmButton

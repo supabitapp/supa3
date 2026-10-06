@@ -1085,6 +1085,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // the user visits the thread.
   wokeAt: string | null;
   isActive: boolean;
+  // The pin and settle shortcuts act on the active thread, so only its row receives them.
+  pinShortcut: string | null;
+  settleShortcut: string | null;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
   currentEnvironmentId: string | null;
@@ -1706,7 +1709,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
     props.pinningSupported && !sortable?.isDragging ? (
-      <SidebarPinButton pinned onPin={handlePin} onUnpin={handleUnpin} />
+      <SidebarPinButton
+        pinned
+        shortcut={props.pinShortcut}
+        onPin={handlePin}
+        onUnpin={handleUnpin}
+      />
     ) : (
       <PinIcon
         aria-label="Pinned"
@@ -1839,7 +1847,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       <AlarmClockOffIcon className="mb-px size-3" />
                     </button>
                   )
-                ) : !settlementSupported ? null : variantAction === "unsettle" ? (
+                ) : !settlementSupported ? null : (
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -1856,20 +1864,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     >
                       <Undo2Icon className="mb-px size-3.5" />
                     </TooltipTrigger>
-                    <TooltipPopup side="top">Un-settle thread</TooltipPopup>
+                    <TooltipPopup side="top" shortcut={props.settleShortcut}>
+                      Un-settle thread
+                    </TooltipPopup>
                   </Tooltip>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label="Settle thread"
-                    onClick={handleSettleClick}
-                    onPointerDown={handleActionPointerDown}
-                    className={cn(
-                      "pointer-events-none absolute inset-y-0 right-0 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
-                    )}
-                  >
-                    <CheckIcon className="size-3" />
-                  </button>
                 )}
               </span>
             )}
@@ -1977,6 +1975,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   {props.pinningSupported && !isPendingCreation ? (
                     <SidebarPinButton
                       pinned={props.isPinned}
+                      shortcut={props.pinShortcut}
                       onPin={handlePin}
                       onUnpin={handleUnpin}
                     />
@@ -2004,7 +2003,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         <CheckIcon aria-hidden className="size-3.5" />
                         Settle
                       </TooltipTrigger>
-                      <TooltipPopup>Settle thread</TooltipPopup>
+                      <TooltipPopup shortcut={props.settleShortcut}>Settle thread</TooltipPopup>
                     </Tooltip>
                   ) : null}
                 </span>
@@ -2800,6 +2799,8 @@ export default function Sidebar() {
     snoozedThreadKeysRef.current = snoozedThreadKeys;
   });
 
+  const pinShortcut = shortcutLabelForCommand(keybindings, "thread.pin");
+  const settleShortcut = shortcutLabelForCommand(keybindings, "thread.settle");
   const jumpLabelByKey = useMemo(() => {
     const mapping = new Map<string, string>();
     for (const [index, threadKey] of orderedThreadKeys.entries()) {
@@ -4649,6 +4650,7 @@ export default function Sidebar() {
                       const threadKey = scopedThreadKey(
                         scopeThreadRef(thread.environmentId, thread.id),
                       );
+                      const isActive = routeThreadKey === threadKey;
                       return (
                         <SidebarThreadRow
                           key={threadKey}
@@ -4696,7 +4698,9 @@ export default function Sidebar() {
                           // the wake signal must survive the trip. Still-snoozed
                           // rows resolve to null on their own.
                           wokeAt={threadWokeAt(thread, { now: snoozeNow })}
-                          isActive={routeThreadKey === threadKey}
+                          isActive={isActive}
+                          pinShortcut={isActive ? pinShortcut : null}
+                          settleShortcut={isActive ? settleShortcut : null}
                           openPullRequestsInRightPanel={routeThreadRef !== null}
                           jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
                           currentEnvironmentId={primaryEnvironmentId}

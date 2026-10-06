@@ -4,6 +4,7 @@ import { shortcutLabelForCommand } from "../../keybindings";
 import { commandForProjectScript } from "../../projectScripts";
 import { ScriptIcon } from "../projectScriptEditor";
 import { Button } from "../ui/button";
+import { Kbd } from "../ui/kbd";
 import { SettingsRow } from "./settingsLayout";
 
 export function ProjectActionsList({
@@ -48,9 +49,7 @@ export function ProjectActionsList({
         description={<code className="block max-w-full truncate font-mono">{script.command}</code>}
         control={
           <>
-            {shortcutLabel ? (
-              <span className="text-xs text-muted-foreground">{shortcutLabel}</span>
-            ) : null}
+            {shortcutLabel ? <Kbd>{shortcutLabel}</Kbd> : null}
             <span className="flex shrink-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
               <Button
                 size="icon-xs"
