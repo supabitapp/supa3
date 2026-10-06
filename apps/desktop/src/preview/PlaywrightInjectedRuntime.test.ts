@@ -1,6 +1,14 @@
+// @effect-diagnostics nodeBuiltinImport:off -- The packaging probe copies the installed dependency into an isolated temporary directory.
+import * as NodeFSP from "node:fs/promises";
+import * as NodeModule from "node:module";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { describe, expect } from "vite-plus/test";
+
+import { DESKTOP_RUNTIME_FILE_EXCLUSIONS } from "../../../../scripts/lib/desktop-external-packages.ts";
 
 import {
   extractPlaywrightInjectedRuntimeSource,
@@ -12,6 +20,46 @@ const bundleWithSourceLiteral = (literal: string): string =>
   `const source3 = ${literal};\n  }\n});`;
 
 describe("playwright injected runtime", () => {
+  effectIt.effect("extracts the runtime with only the packaged Playwright files available", () =>
+    Effect.gen(function* () {
+      const scratch = yield* Effect.acquireRelease(
+        Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "supacode-playwright-package-")),
+        ),
+        (directory) =>
+          Effect.promise(() => NodeFSP.rm(directory, { recursive: true, force: true })),
+      );
+      const require = NodeModule.createRequire(import.meta.url);
+      const source = NodePath.dirname(require.resolve("playwright-core/package.json"));
+      const target = NodePath.join(scratch, "node_modules/playwright-core");
+      yield* Effect.promise(() =>
+        NodeFSP.cp(source, target, {
+          recursive: true,
+          filter: (entry) =>
+            entry === source ||
+            !DESKTOP_RUNTIME_FILE_EXCLUSIONS.some((pattern) =>
+              NodePath.matchesGlob(
+                `node_modules/playwright-core/${NodePath.relative(source, entry).replaceAll("\\", "/")}`,
+                pattern.slice(1),
+              ),
+            ),
+        }),
+      );
+      const packagedRequire = NodeModule.createRequire(NodePath.join(scratch, "probe.cjs"));
+      const packageJsonPath = packagedRequire.resolve("playwright-core/package.json");
+      const bundlePath = NodePath.join(NodePath.dirname(packageJsonPath), "lib/coreBundle.js");
+      const coreBundle = yield* Effect.promise(() => NodeFSP.readFile(bundlePath, "utf8"));
+      const runtime = yield* extractPlaywrightInjectedRuntimeSource(coreBundle, bundlePath);
+      expect(runtime).toContain("InjectedScript");
+      expect(yield* Effect.promise(() => NodeFSP.readdir(target))).toContain(
+        "ThirdPartyNotices.txt",
+      );
+      expect(yield* Effect.promise(() => NodeFSP.readdir(NodePath.join(target, "lib")))).toEqual([
+        "coreBundle.js",
+      ]);
+    }).pipe(Effect.scoped),
+  );
+
   effectIt.effect("extracts the pinned runtime from playwright-core", () =>
     Effect.gen(function* () {
       const source = yield* playwrightInjectedRuntimeSource();

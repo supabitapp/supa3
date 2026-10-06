@@ -13,6 +13,7 @@ import { WeightedShardSequencer } from "./src/testUtils/weightedShardSequencer.t
 // Inverted here — bundle everything except the packages that genuinely cannot be
 // inlined. See scripts/lib/cli-external-packages.ts for what earns an exemption.
 import {
+  cliBundleModulesPlugin,
   isExternalCliDependency,
   shouldBundleCliDependency,
 } from "../../scripts/lib/cli-external-packages.ts";
@@ -74,6 +75,9 @@ export default mergeConfig(
       entry: packExecutable ? ["src/bin.ts"] : ["src/bin.ts", "src/claude-history-worker.ts"],
       outDir: packExecutable ? "dist-exe" : "dist",
       sourcemap: !packExecutable,
+      minify: true,
+      outputOptions: { keepNames: true },
+      plugins: packExecutable ? [] : [cliBundleModulesPlugin()],
       clean: true,
       ...(packExecutable
         ? {

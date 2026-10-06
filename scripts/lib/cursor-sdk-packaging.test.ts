@@ -11,7 +11,11 @@ import * as Schema from "effect/Schema";
 import { build } from "vite-plus/pack";
 
 import serverPackage from "../../apps/server/package.json" with { type: "json" };
+import { DESKTOP_RUNTIME_FILE_EXCLUSIONS } from "./desktop-external-packages.ts";
 import {
+  CLI_BUNDLE_MODULES_FILE_NAME,
+  cliBundleModulesPlugin,
+  findInlinedExternalPackages,
   isExternalCliDependency,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
@@ -26,6 +30,10 @@ const decodeManifest = Schema.decodeUnknownSync(
       peerDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
     }),
   ),
+);
+
+const decodeBundleModules = Schema.decodeSync(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Array(Schema.String))),
 );
 
 const repoRoot = NodeURL.fileURLToPath(new URL("../..", import.meta.url));
@@ -57,7 +65,14 @@ async function stagePackage(name: string, from: string, destination: string): Pr
   await NodeFSP.mkdir(NodePath.dirname(target), { recursive: true });
   await NodeFSP.cp(source, target, {
     recursive: true,
-    filter: (entry) => NodePath.basename(entry) !== "node_modules",
+    filter: (entry) =>
+      NodePath.basename(entry) !== "node_modules" &&
+      !DESKTOP_RUNTIME_FILE_EXCLUSIONS.some((pattern) =>
+        NodePath.matchesGlob(
+          `node_modules/${name}/${NodePath.relative(source, entry).replaceAll("\\", "/")}`,
+          pattern.slice(1),
+        ),
+      ),
   });
   const dependencies = { ...manifest.dependencies, ...manifest.peerDependencies };
   for (const dependency of Object.keys(dependencies)) {
@@ -80,6 +95,10 @@ it("loads packaged Cursor catalog chunks without credentials or checkout depende
       `
       import assert from 'node:assert/strict';
       import { Cursor } from ${JSON.stringify(NodePath.join(repoRoot, "apps/server/src/provider/cursorSdk.ts"))};
+      function preservedFunctionName() { return preservedFunctionName.name; }
+      class PreservedErrorName extends Error {}
+      assert.equal(preservedFunctionName(), 'preservedFunctionName');
+      assert.equal(new PreservedErrorName().constructor.name, 'PreservedErrorName');
       for (const [operation, request] of [
         ['Cursor.models.list', () => Cursor.models.list({ apiKey: '' })],
         ['Cursor.me', () => Cursor.me({ apiKey: '' })],
@@ -101,6 +120,9 @@ it("loads packaged Cursor catalog chunks without credentials or checkout depende
       platform: "node",
       format: "esm",
       dts: false,
+      minify: true,
+      outputOptions: { keepNames: true },
+      plugins: [cliBundleModulesPlugin()],
       logLevel: "error",
       deps: {
         alwaysBundle: shouldBundleCliDependency,
@@ -115,6 +137,12 @@ it("loads packaged Cursor catalog chunks without credentials or checkout depende
       await stagePackage(name, NodePath.join(repoRoot, "apps/server/package.json"), output);
     }
     const probe = NodePath.join(output, "probe.mjs");
+    const modulesByChunk = decodeBundleModules(
+      await NodeFSP.readFile(NodePath.join(output, CLI_BUNDLE_MODULES_FILE_NAME), "utf8"),
+    );
+    const scan = findInlinedExternalPackages(modulesByChunk["probe.mjs"] ?? []);
+    assert.isAbove(scan.moduleCount, 0);
+    assert.deepEqual(scan.inlined, []);
     assert.deepEqual(findEsmImportsOfExternalPackages(await NodeFSP.readFile(probe, "utf8")), []);
     const stdout = NodeChildProcess.execFileSync(
       process.execPath,

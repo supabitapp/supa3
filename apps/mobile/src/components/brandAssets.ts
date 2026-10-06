@@ -1,6 +1,4 @@
-import Constants from "expo-constants";
-
-const appVariant = Constants.expoConfig?.extra?.appVariant;
+const appVariant = process.env.EXPO_PUBLIC_APP_VARIANT;
 
 export const SUPACODE_BRAND_MARK_SOURCE =
   appVariant === "development"

@@ -1,3 +1,27 @@
+import type { Plugin } from "vite-plus";
+
+export const CLI_BUNDLE_MODULES_FILE_NAME = "bundle-modules.json";
+
+/** Emit module ownership so packaged bundle checks survive minification. */
+export function cliBundleModulesPlugin(): Plugin {
+  return {
+    name: "supacode-cli-bundle-modules",
+    generateBundle(_options, bundle) {
+      this.emitFile({
+        type: "asset",
+        fileName: CLI_BUNDLE_MODULES_FILE_NAME,
+        source: JSON.stringify(
+          Object.fromEntries(
+            Object.values(bundle)
+              .filter((output) => output.type === "chunk")
+              .map((chunk) => [chunk.fileName, chunk.moduleIds]),
+          ),
+        ),
+      });
+    },
+  };
+}
+
 /**
  * The single source of truth for packages the server CLI bundle must NOT inline.
  *
@@ -98,7 +122,7 @@ export function selectCliRuntimeExternalDependencies(
 }
 
 /**
- * Scan an emitted bundle chunk for runtime-external packages that were inlined.
+ * Scan an emitted chunk's module IDs for runtime-external packages that were inlined.
  *
  * Configuring the bundler is not the same as checking what it produced. The
  * `alwaysBundle` predicate only forces packages IN; returning false from it
@@ -108,32 +132,26 @@ export function selectCliRuntimeExternalDependencies(
  * way while every list-based test passed, which is why this reads the artifact
  * instead.
  *
- * `regionCount` is reported so the caller can tell "nothing was inlined" apart
- * from "the marker format changed and this scan no longer sees anything".
+ * `moduleCount` lets the caller reject missing or empty bundle metadata.
  *
- * `inlinedPackages` is every package seen in a region, which lets the caller
+ * `inlinedPackages` is every package found in the metadata, which lets the caller
  * check the opposite direction too. Verifying only that externals are absent
  * would still pass if the bundler reverted to leaving everything external: the
- * scan would see source-file regions, report nothing inlined, and the packaged
+ * scan would see application module IDs, report nothing inlined, and the packaged
  * backends would then fail with ERR_MODULE_NOT_FOUND because those packages
  * are not in the selected sidecar closure either.
  */
-export function findInlinedExternalPackages(source: string): {
-  readonly regionCount: number;
+export function findInlinedExternalPackages(moduleIds: ReadonlyArray<string>): {
+  readonly moduleCount: number;
   readonly inlined: ReadonlyArray<string>;
   readonly inlinedPackages: ReadonlyArray<string>;
 } {
-  // Rolldown marks each inlined module with a `//#region <path>` comment.
-  const regionPattern = /\/\/#region\s+(\S+)/g;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;
 
-  let regionCount = 0;
   const inlined = new Set<string>();
   const inlinedPackages = new Set<string>();
-  for (const region of source.matchAll(regionPattern)) {
-    regionCount += 1;
-    const regionPath = region[1] ?? "";
-    for (const candidate of regionPath.matchAll(packagePattern)) {
+  for (const moduleId of moduleIds) {
+    for (const candidate of moduleId.replaceAll("\\", "/").matchAll(packagePattern)) {
       const name = candidate[1];
       if (name === undefined || name === ".pnpm") continue;
       inlinedPackages.add(name);
@@ -142,7 +160,7 @@ export function findInlinedExternalPackages(source: string): {
   }
 
   return {
-    regionCount,
+    moduleCount: moduleIds.length,
     inlined: [...inlined].sort(),
     inlinedPackages: [...inlinedPackages].sort(),
   };
