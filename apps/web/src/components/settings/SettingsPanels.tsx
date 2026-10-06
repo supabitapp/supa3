@@ -62,7 +62,7 @@ import {
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import {
-  resolveEnvironmentIdentificationPillLabel,
+  resolveEnvironmentIdentificationModes,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { isElectron } from "../../env";
@@ -1090,8 +1090,11 @@ export function AppearanceSettingsPanel() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const environmentStageLabel = useEnvironmentStageLabel();
-  const showEnvironmentIdentification =
-    resolveEnvironmentIdentificationPillLabel(environmentStageLabel) !== null;
+  const environmentIdentificationModes =
+    resolveEnvironmentIdentificationModes(environmentStageLabel);
+  const environmentIdentificationDescription = environmentIdentificationModes.includes("pill")
+    ? "Choose how Dev and Nightly environments are identified."
+    : "Choose whether artwork appears in the sidebar.";
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
   const glassOpacitySliderStyle = {
@@ -1228,10 +1231,10 @@ export function AppearanceSettingsPanel() {
           }
         />
 
-        {showEnvironmentIdentification ? (
+        {environmentIdentificationModes.length > 1 ? (
           <SettingsRow
             {...searchableSetting("environment-identification")}
-            description="Choose how Dev and Nightly environments are identified."
+            description={environmentIdentificationDescription}
             resetAction={
               settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
                 <SettingResetButton
@@ -1263,9 +1266,9 @@ export function AppearanceSettingsPanel() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
-                    <SelectItem hideIndicator key={value} value={value}>
-                      {label}
+                  {environmentIdentificationModes.map((mode) => (
+                    <SelectItem hideIndicator key={mode} value={mode}>
+                      {ENVIRONMENT_IDENTIFICATION_LABELS[mode]}
                     </SelectItem>
                   ))}
                 </SelectPopup>

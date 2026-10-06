@@ -37,10 +37,10 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }) {
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const backdropVariant = resolveSidebarStageBackdropVariant(
-    stageLabel,
-    environmentIdentificationMode === "artwork",
-  );
+  const backdropVariant =
+    environmentIdentificationMode === "artwork"
+      ? resolveSidebarStageBackdropVariant(stageLabel)
+      : null;
   const pillLabel =
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)

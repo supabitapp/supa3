@@ -2,17 +2,25 @@ import { describe, expect, it } from "vite-plus/test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  resolveEnvironmentIdentificationModes,
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
   StageBackdropArt,
 } from "./SidebarStageBackdrop";
 
 describe("SidebarStageBackdrop", () => {
-  it("resolves stage artwork only when enabled", () => {
+  it("resolves stage artwork per channel", () => {
     expect(resolveSidebarStageBackdropVariant("Dev")).toBe("dev");
     expect(resolveSidebarStageBackdropVariant("Nightly")).toBe("nightly");
-    expect(resolveSidebarStageBackdropVariant("Dev", false)).toBeNull();
-    expect(resolveSidebarStageBackdropVariant(null)).toBeNull();
+    expect(resolveSidebarStageBackdropVariant("Latest")).toBe("release");
+    expect(resolveSidebarStageBackdropVariant(null)).toBe("release");
+    expect(resolveSidebarStageBackdropVariant("Preview")).toBeNull();
+  });
+
+  it("offers only the identification modes that change something", () => {
+    expect(resolveEnvironmentIdentificationModes("Dev")).toEqual(["artwork", "pill", "none"]);
+    expect(resolveEnvironmentIdentificationModes(null)).toEqual(["artwork", "none"]);
+    expect(resolveEnvironmentIdentificationModes("Preview")).toEqual(["none"]);
   });
 
   it("resolves supported environment pill labels", () => {
@@ -22,7 +30,7 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveEnvironmentIdentificationPillLabel(null)).toBeNull();
   });
 
-  it.each(["nightly", "dev"] as const)(
+  it.each(["nightly", "dev", "release"] as const)(
     "uses unique SVG definition ids when %s artwork is rendered more than once",
     (variant) => {
       const markup = renderToStaticMarkup(
