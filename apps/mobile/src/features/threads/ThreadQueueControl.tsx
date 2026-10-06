@@ -38,6 +38,7 @@ import {
   resolveThreadQueueRowControls,
 } from "./threadQueueControlPresentation";
 import { threadDragGapOffset } from "./threadDragGap";
+import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 const REMOVE_ACTION_WIDTH = 76;
@@ -77,6 +78,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
     rows: ReadonlyArray<QueueRowLayout>;
   } | null>(null);
   const [translation] = useState(() => new Animated.Value(0));
+  const reducedMotion = useReducedMotionPreference();
   const queuedRuns = workflow?.queuedRuns ?? [];
   const order = queuedRuns.map(({ run }) => run.id).join(",");
 
@@ -308,11 +310,15 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                       source.height !== undefined &&
                       insertion !== undefined
                     ) {
-                      Animated.timing(translation, {
-                        toValue: insertion - source.y - (insertion > source.y ? source.height : 0),
-                        duration: 160,
-                        useNativeDriver: true,
-                      }).start();
+                      const offset =
+                        insertion - source.y - (insertion > source.y ? source.height : 0);
+                      if (reducedMotion) translation.setValue(offset);
+                      else
+                        Animated.timing(translation, {
+                          toValue: offset,
+                          duration: 160,
+                          useNativeDriver: true,
+                        }).start();
                     }
                     setPreviewBeforeRunId(before);
                     void move(run.id, before).finally(stop);

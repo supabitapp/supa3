@@ -1,6 +1,9 @@
 import { useThreadListV2Layout } from "../threads/use-thread-list-v2-layout";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
-import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
+import { type LegendListRef } from "@legendapp/list/react-native";
+import { AnimatedLegendList } from "@legendapp/list/reanimated";
+import Animated from "react-native-reanimated";
+import { useThreadListMotion } from "../threads/use-thread-list-motion";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
@@ -598,7 +601,14 @@ export function HomeScreen(props: HomeScreenProps) {
     if (swipeEnabled) activateVisibleRows(threadListV2Items);
   }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
 
-  const renderV2Item = useCallback(
+  const listMotion = useThreadListMotion({
+    items: threadListV2Items,
+    scope: settledResetKey,
+    searching: hasSearchQuery,
+    scrolling: !swipeEnabled,
+    ready: shelfPreferencesLoaded && !props.catalogState.isLoadingConnections,
+  });
+  const renderV2ItemContent = useCallback(
     ({ item }: { readonly item: ThreadListV2ListItem }) => {
       if (item.type === "v2-pending") {
         const pendingScopeKey = scopedProjectKey(
@@ -768,6 +778,19 @@ export function HomeScreen(props: HomeScreenProps) {
     ],
   );
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
+  const renderV2Item = useCallback(
+    (itemProps: Parameters<typeof renderV2ItemContent>[0]) => (
+      <Animated.View
+        key={itemProps.item.key}
+        collapsable={false}
+        entering={listMotion.entering}
+        exiting={listMotion.exiting}
+      >
+        {renderV2ItemContent(itemProps)}
+      </Animated.View>
+    ),
+    [listMotion, renderV2ItemContent],
+  );
 
   // FlatList/LegendList treat a changed extraData identity as "re-render every
   // visible row", so an inline object literal would invalidate all rows on
@@ -916,7 +939,7 @@ export function HomeScreen(props: HomeScreenProps) {
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
         <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
-          <LegendList
+          <AnimatedLegendList
             ref={listRef}
             onLoad={() => activateVisibleRows(threadListV2Items)}
             onTouchStart={(event) => trackListTouches(event, true)}
@@ -930,6 +953,7 @@ export function HomeScreen(props: HomeScreenProps) {
             estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
             drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
             recycleItems
+            itemLayoutAnimation={listMotion.layout}
             extraData={v2ExtraData}
             ListHeaderComponent={v2ListHeader}
             ListFooterComponent={

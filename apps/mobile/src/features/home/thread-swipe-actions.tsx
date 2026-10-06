@@ -42,6 +42,7 @@ import Animated, {
 import { AppText as Text } from "../../components/AppText";
 import { SwipeRowActivationContext, type SwipeRowActivation } from "./swipe-row-activation";
 import { registerThreadDismissal } from "./thread-dismissal";
+import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
 
 // Wide enough for the longest action label ("Unarchive").
 const ACTION_ITEM_WIDTH = 58;
@@ -295,6 +296,7 @@ export function ThreadSwipeable(props: ThreadSwipeableProps) {
 }
 
 function ThreadSwipeableRow(props: ThreadSwipeableProps) {
+  const reducedMotion = useReducedMotionPreference();
   const swipeableRef = useRef<SwipeableMethods | null>(null);
   const fullSwipeArmedRef = useRef(false);
   const hasSecondaryAction = props.secondaryAction !== null;
@@ -356,22 +358,18 @@ function ThreadSwipeableRow(props: ThreadSwipeableProps) {
       const timing = {
         duration: 220,
         easing: Easing.out(Easing.cubic),
-        reduceMotion: ReduceMotion.System,
+        reduceMotion: reducedMotion ? ReduceMotion.Always : ReduceMotion.Never,
       };
       actionOpacity.set(withTiming(0, timing));
       // Never reverse a swipe that already carried the row beyond its width.
-      translation.set(
-        withTiming(Math.min(translation.value, -rowWidth.value), timing, (finished) => {
-          if (!finished) return;
-          collapse.set(
-            withTiming(1, { ...timing, duration: 180 }, (collapsed) => {
-              if (collapsed) runOnJS(finishDismiss)();
-            }),
-          );
+      translation.set(withTiming(Math.min(translation.value, -rowWidth.value), timing));
+      collapse.set(
+        withTiming(1, timing, (finished) => {
+          if (finished) runOnJS(finishDismiss)();
         }),
       );
     },
-    [actionOpacity, collapse, dismissing, finishDismiss, rowWidth],
+    [actionOpacity, collapse, dismissing, finishDismiss, reducedMotion, rowWidth],
   );
   useLayoutEffect(
     () =>

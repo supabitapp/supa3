@@ -4,6 +4,7 @@ import type {
   OrchestrationV2ProviderCapabilities,
   OrchestrationV2ThreadProjection,
 } from "@supacode/contracts";
+import { latestForkableRun } from "@supacode/contracts";
 import { copySorted } from "@supacode/shared/Array";
 
 type Projection = OrchestrationV2ThreadProjection;
@@ -38,6 +39,21 @@ export interface ThreadQueueWorkflowState {
 
 export function resolveActiveThreadRun(projection: Pick<Projection, "runs">): Run | null {
   return projection.runs.findLast((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? null;
+}
+
+/** Newer work does not prevent forking the last provider-finished conversation. */
+export function resolveThreadForkSource(projection: {
+  readonly thread: Pick<Projection["thread"], "id" | "forkedFrom">;
+  readonly runs: ReadonlyArray<Pick<Run, "id" | "ordinal" | "status">>;
+}) {
+  const run = latestForkableRun(projection.runs);
+  if (run !== null) return { sourceThreadId: projection.thread.id, runId: run.id };
+
+  // A fresh fork can still fork its inherited history before finishing a local turn.
+  const inheritedSource = projection.thread.forkedFrom;
+  return inheritedSource?.type === "run"
+    ? { sourceThreadId: inheritedSource.threadId, runId: inheritedSource.runId }
+    : null;
 }
 
 /**

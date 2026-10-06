@@ -584,6 +584,29 @@ export const OrchestrationV2Run = Schema.Struct({
 });
 export type OrchestrationV2Run = typeof OrchestrationV2Run.Type;
 
+/** Provider-finished runs can be forked before their checkpoint is captured. */
+export function isForkableSourceRunStatus(status: OrchestrationV2RunStatus): boolean {
+  return (
+    status === "completed" ||
+    status === "waiting" ||
+    status === "failed" ||
+    status === "interrupted" ||
+    status === "cancelled"
+  );
+}
+
+export function latestForkableRun<Run extends Pick<OrchestrationV2Run, "ordinal" | "status">>(
+  runs: ReadonlyArray<Run>,
+): Run | null {
+  return runs.reduce<Run | null>(
+    (latest, run) =>
+      isForkableSourceRunStatus(run.status) && (latest === null || run.ordinal > latest.ordinal)
+        ? run
+        : latest,
+    null,
+  );
+}
+
 /**
  * When the work a run belongs to started. A wake does not start new work, so
  * working timers count from the prompt that did, not from the latest wake.

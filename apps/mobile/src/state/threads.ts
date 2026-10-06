@@ -1,8 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
+import { enabledEnvironmentIds } from "@supacode/client-runtime/state/connections";
 import {
   createEnvironmentThreadDetailAtoms,
   createEnvironmentThreadShellAtoms,
   createEnvironmentThreadStateAtoms,
+  createRunningThreadKeepAliveAtom,
   EMPTY_ENVIRONMENT_THREAD_STATE,
   type EnvironmentThreadState,
   createThreadEnvironmentAtoms,
@@ -26,6 +28,14 @@ export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: threadEnvironment.snapshotAtom,
+});
+
+export const runningThreadKeepAliveAtom = createRunningThreadKeepAliveAtom({
+  environmentIdsAtom: Atom.map(environmentCatalog.catalogValueAtom, (catalog) => [
+    ...enabledEnvironmentIds(catalog),
+  ]),
+  threadsAtom: environmentThreadShells.environmentThreadsAtom,
+  stateAtom: environmentThreads.stateAtom,
 });
 
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(

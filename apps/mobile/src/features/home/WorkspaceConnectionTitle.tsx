@@ -11,6 +11,7 @@ import {
   getCompactBrandHeaderOptions,
 } from "../../components/CompactBrandTitle";
 import { useWorkspaceState } from "../../state/workspace";
+import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
 import {
   workspaceConnectionStatusPresentation,
   type WorkspaceConnectionStatusPresentation,
@@ -55,9 +56,15 @@ function StatusFadeIn(props: {
   readonly grow?: boolean;
   readonly maxWidth?: number;
 }) {
-  const [opacity] = useState(() => new Animated.Value(0));
+  const reducedMotion = useReducedMotionPreference();
+  const [opacity] = useState(() => new Animated.Value(reducedMotion ? 1 : 0));
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.stopAnimation();
+      opacity.setValue(1);
+      return;
+    }
     const animation = Animated.timing(opacity, {
       duration: FADE_IN_MS,
       toValue: 1,
@@ -65,7 +72,7 @@ function StatusFadeIn(props: {
     });
     animation.start();
     return () => animation.stop();
-  }, [opacity]);
+  }, [opacity, reducedMotion]);
 
   return (
     <Animated.View

@@ -24,10 +24,13 @@ import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
+import { useEnvironmentQuery } from "../state/query";
+import { vcsEnvironment } from "../state/vcs";
 import {
   type EnvMode,
   type EnvironmentOption,
   resolveContextStripLabelsCompact,
+  resolveBranchToolbarValue,
   resolveCurrentWorkspaceLabel,
   resolveEnvModeLabel,
   resolveLockedWorkspaceLabel,
@@ -583,6 +586,27 @@ export const BranchToolbar = memo(function BranchToolbar({
     : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
   const effectiveEnvMode = forceNewWorktree ? "worktree" : envMode;
   const envModeLocked = envLocked || (serverThread !== null && activeWorktreePath !== null);
+  const workspaceCwd = activeWorktreePath ?? activeProject?.workspaceRoot ?? null;
+  const workspaceStatus = useEnvironmentQuery(
+    layout === "panel" &&
+      panelSection !== "branch" &&
+      showGitControls &&
+      envModeLocked &&
+      (effectiveEnvMode === "local" || activeWorktreePath !== null) &&
+      !forceNewWorktree &&
+      workspaceCwd
+      ? vcsEnvironment.status({ environmentId, input: { cwd: workspaceCwd } })
+      : null,
+  );
+  const activeBranch = resolveBranchToolbarValue({
+    envMode: effectiveEnvMode,
+    activeWorktreePath,
+    activeThreadBranch:
+      activeThreadBranchOverride !== undefined
+        ? activeThreadBranchOverride
+        : (serverThread?.branch ?? draftThread?.branch ?? null),
+    currentGitBranch: workspaceStatus.data?.refName ?? null,
+  });
 
   // "Previous worktree" hops a draft into the most recently active worktree
   // of this project — the "keep going where I just was" follow-up flow. Only
@@ -661,6 +685,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             envLocked={envModeLocked}
             effectiveEnvMode={effectiveEnvMode}
             activeWorktreePath={activeWorktreePath}
+            activeBranch={showGitControls ? activeBranch : null}
             workspaceRoot={activeProject.workspaceRoot}
             onEnvModeChange={onEnvModeChange}
           />

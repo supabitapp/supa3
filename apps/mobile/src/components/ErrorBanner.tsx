@@ -1,10 +1,16 @@
-import { View } from "react-native";
+import Animated from "react-native-reanimated";
+import { useNoticeMotion } from "../lib/useNoticeMotion";
 
 import { AppText as Text } from "./AppText";
 export function ErrorBanner(props: { readonly message: string }) {
+  const motion = useNoticeMotion();
   return (
-    <View className="rounded-2xl border border-danger-border bg-danger px-3.5 py-3">
+    <Animated.View
+      {...motion}
+      collapsable={false}
+      className="rounded-2xl border border-danger-border bg-danger px-3.5 py-3"
+    >
       <Text className="font-supacode-medium text-sm text-danger-foreground">{props.message}</Text>
-    </View>
+    </Animated.View>
   );
 }

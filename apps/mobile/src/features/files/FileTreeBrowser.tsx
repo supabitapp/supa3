@@ -1,5 +1,5 @@
 import type { ProjectEntry } from "@supacode/contracts";
-import { SymbolView } from "../../components/AppSymbol";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -74,11 +74,11 @@ const FileTreeRow = memo(function FileTreeRow(props: {
       style={{ paddingLeft: 8 + depth * 18 }}
     >
       {node.kind === "directory" ? (
-        <SymbolView
-          name={props.expanded ? "chevron.down" : "chevron.right"}
+        <DisclosureChevron
+          expanded={props.expanded}
+          collapsedDirection="right"
           size={12}
           tintColorClassName="accent-icon-muted"
-          type="monochrome"
         />
       ) : (
         <View className="w-3" />
