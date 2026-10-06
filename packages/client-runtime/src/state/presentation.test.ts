@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import { AVAILABLE_CONNECTION_STATE, PrimaryConnectionTarget } from "../connection/model.ts";
+import { isEnvironmentConnected } from "../connection/presentation.ts";
 import {
   createEnvironmentPresentationAtoms,
   createEnvironmentSummaryAtoms,
@@ -53,6 +54,71 @@ function harness() {
 }
 
 describe("environment summary subscriptions", () => {
+  it("updates thread connection selectors only when their own environment connects or disconnects", () => {
+    const h = harness();
+    const states = Atom.family((_id: EnvironmentId) =>
+      Atom.make(AsyncResult.success(AVAILABLE_CONNECTION_STATE)),
+    );
+    const presentations = createEnvironmentPresentationAtoms({
+      catalogValueAtom: h.catalog,
+      stateAtom: states,
+      serverConfigValueAtom: h.configs,
+    });
+    const connected = Atom.family((id: EnvironmentId) =>
+      Atom.map(presentations.presentationAtom(id), isEnvironmentConnected),
+    );
+    h.registry.get(connected(FIRST));
+    h.registry.get(connected(SECOND));
+    const changes = { first: 0, second: 0 };
+    const stops = [
+      h.registry.subscribe(connected(FIRST), () => changes.first++),
+      h.registry.subscribe(connected(SECOND), () => changes.second++),
+    ];
+    try {
+      expect(h.registry.get(connected(FIRST))).toBe(false);
+      expect(h.registry.get(connected(SECOND))).toBe(false);
+      h.registry.set(
+        states(FIRST),
+        AsyncResult.success({ ...AVAILABLE_CONNECTION_STATE, phase: "connecting" }),
+      );
+      h.registry.set(h.configs(FIRST), config(false, "/updated-config"));
+      expect(changes).toEqual({ first: 0, second: 0 });
+
+      h.registry.set(
+        states(FIRST),
+        AsyncResult.success({ ...AVAILABLE_CONNECTION_STATE, phase: "connected", generation: 1 }),
+      );
+      expect(h.registry.get(connected(FIRST))).toBe(true);
+      expect(h.registry.get(connected(SECOND))).toBe(false);
+      expect(changes).toEqual({ first: 1, second: 0 });
+
+      h.registry.set(
+        states(FIRST),
+        AsyncResult.success({ ...AVAILABLE_CONNECTION_STATE, phase: "backoff", attempt: 2 }),
+      );
+      expect(h.registry.get(connected(FIRST))).toBe(false);
+      expect(changes).toEqual({ first: 2, second: 0 });
+      h.registry.set(
+        states(FIRST),
+        AsyncResult.success({ ...AVAILABLE_CONNECTION_STATE, phase: "connecting", attempt: 2 }),
+      );
+      expect(changes).toEqual({ first: 2, second: 0 });
+
+      h.registry.set(
+        states(FIRST),
+        AsyncResult.success({ ...AVAILABLE_CONNECTION_STATE, phase: "connected", generation: 2 }),
+      );
+      expect(h.registry.get(connected(FIRST))).toBe(true);
+      expect(changes).toEqual({ first: 3, second: 0 });
+      h.registry.set(h.catalog, { isReady: true, entries: new Map([[SECOND, entry(SECOND)]]) });
+      expect(h.registry.get(connected(FIRST))).toBe(false);
+      expect(changes).toEqual({ first: 4, second: 0 });
+    } finally {
+      stops.forEach((stop) => stop());
+      h.registry.dispose();
+    }
+  });
+
   it("publishes full config updates without notifying membership, labels, connections or capability consumers", () => {
     const h = harness();
     h.registry.get(h.full.presentationsAtom);

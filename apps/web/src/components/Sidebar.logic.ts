@@ -9,7 +9,6 @@ import type { ContextMenuItem } from "@supacode/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@supacode/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
 import { planPinnedReorder } from "@supacode/client-runtime/state/thread-sort";
-import { resolveThreadWorkingStartedAt } from "@supacode/client-runtime/state/models";
 import {
   effectiveSnoozed,
   type ThreadSnoozeShell,
@@ -23,6 +22,11 @@ import {
 import type { SidebarThreadSummary, Thread } from "../types";
 import { isLatestRunSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+
+export {
+  formatWorkingDurationLabel,
+  resolveThreadListDurationStartedAt as resolveSidebarV2DurationStartedAt,
+} from "@supacode/client-runtime/state/thread-timing";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -924,6 +928,7 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
 
 export type SidebarV2TopStatusKind =
   | "approval"
+  | "connecting"
   | "done"
   | "failed"
   | "limited"
@@ -932,19 +937,13 @@ export type SidebarV2TopStatusKind =
   | "woke"
   | "working";
 
-export function formatWorkingDurationLabel(elapsedMs: number): string {
-  const seconds = Number.isFinite(elapsedMs) ? Math.max(0, Math.floor(elapsedMs / 1000)) : 0;
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
 export function resolveSidebarV2TopStatus(input: {
+  readonly environmentConnected: boolean;
   readonly status: SidebarThreadStatus;
   readonly isUnread: boolean;
   readonly isWoke: boolean;
 }): SidebarV2TopStatusKind | null {
+  if (!input.environmentConnected) return "connecting";
   if (input.status === "working") {
     return "working";
   }
@@ -968,20 +967,6 @@ export function resolveSidebarV2TopStatus(input: {
 
 export function shouldShowSidebarV2Duration(status: SidebarThreadStatus): boolean {
   return status === "working" || status === "waiting";
-}
-
-/** Settled background work has no active run timestamp; its timer continues
-    from the parent run's start while it waits for a wake. */
-export function resolveSidebarV2DurationStartedAt(
-  thread: Pick<SidebarThreadSummary, "latestRun" | "runtime">,
-): string | null {
-  const activityStartedAt = resolveThreadWorkingStartedAt(thread);
-  if (activityStartedAt !== null || thread.runtime?.status !== "idle") return activityStartedAt;
-  return (
-    [thread.latestRun?.startedAt, thread.latestRun?.requestedAt].find(
-      (timestamp) => timestamp != null && Number.isFinite(Date.parse(timestamp)),
-    ) ?? null
-  );
 }
 
 /** First VALID timestamp wins: `a ?? b` falls through on null, but a present-
@@ -1046,8 +1031,18 @@ export function reduceSidebarProjectScopeMenuState(
 
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
+  environmentConnected?: boolean;
 }): ThreadStatusPill | null {
   const { thread } = input;
+
+  if (input.environmentConnected === false) {
+    return {
+      label: "Connecting",
+      colorClass: "text-secondary-label",
+      dotClass: "bg-secondary-label",
+      pulse: false,
+    };
+  }
 
   if (thread.hasPendingApprovals) {
     return {

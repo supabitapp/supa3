@@ -11,6 +11,7 @@ import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@supacode/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";
+import { isEnvironmentConnected } from "@supacode/client-runtime/connection";
 import { replaceComposerContextReferences } from "@supacode/shared/composerContextReferences";
 import * as Schema from "effect/Schema";
 import {
@@ -153,6 +154,7 @@ import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../s
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
 import { useEnvironmentQuery } from "../state/query";
+import { environmentPresentations } from "../state/presentation";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   buildThreadRouteParams,
@@ -192,6 +194,7 @@ import {
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
   resolveSidebarV2DurationStartedAt,
+  resolveSidebarV2TopStatus,
   resolveThreadLastVisitedAt,
   shouldNavigateAfterThreadPark,
   shouldRecedeSidebarThread,
@@ -1149,6 +1152,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const environmentConnected = useAtomValue(
+    environmentPresentations.presentationAtom(thread.environmentId),
+    isEnvironmentConnected,
+  );
   const isPendingCreation = useThreadShell(threadRef) === null;
   const settlementSupported = props.settlementSupported && !isPendingCreation;
   const snoozeSupported = props.snoozeSupported && !isPendingCreation;
@@ -1206,7 +1213,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = resolveSidebarThreadStatus(thread);
-  const showDuration = shouldShowSidebarV2Duration(status);
+  const showDuration = environmentConnected && shouldShowSidebarV2Duration(status);
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1234,60 +1241,69 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile widgets (amber approval, indigo input, sky working) so a thread
   // reads the same color everywhere it surfaces.
-  const topStatus = isPendingCreation
-    ? { label: "Preparing", icon: null, className: "text-info" }
-    : status === "working"
-      ? {
-          // A native /goal keeps the agent going across turns until it is met.
-          label: thread.goal?.status === "active" ? "Goal" : "Working",
-          icon: "working" as const,
-          // No shimmer: a label that animates forever is noise in a sidebar
-          // full of them (and repaints every vsync on high-refresh displays).
-          className: "text-info",
-        }
-      : status === "waiting"
-        ? {
-            label: "Waiting",
-            icon: null,
-            className: "text-info",
-          }
-        : status === "approval"
+  const topStatusKind = resolveSidebarV2TopStatus({
+    environmentConnected,
+    status,
+    isUnread,
+    isWoke,
+  });
+  const topStatus =
+    topStatusKind === "connecting"
+      ? { label: "Connecting", icon: null, className: "text-secondary-label" }
+      : isPendingCreation
+        ? { label: "Preparing", icon: null, className: "text-info" }
+        : topStatusKind === "working"
           ? {
-              label: "Approval",
-              icon: "approval" as const,
-              className: "text-warning-foreground",
+              // A native /goal keeps the agent going across turns until it is met.
+              label: thread.goal?.status === "active" ? "Goal" : "Working",
+              icon: "working" as const,
+              // No shimmer: a label that animates forever is noise in a sidebar
+              // full of them (and repaints every vsync on high-refresh displays).
+              className: "text-info",
             }
-          : status === "input"
+          : topStatusKind === "waiting"
             ? {
-                label: "Input",
-                icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
+                label: "Waiting",
+                icon: null,
+                className: "text-info",
               }
-            : status === "limited"
+            : topStatusKind === "approval"
               ? {
-                  label: "Limited",
-                  icon: "failed" as const,
-                  className: "text-warning",
+                  label: "Approval",
+                  icon: "approval" as const,
+                  className: "text-warning-foreground",
                 }
-              : status === "failed"
+              : topStatusKind === "input"
                 ? {
-                    label: "Failed",
-                    icon: "failed" as const,
-                    className: "text-error",
+                    label: "Input",
+                    icon: "input" as const,
+                    className: "text-indigo-600 dark:text-indigo-300",
                   }
-                : isWoke
+                : topStatusKind === "limited"
                   ? {
-                      label: "Woke",
-                      icon: "woke" as const,
+                      label: "Limited",
+                      icon: "failed" as const,
                       className: "text-warning",
                     }
-                  : isUnread
+                  : topStatusKind === "failed"
                     ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-success",
+                        label: "Failed",
+                        icon: "failed" as const,
+                        className: "text-error",
                       }
-                    : null;
+                    : topStatusKind === "woke"
+                      ? {
+                          label: "Woke",
+                          icon: "woke" as const,
+                          className: "text-warning",
+                        }
+                      : topStatusKind === "done"
+                        ? {
+                            label: "Done",
+                            icon: "done" as const,
+                            className: "text-success",
+                          }
+                        : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1801,7 +1817,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     jumpHintIndicatorsClassName,
                   )}
                 >
-                  {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
+                  {!environmentConnected ? (
+                    <span role="status" className="text-xs">
+                      Connecting
+                    </span>
+                  ) : variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
                     // Snoozed rows show when they come BACK, not when they were
                     // last touched — the return ticket is the row's whole story.
                     <span className="text-xs text-info-foreground tabular-nums">
@@ -1954,12 +1974,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     jumpHintIndicatorsClassName,
                   )}
                 >
-                  {topStatus && showDuration ? (
-                    <span className="whitespace-nowrap text-info">
-                      <span role="status">{topStatus.label}</span>{" "}
-                      <span aria-hidden>
-                        <WorkingDuration startedAt={resolveSidebarV2DurationStartedAt(thread)} />
-                      </span>
+                  {topStatus && (showDuration || topStatusKind === "connecting") ? (
+                    <span className={cn("whitespace-nowrap", topStatus.className)}>
+                      <span role="status">{topStatus.label}</span>
+                      {showDuration ? (
+                        <span aria-hidden>
+                          {" "}
+                          <WorkingDuration startedAt={resolveSidebarV2DurationStartedAt(thread)} />
+                        </span>
+                      ) : null}
                     </span>
                   ) : (
                     <SidebarRelativeTime
@@ -2048,7 +2071,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <span className={cn("contents", jumpHintIndicatorsClassName)}>
                 {terminalStatusIcon}
                 {prBadge}
-                {topStatus && !showDuration ? (
+                {topStatus && !showDuration && topStatusKind !== "connecting" ? (
                   isWokeStatus ? (
                     <button
                       type="button"

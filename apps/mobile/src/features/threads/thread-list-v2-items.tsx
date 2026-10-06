@@ -12,13 +12,14 @@ import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentPresentation } from "@supacode/client-runtime/connection";
+import { isEnvironmentConnected } from "@supacode/client-runtime/connection";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@supacode/client-runtime/state/shell";
 import type { EnvironmentThreadSearchMatch } from "@supacode/client-runtime/state/thread-search";
 import type { EnvironmentMachineKind } from "@supacode/contracts";
+import { resolveThreadListDurationStartedAt } from "@supacode/client-runtime/state/thread-timing";
 import { canSnooze, resolveSnoozePresets } from "@supacode/client-runtime/state/thread-settled";
 import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import type { MenuAction } from "@react-native-menu/menu";
@@ -71,12 +72,13 @@ import {
   resolveThreadListV2Status,
   resolveThreadListV2ProviderDrivers,
   resolveThreadListV2SwipeActions,
-  type ThreadListV2Status,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
+import { ThreadListWorkingStatus } from "./thread-list-working-status";
+import { resolveThreadListV2RowStatusLabel } from "./thread-list-row-status";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -84,39 +86,6 @@ import { THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
  * long-press actions. State reads through colored status labels and text
  * hierarchy rather than card fills.
  */
-
-// Status hues follow the system-wide convention set by sidebar v1 (amber
-// approval, indigo input, sky working) so a thread reads the same color
-// everywhere it surfaces.
-const STATUS_LABEL_BY_STATUS: Partial<
-  Record<ThreadListV2Status, { label: string; className: string }>
-> = {
-  approval: { label: "Approval", className: "text-warning-foreground" },
-  input: { label: "Input", className: "text-adaptive-indigo-600-300" },
-  working: { label: "Working", className: "text-adaptive-sky-600-400" },
-  failed: { label: "Failed", className: "text-danger-foreground" },
-  limited: { label: "Limited", className: "text-warning-foreground" },
-};
-
-const selectEnvironmentConnected = (presentation: EnvironmentPresentation | null) =>
-  presentation?.connection.phase === "connected";
-
-/** Waiting (parked on subagents or monitors) stays grey like the web sidebar:
-    not the user's turn yet, but not active progress either. */
-function resolveRowStatusLabel(input: {
-  readonly status: ThreadListV2Status;
-  readonly isUnread: boolean;
-  readonly goalActive: boolean;
-  readonly mutedClassName: string;
-}): { label: string; className: string } | undefined {
-  const label = STATUS_LABEL_BY_STATUS[input.status];
-  // A native /goal keeps the agent going across turns until it is met.
-  if (label && input.status === "working" && input.goalActive) return { ...label, label: "Goal" };
-  if (label) return label;
-  if (input.status === "waiting") return { label: "Waiting", className: input.mutedClassName };
-  if (input.isUnread) return { label: "Done", className: "text-adaptive-emerald-700-300" };
-  return undefined;
-}
 
 // Menus keep lifecycle and title regeneration together. Archive keeps its
 // own surface (thread screen / settings) rather than crowding v2 rows.
@@ -754,7 +723,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const pinnedRow = props.pinned === true;
   const environmentConnected = useAtomValue(
     environmentPresentations.presentationAtom(thread.environmentId),
-    selectEnvironmentConnected,
+    isEnvironmentConnected,
   );
   const dormant = useSwipeRowDormant(props.activationKey);
 
@@ -783,7 +752,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // label as the web sidebar, sourced from the server-side visited watermark
   // so checking a thread on any device clears it everywhere.
   const isUnread = status === "ready" && threadHasUnseenCompletion(thread);
-  const statusLabel = resolveRowStatusLabel({
+  const statusLabel = resolveThreadListV2RowStatusLabel({
+    environmentConnected,
     status,
     isUnread,
     goalActive: thread.goal?.status === "active",
@@ -791,6 +761,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? selectedThreadRowColors.mutedForegroundClassName
       : rowAppearance.mutedForegroundClassName,
   });
+  const durationStartedAt =
+    environmentConnected && (status === "working" || status === "waiting")
+      ? resolveThreadListDurationStartedAt(thread)
+      : null;
   // The timestamp is precomputed on the list item (same stamps the settled
   // tail sorts by) so a minute tick only re-renders rows that draw it.
   const timeLabel = props.timeLabel;
@@ -1134,7 +1108,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             type="monochrome"
           />
         ) : null}
-        <Text
+        <ThreadListWorkingStatus
+          key={durationStartedAt}
+          label={statusLabel?.label ?? timeLabel}
+          startedAt={durationStartedAt}
           className={cn(
             "text-xs tabular-nums",
             statusLabel?.className ??
@@ -1142,9 +1119,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 ? selectedThreadRowColors.foregroundClassName
                 : rowAppearance.tertiaryForegroundClassName),
           )}
-        >
-          {statusLabel?.label ?? timeLabel}
-        </Text>
+        />
       </View>
       <Text
         className={cn(
@@ -1404,9 +1379,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             )}
             style={{ fontFamily: MONO_FONT }}
           >
-            {snoozedRow && props.snoozeWakeLabelText !== undefined
-              ? props.snoozeWakeLabelText
-              : timeLabel}
+            {!environmentConnected
+              ? statusLabel?.label
+              : snoozedRow && props.snoozeWakeLabelText !== undefined
+                ? props.snoozeWakeLabelText
+                : timeLabel}
           </Text>
         </View>
       </RowPressable>
