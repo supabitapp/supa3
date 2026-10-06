@@ -159,6 +159,10 @@
       "types": "./src/stableStringify.ts",
       "import": "./src/stableStringify.ts"
     },
+    "./desktopBootstrapToken": {
+      "types": "./src/desktopBootstrapToken.ts",
+      "import": "./src/desktopBootstrapToken.ts"
+    },
     "./oauthScope": {
       "types": "./src/oauthScope.ts",
       "import": "./src/oauthScope.ts"
