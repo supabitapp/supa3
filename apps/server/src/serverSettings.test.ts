@@ -53,7 +53,7 @@ const layerServerSettings = () =>
     ),
   );
 
-/** Like `makeServerSettingsLayer`, but also exposes the secret store for assertions. */
+/** Like `layerServerSettings`, but also exposes the secret store for assertions. */
 const layerServerSettingsWithSecrets = () =>
   ServerSettingsModule.layer.pipe(
     Layer.provideMerge(ServerSecretStore.layer),
@@ -332,7 +332,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const settings = yield* serverSettings.getSettings;
       assert.equal(settings.responseStreamingMode, "turn");
-    }).pipe(Effect.provide(makeServerSettingsLayer())),
+    }).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect("decodes nested settings patches", () =>
