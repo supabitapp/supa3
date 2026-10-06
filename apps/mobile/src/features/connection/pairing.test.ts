@@ -5,6 +5,7 @@ import {
   extractPairingUrlFromQrPayload,
   PairingQrPayloadEmptyError,
   parsePairingUrl,
+  pairingUrlForFields,
 } from "./pairing";
 
 describe("buildPairingUrl", () => {
@@ -51,6 +52,20 @@ describe("extractPairingUrlFromQrPayload", () => {
 });
 
 describe("parsePairingUrl", () => {
+  it("preserves scanned or pasted route metadata until the host or token is edited", () => {
+    const original =
+      "http://192.168.1.10:3773/pair#token=code&env=machine&routes=https://machine.ts.net";
+    const fields = parsePairingUrl(original);
+    expect(pairingUrlForFields(fields.host, fields.code, original)).toBe(original);
+    expect(pairingUrlForFields("https://new.test", fields.code, original)).toBe(
+      "https://new.test/#token=code",
+    );
+    expect(pairingUrlForFields(fields.host, "new-code", original)).toBe(
+      "http://192.168.1.10:3773/#token=new-code",
+    );
+    const wrapper = `supacode://pair?pairingUrl=${encodeURIComponent(original)}`;
+    expect(extractPairingUrlFromQrPayload(wrapper)).toBe(original);
+  });
   it("reads hosted pairing links into backend host fields", () => {
     expect(
       parsePairingUrl(

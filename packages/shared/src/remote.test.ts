@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { EnvironmentId } from "@supacode/contracts";
 
 import {
   RemoteBackendUrlInvalidError,
@@ -6,9 +7,92 @@ import {
   RemotePairingTokenMissingError,
   RemotePairingUrlInvalidError,
   resolveRemotePairingTarget,
+  buildPairingUrl,
+  stripPairingTokenFromUrl,
+  setPairingTokenOnUrl,
 } from "./remote.ts";
 
 describe("remote", () => {
+  const environmentId = EnvironmentId.make("paired-environment");
+
+  it("preserves unrelated fragments when removing a pairing token", () => {
+    expect(stripPairingTokenFromUrl(new URL("https://host.test/?token=code#section")).href).toBe(
+      "https://host.test/#section",
+    );
+  });
+
+  it("round-trips identity and eligible routes while keeping tokens in the fragment", () => {
+    const pairingUrl = buildPairingUrl("http://192.168.1.10:3773", "a token & code", {
+      environmentId,
+      routes: [
+        "http://192.168.1.10:3773/",
+        "http://100.64.1.2:3773/",
+        "https://machine.ts.net/",
+        "https://machine.ts.net/",
+      ],
+    });
+    expect(new URL(pairingUrl).search).toBe("");
+    expect(resolveRemotePairingTarget({ pairingUrl })).toMatchObject({
+      credential: "a token & code",
+      environmentId,
+      routes: ["https://machine.ts.net/", "http://100.64.1.2:3773/"],
+    });
+    expect(stripPairingTokenFromUrl(new URL(`${pairingUrl}&keep=yes`)).hash).toBe("#keep=yes");
+  });
+
+  it.each(["", "env=", "env=%20", "env=one&env=two"])(
+    "handles absent or malformed identity %s",
+    (fragment) => {
+      const pairingUrl = `https://host.test/pair#token=code&routes=https://other.test&${fragment}`;
+      if (fragment === "") {
+        expect(resolveRemotePairingTarget({ pairingUrl })).not.toHaveProperty("routes");
+      } else {
+        expect(() => resolveRemotePairingTarget({ pairingUrl })).toThrow(
+          RemotePairingUrlInvalidError,
+        );
+      }
+    },
+  );
+
+  it("discards unsafe route hints", () => {
+    const routes = [
+      "http://localhost",
+      "https://127.0.0.2",
+      "http://0.0.0.0",
+      "http://169.254.1.1",
+      "http://8.8.8.8",
+      "http://machine.local",
+      "https://user:pass@host.test",
+      "https://host.test/path",
+      "https://host.test?token=code",
+    ];
+    for (const route of routes) {
+      expect(
+        resolveRemotePairingTarget({
+          pairingUrl: `https://host.test/pair#token=code&env=${environmentId}&routes=${encodeURIComponent(route)}`,
+        }).routes,
+      ).toEqual([]);
+    }
+  });
+
+  it("caps hints without truncating mandatory fields or labels", () => {
+    const routes = Array.from({ length: 10 }, (_, index) => `http://10.0.0.${index + 1}`);
+    const pairingUrl = buildPairingUrl("https://host.test", "code", { environmentId, routes });
+    expect(resolveRemotePairingTarget({ pairingUrl }).routes).toHaveLength(6);
+    expect(new TextEncoder().encode(pairingUrl).length).toBeLessThanOrEqual(287);
+    const hosted = new URL("https://app.test/pair?host=https://host.test");
+    hosted.searchParams.set("label", "long label ".repeat(60));
+    const longLink = setPairingTokenOnUrl(hosted, "long token ".repeat(50), {
+      environmentId,
+      routes,
+    });
+    expect(longLink.searchParams.get("label")).toBe(hosted.searchParams.get("label"));
+    expect(resolveRemotePairingTarget({ pairingUrl: longLink.href })).toMatchObject({
+      environmentId,
+      credential: "long token ".repeat(50).trim(),
+      routes: [],
+    });
+  });
   it("derives backend urls and token from a pairing url", () => {
     expect(
       resolveRemotePairingTarget({

@@ -29,6 +29,15 @@ in the receiving app. Connection settings are under **Settings → Connections**
 on web and desktop and **Settings → Environments** on mobile. A loopback address
 such as `127.0.0.1` reaches only the device opening the link.
 
+Pairing links include alternative host addresses when available. The in-app
+scanner and **Add environment** can use a reachable alternative when the main
+address is unavailable, including when pairing a new device away from the LAN.
+Older links can use another saved route when the main address belongs to one
+saved machine. Each alternative must identify the intended environment before
+receiving the token. A phone camera opening an unreachable LAN URL in a browser
+cannot load the app to try those alternatives; use the in-app scanner or paste
+the link instead.
+
 Pairing authorizes that device for future connections. Use a fresh one-time link
 for each new device; you do not need the original token to reconnect. Links
 created in Settings can only be copied from the client that created them while
@@ -144,6 +153,11 @@ On the host, **Settings → Connections** lets authorized administrators create
 pairing links and revoke client sessions. Revoking an unused link prevents new
 pairings; revoke a device's session to remove its existing access. Command-line
 management is available through `supacode auth --help`.
+
+To restore a device whose session was revoked, pair it again with a fresh link.
+If the link's address is one the device already uses for that machine but cannot
+reach right now, such as a LAN address while on cellular, it pairs through the
+machine's other saved routes instead.
 
 A session with an open connection stays listed after its access credential
 expires.

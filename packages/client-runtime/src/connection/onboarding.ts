@@ -7,10 +7,10 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as HttpClient from "effect/http/HttpClient";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 
-import { bootstrapRemoteBearerSession } from "../authorization/remote.ts";
+import { bootstrapRemoteBearerSession, fetchRemoteSessionState } from "../authorization/remote.ts";
 import { deriveWsBaseUrl, normalizeHttpBaseUrl } from "../environment/endpoint.ts";
-import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import {
   BearerConnectionCredential,
@@ -32,7 +32,17 @@ import {
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
-import { connectionRoutes, isLearned, routeEntry, sshTargetKey } from "./routes.ts";
+import {
+  connectionRouteId,
+  connectionRoutes,
+  credentialConnectionId,
+  isLearned,
+  pairingFallbackRoutes,
+  routeEntry,
+  routesAt,
+  sshTargetKey,
+} from "./routes.ts";
+import { reachPairingServer } from "./pairing.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -88,73 +98,149 @@ const resolvePairingTarget = Effect.fn("clientRuntime.connection.onboarding.reso
   },
 );
 
-function bearerConnectionId(environmentId: EnvironmentId, httpBaseUrl: string): string {
-  return `bearer:${environmentId}:${new URL(httpBaseUrl).origin}`;
-}
-
-function differentMachineError(label: string) {
-  return new ConnectionBlockedError({
-    reason: "configuration",
-    detail: `That address reaches ${label}, a different machine. Add it as its own environment instead.`,
-  });
+/**
+ * Re-pairing an address the user already paired keeps that route's id, so the
+ * routes learned through it stay attached and share the new credential.
+ */
+function pairingConnectionId(
+  entry: ConnectionCatalogEntry | undefined,
+  environmentId: EnvironmentId,
+  httpBaseUrl: string,
+): string {
+  const paired =
+    entry === undefined
+      ? undefined
+      : routesAt(entry, httpBaseUrl).find(
+          (route) => route.target._tag === "BearerConnectionTarget" && !isLearned(route),
+        );
+  return paired === undefined
+    ? `bearer:${environmentId}:${new URL(httpBaseUrl).origin}`
+    : connectionRouteId(paired.target);
 }
 
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
-)(function* (input: PairingConnectionInput) {
-  const target = yield* resolvePairingTarget(input);
-  const presentation = yield* ClientCapabilities.ClientPresentation;
-  const descriptor = yield* fetchRemoteEnvironmentDescriptor({
-    httpBaseUrl: target.httpBaseUrl,
-  }).pipe(Effect.mapError(mapRemoteEnvironmentError));
-  if (
-    input.expectedEnvironmentId !== undefined &&
-    descriptor.environmentId !== input.expectedEnvironmentId
+)(
+  function* (
+    input: PairingConnectionInput,
+    entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
   ) {
-    return yield* differentMachineError(descriptor.label);
-  }
-  const compatibilityError = orchestrationProtocolCompatibilityError(descriptor);
-  // An outdated server is still saved so it can be updated from this client.
-  if (compatibilityError !== null && compatibilityError.serverUpdateRequired !== true) {
-    return yield* compatibilityError;
-  }
-  const access = yield* bootstrapRemoteBearerSession({
-    httpBaseUrl: target.httpBaseUrl,
-    credential: target.credential,
-    scopes: presentation.scopes,
-    clientMetadata: presentation.metadata,
-  }).pipe(Effect.mapError(mapRemoteEnvironmentError));
-  const connectionId = bearerConnectionId(descriptor.environmentId, target.httpBaseUrl);
-
-  return new BearerConnectionRegistration({
-    target: new BearerConnectionTarget({
-      environmentId: descriptor.environmentId,
-      label: descriptor.label,
-      connectionId,
-    }),
-    profile: new BearerConnectionProfile({
-      connectionId,
-      environmentId: descriptor.environmentId,
-      label: descriptor.label,
+    const target = yield* resolvePairingTarget(input);
+    const presentation = yield* ClientCapabilities.ClientPresentation;
+    if (
+      input.expectedEnvironmentId !== undefined &&
+      target.environmentId !== undefined &&
+      input.expectedEnvironmentId !== target.environmentId
+    ) {
+      return yield* new ConnectionBlockedError({
+        reason: "configuration",
+        detail: "This pairing link belongs to a different environment.",
+      });
+    }
+    const expected = input.expectedEnvironmentId ?? target.environmentId;
+    const reached = yield* reachPairingServer({
       httpBaseUrl: target.httpBaseUrl,
-      wsBaseUrl: target.wsBaseUrl,
-    }),
-    credential: new BearerConnectionCredential({
-      token: access.access_token,
-    }),
-  });
-});
+      expectedEnvironmentId: expected,
+      fallback: pairingFallbackRoutes(entries, target.httpBaseUrl, expected),
+      routes: target.routes ?? [],
+    });
+    const { descriptor } = reached;
+    const compatibilityError = orchestrationProtocolCompatibilityError(descriptor);
+    // An outdated server is still saved so it can be updated from this client.
+    if (compatibilityError !== null && compatibilityError.serverUpdateRequired !== true) {
+      return yield* compatibilityError;
+    }
+    const access = yield* bootstrapRemoteBearerSession({
+      httpBaseUrl: reached.httpBaseUrl,
+      credential: target.credential,
+      scopes: presentation.scopes,
+      clientMetadata: presentation.metadata,
+    }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+    const registrationHttpBaseUrl =
+      reached.source === "hint" ? reached.httpBaseUrl : target.httpBaseUrl;
+    const connectionId = pairingConnectionId(
+      entries.get(descriptor.environmentId),
+      descriptor.environmentId,
+      registrationHttpBaseUrl,
+    );
+
+    const registration = new BearerConnectionRegistration({
+      target: new BearerConnectionTarget({
+        environmentId: descriptor.environmentId,
+        label: descriptor.label,
+        connectionId,
+      }),
+      profile: new BearerConnectionProfile({
+        connectionId,
+        environmentId: descriptor.environmentId,
+        label: descriptor.label,
+        httpBaseUrl: registrationHttpBaseUrl,
+        wsBaseUrl: deriveWsBaseUrl(registrationHttpBaseUrl),
+      }),
+      credential: new BearerConnectionCredential({
+        token: access.access_token,
+      }),
+    });
+    return { registration, reachedHttpBaseUrl: reached.httpBaseUrl };
+  },
+  Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+);
+
+const isBearerCredential = Schema.is(BearerConnectionCredential);
+
+/**
+ * Each saved route keeps the credential it was paired with, so re-pairing after
+ * a revoked session would otherwise fix only the link's address. When pairing
+ * reached a saved route, that route takes the new credential if the server now
+ * rejects its own. The check only goes to an address that already carries that
+ * credential. Runs before `register`, whose restarted supervisor reads
+ * credentials as it connects.
+ */
+const refreshReachedRouteCredential = Effect.fn(
+  "clientRuntime.connection.onboarding.refreshReachedRouteCredential",
+)(
+  function* (registration: BearerConnectionRegistration, reachedHttpBaseUrl: string) {
+    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+    const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
+    const entry = (yield* SubscriptionRef.get(registry.entries)).get(
+      registration.target.environmentId,
+    );
+    if (entry === undefined) return;
+    const reachedRoute = routesAt(entry, reachedHttpBaseUrl).find(
+      (route) => route.target._tag === "BearerConnectionTarget",
+    );
+    if (reachedRoute === undefined) return;
+    const connectionId = credentialConnectionId(connectionRouteId(reachedRoute.target));
+    if (connectionId === registration.target.connectionId) return;
+    const current = Option.getOrUndefined(yield* credentials.get(connectionId));
+    if (current !== undefined && isBearerCredential(current)) {
+      const session = yield* fetchRemoteSessionState({
+        httpBaseUrl: reachedHttpBaseUrl,
+        bearerToken: current.token,
+      });
+      if (session.authenticated) return;
+    }
+    yield* credentials.put(connectionId, registration.credential);
+  },
+  Effect.catch((error) =>
+    Effect.logWarning("Could not refresh the credential of the reached route.", { error }),
+  ),
+  Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+);
 
 const registerPairingConnection = Effect.fn(
   "clientRuntime.connection.onboarding.registerPairingConnection",
 )(function* (input: PairingConnectionInput) {
-  const registration = yield* preparePairingRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+  const { registration, reachedHttpBaseUrl } = yield* preparePairingRegistration(
+    input,
+    yield* SubscriptionRef.get(registry.entries),
+  );
+  yield* refreshReachedRouteCredential(registration, reachedHttpBaseUrl);
   yield* registry.register(registration);
   return registration.target.environmentId;
 });
 
-const isBearerCredential = Schema.is(BearerConnectionCredential);
 const isBearerProfile = Schema.is(BearerConnectionProfile);
 
 const updateBearerConnection = Effect.fn(
@@ -300,6 +386,7 @@ export const make = Effect.gen(function* () {
         Effect.provideService(EnvironmentRegistry.EnvironmentRegistry, registry),
         Effect.provideService(ClientCapabilities.ClientPresentation, presentation),
         Effect.provideService(HttpClient.HttpClient, httpClient),
+        Effect.provideService(ConnectionCredentialStore.ConnectionCredentialStore, credentials),
       ),
     registerSsh: (input) =>
       registerSshConnection(input).pipe(

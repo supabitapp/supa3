@@ -463,7 +463,13 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const sessions = yield* SessionStore.SessionStore;
 
-      const pairingUrl = yield* serverAuth.issueStartupPairingUrl("http://127.0.0.1:3773");
+      const pairingUrl = yield* serverAuth.issueStartupPairingUrl("http://127.0.0.1:3773", [
+        "https://machine.ts.net",
+        "http://100.64.1.2:3773",
+      ]);
+      const hash = new URLSearchParams(new URL(pairingUrl).hash.slice(1));
+      expect(hash.get("env")).toBeTruthy();
+      expect(hash.get("routes")).toBe("https://machine.ts.net,http://100.64.1.2:3773");
       const token = new URLSearchParams(new URL(pairingUrl).hash.slice(1)).get("token");
       const listedPairingLinks = yield* serverAuth.listPairingLinks();
       expect(token).toBeTruthy();

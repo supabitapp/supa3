@@ -126,8 +126,14 @@ import { AnimatedHeight } from "../AnimatedHeight";
 import { InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Textarea } from "../ui/textarea";
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "../../pairingUrl";
-import { readHostedPairingRequest } from "../../hostedPairing";
+import { setPairingTokenOnUrl } from "../../pairingUrl";
+import type { PairingRouteHints } from "@supacode/shared/remote";
+import {
+  emptyRemotePairingForm,
+  updateRemotePairingHost,
+  updateRemotePairingCode,
+  resolveRemotePairingForm,
+} from "./remotePairingForm";
 import {
   createServerPairingCredential,
   revokeOtherServerClientSessions,
@@ -346,55 +352,6 @@ function parseManualDesktopSshTarget(input: {
   };
 }
 
-function parsePairingUrlFields(
-  input: string,
-): { readonly host: string; readonly pairingCode: string } | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  try {
-    const urlLikeInput =
-      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
-        ? trimmed
-        : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
-    const hostedPairingRequest = readHostedPairingRequest(url);
-    if (hostedPairingRequest) {
-      return {
-        host: hostedPairingRequest.host,
-        pairingCode: hostedPairingRequest.token,
-      };
-    }
-
-    const pairingCode = getPairingTokenFromUrl(url);
-    if (!pairingCode) return null;
-    return {
-      host: url.origin,
-      pairingCode,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parseRemotePairingFields(input: { readonly host: string; readonly pairingCode: string }): {
-  readonly host: string;
-  readonly pairingCode: string;
-} {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
-  if (parsedPairingUrl) return parsedPairingUrl;
-
-  const host = input.host.trim();
-  const pairingCode = input.pairingCode.trim();
-  if (!host) {
-    throw new Error("Enter a backend host.");
-  }
-  if (!pairingCode) {
-    throw new Error("Enter a pairing code.");
-  }
-  return { host, pairingCode };
-}
-
 function formatDesktopSshConnectionError(error: unknown): string {
   const fallback = "Failed to connect SSH host.";
   const rawMessage = error instanceof Error ? error.message : fallback;
@@ -529,19 +486,20 @@ function endpointDefaultPreferenceKey(endpoint: AdvertisedEndpoint): string {
 function resolveAdvertisedEndpointPairingUrl(
   endpoint: AdvertisedEndpoint,
   credential: string,
+  hints: PairingRouteHints,
 ): string {
   if (endpoint.compatibility.hostedHttpsApp === "compatible") {
     return (
-      resolveHostedPairingUrl(endpoint.httpBaseUrl, credential) ??
-      resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential)
+      resolveHostedPairingUrl(endpoint.httpBaseUrl, credential, hints) ??
+      resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential, hints)
     );
   }
-  return resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential);
+  return resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential, hints);
 }
 
-function resolveCurrentOriginPairingUrl(credential: string): string {
+function resolveCurrentOriginPairingUrl(credential: string, hints: PairingRouteHints): string {
   const url = new URL("/pair", window.location.href);
-  return setPairingTokenOnUrl(url, credential).toString();
+  return setPairingTokenOnUrl(url, credential, hints).toString();
 }
 
 function isHostedAppPairingUrl(value: string): boolean {
@@ -612,6 +570,7 @@ function RevokeButton({
 }
 
 type PairingLinkListRowProps = {
+  pairingHints: PairingRouteHints;
   pairingLink: ServerPairingLinkRecord;
   credential: string | undefined;
   endpointUrl: string | null | undefined;
@@ -623,6 +582,7 @@ type PairingLinkListRowProps = {
 };
 
 const PairingLinkListRow = memo(function PairingLinkListRow({
+  pairingHints,
   pairingLink,
   credential,
   endpointUrl,
@@ -645,22 +605,22 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const qrPanelId = useId();
 
   const currentOriginPairingUrl = useMemo(
-    () => (credential ? resolveCurrentOriginPairingUrl(credential) : null),
-    [credential],
+    () => (credential ? resolveCurrentOriginPairingUrl(credential, pairingHints) : null),
+    [credential, pairingHints],
   );
   const hostedPairingUrl = useMemo(
     () =>
       credential && endpointUrl != null && endpointUrl !== ""
-        ? resolveHostedPairingUrl(endpointUrl, credential)
+        ? resolveHostedPairingUrl(endpointUrl, credential, pairingHints)
         : null,
-    [endpointUrl, credential],
+    [endpointUrl, credential, pairingHints],
   );
   const endpointPairingUrl = useMemo(() => {
     const endpoint = selectPairingEndpoint(endpoints, defaultEndpointKey);
     return endpoint && credential
-      ? resolveAdvertisedEndpointPairingUrl(endpoint, credential)
+      ? resolveAdvertisedEndpointPairingUrl(endpoint, credential, pairingHints)
       : null;
-  }, [defaultEndpointKey, endpoints, credential]);
+  }, [defaultEndpointKey, endpoints, credential, pairingHints]);
   const endpointCopyOptions = useMemo(() => {
     const options: Array<{
       readonly id: string;
@@ -675,7 +635,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       if (endpoint.status === "unavailable") {
         continue;
       }
-      const url = resolveAdvertisedEndpointPairingUrl(endpoint, credential);
+      const url = resolveAdvertisedEndpointPairingUrl(endpoint, credential, pairingHints);
       options.push({
         id: endpoint.id,
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
@@ -686,11 +646,11 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       });
     }
     return options;
-  }, [endpoints, credential]);
+  }, [endpoints, credential, pairingHints]);
   const shareablePairingUrl =
     endpointPairingUrl ??
     (credential && endpointUrl != null && endpointUrl !== ""
-      ? (hostedPairingUrl ?? resolveDesktopPairingUrl(endpointUrl, credential))
+      ? (hostedPairingUrl ?? resolveDesktopPairingUrl(endpointUrl, credential, pairingHints))
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl);
@@ -1259,6 +1219,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
 });
 
 type PairingClientsListProps = {
+  pairingHints: PairingRouteHints;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
   defaultEndpointKey: string | null;
@@ -1274,6 +1235,7 @@ type PairingClientsListProps = {
 };
 
 const PairingClientsList = memo(function PairingClientsList({
+  pairingHints,
   endpointUrl,
   endpoints,
   defaultEndpointKey,
@@ -1291,6 +1253,7 @@ const PairingClientsList = memo(function PairingClientsList({
     <>
       {pairingLinks.map((pairingLink) => (
         <PairingLinkListRow
+          pairingHints={pairingHints}
           key={pairingLink.id}
           pairingLink={pairingLink}
           credential={createdPairingCredentials.get(pairingLink.id)}
@@ -1873,8 +1836,7 @@ export function ConnectionsSettings() {
   const [addBackendDialogOpen, setAddBackendDialogOpen] = useState(false);
   const [routeTarget, setRouteTarget] = useState<EnvironmentPresentation | null>(null);
   const [savedBackendMode, setSavedBackendMode] = useState<"remote" | "ssh">("remote");
-  const [savedBackendHost, setSavedBackendHost] = useState("");
-  const [savedBackendPairingCode, setSavedBackendPairingCode] = useState("");
+  const [savedBackendForm, setSavedBackendForm] = useState(emptyRemotePairingForm);
   const [savedBackendSshHost, setSavedBackendSshHost] = useState("");
   const [savedBackendSshUsername, setSavedBackendSshUsername] = useState("");
   const [savedBackendSshPort, setSavedBackendSshPort] = useState("");
@@ -2227,8 +2189,7 @@ export function ConnectionsSettings() {
         return;
       }
 
-      setSavedBackendHost("");
-      setSavedBackendPairingCode("");
+      setSavedBackendForm(emptyRemotePairingForm);
       setSavedBackendSshHost("");
       setSavedBackendSshUsername("");
       setSavedBackendSshPort("");
@@ -2263,12 +2224,9 @@ export function ConnectionsSettings() {
 
     setIsAddingSavedBackend(true);
     setSavedBackendError(null);
-    let remotePairingInput: ReturnType<typeof parseRemotePairingFields>;
+    let remotePairingInput: ReturnType<typeof resolveRemotePairingForm>;
     try {
-      remotePairingInput = parseRemotePairingFields({
-        host: savedBackendHost,
-        pairingCode: savedBackendPairingCode,
-      });
+      remotePairingInput = resolveRemotePairingForm(savedBackendForm);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to add backend.";
       setSavedBackendError(message);
@@ -2304,8 +2262,7 @@ export function ConnectionsSettings() {
       return;
     }
 
-    setSavedBackendHost("");
-    setSavedBackendPairingCode("");
+    setSavedBackendForm(emptyRemotePairingForm);
     setSavedBackendSshHost("");
     setSavedBackendSshUsername("");
     setSavedBackendSshPort("");
@@ -2328,9 +2285,8 @@ export function ConnectionsSettings() {
     connectPairing,
     connectSavedBackendSshTarget,
     routeTarget,
-    savedBackendHost,
+    savedBackendForm,
     savedBackendMode,
-    savedBackendPairingCode,
     savedBackendSshHost,
     savedBackendSshPort,
     savedBackendSshUsername,
@@ -2501,6 +2457,18 @@ export function ConnectionsSettings() {
         : visibleDesktopNetworkAdvertisedEndpoints,
     [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
+  const pairingHints = useMemo(
+    () => ({
+      environmentId: primaryServerConfig?.environment.environmentId,
+      routes: [
+        ...visibleDesktopAdvertisedEndpoints
+          .filter((endpoint) => endpoint.status !== "unavailable")
+          .map((endpoint) => endpoint.httpBaseUrl),
+        ...(primaryServerConfig?.directEndpoints ?? []).map((endpoint) => endpoint.httpBaseUrl),
+      ],
+    }),
+    [primaryServerConfig, visibleDesktopAdvertisedEndpoints],
+  );
   const isLocalBackendRemotelyReachable =
     isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
@@ -2527,13 +2495,7 @@ export function ConnectionsSettings() {
     [setDefaultAdvertisedEndpointKey],
   );
   const handleSavedBackendHostChange = useCallback((value: string) => {
-    const parsedPairingUrl = parsePairingUrlFields(value);
-    if (parsedPairingUrl) {
-      setSavedBackendHost(parsedPairingUrl.host);
-      setSavedBackendPairingCode(parsedPairingUrl.pairingCode);
-      return;
-    }
-    setSavedBackendHost(value);
+    setSavedBackendForm((form) => updateRemotePairingHost(form, value, window.location.origin));
   }, []);
 
   const renderConnectionModeCard = (input: {
@@ -2584,7 +2546,7 @@ export function ConnectionsSettings() {
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-foreground">Host</span>
           <Input
-            value={savedBackendHost}
+            value={savedBackendForm.host}
             onChange={(event) => handleSavedBackendHostChange(event.target.value)}
             placeholder="backend.example.com"
             disabled={isAddingSavedBackend}
@@ -2594,8 +2556,11 @@ export function ConnectionsSettings() {
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-foreground">Pairing code</span>
           <Input
-            value={savedBackendPairingCode}
-            onChange={(event) => setSavedBackendPairingCode(event.target.value)}
+            value={savedBackendForm.pairingCode}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSavedBackendForm((form) => updateRemotePairingCode(form, value));
+            }}
             placeholder="PAIRCODE"
             disabled={isAddingSavedBackend}
             spellCheck={false}
@@ -3125,6 +3090,7 @@ export function ConnectionsSettings() {
         </div>
       ) : null}
       <PairingClientsList
+        pairingHints={pairingHints}
         endpointUrl={desktopServerExposureState?.endpointUrl}
         endpoints={visibleDesktopAdvertisedEndpoints}
         defaultEndpointKey={defaultDesktopAdvertisedEndpointKey}

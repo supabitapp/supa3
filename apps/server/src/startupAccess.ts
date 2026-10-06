@@ -1,11 +1,14 @@
 import * as NodeOS from "node:os";
 
 import { QrCode } from "@supacode/shared/qrCode";
+import { buildPairingUrl } from "@supacode/shared/remote";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/http";
 
 import * as ServerConfig from "./config.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
+import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 
 export interface HeadlessServeAccessInfo {
   readonly connectionString: string;
@@ -89,14 +92,6 @@ export const resolveListeningPort = (address: unknown, fallbackPort: number): nu
   return fallbackPort;
 };
 
-export const buildPairingUrl = (connectionString: string, token: string): string => {
-  const url = new URL(connectionString);
-  url.pathname = "/pair";
-  url.searchParams.delete("token");
-  url.hash = new URLSearchParams([["token", token]]).toString();
-  return url.toString();
-};
-
 export const renderTerminalQrCode = (value: string, margin = 2): string => {
   const qrCode = QrCode.encodeText(value, QrCode.Ecc.MEDIUM);
   const rows: Array<string> = [];
@@ -134,6 +129,8 @@ export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessI
   const serverConfig = yield* ServerConfig.ServerConfig;
   const httpServer = yield* HttpServer.HttpServer;
   const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+  const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
+  const endpoints = yield* DirectEndpoints.DirectEndpoints;
   const connectionString = resolveHeadlessConnectionString(
     serverConfig.host,
     resolveListeningPort(httpServer.address, serverConfig.port),
@@ -143,6 +140,9 @@ export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessI
   return {
     connectionString,
     token: issued.credential,
-    pairingUrl: buildPairingUrl(connectionString, issued.credential),
+    pairingUrl: buildPairingUrl(connectionString, issued.credential, {
+      environmentId: yield* environment.getEnvironmentId,
+      routes: (yield* endpoints.resolve()).map((endpoint) => endpoint.httpBaseUrl),
+    }),
   } satisfies HeadlessServeAccessInfo;
 });

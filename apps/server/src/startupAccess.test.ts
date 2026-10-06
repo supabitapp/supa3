@@ -1,7 +1,7 @@
 import { assert, expect, it } from "@effect/vitest";
+import { buildPairingUrl } from "@supacode/shared/remote";
 
 import {
-  buildPairingUrl,
   formatHeadlessServeOutput,
   renderTerminalQrCode,
   resolveHeadlessConnectionHost,

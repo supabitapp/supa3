@@ -3,7 +3,7 @@ import {
   isPrivateNetworkHost,
   isTailnetHost,
 } from "@supacode/shared/hostClassification";
-import type { DesktopSshEnvironmentTarget } from "@supacode/contracts";
+import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contracts";
 import * as Option from "effect/Option";
 
 import {
@@ -58,14 +58,72 @@ export function routeHttpBaseUrl(route: ConnectionRoute): string | null {
   return profile?._tag === "BearerConnectionProfile" ? profile.httpBaseUrl : null;
 }
 
-function routeHostname(route: ConnectionRoute): string | null {
+function routeUrl(route: ConnectionRoute): URL | null {
   const httpBaseUrl = routeHttpBaseUrl(route);
   if (httpBaseUrl === null) return null;
   try {
-    return new URL(httpBaseUrl).hostname;
+    return new URL(httpBaseUrl);
   } catch {
     return null;
   }
+}
+
+function routeHostname(route: ConnectionRoute): string | null {
+  return routeUrl(route)?.hostname ?? null;
+}
+
+/** The saved routes that reach `httpBaseUrl`'s origin. */
+export function routesAt(
+  entry: ConnectionCatalogEntry,
+  httpBaseUrl: string,
+): ReadonlyArray<ConnectionRoute> {
+  const origin = new URL(httpBaseUrl).origin;
+  return connectionRoutes(entry).filter((route) => routeUrl(route)?.origin === origin);
+}
+
+export interface PairingFallback {
+  readonly environmentId: EnvironmentId;
+  readonly httpBaseUrls: ReadonlyArray<string>;
+}
+
+/**
+ * The saved addresses to pair through when a pairing link's own address is out
+ * of reach, such as a LAN address from cellular. A pairing token is accepted on
+ * every address of its server. The link is for the expected environment when
+ * the user named one; otherwise its address must already be a route of exactly
+ * one saved environment, since a private address can belong to a different
+ * machine on each network.
+ */
+export function pairingFallbackRoutes(
+  entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
+  httpBaseUrl: string,
+  expectedEnvironmentId: EnvironmentId | undefined,
+): PairingFallback | null {
+  const owner =
+    expectedEnvironmentId === undefined
+      ? onlyEnvironmentAt(entries, httpBaseUrl)
+      : entries.get(expectedEnvironmentId);
+  if (owner === undefined) return null;
+  const linkOrigin = new URL(httpBaseUrl).origin;
+  const fallbacks = new Map<string, string>();
+  for (const route of connectionRoutes(owner)) {
+    const url = routeUrl(route);
+    if (url === null || url.origin === linkOrigin || fallbacks.has(url.origin)) continue;
+    fallbacks.set(url.origin, url.href);
+  }
+  return fallbacks.size === 0
+    ? null
+    : { environmentId: owner.target.environmentId, httpBaseUrls: [...fallbacks.values()] };
+}
+
+function onlyEnvironmentAt(
+  entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
+  httpBaseUrl: string,
+): ConnectionCatalogEntry | undefined {
+  const [owner, ...others] = [...entries.values()].filter(
+    (entry) => routesAt(entry, httpBaseUrl).length > 0,
+  );
+  return others.length === 0 ? owner : undefined;
 }
 
 export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind {

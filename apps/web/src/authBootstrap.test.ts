@@ -1,5 +1,8 @@
 import {
   EnvironmentAuthInvalidError,
+  EnvironmentId,
+  ORCHESTRATION_PROTOCOL_VERSION,
+  type ExecutionEnvironmentDescriptor,
   type AuthBrowserSessionResult,
   type AuthCreatePairingCredentialInput,
   type AuthSessionState,
@@ -94,6 +97,7 @@ function sequence<A>(...values: ReadonlyArray<A>) {
 let disposeHttpTest: (() => Promise<void>) | undefined;
 
 async function installAuthApi(input: {
+  readonly descriptor?: () => Effect.Effect<ExecutionEnvironmentDescriptor>;
   readonly session?: () => AuthSessionState;
   readonly browserSession?: (
     credential: string,
@@ -106,6 +110,7 @@ async function installAuthApi(input: {
   }>;
 }) {
   const testApi = await installEnvironmentHttpTest({
+    ...(input.descriptor ? { descriptor: input.descriptor } : {}),
     ...(input.session ? { session: () => Effect.succeed(input.session!()) } : {}),
     ...(input.browserSession
       ? { browserSession: (payload) => input.browserSession!(payload.credential) }
@@ -119,6 +124,47 @@ async function installAuthApi(input: {
 }
 
 describe("resolveInitialServerAuthGateState", () => {
+  it.each(["machine", "other"])(
+    "verifies pairing identity %s before exchanging a cookie credential",
+    async (identity) => {
+      installTestBrowser(
+        "http://localhost/pair#token=code&env=machine&routes=https://machine.ts.net",
+      );
+      const testApi = await installAuthApi({
+        descriptor: () =>
+          Effect.succeed({
+            environmentId: EnvironmentId.make(identity),
+            label: "Machine",
+            platform: { os: "linux", arch: "x64" },
+            serverVersion: "test",
+            orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
+            capabilities: { repositoryIdentity: true },
+          }),
+        session: sequence(authenticatedSession(LOOPBACK_AUTH), authenticatedSession(LOOPBACK_AUTH)),
+        browserSession: () => Effect.succeed(browserSession(["orchestration:read"])),
+      });
+      const { resolveInitialServerAuthGateState } = await import("./environments/primary");
+      const result = await resolveInitialServerAuthGateState();
+      expect(testApi.calls.descriptor).toBe(1);
+      expect(testApi.calls.browserSession).toHaveLength(identity === "machine" ? 1 : 0);
+      expect(result.status).toBe(identity === "machine" ? "authenticated" : "requires-auth");
+      expect(window.location.hash).toBe("");
+    },
+  );
+
+  it.each(["env=", "env=one&env=two"])(
+    "does not redeem a malformed identity %s",
+    async (identity) => {
+      installTestBrowser(`http://localhost/pair#token=code&${identity}`);
+      const testApi = await installAuthApi({ session: () => authenticatedSession(LOOPBACK_AUTH) });
+      const { resolveInitialServerAuthGateState } = await import("./environments/primary");
+      const result = await resolveInitialServerAuthGateState();
+      expect(result.status).toBe("requires-auth");
+      expect(testApi.calls.browserSession).toEqual([]);
+      expect(testApi.calls.descriptor).toBe(0);
+    },
+  );
+
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
