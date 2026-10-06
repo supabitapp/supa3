@@ -17,6 +17,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   clampCollapsedComposerCursor,
   collapseExpandedComposerCursor,
+  composerSendShortcutLabels,
   composerSubmissionIntentForKey,
   composerStateAtPromptEnd,
   expandCollapsedComposerCursor,
@@ -64,6 +65,58 @@ describe("formatAssistantCitationForComposer", () => {
     expect(text).toBe(`${serializeAssistantCitation(boundCitation)} `);
     expect(collectAssistantCitations(text).map((entry) => entry.citation)).toEqual([boundCitation]);
     expect(expandAssistantCitationsForProvider(text)).toMatch(/^\[assistant-quote-1\] \n\n/);
+  });
+});
+
+describe("composerSendShortcutLabels", () => {
+  const input = {
+    keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+    platform: "MacIntel",
+    isDraftThread: false,
+    isRunning: false,
+    sendShortcut: "enter" as const,
+    hasMultilinePrompt: false,
+    isMobileViewport: false,
+  };
+
+  it("sends on Enter and starts a new thread on the background key", () => {
+    expect(composerSendShortcutLabels(input)).toEqual({
+      foreground: "Enter",
+      newLine: "⇧Enter",
+      background: "⌥⌘Enter",
+    });
+  });
+
+  it("sends a draft in the background on Mod+Enter", () => {
+    expect(composerSendShortcutLabels({ ...input, isDraftThread: true })).toEqual({
+      foreground: "Enter",
+      newLine: "⇧Enter",
+      background: "⌘Enter",
+    });
+  });
+
+  it("leaves Enter as a line break when sending needs the modifier", () => {
+    expect(
+      composerSendShortcutLabels({ ...input, platform: "Linux", sendShortcut: "mod-enter" }),
+    ).toEqual({ foreground: "Ctrl+Enter", newLine: "Enter", background: "Ctrl+Alt+Enter" });
+  });
+
+  it("never sends on Enter in a mobile viewport", () => {
+    expect(composerSendShortcutLabels({ ...input, isMobileViewport: true })).toEqual({
+      newLine: "Enter",
+      background: "⌥⌘Enter",
+    });
+  });
+
+  it("gives Mod+Enter to the alternate follow-up while a turn runs", () => {
+    expect(
+      composerSendShortcutLabels({
+        ...input,
+        isRunning: true,
+        sendShortcut: "mod-enter-multiline",
+        hasMultilinePrompt: true,
+      }),
+    ).toEqual({ newLine: "Enter", alternate: "⌘Enter", background: "⌥⌘Enter" });
   });
 });
 

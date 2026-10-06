@@ -7,6 +7,7 @@ interface PanelTabCloseButtonProps {
   label: string;
   onClick: () => void;
   tooltip?: string;
+  shortcut?: string | null | undefined;
 }
 
 /** Inside a `group/tab` row, swaps the tab identity for its close action on hover or focus. */
@@ -15,6 +16,7 @@ export function PanelTabCloseButton({
   label,
   onClick,
   tooltip,
+  shortcut,
 }: PanelTabCloseButtonProps) {
   const button = (
     <button
@@ -35,7 +37,7 @@ export function PanelTabCloseButton({
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
-      <TooltipPopup>{tooltip}</TooltipPopup>
+      <TooltipPopup shortcut={shortcut}>{tooltip}</TooltipPopup>
     </Tooltip>
   );
 }

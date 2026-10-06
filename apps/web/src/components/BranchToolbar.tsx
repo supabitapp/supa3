@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -50,10 +51,11 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
+  MenuShortcut,
   MenuTrigger,
 } from "./ui/menu";
 import { Separator } from "./ui/separator";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipShortcutLabel, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { useComposerMenuProps } from "./chat/composerEventScope";
@@ -149,31 +151,30 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
         ? resolveEnvModeLabel("worktree")
         : resolveCurrentWorkspaceLabel(activeWorktreePath);
   const isLocked = envLocked || envModeLocked;
+  const hostShortcut = useShortcutLabel(
+    showEnvironmentPicker && !isLocked ? "composer.host" : null,
+  );
+  const workspaceShortcut = useShortcutLabel(isLocked ? null : "composer.workspace");
+  const previousWorktreeShortcut = useShortcutLabel(
+    previousWorktreeLabel ? "composer.previousWorktree" : null,
+  );
+  const environmentLabel = autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on";
+  const showsEnvironmentLabel = autoEnvironmentLabel !== undefined || showEnvironmentIndicator;
   const workspaceIcon = (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <WorkspaceIcon className={cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")} />
-      </TooltipTrigger>
-      <TooltipPopup>{workspaceLabel}</TooltipPopup>
-    </Tooltip>
+    <WorkspaceIcon className={cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")} />
   );
   const icon = showEnvironmentIndicator ? (
     // Button's base styles apply `-mx-0.5` to descendant SVGs, which eats 4px
     // out of whatever gap we set. mx-0! cancels that so gap-0.5 reads as 2px.
     <span className="inline-flex shrink-0 items-center gap-0.5">
-      <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-          {autoEnvironmentLabel ? (
-            <ScaleIcon className="size-3 shrink-0 mx-0!" aria-hidden="true" />
-          ) : (
-            <EnvironmentMachineIcon
-              kind={activeEnvironment?.machine ?? "server"}
-              className="size-3 shrink-0 mx-0!"
-            />
-          )}
-        </TooltipTrigger>
-        <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
-      </Tooltip>
+      {autoEnvironmentLabel ? (
+        <ScaleIcon className="size-3 shrink-0 mx-0!" aria-hidden="true" />
+      ) : (
+        <EnvironmentMachineIcon
+          kind={activeEnvironment?.machine ?? "server"}
+          className="size-3 shrink-0 mx-0!"
+        />
+      )}
       {workspaceIcon}
     </span>
   ) : (
@@ -183,37 +184,61 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
     <>
       {icon}
       <ComposerContextLabel>
-        {autoEnvironmentLabel ??
-          (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
+        {showsEnvironmentLabel ? environmentLabel : workspaceLabel}
       </ComposerContextLabel>
     </>
+  );
+  // The label shows one of host and workspace, so the tooltip names both with their keys.
+  const triggerTooltip = (
+    <TooltipPopup>
+      <span className="grid gap-1">
+        {showsEnvironmentLabel ? (
+          <TooltipShortcutLabel shortcut={hostShortcut}>{environmentLabel}</TooltipShortcutLabel>
+        ) : null}
+        <TooltipShortcutLabel shortcut={workspaceShortcut}>{workspaceLabel}</TooltipShortcutLabel>
+      </span>
+    </TooltipPopup>
   );
 
   if (isLocked) {
     return (
-      <span
-        className="inline-flex h-7 min-w-0 max-w-[48%] flex-initial items-center justify-start gap-1 rounded-md border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
-        data-composer-context-control
-      >
-        {triggerContent}
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className="inline-flex h-7 min-w-0 max-w-[48%] flex-initial items-center justify-start gap-1 rounded-md border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
+              data-composer-context-control
+            />
+          }
+        >
+          {triggerContent}
+        </TooltipTrigger>
+        {triggerTooltip}
+      </Tooltip>
     );
   }
 
   return (
     <Menu>
-      <MenuTrigger
-        render={<ComposerControl size="xs" />}
-        className="min-w-0 max-w-[48%] flex-initial justify-start"
-        data-composer-context-control
-        data-composer-shortcut={[
-          showEnvironmentPicker && !envLocked ? "composer.host" : "",
-          !envModeLocked ? "composer.workspace" : "",
-        ].join(" ")}
-      >
-        {triggerContent}
-        <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-      </MenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <MenuTrigger
+              render={<ComposerControl size="xs" />}
+              className="min-w-0 max-w-[48%] flex-initial justify-start"
+              data-composer-context-control
+              data-composer-shortcut={[
+                showEnvironmentPicker && !envLocked ? "composer.host" : "",
+                !envModeLocked ? "composer.workspace" : "",
+              ].join(" ")}
+            />
+          }
+        >
+          {triggerContent}
+          <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+        </TooltipTrigger>
+        {triggerTooltip}
+      </Tooltip>
       <MenuPopup
         align="start"
         side="top"
@@ -297,7 +322,12 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
             </MenuRadioItem>
             {previousWorktreeLabel ? (
               <MenuRadioItem disabled={envModeLocked} value="previous-worktree" closeOnClick>
-                <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
+                <span className="flex w-full min-w-0 items-center gap-2">
+                  <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
+                  {previousWorktreeShortcut ? (
+                    <MenuShortcut>{previousWorktreeShortcut}</MenuShortcut>
+                  ) : null}
+                </span>
               </MenuRadioItem>
             ) : null}
           </MenuRadioGroup>

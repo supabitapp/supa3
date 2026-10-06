@@ -82,6 +82,7 @@ import {
   composerStateAtPromptEnd,
   expandCollapsedComposerCursor,
   formatAssistantCitationForComposer,
+  INTERACTION_MODE_TOGGLE_SHORTCUT,
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import { listContinuationForEnter, listIndentForTab } from "../../composer-list-continuation";
@@ -183,7 +184,11 @@ import {
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { getTerminalFocusOwner } from "../../lib/terminalFocus";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
+import {
+  formatShortcutLabel,
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
+} from "../../keybindings";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -1284,8 +1289,8 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   const runtimeModeShortcut = shortcutLabelForCommand(props.keybindings, "composer.mode");
   const interactionModeTooltip =
     props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode · ⇧Tab"
-      : "Default mode — click to enter plan mode · ⇧Tab";
+      ? "Plan mode — click to return to normal build mode"
+      : "Default mode — click to enter plan mode";
 
   const interactionModeToggle = props.showInteractionModeToggle ? (
     <>
@@ -1320,7 +1325,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
             {props.interactionMode === "plan" ? "Plan" : "Build"}
           </span>
         </TooltipTrigger>
-        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
+        <TooltipPopup side="top" shortcut={formatShortcutLabel(INTERACTION_MODE_TOGGLE_SHORTCUT)}>
+          {interactionModeTooltip}
+        </TooltipPopup>
       </Tooltip>
     </>
   ) : null;
@@ -1374,9 +1381,8 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
             })}
           </SelectPopup>
         </Select>
-        <TooltipPopup side="top">
+        <TooltipPopup side="top" shortcut={runtimeModeShortcut}>
           {runtimeModeOption.description}
-          {runtimeModeShortcut ? ` · ${runtimeModeShortcut}` : ""}
         </TooltipPopup>
       </Tooltip>
 
@@ -1401,7 +1407,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isRunning: boolean;
   canInterrupt: boolean;
   followUpBehavior: "queue" | "steer";
-  alternateShortcutLabel: string | null;
+  keybindings: ResolvedKeybindingsConfig;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -1412,7 +1418,6 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   sendShortcut?: UnifiedSettings["sendShortcut"] | undefined;
   isDraftThread?: boolean | undefined;
   hasMultilinePrompt?: boolean | undefined;
-  modifierLabel?: string | undefined;
   canResume: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
   isEditingQueuedMessage: boolean;
@@ -1444,7 +1449,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isRunning={props.isRunning}
         canInterrupt={props.canInterrupt}
         followUpBehavior={props.followUpBehavior}
-        alternateShortcutLabel={props.alternateShortcutLabel}
+        keybindings={props.keybindings}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
         promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
@@ -1456,7 +1461,6 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         sendShortcut={props.sendShortcut}
         isDraftThread={props.isDraftThread}
         hasMultilinePrompt={props.hasMultilinePrompt}
-        modifierLabel={props.modifierLabel}
         canResume={props.canResume}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
         isEditingQueuedMessage={props.isEditingQueuedMessage}
@@ -2999,6 +3003,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPromptChange: setPromptFromTraits,
     planModeEnabled: settings.planModeEnabled,
     isComposerOwned: true,
+    shortcutLabel: shortcutLabelForCommand(keybindings, "composer.effort"),
   } satisfies Parameters<typeof renderProviderTraitsPicker>[0];
   const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsPickerInput);
   const [inlineRestingControlsHost, setInlineRestingControlsHost] = useState<HTMLDivElement | null>(
@@ -5616,6 +5621,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             size={composerControlsCollapsed ? "xs" : "sm"}
             hidden={composerControlsHidden || hiddenRestingBlockIds.length === 0}
             showInteractionModeToggle={planModeUiEnabled && hiddenRestingBlockIds.includes("mode")}
+            keybindings={keybindings}
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
             }
@@ -6807,6 +6813,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           {activePendingProgress?.activeQuestion?.multiSelect ? (
                             <ComposerPrimaryActions
                               compact
+                              keybindings={keybindings}
                               pendingAction={pendingPrimaryAction}
                               isRunning={false}
                               canInterrupt={false}
@@ -7492,6 +7499,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   >
                     <ComposerPrimaryActions
                       compact
+                      keybindings={keybindings}
                       pendingAction={pendingPrimaryAction}
                       isRunning={false}
                       canInterrupt={false}
@@ -7606,17 +7614,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     isRunning={phase === "running"}
                     canInterrupt={canInterrupt}
                     followUpBehavior={settings.followUpBehavior}
-                    alternateShortcutLabel={shortcutLabelForCommand(
-                      keybindings,
-                      "composer.sendAlternate",
-                      {
-                        context: {
-                          composerFocus: true,
-                          draftThreadRoute: routeKind === "draft",
-                          turnRunning: true,
-                        },
-                      },
-                    )}
+                    keybindings={keybindings}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
@@ -7634,7 +7632,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     sendShortcut={settings.sendShortcut}
                     isDraftThread={_isLocalDraftThread}
                     hasMultilinePrompt={hasMultilinePrompt}
-                    modifierLabel={isMacPlatform(navigator.platform) ? "⌘" : "Ctrl"}
                     canResume={showResumeAction}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     isEditingQueuedMessage={isEditingQueuedMessage}

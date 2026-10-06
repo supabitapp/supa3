@@ -19,6 +19,8 @@ import {
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useShortcutLabel } from "~/hooks/useShortcutLabel";
+import { PREVIEW_FOCUS_SHORTCUT_OPTIONS } from "~/lib/previewFocus";
 import { cn } from "~/lib/utils";
 
 interface Props {
@@ -92,6 +94,7 @@ export function PreviewChromeRow({
   trailingActions,
   leadingActions,
 }: Props) {
+  const refreshShortcut = useShortcutLabel("preview.refresh", PREVIEW_FOCUS_SHORTCUT_OPTIONS);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState(url);
   const [inputFocused, setInputFocused] = useState(false);
@@ -168,7 +171,9 @@ export function PreviewChromeRow({
             >
               <RefreshIcon refreshing={loading} />
             </TooltipTrigger>
-            <TooltipPopup>{loading ? "Loading…" : "Refresh"}</TooltipPopup>
+            <TooltipPopup shortcut={loading ? null : refreshShortcut}>
+              {loading ? "Loading…" : "Refresh"}
+            </TooltipPopup>
           </Tooltip>
         </div>
 
@@ -249,13 +254,13 @@ export function PreviewChromeRow({
             >
               <MousePointerClick className={cn(pickActive && "text-primary")} />
             </TooltipTrigger>
-            <TooltipPopup>
-              {pickDisabled && pickDisabledReason
-                ? pickDisabledReason
-                : pickActive
-                  ? "Cancel annotation (Esc)"
-                  : "Annotate elements, regions, and drawings"}
-            </TooltipPopup>
+            {pickDisabled && pickDisabledReason ? (
+              <TooltipPopup>{pickDisabledReason}</TooltipPopup>
+            ) : (
+              <TooltipPopup shortcut={pickActive ? "Esc" : null}>
+                {pickActive ? "Cancel annotation" : "Annotate elements, regions, and drawings"}
+              </TooltipPopup>
+            )}
           </Tooltip>
         ) : null}
         {onCapture ? (

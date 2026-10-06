@@ -7,6 +7,7 @@ import { memo, useMemo } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
+import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
@@ -42,6 +43,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   displayMode = "toolbar",
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
+  const hostShortcut = useShortcutLabel(displayMode === "toolbar" ? "composer.host" : null);
   const activeEnvironment = useMemo(() => {
     return availableEnvironments.find((env) => env.environmentId === environmentId) ?? null;
   }, [availableEnvironments, environmentId]);
@@ -138,7 +140,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
           </ComposerContextLabel>
         </TooltipTrigger>
-        <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+        <TooltipPopup shortcut={hostShortcut}>
+          {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
+        </TooltipPopup>
       </Tooltip>
       <ComboboxPopup
         {...(displayMode === "toolbar" ? composerFloatingLayerProps : {})}

@@ -1,8 +1,12 @@
 "use client";
 
-import type { DesktopPreviewColorScheme, EnvironmentId } from "@supacode/contracts";
+import type {
+  DesktopPreviewColorScheme,
+  EnvironmentId,
+  KeybindingCommand,
+} from "@supacode/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -22,6 +26,8 @@ import {
 } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useInlineConfirm } from "~/hooks/useInlineConfirm";
+import { useShortcutLabel } from "~/hooks/useShortcutLabel";
+import { PREVIEW_FOCUS_SHORTCUT_OPTIONS } from "~/lib/previewFocus";
 
 import { previewBridge } from "./previewBridge";
 
@@ -33,6 +39,43 @@ const COLOR_SCHEME_OPTIONS: ReadonlyArray<{
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
+
+function ZoomButton({
+  label,
+  command,
+  variant,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  command: KeybindingCommand;
+  variant: "outline" | "ghost";
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const shortcut = useShortcutLabel(command, PREVIEW_FOCUS_SHORTCUT_OPTIONS);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant={variant}
+            size="icon-xs"
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            disabled={disabled}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup shortcut={shortcut}>{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
 
 interface Props {
   /** Active preview tab id. Tab-targeting actions are disabled without it. */
@@ -161,39 +204,36 @@ export function PreviewMoreMenu({
         >
           <span>Zoom</span>
           <span className="flex items-center gap-1">
-            <Button
+            <ZoomButton
+              label="Zoom out"
+              command="preview.zoomOut"
               variant="outline"
-              size="icon-xs"
-              type="button"
-              onClick={callTab(bridge.zoomOut)}
-              aria-label="Zoom out"
               disabled={tabDisabled}
+              onClick={callTab(bridge.zoomOut)}
             >
               <Minus />
-            </Button>
+            </ZoomButton>
             <span className="min-w-12 text-center text-xs tabular-nums text-muted-foreground">
               {zoomLabel}
             </span>
-            <Button
+            <ZoomButton
+              label="Zoom in"
+              command="preview.zoomIn"
               variant="outline"
-              size="icon-xs"
-              type="button"
-              onClick={callTab(bridge.zoomIn)}
-              aria-label="Zoom in"
               disabled={tabDisabled}
+              onClick={callTab(bridge.zoomIn)}
             >
               <PlusIcon />
-            </Button>
-            <Button
+            </ZoomButton>
+            <ZoomButton
+              label="Reset zoom"
+              command="preview.resetZoom"
               variant="ghost"
-              size="icon-xs"
-              type="button"
-              onClick={callTab(bridge.resetZoom)}
-              aria-label="Reset zoom"
               disabled={tabDisabled}
+              onClick={callTab(bridge.resetZoom)}
             >
               <RotateCcw />
-            </Button>
+            </ZoomButton>
           </span>
         </MenuItem>
         <MenuSeparator />

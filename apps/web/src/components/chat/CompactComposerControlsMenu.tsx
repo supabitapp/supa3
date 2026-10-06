@@ -1,4 +1,8 @@
-import { ProviderInteractionMode, RuntimeMode } from "@supacode/contracts";
+import {
+  ProviderInteractionMode,
+  RuntimeMode,
+  type ResolvedKeybindingsConfig,
+} from "@supacode/contracts";
 import { memo, type ReactNode } from "react";
 import { EllipsisIcon } from "lucide-react";
 import {
@@ -7,8 +11,11 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator as MenuDivider,
+  MenuShortcut,
   MenuTrigger,
 } from "../ui/menu";
+import { INTERACTION_MODE_TOGGLE_SHORTCUT } from "../../composer-logic";
+import { formatShortcutLabel, shortcutLabelForCommand } from "../../keybindings";
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
@@ -20,6 +27,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
     readonly mode: RuntimeMode;
     readonly label: string;
   }>;
+  keybindings: ResolvedKeybindingsConfig;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
   size?: "sm" | "xs";
@@ -35,6 +43,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   const composerFloatingLayerProps = useComposerMenuProps();
   const size = props.size ?? "sm";
   const [open, setOpen] = useComposerMenuState(props.hidden);
+  const runtimeModeShortcut = shortcutLabelForCommand(props.keybindings, "composer.mode");
 
   return (
     <Menu open={open} onOpenChange={setOpen}>
@@ -61,7 +70,10 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
         ) : null}
         {props.showInteractionModeToggle ? (
           <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
+            <div className="flex items-center gap-2 px-2 py-1.5 font-medium text-muted-foreground text-xs">
+              Mode
+              <MenuShortcut>{formatShortcutLabel(INTERACTION_MODE_TOGGLE_SHORTCUT)}</MenuShortcut>
+            </div>
             <MenuRadioGroup
               value={props.interactionMode}
               onValueChange={(value) => {
@@ -75,7 +87,10 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             <MenuDivider />
           </>
         ) : null}
-        <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
+        <div className="flex items-center gap-2 px-2 py-1.5 font-medium text-muted-foreground text-xs">
+          Access
+          {runtimeModeShortcut ? <MenuShortcut>{runtimeModeShortcut}</MenuShortcut> : null}
+        </div>
         <MenuRadioGroup
           value={props.runtimeMode}
           onValueChange={(value) => {

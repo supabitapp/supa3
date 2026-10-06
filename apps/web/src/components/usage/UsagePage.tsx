@@ -52,6 +52,7 @@ import {
   makeWindow,
 } from "@supacode/shared/usageFormat";
 import { Button, InlineButton } from "../ui/button";
+import { Kbd } from "../ui/kbd";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import {
   Menu,
@@ -109,18 +110,44 @@ function isUsageWindowDays(value: number): value is UsagePagePreferences["window
   return WINDOW_OPTIONS.some((option) => option.days === value);
 }
 
+interface ShortcutOptionProps {
+  readonly value: string;
+  readonly label: string;
+  readonly shortcut: string | null;
+}
+
+function ShortcutToggle({ value, label, shortcut }: ShortcutOptionProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Toggle value={value} />}>{label}</TooltipTrigger>
+      <TooltipPopup side="bottom" shortcut={shortcut}>
+        {label}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function ShortcutSelectItem({ value, label, shortcut }: ShortcutOptionProps) {
+  return (
+    <SelectItem value={value} label={label}>
+      <span className="flex items-center gap-3">
+        {label}
+        {shortcut ? (
+          <Kbd variant="plain" className="ms-auto" aria-hidden>
+            {shortcut}
+          </Kbd>
+        ) : null}
+      </span>
+    </SelectItem>
+  );
+}
+
 export function UsagePage() {
   const [preferences, setPreferences] = useState(readUsagePagePreferences);
   useEscapeToGoBack();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const shortcutTitle = (
-    option: (typeof METRIC_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number],
-  ) => {
-    const shortcut = shortcutLabelForCommand(keybindings, option.command, {
-      context: { usagePageOpen: true },
-    });
-    return shortcut ? `${option.label} (${shortcut})` : option.label;
-  };
+  const shortcutFor = (option: (typeof METRIC_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number]) =>
+    shortcutLabelForCommand(keybindings, option.command, { context: { usagePageOpen: true } });
   const [windowSelection, setWindowSelection] = useState(() => ({
     days: preferences.windowDays,
     window: makeWindow(
@@ -360,9 +387,12 @@ export function UsagePage() {
           }}
         >
           {METRIC_OPTIONS.map((option) => (
-            <Toggle key={option.value} value={option.value} title={shortcutTitle(option)}>
-              {option.label}
-            </Toggle>
+            <ShortcutToggle
+              key={option.value}
+              value={option.value}
+              label={option.label}
+              shortcut={shortcutFor(option)}
+            />
           ))}
         </ToggleGroup>
         {/* The period does not apply to Limits, so it stays in place but
@@ -378,9 +408,12 @@ export function UsagePage() {
           }}
         >
           {WINDOW_OPTIONS.map((option) => (
-            <Toggle key={option.days} value={String(option.days)} title={shortcutTitle(option)}>
-              {option.label}
-            </Toggle>
+            <ShortcutToggle
+              key={option.days}
+              value={String(option.days)}
+              label={option.label}
+              shortcut={shortcutFor(option)}
+            />
           ))}
         </ToggleGroup>
         <Button
@@ -413,9 +446,12 @@ export function UsagePage() {
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {METRIC_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value} title={shortcutTitle(option)}>
-                {option.label}
-              </SelectItem>
+              <ShortcutSelectItem
+                key={option.value}
+                value={option.value}
+                label={option.label}
+                shortcut={shortcutFor(option)}
+              />
             ))}
           </SelectPopup>
         </Select>
@@ -436,13 +472,12 @@ export function UsagePage() {
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {WINDOW_OPTIONS.map((option) => (
-              <SelectItem
+              <ShortcutSelectItem
                 key={option.days}
                 value={String(option.days)}
-                title={shortcutTitle(option)}
-              >
-                {option.label}
-              </SelectItem>
+                label={option.label}
+                shortcut={shortcutFor(option)}
+              />
             ))}
           </SelectPopup>
         </Select>

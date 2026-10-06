@@ -1,5 +1,6 @@
 import type { ClientSettings } from "@supacode/contracts/settings";
 import type { AssistantCitation, ResolvedKeybindingsConfig } from "@supacode/contracts";
+import { parseKeybindingShortcut } from "@supacode/shared/keybindings";
 import {
   serializeAssistantCitation,
   withAssistantCitationComment,
@@ -14,7 +15,13 @@ import {
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
 
-import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
+import {
+  formatShortcutLabel,
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
+  type ShortcutEventLike,
+} from "./keybindings";
+import { isMacPlatform } from "./lib/utils";
 
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
@@ -64,6 +71,75 @@ export function composerSubmissionIntentForKey(input: {
   )
     return null;
   return "foreground";
+}
+
+/** The plan mode toggle, which the composer handles itself rather than the keybinding registry. */
+export const INTERACTION_MODE_TOGGLE_SHORTCUT = parseKeybindingShortcut("shift+tab")!;
+
+export type ComposerSendAction = ComposerSubmissionIntent | "newLine";
+
+const COMPOSER_ENTER_KEYS = [
+  { shiftKey: false, modKey: false },
+  { shiftKey: true, modKey: false },
+  { shiftKey: false, modKey: true },
+] as const;
+
+/**
+ * The first key that runs each composer send action, resolved the way the composer's keydown
+ * handler resolves Enter and the send keybindings. Actions without a key are absent.
+ */
+export function composerSendShortcutLabels(input: {
+  keybindings: ResolvedKeybindingsConfig;
+  platform: string;
+  isDraftThread: boolean;
+  isRunning: boolean;
+  sendShortcut: ClientSettings["sendShortcut"];
+  hasMultilinePrompt: boolean;
+  isMobileViewport: boolean;
+}): Partial<Record<ComposerSendAction, string>> {
+  const { keybindings, platform, isDraftThread, isRunning } = input;
+  const labels: Partial<Record<ComposerSendAction, string>> = {};
+  const useMetaForMod = isMacPlatform(platform);
+  for (const { shiftKey, modKey } of COMPOSER_ENTER_KEYS) {
+    const intent = composerSubmissionIntentForKey({
+      event: {
+        key: "Enter",
+        metaKey: modKey && useMetaForMod,
+        ctrlKey: modKey && !useMetaForMod,
+        shiftKey,
+        altKey: false,
+      },
+      keybindings,
+      platform,
+      isMobileViewport: input.isMobileViewport,
+      isDraftThread,
+      isRunning,
+      sendShortcut: input.sendShortcut,
+      prompt: input.hasMultilinePrompt ? "\n" : "",
+    });
+    // An unmodified Enter the composer does not submit falls through to the editor as a line break.
+    const action = intent ?? (modKey ? null : "newLine");
+    if (action === null || labels[action] !== undefined) continue;
+    labels[action] = formatShortcutLabel(
+      { key: "enter", metaKey: false, ctrlKey: false, altKey: false, shiftKey, modKey },
+      platform,
+    );
+  }
+  const options = {
+    platform,
+    context: { composerFocus: true, draftThreadRoute: isDraftThread, turnRunning: isRunning },
+  };
+  const alternate = isRunning
+    ? shortcutLabelForCommand(keybindings, "composer.sendAlternate", options)
+    : null;
+  const background = shortcutLabelForCommand(
+    keybindings,
+    isDraftThread ? "composer.sendBackground" : "composer.sendAndNewThread",
+    options,
+  );
+  if (alternate && labels.alternate === undefined) labels.alternate = alternate;
+  if (background && labels.background === undefined) labels.background = background;
+  return labels;
 }
 
 const isInlineTokenSegment = (segment: ComposerPromptSegment): boolean => segment.type !== "text";

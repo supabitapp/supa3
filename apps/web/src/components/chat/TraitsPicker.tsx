@@ -566,6 +566,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   planModeEnabled,
   triggerClassName,
   isComposerOwned,
+  shortcutLabel = null,
   size = "sm",
   hidden = false,
   ...persistence
@@ -573,6 +574,8 @@ export const TraitsPicker = memo(function TraitsPicker({
   TraitsPersistence & {
     size?: ComposerControlSize;
     hidden?: boolean;
+    /** The key that opens the picker, shown on its trigger. */
+    shortcutLabel?: string | null;
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
@@ -707,7 +710,9 @@ export const TraitsPicker = memo(function TraitsPicker({
               </>
             )}
           </TooltipTrigger>
-          <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
+          <TooltipPopup side="top" shortcut={shortcutLabel}>
+            {triggerLabel}
+          </TooltipPopup>
         </Tooltip>
         <MenuPopup align="start" {...(isComposerOwned ? composerFloatingLayerProps : {})}>
           <TraitsMenuContent

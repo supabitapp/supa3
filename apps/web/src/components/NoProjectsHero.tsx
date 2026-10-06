@@ -4,10 +4,12 @@ import { useCallback } from "react";
 import { openCommandPalette } from "../commandPaletteBus";
 import { isElectron } from "../env";
 import { useScratchProject } from "../hooks/useScratchProject";
+import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 export function NoProjectsHero() {
@@ -15,6 +17,7 @@ export function NoProjectsHero() {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { scratchEnvironmentId, startScratchThread } = useScratchProject();
   const scratchTargetEnvironmentId = scratchEnvironmentId(primaryEnvironmentId);
+  const noProjectShortcut = useShortcutLabel("chat.newWithoutProject");
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
@@ -36,14 +39,25 @@ export function NoProjectsHero() {
                   Add project
                 </Button>
                 {scratchTargetEnvironmentId === null ? null : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void startScratchThread(scratchTargetEnvironmentId)}
-                  >
-                    <MessageSquareDashedIcon className="size-4" />
-                    Start without a project
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void startScratchThread(scratchTargetEnvironmentId)}
+                        />
+                      }
+                    >
+                      <MessageSquareDashedIcon className="size-4" />
+                      Start without a project
+                    </TooltipTrigger>
+                    {noProjectShortcut ? (
+                      <TooltipPopup side="bottom" shortcut={noProjectShortcut}>
+                        New thread without a project
+                      </TooltipPopup>
+                    ) : null}
+                  </Tooltip>
                 )}
               </div>
             </EmptyHeader>

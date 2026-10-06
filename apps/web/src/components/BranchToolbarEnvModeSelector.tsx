@@ -3,6 +3,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import { memo, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { readLocalApi } from "../localApi";
 import { cn } from "../lib/utils";
 import {
@@ -27,6 +28,7 @@ import {
   ComboboxEmpty,
   ComboboxItem,
 } from "./ui/combobox";
+import { Kbd } from "./ui/kbd";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
@@ -65,7 +67,13 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   const selectWorkspaceKind =
     effectiveEnvMode === "worktree" && !activeWorktreePath ? "Create" : workspaceKind;
   const composerFloatingLayerProps = useComposerMenuProps();
+  const workspaceShortcut = useShortcutLabel(
+    displayMode === "toolbar" ? "composer.workspace" : null,
+  );
   const showPreviousWorktree = Boolean(previousWorktreeLabel && onUsePreviousWorktree);
+  const previousWorktreeShortcut = useShortcutLabel(
+    showPreviousWorktree ? "composer.previousWorktree" : null,
+  );
   const envModeItems = useMemo(
     () => [
       {
@@ -224,7 +232,10 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
             </span>
           ) : null}
         </TooltipTrigger>
-        <TooltipPopup side={displayMode === "panel" ? "left" : undefined}>
+        <TooltipPopup
+          side={displayMode === "panel" ? "left" : undefined}
+          shortcut={workspaceShortcut}
+        >
           {workspacePath ??
             (effectiveEnvMode === "worktree"
               ? resolveEnvModeLabel("worktree")
@@ -251,7 +262,14 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
           {(item: (typeof envModeItems)[number]) => (
             <ComboboxItem key={item.value} value={item}>
               {item.value === PREVIOUS_WORKTREE_SELECT_VALUE ? (
-                <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
+                <>
+                  <PreviousWorktreeItemContent branch={previousWorktreeBranch} />
+                  {previousWorktreeShortcut ? (
+                    <Kbd variant="plain" className="ms-auto" aria-hidden>
+                      {previousWorktreeShortcut}
+                    </Kbd>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <FolderIcon className="size-3" />

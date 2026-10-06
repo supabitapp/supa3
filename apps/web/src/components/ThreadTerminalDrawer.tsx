@@ -39,10 +39,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { Kbd } from "~/components/ui/kbd";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
@@ -1043,30 +1044,30 @@ interface ThreadTerminalDrawerProps {
 
 interface TerminalActionButtonProps {
   label: string;
+  shortcut: string | undefined;
   className: string;
   onClick: () => void;
   children: ReactNode;
 }
 
-function TerminalActionButton({ label, className, onClick, children }: TerminalActionButtonProps) {
+function TerminalActionButton({
+  label,
+  shortcut,
+  className,
+  onClick,
+  children,
+}: TerminalActionButtonProps) {
   return (
-    <Popover>
-      <PopoverTrigger
-        openOnHover
+    <Tooltip>
+      <TooltipTrigger
         render={<button type="button" className={className} onClick={onClick} aria-label={label} />}
       >
         {children}
-      </PopoverTrigger>
-      <PopoverPopup
-        tooltipStyle
-        side="bottom"
-        sideOffset={6}
-        align="center"
-        className="pointer-events-none select-none"
-      >
+      </TooltipTrigger>
+      <TooltipPopup side="bottom" shortcut={shortcut}>
         {label}
-      </PopoverPopup>
-    </Popover>
+      </TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -1274,22 +1275,13 @@ export default function ThreadTerminalDrawer({
     },
     [cwd, runtimeEnv, terminalLaunchLocationsById, worktreePath],
   );
-  const splitTerminalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Horizontally (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitShortcutLabel
-      ? `Split Terminal Horizontally (${splitShortcutLabel})`
-      : "Split Terminal Horizontally";
-  const splitTerminalVerticalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Vertically (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitVerticalShortcutLabel
-      ? `Split Terminal Vertically (${splitVerticalShortcutLabel})`
-      : "Split Terminal Vertically";
-  const newTerminalActionLabel = newShortcutLabel
-    ? `New Terminal (${newShortcutLabel})`
-    : "New Terminal";
-  const closeTerminalActionLabel = closeShortcutLabel
-    ? `Close Terminal (${closeShortcutLabel})`
-    : "Close Terminal";
+  const splitLimitNote = hasReachedSplitLimit ? ` (max ${MAX_TERMINALS_PER_GROUP} per group)` : "";
+  const splitTerminalActionLabel = `Split terminal horizontally${splitLimitNote}`;
+  const splitTerminalVerticalActionLabel = `Split terminal vertically${splitLimitNote}`;
+  const splitTerminalShortcut = hasReachedSplitLimit ? undefined : splitShortcutLabel;
+  const splitTerminalVerticalShortcut = hasReachedSplitLimit
+    ? undefined
+    : splitVerticalShortcutLabel;
   const onSplitTerminalAction = useCallback(() => {
     if (hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1444,7 +1436,8 @@ export default function ThreadTerminalDrawer({
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
           <p>No terminal sessions for this thread yet.</p>
           <Button size="xs" variant="outline" onClick={onNewTerminalAction}>
-            {newTerminalActionLabel}
+            New terminal
+            {newShortcutLabel ? <Kbd aria-hidden>{newShortcutLabel}</Kbd> : null}
           </Button>
         </div>
       </aside>
@@ -1484,6 +1477,7 @@ export default function ThreadTerminalDrawer({
               }`}
               onClick={onSplitTerminalAction}
               label={splitTerminalActionLabel}
+              shortcut={splitTerminalShortcut}
             >
               <SquareSplitHorizontal className="size-3.25" />
             </TerminalActionButton>
@@ -1496,6 +1490,7 @@ export default function ThreadTerminalDrawer({
               }`}
               onClick={onSplitTerminalVerticalAction}
               label={splitTerminalVerticalActionLabel}
+              shortcut={splitTerminalVerticalShortcut}
             >
               <SquareSplitVertical className="size-3.25" />
             </TerminalActionButton>
@@ -1503,7 +1498,8 @@ export default function ThreadTerminalDrawer({
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
               onClick={onNewTerminalAction}
-              label={newTerminalActionLabel}
+              label="New terminal"
+              shortcut={newShortcutLabel}
             >
               <Plus className="size-3.25" />
             </TerminalActionButton>
@@ -1511,7 +1507,8 @@ export default function ThreadTerminalDrawer({
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
               onClick={() => confirmCloseTerminal(resolvedActiveTerminalId)}
-              label={closeTerminalActionLabel}
+              label="Close terminal"
+              shortcut={closeShortcutLabel}
             >
               <Trash2 className="size-3.25" />
             </TerminalActionButton>
@@ -1629,6 +1626,7 @@ export default function ThreadTerminalDrawer({
                     }`}
                     onClick={onSplitTerminalAction}
                     label={splitTerminalActionLabel}
+                    shortcut={splitTerminalShortcut}
                   >
                     <SquareSplitHorizontal className="size-3.25" />
                   </TerminalActionButton>
@@ -1640,20 +1638,23 @@ export default function ThreadTerminalDrawer({
                     }`}
                     onClick={onSplitTerminalVerticalAction}
                     label={splitTerminalVerticalActionLabel}
+                    shortcut={splitTerminalVerticalShortcut}
                   >
                     <SquareSplitVertical className="size-3.25" />
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
                     onClick={onNewTerminalAction}
-                    label={newTerminalActionLabel}
+                    label="New terminal"
+                    shortcut={newShortcutLabel}
                   >
                     <Plus className="size-3.25" />
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
                     onClick={() => confirmCloseTerminal(resolvedActiveTerminalId)}
-                    label={closeTerminalActionLabel}
+                    label="Close terminal"
+                    shortcut={closeShortcutLabel}
                   >
                     <Trash2 className="size-3.25" />
                   </TerminalActionButton>
@@ -1704,9 +1705,7 @@ export default function ThreadTerminalDrawer({
                         {terminalGroup.terminalIds.map((terminalId) => {
                           const isActive = terminalId === resolvedActiveTerminalId;
                           const terminalLabel = terminalLabelById.get(terminalId) ?? "Terminal";
-                          const closeTerminalLabel = `Close ${terminalLabel}${
-                            isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : ""
-                          }`;
+                          const closeTerminalLabel = `Close ${terminalLabel}`;
                           return (
                             <div
                               key={terminalId}
@@ -1731,6 +1730,7 @@ export default function ThreadTerminalDrawer({
                                 label={closeTerminalLabel}
                                 onClick={() => confirmCloseTerminal(terminalId)}
                                 tooltip={closeTerminalLabel}
+                                shortcut={isActive ? closeShortcutLabel : null}
                               >
                                 <TerminalSquare className="size-3 shrink-0" />
                               </PanelTabCloseButton>

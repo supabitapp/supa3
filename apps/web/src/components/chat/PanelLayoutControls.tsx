@@ -72,9 +72,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         render={trigger}
         {...(threadPanelPresentation === "popover" ? {} : { onClick: onToggleThreadPanel })}
       />
-      <TooltipPopup side="bottom">
+      <TooltipPopup side="bottom" shortcut={threadPanelShortcutLabel}>
         Toggle thread details
-        {threadPanelShortcutLabel ? ` (${threadPanelShortcutLabel})` : ""}
       </TooltipPopup>
     </Tooltip>
   );
@@ -106,10 +105,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               <PanelBottomIcon className="size-4" />
             </Toggle>
           </TooltipTrigger>
-          <TooltipPopup side="bottom">
-            {terminalAvailable
-              ? `Toggle terminal drawer${terminalShortcutLabel ? ` (${terminalShortcutLabel})` : ""}`
-              : "Terminal drawer is unavailable"}
+          <TooltipPopup side="bottom" shortcut={terminalAvailable ? terminalShortcutLabel : null}>
+            {terminalAvailable ? "Toggle terminal drawer" : "Terminal drawer is unavailable"}
           </TooltipPopup>
         </Tooltip>
       ) : null}
@@ -128,10 +125,11 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               <PanelRightIcon className="size-4" />
             </Toggle>
           </TooltipTrigger>
-          <TooltipPopup side="bottom">
-            {rightPanelAvailable
-              ? `Toggle right panel${rightPanelShortcutLabel ? ` (${rightPanelShortcutLabel})` : ""}`
-              : rightPanelUnavailableLabel}
+          <TooltipPopup
+            side="bottom"
+            shortcut={rightPanelAvailable ? rightPanelShortcutLabel : null}
+          >
+            {rightPanelAvailable ? "Toggle right panel" : rightPanelUnavailableLabel}
           </TooltipPopup>
         </Tooltip>
       ) : null}

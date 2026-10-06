@@ -2,9 +2,13 @@ import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { parseKeybindingShortcut } from "@supacode/shared/keybindings";
 
 import { APP_BASE_NAME } from "../../branding";
+import { isElectron } from "../../env";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useShortcutLabel } from "../../hooks/useShortcutLabel";
+import { formatShortcutLabel } from "../../keybindings";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import {
@@ -130,13 +134,18 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   );
 }
 
+// The desktop app's Settings menu item owns Mod+, so it is not in the keybinding registry.
+const DESKTOP_SETTINGS_SHORTCUT = parseKeybindingShortcut("mod+,")!;
+
 function SidebarUtilityItem({
   icon,
   label,
+  shortcut = null,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  shortcut?: string | null;
   onClick: () => void;
 }) {
   return (
@@ -149,7 +158,9 @@ function SidebarUtilityItem({
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        <TooltipPopup side="top" shortcut={shortcut}>
+          {label}
+        </TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -163,6 +174,8 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const usageShortcut = useShortcutLabel("usage.open");
+  const settingsShortcut = isElectron ? formatShortcutLabel(DESKTOP_SETTINGS_SHORTCUT) : null;
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -206,6 +219,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <SidebarUtilityItem
             icon={<SettingsIcon />}
             label="Settings"
+            shortcut={settingsShortcut}
             onClick={handleSettingsClick}
           />
           {pullRequestsSupported ? (
@@ -218,6 +232,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
             label="Usage"
+            shortcut={usageShortcut}
             onClick={handleUsageClick}
           />
         </>

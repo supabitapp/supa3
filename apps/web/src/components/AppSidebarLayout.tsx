@@ -186,8 +186,8 @@ function SidebarControl() {
             />
           }
         />
-        <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+        <TooltipPopup side="bottom" shortcut={shortcutLabel}>
+          Toggle main sidebar
         </TooltipPopup>
       </Tooltip>
     </div>

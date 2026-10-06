@@ -2,17 +2,22 @@ import { memo, type MouseEventHandler, type PointerEventHandler } from "react";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, PlayIcon } from "lucide-react";
 import { CornerUpRight, ListPlus } from "lucide";
 import { MorphIcon } from "~/components/MorphIcon";
+import type { ResolvedKeybindingsConfig } from "@supacode/contracts";
 import type { ClientSettings } from "@supacode/contracts/settings";
+import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
-import { cn, isMacPlatform } from "~/lib/utils";
+import { cn } from "~/lib/utils";
+import { composerSendShortcutLabels, type ComposerSendAction } from "../../composer-logic";
+import { shortcutLabelForCommand } from "../../keybindings";
 import { useShortcutModifierState } from "../../shortcutModifierState";
 import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Spinner } from "../ui/spinner";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipShortcutLabel, TooltipTrigger } from "../ui/tooltip";
 import { composerFloatingLayerProps } from "./composerEventScope";
 import {
+  type ActiveTurnComposerAction,
   alternateComposerDispatchAction,
   resolveComposerDispatchMode,
 } from "@supacode/client-runtime/state/composer-dispatch";
@@ -27,13 +32,13 @@ interface PendingActionState {
 
 interface ComposerPrimaryActionsProps {
   compact: boolean;
+  keybindings: ResolvedKeybindingsConfig;
   pendingAction: PendingActionState | null;
   /** The turn is running: sending steers or queues instead of starting a turn. */
   isRunning: boolean;
   /** Stop can reach a run, including one still preparing or starting. */
   canInterrupt: boolean;
   followUpBehavior?: "queue" | "steer";
-  alternateShortcutLabel?: string | null;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -45,7 +50,6 @@ interface ComposerPrimaryActionsProps {
   sendShortcut?: ClientSettings["sendShortcut"] | undefined;
   isDraftThread?: boolean | undefined;
   hasMultilinePrompt?: boolean | undefined;
-  modifierLabel?: string | undefined;
   canResume?: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
   isEditingQueuedMessage?: boolean;
@@ -83,90 +87,69 @@ const preventPointerFocus: PointerEventHandler<HTMLElement> = (event) => {
   event.preventDefault();
 };
 
+const FOLLOW_UP_ACTION_LABELS: Record<ActiveTurnComposerAction, string> = {
+  queue: "Queue message",
+  steer: "Steer current run",
+  restart: "Restart run",
+};
+
+// The click action leads; the others only appear while a key runs them.
+const SEND_ACTION_ORDER: ReadonlyArray<ComposerSendAction> = [
+  "foreground",
+  "newLine",
+  "alternate",
+  "background",
+];
+
+/** Every way to send from the composer with the key that does it. */
 function SendActionsTooltip(props: {
+  keybindings: ResolvedKeybindingsConfig;
   isRunning: boolean;
   sendShortcut: ClientSettings["sendShortcut"];
   followUpBehavior: ClientSettings["followUpBehavior"];
   isDraftThread: boolean;
   hasMultilinePrompt: boolean;
-  modifierLabel: string;
 }) {
-  const {
-    isRunning,
-    sendShortcut,
-    followUpBehavior,
-    isDraftThread,
-    hasMultilinePrompt,
-    modifierLabel,
-  } = props;
-  const primaryFollowUpAction =
-    followUpBehavior === "queue" ? "Queue message" : "Steer current run";
-  const alternateFollowUpAction =
-    followUpBehavior === "queue" ? "Steer current run" : "Queue message";
-  const modifierShortcut = `${modifierLabel} + Enter`;
-  const modifierShiftShortcut = `${modifierLabel} + Shift + Enter`;
-  const usesModifierToSend =
-    sendShortcut === "mod-enter" || (sendShortcut === "mod-enter-multiline" && hasMultilinePrompt);
-  const actions = usesModifierToSend
-    ? [
-        {
-          shortcut: "Enter",
-          label: "New line",
-        },
-        {
-          shortcut: modifierShortcut,
-          label: isRunning
-            ? primaryFollowUpAction
-            : isDraftThread
-              ? "Send in background"
-              : "Send message",
-        },
-        {
-          shortcut: modifierShiftShortcut,
-          label: isRunning ? alternateFollowUpAction : "New line",
-        },
-      ]
-    : [
-        {
-          shortcut: "Enter",
-          label: isRunning ? primaryFollowUpAction : "Send message",
-        },
-        {
-          shortcut: "Shift + Enter",
-          label: "New line",
-        },
-        {
-          shortcut: modifierShortcut,
-          label: isRunning
-            ? alternateFollowUpAction
-            : isDraftThread
-              ? "Send in background"
-              : "Send message",
-        },
-      ];
+  const { isRunning, followUpBehavior, isDraftThread } = props;
+  const isMobileViewport = useMediaQuery("max-sm");
+  const shortcuts = composerSendShortcutLabels({
+    ...props,
+    platform: navigator.platform,
+    isMobileViewport,
+  });
+  const labels: Record<ComposerSendAction, string> = {
+    foreground: isRunning ? FOLLOW_UP_ACTION_LABELS[followUpBehavior] : "Send message",
+    newLine: "New line",
+    alternate: FOLLOW_UP_ACTION_LABELS[alternateComposerDispatchAction(followUpBehavior)],
+    background: isDraftThread ? "Send in background" : "Send and start new thread",
+  };
 
   return (
     <div className="grid gap-1.5 py-0.5">
-      <span className="font-medium">{isRunning ? primaryFollowUpAction : "Send message"}</span>
-      {actions.map((action) => (
-        <span key={`${action.shortcut}-${action.label}`} className="flex items-center gap-3">
-          <kbd className="min-w-16 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 text-center font-mono text-3xs text-muted-foreground">
-            {action.shortcut}
-          </kbd>
-          <span>{action.label}</span>
-        </span>
-      ))}
+      {SEND_ACTION_ORDER.flatMap((action) =>
+        action === "foreground" || shortcuts[action] !== undefined
+          ? [
+              <TooltipShortcutLabel key={action} shortcut={shortcuts[action] ?? null}>
+                {action === "foreground" ? (
+                  <span className="font-medium">{labels[action]}</span>
+                ) : (
+                  labels[action]
+                )}
+              </TooltipShortcutLabel>,
+            ]
+          : [],
+      )}
     </div>
   );
 }
 
 export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
+  keybindings,
   pendingAction,
   isRunning,
   canInterrupt,
   followUpBehavior = "steer",
-  alternateShortcutLabel = null,
   showPlanFollowUpPrompt,
   promptHasText,
   isSendBusy,
@@ -178,9 +161,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   sendShortcut = "enter",
   isDraftThread = false,
   hasMultilinePrompt = false,
-  modifierLabel = typeof navigator !== "undefined" && isMacPlatform(navigator.platform)
-    ? "⌘"
-    : "Ctrl",
   canResume = false,
   preserveComposerFocusOnPointerDown = false,
   isEditingQueuedMessage = false,
@@ -202,7 +182,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       activeTurnDefault: followUpBehavior,
       alternateModifier: shortcutModifiers.metaKey || shortcutModifiers.ctrlKey,
     }) === "queue";
-  const alternateAction = alternateComposerDispatchAction(followUpBehavior);
   const isSendDisabled = sendDisabledReason !== null;
   const stageBackdropVariant = useSidebarStageBackdropVariant(
     environmentIdentificationMode === "artwork",
@@ -228,7 +207,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           <rect x="2" y="2" width="8" height="8" rx="1.5" />
         </svg>
       </TooltipTrigger>
-      <TooltipPopup>Interrupt</TooltipPopup>
+      <TooltipPopup shortcut={shortcutLabelForCommand(keybindings, "thread.stop")}>
+        Interrupt
+      </TooltipPopup>
     </Tooltip>
   );
 
@@ -361,11 +342,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               ? "Updating queued message"
               : "Submitting message"
             : null));
-  const submitTooltip =
-    submitStatus ??
-    (isRunning && !isEditingQueuedMessage
-      ? `Click to ${followUpBehavior}, Ctrl/⌘-click${alternateShortcutLabel ? ` or ${alternateShortcutLabel}` : ""} to ${alternateAction}`
-      : submitLabel);
 
   const sendButton = (
     <button
@@ -421,15 +397,15 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         <TooltipTrigger render={<span className="inline-flex" />}>{sendButton}</TooltipTrigger>
         <TooltipPopup side="top">
           {submitStatus || showResume || isEditingQueuedMessage ? (
-            submitTooltip
+            (submitStatus ?? submitLabel)
           ) : (
             <SendActionsTooltip
+              keybindings={keybindings}
               isRunning={isRunning}
               sendShortcut={sendShortcut}
               followUpBehavior={followUpBehavior}
               isDraftThread={isDraftThread}
               hasMultilinePrompt={hasMultilinePrompt}
-              modifierLabel={modifierLabel}
             />
           )}
         </TooltipPopup>

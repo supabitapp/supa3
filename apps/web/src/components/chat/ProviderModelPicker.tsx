@@ -187,9 +187,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const allModelNames = selectedEntries
     ? selectedEntries.map((selection) => selection.label).join(", ") || "Choose models"
     : undefined;
-  const triggerTooltipContent = shortcutLabel
-    ? `${props.triggerLabel ?? allModelNames ?? triggerLabel} · ${shortcutLabel}`
-    : (props.triggerLabel ?? allModelNames ?? triggerLabel);
 
   return (
     <Popover
@@ -202,88 +199,92 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         setIsMenuOpen(open);
       }}
     >
-      <PopoverTrigger
-        render={
-          <ComposerControl
-            aria-label={props.triggerAriaLabel ?? allModelNames}
-            size={size}
-            data-chat-provider-model-picker="true"
-            className={cn(
-              "min-w-0 shrink justify-between whitespace-nowrap",
-              props.compact
-                ? "max-w-42 shrink-0"
-                : !props.isComposerOwned && "max-w-48 sm:max-w-56",
-              props.triggerClassName,
-            )}
-            disabled={props.disabled}
-          />
-        }
-      >
-        <span
-          className={cn("flex min-w-0 flex-1 items-center", size === "xs" ? "gap-1" : "gap-1.5")}
-        >
-          {selectedEntries && props.triggerLabel === undefined ? (
-            <span className="flex shrink-0 items-center -space-x-1" aria-hidden="true">
-              {selectedEntries
-                .slice(0, 3)
-                .map((selection) =>
-                  selection.entry ? (
-                    <ProviderInstanceIcon
-                      key={`${selection.instanceId}:${selection.model}`}
-                      driverKind={selection.entry.driverKind}
-                      displayName={selection.entry.displayName}
-                      accentColor={selection.entry.accentColor}
-                      className="size-4 rounded-full bg-(--chat-composer-glass-surface,var(--background)) ring-2 ring-(--chat-composer-glass-surface,var(--background))"
-                      iconClassName="size-4"
-                    />
-                  ) : null,
-                )}
-              {selectedEntries.length > 3 ? (
-                <span className="relative z-30 flex size-4 items-center justify-center rounded-full bg-(--chat-composer-glass-surface,var(--background)) text-3xs ring-2 ring-(--chat-composer-glass-surface,var(--background))">
-                  +{selectedEntries.length - 3}
-                </span>
-              ) : null}
-            </span>
-          ) : activeEntry && props.triggerLabel === undefined ? (
-            <ProviderInstanceIcon
-              driverKind={activeEntry.driverKind}
-              displayName={activeEntry.displayName}
-              accentColor={activeEntry.accentColor}
-              acpRegistryAgentId={activeEntry.acpRegistryAgentId}
-              acpRegistryIconUrl={activeEntry.acpRegistryIconUrl}
-              showBadge={showInstanceBadge}
-              className="size-4"
-              iconClassName={cn("size-4", props.activeProviderIconClassName)}
-              indicatorBackground={props.instanceIndicatorBackground ?? "var(--contrast-input)"}
-              badgeClassName={cn(
-                "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs",
-                size === "xs" && "shadow-none",
-              )}
-            />
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
               render={
-                <span
-                  className="min-w-0 flex-1 overflow-hidden truncate"
-                  data-chat-provider-model-picker-label="true"
+                <ComposerControl
+                  aria-label={props.triggerAriaLabel ?? allModelNames}
+                  size={size}
+                  data-chat-provider-model-picker="true"
+                  className={cn(
+                    "min-w-0 shrink justify-between whitespace-nowrap",
+                    props.compact
+                      ? "max-w-42 shrink-0"
+                      : !props.isComposerOwned && "max-w-48 sm:max-w-56",
+                    props.triggerClassName,
+                  )}
+                  disabled={props.disabled}
                 />
               }
+            />
+          }
+        >
+          <span
+            className={cn("flex min-w-0 flex-1 items-center", size === "xs" ? "gap-1" : "gap-1.5")}
+          >
+            {selectedEntries && props.triggerLabel === undefined ? (
+              <span className="flex shrink-0 items-center -space-x-1" aria-hidden="true">
+                {selectedEntries
+                  .slice(0, 3)
+                  .map((selection) =>
+                    selection.entry ? (
+                      <ProviderInstanceIcon
+                        key={`${selection.instanceId}:${selection.model}`}
+                        driverKind={selection.entry.driverKind}
+                        displayName={selection.entry.displayName}
+                        accentColor={selection.entry.accentColor}
+                        className="size-4 rounded-full bg-(--chat-composer-glass-surface,var(--background)) ring-2 ring-(--chat-composer-glass-surface,var(--background))"
+                        iconClassName="size-4"
+                      />
+                    ) : null,
+                  )}
+                {selectedEntries.length > 3 ? (
+                  <span className="relative z-30 flex size-4 items-center justify-center rounded-full bg-(--chat-composer-glass-surface,var(--background)) text-3xs ring-2 ring-(--chat-composer-glass-surface,var(--background))">
+                    +{selectedEntries.length - 3}
+                  </span>
+                ) : null}
+              </span>
+            ) : activeEntry && props.triggerLabel === undefined ? (
+              <ProviderInstanceIcon
+                driverKind={activeEntry.driverKind}
+                displayName={activeEntry.displayName}
+                accentColor={activeEntry.accentColor}
+                acpRegistryAgentId={activeEntry.acpRegistryAgentId}
+                acpRegistryIconUrl={activeEntry.acpRegistryIconUrl}
+                showBadge={showInstanceBadge}
+                className="size-4"
+                iconClassName={cn("size-4", props.activeProviderIconClassName)}
+                indicatorBackground={props.instanceIndicatorBackground ?? "var(--contrast-input)"}
+                badgeClassName={cn(
+                  "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs",
+                  size === "xs" && "shadow-none",
+                )}
+              />
+            ) : null}
+            <span
+              className="min-w-0 flex-1 overflow-hidden truncate"
+              data-chat-provider-model-picker-label="true"
             >
               {props.triggerLabel ?? multipleLabel ?? triggerTitle}
-            </TooltipTrigger>
-            <TooltipPopup side="top">{triggerTooltipContent}</TooltipPopup>
-          </Tooltip>
-          {selectedModel?.isUnavailable && !selectedEntries && props.triggerLabel === undefined ? (
-            <Badge variant="outline" size="sm">
-              Unavailable
-            </Badge>
-          ) : null}
-        </span>
-        <span aria-hidden="true" className="flex items-center">
-          <ComposerControlChevron size={size} />
-        </span>
-      </PopoverTrigger>
+            </span>
+            {selectedModel?.isUnavailable &&
+            !selectedEntries &&
+            props.triggerLabel === undefined ? (
+              <Badge variant="outline" size="sm">
+                Unavailable
+              </Badge>
+            ) : null}
+          </span>
+          <span aria-hidden="true" className="flex items-center">
+            <ComposerControlChevron size={size} />
+          </span>
+        </TooltipTrigger>
+        <TooltipPopup side="top" shortcut={shortcutLabel}>
+          {props.triggerLabel ?? allModelNames ?? triggerLabel}
+        </TooltipPopup>
+      </Tooltip>
       <PopoverPopup
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         align="start"

@@ -2,25 +2,20 @@
  * The sidebar's top rows: start a thread, search through the command palette,
  * and open Automations. Both the default and the legacy sidebar render it.
  */
-import { useAtomValue } from "@effect/atom-react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { CalendarClockIcon, SearchIcon, SquarePenIcon } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { openCommandPalette } from "../../commandPaletteBus";
 import { useStartNewThreadInCurrentProject } from "../../hooks/useHandleNewThread";
-import { shortcutLabelForCommand } from "../../keybindings";
-import { primaryServerKeybindingsAtom } from "../../state/server";
+import { useShortcutLabel } from "../../hooks/useShortcutLabel";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
-
-function withShortcut(label: string, shortcut: string | null) {
-  return shortcut ? `${label} (${shortcut})` : null;
-}
 
 export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCount: number }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const size = isMobile ? "default" : "compact";
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const newThreadShortcut = useShortcutLabel("chat.newLocal");
+  const searchShortcut = useShortcutLabel("commandPalette.toggle");
+  const automationsShortcut = useShortcutLabel("automations.open");
   const startNewThreadInCurrentProject = useStartNewThreadInCurrentProject();
   const automationsActive = useLocation({
     select: (location) => location.pathname === "/automations",
@@ -28,12 +23,6 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
   };
-  // The sidebar is offcanvas, so its built-in tooltips (shown only when
-  // collapsed) never appear; these show on hover instead, except on touch.
-  const withTooltip = (children: ReactNode) =>
-    children ? { tooltip: { children, hidden: isMobile } } : {};
-
-  const newThreadShortcut = shortcutLabelForCommand(keybindings, "chat.newLocal");
   const handleNewThread = () => {
     closeMobileSidebar();
     void startNewThreadInCurrentProject();
@@ -46,7 +35,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
           size={size}
           disabled={projectGroupCount === 0}
           onClick={handleNewThread}
-          {...withTooltip(withShortcut("New thread", newThreadShortcut) ?? "New thread")}
+          shortcut={newThreadShortcut}
         >
           <SquarePenIcon />
           <span>New thread</span>
@@ -61,9 +50,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
             closeMobileSidebar();
             openCommandPalette();
           }}
-          {...withTooltip(
-            withShortcut("Search", shortcutLabelForCommand(keybindings, "commandPalette.toggle")),
-          )}
+          shortcut={searchShortcut}
         >
           <SearchIcon />
           <span>Search</span>
@@ -74,9 +61,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
           size={size}
           isActive={automationsActive}
           render={<Link to="/automations" onClick={closeMobileSidebar} />}
-          {...withTooltip(
-            withShortcut("Automations", shortcutLabelForCommand(keybindings, "automations.open")),
-          )}
+          shortcut={automationsShortcut}
         >
           <CalendarClockIcon />
           <span>Automations</span>

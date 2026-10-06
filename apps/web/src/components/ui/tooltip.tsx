@@ -6,9 +6,11 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type ReactNode,
   type RefObject,
 } from "react";
 
+import { Kbd } from "~/components/ui/kbd";
 import { cn } from "~/lib/utils";
 
 const TooltipProvider = TooltipPrimitive.Provider;
@@ -106,6 +108,7 @@ function TooltipPopup({
   side = "top",
   variant = "default",
   anchor,
+  shortcut,
   children,
   ...props
 }: TooltipPrimitive.Popup.Props & {
@@ -115,6 +118,8 @@ function TooltipPopup({
   /** `code` renders monospace content that breaks anywhere, for paths and commands. */
   variant?: "default" | "glass" | "code";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
+  /** The key that runs the same action as the trigger, shown after the content. */
+  shortcut?: string | null | undefined;
 }) {
   return (
     <TooltipPrimitive.Portal>
@@ -145,7 +150,11 @@ function TooltipPopup({
             className="relative size-full overflow-clip px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] data-instant:transition-none **:data-current:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-ending-style:opacity-0 **:data-previous:data-starting-style:opacity-0 **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:truncate **:data-current:opacity-100 **:data-previous:opacity-100 **:data-current:transition-opacity **:data-previous:transition-opacity"
             data-slot="tooltip-viewport"
           >
-            {children}
+            {shortcut ? (
+              <TooltipShortcutLabel shortcut={shortcut}>{children}</TooltipShortcutLabel>
+            ) : (
+              children
+            )}
           </TooltipPrimitive.Viewport>
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
@@ -153,4 +162,28 @@ function TooltipPopup({
   );
 }
 
-export { TooltipProvider, Tooltip, TooltipTrigger, TooltipPopup, TooltipScrollDismissArea };
+/** One tooltip row naming an action, followed by the key that runs it when one is bound. */
+function TooltipShortcutLabel({
+  children,
+  shortcut,
+}: {
+  children: ReactNode;
+  shortcut: string | null;
+}) {
+  if (!shortcut) return children;
+  return (
+    <span className="flex items-center justify-between gap-2" data-slot="tooltip-shortcut-label">
+      <span className="min-w-0">{children}</span>
+      <Kbd variant="raised">{shortcut}</Kbd>
+    </span>
+  );
+}
+
+export {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipPopup,
+  TooltipScrollDismissArea,
+  TooltipShortcutLabel,
+};

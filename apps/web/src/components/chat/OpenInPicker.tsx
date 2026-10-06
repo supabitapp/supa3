@@ -30,6 +30,7 @@ import {
   MenuSubPopup,
   MenuTrigger,
 } from "../ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   AntigravityIcon,
   CursorIcon,
@@ -299,7 +300,8 @@ export const OpenInPicker = memo(function OpenInPicker({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [enableShortcut, keybindings, openInCwd, openInEditor, preferredEditor]);
-  const primaryLabel = isPanel ? `Open in ${primaryOption?.label ?? "editor"}` : "Open";
+  const openInLabel = `Open in ${primaryOption?.label ?? "editor"}`;
+  const primaryLabel = isPanel ? openInLabel : "Open";
 
   const editorItems = (
     <>
@@ -372,40 +374,49 @@ export const OpenInPicker = memo(function OpenInPicker({
         ? { className: THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS, ref: panelAnchorRef }
         : {})}
     >
-      <ThreadDetailsControl
-        aria-label={compact ? "Open file in preferred editor" : primaryLabel}
-        size={isPanel ? "sm" : "xs"}
-        variant={isPanel ? "ghost" : "outline"}
-        part="primary"
-        panel={isPanel}
-        disabled={!preferredEditor || !openInCwd || remote.mode === "remote-unavailable"}
-        onClick={() => openInEditor(preferredEditor)}
-      >
-        {primaryOption?.Icon ? (
-          <primaryOption.Icon
-            aria-hidden="true"
-            className={cn(
-              isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
-              getOpenInIconClass(primaryOption.kind),
-            )}
-          />
-        ) : isPanel ? (
-          <SquareArrowOutUpRightIcon
-            aria-hidden="true"
-            className={THREAD_DETAILS_PANEL_ICON_CLASS}
-          />
-        ) : null}
-        <span
-          className={cn(
-            compact
-              ? "sr-only"
-              : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
-            isPanel && "not-sr-only ml-0 min-w-0 truncate",
-          )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <ThreadDetailsControl
+              aria-label={compact ? "Open file in preferred editor" : primaryLabel}
+              size={isPanel ? "sm" : "xs"}
+              variant={isPanel ? "ghost" : "outline"}
+              part="primary"
+              panel={isPanel}
+              disabled={!preferredEditor || !openInCwd || remote.mode === "remote-unavailable"}
+              onClick={() => openInEditor(preferredEditor)}
+            />
+          }
         >
-          {primaryLabel}
-        </span>
-      </ThreadDetailsControl>
+          {primaryOption?.Icon ? (
+            <primaryOption.Icon
+              aria-hidden="true"
+              className={cn(
+                isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
+                getOpenInIconClass(primaryOption.kind),
+              )}
+            />
+          ) : isPanel ? (
+            <SquareArrowOutUpRightIcon
+              aria-hidden="true"
+              className={THREAD_DETAILS_PANEL_ICON_CLASS}
+            />
+          ) : null}
+          <span
+            className={cn(
+              compact
+                ? "sr-only"
+                : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
+              isPanel && "not-sr-only ml-0 min-w-0 truncate",
+            )}
+          >
+            {primaryLabel}
+          </span>
+        </TooltipTrigger>
+        <TooltipPopup side="top" shortcut={openFavoriteEditorShortcutLabel}>
+          {openInLabel}
+        </TooltipPopup>
+      </Tooltip>
       {isPanel ? (
         <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
       ) : (

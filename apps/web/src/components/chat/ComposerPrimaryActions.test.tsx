@@ -1,3 +1,4 @@
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
 import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -19,6 +20,7 @@ vi.mock("../ui/tooltip", () => ({
   TooltipTrigger: ({ render, children }: { render: ReactNode; children: ReactNode }) =>
     createElement("div", null, render, children),
   TooltipPopup: ({ children }: { children: ReactNode }) => children,
+  TooltipShortcutLabel: ({ children }: { children: ReactNode }) => children,
 }));
 
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
@@ -27,6 +29,7 @@ function renderPendingActions(isRunning: boolean) {
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
+      keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
       pendingAction: {
         questionIndex: 0,
         isLastQuestion: true,
@@ -55,6 +58,7 @@ function renderRunningActions(hasSendableContent: boolean) {
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
+      keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
       pendingAction: null,
       isRunning: true,
       canInterrupt: true,
@@ -81,6 +85,7 @@ function renderSendButton(
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
+      keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
       pendingAction: null,
       isRunning: false,
       canInterrupt: false,
@@ -138,22 +143,17 @@ describe("ComposerPrimaryActions", () => {
     expect(markup).not.toContain("stage-nightly");
   });
 
-  it("shows the send shortcuts for a new thread", () => {
-    const markup = renderSendButton(null, { isDraftThread: true, modifierLabel: "⌘" });
+  it("lists the background send for a new thread", () => {
+    const markup = renderSendButton(null, { isDraftThread: true });
 
     expect(markup).toContain("Send in background");
-    expect(markup).toContain("Shift + Enter");
-    expect(markup).toContain("⌘ + Enter");
+    expect(markup).toContain("New line");
   });
 
-  it("shows the configured modifier shortcut for multiline prompts", () => {
-    const markup = renderSendButton(null, {
-      sendShortcut: "mod-enter",
-      modifierLabel: "Ctrl",
-    });
+  it("lists sending into a new thread from an existing thread", () => {
+    const markup = renderSendButton(null, { sendShortcut: "mod-enter" });
 
-    expect(markup).toContain("Ctrl + Enter");
-    expect(markup).toContain("Ctrl + Shift + Enter");
+    expect(markup).toContain("Send and start new thread");
     expect(markup).toContain("New line");
   });
 
