@@ -373,7 +373,9 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
         case "BetterRouteAvailable":
           break;
         case "Wakeup":
-          if (next.reason === "application-active-reconnect") {
+          // A long resume or a network move leaves the attempt dialing routes
+          // checked on a network the device has left, so it starts over.
+          if (next.reason === "application-active-reconnect" || next.reason === "network-changed") {
             return true;
           }
           break;
@@ -537,6 +539,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     ignoreOffline: boolean,
   ) {
     const switchingTo = yield* Ref.get(preferredRouteId);
+    const routeCount = connectionRoutes(yield* Ref.get(currentEntry)).length;
     yield* SubscriptionRef.set(prepared, Option.none());
     const establishment = yield* Effect.raceAllFirst([
       exitUnlessInterrupted(establishConnection(attempt, generation, lastFailure)).pipe(
@@ -551,11 +554,12 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
           resetRetry,
         })),
       ),
+      // Every route gets a full setup timeout, after the driver has waited
+      // for routes that were slow to answer their check.
       Effect.sleep(
-        Duration.times(
-          Duration.fromInputUnsafe(CONNECTION_ESTABLISHMENT_TIMEOUT),
-          connectionRoutes(yield* Ref.get(currentEntry)).length +
-            (connectionRoutes(yield* Ref.get(currentEntry)).length > 1 ? 0.2 : 0),
+        Duration.sum(
+          Duration.times(Duration.fromInputUnsafe(CONNECTION_ESTABLISHMENT_TIMEOUT), routeCount),
+          Duration.millis(routeCount > 1 ? ConnectionDriver.LATE_ROUTE_CHECK_TIMEOUT_MS : 0),
         ),
       ).pipe(Effect.as<EstablishmentEvent>({ _tag: "TimedOut" })),
     ]);

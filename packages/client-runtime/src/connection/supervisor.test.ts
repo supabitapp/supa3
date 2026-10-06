@@ -809,7 +809,7 @@ describe("EnvironmentSupervisor", () => {
     }),
   );
 
-  it.effect("does not let platform wakeups reset an in-flight attempt", () =>
+  it.effect("does not let app activation reset an in-flight attempt", () =>
     Effect.gen(function* () {
       const firstAttemptStarted = yield* Deferred.make<void>();
       const harness = yield* makeHarness({
@@ -848,6 +848,30 @@ describe("EnvironmentSupervisor", () => {
       });
       expect(yield* Ref.get(harness.prepareCount)).toBe(1);
       expect(yield* Ref.get(harness.sessionCount)).toBe(0);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("starts an in-flight attempt over when the device moves to another network", () =>
+    Effect.gen(function* () {
+      const firstAttemptStarted = yield* Deferred.make<void>();
+      const harness = yield* makeHarness({
+        prepare: (attempt) =>
+          attempt === 1
+            ? Deferred.succeed(firstAttemptStarted, undefined).pipe(Effect.andThen(Effect.never))
+            : Effect.succeed(PREPARED_CONNECTION),
+      });
+      const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
+        initiallyDesired: true,
+      }).pipe(Effect.provide(harness.dependencies));
+
+      yield* Deferred.await(firstAttemptStarted);
+      yield* harness.wake("network-changed");
+      yield* awaitState(
+        supervisor.state,
+        (state) => state.phase === "connected" && state.generation === 1,
+      );
+
+      expect(yield* Ref.get(harness.prepareCount)).toBe(2);
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
@@ -1366,6 +1390,31 @@ describe("EnvironmentSupervisor", () => {
         );
       }),
   );
+  it.effect("gives the last route its full setup time after slow route checks", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        checkRoute: () => Effect.sleep("15 seconds").pipe(Effect.as("silent" as const)),
+        prepare: (_attempt, target) =>
+          target === LAN_TARGET
+            ? Effect.never
+            : Effect.sleep("10 seconds").pipe(Effect.as(PREPARED_CONNECTION)),
+      });
+      const entry: ConnectionCatalogEntry = {
+        ...LAN_ROUTE,
+        alternateRoutes: [TAILNET_ROUTE],
+        enabled: true,
+      };
+      const supervisor = yield* EnvironmentSupervisor.make(entry, { initiallyDesired: true }).pipe(
+        Effect.provide(harness.dependencies),
+      );
+      yield* TestClock.adjust("40 seconds");
+      yield* awaitState(supervisor.state, (state) => state.phase === "connected");
+      expect(Option.getOrThrow(yield* SubscriptionRef.get(supervisor.prepared)).target).toEqual(
+        TAILNET_TARGET,
+      );
+    }),
+  );
+
   it.effect("keeps the fallback connected while a failed preferred route cools down", () =>
     Effect.gen(function* () {
       const lanAnswers = yield* Ref.make(false);
