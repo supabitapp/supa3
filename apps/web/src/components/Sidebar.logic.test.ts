@@ -34,6 +34,7 @@ import {
   resolveSidebarThreadSection,
   resolveSidebarRowAccessibility,
   resolveSidebarThreadStatus,
+  resolveSidebarV2DurationStartedAt,
   resolveSidebarV2TopStatus,
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
@@ -981,9 +982,57 @@ describe("resolveSidebarThreadStatus", () => {
     );
   });
 
-  it("keeps Waiting static while Working shows elapsed duration", () => {
-    expect(shouldShowSidebarV2Duration("waiting")).toBe(false);
+  it("shows elapsed duration for Waiting and Working", () => {
+    expect(shouldShowSidebarV2Duration("waiting")).toBe(true);
     expect(shouldShowSidebarV2Duration("working")).toBe(true);
+    expect(shouldShowSidebarV2Duration("ready")).toBe(false);
+  });
+});
+
+describe("resolveSidebarV2DurationStartedAt", () => {
+  const thread = makeThreadFixture({
+    latestRun: makeLatestRun(),
+    runtime: {
+      status: "idle",
+      activeRunId: null,
+      activityStartedAt: null,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      providerName: null,
+      lastError: null,
+      updatedAt: "2026-03-09T10:05:00.000Z",
+    },
+  });
+
+  it("keeps counting after the parent run settles with background work", () => {
+    expect(resolveSidebarV2DurationStartedAt(thread)).toBe("2026-03-09T10:00:00.000Z");
+  });
+
+  it("prefers the activity start carried across background wakes", () => {
+    expect(
+      resolveSidebarV2DurationStartedAt({
+        ...thread,
+        runtime: { ...thread.runtime!, activityStartedAt: "2026-03-09T09:55:00.000Z" },
+      }),
+    ).toBe("2026-03-09T09:55:00.000Z");
+  });
+
+  it("falls back to request time when the settled run has no valid start", () => {
+    expect(
+      resolveSidebarV2DurationStartedAt({
+        ...thread,
+        latestRun: makeLatestRun({ startedAt: "invalid" }),
+      }),
+    ).toBe("2026-03-09T10:00:00.000Z");
+  });
+
+  it("leaves ready threads and waits without a known run untimed", () => {
+    expect(
+      resolveSidebarV2DurationStartedAt({
+        ...thread,
+        runtime: { ...thread.runtime!, status: "completed" },
+      }),
+    ).toBeNull();
+    expect(resolveSidebarV2DurationStartedAt({ ...thread, latestRun: null })).toBeNull();
   });
 });
 
