@@ -55,7 +55,7 @@ Every configured device defaults to dark appearance and the `supacode` palette, 
 `--appearance both` to override the configured appearance; `both` produces 60 PNGs.
 
 Pass `--theme <id>` (repeatable) or `--theme all` to capture the app's other palettes: `supacode`,
-`supacode-chat`, `grove`, `ocean`, `ember`, and `iris`. The runner hands the palette to
+`supacode-chat`, `grove`, `ocean`, `ember`, `iris`, and `graphite`. The runner hands the palette to
 the app as a launch argument, the app applies it to both color schemes, and a scene only reports
 itself ready once the requested palette is active — so a capture can never show the previous theme.
 `--theme all` multiplies the run by the palette count; only the native build is shared.

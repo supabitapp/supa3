@@ -450,8 +450,7 @@ describe("theme files", () => {
     for (const theme of BUILT_IN_THEMES) {
       expect(getThemeDefinition(theme.id)).toBe(theme);
       expect(getThemeModes(theme)).toEqual(["light", "dark"]);
-      expect(theme.sidebarArtwork).toBe(true);
-      expect(themeAllowsSidebarArtwork(theme.id)).toBe(true);
+      expect(themeAllowsSidebarArtwork(theme.id)).toBe(theme.sidebarArtwork === true);
       expect(theme.colors.accent).toMatch(/^oklch\(/);
       expect(theme.variants?.dark?.accent).toMatch(/^oklch\(/);
 
