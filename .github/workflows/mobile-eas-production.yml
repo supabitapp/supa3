@@ -26,6 +26,7 @@ on:
         default: all
         options:
           - ios
+          - android
           - all
       version:
         description: "Optional build version override (blank uses app.config.ts; an override is committed before building)"
@@ -179,6 +180,7 @@ jobs:
             import fs from "node:fs";
             const include = [
               { platform: "ios", runner: "depot-macos-26", legacy: false },
+              { platform: "android", runner: "depot-ubuntu-24.04-8", legacy: false },
               { platform: "ios", runner: "depot-ubuntu-24.04-8", legacy: true },
             ].filter(({ platform, legacy }) =>
               (process.env.MOBILE_PLATFORM === "all" || platform === process.env.MOBILE_PLATFORM) &&
