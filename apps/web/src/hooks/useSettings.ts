@@ -34,10 +34,11 @@ import {
 import { ensureLocalApi } from "~/localApi";
 import {
   getThemeDefinition,
-  getThemePreviewSidebarArtwork,
+  getThemePreviewAppearance,
   resolveThemeHalf,
   subscribeToThemePreview,
   themeAllowsSidebarArtwork,
+  type ThemeAppearance,
 } from "~/themePalette";
 import * as Struct from "effect/Struct";
 import { toastManager } from "~/components/ui/toast";
@@ -334,14 +335,17 @@ export function useClientSettings<T = ClientSettings>(
 export function resolveEnvironmentIdentificationMode(input: {
   mode: EnvironmentIdentificationMode;
   settingsHydrated: boolean;
+  appearance: ThemeAppearance;
   paletteThemeActive?: boolean;
   paletteThemeAllowsArtwork?: boolean;
 }): EnvironmentIdentificationMode {
   // Avoid briefly rendering the default artwork before a persisted pill/none choice loads.
   if (!input.settingsHydrated) return "none";
-  // Artwork palettes are maintained for built-ins only. Keep an explicit
-  // "none", but use the theme-aware pill for user-controlled palettes.
-  return input.paletteThemeActive && !input.paletteThemeAllowsArtwork && input.mode === "artwork"
+  // Custom light palettes use the pill; every dark palette supports artwork.
+  return input.appearance === "light" &&
+    input.paletteThemeActive &&
+    !input.paletteThemeAllowsArtwork &&
+    input.mode === "artwork"
     ? "pill"
     : input.mode;
 }
@@ -350,9 +354,9 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
   const settingsHydrated = useClientSettingsHydrated();
   const mode = useClientSettingsValue().environmentIdentificationMode;
   const { resolvedTheme, theme, themeHalves } = useTheme();
-  const previewSidebarArtwork = useSyncExternalStore(
+  const previewAppearance = useSyncExternalStore(
     subscribeToThemePreview,
-    getThemePreviewSidebarArtwork,
+    getThemePreviewAppearance,
     () => null,
   );
   const activeTheme = resolveThemeHalf(theme, themeHalves, resolvedTheme);
@@ -360,8 +364,9 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
   return resolveEnvironmentIdentificationMode({
     mode,
     settingsHydrated,
-    paletteThemeActive: previewSidebarArtwork !== null || activeThemeDefinition !== null,
-    paletteThemeAllowsArtwork: previewSidebarArtwork ?? themeAllowsSidebarArtwork(activeTheme),
+    appearance: previewAppearance ?? resolvedTheme,
+    paletteThemeActive: previewAppearance !== null || activeThemeDefinition !== null,
+    paletteThemeAllowsArtwork: previewAppearance === null && themeAllowsSidebarArtwork(activeTheme),
   });
 }
 

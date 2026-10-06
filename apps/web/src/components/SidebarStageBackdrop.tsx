@@ -1,12 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentIdentificationMode } from "@supacode/contracts";
-import { type ComponentType, useId } from "react";
+import { type ComponentType, useId, useSyncExternalStore } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
-import type { ThemeAppearance } from "../themePalette";
+import {
+  getThemePreviewAppearance,
+  subscribeToThemePreview,
+  type ThemeAppearance,
+} from "../themePalette";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "release";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
@@ -25,13 +29,15 @@ export function resolveSidebarStageBackdropVariant(
   return null;
 }
 
-/** The release sleigh is a night scene, so it only renders under dark themes. */
+/** Dark themes share the sleigh scene across release channels. */
 export function resolveVisibleSidebarStageBackdropVariant(
   stageLabel: string | null,
   appearance: ThemeAppearance,
 ): SidebarStageBackdropVariant | null {
   const variant = resolveSidebarStageBackdropVariant(stageLabel);
-  return variant === "release" && appearance !== "dark" ? null : variant;
+  if (variant === null) return null;
+  if (appearance === "dark") return "release";
+  return variant === "release" ? null : variant;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
@@ -67,7 +73,14 @@ export function useEnvironmentStageLabel(): string | null {
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
   const { resolvedTheme } = useTheme();
-  return enabled ? resolveVisibleSidebarStageBackdropVariant(stageLabel, resolvedTheme) : null;
+  const previewAppearance = useSyncExternalStore(
+    subscribeToThemePreview,
+    getThemePreviewAppearance,
+    () => null,
+  );
+  return enabled
+    ? resolveVisibleSidebarStageBackdropVariant(stageLabel, previewAppearance ?? resolvedTheme)
+    : null;
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */

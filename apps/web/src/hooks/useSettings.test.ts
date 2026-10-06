@@ -329,19 +329,28 @@ describe("persistClientSettingsUpdate", () => {
 
 describe("resolveEnvironmentIdentificationMode", () => {
   it("keeps identification hidden until client settings hydrate", () => {
-    expect(resolveEnvironmentIdentificationMode({ mode: "artwork", settingsHydrated: false })).toBe(
-      "none",
-    );
-    expect(resolveEnvironmentIdentificationMode({ mode: "pill", settingsHydrated: true })).toBe(
-      "pill",
-    );
+    expect(
+      resolveEnvironmentIdentificationMode({
+        mode: "artwork",
+        settingsHydrated: false,
+        appearance: "dark",
+      }),
+    ).toBe("none");
+    expect(
+      resolveEnvironmentIdentificationMode({
+        mode: "pill",
+        settingsHydrated: true,
+        appearance: "dark",
+      }),
+    ).toBe("pill");
   });
 
-  it("uses a pill instead of artwork with a palette theme", () => {
+  it("uses a pill instead of artwork with a custom light palette", () => {
     expect(
       resolveEnvironmentIdentificationMode({
         mode: "artwork",
         settingsHydrated: true,
+        appearance: "light",
         paletteThemeActive: true,
       }),
     ).toBe("pill");
@@ -352,6 +361,7 @@ describe("resolveEnvironmentIdentificationMode", () => {
       resolveEnvironmentIdentificationMode({
         mode: "none",
         settingsHydrated: true,
+        appearance: "light",
         paletteThemeActive: true,
       }),
     ).toBe("none");
@@ -362,11 +372,27 @@ describe("resolveEnvironmentIdentificationMode", () => {
       resolveEnvironmentIdentificationMode({
         mode: "artwork",
         settingsHydrated: true,
+        appearance: "light",
         paletteThemeActive: true,
         paletteThemeAllowsArtwork: true,
       }),
     ).toBe("artwork");
   });
+
+  it.each(["artwork", "pill", "none"] as const)(
+    "respects %s with a custom dark palette",
+    (mode) => {
+      expect(
+        resolveEnvironmentIdentificationMode({
+          mode,
+          settingsHydrated: true,
+          appearance: "dark",
+          paletteThemeActive: true,
+          paletteThemeAllowsArtwork: false,
+        }),
+      ).toBe(mode);
+    },
+  );
 });
 
 describe("mergeEnvironmentSettings", () => {
