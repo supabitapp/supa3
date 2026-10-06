@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as HttpClient from "effect/http/HttpClient";
 
@@ -38,8 +39,10 @@ export interface EnvironmentConnectionLease {
  */
 export type RouteCheck = "answered" | "silent" | "unchecked";
 
-/** How long a direct route has to answer before it counts as unreachable from here. */
-const ROUTE_CHECK_TIMEOUT_MS = 2_500;
+/** How long a direct route has to answer before the attempt moves on to the routes after it. */
+const ROUTE_CHECK_WINDOW_MS = 2_500;
+/** How long a check keeps listening, so a slow route still goes ahead of one that never answers. */
+const ROUTE_CHECK_TIMEOUT_MS = 15_000;
 
 export class ConnectionDriver extends Context.Service<
   ConnectionDriver,
@@ -69,11 +72,15 @@ export class ConnectionDriver extends Context.Service<
  * Connects over the first route, in preference order, that is worth trying.
  * Every route is checked at once, but a route only waits for its own check,
  * so a reachable LAN address connects without waiting on a silent tailnet
- * one. A silent route is skipped on the first pass so a LAN address from
- * another network costs one short check, not a connection timeout. A route
- * that fails to connect moves on to the next so an unavailable address cannot
- * hide a working LAN or Tailscale route. Silent routes are tried last, since a
- * check is not proof.
+ * one. A route that misses the check window is skipped on the first pass so a
+ * LAN address from another network costs one short check, not a connection
+ * timeout. A route that fails to connect moves on to the next so an
+ * unavailable address cannot hide a working LAN or Tailscale route.
+ *
+ * Skipped routes are tried in the order their checks answer late, so a tailnet
+ * still waking up after a network change goes ahead of a LAN that will never
+ * answer. Routes whose checks never answer are tried last, since a check is not
+ * proof.
  *
  * The reported error is a transient one when any route failed transiently,
  * so the supervisor keeps retrying a route that may come back; a blocked
@@ -87,10 +94,24 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
   ) => Effect.Effect<EnvironmentConnectionLease, ConnectionAttemptError, R | Scope.Scope>,
 ) {
   const routes = connectionRoutes(entry);
+  const results: Array<RouteCheck | undefined> = routes.map(() => undefined);
   const checks =
     routes.length === 1
       ? []
-      : yield* Effect.forEach(routes, (route) => Effect.forkChild(checkRoute(route)));
+      : yield* Effect.forEach(routes, (route, index) =>
+          Effect.forkChild(
+            checkRoute(route).pipe(
+              Effect.tap((check) =>
+                Effect.sync(() => {
+                  results[index] = check;
+                }),
+              ),
+            ),
+          ),
+        );
+  const inWindow = yield* Effect.forEach(checks, (check) =>
+    Effect.forkChild(Fiber.join(check).pipe(Effect.timeoutOption(ROUTE_CHECK_WINDOW_MS))),
+  );
   const attemptScope = yield* Scope.Scope;
   let transient: ConnectionAttemptError | undefined;
   let blocked: ConnectionAttemptError | undefined;
@@ -118,11 +139,12 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     }
     return result;
   });
-  const silent: Array<ConnectionRoute> = [];
+  let skipped: Array<number> = [];
   for (const [index, route] of routes.entries()) {
-    const check = checks.length === 0 ? "unchecked" : yield* Fiber.join(checks[index]!);
-    if (check === "silent") {
-      silent.push(route);
+    const check =
+      inWindow.length === 0 ? Option.some("unchecked") : yield* Fiber.join(inWindow[index]!);
+    if (Option.isNone(check) || check.value === "silent") {
+      skipped.push(index);
       continue;
     }
     const result = yield* attempt(route);
@@ -130,8 +152,18 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     // An incompatible server is the same server on every route.
     if (result.failure.reason === "unsupported") return yield* result.failure;
   }
-  for (const route of silent) {
-    const result = yield* attempt(route);
+  while (skipped.length > 0) {
+    const answered = skipped.find(
+      (index) => results[index] !== undefined && results[index] !== "silent",
+    );
+    const pending = skipped.filter((index) => results[index] === undefined);
+    if (answered === undefined && pending.length > 0) {
+      yield* Effect.raceAll(pending.map((index) => Fiber.await(checks[index]!)));
+      continue;
+    }
+    const index = answered ?? skipped[0]!;
+    skipped = skipped.filter((candidate) => candidate !== index);
+    const result = yield* attempt(routes[index]!);
     if (result._tag === "Success") return result.success;
     if (result.failure.reason === "unsupported") return yield* result.failure;
   }
@@ -151,14 +183,18 @@ export const make = Effect.gen(function* () {
   const sessions = yield* RpcSession.RpcSessionFactory;
   const httpClient = yield* HttpClient.HttpClient;
 
-  const checkRoute = (entry: ConnectionCatalogEntry, route: ConnectionRoute) => {
+  const checkRoute = (
+    entry: ConnectionCatalogEntry,
+    route: ConnectionRoute,
+    timeoutMs = ROUTE_CHECK_WINDOW_MS,
+  ) => {
     const httpBaseUrl = routeHttpBaseUrl(route);
     if (httpBaseUrl === null) return Effect.succeed<RouteCheck>("unchecked");
     // The descriptor is public, so this sends no credential to whatever
     // answers at a saved LAN address on a different network.
     return fetchRemoteEnvironmentDescriptor({
       httpBaseUrl,
-      timeoutMs: ROUTE_CHECK_TIMEOUT_MS,
+      timeoutMs,
     }).pipe(
       Effect.map((descriptor): RouteCheck =>
         descriptor.environmentId === entry.target.environmentId ? "answered" : "silent",
@@ -184,7 +220,7 @@ export const make = Effect.gen(function* () {
     yield* reportProgress({ stage: "preparing" });
     return yield* connectOverRoutes(
       entry,
-      (route) => checkRoute(entry, route),
+      (route) => checkRoute(entry, route, ROUTE_CHECK_TIMEOUT_MS),
       Effect.fnUntraced(function* (route) {
         const prepared = yield* resolver.prepare(routeEntry(entry, route));
         yield* reportProgress({ stage: "opening", prepared });

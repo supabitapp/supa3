@@ -373,7 +373,9 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
         case "BetterRouteAvailable":
           break;
         case "Wakeup":
-          if (next.reason === "application-active-reconnect") {
+          // Route checks from the previous network no longer say which route
+          // answers, so a network move starts over instead of dialing them.
+          if (next.reason === "application-active-reconnect" || next.reason === "network-changed") {
             return true;
           }
           break;

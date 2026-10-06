@@ -119,6 +119,27 @@ describe("direct route connection attempts", () => {
     }),
   );
 
+  it.effect("tries a route that answers late before one that never answers", () =>
+    Effect.gen(function* () {
+      const attempted: ConnectionRoute[] = [];
+      const fiber = yield* connectOverRoutes(
+        entry,
+        (route) =>
+          route === tailnet
+            ? Effect.sleep("5 seconds").pipe(Effect.as("answered" as const))
+            : Effect.never,
+        (route) =>
+          Effect.sync(() => {
+            attempted.push(route);
+            return lease(route);
+          }),
+      ).pipe(Effect.forkChild);
+      yield* TestClock.adjust("5 seconds");
+      expect((yield* Fiber.join(fiber)).prepared.target).toEqual(tailnet.target);
+      expect(attempted).toEqual([tailnet]);
+    }),
+  );
+
   it.effect("retries silent routes after reachable routes reject authentication", () =>
     Effect.gen(function* () {
       const result = yield* connectOverRoutes(
