@@ -59,6 +59,34 @@ bumps require a new store binary under the existing OTA fingerprint policy.
   - nightly releases are aliased to the `nightly` hosted app channel
 - Release macOS jobs require Apple credentials from 1Password. Windows signing is auto-detected from its Azure secrets.
 
+## Mobile store review
+
+[Mobile Production](../../.github/workflows/mobile-eas-production.yml) submits newly built production
+binaries to TestFlight and Google Play internal testing. After a successful upload, it records the
+source commit, app version, and native build number from the signed binary. Its store-review job calls
+[Mobile Store Review](../../.github/workflows/mobile-store-review.yml) for those builds.
+
+The review workflow captures the [native screenshot matrix](mobile-app-store-screenshots.md) at the
+same source commit and validates every image before preparing Fastlane folders. The Android assets
+also include a 512-pixel icon from the native SVG and the checked-in feature graphic.
+Fastlane waits up to 45 minutes for the exact iOS build to finish processing, uploads the screenshots,
+and submits it for App Store review. Apple publishing remains manual after approval. The Android lane
+promotes the exact internal version code to production with a full rollout and commits the edit for
+review. It fails if Google requires a separate manual submission instead of reporting success.
+
+Submission runs only on `main` in the GitHub `release` environment. The `app-store` fnox profile
+reads the existing App Store Connect team API key from 1Password using `OP_SERVICE_ACCOUNT_TOKEN`.
+That key needs permission to manage the App Store release. Android uses `EXPO_TOKEN` to download the
+existing Google Play submission service account from EAS into a temporary file, which the job removes
+afterward. Store agreements, privacy declarations, and account-level access must already be complete.
+OTA-only updates, preview builds, and runs without a new signed production binary skip store review.
+
+The two platforms capture and submit independently, so a failed iOS capture does not block Android.
+To retry review after fixing a store-side issue, dispatch `Mobile Store Review` on `main` with the
+platform, original Mobile Production run ID, and source SHA recorded in its build manifest. Artifacts last
+14 days. The workflow selects the newest build attempt per platform from that source and skips a
+build that has already reached the review or production stage. It does not withdraw an active review.
+
 ## Pull request macOS previews
 
 PRs from trusted authors automatically publish a signed, notarized Apple Silicon DMG to the

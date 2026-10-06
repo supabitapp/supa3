@@ -16,8 +16,7 @@ export const SHOWCASE_THEMES = MOBILE_THEME_IDS;
 export const DEFAULT_SHOWCASE_THEME = MOBILE_DEFAULT_THEME_ID;
 export type ShowcaseTheme = MobileThemeId;
 
-export interface ShowcaseStoreAssetSpec {
-  readonly store: "apple" | "google-play";
+export type ShowcaseStoreAssetSpec = {
   /** Device directory relative to ShowcaseConfig.outputDirectory. */
   readonly directory: string;
   readonly width: number;
@@ -25,7 +24,13 @@ export interface ShowcaseStoreAssetSpec {
   readonly minimumUploadCount: number;
   readonly maximumUploadCount: number;
   readonly maximumFileSizeBytes?: number;
-}
+} & (
+  | { readonly store: "apple" }
+  | {
+      readonly store: "google-play";
+      readonly screenshotType: "phoneScreenshots" | "sevenInchScreenshots" | "tenInchScreenshots";
+    }
+);
 
 export interface ShowcaseIosDevice {
   readonly id: string;
@@ -75,6 +80,7 @@ export interface ShowcaseConfig {
 }
 
 const ANDROID_ABIS = ["arm64-v8a", "x86_64", "x86", "armeabi-v7a"] as const;
+const STORE_SCENES = ["threads", "thread", "review", "terminal", "environments"] as const;
 
 export function resolveShowcaseAndroidAbi(
   value: string | undefined,
@@ -108,12 +114,29 @@ const config: ShowcaseConfig = {
       simulatorDeviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
       appearance: "dark",
       theme: DEFAULT_SHOWCASE_THEME,
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "apple",
         directory: "apple/iphone-6.9",
         width: 1320,
         height: 2868,
+        minimumUploadCount: 1,
+        maximumUploadCount: 10,
+      },
+    },
+    {
+      id: "iphone-6.3",
+      platform: "ios",
+      simulator: "Supacode Showcase iPhone 17 Pro",
+      simulatorDeviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      appearance: "dark",
+      theme: DEFAULT_SHOWCASE_THEME,
+      scenes: STORE_SCENES,
+      storeAsset: {
+        store: "apple",
+        directory: "apple/iphone-6.3",
+        width: 1206,
+        height: 2622,
         minimumUploadCount: 1,
         maximumUploadCount: 10,
       },
@@ -125,7 +148,7 @@ const config: ShowcaseConfig = {
       simulatorDeviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-14-Plus",
       appearance: "dark",
       theme: DEFAULT_SHOWCASE_THEME,
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "apple",
         directory: "apple/iphone-6.5",
@@ -143,7 +166,7 @@ const config: ShowcaseConfig = {
       appearance: "dark",
       theme: DEFAULT_SHOWCASE_THEME,
       orientation: "landscape",
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "apple",
         directory: "apple/ipad-13",
@@ -167,9 +190,10 @@ const config: ShowcaseConfig = {
         height: 1920,
         density: 420,
       },
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "google-play",
+        screenshotType: "phoneScreenshots",
         directory: "google-play/phone",
         width: 1080,
         height: 1920,
@@ -190,9 +214,10 @@ const config: ShowcaseConfig = {
         height: 1920,
         density: 288,
       },
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "google-play",
+        screenshotType: "sevenInchScreenshots",
         directory: "google-play/tablet-7",
         width: 1080,
         height: 1920,
@@ -213,9 +238,10 @@ const config: ShowcaseConfig = {
         height: 2560,
         density: 288,
       },
-      scenes: ["thread", "terminal", "review", "threads", "environments"],
+      scenes: STORE_SCENES,
       storeAsset: {
         store: "google-play",
+        screenshotType: "tenInchScreenshots",
         directory: "google-play/tablet-10",
         width: 1440,
         height: 2560,

@@ -6,6 +6,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 import * as NodeProcess from "node:process";
 import * as NodeURL from "node:url";
 
@@ -26,7 +27,9 @@ import showcaseConfig, {
 import {
   SHOWCASE_ENVIRONMENTS,
   SHOWCASE_PROJECTS,
+  SHOWCASE_THREADS,
   seedShowcaseEnvironment,
+  waitForSeedableSchema,
 } from "./mobile-showcase-environment.ts";
 
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
@@ -569,6 +572,34 @@ async function reserveAvailablePort(): Promise<number> {
   });
 }
 
+async function waitForShowcaseThreads(dbPath: string, projectIds: ReadonlyArray<string>) {
+  const expectedIds = SHOWCASE_THREADS.filter((thread) =>
+    projectIds.includes(thread.projectId),
+  ).map((thread) => thread.id);
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const database = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
+    try {
+      const table = database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'orchestration_v2_projection_threads'",
+        )
+        .get();
+      if (table) {
+        const rows = database
+          .prepare("SELECT thread_id FROM orchestration_v2_projection_threads")
+          .all() as Array<{ thread_id: string }>;
+        const actualIds = new Set(rows.map((row) => row.thread_id));
+        if (expectedIds.every((id) => actualIds.has(id))) return;
+      }
+    } finally {
+      database.close();
+    }
+    await delay(250);
+  }
+  throw new Error(`Showcase threads were not imported into ${dbPath}.`);
+}
+
 async function createShowcaseShell(baseDir: string): Promise<string> {
   const shellPath = NodePath.join(baseDir, "showcase-shell");
   await NodeFSP.writeFile(
@@ -1073,7 +1104,7 @@ async function runningAndroidAvds(): Promise<ReadonlyMap<string, string>> {
   return result;
 }
 
-async function waitForAndroidSerial(avd: string, timeoutMs = 120_000): Promise<string> {
+async function waitForAndroidSerial(avd: string, timeoutMs = 300_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const serial = (await runningAndroidAvds()).get(avd);
@@ -1369,7 +1400,20 @@ async function main(): Promise<void> {
       );
       showcaseServers.push(server);
       await waitForPort(port, `${environment.label} server`);
+      const dbPath = NodePath.join(baseDir, "userdata", "statev2.sqlite");
+      await waitForSeedableSchema(dbPath);
+      await stopProcess(server);
       await seedShowcaseEnvironment({ baseDir, projectIds: environment.projectIds });
+      const captureServer = startShowcaseServer(
+        baseDir,
+        workspaceRoot,
+        port,
+        shellPath,
+        labelProbeDirectory,
+      );
+      showcaseServers.push(captureServer);
+      await waitForPort(port, `${environment.label} capture server`);
+      await waitForShowcaseThreads(dbPath, environment.projectIds);
       // The server begins listening before the ServerEnvironment layer
       // persists the environment id, so poll rather than read once.
       const environmentId = await waitForFileContent(

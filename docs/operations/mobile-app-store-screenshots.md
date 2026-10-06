@@ -51,8 +51,8 @@ verify process ownership. Concurrent screenshot harnesses in different worktrees
 collide or attach to the wrong Metro process.
 
 Every configured device defaults to dark appearance and the `supacode` palette, so plain
-`pnpm screenshots:mobile` produces 30 dark PNGs. Pass `--appearance light`, `--appearance dark`, or
-`--appearance both` to override the configured appearance; `both` produces 60 PNGs.
+`pnpm screenshots:mobile` produces 35 dark PNGs. Pass `--appearance light`, `--appearance dark`, or
+`--appearance both` to override the configured appearance; `both` produces 70 PNGs.
 
 Pass `--theme <id>` (repeatable) or `--theme all` to capture the app's other palettes: `supacode`,
 `supacode-chat`, `grove`, `ocean`, `ember`, `iris`, and `zenbones`. The runner hands the palette to
@@ -65,6 +65,7 @@ The default matrix is:
 | Output folder                          | Capture target               | Upload dimensions | Store slot                                |
 | -------------------------------------- | ---------------------------- | ----------------- | ----------------------------------------- |
 | `apple/iphone-6.9/dark/supacode/`      | disposable iPhone 17 Pro Max | 1320×2868         | App Store Connect iPhone 6.9-inch         |
+| `apple/iphone-6.3/dark/supacode/`      | disposable iPhone 17 Pro     | 1206×2622         | App Store Connect iPhone 6.3-inch         |
 | `apple/iphone-6.5/dark/supacode/`      | disposable iPhone 14 Plus    | 1284×2778         | App Store Connect iPhone 6.5-inch         |
 | `apple/ipad-13/dark/supacode/`         | iPad Pro 13-inch (M5)        | 2752×2064         | App Store Connect iPad 13-inch, landscape |
 | `google-play/phone/dark/supacode/`     | Pixel AVD at 420 dpi         | 1080×1920         | Google Play phone, portrait 9:16          |
@@ -82,6 +83,7 @@ The generated tree is deliberately aligned with the store upload fields:
     artifacts/app-store/screenshots/
     ├── apple/
     │   ├── iphone-6.9/dark/supacode/{thread,terminal,review,threads,environments}.png
+    │   ├── iphone-6.3/dark/supacode/{thread,terminal,review,threads,environments}.png
     │   ├── iphone-6.5/dark/supacode/{thread,terminal,review,threads,environments}.png
     │   └── ipad-13/dark/supacode/{thread,terminal,review,threads,environments}.png
     └── google-play/
@@ -102,7 +104,7 @@ appearance settings can never drift apart.
 
 Run the `Mobile Showcase Screenshots` workflow from GitHub's Actions tab, choose `all`, `ios`, or
 `android`, select `light`, `dark`, or `both`, and pick a palette (or `all`, which raises each job's
-timeout from 60 to 300 minutes). The default dispatch captures both appearances of the `supacode`
+timeout from 120 to 350 minutes). The default dispatch captures both appearances of the `supacode`
 palette and runs iOS and Android concurrently: iPhone and iPad capture on a
 8-vCPU Depot macOS runner, while Android phone, 7-inch tablet, and 10-inch tablet capture on a
 GitHub-hosted Ubuntu runner with a KVM-accelerated x86_64 emulator.
@@ -116,6 +118,10 @@ Artifacts section. Artifacts are retained for 14 days.
 The workflow uses the same checked-in device and scene matrix as local capture. Android remains
 ARM64 by default for local Apple Silicon development; CI sets `SUPACODE_SHOWCASE_ANDROID_ABI=x86_64` so the
 debug APK matches its accelerated emulator.
+
+Production store releases call this workflow at the signed binary's source commit with dark
+appearance and the Supacode palette. [Mobile store review](release.md#mobile-store-review) owns
+the upload and submission procedure. Standalone screenshot captures only create downloadable artifacts.
 
 ## Fast iteration
 

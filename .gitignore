@@ -34,6 +34,10 @@ apps/mobile/.showcase/
 apps/mobile/.generated/
 /.generated/
 artifacts/app-store/screenshots/
+artifacts/app-store/fastlane/
+apps/mobile/vendor/bundle/
+apps/mobile/.bundle/
+apps/mobile/fastlane/report.xml
 .github/pr-assets/
 native/**/target/
 node_modules/

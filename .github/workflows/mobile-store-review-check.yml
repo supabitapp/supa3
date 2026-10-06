@@ -1,0 +1,54 @@
+name: Mobile Store Automation Checks
+
+on:
+  pull_request:
+    paths:
+      - .github/scripts/*play-credentials*
+      - .github/scripts/mobile-store-*
+      - .github/workflows/mobile-*.yml
+      - apps/mobile/Gemfile*
+      - apps/mobile/fastlane/**
+      - scripts/mobile-store-*
+      - scripts/mobile-showcase*
+  push:
+    branches: [main]
+    paths:
+      - .github/scripts/*play-credentials*
+      - .github/scripts/mobile-store-*
+      - .github/workflows/mobile-*.yml
+      - apps/mobile/Gemfile*
+      - apps/mobile/fastlane/**
+      - scripts/mobile-store-*
+      - scripts/mobile-showcase*
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mise
+      - name: Install screenshot tooling
+        run: mise exec -- vp install --filter=@supacode/scripts...
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4.8"
+          working-directory: apps/mobile
+          bundler-cache: true
+      - name: Validate workflows
+        run: mise exec -- actionlint .github/workflows/mobile-eas-production.yml .github/workflows/mobile-store-review.yml .github/workflows/mobile-showcase-screenshots.yml .github/workflows/mobile-store-review-check.yml
+      - name: Test exact build selection and credential export
+        run: node --test .github/scripts/mobile-store-release.test.mjs .github/scripts/export-play-credentials.test.mjs
+      - name: Test screenshot validation
+        run: vp test run scripts/mobile-showcase.test.ts scripts/mobile-store-assets.test.ts
+      - name: Test review behavior and load pinned Fastlane lanes
+        working-directory: apps/mobile
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: "true"
+        run: |
+          ruby fastlane/review.test.rb
+          bundle exec ruby fastlane/play-review-commit.test.rb
+          bundle exec fastlane lanes
