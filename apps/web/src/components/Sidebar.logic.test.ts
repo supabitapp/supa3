@@ -937,9 +937,14 @@ describe("resolveSidebarThreadStatus", () => {
     expect(
       resolveSidebarThreadStatus({ ...idle, runtime: { ...limited, status: "completed" } }),
     ).toBe("ready");
-    expect(resolveSidebarV2TopStatus({ status: "limited", isUnread: false, isWoke: false })).toBe(
-      "limited",
-    );
+    expect(
+      resolveSidebarV2TopStatus({
+        environmentConnected: true,
+        status: "limited",
+        isUnread: false,
+        isWoke: false,
+      }),
+    ).toBe("limited");
     expect(
       shouldRecedeSidebarThread({
         status: "limited",
@@ -977,15 +982,36 @@ describe("resolveSidebarThreadStatus", () => {
   });
 
   it("keeps a waiting runtime visible ahead of unread and woke presentation", () => {
-    expect(resolveSidebarV2TopStatus({ status: "waiting", isUnread: true, isWoke: true })).toBe(
-      "waiting",
-    );
+    expect(
+      resolveSidebarV2TopStatus({
+        environmentConnected: true,
+        status: "waiting",
+        isUnread: true,
+        isWoke: true,
+      }),
+    ).toBe("waiting");
   });
 
   it("shows elapsed duration for Waiting and Working", () => {
     expect(shouldShowSidebarV2Duration("waiting")).toBe(true);
     expect(shouldShowSidebarV2Duration("working")).toBe(true);
     expect(shouldShowSidebarV2Duration("ready")).toBe(false);
+  });
+});
+
+describe("environment connection status in the sidebar", () => {
+  it.each([
+    ["working", "working"],
+    ["waiting", "waiting"],
+    ["approval", "approval"],
+    ["input", "input"],
+    ["failed", "failed"],
+    ["limited", "limited"],
+    ["ready", "woke"],
+  ] as const)("replaces cached %s status until the environment connects", (status, restored) => {
+    const input = { status, isUnread: true, isWoke: true };
+    expect(resolveSidebarV2TopStatus({ ...input, environmentConnected: false })).toBe("connecting");
+    expect(resolveSidebarV2TopStatus({ ...input, environmentConnected: true })).toBe(restored);
   });
 });
 
@@ -1129,6 +1155,18 @@ describe("resolveThreadStatusPill", () => {
       updatedAt: "2026-03-09T10:00:00.000Z",
     },
   };
+
+  it("shows Connecting ahead of cached approvals and restores them after reconnect", () => {
+    const thread = { ...baseThread, hasPendingApprovals: true, hasPendingUserInput: true };
+    expect(resolveThreadStatusPill({ thread, environmentConnected: false })).toMatchObject({
+      label: "Connecting",
+      pulse: false,
+    });
+    expect(resolveThreadStatusPill({ thread, environmentConnected: true })).toMatchObject({
+      label: "Pending Approval",
+      pulse: false,
+    });
+  });
 
   it("shows pending approval before all other statuses", () => {
     expect(
@@ -1999,7 +2037,9 @@ describe("unseen completion with background work", () => {
 
     expect(isUnread).toBe(true);
     expect(status).toBe(expected.status);
-    expect(resolveSidebarV2TopStatus({ status, isUnread, isWoke: false })).toBe(expected.topStatus);
+    expect(
+      resolveSidebarV2TopStatus({ environmentConnected: true, status, isUnread, isWoke: false }),
+    ).toBe(expected.topStatus);
     expect(
       shouldRecedeSidebarThread({
         status,

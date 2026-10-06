@@ -24,6 +24,7 @@ import {
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { useAtomValue } from "@effect/atom-react";
+import { isEnvironmentConnected } from "@supacode/client-runtime/connection";
 import { autoAnimate } from "@formkit/auto-animate";
 import React, {
   useCallback,
@@ -475,6 +476,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   );
   const canArchive = !isPendingCreation && threadRuntimeCanArchive(thread.runtime);
   const threadStatus = resolveThreadStatusPill({
+    environmentConnected: isEnvironmentConnected(environment),
     thread: {
       ...thread,
       lastVisitedAt,

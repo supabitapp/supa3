@@ -25,6 +25,10 @@ export interface EnvironmentPresentation {
   readonly serverConfig: ServerConfig | null;
 }
 
+export function isEnvironmentConnected(environment: EnvironmentPresentation | null): boolean {
+  return environment?.connection.phase === "connected";
+}
+
 export function presentConnectionState(
   state: SupervisorConnectionState,
 ): EnvironmentConnectionPresentation {

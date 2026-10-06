@@ -14,11 +14,14 @@ import {
   type VcsStatusResult,
 } from "@supacode/contracts";
 import { Atom } from "effect/reactivity";
+import { useAtomValue } from "@effect/atom-react";
+import { isEnvironmentConnected } from "@supacode/client-runtime/connection";
 import { FolderGit2Icon, TerminalIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject } from "../state/entities";
+import { environmentPresentations } from "../state/presentation";
 import {
   resolveThreadCurrentPullRequestLink,
   resolveThreadPullRequestChains,
@@ -857,6 +860,10 @@ export function ThreadRowLeadingStatus({
   thread: SidebarThreadSummary;
   snapshot?: ThreadChangeRequestSnapshot | undefined;
 }) {
+  const environmentConnected = useAtomValue(
+    environmentPresentations.presentationAtom(thread.environmentId),
+    isEnvironmentConnected,
+  );
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(false);
   // Observe the containing title even when this thread has no badge yet.
   const statusRef = useCallback(
@@ -907,6 +914,7 @@ export function ThreadRowLeadingStatus({
   const pr = resolveDisplayedThreadPr(displayedPrInput);
   const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
   const threadStatus = resolveThreadStatusPill({
+    environmentConnected,
     thread: {
       ...thread,
       lastVisitedAt,
