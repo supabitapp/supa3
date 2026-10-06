@@ -177,7 +177,7 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
   const isAndroid = Platform.OS === "android";
   const params = props.route.params;
   const environmentId = useMemo(
-    () => (params.environmentId ? EnvironmentId.make(params.environmentId) : null),
+    () => (params.environmentId?.trim() ? EnvironmentId.make(params.environmentId) : null),
     [params.environmentId],
   );
   const sizeBytes = Number.parseInt(params.sizeBytes, 10) || 0;

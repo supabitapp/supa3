@@ -895,7 +895,7 @@ interface SidebarDraftRowData {
 }
 
 function readSidebarDraftRow(routeDraftId: string | null) {
-  if (routeDraftId === null) return null;
+  if (routeDraftId === null || routeDraftId.trim() === "") return null;
   const draftId = DraftId.make(routeDraftId);
   const store = useComposerDraftStore.getState();
   const session = store.getDraftSession(draftId);
