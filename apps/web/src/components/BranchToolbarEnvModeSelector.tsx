@@ -1,8 +1,8 @@
-import { ThreadDetailsComboboxControl } from "./chat/ThreadDetailsControl";
+import { ThreadDetailsComboboxControl, ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import { memo, useMemo, type MouseEvent as ReactMouseEvent } from "react";
-import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { useCopyToClipboard, writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { useShortcutLabel } from "../hooks/useShortcutLabel";
 import { readLocalApi } from "../localApi";
 import { cn } from "../lib/utils";
@@ -39,6 +39,7 @@ interface BranchToolbarEnvModeSelectorProps {
   envLocked: boolean;
   effectiveEnvMode: EnvMode;
   activeWorktreePath: string | null;
+  activeBranch?: string | null;
   workspaceRoot?: string | null;
   onEnvModeChange: (mode: EnvMode) => void;
   displayMode?: "toolbar" | "panel";
@@ -52,6 +53,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   envLocked,
   effectiveEnvMode,
   activeWorktreePath,
+  activeBranch = null,
   workspaceRoot = null,
   onEnvModeChange,
   displayMode = "toolbar",
@@ -129,6 +131,23 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
       event.stopPropagation();
     }
   };
+
+  if (
+    displayMode === "panel" &&
+    envLocked &&
+    !forceNewWorktree &&
+    (effectiveEnvMode === "local" || activeWorktreePath !== null) &&
+    activeBranch
+  ) {
+    return (
+      <WorkspaceBranchCopyRow
+        key={activeBranch}
+        branch={activeBranch}
+        workspaceKind={workspaceKind}
+        onContextMenu={handleWorkspaceContextMenu}
+      />
+    );
+  }
 
   if (envLocked || forceNewWorktree) {
     const lockedRow = (
@@ -283,3 +302,63 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
     </Combobox>
   );
 });
+
+/** The pinned workspace exposes its branch as a copy action while retaining path copying. */
+function WorkspaceBranchCopyRow({
+  branch,
+  workspaceKind,
+  onContextMenu,
+}: {
+  branch: string;
+  workspaceKind: string | null;
+  onContextMenu: (event: ReactMouseEvent) => void;
+}) {
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: "branch name",
+    timeout: 1500,
+    onError: (error) => {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to copy branch name",
+          description: error.message,
+        }),
+      );
+    },
+  });
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ThreadDetailsControl
+            className="group/branch-copy"
+            aria-label={`Copy branch name: ${branch}`}
+            data-composer-context-control
+            onClick={() => copyToClipboard(branch)}
+            onContextMenu={onContextMenu}
+          />
+        }
+      >
+        {isCopied ? (
+          <CheckIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+        ) : (
+          <FolderGitIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+        )}
+        <ComposerContextLabel displayMode="panel">
+          <span aria-live="polite">{isCopied ? "Copied" : branch}</span>
+        </ComposerContextLabel>
+        <CopyIcon
+          aria-hidden
+          className="size-3.5 text-muted-foreground opacity-0 transition-opacity duration-150 ease-out group-hover/branch-copy:opacity-100 group-focus-visible/branch-copy:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
+        />
+        {workspaceKind ? (
+          <span className="shrink-0 text-3xs font-normal text-muted-foreground/70">
+            {workspaceKind}
+          </span>
+        ) : null}
+      </TooltipTrigger>
+      <TooltipPopup side="left">Copy branch name: {branch}</TooltipPopup>
+    </Tooltip>
+  );
+}
