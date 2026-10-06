@@ -2,6 +2,9 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import {
   Easing,
   ReduceMotion,
+  runOnUI,
+  useAnimatedReaction,
+  useAnimatedStyle,
   useSharedValue,
   withTiming,
   type EntryAnimationsValues,
@@ -10,7 +13,7 @@ import {
 } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
-import { shouldAnimateThreadList } from "./thread-list-motion";
+import { shouldAnimateThreadList, THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
 import { isKeyboardMotionSuppressed } from "../../lib/motionInput";
 
 /** Uses LegendList's recycling guards while animating only visible cells' transforms and opacity. */
@@ -25,7 +28,17 @@ export function useThreadListMotion(input: {
   const reducedMotion = useReducedMotionPreference();
   const frame = useMemo(() => ({ keys: items.map((item) => item.key), scope }), [items, scope]);
   const previous = useRef<typeof frame | null>(null);
-  const enabled = useSharedValue(0);
+  const deadline = useSharedValue(0);
+  const alignmentPadding = useSharedValue(0);
+  const alignmentOffset = useSharedValue(0);
+  const timing = useMemo(
+    () => ({
+      duration: THREAD_LIST_MOTION_DURATION,
+      easing: Easing.bezier(0.645, 0.045, 0.355, 1),
+      reduceMotion: ReduceMotion.Never,
+    }),
+    [],
+  );
   useLayoutEffect(() => {
     const animate =
       ready &&
@@ -39,19 +52,40 @@ export function useThreadListMotion(input: {
         searching,
       });
     previous.current = ready ? frame : null;
-    enabled.set(animate && !reducedMotion && !scrolling ? 1 : 0);
-    if (animate && !reducedMotion && !scrolling) {
-      // Newly recycled rows reached by a later scroll must never play an entrance.
-      enabled.set(withTiming(0, { duration: 220, reduceMotion: ReduceMotion.Never }));
-    }
-  }, [enabled, frame, scrolling, searching, reducedMotion, ready]);
+    // Bound eligibility without scheduling an animation just to expire a flag.
+    runOnUI((allow: boolean) => {
+      "worklet";
+      deadline.set(allow ? performance.now() + 300 : 0);
+    })(animate && !reducedMotion && !scrolling);
+  }, [deadline, frame, scrolling, searching, reducedMotion, ready]);
+
+  useAnimatedReaction(
+    () => ({ padding: alignmentPadding.value, deadline: deadline.value }),
+    (next, previous) => {
+      if (next.deadline === 0) {
+        alignmentOffset.set(0);
+      } else if (previous && next.padding !== previous.padding) {
+        if (performance.now() < next.deadline) {
+          // The recycler commits its spacer immediately. Keep the visual position
+          // continuous, including when a second toggle interrupts the movement.
+          alignmentOffset.set(alignmentOffset.value + previous.padding - next.padding);
+          alignmentOffset.set(withTiming(0, timing));
+        } else {
+          alignmentOffset.set(0);
+        }
+      }
+    },
+    [timing],
+  );
+  const alignmentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: alignmentOffset.value }],
+  }));
+  const sharedValues = useMemo(
+    () => ({ alignItemsAtEndPadding: alignmentPadding }),
+    [alignmentPadding],
+  );
 
   return useMemo(() => {
-    const timing = {
-      duration: 180,
-      easing: Easing.inOut(Easing.cubic),
-      reduceMotion: ReduceMotion.Never,
-    };
     const entryTiming = { ...timing, easing: Easing.bezier(0.32, 0.72, 0, 1) };
     const layout: LayoutAnimationFunction = (values) => {
       "worklet";
@@ -61,7 +95,9 @@ export function useThreadListMotion(input: {
         values.targetGlobalOriginY + values.targetHeight > 0 &&
         values.targetGlobalOriginY < values.windowHeight;
       const offset =
-        enabled.value > 0 && visible ? values.currentOriginY - values.targetOriginY : 0;
+        performance.now() < deadline.value && visible
+          ? values.currentOriginY - values.targetOriginY
+          : 0;
       const geometry = {
         originX: values.targetOriginX,
         originY: values.targetOriginY,
@@ -79,7 +115,7 @@ export function useThreadListMotion(input: {
     const entering = (values: EntryAnimationsValues) => {
       "worklet";
       const animateEntry =
-        enabled.value > 0 &&
+        performance.now() < deadline.value &&
         values.targetGlobalOriginY + values.targetHeight > 0 &&
         values.targetGlobalOriginY < values.windowHeight;
       return {
@@ -96,14 +132,14 @@ export function useThreadListMotion(input: {
     const exiting = (values: ExitAnimationsValues) => {
       "worklet";
       const animateExit =
-        enabled.value > 0 &&
+        performance.now() < deadline.value &&
         values.currentGlobalOriginY + values.currentHeight > 0 &&
         values.currentGlobalOriginY < values.windowHeight;
       return {
         initialValues: { opacity: 1 },
-        animations: { opacity: animateExit ? withTiming(0, { ...entryTiming, duration: 140 }) : 0 },
+        animations: { opacity: animateExit ? withTiming(0, { ...entryTiming, duration: 160 }) : 0 },
       };
     };
-    return { layout, entering, exiting };
-  }, [enabled]);
+    return { layout, entering, exiting, alignmentStyle, sharedValues };
+  }, [alignmentStyle, deadline, sharedValues, timing]);
 }

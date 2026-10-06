@@ -175,6 +175,8 @@ export function HomeRouteScreen() {
                 }),
             }),
             headerShown: true,
+            // The list has a clipped viewport outside the native bars.
+            scrollEdgeEffects: { top: "hidden", bottom: "hidden" },
           }}
         />
         <HomeHeader

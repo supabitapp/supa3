@@ -76,6 +76,7 @@ import {
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
+import { THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -158,7 +159,8 @@ function ThreadListV2Section(props: {
   const snoozed = props.tone === "snoozed";
   const sidebarPane = props.pane === "sidebar";
   const className = cn(
-    "mb-1.5 mt-4 flex-row items-center gap-2.5",
+    "flex-row items-center gap-2.5",
+    props.disclosure ? "my-1" : "mb-1.5 mt-4",
     props.pane === "sidebar" ? "px-3" : "px-5",
   );
   const content = (
@@ -184,6 +186,7 @@ function ThreadListV2Section(props: {
       {props.disclosure ? (
         <DisclosureChevron
           expanded={props.disclosure.expanded}
+          duration={THREAD_LIST_MOTION_DURATION}
           size={10}
           tintColorClassName={
             sidebarPane
@@ -209,7 +212,7 @@ function ThreadListV2Section(props: {
       className={className}
       disabled={props.disclosure.disabled}
       onPress={props.disclosure.onToggle}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.6 : 1 })}
     >
       {content}
     </Pressable>
@@ -296,7 +299,7 @@ export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(pro
       accessibilityLabel={`Show ${Math.min(props.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`}
       onPress={props.onPress}
       className="mx-4 mt-2 items-center rounded-lg border border-dashed border-border py-2.5"
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.6 : 1 })}
     >
       <Text
         className={

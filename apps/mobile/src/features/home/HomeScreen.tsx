@@ -231,6 +231,10 @@ export function HomeScreen(props: HomeScreenProps) {
     Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
       ? PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT
       : 0;
+  const listTopInset =
+    Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0;
+  const listBottomInset =
+    Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 72 + iosBottomToolbarClearance : 0;
   const searchEnvironmentIds = useMemo(
     () =>
       props.selectedEnvironmentId === null
@@ -932,8 +936,9 @@ export function HomeScreen(props: HomeScreenProps) {
         className={
           Platform.OS === "android"
             ? "flex-1 overflow-hidden rounded-t-[28px] bg-screen"
-            : "flex-1 bg-screen"
+            : "flex-1 overflow-hidden bg-screen"
         }
+        style={{ marginTop: listTopInset, marginBottom: listBottomInset }}
       >
         {/* Shared with the iPad sidebar: cells are reused across data
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
@@ -966,12 +971,11 @@ export function HomeScreen(props: HomeScreenProps) {
             }
             ListEmptyComponent={v2ListEmpty}
             style={{ flex: 1 }}
+            sharedValues={listMotion.sharedValues}
+            itemsContainerStyle={listMotion.alignmentStyle}
             alignItemsAtEnd={!hasSearchQuery && !keyboardVisible}
-            // UIKit's transparent header inset is outside the recycler's
-            // measured viewport; include it so bottom alignment clears the toolbar.
-            contentInsetStartAdjustment={NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0}
             automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+            contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
@@ -980,7 +984,7 @@ export function HomeScreen(props: HomeScreenProps) {
             contentContainerStyle={{
               paddingBottom:
                 Platform.OS === "ios"
-                  ? Math.max(insets.bottom, 24) + 48 + iosBottomToolbarClearance
+                  ? 16
                   : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
             }}
           />
