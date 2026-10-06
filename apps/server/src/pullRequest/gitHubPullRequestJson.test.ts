@@ -2036,7 +2036,7 @@ describe("pull request watch fingerprints", () => {
       { repository: "pingdotgg/lakebed", number: 8 },
     ]);
     expect(query).toContain(
-      'w0: repository(owner: "pingdotgg", name: "supacode") { pullRequest(number: 7)',
+      'w0: repository(owner: "supabitapp", name: "supacode-next") { pullRequest(number: 7)',
     );
     expect(query).toContain(
       'w1: repository(owner: "pingdotgg", name: "lakebed") { pullRequest(number: 8)',

@@ -302,7 +302,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
 
       yield* git(cwd, ["init"]);
       yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/supacode-fork.git"]);
-      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:SupacodeTools/supacode.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:supabitapp/supacode-next.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
