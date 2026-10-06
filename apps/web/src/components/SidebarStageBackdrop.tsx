@@ -1,12 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentIdentificationMode } from "@supacode/contracts";
-import type { ThemeAppearance } from "@supacode/shared/themePalettes";
 import { type ComponentType, useId } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
+import type { ThemeAppearance } from "../themePalette";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "release";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
@@ -26,7 +26,7 @@ export function resolveSidebarStageBackdropVariant(
 }
 
 /** The release sleigh is a night scene, so it only renders under dark themes. */
-export function resolveVisibleStageBackdropVariant(
+export function resolveVisibleSidebarStageBackdropVariant(
   stageLabel: string | null,
   appearance: ThemeAppearance,
 ): SidebarStageBackdropVariant | null {
@@ -67,7 +67,7 @@ export function useEnvironmentStageLabel(): string | null {
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
   const { resolvedTheme } = useTheme();
-  return enabled ? resolveVisibleStageBackdropVariant(stageLabel, resolvedTheme) : null;
+  return enabled ? resolveVisibleSidebarStageBackdropVariant(stageLabel, resolvedTheme) : null;
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */

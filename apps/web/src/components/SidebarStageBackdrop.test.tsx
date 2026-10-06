@@ -5,7 +5,7 @@ import {
   resolveEnvironmentIdentificationModes,
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveVisibleStageBackdropVariant,
+  resolveVisibleSidebarStageBackdropVariant,
   StageBackdropArt,
 } from "./SidebarStageBackdrop";
 
@@ -19,10 +19,10 @@ describe("SidebarStageBackdrop", () => {
   });
 
   it("shows release artwork only under dark themes", () => {
-    expect(resolveVisibleStageBackdropVariant(null, "dark")).toBe("release");
-    expect(resolveVisibleStageBackdropVariant(null, "light")).toBeNull();
-    expect(resolveVisibleStageBackdropVariant("Nightly", "light")).toBe("nightly");
-    expect(resolveVisibleStageBackdropVariant("Dev", "light")).toBe("dev");
+    expect(resolveVisibleSidebarStageBackdropVariant(null, "dark")).toBe("release");
+    expect(resolveVisibleSidebarStageBackdropVariant(null, "light")).toBeNull();
+    expect(resolveVisibleSidebarStageBackdropVariant("Nightly", "light")).toBe("nightly");
+    expect(resolveVisibleSidebarStageBackdropVariant("Dev", "light")).toBe("dev");
   });
 
   it("offers only the identification modes that change something", () => {
