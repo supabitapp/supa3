@@ -2,7 +2,6 @@ import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contr
 import { resolveRemotePairingTarget } from "@supacode/shared/remote";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -36,11 +35,14 @@ import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
 import {
+  connectionRouteId,
   connectionRoutes,
   credentialConnectionId,
   isLearned,
+  type PairingFallback,
   pairingFallbackRoutes,
   routeEntry,
+  routesAt,
   sshTargetKey,
 } from "./routes.ts";
 
@@ -98,8 +100,24 @@ const resolvePairingTarget = Effect.fn("clientRuntime.connection.onboarding.reso
   },
 );
 
-function bearerConnectionId(environmentId: EnvironmentId, httpBaseUrl: string): string {
-  return `bearer:${environmentId}:${new URL(httpBaseUrl).origin}`;
+/**
+ * Re-pairing an address the user already paired keeps that route's id, so the
+ * routes learned through it stay attached and share the new credential.
+ */
+function pairingConnectionId(
+  entry: ConnectionCatalogEntry | undefined,
+  environmentId: EnvironmentId,
+  httpBaseUrl: string,
+): string {
+  const paired =
+    entry === undefined
+      ? undefined
+      : routesAt(entry, httpBaseUrl).find(
+          (route) => route.target._tag === "BearerConnectionTarget" && !isLearned(route),
+        );
+  return paired === undefined
+    ? `bearer:${environmentId}:${new URL(httpBaseUrl).origin}`
+    : connectionRouteId(paired.target);
 }
 
 function differentMachineError(label: string) {
@@ -109,50 +127,58 @@ function differentMachineError(label: string) {
   });
 }
 
+const reachDescriptor = (httpBaseUrl: string) =>
+  fetchRemoteEnvironmentDescriptor({ httpBaseUrl }).pipe(
+    Effect.map((descriptor) => ({ httpBaseUrl, descriptor })),
+  );
+
 /**
- * Reaches the server behind a pairing link. When the link's address belongs to
- * a saved environment, that environment's other routes are tried once the
- * address misses the route check, so a LAN link still pairs over Tailscale.
+ * Reaches the server behind a pairing link. The link's address gets a head
+ * start; once it misses the route check, the saved routes race it and count
+ * only when they answer as the environment the link is for.
  */
 const reachPairingServer = Effect.fn("clientRuntime.connection.onboarding.reachPairingServer")(
-  function* (httpBaseUrl: string, saved: ReadonlyArray<ConnectionCatalogEntry>) {
-    const reach = (url: string) =>
-      fetchRemoteEnvironmentDescriptor({ httpBaseUrl: url }).pipe(
-        Effect.map((descriptor) => ({ httpBaseUrl: url, descriptor })),
-      );
-    const linkedAddress = reach(httpBaseUrl).pipe(Effect.mapError(mapRemoteEnvironmentError));
-    const fallback = pairingFallbackRoutes(saved, httpBaseUrl);
+  function* (httpBaseUrl: string, fallback: PairingFallback | null) {
+    const linkedAddress = reachDescriptor(httpBaseUrl).pipe(
+      Effect.mapError(mapRemoteEnvironmentError),
+    );
     if (fallback === null) return yield* linkedAddress;
-    const linked = yield* Effect.forkChild(linkedAddress);
-    const savedRoutes = Effect.raceAll(
+    const linked = yield* Effect.forkScoped(linkedAddress);
+    const answered = yield* Fiber.join(linked).pipe(
+      Effect.timeoutOption(ROUTE_CHECK_TIMEOUT_MS),
+      Effect.orElseSucceed(() => Option.none()),
+    );
+    if (Option.isSome(answered)) return answered.value;
+    const viaSavedRoutes = Effect.raceAll(
       fallback.httpBaseUrls.map((url) =>
-        reach(url).pipe(
+        reachDescriptor(url).pipe(
           Effect.filterOrFail(
             (reached) => reached.descriptor.environmentId === fallback.environmentId,
           ),
         ),
       ),
     );
-    const early = yield* Fiber.await(linked).pipe(Effect.timeoutOption(ROUTE_CHECK_TIMEOUT_MS));
-    if (Option.isSome(early) && Exit.isSuccess(early.value)) return early.value.value;
-    return yield* Effect.raceAll([Fiber.join(linked), savedRoutes]).pipe(
+    return yield* Effect.raceAll([Fiber.join(linked), viaSavedRoutes]).pipe(
       Effect.catch(() => Fiber.join(linked)),
     );
   },
+  Effect.scoped,
 );
 
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
-)(function* (input: PairingConnectionInput, saved: ReadonlyArray<ConnectionCatalogEntry> = []) {
+)(function* (
+  input: PairingConnectionInput,
+  entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
+) {
   const target = yield* resolvePairingTarget(input);
   const presentation = yield* ClientCapabilities.ClientPresentation;
   const expected = input.expectedEnvironmentId;
-  const { httpBaseUrl: reachedHttpBaseUrl, descriptor } = yield* reachPairingServer(
+  const reached = yield* reachPairingServer(
     target.httpBaseUrl,
-    expected === undefined
-      ? saved
-      : saved.filter((entry) => entry.target.environmentId === expected),
+    pairingFallbackRoutes(entries, target.httpBaseUrl, expected),
   );
+  const { descriptor } = reached;
   if (expected !== undefined && descriptor.environmentId !== expected) {
     return yield* differentMachineError(descriptor.label);
   }
@@ -162,12 +188,16 @@ export const preparePairingRegistration = Effect.fn(
     return yield* compatibilityError;
   }
   const access = yield* bootstrapRemoteBearerSession({
-    httpBaseUrl: reachedHttpBaseUrl,
+    httpBaseUrl: reached.httpBaseUrl,
     credential: target.credential,
     scopes: presentation.scopes,
     clientMetadata: presentation.metadata,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
-  const connectionId = bearerConnectionId(descriptor.environmentId, target.httpBaseUrl);
+  const connectionId = pairingConnectionId(
+    entries.get(descriptor.environmentId),
+    descriptor.environmentId,
+    target.httpBaseUrl,
+  );
 
   const registration = new BearerConnectionRegistration({
     target: new BearerConnectionTarget({
@@ -186,63 +216,59 @@ export const preparePairingRegistration = Effect.fn(
       token: access.access_token,
     }),
   });
-  return { registration, reachedHttpBaseUrl };
+  return { registration, reachedHttpBaseUrl: reached.httpBaseUrl };
 });
 
 const isBearerCredential = Schema.is(BearerConnectionCredential);
 
 /**
- * Each route of a saved environment keeps the credential it was paired with,
- * so re-pairing after a revoked session would otherwise fix only the linked
- * address. Credentials the server no longer accepts take the new one.
+ * Each saved route keeps the credential it was paired with, so re-pairing after
+ * a revoked session would otherwise fix only the link's address. When pairing
+ * reached a saved route, that route takes the new credential if the server now
+ * rejects its own. The check only goes to an address that already carries that
+ * credential. Runs before `register`, whose restarted supervisor reads
+ * credentials as it connects.
  */
-const replaceRejectedCredentials = Effect.fn(
-  "clientRuntime.connection.onboarding.replaceRejectedCredentials",
-)(function* (
-  entry: ConnectionCatalogEntry,
-  registration: BearerConnectionRegistration,
-  httpBaseUrl: string,
-) {
-  const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
-  const connectionIds = new Set(
-    connectionRoutes(entry).flatMap((route) =>
-      route.target._tag === "BearerConnectionTarget"
-        ? [credentialConnectionId(route.target.connectionId)]
-        : [],
-    ),
-  );
-  connectionIds.delete(registration.target.connectionId);
-  yield* Effect.forEach(
-    connectionIds,
-    (connectionId) =>
-      Effect.gen(function* () {
-        const saved = Option.getOrUndefined(yield* credentials.get(connectionId));
-        if (saved !== undefined && isBearerCredential(saved)) {
-          const session = yield* fetchRemoteSessionState({ httpBaseUrl, bearerToken: saved.token });
-          if (session.authenticated) return;
-        }
-        yield* credentials.put(connectionId, registration.credential);
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Could not refresh a saved credential.", { connectionId, error }),
-        ),
-      ),
-    { concurrency: "unbounded", discard: true },
-  );
-});
+const refreshReachedRouteCredential = Effect.fn(
+  "clientRuntime.connection.onboarding.refreshReachedRouteCredential",
+)(
+  function* (registration: BearerConnectionRegistration, reachedHttpBaseUrl: string) {
+    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+    const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
+    const entry = (yield* SubscriptionRef.get(registry.entries)).get(
+      registration.target.environmentId,
+    );
+    if (entry === undefined) return;
+    const reachedRoute = routesAt(entry, reachedHttpBaseUrl).find(
+      (route) => route.target._tag === "BearerConnectionTarget",
+    );
+    if (reachedRoute === undefined) return;
+    const connectionId = credentialConnectionId(connectionRouteId(reachedRoute.target));
+    if (connectionId === registration.target.connectionId) return;
+    const current = Option.getOrUndefined(yield* credentials.get(connectionId));
+    if (current !== undefined && isBearerCredential(current)) {
+      const session = yield* fetchRemoteSessionState({
+        httpBaseUrl: reachedHttpBaseUrl,
+        bearerToken: current.token,
+      });
+      if (session.authenticated) return;
+    }
+    yield* credentials.put(connectionId, registration.credential);
+  },
+  Effect.catch((error) =>
+    Effect.logWarning("Could not refresh the credential of the reached route.", { error }),
+  ),
+);
 
 const registerPairingConnection = Effect.fn(
   "clientRuntime.connection.onboarding.registerPairingConnection",
 )(function* (input: PairingConnectionInput) {
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-  const saved = yield* SubscriptionRef.get(registry.entries);
-  const { registration, reachedHttpBaseUrl } = yield* preparePairingRegistration(input, [
-    ...saved.values(),
-  ]);
-  const previous = saved.get(registration.target.environmentId);
-  if (previous !== undefined) {
-    yield* replaceRejectedCredentials(previous, registration, reachedHttpBaseUrl);
-  }
+  const { registration, reachedHttpBaseUrl } = yield* preparePairingRegistration(
+    input,
+    yield* SubscriptionRef.get(registry.entries),
+  );
+  yield* refreshReachedRouteCredential(registration, reachedHttpBaseUrl);
   yield* registry.register(registration);
   return registration.target.environmentId;
 });

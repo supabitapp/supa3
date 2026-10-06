@@ -32,6 +32,7 @@ import {
   prepareSshRegistration,
 } from "./onboarding.ts";
 import * as EnvironmentRegistry from "./registry.ts";
+import { ROUTE_CHECK_TIMEOUT_MS } from "./driver.ts";
 import { entryWithRoutes } from "./routes.ts";
 
 const layerClientPresentation = Layer.succeed(
@@ -46,73 +47,101 @@ const layerClientPresentation = Layer.succeed(
   }),
 );
 
-function layerPairingHttp(
-  calls: Array<{ readonly url: string; readonly init: RequestInit }>,
-  options?: {
-    readonly failDescriptor?: boolean;
-    readonly protocolVersion?: number;
-    readonly selfUpdate?: boolean;
-  },
+type Call = { readonly url: string; readonly init: RequestInit };
+type Server = (path: string, init: RequestInit) => Response;
+
+/**
+ * Answers the origins a test lists. A silent origin never answers, like a LAN
+ * address from cellular; every other address fails at once.
+ */
+function layerRoutedHttp(
+  calls: Array<Call>,
+  servers: Record<string, Server | "silent">,
+  silenced?: Deferred.Deferred<void>,
 ) {
   const fetchFn = ((input, init = {}) => {
-    const url = String(input);
-    calls.push({ url, init });
-
-    if (url.endsWith("/.well-known/supacode/environment")) {
-      if (options?.failDescriptor === true) {
-        return Promise.resolve(
-          Response.json({ message: "descriptor unavailable" }, { status: 503 }),
-        );
-      }
-      return Promise.resolve(descriptorResponse("environment-paired", options));
+    const url = new URL(String(input));
+    calls.push({ url: url.href, init });
+    const server = servers[url.origin];
+    if (server === "silent") {
+      if (silenced !== undefined) Deferred.doneUnsafe(silenced, Effect.void);
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
+      );
     }
-
-    if (url.endsWith("/oauth/token")) {
-      return Promise.resolve(tokenResponse());
-    }
-
-    return Promise.reject(new Error(`Unexpected request: ${url}`));
+    return server === undefined
+      ? Promise.reject(new TypeError("Network request failed"))
+      : Promise.resolve(server(url.pathname, init));
   }) satisfies typeof fetch;
-
   return RpcHttp.layerRemoteHttpClient(fetchFn);
 }
 
-function descriptorResponse(
-  environmentId: string,
-  options?: { readonly protocolVersion?: number; readonly selfUpdate?: boolean },
-) {
-  return Response.json({
-    environmentId,
-    label: "Paired environment",
-    platform: {
-      os: "linux",
-      arch: "x64",
-    },
-    serverVersion: "0.0.0-test",
-    orchestrationProtocolVersion: options?.protocolVersion ?? ORCHESTRATION_PROTOCOL_VERSION,
-    capabilities: {
-      repositoryIdentity: true,
-      ...(options?.selfUpdate === true ? { serverSelfUpdate: "boot-service" } : {}),
-    },
-  });
+function pairingServer(options?: {
+  readonly environmentId?: string;
+  readonly protocolVersion?: number;
+  readonly selfUpdate?: boolean;
+  readonly failDescriptor?: boolean;
+  readonly failSession?: boolean;
+  readonly acceptedTokens?: ReadonlyArray<string>;
+}): Server {
+  return (path, init) => {
+    if (path === "/.well-known/supacode/environment") {
+      if (options?.failDescriptor === true) {
+        return Response.json({ message: "descriptor unavailable" }, { status: 503 });
+      }
+      return Response.json({
+        environmentId: options?.environmentId ?? "environment-paired",
+        label: "Paired environment",
+        platform: {
+          os: "linux",
+          arch: "x64",
+        },
+        serverVersion: "0.0.0-test",
+        orchestrationProtocolVersion: options?.protocolVersion ?? ORCHESTRATION_PROTOCOL_VERSION,
+        capabilities: {
+          repositoryIdentity: true,
+          ...(options?.selfUpdate === true ? { serverSelfUpdate: "boot-service" } : {}),
+        },
+      });
+    }
+    if (path === "/oauth/token") {
+      return Response.json({
+        access_token: "bearer-token",
+        issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: AuthStandardClientScopes.join(" "),
+      });
+    }
+    if (path === "/api/auth/session") {
+      if (options?.failSession === true) {
+        return Response.json({ message: "unavailable" }, { status: 500 });
+      }
+      return Response.json({
+        authenticated: (options?.acceptedTokens ?? []).includes(bearerToken(init) ?? ""),
+        auth: {
+          policy: "remote-reachable",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["bearer-access-token"],
+          sessionCookieName: "supacode_session",
+        },
+      });
+    }
+    return Response.json({ message: "not found" }, { status: 404 });
+  };
 }
 
-function tokenResponse() {
-  return Response.json({
-    access_token: "bearer-token",
-    issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
-    token_type: "Bearer",
-    expires_in: 3600,
-    scope: AuthStandardClientScopes.join(" "),
-  });
+function bearerToken(init: RequestInit): string | undefined {
+  return new Headers(init.headers).get("authorization")?.replace(/^Bearer /, "");
 }
 
+const REMOTE = "https://remote.example.test";
+const NO_SAVED_ENVIRONMENTS = new Map<EnvironmentId, ConnectionCatalogEntry>();
 const SAVED_ENVIRONMENT_ID = EnvironmentId.make("environment-paired");
 const LAN = "http://192.168.1.10:3773";
 const TAILNET = "https://minim5.tail.ts.net";
-const PUBLIC = "https://public.example.test";
 const TAILNET_CONNECTION = `bearer:environment-paired:${TAILNET}`;
-const PUBLIC_CONNECTION = `bearer:environment-paired:${PUBLIC}`;
+const PAIRING_LINK = `${LAN}/#token=pairing-token`;
 
 function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true): ConnectionRoute {
   return {
@@ -134,70 +163,94 @@ function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true): 
   };
 }
 
-/** Paired over Tailscale and a public link; the LAN address was learned later. */
-function savedEnvironment(): ConnectionCatalogEntry {
-  const tailnet = savedRoute(TAILNET, TAILNET_CONNECTION);
-  return entryWithRoutes({ target: tailnet.target, profile: tailnet.profile, enabled: true }, [
-    savedRoute(LAN, `learned:environment-paired:${LAN}@${TAILNET_CONNECTION}`, true),
-    tailnet,
-    savedRoute(PUBLIC, PUBLIC_CONNECTION),
-  ]);
+function savedEnvironment(
+  first: ConnectionRoute,
+  ...rest: ReadonlyArray<ConnectionRoute>
+): ReadonlyMap<EnvironmentId, ConnectionCatalogEntry> {
+  const base = { target: first.target, profile: first.profile, enabled: true };
+  return new Map([[SAVED_ENVIRONMENT_ID, entryWithRoutes(base, [first, ...rest])]]);
 }
 
-/**
- * Answers the routes a test lists. A silent route never answers, like a LAN
- * address from cellular; every other address fails at once.
- */
-function layerRoutedHttp(
-  calls: Array<string>,
-  routes: Record<string, "silent" | ((path: string, init: RequestInit) => Response)>,
-  silenced?: Deferred.Deferred<void>,
-) {
-  const fetchFn = ((input, init = {}) => {
-    const url = new URL(String(input));
-    calls.push(url.href);
-    const answer = routes[url.origin];
-    if (answer === "silent") {
-      if (silenced !== undefined) Deferred.doneUnsafe(silenced, Effect.void);
-      return new Promise<Response>((_, reject) =>
-        init.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
-      );
-    }
-    return answer === undefined
-      ? Promise.reject(new TypeError("Network request failed"))
-      : Promise.resolve(answer(url.pathname, init));
-  }) satisfies typeof fetch;
-  return RpcHttp.layerRemoteHttpClient(fetchFn);
-}
+/** Paired over Tailscale; the LAN address was learned later. */
+const PAIRED_OVER_TAILNET = savedEnvironment(
+  savedRoute(LAN, `learned:environment-paired:${LAN}@${TAILNET_CONNECTION}`, true),
+  savedRoute(TAILNET, TAILNET_CONNECTION),
+);
 
-function pairingServer(environmentId = "environment-paired") {
-  return (path: string, init: RequestInit) => {
-    if (path === "/.well-known/supacode/environment") return descriptorResponse(environmentId);
-    if (path === "/oauth/token") return tokenResponse();
-    if (path === "/api/auth/session") {
-      const token = new Headers(init.headers).get("authorization")?.replace(/^Bearer /, "");
-      return Response.json({
-        authenticated: token === "bearer-token" || token === "working-token",
-        auth: {
-          policy: "remote-reachable",
-          bootstrapMethods: ["one-time-token"],
-          sessionMethods: ["bearer-access-token"],
-          sessionCookieName: "supacode_session",
-        },
-      });
-    }
-    return Response.json({ message: "not found" }, { status: 404 });
-  };
-}
+const urls = (calls: ReadonlyArray<Call>) => calls.map((call) => call.url);
+
+/** Runs `registerPairing` against a registry holding `entries`, recording what it persists. */
+const registerPairing = Effect.fnUntraced(function* (options: {
+  readonly pairingUrl: string;
+  readonly entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>;
+  readonly credentials: ReadonlyArray<readonly [string, string]>;
+  readonly servers: Record<string, Server | "silent">;
+}) {
+  const calls: Array<Call> = [];
+  const events: Array<string> = [];
+  const stored = new Map<string, ConnectionCredential>(
+    options.credentials.map(([connectionId, token]) => [
+      connectionId,
+      new BearerConnectionCredential({ token }),
+    ]),
+  );
+  const entries = yield* SubscriptionRef.make(options.entries);
+  const registry = EnvironmentRegistry.EnvironmentRegistry.of({
+    entries,
+    register: (registration: ConnectionRegistration) =>
+      Effect.sync(() => {
+        events.push(`register:${registration.target.connectionId}`);
+      }),
+  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  const credentialStore = CredentialStore.make({
+    get: (connectionId) => Effect.sync(() => Option.fromUndefinedOr(stored.get(connectionId))),
+    put: (connectionId, credential) =>
+      Effect.sync(() => {
+        events.push(`put:${connectionId}`);
+        stored.set(connectionId, credential);
+      }),
+    remove: (connectionId) => Effect.sync(() => stored.delete(connectionId)),
+  });
+  const onboarding = yield* ConnectionOnboarding.pipe(
+    Effect.provide(
+      layerConnectionOnboarding.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registry),
+            Layer.succeed(CredentialStore.ConnectionCredentialStore, credentialStore),
+            layerClientPresentation,
+            layerRoutedHttp(calls, options.servers),
+            Layer.succeed(
+              ClientCapabilities.SshEnvironmentGateway,
+              {} as ClientCapabilities.SshEnvironmentGateway["Service"],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  yield* onboarding.registerPairing({ pairingUrl: options.pairingUrl });
+  return { calls, events, token: (connectionId: string) => stored.get(connectionId)?.token };
+});
 
 describe("connection onboarding", () => {
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
-      const { registration } = yield* preparePairingRegistration({
-        host: "remote.example.test",
-        pairingCode: "pairing-token",
-      }).pipe(Effect.provide(Layer.mergeAll(layerClientPresentation, layerPairingHttp(calls))));
+      const calls: Array<Call> = [];
+      const { registration } = yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [REMOTE]: pairingServer() }),
+          ),
+        ),
+      );
 
       expect(registration).toMatchObject({
         _tag: "BearerConnectionRegistration",
@@ -236,15 +289,20 @@ describe("connection onboarding", () => {
 
   it.effect("rejects an incompatible server without consuming the pairing credential", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
-      const error = yield* preparePairingRegistration({
-        host: "remote.example.test",
-        pairingCode: "pairing-token",
-      }).pipe(
+      const calls: Array<Call> = [];
+      const error = yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
-            layerPairingHttp(calls, { protocolVersion: ORCHESTRATION_PROTOCOL_VERSION + 1 }),
+            layerRoutedHttp(calls, {
+              [REMOTE]: pairingServer({ protocolVersion: ORCHESTRATION_PROTOCOL_VERSION + 1 }),
+            }),
           ),
         ),
         Effect.flip,
@@ -258,17 +316,22 @@ describe("connection onboarding", () => {
 
   it.effect("pairs an outdated server so it can be updated from this client", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
-      const { registration } = yield* preparePairingRegistration({
-        host: "remote.example.test",
-        pairingCode: "pairing-token",
-      }).pipe(
+      const calls: Array<Call> = [];
+      const { registration } = yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
-            layerPairingHttp(calls, {
-              protocolVersion: ORCHESTRATION_PROTOCOL_VERSION - 1,
-              selfUpdate: true,
+            layerRoutedHttp(calls, {
+              [REMOTE]: pairingServer({
+                protocolVersion: ORCHESTRATION_PROTOCOL_VERSION - 1,
+                selfUpdate: true,
+              }),
             }),
           ),
         ),
@@ -280,15 +343,20 @@ describe("connection onboarding", () => {
 
   it.effect("refuses an outdated server that cannot update itself", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
-      const error = yield* preparePairingRegistration({
-        host: "remote.example.test",
-        pairingCode: "pairing-token",
-      }).pipe(
+      const calls: Array<Call> = [];
+      const error = yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
-            layerPairingHttp(calls, { protocolVersion: ORCHESTRATION_PROTOCOL_VERSION - 1 }),
+            layerRoutedHttp(calls, {
+              [REMOTE]: pairingServer({ protocolVersion: ORCHESTRATION_PROTOCOL_VERSION - 1 }),
+            }),
           ),
         ),
         Effect.flip,
@@ -303,16 +371,19 @@ describe("connection onboarding", () => {
 
   it.effect("does not consume a pairing credential when descriptor discovery fails", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+      const calls: Array<Call> = [];
 
-      yield* preparePairingRegistration({
-        host: "remote.example.test",
-        pairingCode: "pairing-token",
-      }).pipe(
+      yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
-            layerPairingHttp(calls, { failDescriptor: true }),
+            layerRoutedHttp(calls, { [REMOTE]: pairingServer({ failDescriptor: true }) }),
           ),
         ),
         Effect.flip,
@@ -326,12 +397,17 @@ describe("connection onboarding", () => {
 
   it.effect("rejects invalid pairing details before making a request", () =>
     Effect.gen(function* () {
-      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
-      const error = yield* preparePairingRegistration({
-        host: "",
-        pairingCode: "",
-      }).pipe(
-        Effect.provide(Layer.mergeAll(layerClientPresentation, layerPairingHttp(calls))),
+      const calls: Array<Call> = [];
+      const error = yield* preparePairingRegistration(
+        { host: "", pairingCode: "" },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [REMOTE]: pairingServer() }),
+          ),
+        ),
         Effect.flip,
       );
 
@@ -439,44 +515,39 @@ describe("connection onboarding", () => {
     }),
   );
 
-  it.effect(
-    "pairs a saved environment through another route when the link's address is unreachable",
-    () =>
-      Effect.gen(function* () {
-        const calls: Array<string> = [];
-        const { registration, reachedHttpBaseUrl } = yield* preparePairingRegistration(
-          { pairingUrl: `${LAN}/#token=pairing-token` },
-          [savedEnvironment()],
-        ).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              layerClientPresentation,
-              layerRoutedHttp(calls, {
-                [TAILNET]: pairingServer(),
-                [PUBLIC]: pairingServer("environment-other"),
-              }),
-            ),
+  it.effect("pairs a saved machine through another route when the link's address fails", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const { registration } = yield* preparePairingRegistration(
+        { pairingUrl: PAIRING_LINK },
+        PAIRED_OVER_TAILNET,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
           ),
-        );
+        ),
+      );
 
-        expect(reachedHttpBaseUrl).toBe(`${TAILNET}/`);
-        expect(registration).toMatchObject({
-          target: { connectionId: `bearer:environment-paired:${LAN}` },
-          profile: { httpBaseUrl: `${LAN}/`, wsBaseUrl: "ws://192.168.1.10:3773/" },
-          credential: { token: "bearer-token" },
-        });
-        expect(calls).toContain(`${TAILNET}/oauth/token`);
-        expect(calls).not.toContain(`${PUBLIC}/oauth/token`);
-      }),
+      expect(registration).toMatchObject({
+        target: { connectionId: `bearer:environment-paired:${LAN}` },
+        profile: { httpBaseUrl: `${LAN}/`, wsBaseUrl: "ws://192.168.1.10:3773/" },
+        credential: { token: "bearer-token" },
+      });
+      expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+        `${TAILNET}/oauth/token`,
+      ]);
+    }),
   );
 
   it.effect("pairs through another route once the link's address misses the route check", () =>
     Effect.gen(function* () {
-      const calls: Array<string> = [];
+      const calls: Array<Call> = [];
       const silenced = yield* Deferred.make<void>();
       const fiber = yield* preparePairingRegistration(
-        { pairingUrl: `${LAN}/#token=pairing-token` },
-        [savedEnvironment()],
+        { pairingUrl: PAIRING_LINK },
+        PAIRED_OVER_TAILNET,
       ).pipe(
         Effect.provide(
           Layer.mergeAll(
@@ -487,21 +558,19 @@ describe("connection onboarding", () => {
         Effect.forkChild,
       );
       yield* Deferred.await(silenced);
-      expect(calls).toEqual([`${LAN}/.well-known/supacode/environment`]);
+      expect(urls(calls)).toEqual([`${LAN}/.well-known/supacode/environment`]);
 
-      yield* TestClock.adjust("2500 millis");
-      const { reachedHttpBaseUrl } = yield* Fiber.join(fiber);
-      expect(reachedHttpBaseUrl).toBe(`${TAILNET}/`);
+      yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+      yield* Fiber.join(fiber);
+      expect(urls(calls)).toContain(`${TAILNET}/oauth/token`);
+      expect(calls[0]?.init.signal?.aborted).toBe(true);
     }),
   );
 
   it.effect("pairs on the link's address when it answers", () =>
     Effect.gen(function* () {
-      const calls: Array<string> = [];
-      const { reachedHttpBaseUrl } = yield* preparePairingRegistration(
-        { pairingUrl: `${LAN}/#token=pairing-token` },
-        [savedEnvironment()],
-      ).pipe(
+      const calls: Array<Call> = [];
+      yield* preparePairingRegistration({ pairingUrl: PAIRING_LINK }, PAIRED_OVER_TAILNET).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
@@ -510,88 +579,130 @@ describe("connection onboarding", () => {
         ),
       );
 
-      expect(reachedHttpBaseUrl).toBe(`${LAN}/`);
-      expect(calls).toEqual([`${LAN}/.well-known/supacode/environment`, `${LAN}/oauth/token`]);
+      expect(urls(calls)).toEqual([
+        `${LAN}/.well-known/supacode/environment`,
+        `${LAN}/oauth/token`,
+      ]);
     }),
   );
 
   it.effect("reports the link's own error when no saved route answers as that machine", () =>
     Effect.gen(function* () {
-      const calls: Array<string> = [];
+      const calls: Array<Call> = [];
       const error = yield* preparePairingRegistration(
-        { pairingUrl: `${LAN}/#token=pairing-token` },
-        [savedEnvironment()],
+        { pairingUrl: PAIRING_LINK },
+        PAIRED_OVER_TAILNET,
       ).pipe(
         Effect.provide(
           Layer.mergeAll(
             layerClientPresentation,
-            layerRoutedHttp(calls, { [TAILNET]: pairingServer("environment-other") }),
+            layerRoutedHttp(calls, {
+              [TAILNET]: pairingServer({ environmentId: "environment-other" }),
+            }),
           ),
         ),
         Effect.flip,
       );
 
       expect(error).toMatchObject({ _tag: "ConnectionTransientError", reason: "network" });
-      expect(calls.filter((url) => url.endsWith("/oauth/token"))).toEqual([]);
+      expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([]);
     }),
   );
 
-  it.effect("re-pairing gives the new credential to saved routes the server rejects", () =>
+  it.effect("re-pairing an address saved under an older id keeps that route", () =>
     Effect.gen(function* () {
-      const events: Array<string> = [];
-      const stored = new Map<string, ConnectionCredential>([
-        [TAILNET_CONNECTION, new BearerConnectionCredential({ token: "revoked-token" })],
-        [PUBLIC_CONNECTION, new BearerConnectionCredential({ token: "working-token" })],
-      ]);
-      const entries = yield* SubscriptionRef.make<
-        ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
-      >(new Map([[SAVED_ENVIRONMENT_ID, savedEnvironment()]]));
-      const registry = EnvironmentRegistry.EnvironmentRegistry.of({
-        entries,
-        register: (registration: ConnectionRegistration) =>
-          Effect.sync(() => {
-            events.push(`register:${registration.target.connectionId}`);
-          }),
-      } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
-
-      const onboarding = yield* ConnectionOnboarding.pipe(
+      const { registration } = yield* preparePairingRegistration(
+        { pairingUrl: PAIRING_LINK },
+        savedEnvironment(
+          savedRoute(LAN, "bearer:environment-paired"),
+          savedRoute(
+            TAILNET,
+            `learned:environment-paired:${TAILNET}@bearer:environment-paired`,
+            true,
+          ),
+        ),
+      ).pipe(
         Effect.provide(
-          layerConnectionOnboarding.pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registry),
-                layerClientPresentation,
-                layerRoutedHttp([], { [TAILNET]: pairingServer(), [PUBLIC]: pairingServer() }),
-                Layer.succeed(
-                  ClientCapabilities.SshEnvironmentGateway,
-                  {} as ClientCapabilities.SshEnvironmentGateway["Service"],
-                ),
-                Layer.succeed(
-                  CredentialStore.ConnectionCredentialStore,
-                  CredentialStore.make({
-                    get: (connectionId) =>
-                      Effect.sync(() => Option.fromUndefinedOr(stored.get(connectionId))),
-                    put: (connectionId, credential) =>
-                      Effect.sync(() => {
-                        events.push(`put:${connectionId}`);
-                        stored.set(connectionId, credential);
-                      }),
-                    remove: (connectionId) => Effect.sync(() => stored.delete(connectionId)),
-                  }),
-                ),
-              ),
-            ),
+          Layer.mergeAll(
+            layerClientPresentation,
+            layerRoutedHttp([], { [TAILNET]: pairingServer() }),
           ),
         ),
       );
-      yield* onboarding.registerPairing({ pairingUrl: `${LAN}/#token=pairing-token` });
+
+      expect(registration.target.connectionId).toBe("bearer:environment-paired");
+    }),
+  );
+
+  it.effect("re-pairing over another route renews its revoked credential before reconnecting", () =>
+    Effect.gen(function* () {
+      const { events, token } = yield* registerPairing({
+        pairingUrl: PAIRING_LINK,
+        entries: PAIRED_OVER_TAILNET,
+        credentials: [[TAILNET_CONNECTION, "revoked-token"]],
+        servers: { [TAILNET]: pairingServer({ acceptedTokens: ["bearer-token"] }) },
+      });
 
       expect(events).toEqual([
         `put:${TAILNET_CONNECTION}`,
         `register:bearer:environment-paired:${LAN}`,
       ]);
-      expect(stored.get(TAILNET_CONNECTION)).toMatchObject({ token: "bearer-token" });
-      expect(stored.get(PUBLIC_CONNECTION)).toMatchObject({ token: "working-token" });
+      expect(token(TAILNET_CONNECTION)).toBe("bearer-token");
+    }),
+  );
+
+  it.effect("re-pairing keeps a credential the server still accepts", () =>
+    Effect.gen(function* () {
+      const { events, token } = yield* registerPairing({
+        pairingUrl: PAIRING_LINK,
+        entries: PAIRED_OVER_TAILNET,
+        credentials: [[TAILNET_CONNECTION, "admin-token"]],
+        servers: { [TAILNET]: pairingServer({ acceptedTokens: ["admin-token"] }) },
+      });
+
+      expect(events).toEqual([`register:bearer:environment-paired:${LAN}`]);
+      expect(token(TAILNET_CONNECTION)).toBe("admin-token");
+    }),
+  );
+
+  it.effect("re-pairing keeps a credential it could not check", () =>
+    Effect.gen(function* () {
+      const { token } = yield* registerPairing({
+        pairingUrl: PAIRING_LINK,
+        entries: PAIRED_OVER_TAILNET,
+        credentials: [[TAILNET_CONNECTION, "admin-token"]],
+        servers: { [TAILNET]: pairingServer({ failSession: true }) },
+      });
+
+      expect(token(TAILNET_CONNECTION)).toBe("admin-token");
+    }),
+  );
+
+  it.effect("re-pairing gives a reached route with no credential the new one", () =>
+    Effect.gen(function* () {
+      const { token } = yield* registerPairing({
+        pairingUrl: PAIRING_LINK,
+        entries: PAIRED_OVER_TAILNET,
+        credentials: [],
+        servers: { [TAILNET]: pairingServer() },
+      });
+
+      expect(token(TAILNET_CONNECTION)).toBe("bearer-token");
+    }),
+  );
+
+  it.effect("never sends saved credentials to a link address that is not a saved route", () =>
+    Effect.gen(function* () {
+      const impostor = "http://203.0.113.9:3773";
+      const { calls, token } = yield* registerPairing({
+        pairingUrl: `${impostor}/#token=pairing-token`,
+        entries: PAIRED_OVER_TAILNET,
+        credentials: [[TAILNET_CONNECTION, "saved-token"]],
+        servers: { [impostor]: pairingServer() },
+      });
+
+      expect(calls.map((call) => bearerToken(call.init))).not.toContain("saved-token");
+      expect(token(TAILNET_CONNECTION)).toBe("saved-token");
     }),
   );
 });

@@ -2,7 +2,12 @@ import { EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 
-import { BearerConnectionProfile, BearerConnectionTarget, type ConnectionRoute } from "./index.ts";
+import {
+  BearerConnectionProfile,
+  BearerConnectionTarget,
+  type ConnectionRoute,
+  SshConnectionTarget,
+} from "./index.ts";
 import {
   connectionRouteKind,
   entryWithRoutes,
@@ -104,26 +109,23 @@ describe("connection routes", () => {
   });
 
   it("offers the other addresses of the saved environment a pairing link points at", () => {
-    const tailnet = route("https://minim5.tail.ts.net/");
-    const base = { target: tailnet.target, profile: tailnet.profile, enabled: true };
+    const tailnet = route("https://minim5.tail.ts.net/", "tailnet");
+    const lan = route("http://192.168.1.20:4389/", "learned-lan");
+    const ssh: ConnectionRoute = {
+      target: new SshConnectionTarget({ environmentId, label: "Remote", connectionId: "ssh" }),
+      profile: Option.none(),
+    };
     const entry = entryWithRoutes(
-      base,
-      mergeLearnedRoutes({
-        entry: base,
-        activeRoute: tailnet,
-        reported: [
-          { httpBaseUrl: "http://192.168.1.20:4389/" },
-          { httpBaseUrl: "http://100.100.10.2:4389/" },
-        ],
-        allowInsecure: true,
-      })!,
+      { target: tailnet.target, profile: tailnet.profile, enabled: true },
+      [lan, tailnet, route("https://minim5.tail.ts.net/other-path/", "tailnet-duplicate"), ssh],
     );
+    const entries = new Map([[environmentId, entry]]);
 
-    expect(pairingFallbackRoutes([entry], "http://192.168.1.20:4389/")).toEqual({
+    expect(pairingFallbackRoutes(entries, "http://192.168.1.20:4389/", undefined)).toEqual({
       environmentId,
-      httpBaseUrls: ["https://minim5.tail.ts.net/", "http://100.100.10.2:4389/"],
+      httpBaseUrls: ["https://minim5.tail.ts.net/"],
     });
-    expect(pairingFallbackRoutes([entry], "http://192.168.1.30:4389/")).toBeNull();
+    expect(pairingFallbackRoutes(entries, "http://192.168.1.30:4389/", undefined)).toBeNull();
   });
 
   it("offers no fallback when two saved environments share the address", () => {
@@ -132,14 +134,38 @@ describe("connection routes", () => {
       lan,
       route("https://minim5.tail.ts.net/", "tailnet"),
     ]);
-    const officeLan = route(
-      "http://192.168.1.20:4389/",
-      "office-lan",
-      EnvironmentId.make("environment-office"),
-    );
+    const officeId = EnvironmentId.make("environment-office");
+    const officeLan = route("http://192.168.1.20:4389/", "office-lan", officeId);
     const office = { target: officeLan.target, profile: officeLan.profile, enabled: true };
 
-    expect(pairingFallbackRoutes([home], "http://192.168.1.20:4389/")).not.toBeNull();
-    expect(pairingFallbackRoutes([home, office], "http://192.168.1.20:4389/")).toBeNull();
+    expect(
+      pairingFallbackRoutes(
+        new Map([[environmentId, home]]),
+        "http://192.168.1.20:4389/",
+        undefined,
+      ),
+    ).not.toBeNull();
+    expect(
+      pairingFallbackRoutes(
+        new Map([
+          [environmentId, home],
+          [officeId, office],
+        ]),
+        "http://192.168.1.20:4389/",
+        undefined,
+      ),
+    ).toBeNull();
+  });
+
+  it("pairs a route added to a named environment through its saved addresses", () => {
+    const tailnet = route("https://minim5.tail.ts.net/", "tailnet");
+    const entry = { target: tailnet.target, profile: tailnet.profile, enabled: true };
+    const entries = new Map([[environmentId, entry]]);
+
+    expect(pairingFallbackRoutes(entries, "http://192.168.1.99:4389/", undefined)).toBeNull();
+    expect(pairingFallbackRoutes(entries, "http://192.168.1.99:4389/", environmentId)).toEqual({
+      environmentId,
+      httpBaseUrls: ["https://minim5.tail.ts.net/"],
+    });
   });
 });

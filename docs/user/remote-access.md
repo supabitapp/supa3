@@ -146,9 +146,9 @@ pairings; revoke a device's session to remove its existing access. Command-line
 management is available through `supacode auth --help`.
 
 To restore a device whose session was revoked, pair it again with a fresh link.
-When the device already saved that machine, a link whose address it cannot reach
-right now, such as a LAN address while on cellular, pairs through the machine's
-other saved routes. Routes that lost access pick up the new pairing.
+If the link's address is one the device already uses for that machine but cannot
+reach right now, such as a LAN address while on cellular, it pairs through the
+machine's other saved routes instead.
 
 A session with an open connection stays listed after its access credential
 expires.
