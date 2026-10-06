@@ -3433,7 +3433,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   useEffect(() => {
     promptRef.current = prompt;
   }, [prompt, promptRef]);
-  const clampedComposerCursor = clampCollapsedComposerCursor(prompt, composerCursor);
+  const composerEditableText = activePendingProgress ? activePendingProgress.customAnswer : prompt;
+  const clampedComposerCursor = clampCollapsedComposerCursor(composerEditableText, composerCursor);
   if (clampedComposerCursor !== composerCursor) {
     setComposerCursor(clampedComposerCursor);
   }
@@ -7480,13 +7481,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }
                     editorRef={composerEditorRef}
                     richTextEnabled={settings.composerRichTextEnabled}
-                    value={
-                      isComposerApprovalState
-                        ? ""
-                        : activePendingProgress
-                          ? activePendingProgress.customAnswer
-                          : prompt
-                    }
+                    value={isComposerApprovalState ? "" : composerEditableText}
                     cursor={composerCursor}
                     contextRecords={composerContextRecords}
                     buildContextClipboardFragment={buildContextClipboardFragment}
