@@ -61,6 +61,7 @@ import { ComposerSurface } from "./chat/ComposerSurface";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { measureRestingComposerControls } from "./chat/restingComposerControlsMeasurement";
 import { resolveRestingComposerControlsNaturalWidth } from "./composerFooterLayout";
+import { EASE_DRAWER } from "~/lib/motion";
 import { cn } from "~/lib/utils";
 
 export interface BranchToolbarHandle {
@@ -338,7 +339,6 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
 });
 
 const COMPOSER_CONTEXT_MOTION_DURATION_MS = 180;
-const COMPOSER_CONTEXT_MOTION_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 const COMPOSER_CONTEXT_LABEL_SELECTOR = "[data-composer-label]";
 
 /**
@@ -489,7 +489,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
         ],
         {
           duration: COMPOSER_CONTEXT_MOTION_DURATION_MS,
-          easing: COMPOSER_CONTEXT_MOTION_EASING,
+          easing: EASE_DRAWER,
           fill: "backwards",
         },
       );

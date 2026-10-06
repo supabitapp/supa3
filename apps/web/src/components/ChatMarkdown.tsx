@@ -5,7 +5,6 @@ import {
   encodeComposerContextClipboardHtml,
 } from "@supacode/shared/composerContextClipboard";
 import {
-  ChevronRightIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   GlobeIcon,
@@ -121,6 +120,8 @@ import { Button } from "./ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { ContextChip } from "./ContextChip";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./ui/collapsible";
+import { DisclosureChevron } from "./ui/disclosure-chevron";
+import { useTimelineDisclosure } from "./chat/timelineDisclosure";
 import { ScrollArea } from "./ui/scroll-area";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -210,6 +211,9 @@ interface ChatMarkdownProps {
   environmentId?: EnvironmentId | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
+  /** Set false to skip the streaming fade for blocks present at mount, such as a
+      live thought expanded mid-stream. */
+  fadeInitialBlocks?: boolean;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
@@ -889,7 +893,7 @@ function MarkdownDetails({
   children,
   open = false,
 }: Pick<React.ComponentProps<"details">, "children" | "open">) {
-  const [isOpen, setIsOpen] = useState(open);
+  const [isOpen, toggle] = useTimelineDisclosure(open);
   const childNodes = Children.toArray(children);
   const summaryIndex = childNodes.findIndex(
     (child) => isValidElement(child) && child.type === "summary",
@@ -904,19 +908,18 @@ function MarkdownDetails({
   return (
     <div className="my-2 border-y border-border/60">
       <Collapsible
-        defaultOpen={open}
-        onOpenChange={setIsOpen}
+        open={isOpen}
+        onOpenChange={(_, details) => toggle(details.event)}
         data-markdown-details=""
         data-markdown-details-open={isOpen ? "true" : "false"}
       >
         <CollapsibleTrigger
-          className="flex w-full items-center gap-2 py-2 text-left text-sm font-medium text-foreground data-panel-open:[&_svg]:rotate-90"
+          className="flex w-full items-center gap-2 py-2 text-left text-sm font-medium text-foreground"
           data-markdown-details-summary=""
         >
-          <ChevronRightIcon
-            className="size-4 shrink-0 text-muted-foreground transition-transform"
-            aria-hidden
-          />
+          <span className="flex shrink-0 text-muted-foreground">
+            <DisclosureChevron open={isOpen} size="sm" />
+          </span>
           <span>{summary}</span>
         </CollapsibleTrigger>
         <CollapsiblePanel>
@@ -3409,8 +3412,10 @@ function ChatMarkdown({
   lineBreaks = false,
   parseRawHtml = true,
   extraRemarkPlugins = EMPTY_REMARK_PLUGINS,
+  fadeInitialBlocks = true,
   ...props
 }: ChatMarkdownProps) {
+  const [mountedText] = useState(text);
   const {
     componentState,
     handleCopy,
@@ -3419,6 +3424,7 @@ function ChatMarkdown({
     localMediaPreview,
     setLocalMediaPreview,
   } = useChatMarkdownState({ text, ...props });
+  const fadesNewBlocks = componentState.isStreaming && (fadeInitialBlocks || text !== mountedText);
   const incrementalParsing =
     props.isStreaming === true &&
     extraRemarkPlugins.length === 0 &&
@@ -3443,7 +3449,7 @@ function ChatMarkdown({
         className,
       )}
       // Gates the fade-in for blocks that arrive while the response streams.
-      data-streaming={componentState.isStreaming ? "" : undefined}
+      data-streaming={fadesNewBlocks ? "" : undefined}
       onCopy={handleCopy}
     >
       <ChatMarkdownRendererContext value={componentState}>

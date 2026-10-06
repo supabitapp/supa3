@@ -2,21 +2,45 @@
 
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { EASE_DRAWER, prefersReducedMotion } from "~/lib/motion";
+import { cn } from "~/lib/utils";
+
 const HEIGHT_TRANSITION_FALLBACK_MS = 250;
 
 export function AnimatedHeight({
   children,
   holdHeight = false,
+  animateKey,
 }: {
   readonly children: ReactNode;
   /** Retain the previous content height while a replacement is loading. */
   readonly holdHeight?: boolean;
+  /**
+   * Animate only the resize that follows a change of this key, such as an
+   * expanded flag. Every other resize, like a reflow at a new width, snaps.
+   */
+  readonly animateKey?: string | number | boolean;
+}) {
+  return animateKey === undefined ? (
+    <TrackedHeight holdHeight={holdHeight}>{children}</TrackedHeight>
+  ) : (
+    <KeyedHeight animateKey={animateKey}>{children}</KeyedHeight>
+  );
+}
+
+function TrackedHeight({
+  children,
+  holdHeight,
+}: {
+  readonly children: ReactNode;
+  readonly holdHeight: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [heightState, setHeightState] = useState<{
     readonly height: number | null;
     readonly isClipping: boolean;
-  }>({ height: null, isClipping: false });
+    readonly isShrinking: boolean;
+  }>({ height: null, isClipping: false, isShrinking: false });
 
   useEffect(() => {
     if (!heightState.isClipping) return;
@@ -45,6 +69,7 @@ export function AnimatedHeight({
         return {
           height: nextHeight,
           isClipping: currentState.height !== null,
+          isShrinking: currentState.height !== null && nextHeight < currentState.height,
         };
       });
     };
@@ -83,7 +108,10 @@ export function AnimatedHeight({
   return (
     <div
       data-slot="animated-height"
-      className="transition-[height] duration-200 ease-out motion-reduce:transition-none"
+      className={cn(
+        "transition-[height] duration-200 ease-drawer motion-reduce:transition-none",
+        heightState.isShrinking && "duration-150",
+      )}
       style={
         heightState.height === null
           ? undefined
@@ -99,6 +127,68 @@ export function AnimatedHeight({
       <div ref={contentRef} style={holdHeight ? { height: "100%" } : undefined}>
         {children}
       </div>
+    </div>
+  );
+}
+
+function KeyedHeight({
+  children,
+  animateKey,
+}: {
+  readonly children: ReactNode;
+  readonly animateKey: string | number | boolean;
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The layout effect below runs after the new content is in the DOM, so the
+  // starting height comes from the last observed size.
+  const lastHeightRef = useRef<number | null>(null);
+  const animationRef = useRef<Animation | null>(null);
+  const animatedKeyRef = useRef(animateKey);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const observer = new ResizeObserver(() => {
+      lastHeightRef.current = content.offsetHeight;
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      animationRef.current?.cancel();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (animatedKeyRef.current === animateKey) return;
+    animatedKeyRef.current = animateKey;
+    const wrapper = wrapperRef.current;
+    const content = contentRef.current;
+    if (!wrapper || !content) return;
+    const running = animationRef.current;
+    const from = running ? wrapper.getBoundingClientRect().height : lastHeightRef.current;
+    running?.cancel();
+    animationRef.current = null;
+    const to = content.offsetHeight;
+    if (from === null || from === to || prefersReducedMotion()) {
+      wrapper.style.removeProperty("overflow");
+      return;
+    }
+    wrapper.style.overflow = "hidden";
+    const animation = wrapper.animate(
+      { height: [`${from}px`, `${to}px`] },
+      { duration: to > from ? 200 : 150, easing: EASE_DRAWER },
+    );
+    animation.onfinish = () => {
+      animationRef.current = null;
+      wrapper.style.removeProperty("overflow");
+    };
+    animationRef.current = animation;
+  }, [animateKey]);
+
+  return (
+    <div ref={wrapperRef}>
+      <div ref={contentRef}>{children}</div>
     </div>
   );
 }

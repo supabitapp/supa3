@@ -36,7 +36,10 @@ export function CollapsibleSectionHeader({
       {accessory}
       <ChevronDownIcon
         aria-hidden
-        className={cn("size-3 shrink-0 transition-transform", expanded && "rotate-180")}
+        className={cn(
+          "size-3 shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none",
+          expanded && "rotate-180",
+        )}
       />
     </button>
   );

@@ -74,6 +74,8 @@ import { WizardPopup, WizardHeader, WizardSteps, WizardPanel, WizardFooter } fro
 import { StartTruncatedPath } from "./StartTruncatedPath";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
+import { DisclosureChevron } from "~/components/ui/disclosure-chevron";
 import {
   Dialog,
   DialogDescription,
@@ -888,23 +890,13 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
               </RadioGroup>
             </div>
 
-            <div>
-              <button
-                type="button"
-                onClick={() => setPublishAdvancedOpen((prev) => !prev)}
-                aria-expanded={publishAdvancedOpen}
-                className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ChevronDownIcon
-                  className={cn(
-                    "size-3.5 transition-transform",
-                    publishAdvancedOpen ? "" : "-rotate-90",
-                  )}
-                />
+            <Collapsible open={publishAdvancedOpen} onOpenChange={setPublishAdvancedOpen}>
+              <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+                <DisclosureChevron open={publishAdvancedOpen} size="sm" />
                 Advanced
-              </button>
-              {publishAdvancedOpen ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              </CollapsibleTrigger>
+              <CollapsiblePanel className="-mx-1 -mb-1">
+                <div className="grid gap-3 px-1 pt-3 pb-1 sm:grid-cols-2">
                   <label className="space-y-1.5" htmlFor="publish-remote-name">
                     <span className="text-xs font-medium text-foreground">Remote</span>
                     <Input
@@ -938,8 +930,8 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                     </ToggleGroup>
                   </div>
                 </div>
-              ) : null}
-            </div>
+              </CollapsiblePanel>
+            </Collapsible>
 
             {publishRepositoryAction.isPending ? (
               <div

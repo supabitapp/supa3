@@ -23,7 +23,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(root) {
 
 html[data-mobile-composer-route-transition="true"]::view-transition-group(supacode-mobile-composer) {
   animation-duration: var(--mobile-composer-transition-duration);
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-timing-function: var(--ease-drawer);
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-image-pair(supacode-mobile-composer) {
@@ -69,9 +69,11 @@ html[data-mobile-composer-route-transition="true"]::view-transition-group(supaco
   animation-duration: var(--mobile-composer-transition-duration);
 }
 
+/* Exits finish a quarter sooner than the composer move; playDraftHeadlineExit in
+   draftHeroTransition.ts is the desktop twin. */
 html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode-mobile-draft-headline) {
-  animation: supacode-mobile-draft-headline-exit var(--mobile-composer-transition-duration)
-    cubic-bezier(0.4, 0, 1, 1) both;
+  animation: supacode-mobile-draft-headline-exit
+    calc(var(--mobile-composer-transition-duration) * 0.75) var(--ease-in) both;
   mix-blend-mode: normal;
 }
 

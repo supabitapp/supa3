@@ -1,5 +1,6 @@
+import { EASE_IN } from "~/lib/motion";
+
 export const DRAFT_HERO_TRANSITION_ANIMATION_ID = "supacode-draft-hero-transition";
-export const DRAFT_HERO_TRANSITION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 export const MOBILE_COMPOSER_VIEW_TRANSITION_NAME = "supacode-mobile-composer";
 export const MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME = "supacode-mobile-draft-headline";
 const MOBILE_COMPOSER_TRANSITION_DURATION_PROPERTY = "--mobile-composer-transition-duration";
@@ -92,4 +93,50 @@ export async function runMobileComposerTransition(
       MOBILE_COMPOSER_TRANSITION_DURATION_PROPERTY,
     );
   }
+}
+
+/**
+ * Copies the hero headline while it is still laid out, with the text styles it
+ * inherits, so playDraftHeadlineExit can fade it after React removes the original.
+ */
+export function captureDraftHeadline(headline: HTMLElement): HTMLElement {
+  const rect = headline.getBoundingClientRect();
+  const inherited = getComputedStyle(headline);
+  const ghost = headline.cloneNode(true) as HTMLElement;
+  ghost.inert = true;
+  ghost.setAttribute("aria-hidden", "true");
+  for (const trigger of ghost.querySelectorAll("[data-draft-project-trigger]")) {
+    trigger.removeAttribute("data-draft-project-trigger");
+  }
+  ghost.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;margin:0;pointer-events:none;z-index:20`;
+  Object.assign(ghost.style, {
+    color: inherited.color,
+    fontFamily: inherited.fontFamily,
+    fontSize: inherited.fontSize,
+    fontWeight: inherited.fontWeight,
+    letterSpacing: inherited.letterSpacing,
+    lineHeight: inherited.lineHeight,
+    textAlign: inherited.textAlign,
+  });
+  return ghost;
+}
+
+/**
+ * Fades a captured headline up and out where it stood while the composer docks:
+ * the desktop twin of the mobile view transition's headline exit in index.css,
+ * at the same speed relative to the composer move.
+ */
+export function playDraftHeadlineExit(
+  ghost: HTMLElement,
+  composerDurationMs: number,
+): Promise<void> {
+  document.body.append(ghost);
+  const animation = ghost.animate(
+    [
+      { opacity: 1, transform: "translateY(0)" },
+      { opacity: 0, transform: "translateY(-6px)" },
+    ],
+    { duration: composerDurationMs * 0.75, easing: EASE_IN, fill: "forwards" },
+  );
+  return animation.finished.catch(() => undefined).then(() => ghost.remove());
 }

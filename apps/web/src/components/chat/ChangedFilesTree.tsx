@@ -1,20 +1,22 @@
 import { type RunId } from "@supacode/contracts";
-import { type MouseEvent, memo, useCallback, useMemo, useState } from "react";
+import { type MouseEvent, type ReactNode, memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import {
   buildTurnDiffTree,
   summarizeTurnDiffStats,
   type TurnDiffTreeNode,
 } from "../../lib/turnDiffTree";
-import { ChevronRightIcon, FileDiffIcon } from "lucide-react";
+import { FileDiffIcon } from "lucide-react";
 import { ChevronsDownUp, ChevronsUpDown, Folder, FolderClosed } from "lucide";
-import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { MorphIcon } from "~/components/MorphIcon";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
+import { DisclosureChevron } from "../ui/disclosure-chevron";
+import { useTimelineDisclosureToggle } from "./timelineDisclosure";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
 
@@ -41,6 +43,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   } = props;
   const summaryStat = useMemo(() => summarizeTurnDiffStats(files), [files]);
   const hasDirectories = files.some((file) => /[/\\]/.test(file.path));
+  const onDisclosureToggle = useTimelineDisclosureToggle();
 
   return (
     <div
@@ -76,8 +79,10 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                     aria-label={
                       allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"
                     }
-                    data-scroll-anchor-ignore
-                    onClick={onToggleAllDirectories}
+                    onClick={(event) => {
+                      onDisclosureToggle(event.currentTarget, allDirectoriesExpanded);
+                      onToggleAllDirectories();
+                    }}
                   />
                 }
               >
@@ -111,7 +116,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         </div>
       </div>
       <ChangedFilesTree
-        key={`${runId}:${allDirectoriesExpanded}`}
+        key={runId}
         runId={runId}
         files={files}
         allDirectoriesExpanded={allDirectoriesExpanded}
@@ -133,6 +138,7 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
 }) {
   const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, runId, onFileContextMenu } =
     props;
+  const onDisclosureToggle = useTimelineDisclosureToggle();
   const treeNodes = useMemo(() => buildTurnDiffTree(files), [files]);
   const directoryPathsKey = useMemo(
     () => collectDirectoryPaths(treeNodes).join("\u0000"),
@@ -173,22 +179,21 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
     if (node.kind === "directory") {
       const isExpanded = expandedDirectories[node.path] ?? allDirectoriesExpanded;
       return (
-        <div key={`dir:${node.path}`}>
-          <button
-            type="button"
-            data-scroll-anchor-ignore
-            aria-expanded={isExpanded}
+        <Collapsible
+          key={`dir:${node.path}`}
+          open={isExpanded}
+          onOpenChange={(open, details) => {
+            onDisclosureToggle(details.event.target, !open);
+            toggleDirectory(node.path);
+          }}
+        >
+          <CollapsibleTrigger
             className="group flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             style={{ paddingLeft: `${leftPadding}px` }}
-            onClick={() => toggleDirectory(node.path)}
           >
-            <ChevronRightIcon
-              aria-hidden="true"
-              className={cn(
-                "size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:text-foreground/80",
-                isExpanded && "rotate-90",
-              )}
-            />
+            <span className="flex shrink-0 text-muted-foreground/70 group-hover:text-foreground/80">
+              <DisclosureChevron open={isExpanded} size="sm" />
+            </span>
             <MorphIcon
               className="size-3.5 shrink-0 text-muted-foreground/75"
               icon={isExpanded ? Folder : FolderClosed}
@@ -201,11 +206,11 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
                 <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
               </span>
             )}
-          </button>
-          {isExpanded && (
-            <div>{node.children.map((childNode) => renderTreeNode(childNode, depth + 1))}</div>
-          )}
-        </div>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <DirectoryRows nodes={node.children} depth={depth + 1} renderNode={renderTreeNode} />
+          </CollapsiblePanel>
+        </Collapsible>
       );
     }
 
@@ -248,6 +253,19 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
 
   return <div className="p-2">{treeNodes.map((node) => renderTreeNode(node, 0))}</div>;
 });
+
+/** A component boundary, so a closed folder's subtree is only built once its panel mounts it. */
+function DirectoryRows({
+  nodes,
+  depth,
+  renderNode,
+}: {
+  nodes: ReadonlyArray<TurnDiffTreeNode>;
+  depth: number;
+  renderNode: (node: TurnDiffTreeNode, depth: number) => ReactNode;
+}) {
+  return nodes.map((node) => renderNode(node, depth));
+}
 
 function collectDirectoryPaths(nodes: ReadonlyArray<TurnDiffTreeNode>): string[] {
   const paths: string[] = [];

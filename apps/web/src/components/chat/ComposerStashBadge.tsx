@@ -24,8 +24,9 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
     <ComposerBanner.Count
       key={props.pulseKey}
       className={cn(
+        "transition-[color,opacity,translate] duration-200 ease-out motion-reduce:transition-none",
         props.pulsing
-          ? "text-primary transition-[opacity,translate] duration-180 ease-out starting:translate-y-0.5 starting:opacity-0 motion-reduce:transition-none"
+          ? "text-primary starting:translate-y-0.5 starting:opacity-0"
           : "text-muted-foreground",
       )}
     >

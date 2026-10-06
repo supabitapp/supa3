@@ -16,6 +16,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 
 import { pullRequestListLines } from "../pullRequest/pullRequestListLines";
 import { MorphIcon } from "~/components/MorphIcon";
+import { Collapsible, CollapsiblePanel } from "~/components/ui/collapsible";
 import { linkedPullRequestSnapshotStatus, prStatusIndicator } from "../ThreadStatusIndicators";
 
 import { ThreadDetailsPrRow } from "./ThreadDetailsPrRow";
@@ -102,18 +103,22 @@ export function ThreadDetailsPrRows({
   return (
     <>
       {currentRow}
-      {expanded
-        ? rest.map((link) => (
-            <ThreadDetailsPrLinkRow
-              key={threadPullRequestKeyOf(link)}
-              environmentId={row.environmentId}
-              link={link}
-              onOpen={(event) => onOpenLink(event, link.url)}
-              onActed={row.onActed}
-              onStopWatching={stopWatching(link)}
-            />
-          ))
-        : null}
+      <Collapsible open={expanded} className="-mx-1">
+        <CollapsiblePanel>
+          <div className="flex flex-col px-1">
+            {rest.map((link) => (
+              <ThreadDetailsPrLinkRow
+                key={threadPullRequestKeyOf(link)}
+                environmentId={row.environmentId}
+                link={link}
+                onOpen={(event) => onOpenLink(event, link.url)}
+                onActed={row.onActed}
+                onStopWatching={stopWatching(link)}
+              />
+            ))}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
       <ThreadDetailsControl
         variant="ghost"
         size="sm"

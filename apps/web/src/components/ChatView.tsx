@@ -291,8 +291,6 @@ import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   AlarmClockIcon,
   CheckCircle2Icon,
-  PaperclipIcon,
-  ChevronDownIcon,
   DownloadIcon,
   GitBranchIcon,
   TargetIcon,
@@ -484,12 +482,16 @@ import {
 } from "./chat/ContextWindowMeter.logic";
 import { deriveLatestContextWindowSnapshot, formatContextWindowTokens } from "../lib/contextWindow";
 import {
+  captureDraftHeadline,
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
-  DRAFT_HERO_TRANSITION_EASING,
   MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
   MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME,
+  playDraftHeadlineExit,
   runMobileComposerTransition,
 } from "./chat/draftHeroTransition";
+import { EASE_DRAWER, animationsSettled, prefersReducedMotion } from "../lib/motion";
+import { ScrollToEndPill } from "./chat/ScrollToEndPill";
+import { WorkspaceDropOverlay } from "./WorkspaceDropOverlay";
 import type { ComposerDispatchMode } from "@supacode/client-runtime/state/composer-dispatch";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
@@ -566,7 +568,7 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { ServerUpdateAction } from "./ServerUpdateAction";
 import { useAutoBalanceUpdateBanner } from "./chat/useAutoBalanceUpdateBanner";
 import { InlineConfirmButton } from "./InlineConfirm";
@@ -614,8 +616,10 @@ function useDraftHeroLayoutTransition(
 ) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
+  const headlineRef = useRef<HTMLDivElement | null>(null);
   const previousStateRef = useRef(isDraftHeroState);
   const previousComposerRectRef = useRef<DOMRect | null>(null);
+  const headlineGhostRef = useRef<HTMLElement | null>(null);
   const animationRef = useRef<Animation | null>(null);
   const attachTransitionGroupRef = (element: HTMLDivElement | null) => {
     transitionGroupRef.current = element;
@@ -623,9 +627,15 @@ function useDraftHeroLayoutTransition(
   const attachComposerAnchorRef = (element: HTMLDivElement | null) => {
     composerAnchorRef.current = element;
   };
+  const attachHeadlineRef = (element: HTMLDivElement | null) => {
+    headlineRef.current = element;
+  };
 
-  const captureComposerRect = () => {
+  const captureLayout = () => {
     previousComposerRectRef.current = composerAnchorRef.current?.getBoundingClientRect() ?? null;
+    headlineGhostRef.current = headlineRef.current
+      ? captureDraftHeadline(headlineRef.current)
+      : null;
   };
 
   useLayoutEffect(() => {
@@ -639,6 +649,8 @@ function useDraftHeroLayoutTransition(
     animationRef.current?.cancel();
     animationRef.current = null;
     const previousComposerRect = previousComposerRectRef.current;
+    const headlineGhost = headlineGhostRef.current;
+    headlineGhostRef.current = null;
     if (
       stateChanged &&
       animationsActive &&
@@ -658,7 +670,7 @@ function useDraftHeroLayoutTransition(
           ],
           {
             duration: animationDurationMs,
-            easing: DRAFT_HERO_TRANSITION_EASING,
+            easing: EASE_DRAWER,
           },
         );
         animation.id = DRAFT_HERO_TRANSITION_ANIMATION_ID;
@@ -668,6 +680,9 @@ function useDraftHeroLayoutTransition(
           .then(() => {
             if (animationRef.current === animation) animationRef.current = null;
           });
+        if (!isDraftHeroState && headlineGhost) {
+          void playDraftHeadlineExit(headlineGhost, animationDurationMs);
+        }
       }
     }
     previousStateRef.current = isDraftHeroState;
@@ -677,7 +692,8 @@ function useDraftHeroLayoutTransition(
   return {
     transitionGroupRef: attachTransitionGroupRef,
     composerAnchorRef: attachComposerAnchorRef,
-    captureComposerRect,
+    headlineRef: attachHeadlineRef,
+    captureLayout,
   } as const;
 }
 
@@ -1519,6 +1535,20 @@ type LocalThreadErrorEntry = {
   readonly message: string | null;
   readonly at: number;
 };
+
+function isAnimatingSize(element: Element): boolean {
+  return element
+    .getAnimations({ subtree: true })
+    .some(
+      (animation) =>
+        animation.playState === "running" &&
+        animation.effect instanceof KeyframeEffect &&
+        animation.effect.getComputedTiming().iterations !== Infinity &&
+        animation.effect
+          .getKeyframes()
+          .some((keyframe) => "height" in keyframe || "gridTemplateRows" in keyframe),
+    );
+}
 
 function chatActionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "An error occurred.";
@@ -3495,7 +3525,7 @@ export default function ChatView(props: ChatViewProps) {
   const usageLimitsBanner = useMemo(
     () =>
       usageLimitsReport !== null && usageLimitsPanel !== null
-        ? // A fresh id per opening: the stack keeps the last dismissed id as "exiting".
+        ? // A fresh id per opening: a reopen must not collide with the previous notice while it exits.
           usageLimitsBannerItem(
             `usage-limits:${usageLimitsPanel.key}:${usageLimitsPanel.now}`,
             usageLimitsReport,
@@ -4069,7 +4099,8 @@ export default function ChatView(props: ChatViewProps) {
   const {
     transitionGroupRef: draftHeroTransitionGroupRef,
     composerAnchorRef: draftHeroComposerAnchorRef,
-    captureComposerRect: captureDraftHeroComposerRect,
+    headlineRef: draftHeroHeadlineRef,
+    captureLayout: captureDraftHeroLayout,
   } = useDraftHeroLayoutTransition(
     isDraftHeroState,
     panelAnimationsActive,
@@ -6294,7 +6325,7 @@ export default function ChatView(props: ChatViewProps) {
     // The anchored end space must be gone before the scroll measures, or the
     // list lands short of the real end (#6519).
     requestAnimationFrame(() => {
-      void legendListRef.current?.scrollToEnd?.({ animated });
+      void legendListRef.current?.scrollToEnd?.({ animated: animated && !prefersReducedMotion() });
     });
   }, []);
   useEffect(() => {
@@ -6496,7 +6527,7 @@ export default function ChatView(props: ChatViewProps) {
         scrollNode.addEventListener("scrollend", finishAnimatedPositioning, { once: true });
         void list.scrollToIndex({
           index: anchorIndex,
-          animated: true,
+          animated: !prefersReducedMotion(),
           viewPosition: 0,
           viewOffset: CHAT_LIST_ANCHOR_OFFSET,
         });
@@ -6852,17 +6883,31 @@ export default function ChatView(props: ChatViewProps) {
   useLayoutEffect(() => {
     if (!composerOverlayElement) return;
 
+    // A drawer or tray easing its height resizes the overlay every frame. Publishing only the
+    // landed height keeps ChatView and the timeline to one render per resize; meanwhile a
+    // growing composer briefly overlaps the timeline end and a shrinking one leaves a gap.
+    let settling = false;
+    let disposed = false;
     const updateHeight = () => {
+      if (settling || disposed) return;
+      if (isAnimatingSize(composerOverlayElement)) {
+        settling = true;
+        void animationsSettled(composerOverlayElement, { subtree: true }).then(() => {
+          settling = false;
+          updateHeight();
+        });
+        return;
+      }
       publishComposerOverlayHeight(composerOverlayElement.getBoundingClientRect().height);
     };
 
     updateHeight();
-    if (typeof ResizeObserver === "undefined") return;
-
-    const resizeObserver = new ResizeObserver(updateHeight);
-    resizeObserver.observe(composerOverlayElement);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
+    resizeObserver?.observe(composerOverlayElement);
     return () => {
-      resizeObserver.disconnect();
+      disposed = true;
+      resizeObserver?.disconnect();
     };
   }, [composerOverlayElement, publishComposerOverlayHeight]);
   const measuredScrollToEndVisibleRef = useRef(showScrollToBottom);
@@ -9099,7 +9144,7 @@ export default function ChatView(props: ChatViewProps) {
       const dockTransition = runMobileComposerTransition(
         () => {
           flushSync(() => {
-            captureDraftHeroComposerRect();
+            captureDraftHeroLayout();
             setDockedDraftHeroThreadKey(activeThreadKey);
           });
           resolveDockStarted?.();
@@ -10878,29 +10923,31 @@ export default function ChatView(props: ChatViewProps) {
       )}
       data-workspace-titlebar-controls
     >
-      {!shouldUsePlanSidebarSheet ? (
-        <span
-          aria-hidden={!rightPanelOpen}
-          className={cn(
-            "flex shrink-0",
-            panelAnimationsActive &&
-              "motion-safe:transition-opacity motion-safe:duration-(--panel-animation-duration) motion-safe:ease-out",
-            // Closed, the control leaves the flex flow so the cluster is only as wide as the two
-            // toggles the header reserves room for; anchored to the cluster's left edge, it fades
-            // out where it stood rather than over the terminal toggle.
-            rightPanelOpen
-              ? "pointer-events-auto opacity-100"
-              : "pointer-events-none absolute right-full mr-1 opacity-0",
-          )}
-          inert={!rightPanelOpen}
-        >
-          <RightPanelMaximizeControl
-            maximized={rightPanelMaximized}
-            onToggle={toggleRightPanelMaximized}
-          />
-        </span>
-      ) : null}
-      <div className="pointer-events-auto flex h-full items-center">{panelToggleControls}</div>
+      <TooltipProvider>
+        {!shouldUsePlanSidebarSheet ? (
+          <span
+            aria-hidden={!rightPanelOpen}
+            className={cn(
+              "flex shrink-0",
+              panelAnimationsActive &&
+                "motion-safe:transition-opacity motion-safe:duration-(--panel-animation-duration) motion-safe:ease-out",
+              // Closed, the control leaves the flex flow so the cluster is only as wide as the two
+              // toggles the header reserves room for; anchored to the cluster's left edge, it fades
+              // out where it stood rather than over the terminal toggle.
+              rightPanelOpen
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none absolute right-full mr-1 opacity-0",
+            )}
+            inert={!rightPanelOpen}
+          >
+            <RightPanelMaximizeControl
+              maximized={rightPanelMaximized}
+              onToggle={toggleRightPanelMaximized}
+            />
+          </span>
+        ) : null}
+        <div className="pointer-events-auto flex h-full items-center">{panelToggleControls}</div>
+      </TooltipProvider>
     </div>
   );
   const workspaceFileDropHost: WorkspaceFileDropHost = {
@@ -10970,18 +11017,20 @@ export default function ChatView(props: ChatViewProps) {
           ) : null}
           {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
           {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
-          <ChatHeader
-            activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            isServerThread={isServerThread}
-            activeThreadTitle={activeThread.title}
-            activeProject={activeProject ?? null}
-            rightPanelOpen={inlineRightPanelOwnsTitleBar}
-            onNewThreadInProject={handleNewThreadInActiveProject}
-            {...(activeDraftLogicalProjectKey
-              ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
-              : {})}
-          />
+          <TooltipProvider>
+            <ChatHeader
+              activeThreadEnvironmentId={activeThread.environmentId}
+              activeThreadId={activeThread.id}
+              isServerThread={isServerThread}
+              activeThreadTitle={activeThread.title}
+              activeProject={activeProject ?? null}
+              rightPanelOpen={inlineRightPanelOwnsTitleBar}
+              onNewThreadInProject={handleNewThreadInActiveProject}
+              {...(activeDraftLogicalProjectKey
+                ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
+                : {})}
+            />
+          </TooltipProvider>
         </header>
 
         {/* Main content area with optional plan sidebar */}
@@ -11001,28 +11050,17 @@ export default function ChatView(props: ChatViewProps) {
             }
             onDrop={(event) => makeWorkspaceFileDropHandlers(workspaceFileDropHost).onDrop(event)}
           >
-            {isWorkspaceFileDragActive ? (
-              <div
-                className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/[0.035]"
-                data-chat-workspace-drop-overlay="true"
-              >
-                <div
-                  role="status"
-                  className="flex items-center gap-2 rounded-full border border-primary/25 bg-background/95 px-4 py-2.5 text-sm font-medium text-foreground shadow-lg"
-                >
-                  <PaperclipIcon className="size-4 text-primary" aria-hidden="true" />
-                  Drop files to attach
-                </div>
-              </div>
-            ) : null}
+            <WorkspaceDropOverlay active={isWorkspaceFileDragActive} />
             {/* Banners overlay the timeline without changing its content height. */}
             <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col">
               <ProviderStatusBanner
+                key={`provider:${routeThreadKey}`}
                 status={visibleProviderStatus}
                 onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
                 onOpenProviderSetup={openProviderSetup}
               />
               <ThreadErrorBanner
+                key={`error:${routeThreadKey}`}
                 error={timelineThreadError}
                 errorClass={
                   localServerError === null && visibleThreadError === serverRuntime?.lastError
@@ -11134,28 +11172,15 @@ export default function ChatView(props: ChatViewProps) {
                   : { historyControls: threadHistoryControls })}
               />
 
-              {/* scroll to end pill — shown when user has scrolled away from the live edge */}
-              {showScrollToBottom && (
-                <div
-                  className="chat-scroll-to-bottom pointer-events-none absolute z-30 flex justify-center py-1.5"
-                  style={{ bottom: scrollToEndClearance + 4 }}
-                >
-                  <Button
-                    aria-label="Scroll to end"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      composerRef.current?.restoreAfterTimelineReachedEnd();
-                      scrollToEnd(true);
-                    }}
-                    className="pointer-events-auto"
-                    size="xs"
-                    variant="glass"
-                  >
-                    <ChevronDownIcon className="size-3.5" />
-                    Scroll to end
-                  </Button>
-                </div>
-              )}
+              <ScrollToEndPill
+                key={routeThreadKey}
+                show={showScrollToBottom}
+                bottom={scrollToEndClearance + 4}
+                onScrollToEnd={() => {
+                  composerRef.current?.restoreAfterTimelineReachedEnd();
+                  scrollToEnd(true);
+                }}
+              />
             </div>
 
             {/* Input bar — centered for an empty draft, docked after sending. */}
@@ -11177,6 +11202,7 @@ export default function ChatView(props: ChatViewProps) {
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full">
                       <div
+                        ref={draftHeroHeadlineRef}
                         className="pb-4 group-has-data-[composer-shoulder-tab]/composer-stack:pb-0"
                         style={
                           forceExpandedMobileComposer
@@ -11591,7 +11617,9 @@ export default function ChatView(props: ChatViewProps) {
             // the sheet opens.
             layoutControls={
               rightPanelOpen ? (
-                <div className="mr-px flex items-center">{panelToggleControls}</div>
+                <TooltipProvider>
+                  <div className="mr-px flex items-center">{panelToggleControls}</div>
+                </TooltipProvider>
               ) : null
             }
             surfaces={renderedRightPanelSurfaces}

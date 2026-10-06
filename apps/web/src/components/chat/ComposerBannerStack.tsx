@@ -1,13 +1,19 @@
 import { InfoIcon } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
+import { animationsSettled } from "~/lib/motion";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { ComposerBanner, type ComposerBannerVariant } from "./ComposerBanner";
-
-// Match the duration-220 exit transition before removing a dismissed notice.
-const DISMISS_TRANSITION_MS = 220;
 
 export interface ComposerBannerStackItem {
   readonly id: string;
@@ -40,6 +46,77 @@ function bannerPriority(item: ComposerBannerStackEntry) {
   return 2;
 }
 
+interface StackSlot {
+  readonly item: ComposerBannerStackEntry;
+  readonly exiting: boolean;
+  /** Exiting notices only leave from the slot they occupied; stacked ones never surface. */
+  readonly wasFront: boolean;
+  /** Set for the commit that mounts the slot, so `starting:` styles replay only then. */
+  readonly entering: boolean;
+}
+
+// The activity row trades places with the strip outside the stack, so it never animates.
+const animates = (item: ComposerBannerStackEntry) => item.priority !== "activity";
+
+function arrangeSlots(slots: ReadonlyArray<StackSlot>) {
+  const ordered = slots.toSorted((a, b) => bannerPriority(a.item) - bannerPriority(b.item));
+  const front = ordered.find((slot) => !slot.exiting || slot.wasFront);
+  return { front, stacked: ordered.filter((slot) => slot !== front) };
+}
+
+/** Keeps removed notices where they were, marked exiting, until their exit transition ends. */
+function reconcileStackSlots(
+  previous: ReadonlyArray<StackSlot>,
+  live: ReadonlyArray<ComposerBannerStackEntry>,
+): ReadonlyArray<StackSlot> {
+  const liveIds = new Set(live.map((item) => item.id));
+  const previousLiveIds = new Set(previous.flatMap((slot) => (slot.exiting ? [] : [slot.item.id])));
+  const previousFront = arrangeSlots(previous).front;
+  const exitingAfter = new Map<string | null, StackSlot[]>();
+  let anchor: string | null = null;
+  for (const slot of previous) {
+    if (liveIds.has(slot.item.id)) {
+      anchor = slot.item.id;
+      continue;
+    }
+    if (!animates(slot.item)) continue;
+    const exiting = slot.exiting
+      ? slot
+      : { ...slot, exiting: true, entering: false, wasFront: slot === previousFront };
+    exitingAfter.set(anchor, [...(exitingAfter.get(anchor) ?? []), exiting]);
+  }
+  return [
+    ...(exitingAfter.get(null) ?? []),
+    ...live.flatMap((item) => [
+      {
+        item,
+        exiting: false,
+        wasFront: false,
+        entering: !previousLiveIds.has(item.id) && animates(item),
+      },
+      ...(exitingAfter.get(item.id) ?? []),
+    ]),
+  ];
+}
+
+/** Drops a finished exit. A notice revealed by the front's exit rises into its place. */
+function releaseStackSlot(slots: ReadonlyArray<StackSlot>, id: string): ReadonlyArray<StackSlot> {
+  const released = slots.find((slot) => slot.exiting && slot.item.id === id);
+  if (!released) return slots;
+  const remaining = slots.flatMap((slot) =>
+    slot === released ? [] : [slot.entering ? { ...slot, entering: false } : slot],
+  );
+  if (arrangeSlots(slots).front !== released) return remaining;
+  const revealed = arrangeSlots(remaining).front;
+  return revealed && !revealed.exiting && animates(revealed.item)
+    ? remaining.map((slot) => (slot === revealed ? { ...slot, entering: true } : slot))
+    : remaining;
+}
+
+// The banner fades itself (see ComposerBanner.Root) so its glass keeps its blur.
+const presenceClassName =
+  "transition-[translate] duration-200 ease-drawer data-enter:starting:translate-y-1 data-ending-style:pointer-events-none data-ending-style:translate-y-2 data-ending-style:duration-150 data-ending-style:ease-in motion-reduce:transition-none";
+
 interface ComposerBannerStackProps {
   readonly className?: string;
   readonly items: ReadonlyArray<ComposerBannerStackEntry>;
@@ -51,23 +128,54 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
   const peekRef = useRef<HTMLButtonElement>(null);
   const expandedItemsRef = useRef<HTMLDivElement>(null);
   const pendingFocusRef = useRef<"peek" | "notice" | null>(null);
+  const slotElementsRef = useRef(new Map<string, HTMLElement>());
   const expandedItemsId = useId();
-  const [requestedExitingItemId, setExitingItemId] = useState<string | null>(null);
-  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exitingItemId =
-    requestedExitingItemId !== null && items.some((item) => item.id === requestedExitingItemId)
-      ? requestedExitingItemId
-      : null;
+  // A dismissed notice leaves at once, even if its owner removes it asynchronously.
+  const [dismissedIds, setDismissedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const presentDismissedIds = [...dismissedIds].filter((id) =>
+    items.some((item) => item.id === id),
+  );
+  if (presentDismissedIds.length !== dismissedIds.size) {
+    setDismissedIds(new Set(presentDismissedIds));
+  }
+  const live = useMemo(
+    () => (dismissedIds.size === 0 ? items : items.filter((item) => !dismissedIds.has(item.id))),
+    [dismissedIds, items],
+  );
+  const liveKey = live.map((item) => item.id).join("\n");
+  const [stack, setStack] = useState<{
+    readonly liveKey: string;
+    readonly slots: ReadonlyArray<StackSlot>;
+  }>(() => ({
+    liveKey,
+    slots: live.map((item) => ({ item, exiting: false, wasFront: false, entering: false })),
+  }));
+  if (stack.liveKey !== liveKey) {
+    setStack({ liveKey, slots: reconcileStackSlots(stack.slots, live) });
+  }
+  // Content changes every parent render; only the set of notices goes through state.
+  const slots = stack.slots.map((slot) => {
+    const fresh = slot.exiting ? undefined : live.find((item) => item.id === slot.item.id);
+    return fresh && fresh !== slot.item ? { ...slot, item: fresh } : slot;
+  });
+  const exitingKey = slots.flatMap((slot) => (slot.exiting ? [slot.item.id] : [])).join("\n");
 
   useEffect(() => {
+    if (exitingKey === "") return;
+    let cancelled = false;
+    for (const id of exitingKey.split("\n")) {
+      const slot = slotElementsRef.current.get(id);
+      void (slot ? animationsSettled(slot, { subtree: true }) : Promise.resolve()).then(() => {
+        if (cancelled) return;
+        setStack((current) => ({ ...current, slots: releaseStackSlot(current.slots, id) }));
+      });
+    }
     return () => {
-      if (dismissTimeoutRef.current) {
-        clearTimeout(dismissTimeoutRef.current);
-      }
+      cancelled = true;
     };
-  }, []);
+  }, [exitingKey, slotElementsRef]);
 
-  if (items.length < 2 && stackExpanded) {
+  if (live.length < 2 && stackExpanded) {
     setStackExpanded(false);
   }
 
@@ -84,33 +192,31 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
     }
   }, [stackExpanded]);
 
-  if (items.length === 0) {
-    return null;
-  }
-
   // Activity stays attached. Urgency and severity only order the notices behind it.
-  const orderedItems = items.toSorted((a, b) => bannerPriority(a) - bannerPriority(b));
-  const frontItem = orderedItems[0];
-  if (!frontItem) {
+  const { front, stacked } = arrangeSlots(slots);
+  if (!front) {
     return null;
   }
-  const stackedItems = orderedItems.slice(1);
-  const hasStack = stackedItems.length > 0;
-  const showCollapsedStackCap = hasStack && exitingItemId !== frontItem.id;
-  const firstStackedItem = stackedItems[0];
+  const hasStack = stacked.length > 0;
+  const firstStackedItem = (stacked.find((slot) => !slot.exiting) ?? stacked[0])?.item;
+  const showCollapsedStackCap = firstStackedItem !== undefined && !front.exiting;
+  const stackLeaving = stacked.every((slot) => slot.exiting);
+
+  const slotProps = (slot: StackSlot) => ({
+    ref: (element: HTMLDivElement | null) => {
+      if (element) slotElementsRef.current.set(slot.item.id, element);
+      else slotElementsRef.current.delete(slot.item.id);
+    },
+    "data-enter": slot.entering ? "" : undefined,
+    "data-ending-style": slot.exiting ? "" : undefined,
+  });
 
   const requestDismiss = (item: ComposerBannerStackEntry) => {
-    if (!("onDismiss" in item) || !item.onDismiss || exitingItemId) {
+    if (!("onDismiss" in item) || !item.onDismiss || dismissedIds.has(item.id)) {
       return;
     }
-    setExitingItemId(item.id);
-    if (dismissTimeoutRef.current) {
-      clearTimeout(dismissTimeoutRef.current);
-    }
-    dismissTimeoutRef.current = setTimeout(() => {
-      dismissTimeoutRef.current = null;
-      item.onDismiss?.();
-    }, DISMISS_TRANSITION_MS);
+    setDismissedIds(new Set(dismissedIds).add(item.id));
+    item.onDismiss();
   };
 
   return (
@@ -121,13 +227,9 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
     >
       <div className={cn("relative flex flex-col-reverse", hasStack && stackExpanded && "z-50")}>
         <div
-          key={frontItem.id}
-          className={cn(
-            "relative z-10 transition-[opacity,translate] duration-220 ease-in",
-            exitingItemId === frontItem.id
-              ? "pointer-events-none translate-y-16 opacity-0"
-              : "opacity-100",
-          )}
+          key={front.item.id}
+          {...slotProps(front)}
+          className={cn("relative z-10", presenceClassName)}
           onPointerDownCapture={() => {
             setStackExpanded(false);
             const activeElement = document.activeElement;
@@ -140,10 +242,9 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
           }}
         >
           <ComposerBannerStackAlert
-            item={frontItem}
+            slot={front}
             attached
-            exiting={exitingItemId === frontItem.id}
-            onDismissRequest={() => requestDismiss(frontItem)}
+            onDismissRequest={() => requestDismiss(front.item)}
           />
         </div>
         {hasStack ? (
@@ -176,7 +277,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
               setStackExpanded(false);
             }}
           >
-            {showCollapsedStackCap && firstStackedItem ? (
+            {showCollapsedStackCap ? (
               <ComposerBanner.Peek
                 ref={peekRef}
                 variant={firstStackedItem.variant}
@@ -190,7 +291,9 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
                   pendingFocusRef.current = "notice";
                   setStackExpanded(true);
                 }}
-                className={cn(stackExpanded && "pointer-events-none invisible opacity-0")}
+                className={cn(
+                  (stackExpanded || stackLeaving) && "pointer-events-none invisible opacity-0",
+                )}
               />
             ) : null}
             <div
@@ -201,34 +304,25 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
               tabIndex={-1}
               data-composer-banner-stack-expanded-items="true"
               className={cn(
-                "grid transition-[grid-template-rows] duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                "grid transition-[grid-template-rows] duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
                 stackExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
               )}
             >
               <div className="min-h-0 overflow-hidden">
                 <div
                   className={cn(
-                    "transform-gpu space-y-2 pb-2 transition-[opacity,transform] duration-150 ease-out will-change-[opacity,transform]",
+                    "space-y-2 pb-2 transition-[opacity,translate,visibility] duration-150 ease-out motion-reduce:transition-none",
                     stackExpanded
                       ? "pointer-events-auto visible translate-y-0 opacity-100"
                       : "pointer-events-none invisible translate-y-1 opacity-0",
                   )}
                 >
-                  {stackedItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        "transition-[opacity,translate] duration-220 ease-in",
-                        exitingItemId === item.id
-                          ? "pointer-events-none translate-y-28 opacity-0"
-                          : "opacity-100",
-                      )}
-                    >
+                  {stacked.map((slot) => (
+                    <div key={slot.item.id} {...slotProps(slot)} className={presenceClassName}>
                       <ComposerBannerStackAlert
-                        item={item}
+                        slot={slot}
                         attached={false}
-                        exiting={exitingItemId === item.id}
-                        onDismissRequest={() => requestDismiss(item)}
+                        onDismissRequest={() => requestDismiss(slot.item)}
                       />
                     </div>
                   ))}
@@ -319,22 +413,25 @@ function NoticeDescription({ children, compact }: { children: ReactNode; compact
 }
 
 function ComposerBannerStackAlert({
-  item,
+  slot: { item, entering, exiting },
   attached,
-  exiting,
   onDismissRequest,
 }: {
-  readonly item: ComposerBannerStackEntry;
+  readonly slot: StackSlot;
   readonly attached: boolean;
-  readonly exiting: boolean;
   readonly onDismissRequest: () => void;
 }) {
+  const presence = {
+    "data-enter": entering ? "" : undefined,
+    "data-ending-style": exiting ? "" : undefined,
+  };
   if ("content" in item) {
     return (
       <ComposerBanner.Root
         density="comfortable"
         placement={attached ? "attached" : "floating"}
         variant={item.variant}
+        {...presence}
       >
         {item.content}
       </ComposerBanner.Root>
@@ -346,6 +443,7 @@ function ComposerBannerStackAlert({
       placement={attached ? "attached" : "floating"}
       variant={item.variant}
       density="comfortable"
+      {...presence}
     >
       <ComposerBanner.Row layout={item.compact ? "wrap-actions-narrow" : "wrap-actions"}>
         <ComposerBanner.Icon className="h-(--composer-banner-icon-column) self-start">
