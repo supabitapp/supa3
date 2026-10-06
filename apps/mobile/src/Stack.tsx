@@ -676,7 +676,10 @@ const RootStackConfig = createNativeStackNavigator({
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
-      options: GLASS_HEADER_OPTIONS,
+      options: {
+        ...GLASS_HEADER_OPTIONS,
+        headerTitleStyle: undefined,
+      },
     }),
     ThreadTerminal: createNativeStackScreen({
       screen: ThreadTerminalRouteScreen,

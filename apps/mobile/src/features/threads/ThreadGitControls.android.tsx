@@ -13,10 +13,6 @@ export function useThreadGitRightHeaderItems(_props: ThreadGitControlsProps) {
   return EMPTY_HEADER_ITEMS;
 }
 
-export function useThreadGitCenterHeaderItems(_props: ThreadGitControlsProps) {
-  return EMPTY_HEADER_ITEMS;
-}
-
 export function ThreadGitControls(_props: ThreadGitControlsProps) {
   return null;
 }
