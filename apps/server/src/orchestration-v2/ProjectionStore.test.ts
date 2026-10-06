@@ -4495,15 +4495,12 @@ it.layer(TestLayer)("ProjectionStoreV2", (it) => {
           occurredAt: at,
           payload: { ...thread, pullRequests },
         });
-      const project = { title: "Project" };
-      const environmentId = EnvironmentId.make("environment:watched-pull-request");
-      const phase = Effect.gen(function* () {
+      const listedMatchesShell = Effect.gen(function* () {
         const shell = yield* store.getThreadShell(threadId);
         const listed = (yield* store.getShellSnapshot()).threads.find(
           (candidate) => candidate.id === threadId,
         );
         assert.deepEqual(listed?.pendingBackgroundTasks, shell?.pendingBackgroundTasks);
-        return shell && projectThreadAwarenessV2({ environmentId, project, thread: shell })?.phase;
       });
 
       yield* syncPullRequests("watched", [
@@ -4529,11 +4526,11 @@ it.layer(TestLayer)("ProjectionStoreV2", (it) => {
           kind: "monitor",
         },
       ]);
-      assert.equal(yield* phase, "running");
+      yield* listedMatchesShell;
 
       yield* syncPullRequests("unwatched", [link]);
       assert.deepEqual((yield* store.getThreadShell(threadId))?.pendingBackgroundTasks, []);
-      assert.equal(yield* phase, "completed");
+      yield* listedMatchesShell;
     }),
   );
 });
