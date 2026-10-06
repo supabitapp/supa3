@@ -18,6 +18,7 @@ function composerControlClassName(
   size: ComposerControlSize,
   className?: string,
   activeBackground = true,
+  iconOnly = false,
 ) {
   return cn(
     "relative inline-flex shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-(--control-radius) border border-transparent text-base outline-none hover:bg-accent data-pressed:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 data-disabled:pointer-events-none data-disabled:opacity-64 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 transition-[box-shadow,scale] duration-150 ease-out [&:active:not([aria-haspopup])]:scale-[0.97] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:-mx-0.5 [&_svg[data-composer-control-icon]]:mx-0",
@@ -27,6 +28,7 @@ function composerControlClassName(
     activeBackground
       ? "aria-pressed:bg-accent aria-pressed:text-accent-foreground aria-pressed:hover:bg-accent/80"
       : undefined,
+    iconOnly ? "aspect-square px-0" : undefined,
     className,
   );
 }
@@ -34,17 +36,19 @@ function composerControlClassName(
 type ComposerControlProps = useRender.ComponentProps<"button"> & {
   size?: ComposerControlSize;
   activeBackground?: boolean;
+  iconOnly?: boolean;
 };
 
 export function ComposerControl({
   className,
   size = "sm",
   activeBackground = true,
+  iconOnly = false,
   render,
   ...props
 }: ComposerControlProps) {
   const defaultProps = {
-    className: composerControlClassName(size, className, activeBackground),
+    className: composerControlClassName(size, className, activeBackground, iconOnly),
     type: render ? undefined : ("button" as const),
   };
   return useRender({
