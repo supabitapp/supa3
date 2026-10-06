@@ -9,6 +9,7 @@ import type { ContextMenuItem } from "@supacode/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@supacode/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
 import { planPinnedReorder } from "@supacode/client-runtime/state/thread-sort";
+import { resolveThreadWorkingStartedAt } from "@supacode/client-runtime/state/models";
 import {
   effectiveSnoozed,
   type ThreadSnoozeShell,
@@ -865,8 +866,8 @@ export function isContextMenuPointerDown(input: {
 // unlabeled resting state — the agent stopped and is waiting on the user,
 // whether it finished, asked a question, or proposed a plan. Waiting
 // (runtime status "idle") is the agent stopped with background work that will
-// wake it (subagents, monitors): not the user's turn yet, so it renders grey
-// like working, not as a false Done. Commands it left running, such as a dev
+// wake it (subagents, monitors): it stays in flight like working, rather than
+// showing Done. Commands it left running, such as a dev
 // server, do not hold the thread; it reads as ready.
 // Unread completion is tracked separately: it describes whether a ready
 // thread needs attention, not what the thread is currently doing.
@@ -966,7 +967,21 @@ export function resolveSidebarV2TopStatus(input: {
 }
 
 export function shouldShowSidebarV2Duration(status: SidebarThreadStatus): boolean {
-  return status === "working";
+  return status === "working" || status === "waiting";
+}
+
+/** Settled background work has no active run timestamp; its timer continues
+    from the parent run's start while it waits for a wake. */
+export function resolveSidebarV2DurationStartedAt(
+  thread: Pick<SidebarThreadSummary, "latestRun" | "runtime">,
+): string | null {
+  const activityStartedAt = resolveThreadWorkingStartedAt(thread);
+  if (activityStartedAt !== null || thread.runtime?.status !== "idle") return activityStartedAt;
+  return (
+    [thread.latestRun?.startedAt, thread.latestRun?.requestedAt].find(
+      (timestamp) => timestamp != null && Number.isFinite(Date.parse(timestamp)),
+    ) ?? null
+  );
 }
 
 /** First VALID timestamp wins: `a ?? b` falls through on null, but a present-

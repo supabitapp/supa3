@@ -36,7 +36,6 @@ import {
   sortSettledThreads,
 } from "@supacode/client-runtime/state/thread-sort";
 import {
-  resolveThreadWorkingStartedAt,
   resolveThreadProviderStack,
   threadRuntimeCanArchive,
   type EnvironmentThreadShell,
@@ -192,9 +191,11 @@ import {
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
+  resolveSidebarV2DurationStartedAt,
   resolveThreadLastVisitedAt,
   shouldNavigateAfterThreadPark,
   shouldRecedeSidebarThread,
+  shouldShowSidebarV2Duration,
   sidebarListItemId,
   sidebarMarkerId,
   sidebarThreadKeyAtY,
@@ -1205,6 +1206,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = resolveSidebarThreadStatus(thread);
+  const showDuration = shouldShowSidebarV2Duration(status);
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1245,11 +1247,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         }
       : status === "waiting"
         ? {
-            // Waiting is calm background presence (post-settle background
-            // roster), not active progress, so the label keeps full strength.
             label: "Waiting",
             icon: null,
-            className: "text-muted-foreground",
+            className: "text-info",
           }
         : status === "approval"
           ? {
@@ -1954,11 +1954,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     jumpHintIndicatorsClassName,
                   )}
                 >
-                  {topStatus?.icon === "working" ? (
+                  {topStatus && showDuration ? (
                     <span className="whitespace-nowrap text-info">
-                      <span role="status">Working</span>{" "}
+                      <span role="status">{topStatus.label}</span>{" "}
                       <span aria-hidden>
-                        <WorkingDuration startedAt={resolveThreadWorkingStartedAt(thread)} />
+                        <WorkingDuration startedAt={resolveSidebarV2DurationStartedAt(thread)} />
                       </span>
                     </span>
                   ) : (
@@ -2048,7 +2048,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <span className={cn("contents", jumpHintIndicatorsClassName)}>
                 {terminalStatusIcon}
                 {prBadge}
-                {topStatus && topStatus.icon !== "working" ? (
+                {topStatus && !showDuration ? (
                   isWokeStatus ? (
                     <button
                       type="button"
