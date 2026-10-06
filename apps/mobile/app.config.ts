@@ -252,9 +252,6 @@ const config: ExpoConfig = {
             EXDevMenuShowsAtLaunch: false,
             EXDevMenuIsOnboardingFinished: true,
             EXDevMenuShowFloatingActionButton: false,
-            EXDevMenuMotionGestureEnabled: false,
-            EXDevMenuTouchGestureEnabled: false,
-            EXDevMenuKeyCommandsEnabled: false,
           }
         : {}),
       // The App Store screenshot harness rotates the iPad interface from
