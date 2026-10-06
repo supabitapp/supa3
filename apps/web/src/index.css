@@ -839,6 +839,26 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
   }
 
   html[data-theme-id="__default"] {
+    --stage-art-top: oklch(0.66 0.012 275);
+    --stage-art-mid: oklch(0.52 0.014 275);
+    --stage-art-bottom: oklch(0.36 0.012 275);
+    --stage-art-highlight: oklch(0.965 0.003 275);
+    --stage-art-secondary: oklch(0.74 0.012 275);
+    --stage-art-tertiary: oklch(0.7 0.016 275);
+    --stage-art-line: oklch(0.975 0.002 275);
+
+    @variant dark {
+      --stage-art-top: oklch(0.54 0.012 275);
+      --stage-art-mid: oklch(0.42 0.012 275);
+      --stage-art-bottom: oklch(0.27 0.01 275);
+      --stage-art-highlight: oklch(0.93 0.004 275);
+      --stage-art-secondary: oklch(0.68 0.012 275);
+      --stage-art-tertiary: oklch(0.64 0.016 275);
+      --stage-art-line: oklch(0.95 0.003 275);
+    }
+  }
+
+  html[data-theme-id="zenbones"] {
     --stage-art-top: oklch(0.66 0.055 237);
     --stage-art-mid: oklch(0.52 0.07 237);
     --stage-art-bottom: oklch(0.36 0.05 237);
@@ -862,7 +882,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     html[data-theme-id="supacode-chat"],
     html[data-theme-id="ocean"],
     html[data-theme-id="iris"],
-    html[data-theme-id="__default"]
+    html[data-theme-id="__default"],
+    html[data-theme-id="zenbones"]
   ) {
     --stage-night-top: color-mix(in oklch, var(--stage-art-top) 38%, var(--stage-night-base-top));
     --stage-night-mid: color-mix(in oklch, var(--stage-art-mid) 38%, var(--stage-night-base-mid));
@@ -891,7 +912,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     html[data-theme-id="ocean"],
     html[data-theme-id="ember"],
     html[data-theme-id="iris"],
-    html[data-theme-id="__default"]
+    html[data-theme-id="__default"],
+    html[data-theme-id="zenbones"]
   ) {
     --stage-art-celeste-highlight: var(--stage-art-highlight);
     --stage-art-celeste-secondary: var(--stage-art-secondary);

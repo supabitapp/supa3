@@ -6,14 +6,14 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#1c1917" />
+    <meta name="theme-color" content="#1d1e22" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
       (() => {
-        const LIGHT_BACKGROUND = "oklch(0.948141 0.003511 39.483)";
-        const DARK_BACKGROUND = "oklch(0.216115 0.006126 56.043)";
+        const LIGHT_BACKGROUND = "oklch(1 0 0)";
+        const DARK_BACKGROUND = "oklch(0.235659 0.007789 274.606)";
         const CUSTOM_THEMES_STORAGE_KEY = "supacode:themes:v1";
         const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "supacode:theme-follow-system";
         const THEME_APPEARANCE_MODE_STORAGE_KEY = "supacode:theme-appearance-mode";
@@ -21,13 +21,13 @@
         const SPLASH_COLORS = {
           light: {
             background: LIGHT_BACKGROUND,
-            foreground: "oklch(0.32609 0.017207 234.391)",
-            accent: "oklch(0.479743 0.082277 236.952)",
+            foreground: "oklch(0.273326 0.007496 274.683)",
+            accent: "oklch(0.273326 0.007496 274.683)",
           },
           dark: {
             background: DARK_BACKGROUND,
-            foreground: "oklch(0.793146 0.01314 236.676)",
-            accent: "oklch(0.659049 0.083617 239.667)",
+            foreground: "oklch(0.919248 0.005502 274.961)",
+            accent: "oklch(0.919248 0.005502 274.961)",
           },
         };
         // These are the runtime defaults used to complete a custom palette
@@ -121,23 +121,23 @@
               chrome: "oklch(0.225975 0.031062 293.741)",
             },
           },
-          graphite: {
+          zenbones: {
             light: {
-              background: "oklch(1 0 0)",
-              foreground: "oklch(0.273326 0.007496 274.683)",
-              accent: "oklch(0.273326 0.007496 274.683)",
-              chrome: "oklch(1 0 0)",
+              background: "oklch(0.948141 0.003511 39.483)",
+              foreground: "oklch(0.32609 0.017207 234.391)",
+              accent: "oklch(0.479743 0.082277 236.952)",
+              chrome: "oklch(0.948141 0.003511 39.483)",
             },
             dark: {
-              background: "oklch(0.235659 0.007789 274.606)",
-              foreground: "oklch(0.919248 0.005502 274.961)",
-              accent: "oklch(0.919248 0.005502 274.961)",
-              chrome: "oklch(0.235659 0.007789 274.606)",
+              background: "oklch(0.216115 0.006126 56.043)",
+              foreground: "oklch(0.793146 0.01314 236.676)",
+              accent: "oklch(0.659049 0.083617 239.667)",
+              chrome: "oklch(0.216115 0.006126 56.043)",
             },
           },
 
-          // Compatibility for saved Zenbones selections, including appearance mixes.
-          zenbones: {
+          // Compatibility for saved Graphite selections, including appearance mixes.
+          graphite: {
             light: { ...SPLASH_COLORS.light, chrome: LIGHT_BACKGROUND },
             dark: { ...SPLASH_COLORS.dark, chrome: DARK_BACKGROUND },
           },
@@ -407,14 +407,14 @@
       }
 
       body {
-        background: oklch(0.948141 0.003511 39.483);
-        color: oklch(0.32609 0.017207 234.391);
+        background: oklch(1 0 0);
+        color: oklch(0.273326 0.007496 274.683);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       }
 
       html.dark body {
-        background: oklch(0.216115 0.006126 56.043);
-        color: oklch(0.793146 0.01314 236.676);
+        background: oklch(0.235659 0.007789 274.606);
+        color: oklch(0.919248 0.005502 274.961);
       }
 
       #boot-shell {

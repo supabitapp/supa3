@@ -33,7 +33,6 @@ on:
           - ocean
           - ember
           - iris
-          - graphite
           - zenbones
           - all
 
