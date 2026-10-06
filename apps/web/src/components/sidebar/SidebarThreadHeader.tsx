@@ -32,7 +32,7 @@ export function SidebarThreadHeader({
   onNewProject,
 }: SidebarThreadHeaderProps) {
   return (
-    <div ref={rowRef} className="flex items-center gap-1 pl-2">
+    <div ref={rowRef} className="-mb-1.5 flex items-center gap-1 pl-2">
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-sidebar-muted-foreground/80">
         {scopeLabel ?? "Threads"}
       </span>
