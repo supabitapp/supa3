@@ -2565,13 +2565,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () =>
       deriveComposerSendState({
         prompt,
-        imageCount: composerImages.length + composerFiles.length,
+        imageCount:
+          composerImages.length + composerFiles.length + (editingQueuedAttachments?.length ?? 0),
         terminalContexts: composerTerminalContexts,
         elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
       }),
     [
       composerFiles.length,
       composerImages.length,
+      editingQueuedAttachments?.length,
       composerPreviewAnnotations.length,
       composerReviewComments.length,
       composerTerminalContexts,
@@ -5188,6 +5190,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // it, so they do not hold the composer open; only surface-internal chrome
   // does.
   const composerHasExpandedChrome =
+    isEditingQueuedMessage ||
     showComposerTopDrawer ||
     isTasksDrawerOpen ||
     composerMenuOpen ||

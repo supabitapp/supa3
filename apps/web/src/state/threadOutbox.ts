@@ -25,6 +25,8 @@ import {
   DraftId,
   finalizePromotedDraftThreadByRef,
   markPromotedDraftThreadByRef,
+  restoreFailedBackgroundDraftThread,
+  useComposerDraftStore,
 } from "../composerDraftStore";
 import { readFileAsDataUrl } from "../components/ChatView.logic";
 import { attachmentEnvironment } from "./attachments";
@@ -35,7 +37,7 @@ import { directThreadEnvironment } from "./threadCommands";
 import { readPreparedConnection } from "./session";
 import { OutboxTurn, OutboxAttachment } from "./threadOutboxSchema";
 import { browserThreadOutboxStorage } from "./threadOutboxStorage";
-import { randomUUID } from "../lib/utils";
+import { randomUUID, newThreadId } from "../lib/utils";
 import { assetEnvironment } from "./assets";
 
 const decodeUpload = Schema.decodeUnknownSync(AttachmentCreateUploadUrlInput);
@@ -297,6 +299,30 @@ export function enqueueThreadOutboxTurns(
   targets: ReadonlyArray<Parameters<typeof prepareThreadOutboxTurn>[0]>,
 ) {
   return webThreadOutbox.enqueueMany(targets.map(prepareThreadOutboxTurn));
+}
+
+/** Rejected thread creation needs fresh identifiers; uncertain sends cannot be edited. */
+export async function replaceThreadOutboxTurn(entry: PendingThreadTurn, payload: OutboxTurn) {
+  const threadId =
+    entry.status === "failed" && payload.input.bootstrap?.createThread
+      ? newThreadId()
+      : payload.input.threadId;
+  const changed = await webThreadOutbox.edit(
+    entry.id,
+    decodeTurn({
+      ...payload,
+      input: { ...payload.input, threadId, commandId: CommandId.make(randomUUID()) },
+    }),
+    scopedThreadKey(scopeThreadRef(payload.environmentId, threadId)),
+  );
+  if (!changed) throw new Error("Delivery has already started. Reconnect to confirm the message.");
+  if (threadId !== entry.payload.input.threadId && payload.draftId) {
+    const draftId = DraftId.make(payload.draftId);
+    const draft = useComposerDraftStore.getState().getDraftSession(draftId);
+    if (draft) restoreFailedBackgroundDraftThread(draftId, draft, threadId);
+    return draftId;
+  }
+  return null;
 }
 
 export function useThreadOutbox() {

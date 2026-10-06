@@ -539,7 +539,12 @@ import { RightPanelSheet } from "./RightPanelSheet";
 import { previewEnvironment } from "../state/preview";
 import { clampFileAttachmentUploadBytes } from "@supacode/client-runtime/state/attachments";
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import { enqueueThreadOutboxTurns, usePendingThreadCreation } from "../state/threadOutbox";
+import {
+  enqueueThreadOutboxTurns,
+  usePendingThreadCreation,
+  type PendingThreadTurn,
+} from "../state/threadOutbox";
+import { buildEditedThreadOutboxTurn, useThreadOutboxEditor } from "../state/threadOutboxEditing";
 import { ThreadOutboxControl } from "./chat/ThreadOutboxControl";
 import { fileAttachmentCapabilityBlockReason } from "./chat/composerAttachmentFiles";
 import { assetEnvironment } from "../state/assets";
@@ -1695,10 +1700,12 @@ export default function ChatView(props: ChatViewProps) {
   );
   const baseComposerDraftTarget: ScopedThreadRef | DraftId =
     routeKind === "server" ? routeThreadRef : props.draftId;
+  const outboxEditor = useThreadOutboxEditor(scopedThreadKey(routeThreadRef));
   const composerDraftTarget: ScopedThreadRef | DraftId =
-    editingQueuedRun === null
+    outboxEditor.editing?.draftTarget ??
+    (editingQueuedRun === null
       ? baseComposerDraftTarget
-      : queuedEditDraftTargetFor(editingQueuedRun.runId);
+      : queuedEditDraftTargetFor(editingQueuedRun.runId));
   const draftThread = useComposerDraftStore((store) =>
     routeKind === "server"
       ? store.getDraftSessionByRef(routeThreadRef)
@@ -4652,6 +4659,7 @@ export default function ChatView(props: ChatViewProps) {
   const beginEditingQueuedRun = useCallback(
     (request: EditQueuedRunRequest) => {
       if (!activeThread) return;
+      outboxEditor.editor.cancel();
       if (editingQueuedRun !== null && editingQueuedRun.runId !== request.runId) {
         clearComposerDraftContent(queuedEditDraftTargetFor(editingQueuedRun.runId));
       }
@@ -4674,6 +4682,7 @@ export default function ChatView(props: ChatViewProps) {
       clearComposerDraftContent,
       editingQueuedRun,
       queuedEditDraftTargetFor,
+      outboxEditor.editor,
       serverProjection,
       scheduleComposerFocus,
       setComposerDraftPrompt,
@@ -4690,6 +4699,18 @@ export default function ChatView(props: ChatViewProps) {
     queuedEditDraftTargetFor,
     scheduleComposerFocus,
   ]);
+  const beginEditingOutboxMessage = useCallback(
+    async (entry: PendingThreadTurn) => {
+      await outboxEditor.editor.begin(entry);
+      cancelEditingQueuedRun();
+      scheduleComposerFocus();
+    },
+    [outboxEditor.editor, cancelEditingQueuedRun, scheduleComposerFocus],
+  );
+  const cancelEditingOutboxMessage = useCallback(() => {
+    outboxEditor.editor.cancel();
+    scheduleComposerFocus();
+  }, [outboxEditor.editor, scheduleComposerFocus]);
   const removeEditingQueuedAttachment = useCallback((attachmentId: string) => {
     setEditingQueuedRun((current) =>
       current === null
@@ -8461,6 +8482,29 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  function captureOutboxAttachments(
+    attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
+  ) {
+    return attachments.map((attachment) => {
+      const uploaded =
+        attachment.file === null
+          ? getUploadedAttachments({ environmentId, images: [attachment] })?.[0]
+          : undefined;
+      if (attachment.file === null && uploaded === undefined)
+        throw new Error(`Attach '${attachment.name}' again before sending.`);
+      return {
+        id: attachment.id,
+        type: attachment.type,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        bytes: attachment.file,
+        ...(attachment.source ? { source: attachment.source } : {}),
+        ...(uploaded ? { uploaded } : {}),
+      };
+    });
+  }
+
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -8471,6 +8515,56 @@ export default function ChatView(props: ChatViewProps) {
     },
   ) => {
     e?.preventDefault();
+    if (outboxEditor.editing) {
+      if (directAnnotation || sendInFlightRef.current || isSavingQueuedEdit) return;
+      const sendContext = composerRef.current?.getSendContext();
+      if (!sendContext) return;
+      const { entry, keptAttachmentIds } = outboxEditor.editing;
+      sendInFlightRef.current = true;
+      setIsSavingQueuedEdit(true);
+      try {
+        const addedAttachments = [...sendContext.images, ...sendContext.files];
+        const payload = buildEditedThreadOutboxTurn({
+          entry,
+          text: promptRef.current,
+          keptAttachmentIds,
+          addedAttachments: captureOutboxAttachments(addedAttachments),
+          context: buildMessageContext({
+            terminalContexts: sendContext.terminalContexts,
+            reviewComments: sendContext.reviewComments,
+            previewAnnotations: sendContext.previewAnnotations,
+            threadContexts: sendContext.threadContexts,
+            attachments: addedAttachments.map((attachment) => ({
+              attachment,
+              attachmentId: attachment.id,
+            })),
+          }),
+        });
+        const nextDraftId = await outboxEditor.editor.save({
+          ...payload,
+          input: {
+            ...payload.input,
+            modelSelection: sendContext.selectedModelSelection,
+            runtimeMode,
+            interactionMode: sendContext.interactionMode,
+          },
+        });
+        setThreadError(threadId, null);
+        composerRef.current?.resetCursorState();
+        if (nextDraftId) void navigate({ to: "/draft/$draftId", params: { draftId: nextDraftId } });
+        scheduleComposerFocus();
+      } catch (error) {
+        setThreadError(
+          threadId,
+          error instanceof Error ? error.message : "Could not save the pending message.",
+        );
+      } finally {
+        sendInFlightRef.current = false;
+        setIsSavingQueuedEdit(false);
+      }
+      return;
+    }
+
     // Typed out in full rather than picked from the menu. Attachments or contexts
     // mean the user is sending a prompt, so those go through as usual.
     if (
@@ -9047,24 +9141,7 @@ export default function ChatView(props: ChatViewProps) {
           ? formatTerminalContextLabel(composerTerminalContextsSnapshot[0])
           : "New thread");
       const title = truncate(titleSeed);
-      const localAttachments = composerAttachmentsSnapshot.map((attachment) => {
-        const uploaded =
-          attachment.file === null
-            ? getUploadedAttachments({ environmentId, images: [attachment] })?.[0]
-            : undefined;
-        if (attachment.file === null && uploaded === undefined)
-          throw new Error(`Attach '${attachment.name}' again before sending.`);
-        return {
-          id: attachment.id,
-          type: attachment.type,
-          name: attachment.name,
-          mimeType: attachment.mimeType,
-          sizeBytes: attachment.sizeBytes,
-          bytes: attachment.file,
-          ...(attachment.source ? { source: attachment.source } : {}),
-          ...(uploaded ? { uploaded } : {}),
-        };
-      });
+      const localAttachments = captureOutboxAttachments(composerAttachmentsSnapshot);
       const targets =
         multipleModelSelections === null
           ? [
@@ -10593,7 +10670,9 @@ export default function ChatView(props: ChatViewProps) {
                           {!composerMounted ? null : (
                             <ChatComposer
                               reportedModelSelection={reportedModelSelection}
-                              multipleModelSelections={multipleModelSelections}
+                              multipleModelSelections={
+                                outboxEditor.editing ? null : multipleModelSelections
+                              }
                               supportsMultipleModels={
                                 serverConfig?.environment.capabilities.requiredWorktreeBootstrap ===
                                 true
@@ -10629,19 +10708,21 @@ export default function ChatView(props: ChatViewProps) {
                               canResume={resumableRunId !== null || hasHeldQueuedRuns}
                               isRevertingCheckpoint={isRevertingCheckpoint}
                               sendDisabledReason={
-                                pendingThreadCreation && !serverThread
-                                  ? "Task waiting to start"
-                                  : isEnvironmentChanging
-                                    ? "Preparing machine"
-                                    : isRevertingCheckpoint
-                                      ? "Rewinding conversation"
-                                      : feedbackUploading
-                                        ? "Sending feedback"
-                                        : threadDetailLoading && !activeEnvironmentUnavailable
-                                          ? "Messages loading"
-                                          : worktreeSetupBlocksSend
-                                            ? "Preparing worktree"
-                                            : projectCloneSendBlockReason
+                                outboxEditor.editing
+                                  ? null
+                                  : pendingThreadCreation && !serverThread
+                                    ? "Task waiting to start"
+                                    : isEnvironmentChanging
+                                      ? "Preparing machine"
+                                      : isRevertingCheckpoint
+                                        ? "Rewinding conversation"
+                                        : feedbackUploading
+                                          ? "Sending feedback"
+                                          : threadDetailLoading && !activeEnvironmentUnavailable
+                                            ? "Messages loading"
+                                            : worktreeSetupBlocksSend
+                                              ? "Preparing worktree"
+                                              : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree}
                               queuedRunsControl={
@@ -10650,6 +10731,9 @@ export default function ChatView(props: ChatViewProps) {
                                     environmentId={environmentId}
                                     threadId={threadId}
                                     projectId={isLocalDraftThread ? activeProject?.id : undefined}
+                                    editingMessageId={outboxEditor.editing?.entry.id ?? null}
+                                    onEditMessage={beginEditingOutboxMessage}
+                                    onCancelEdit={cancelEditingOutboxMessage}
                                   />
                                   {isServerThread && activeThread ? (
                                     <QueuedRunsControl
@@ -10685,16 +10769,22 @@ export default function ChatView(props: ChatViewProps) {
                                   : undefined
                               }
                               environmentUnavailable={activeEnvironmentUnavailableState}
-                              activePendingApproval={activePendingApproval}
-                              pendingApprovals={pendingApprovals}
-                              pendingUserInputs={pendingUserInputs}
-                              activePendingProgress={activePendingProgress}
+                              activePendingApproval={
+                                outboxEditor.editing ? null : activePendingApproval
+                              }
+                              pendingApprovals={outboxEditor.editing ? [] : pendingApprovals}
+                              pendingUserInputs={outboxEditor.editing ? [] : pendingUserInputs}
+                              activePendingProgress={
+                                outboxEditor.editing ? null : activePendingProgress
+                              }
                               activePendingResolvedAnswers={activePendingResolvedAnswers}
                               activePendingIsResponding={activePendingIsResponding}
                               activePendingDraftAnswers={activePendingDraftAnswers}
                               activePendingQuestionIndex={activePendingQuestionIndex}
                               respondingRequestIds={respondingRequestIds}
-                              showPlanFollowUpPrompt={showPlanFollowUpPrompt}
+                              showPlanFollowUpPrompt={
+                                outboxEditor.editing ? false : showPlanFollowUpPrompt
+                              }
                               activeProposedPlan={activeProposedPlan}
                               threadSyncPhase={
                                 activeEnvironmentUnavailable ? null : threadSyncPhase
@@ -10771,8 +10861,14 @@ export default function ChatView(props: ChatViewProps) {
                               setThreadError={setThreadError}
                               onExpandImage={onExpandTimelineImage}
                               onFileOpen={openFileAttachment}
-                              editingQueuedAttachments={composerEditingQueuedAttachments}
-                              onRemoveEditingQueuedAttachment={removeEditingQueuedAttachment}
+                              editingQueuedAttachments={
+                                outboxEditor.attachments ?? composerEditingQueuedAttachments
+                              }
+                              onRemoveEditingQueuedAttachment={
+                                outboxEditor.editing
+                                  ? outboxEditor.editor.removeAttachment
+                                  : removeEditingQueuedAttachment
+                              }
                             />
                           )}
                         </div>

@@ -148,6 +148,42 @@ beforeEach(() => {
 });
 
 describe("web thread outbox delivery", () => {
+  it("persists an edited message with a new command ID before delivering it", async () => {
+    const { enqueueThreadOutboxTurn, webThreadOutbox, replaceThreadOutboxTurn } =
+      await import("./threadOutbox");
+    await enqueueThreadOutboxTurn(target());
+    await webThreadOutbox.pause("message", true);
+    const entry = webThreadOutbox.getSnapshot()[0]!;
+    await replaceThreadOutboxTurn(entry, {
+      ...entry.payload,
+      input: {
+        ...entry.payload.input,
+        message: { ...entry.payload.input.message, text: "Edited in the composer" },
+      },
+    });
+    expect(harness.records.get("message")?.payload.input).toMatchObject({
+      commandId: "generated-command",
+      message: { messageId: "message", text: "Edited in the composer" },
+    });
+    expect(harness.records.get("message")?.paused).toBe(false);
+    harness.online = true;
+    await webThreadOutbox.drain();
+    expect(harness.run).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { label: "send" },
+      expect.objectContaining({
+        input: expect.objectContaining({
+          commandId: "generated-command",
+          message: expect.objectContaining({
+            messageId: "message",
+            text: "Edited in the composer",
+          }),
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("applies saved thread settings before delivering a plan follow-up", async () => {
     const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
     const original = target();
