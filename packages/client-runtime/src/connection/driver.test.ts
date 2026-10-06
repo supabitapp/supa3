@@ -168,6 +168,43 @@ describe("direct route connection attempts", () => {
     }),
   );
 
+  it.effect("keeps retrying when only a route that never answered is blocked", () =>
+    Effect.gen(function* () {
+      const result = yield* connectOverRoutes(
+        entry,
+        () => Effect.succeed("silent"),
+        (route) => Effect.fail(route.target === lan.target ? blocked() : transient()),
+      ).pipe(Effect.result);
+      expect(result).toMatchObject({
+        _tag: "Failure",
+        failure: { _tag: "ConnectionTransientError" },
+      });
+    }),
+  );
+
+  it.effect("keeps retrying a route that answered its check late", () =>
+    Effect.gen(function* () {
+      const checking = yield* Deferred.make<void>();
+      const fiber = yield* connectOverRoutes(
+        entry,
+        (route) =>
+          route.target === lan.target
+            ? Deferred.succeed(checking, undefined).pipe(
+                Effect.andThen(Effect.sleep("5 seconds")),
+                Effect.as("answered" as const),
+              )
+            : Effect.succeed("answered"),
+        (route) => Effect.fail(route.target === lan.target ? transient() : blocked()),
+      ).pipe(Effect.result, Effect.forkChild);
+      yield* Deferred.await(checking);
+      yield* TestClock.adjust("5 seconds");
+      expect(yield* Fiber.join(fiber)).toMatchObject({
+        _tag: "Failure",
+        failure: { _tag: "ConnectionTransientError" },
+      });
+    }),
+  );
+
   it.effect("reports a revoked credential instead of an unreachable LAN", () =>
     Effect.gen(function* () {
       const result = yield* connectOverRoutes(

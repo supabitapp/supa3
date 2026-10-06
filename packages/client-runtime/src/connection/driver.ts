@@ -82,10 +82,12 @@ export class ConnectionDriver extends Context.Service<
  * Silent routes are tried last, in preference order, once every slow check has
  * answered or timed out, since a check is not proof.
  *
- * The reported error is a transient one when a route that answered its check
- * failed transiently, so the supervisor keeps retrying a route that may come
- * back. A route that never answered cannot hide a blocked one, so a revoked
- * credential on a reachable route is reported instead of retried forever.
+ * Routes that answered their check, or have none, report first, and among them
+ * a transient failure wins so the supervisor keeps retrying a route that may
+ * come back. A blocked one, such as a revoked credential, is reported instead
+ * of a failure from a route that never answered, which would retry forever.
+ * Among routes that never answered a transient failure still wins, so another
+ * machine at a saved LAN address cannot stop the retries.
  */
 export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")(function* <R>(
   entry: ConnectionCatalogEntry,
@@ -103,9 +105,8 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     Effect.forkChild(Fiber.join(check).pipe(Effect.timeoutOption(ROUTE_CHECK_TIMEOUT_MS))),
   );
   const attemptScope = yield* Scope.Scope;
-  let transient: ConnectionAttemptError | undefined;
-  let blocked: ConnectionAttemptError | undefined;
-  let unreachable: ConnectionAttemptError | undefined;
+  const failures: Array<{ readonly error: ConnectionAttemptError; readonly answered: boolean }> =
+    [];
   // Each route gets its own scope so a half-open session closes before the next try.
   const attempt = Effect.fnUntraced(function* (route: ConnectionRoute, answered: boolean) {
     const routeScope = yield* Scope.fork(attemptScope);
@@ -127,9 +128,7 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     if (result._tag === "Success") return Option.some(result.success);
     // An incompatible server is the same server on every route.
     if (result.failure.reason === "unsupported") return yield* result.failure;
-    if (result.failure._tag === "ConnectionBlockedError") blocked ??= result.failure;
-    else if (answered) transient ??= result.failure;
-    else unreachable ??= result.failure;
+    failures.push({ error: result.failure, answered });
     return Option.none();
   });
   const slow: Array<number> = [];
@@ -168,10 +167,13 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     const lease = yield* attempt(routes[index]!, false);
     if (Option.isSome(lease)) return lease.value;
   }
+  const reported = (answered: boolean, tag: ConnectionAttemptError["_tag"]) =>
+    failures.find((failure) => failure.answered === answered && failure.error._tag === tag)?.error;
   return yield* (
-    transient ??
-      blocked ??
-      unreachable ??
+    reported(true, "ConnectionTransientError") ??
+      reported(true, "ConnectionBlockedError") ??
+      reported(false, "ConnectionTransientError") ??
+      reported(false, "ConnectionBlockedError") ??
       new ConnectionTransientError({
         reason: "endpoint-unavailable",
         detail: `${entry.target.label} did not answer on any saved route.`,
