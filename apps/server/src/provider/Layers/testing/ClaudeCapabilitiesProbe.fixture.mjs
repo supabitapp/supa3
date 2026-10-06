@@ -24,8 +24,16 @@ NodeFS.writeFileSync(
     mcpConfig,
   }),
 );
-const lines = NodeReadline.createInterface({ input: process.stdin });
+const settingsIndex = args.indexOf("--settings");
+const flagSettings = settingsIndex >= 0 ? JSON.parse(args[settingsIndex + 1]) : {};
 let initializeCount = 0;
+// Like Claude, only an SDK host that opts in gets the account check, and the
+// account's status lands after the first initialize response.
+function fastModeDisabledReason() {
+  if (flagSettings.fastMode !== true) return "sdk_opt_in_required";
+  return initializeCount++ > 0 ? "extra_usage_disabled" : undefined;
+}
+const lines = NodeReadline.createInterface({ input: process.stdin });
 lines.on("line", (line) => {
   const message = JSON.parse(line);
   if (message.type !== "control_request") return;
@@ -37,8 +45,7 @@ lines.on("line", (line) => {
       }) + "\n",
     );
   if (message.request?.subtype === "initialize") {
-    // Claude resolves the account's fast mode status after the first response.
-    const fastModeResolved = initializeCount++ > 0;
+    const reason = fastModeDisabledReason();
     reply({
       commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],
       agents: [],
@@ -46,11 +53,11 @@ lines.on("line", (line) => {
       available_output_styles: ["default"],
       models: [],
       account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
-      fast_mode_state: fastModeResolved ? "off" : "on",
-      ...(fastModeResolved ? { fast_mode_disabled_reason: "extra_usage_disabled" } : {}),
+      ...(reason ? { fast_mode_disabled_reason: reason } : {}),
     });
   }
-  // The probe follows initialize with get_usage on the same process.
+  // The probe follows initialize with get_usage, then initializes again, on
+  // the same process.
   if (message.request?.subtype === "get_usage") {
     reply({
       session: {},

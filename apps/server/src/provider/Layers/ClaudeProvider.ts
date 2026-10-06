@@ -2,7 +2,6 @@ import {
   type ClaudeSettings,
   type ModelCapabilities,
   type ServerProvider,
-  type ServerProviderModel,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
 } from "@supacode/contracts";
@@ -34,6 +33,7 @@ import {
   parseGenericCliVersion,
   providerModelsFromSettings,
   spawnAndCollect,
+  withoutOptionDescriptor,
   type ServerProviderDraft,
 } from "../providerSnapshot.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
@@ -251,32 +251,14 @@ type ClaudeCapabilitiesProbe = {
   readonly fastModeDisabledReason?: FastModeDisabledReason;
 };
 
-// Blocks that hold for every model until the account or environment changes.
-const ACCOUNT_FAST_MODE_BLOCKS: ReadonlySet<FastModeDisabledReason> = new Set([
+// Reasons that hold for every model until the account or environment changes.
+const ACCOUNT_FAST_MODE_DISABLED_REASONS: ReadonlySet<FastModeDisabledReason> = new Set([
   "free",
   "preference",
   "extra_usage_disabled",
   "not_first_party",
   "disabled_by_env",
 ]);
-
-function withoutFastMode(
-  models: ReadonlyArray<ServerProviderModel>,
-): ReadonlyArray<ServerProviderModel> {
-  return models.map((model) =>
-    model.capabilities?.optionDescriptors
-      ? {
-          ...model,
-          capabilities: {
-            ...model.capabilities,
-            optionDescriptors: model.capabilities.optionDescriptors.filter(
-              (descriptor) => descriptor.id !== "fastMode",
-            ),
-          },
-        }
-      : model,
-  );
-}
 
 function parseClaudeInitializationCommands(
   commands: ReadonlyArray<ClaudeSlashCommand> | undefined,
@@ -362,10 +344,6 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
  *
  * This is used as a fallback when `claude auth status` does not include
  * subscription type information.
- *
- * Fast mode availability is re-read after usage because Claude resolves the
- * account's fast mode status asynchronously, after the first initialization
- * response has already been sent.
  */
 const probeClaudeCapabilities = (
   claudeSettings: ClaudeSettings,
@@ -408,15 +386,17 @@ const probeClaudeCapabilities = (
               q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(),
             ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
           : undefined;
-        const reinitResult = includeAccountState
+        // Claude checks the account's fast mode status after its first
+        // initialize response, so read it again once usage has given that
+        // check time to land. A check that is still pending reports no reason,
+        // so that probe shows the toggle.
+        const latestInit = includeAccountState
           ? yield* Effect.tryPromise(() => q.reinitialize()).pipe(
               Effect.timeout(DEFAULT_TIMEOUT_MS),
-              Effect.result,
+              Effect.orElseSucceed(() => init),
             )
-          : undefined;
-        const fastModeDisabledReason = (
-          reinitResult && Result.isSuccess(reinitResult) ? reinitResult.success : init
-        ).fast_mode_disabled_reason;
+          : init;
+        const fastModeDisabledReason = latestInit.fast_mode_disabled_reason;
         const usage =
           usageResult && Result.isSuccess(usageResult)
             ? {
@@ -653,12 +633,12 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       : undefined;
   const fastModeBlocked =
     capabilities.fastModeDisabledReason !== undefined &&
-    ACCOUNT_FAST_MODE_BLOCKS.has(capabilities.fastModeDisabledReason);
+    ACCOUNT_FAST_MODE_DISABLED_REASONS.has(capabilities.fastModeDisabledReason);
   return buildServerProvider({
     presentation: CLAUDE_PRESENTATION,
     enabled: claudeSettings.enabled,
     checkedAt,
-    models: fastModeBlocked ? withoutFastMode(models) : models,
+    models: fastModeBlocked ? withoutOptionDescriptor(models, "fastMode") : models,
     slashCommands: dedupedSlashCommands,
     skills,
     probe: {

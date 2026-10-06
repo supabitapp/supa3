@@ -150,6 +150,25 @@ export function providerModelsFromSettings(
   return [...resolvedBuiltInModels, ...customEntries];
 }
 
+export function withoutOptionDescriptor(
+  models: ReadonlyArray<ServerProviderModel>,
+  descriptorId: string,
+): ReadonlyArray<ServerProviderModel> {
+  return models.map((model) =>
+    model.capabilities?.optionDescriptors
+      ? {
+          ...model,
+          capabilities: {
+            ...model.capabilities,
+            optionDescriptors: model.capabilities.optionDescriptors.filter(
+              (descriptor) => descriptor.id !== descriptorId,
+            ),
+          },
+        }
+      : model,
+  );
+}
+
 export function buildSelectOptionDescriptor(input: {
   readonly id: string;
   readonly label: string;

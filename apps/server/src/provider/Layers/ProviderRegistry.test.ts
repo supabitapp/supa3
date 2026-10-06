@@ -42,6 +42,10 @@ import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from ".
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import * as AntigravityInstallation from "../AntigravityInstallation.ts";
+import {
+  SYNTHETIC_CLAUDE_CAPABLE_MODEL,
+  SYNTHETIC_CLAUDE_MODEL_CATALOG,
+} from "../ClaudeModelCatalog.testFixtures.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import { applyProviderCompatibility } from "../providerCompatibility.ts";
 import * as ResetCreditCoordinator from "./resetCreditCoordinator.ts";
@@ -3055,27 +3059,30 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
 
       it.effect("hides fast mode only when the account cannot use it", () =>
         Effect.gen(function* () {
-          const fastModeModels = (fastModeDisabledReason?: FastModeDisabledReason) =>
+          const capableModelOptions = (fastModeDisabledReason?: FastModeDisabledReason) =>
             checkClaudeProviderStatus(
               defaultClaudeSettings,
               claudeCapabilities(fastModeDisabledReason ? { fastModeDisabledReason } : {}),
+              undefined,
+              undefined,
+              SYNTHETIC_CLAUDE_MODEL_CATALOG,
             ).pipe(
               Effect.map((status) =>
                 status.models
-                  .filter((model) =>
-                    model.capabilities?.optionDescriptors?.some(
-                      (descriptor) => descriptor.id === "fastMode",
-                    ),
-                  )
-                  .map((model) => model.slug),
+                  .find((model) => model.slug === SYNTHETIC_CLAUDE_CAPABLE_MODEL)
+                  ?.capabilities?.optionDescriptors?.map((descriptor) => descriptor.id),
               ),
             );
-          const available = yield* fastModeModels();
-          assert.include(available, "claude-opus-4-6");
-          assert.deepStrictEqual(yield* fastModeModels("network_error"), available);
-          assert.deepStrictEqual(yield* fastModeModels("model_not_allowed"), available);
-          assert.deepStrictEqual(yield* fastModeModels("extra_usage_disabled"), []);
-          assert.deepStrictEqual(yield* fastModeModels("not_first_party"), []);
+          const withFastMode = ["effort", "fastMode", "contextWindow"];
+          const withoutFastMode = ["effort", "contextWindow"];
+          assert.deepStrictEqual(yield* capableModelOptions(), withFastMode);
+          assert.deepStrictEqual(yield* capableModelOptions("network_error"), withFastMode);
+          assert.deepStrictEqual(yield* capableModelOptions("model_not_allowed"), withFastMode);
+          assert.deepStrictEqual(
+            yield* capableModelOptions("extra_usage_disabled"),
+            withoutFastMode,
+          );
+          assert.deepStrictEqual(yield* capableModelOptions("not_first_party"), withoutFastMode);
         }).pipe(
           Effect.provide(
             mockSpawnerLayer((args) => {

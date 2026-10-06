@@ -93,6 +93,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
           skills: [],
         } satisfies ServerProvider;
         let usageCalls = 0;
+        let reinitializeCalls = 0;
         const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
           assert.equal(options?.env?.CLAUDE_CONFIG_DIR, configDir);
           assert.equal(options?.env?.SUPACODE_WORKSPACE_PROBE, "owned-instance");
@@ -114,6 +115,12 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
             usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: async () => {
               usageCalls++;
               return { rate_limits_available: false, rate_limits: null };
+            },
+            reinitialize: () => {
+              reinitializeCalls++;
+              return Promise.reject<ClaudeSdk.SDKControlInitializeResponse>(
+                new Error("Workspace probes skip account state"),
+              );
             },
           } as ReturnType<typeof ClaudeSdk.query>;
         });
@@ -154,6 +161,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
           workspaces,
         );
         assert.equal(usageCalls, 0);
+        assert.equal(reinitializeCalls, 0);
       }).pipe(Effect.scoped),
   );
 
@@ -316,15 +324,13 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       const flagSettings = JSON.parse(invocation.args[settingsFlagIndex + 1] ?? "{}") as {
         readonly disableAllHooks?: boolean;
-        readonly fastMode?: boolean;
       };
       assert.equal(flagSettings.disableAllHooks, true);
-      assert.equal(flagSettings.fastMode, true);
     }).pipe(Effect.scoped),
   );
 });
 
-it.effect("preserves initialized capabilities when optional usage times out", () =>
+it.effect("preserves initialized capabilities when optional account requests fail", () =>
   Effect.gen(function* () {
     const usageStarted = yield* Deferred.make<void>();
     let abortSignal: AbortSignal | undefined;
@@ -334,11 +340,16 @@ it.effect("preserves initialized capabilities when optional usage times out", ()
         initializationResult: async () => ({
           account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
           commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],
+          fast_mode_disabled_reason: "not_first_party",
         }),
         usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () => {
           Deferred.doneUnsafe(usageStarted, Effect.void);
           return new Promise(() => {});
         },
+        reinitialize: () =>
+          Promise.reject<ClaudeSdk.SDKControlInitializeResponse>(
+            new Error("Repeated initialize is not supported"),
+          ),
       } as ReturnType<typeof ClaudeSdk.query>;
     });
     yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
@@ -355,6 +366,7 @@ it.effect("preserves initialized capabilities when optional usage times out", ()
       { name: "review", description: "Review changes", input: { hint: "[path]" } },
     ]);
     assert.equal(capabilities?.usage, undefined);
+    assert.equal(capabilities?.fastModeDisabledReason, "not_first_party");
     assert.equal(abortSignal?.aborted, true);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
