@@ -1955,8 +1955,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   )}
                 >
                   {topStatus?.icon === "working" ? (
-                    <span className="inline-flex items-center gap-1.5 text-info">
-                      <span role="status">Working</span>
+                    <span className="whitespace-nowrap text-info">
+                      <span role="status">Working</span>{" "}
                       <span aria-hidden>
                         <WorkingDuration startedAt={resolveThreadWorkingStartedAt(thread)} />
                       </span>
