@@ -1,0 +1,155 @@
+name: Mobile Store Review
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+      build_run_id:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform whose review submission should be retried
+        required: true
+        type: choice
+        options: [ios, android]
+      source_sha:
+        description: Exact source commit from the production build manifest
+        required: true
+        type: string
+      build_run_id:
+        description: Mobile Production run containing the signed builds
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      enabled: ${{ steps.matrix.outputs.enabled }}
+      platform: ${{ steps.matrix.outputs.platform }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mise
+      - id: artifacts
+        name: Verify the production workflow and available builds
+        uses: actions/github-script@v8
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        with:
+          script: |
+            const run_id = Number(process.env.BUILD_RUN_ID);
+            const { data: run } = await github.rest.actions.getWorkflowRun({...context.repo, run_id});
+            const { data: workflow } = await github.rest.actions.getWorkflow({...context.repo, workflow_id: 'mobile-eas-production.yml'});
+            if (run.workflow_id !== workflow.id || run.head_branch !== 'main') {
+              throw new Error('Store review requires a Mobile Production run from main.');
+            }
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {...context.repo, run_id, per_page: 100});
+            const names = artifacts.filter(artifact => !artifact.expired).map(artifact => artifact.name);
+            core.setOutput('present', names.some(name => /^mobile-store-build-(ios|android)-\d+$/.test(name)));
+            core.setOutput('names', JSON.stringify(names));
+      - name: Download exact build identities
+        if: steps.artifacts.outputs.present == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: mobile-store-build-*
+          path: ${{ runner.temp }}/store-builds
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - id: matrix
+        name: Select signed builds from the requested source commit
+        if: steps.artifacts.outputs.present == 'true'
+        env:
+          MOBILE_PLATFORM: ${{ inputs.platform }}
+          MOBILE_SOURCE_SHA: ${{ inputs.source_sha }}
+          MOBILE_BINARY_ARTIFACTS: ${{ steps.artifacts.outputs.names }}
+        run: node .github/scripts/mobile-store-release.mjs matrix "$RUNNER_TEMP/store-builds"
+
+  capture:
+    needs: prepare
+    if: needs.prepare.outputs.enabled == 'true'
+    uses: ./.github/workflows/mobile-showcase-screenshots.yml
+    with:
+      source_sha: ${{ inputs.source_sha }}
+      platform: ${{ needs.prepare.outputs.platform }}
+      appearance: dark
+      theme: supacode
+
+  submit:
+    name: Submit ${{ matrix.platform }} for review
+    needs: [prepare, capture]
+    if: needs.prepare.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 90
+    concurrency:
+      group: mobile-store-review-${{ matrix.platform }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      CI: "true"
+      FASTLANE_SKIP_UPDATE_CHECK: "true"
+      FASTLANE_HIDE_CHANGELOG: "true"
+      MOBILE_VERSION: ${{ matrix.version }}
+      MOBILE_APPLICATION_ID: ${{ matrix.identifier }}
+      MOBILE_PROJECT_FULL_NAME: ${{ matrix.projectFullName }}
+      MOBILE_BUILD_NUMBER: ${{ matrix.buildNumber }}
+      MOBILE_VERSION_CODE: ${{ matrix.versionCode }}
+      MOBILE_STORE_ASSETS: ${{ github.workspace }}/artifacts/app-store/fastlane/${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+      - uses: ./.github/actions/setup-mise
+      - name: Install asset tooling
+        run: mise exec -- vp install --filter=@supacode/scripts...
+      - name: Download captured screenshots
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.platform == 'ios' && 'app-store-connect-screenshots' || 'google-play-screenshots' }}
+          path: artifacts/app-store/screenshots/${{ matrix.platform == 'ios' && 'apple' || 'google-play' }}
+      - name: Prepare validated Fastlane screenshot folders
+        env:
+          MOBILE_PLATFORM: ${{ matrix.platform }}
+        run: node scripts/mobile-store-assets.ts "$MOBILE_PLATFORM"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4.8"
+          working-directory: apps/mobile
+          bundler-cache: true
+      - name: Load App Store Connect API key
+        if: matrix.platform == 'ios'
+        uses: ./.github/actions/load-release-secrets
+        with:
+          profile: app-store
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      - name: Load the existing EAS Google Play submission key
+        if: matrix.platform == 'android'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ runner.temp }}/google-play.json
+        run: |
+          node .github/scripts/export-play-credentials.mjs
+          echo "GOOGLE_PLAY_JSON_KEY_PATH=$GOOGLE_PLAY_JSON_KEY_PATH" >> "$GITHUB_ENV"
+      - name: Upload screenshots and submit the exact build for review
+        working-directory: apps/mobile
+        env:
+          MOBILE_PLATFORM: ${{ matrix.platform }}
+        run: bundle exec fastlane "$MOBILE_PLATFORM" review
+      - name: Remove Google Play credentials
+        if: always() && matrix.platform == 'android'
+        run: rm -f "$GOOGLE_PLAY_JSON_KEY_PATH"

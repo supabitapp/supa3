@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight / Google Play) or update (OTA)"
+        description: "build (production also uploads screenshots and submits for review) or update (OTA)"
         required: true
         type: choice
         default: build
@@ -52,6 +52,10 @@ on:
       - .github/actions/setup-mobile-release/**
       - .github/actions/build-mobile/**
       - .github/scripts/mobile-build-*.cjs
+      - .github/scripts/mobile-store-*.mjs
+      - .github/scripts/export-play-credentials.mjs
+      - .github/workflows/mobile-store-review.yml
+      - .github/workflows/mobile-showcase-screenshots.yml
 
 concurrency:
   group: mobile-eas-production
@@ -281,6 +285,30 @@ jobs:
         env:
           MOBILE_BINARY: ${{ steps.build.outputs.binary }}
         run: eas submit --platform "$MOBILE_PLATFORM" --profile "$MOBILE_PROFILE" --path "$MOBILE_BINARY" --non-interactive --wait
+      - name: Record exact production binary identity
+        if: steps.build.outcome == 'success' && env.MOBILE_PROFILE == 'production'
+        env:
+          MOBILE_BINARY: ${{ steps.build.outputs.binary }}
+          MOBILE_VERSION: ${{ steps.config.outputs.version }}
+          MOBILE_SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+          MOBILE_BUILD_MANIFEST: ${{ runner.temp }}/mobile-store-build/manifest.json
+          BUNDLETOOL_PATH: ${{ runner.temp }}/bundletool.jar
+        run: |
+          mkdir -p "$(dirname "$MOBILE_BUILD_MANIFEST")"
+          if [ "$MOBILE_PLATFORM" = android ]; then
+            curl --fail --location --retry 3 \
+              https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+              --output "$BUNDLETOOL_PATH"
+          fi
+          node .github/scripts/mobile-store-release.mjs create
+      - name: Save production build identity
+        if: steps.build.outcome == 'success' && env.MOBILE_PROFILE == 'production'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-store-build-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mobile-store-build/manifest.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Record completed store build
         if: steps.build.outcome == 'success'
         uses: actions/github-script@v8
@@ -314,3 +342,24 @@ jobs:
           message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
           eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
             --message "$message" --non-interactive
+
+  store-review:
+    name: Submit production apps for review
+    needs: [prepare, production]
+    if: >-
+      !cancelled() && needs.prepare.outputs.enabled == 'true' &&
+      github.ref == 'refs/heads/main' &&
+      (inputs.profile == '' || inputs.profile == 'production') && inputs.mode != 'update'
+    uses: ./.github/workflows/mobile-store-review.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+    permissions:
+      contents: read
+      actions: read
+    with:
+      platform: ${{ matrix.platform }}
+      source_sha: ${{ needs.prepare.outputs.sha }}
+      build_run_id: ${{ github.run_id }}
+    secrets: inherit

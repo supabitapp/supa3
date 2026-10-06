@@ -466,7 +466,7 @@ function hasSeedableSchema(dbPath: string): boolean {
   }
 }
 
-async function waitForSeedableSchema(dbPath: string, timeoutMs = 60_000): Promise<void> {
+export async function waitForSeedableSchema(dbPath: string, timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (hasSeedableSchema(dbPath)) return;
@@ -482,10 +482,6 @@ function seedDatabase(
   threads: ReadonlyArray<(typeof SHOWCASE_THREADS)[number]>,
   now: number,
 ): void {
-  // The environment server is already running against this file and keeps
-  // writing (migrations, projections) while we seed, so the write lock is
-  // genuinely contended — without a busy timeout `BEGIN IMMEDIATE` fails
-  // instantly with SQLITE_BUSY on a loaded machine.
   const database = new NodeSqlite.DatabaseSync(dbPath, { timeout: 30_000 });
   try {
     database.exec("BEGIN IMMEDIATE");

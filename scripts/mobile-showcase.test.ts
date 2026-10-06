@@ -41,6 +41,7 @@ const appleSpec: ShowcaseStoreAssetSpec = {
 
 const googleSpec: ShowcaseStoreAssetSpec = {
   store: "google-play",
+  screenshotType: "phoneScreenshots",
   directory: "google-play/phone",
   width: 1080,
   height: 1920,
@@ -289,6 +290,7 @@ it("configures every default device with an exact upload-ready store target", ()
     ]),
     [
       ["iphone-6.9", "portrait", "apple/iphone-6.9", 1320, 2868],
+      ["iphone-6.3", "portrait", "apple/iphone-6.3", 1206, 2622],
       ["iphone-6.5", "portrait", "apple/iphone-6.5", 1284, 2778],
       ["ipad-13", "landscape", "apple/ipad-13", 2752, 2064],
       ["pixel", null, "google-play/phone", 1080, 1920],

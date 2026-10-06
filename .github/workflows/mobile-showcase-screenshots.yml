@@ -1,6 +1,20 @@
 name: Mobile Showcase Screenshots
 
 on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+      appearance:
+        type: string
+        default: dark
+      theme:
+        type: string
+        default: supacode
+      source_sha:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       platform:
@@ -44,15 +58,17 @@ env:
 
 jobs:
   ios:
-    name: iPhone 6.9, iPhone 6.5, and iPad 13
+    name: iPhone 6.9, iPhone 6.3, iPhone 6.5, and iPad 13
     if: inputs.platform == 'all' || inputs.platform == 'ios'
     runs-on: depot-macos-26
     # Capturing every palette multiplies the device matrix, and only the one
     # native build is shared between them.
-    timeout-minutes: ${{ inputs.theme == 'all' && 350 || 60 }}
+    timeout-minutes: ${{ inputs.theme == 'all' && 350 || 120 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
@@ -75,6 +91,7 @@ jobs:
           path: artifacts/app-store/screenshots/apple/
           if-no-files-found: warn
           retention-days: 14
+          overwrite: true
 
   android:
     name: Android phone, 7-inch tablet, and 10-inch tablet
@@ -82,12 +99,14 @@ jobs:
     runs-on: ubuntu-24.04
     # Capturing every palette multiplies the device matrix, and only the one
     # native build is shared between them.
-    timeout-minutes: ${{ inputs.theme == 'all' && 350 || 60 }}
+    timeout-minutes: ${{ inputs.theme == 'all' && 350 || 120 }}
     env:
       SUPACODE_SHOWCASE_ANDROID_ABI: x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
@@ -136,3 +155,4 @@ jobs:
           path: artifacts/app-store/screenshots/google-play/
           if-no-files-found: warn
           retention-days: 14
+          overwrite: true
