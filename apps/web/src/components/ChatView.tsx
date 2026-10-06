@@ -10879,6 +10879,15 @@ export default function ChatView(props: ChatViewProps) {
     onAddProjectScript: saveProjectScript,
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
+    contextWindow: activeContextWindow,
+    forkFromItem:
+      serverVisibleTurnItems.findLast(
+        ({ item }) =>
+          item.type === "assistant_message" && item.status === "completed" && item.runId !== null,
+      ) ?? null,
+    forkDisabled:
+      isWorking || isRevertingCheckpoint || threadDetailLoading || activeEnvironmentUnavailable,
+    onForkFromRun,
   };
   const panelToggleControlProps = {
     showThreadPanelControl: routeKind === "server",

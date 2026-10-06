@@ -59,7 +59,7 @@ export function deriveLatestContextWindowSnapshot(
       durationMs: null,
       compactsAutomatically: true,
       autoCompactThreshold: null,
-      cost: null,
+      cost: providerThread?.contextUsage?.cost ?? null,
       updatedAt: liveUsage.updatedAt,
     };
   }
@@ -142,6 +142,16 @@ export function deriveLatestContextWindowSnapshot(
   }
 
   return null;
+}
+
+export function formatContextWindowPercentage(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 10) {
+    return `${value.toFixed(1).replace(/\.0$/, "")}%`;
+  }
+  return `${Math.round(value)}%`;
 }
 
 export function formatContextWindowTokens(value: number | null): string {

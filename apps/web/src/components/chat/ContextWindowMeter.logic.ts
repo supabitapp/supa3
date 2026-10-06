@@ -141,5 +141,14 @@ export function formatContextWindowCost(cost: {
   readonly currency: string;
 }): string {
   const fractionDigits = Math.abs(cost.amount) > 0 && Math.abs(cost.amount) < 0.01 ? 4 : 2;
-  return `${cost.currency} ${cost.amount.toFixed(fractionDigits)}`;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: cost.currency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(cost.amount);
+  } catch {
+    return `${cost.currency} ${cost.amount.toFixed(fractionDigits)}`;
+  }
 }

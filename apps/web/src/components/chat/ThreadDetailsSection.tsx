@@ -23,17 +23,18 @@ export function ThreadDetailsSection({
       {...props}
       aria-labelledby={showHeading ? headingId : undefined}
       aria-label={showHeading ? undefined : title}
-      className={cn("px-2 pt-2 pb-2.5", separated && "border-t border-border/65")}
+      className={cn("px-1.5 py-1", separated && "border-t border-border/65")}
     >
       <div
         className={cn(
-          "mb-1 flex min-h-8 min-w-0 items-center justify-between gap-2 px-1.5",
+          "mb-0.5 flex min-h-6 min-w-0 items-center justify-between gap-2 px-2",
+          actions && "pointer-coarse:min-h-11",
           !showHeading && "hidden",
         )}
       >
         <h3
           id={headingId}
-          className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none"
+          className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none text-balance"
         >
           {title}
         </h3>

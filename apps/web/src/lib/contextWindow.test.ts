@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as DateTime from "effect/DateTime";
-import { deriveLatestContextWindowSnapshot, formatContextWindowTokens } from "./contextWindow";
+import {
+  deriveLatestContextWindowSnapshot,
+  formatContextWindowPercentage,
+  formatContextWindowTokens,
+} from "./contextWindow";
 
 describe("V2 context window presentation", () => {
   it("uses retained compaction token data when available", () => {
@@ -79,5 +83,40 @@ describe("live provider-turn usage (#8144)", () => {
     });
     expect(snapshot?.maxTokens).toBeNull();
     expect(snapshot?.usedPercentage).toBeNull();
+  });
+
+  it("keeps the active provider thread's cost alongside newer live context usage", () => {
+    const snapshot = deriveLatestContextWindowSnapshot(
+      [],
+      {
+        usedTokens: 42_000,
+        maxTokens: 200_000,
+        updatedAt: "2026-08-27T00:01:00.000Z",
+      },
+      {
+        contextUsage: {
+          usedTokens: 20_000,
+          maxTokens: 200_000,
+          cost: { amount: 0.42, currency: "USD" },
+        },
+        updatedAt: DateTime.makeUnsafe("2026-08-27T00:00:00.000Z"),
+      },
+    );
+    expect(snapshot).toMatchObject({
+      usedTokens: 42_000,
+      usedPercentage: 21,
+      cost: { amount: 0.42, currency: "USD" },
+    });
+  });
+});
+
+describe("context percentage formatting", () => {
+  it("keeps small percentages readable and handles unknown usage", () => {
+    expect(formatContextWindowPercentage(0)).toBe("0%");
+    expect(formatContextWindowPercentage(1.25)).toBe("1.3%");
+    expect(formatContextWindowPercentage(68.25)).toBe("68%");
+    expect(formatContextWindowPercentage(100)).toBe("100%");
+    expect(formatContextWindowPercentage(null)).toBeNull();
+    expect(formatContextWindowPercentage(Number.NaN)).toBeNull();
   });
 });

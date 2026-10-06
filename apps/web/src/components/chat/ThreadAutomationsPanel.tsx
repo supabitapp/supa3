@@ -22,6 +22,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+  THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS,
+  THREAD_DETAILS_PANEL_TEXT_CLASS,
 } from "./threadDetailsPanelStyles";
 
 const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
@@ -160,13 +162,15 @@ export function ThreadAutomationsPanel(props: {
           <li
             key={task.id}
             className={cn(
-              "group flex items-center rounded-lg py-1.5",
+              "group flex items-center rounded-lg",
+              THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS,
               THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+              "h-auto min-h-8",
             )}
           >
             <AutomationStatusIcon task={task} now={now} />
             <div className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground/80">
+              <span className={cn("block truncate", THREAD_DETAILS_PANEL_TEXT_CLASS)}>
                 {task.title}
               </span>
               <p className="truncate text-2xs text-muted-foreground">

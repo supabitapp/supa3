@@ -26,6 +26,8 @@ import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
+import { ThreadDetailsUsage } from "./ThreadDetailsUsage";
+import { ThreadDetailsForkControl } from "./ThreadDetailsForkControl";
 
 export interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
@@ -65,6 +67,10 @@ export interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  contextWindow?: ComponentProps<typeof ThreadDetailsUsage>["usage"];
+  forkFromItem?: ComponentProps<typeof ThreadDetailsForkControl>["projectedItem"] | null;
+  forkDisabled?: boolean;
+  onForkFromRun?: ComponentProps<typeof ThreadDetailsForkControl>["onForkFromRun"];
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -189,6 +195,20 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 ) : null}
               </div>
             </ThreadDetailsSection>
+          ) : null}
+
+          {!props.draftId ? (
+            <ThreadDetailsUsage usage={props.contextWindow ?? null}>
+              {props.forkFromItem && props.onForkFromRun ? (
+                <ThreadDetailsForkControl
+                  key={props.threadId}
+                  environmentId={props.environmentId}
+                  projectedItem={props.forkFromItem}
+                  disabled={props.forkDisabled ?? false}
+                  onForkFromRun={props.onForkFromRun}
+                />
+              ) : null}
+            </ThreadDetailsUsage>
           ) : null}
 
           {density === "full" && !props.draftId ? (
