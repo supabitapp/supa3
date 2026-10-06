@@ -167,4 +167,18 @@ describe("direct route connection attempts", () => {
       });
     }),
   );
+
+  it.effect("reports a revoked credential instead of an unreachable LAN", () =>
+    Effect.gen(function* () {
+      const result = yield* connectOverRoutes(
+        entry,
+        (route) => Effect.succeed(route.target === lan.target ? "silent" : "answered"),
+        (route) => Effect.fail(route.target === lan.target ? transient() : blocked()),
+      ).pipe(Effect.result);
+      expect(result).toMatchObject({
+        _tag: "Failure",
+        failure: { _tag: "ConnectionBlockedError", reason: "authentication" },
+      });
+    }),
+  );
 });
