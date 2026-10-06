@@ -1,9 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentIdentificationMode } from "@supacode/contracts";
+import type { ThemeAppearance } from "@supacode/shared/themePalettes";
 import { type ComponentType, useId } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "release";
@@ -21,6 +23,15 @@ export function resolveSidebarStageBackdropVariant(
   if (normalized === "dev") return "dev";
   if (normalized === undefined || normalized === "latest") return "release";
   return null;
+}
+
+/** The release sleigh is a night scene, so it only renders under dark themes. */
+export function resolveVisibleStageBackdropVariant(
+  stageLabel: string | null,
+  appearance: ThemeAppearance,
+): SidebarStageBackdropVariant | null {
+  const variant = resolveSidebarStageBackdropVariant(stageLabel);
+  return variant === "release" && appearance !== "dark" ? null : variant;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
@@ -55,7 +66,8 @@ export function useEnvironmentStageLabel(): string | null {
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
-  return enabled ? resolveSidebarStageBackdropVariant(stageLabel) : null;
+  const { resolvedTheme } = useTheme();
+  return enabled ? resolveVisibleStageBackdropVariant(stageLabel, resolvedTheme) : null;
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */
