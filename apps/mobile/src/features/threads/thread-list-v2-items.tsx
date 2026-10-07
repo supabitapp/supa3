@@ -113,8 +113,6 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
 /** Rounded-row radius shared with the v1 sidebar rows. */
 const SIDEBAR_V2_ROW_RADIUS = 12;
 
-const SHELF_HEADER_HIT_SLOP = { top: 6, bottom: 6 };
-
 function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
@@ -182,9 +180,8 @@ function ThreadListV2Section(props: {
       }}
       className={className}
       disabled={props.disclosure.disabled}
-      hitSlop={SHELF_HEADER_HIT_SLOP}
       onPress={props.disclosure.onToggle}
-      style={({ pressed }) => ({ minHeight: 32, opacity: pressed ? 0.6 : 1 })}
+      style={({ pressed }) => ({ minHeight: 36, opacity: pressed ? 0.6 : 1 })}
     >
       {content}
     </Pressable>
