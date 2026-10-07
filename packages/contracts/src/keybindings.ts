@@ -120,6 +120,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "filePicker.toggle",
   "projectSearch.toggle",
   "projectPicker.toggle",
+  "projectPicker.noProject",
   ...PROJECT_PICKER_JUMP_KEYBINDING_COMMANDS,
   "usage.open",
   "automations.open",

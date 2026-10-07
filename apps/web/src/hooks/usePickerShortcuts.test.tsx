@@ -17,6 +17,11 @@ function Picker(props: Parameters<typeof usePickerShortcuts<string>>[0]) {
   return (
     <div>
       <input aria-label="Search projects" />
+      {props.fixedChoice ? (
+        <div>
+          {props.fixedChoice.item} {labels.get(props.fixedChoice.item)}
+        </div>
+      ) : null}
       {props.items.map((item) => (
         <div key={item}>
           {item} {labels.get(item)}
@@ -132,5 +137,55 @@ describe.each(["project", "host", "branch"] as const)("%s picker shortcuts", (pi
     expect(press("1").defaultPrevented).toBe(false);
     press("b", { metaKey: false, altKey: true });
     expect(select).toHaveBeenCalledWith("Beta");
+  });
+});
+
+describe("No project shortcut", () => {
+  it("keeps No project on zero while numbered projects follow search results", async () => {
+    const fixedChoice = { item: "No project", command: "projectPicker.noProject" as const };
+    await renderPicker({ fixedChoice });
+    expect(container.textContent).toContain("No project ⌘0");
+    expect(container.textContent).toContain("Alpha ⌘1");
+    await renderPicker({ fixedChoice, items: ["Gamma"] });
+    expect(container.textContent).toContain("Gamma ⌘1");
+    expect(press("0").defaultPrevented).toBe(true);
+    expect(select).toHaveBeenLastCalledWith("No project");
+    press("1");
+    expect(select).toHaveBeenLastCalledWith("Gamma");
+  });
+
+  it("does not select No project when unavailable or closed", async () => {
+    await renderPicker();
+    expect(press("0").defaultPrevented).toBe(false);
+    await renderPicker({
+      fixedChoice: { item: "No project", command: "projectPicker.noProject" },
+      open: false,
+    });
+    expect(press("0").defaultPrevented).toBe(false);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("honors customization and conflicting bindings for No project", async () => {
+    const fixedChoice = { item: "No project", command: "projectPicker.noProject" as const };
+    await renderPicker({
+      fixedChoice,
+      keybindings: compileResolvedKeybindingsConfig([
+        { key: "alt+n", command: "projectPicker.noProject", when: "projectPickerOpen" },
+      ]),
+    });
+    expect(container.textContent).toContain("No project ⌥N");
+    press("n", { metaKey: false, altKey: true });
+    expect(select).toHaveBeenCalledWith("No project");
+    select.mockClear();
+    await renderPicker({
+      fixedChoice,
+      keybindings: compileResolvedKeybindingsConfig([
+        { key: "mod+0", command: "projectPicker.noProject", when: "projectPickerOpen" },
+        { key: "mod+0", command: "chat.newLocal" },
+      ]),
+    });
+    expect(container.textContent).not.toContain("⌘0");
+    expect(press("0").defaultPrevented).toBe(false);
+    expect(select).not.toHaveBeenCalled();
   });
 });

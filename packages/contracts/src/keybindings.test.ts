@@ -132,6 +132,13 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedProjectPickerJump.command, "projectPicker.jump.1");
 
+    const parsedNoProject = yield* decode(KeybindingRule, {
+      key: "mod+0",
+      command: "projectPicker.noProject",
+      when: "projectPickerOpen && isDesktop",
+    });
+    assert.strictEqual(parsedNoProject.command, "projectPicker.noProject");
+
     const parsedHostPickerJump = yield* decode(KeybindingRule, {
       key: "mod+2",
       command: "hostPicker.jump.2",

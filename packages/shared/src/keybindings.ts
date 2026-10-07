@@ -207,6 +207,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     command,
     when: "projectPickerOpen && isDesktop",
   })),
+  { key: "mod+0", command: "projectPicker.noProject", when: "projectPickerOpen && isDesktop" },
   ...HOST_PICKER_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
     key: `mod+${index + 1}`,
     command,

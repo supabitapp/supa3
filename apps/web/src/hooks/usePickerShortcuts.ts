@@ -2,6 +2,7 @@ import {
   BRANCH_PICKER_JUMP_KEYBINDING_COMMANDS,
   HOST_PICKER_JUMP_KEYBINDING_COMMANDS,
   PROJECT_PICKER_JUMP_KEYBINDING_COMMANDS,
+  type KeybindingCommand,
   type ResolvedKeybindingsConfig,
 } from "@supacode/contracts";
 import { useEffect, useEffectEvent, useMemo } from "react";
@@ -15,17 +16,19 @@ const PICKER_COMMANDS = {
   branch: BRANCH_PICKER_JUMP_KEYBINDING_COMMANDS,
 };
 
-/** Number the supplied visible choices while their picker owns the keyboard. */
+/** Number visible choices, with an optional fixed shortcut for a special choice. */
 export function usePickerShortcuts<T>({
   picker,
   open,
   items,
+  fixedChoice,
   keybindings,
   onSelect,
 }: {
   picker: keyof typeof PICKER_COMMANDS;
   open: boolean;
   items: readonly T[];
+  fixedChoice?: { item: T; command: KeybindingCommand } | undefined;
   keybindings: ResolvedKeybindingsConfig;
   onSelect: (item: T) => void;
 }) {
@@ -42,6 +45,10 @@ export function usePickerShortcuts<T>({
   const labels = useMemo(() => {
     const mapping = new Map<T, string>();
     if (!open) return mapping;
+    if (fixedChoice) {
+      const label = shortcutLabelForCommand(keybindings, fixedChoice.command, { context });
+      if (label) mapping.set(fixedChoice.item, label);
+    }
     for (const [index, item] of items.entries()) {
       const command = commands[index];
       if (!command) break;
@@ -51,7 +58,7 @@ export function usePickerShortcuts<T>({
       if (label) mapping.set(item, label);
     }
     return mapping;
-  }, [open, items, keybindings, commands, context]);
+  }, [open, items, fixedChoice, keybindings, commands, context]);
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented || event.repeat || event.isComposing || isCommandPaletteOpen()) {
@@ -60,6 +67,12 @@ export function usePickerShortcuts<T>({
     const command = resolveShortcutCommand(event, keybindings, {
       context,
     });
+    if (fixedChoice && command === fixedChoice.command) {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelect(fixedChoice.item);
+      return;
+    }
     const index = commands.findIndex((candidate) => candidate === command);
     if (index === -1) return;
     // Even an empty slot belongs to the picker; it must not jump to a sidebar thread.

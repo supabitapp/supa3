@@ -711,6 +711,32 @@ describe.each(["project", "host", "branch"] as const)("%s picker default shortcu
 });
 
 describe("chat/editor shortcuts", () => {
+  it.each([
+    ["MacIntel", { metaKey: true }],
+    ["Linux", { ctrlKey: true }],
+  ])("scopes No project to the open desktop project picker on %s", (platform, modifiers) => {
+    const input = event({ key: "0", ...modifiers });
+    assert.strictEqual(
+      resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { isDesktop: true, projectPickerOpen: true },
+      }),
+      "projectPicker.noProject",
+    );
+    assert.isNull(
+      resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { isDesktop: true, projectPickerOpen: false },
+      }),
+    );
+    assert.isNull(
+      resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { isDesktop: false, projectPickerOpen: true },
+      }),
+    );
+  });
+
   it("matches chat.new shortcut", () => {
     assert.strictEqual(
       resolveShortcutCommand(event({ key: "o", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {

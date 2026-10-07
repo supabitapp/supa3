@@ -241,8 +241,10 @@ export function DraftHeroHeadline({
     }
   };
 
+  const noProjectItem =
+    scratchWorkspaceRoot === null ? undefined : { value: NO_PROJECT_VALUE, label: "No project" };
   const pickerItems = [
-    ...(scratchWorkspaceRoot === null ? [] : [{ value: NO_PROJECT_VALUE, label: "No project" }]),
+    ...(noProjectItem ? [noProjectItem] : []),
     ...menuEntries.map(({ group }) => ({ value: group.projectKey, label: group.displayName })),
     { value: "add-project", label: "Add project" },
   ];
@@ -288,6 +290,9 @@ export function DraftHeroHeadline({
     picker: "project",
     open: projectMenuOpen,
     items: filteredPickerItems.filter((item) => projectEntryByKey.has(item.value)),
+    fixedChoice: noProjectItem
+      ? { item: noProjectItem, command: "projectPicker.noProject" }
+      : undefined,
     keybindings,
     onSelect: (item) => {
       selectPickerItem(item);
@@ -363,11 +368,6 @@ export function DraftHeroHeadline({
                   <FolderPlusIcon className="size-4 shrink-0" />
                 )}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.value === NO_PROJECT_VALUE && noProjectShortcut ? (
-                  <Kbd variant="plain" className="ms-auto" aria-hidden>
-                    {noProjectShortcut}
-                  </Kbd>
-                ) : null}
                 {entry && showProjectEnvironments ? (
                   <ProjectEnvironmentBadge
                     group={entry.group}

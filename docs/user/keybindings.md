@@ -105,7 +105,8 @@ desktop app. Unknown keys evaluate to `false`.
 `mod+1` through `mod+9` jump to the first nine threads, or the first nine enabled
 choices in an open model, project, host, or branch picker. Picker shortcuts follow
 the visible search results. The new-thread project picker skips **No project** and
-**Add project**; the sidebar filter skips **All projects**. Branch shortcuts also
+**Add project** when numbering projects; **No project** has a fixed `mod+0` shortcut,
+including while filtering. The sidebar filter skips **All projects**. Branch shortcuts also
 work when choosing a worktree or automation base and a diff comparison target.
 They skip disabled refs, branch creation, PR checkout, and **Automatic** comparison.
 Those defaults use `isDesktop` so they do not steal the browser's tab-switch
