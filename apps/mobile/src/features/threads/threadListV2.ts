@@ -315,7 +315,7 @@ export interface ThreadListV2PendingListItem {
   readonly type: "v2-pending";
   readonly key: string;
   readonly pendingTask: PendingNewTask;
-  /** First queued row after the active block draws the PENDING divider. */
+  /** The first draft or queued row draws its section's divider. */
   readonly showPendingDivider: boolean;
   /** Same rule as the thread rows: a hairline unless the next row carries its
       own section rule or none follows. */
@@ -518,8 +518,8 @@ export function buildThreadListV2ListItems(input: {
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
-  /** Heads the shelves with "All caught up" when nothing sits above them; a
-      collapsed Pinned shelf counts, since pins can still need the user.
+  /** Heads the shelves with "All caught up" when the inbox has no threads,
+      queued tasks, or drafts; a collapsed Pinned shelf still counts.
       Callers turn it off while searching: results are a lookup, not the inbox. */
   readonly showActiveEmpty?: boolean;
 }): ThreadListV2ListItem[] {
@@ -552,13 +552,18 @@ export function buildThreadListV2ListItems(input: {
         input.queuedThreadKeys?.has(`${item.thread.environmentId}:${item.thread.id}`) === true,
     };
   });
-  const pendingItems = input.pendingTasks.map((pendingTask, index): ThreadListV2ListItem => ({
-    type: "v2-pending",
-    key: `v2-${pendingTask.key}`,
-    pendingTask,
-    showPendingDivider: index === 0,
-    showTrailingDivider: false,
-  }));
+  const pendingItems: ThreadListV2PendingListItem[] = [];
+  const draftItems: ThreadListV2PendingListItem[] = [];
+  for (const pendingTask of input.pendingTasks) {
+    const sectionItems = pendingTask.kind === "draft" ? draftItems : pendingItems;
+    sectionItems.push({
+      type: "v2-pending",
+      key: `v2-${pendingTask.key}`,
+      pendingTask,
+      showPendingDivider: sectionItems.length === 0,
+      showTrailingDivider: false,
+    });
+  }
   const workingCount = input.workingCount ?? 0;
   const workingShelfHeaderIndex = input.workingShelfHeaderIndex ?? null;
   const snoozedCount = input.snoozedCount ?? 0;
@@ -586,7 +591,7 @@ export function buildThreadListV2ListItems(input: {
     }
   }
   result.push(...threadItems.slice(pinnedEnd, activeEnd), ...pendingItems);
-  const nothingAboveShelves = result.length === 0;
+  const inboxEmpty = result.length === 0 && draftItems.length === 0;
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({
       type: "v2-working-shelf",
@@ -607,6 +612,7 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(snoozedShelfHeaderIndex, snoozedEnd));
   }
+  result.push(...draftItems);
   if (settledShelfHeaderIndex !== null && settledCount > 0) {
     result.push({
       type: "v2-settled-shelf",
@@ -617,7 +623,7 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(settledShelfHeaderIndex));
   }
-  if (input.showActiveEmpty === true && nothingAboveShelves && result.length > 0) {
+  if (input.showActiveEmpty === true && inboxEmpty && result.length > 0) {
     result.unshift({ type: "v2-active-empty", key: "v2-active-empty" });
   }
   // Hairlines depend on the final neighbour, so they are stamped after the

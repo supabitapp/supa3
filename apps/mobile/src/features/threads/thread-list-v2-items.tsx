@@ -310,8 +310,8 @@ const DRAFT_TASK_MENU_ACTIONS: MenuAction[] = [
  * Unsent work, in the same idiom as an active v2 row: it is work the user
  * wrote, so it reads like the thread it will become. The status slot says
  * what happens next, not where the item sits: "Sends on reconnect" stays
- * uncolored because nothing is asked of the user; "Draft" takes the amber the
- * web sidebar uses for drafts, because this one waits on the user.
+ * uncolored because nothing is asked of the user; "Draft" uses an amber pen
+ * like the web sidebar to identify work waiting on the user.
  */
 export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props: {
   readonly pendingTask: PendingNewTask;
@@ -321,7 +321,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   /** Drawn beside the label; ignored while the label is null. */
   readonly environmentMachine?: EnvironmentMachineKind;
   readonly pane?: "screen" | "sidebar";
-  /** Draws the "Unsent" divider above the first draft or queued row. */
+  /** Draws the "Drafts" or "Unsent" divider above the first row in each group. */
   readonly showPendingDivider: boolean;
   /** Keeps row hairlines inside a section; section headers draw their own rule. */
   readonly showTrailingDivider?: boolean;
@@ -502,7 +502,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
     </ControlPillMenu>
   );
   const pendingDivider = props.showPendingDivider ? (
-    <ThreadListV2SectionDivider label="Unsent" pane={props.pane} />
+    <ThreadListV2SectionDivider label={isDraft ? "Drafts" : "Unsent"} pane={props.pane} />
   ) : null;
 
   return (

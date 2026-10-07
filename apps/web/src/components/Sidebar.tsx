@@ -291,6 +291,7 @@ const PINNED_SHELF_EXPANDED_KEY = "supacode:sidebar:pinned-expanded";
 const SETTLED_SHELF_EXPANDED_KEY = "supacode:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "supacode:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "supacode:sidebar:working-expanded";
+const DRAFTS_SHELF_EXPANDED_KEY = "supacode:sidebar:drafts-expanded";
 const PARKED_ACTION_BUTTON_CLASS_NAME =
   "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 group-focus-within/sidebar-row:pointer-events-auto group-focus-within/sidebar-row:opacity-100";
 
@@ -621,9 +622,7 @@ function SortableThreadRow(props: {
   return props.children(bag);
 }
 
-// Unsent work shares one look: the new-thread draft rows and thread rows
-// with unsent composer text both use this tint and pen so they read alike.
-const draftSurfaceClassName = "bg-warning/4 hover:bg-warning/8";
+// The pen identifies unsent work on both draft sessions and existing threads.
 const draftPenClassName = "size-3 shrink-0 text-warning-foreground";
 
 // Structural list items — the section headers and the
@@ -858,7 +857,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           data-testid="sidebar-draft-row"
           className={cn(
             "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-            props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
+            props.isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
           )}
           onClick={handleActivate}
           onContextMenu={handleContextMenu}
@@ -940,10 +939,9 @@ function readSidebarDraftRow(routeDraftId: string | null) {
     : null;
 }
 
-// Draft sessions with user content, surfaced above the pinned block so an
-// interrupted "new thread" stays one click away. Self-contained (own store
-// subscription + closing divider) so per-keystroke composer updates
-// re-render only this block, never the whole sidebar. Vanishes at count 0.
+// Draft sessions with user content live just above the Settled section.
+// Own store subscriptions keep per-keystroke composer updates
+// inside this block. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   projectByKey: ReadonlyMap<string, EnvironmentProject>;
   projectDisplayNameByKey: ReadonlyMap<string, string>;
@@ -952,6 +950,15 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   onNavigateToDraft: (draftId: DraftId) => void;
   onDraftContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
 }) {
+  const [draftsShelfExpanded, setDraftsShelfExpanded] = useLocalStorage(
+    DRAFTS_SHELF_EXPANDED_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleDraftsShelf = useCallback(
+    () => setDraftsShelfExpanded((value) => !value),
+    [setDraftsShelfExpanded],
+  );
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
   // The open draft's row is FROZEN at the moment the draft became the route:
@@ -1012,9 +1019,21 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   if (drafts.length === 0) {
     return null;
   }
+  const renderedDrafts = draftsShelfExpanded
+    ? drafts
+    : drafts.filter(({ draftId }) => draftId === props.routeDraftId);
   return (
     <>
-      {drafts.map(({ composer, draftId, session }) => {
+      <li data-thread-selection-safe className="mx-0.5 h-8 list-none">
+        <CollapsibleSectionHeader
+          expanded={draftsShelfExpanded}
+          onClick={toggleDraftsShelf}
+          data-testid="sidebar-drafts-shelf-toggle"
+        >
+          {draftsShelfExpanded ? "Drafts" : `Drafts (${drafts.length})`}
+        </CollapsibleSectionHeader>
+      </li>
+      {renderedDrafts.map(({ composer, draftId, session }) => {
         const projectKey = `${session.environmentId}:${session.projectId}`;
         return (
           <SidebarDraftRow
@@ -1034,11 +1053,6 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
           />
         );
       })}
-      <li
-        aria-hidden
-        data-testid="sidebar-draft-divider"
-        className="mx-2.5 my-1.5 h-px list-none bg-sidebar-border/60"
-      />
     </>
   );
 });
@@ -1597,11 +1611,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       ? "bg-sidebar-row-active text-sidebar-foreground"
       : isSelected || props.sweepAction !== null
         ? "bg-sidebar-row-selected text-sidebar-foreground"
-        : hasUnsentDraft
-          ? cn(draftSurfaceClassName, "text-sidebar-foreground")
-          : shouldRecede
-            ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+        : shouldRecede
+          ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+          : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
     // Background work fades as a whole row, status label included, so it
     // takes less attention than rows that need a human (input, approval).
     shouldRecede &&
@@ -4910,17 +4922,7 @@ export default function Sidebar() {
                       );
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const items: ReactNode[] = [
-                      <SidebarDraftBlock
-                        key="draft-sessions"
-                        projectByKey={projectByKey}
-                        projectDisplayNameByKey={projectDisplayNameByKey}
-                        scopedProjectKeys={scopedProjectKeys}
-                        routeDraftId={routeDraftIdForRows}
-                        onNavigateToDraft={navigateToDraft}
-                        onDraftContextMenu={handleDraftContextMenu}
-                      />,
-                    ];
+                    const items: ReactNode[] = [];
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
@@ -5022,12 +5024,25 @@ export default function Sidebar() {
                           break;
                         case "settled-header":
                           items.push(
+                            workingThreads.length + snoozedThreads.length === 0 ? (
+                              <li
+                                key="settled-shelf-spacer"
+                                aria-hidden
+                                className="mt-auto h-0 list-none"
+                              />
+                            ) : null,
+                            <SidebarDraftBlock
+                              key="draft-sessions"
+                              projectByKey={projectByKey}
+                              projectDisplayNameByKey={projectDisplayNameByKey}
+                              scopedProjectKeys={scopedProjectKeys}
+                              routeDraftId={routeDraftIdForRows}
+                              onNavigateToDraft={navigateToDraft}
+                              onDraftContextMenu={handleDraftContextMenu}
+                            />,
                             <SidebarSectionHeader
                               key="settled-shelf-header"
                               marker="settled-header"
-                              className={cn(
-                                workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
-                              )}
                               label={
                                 settledShelfExpanded
                                   ? "Settled"
