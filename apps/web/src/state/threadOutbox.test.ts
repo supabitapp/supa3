@@ -100,7 +100,7 @@ vi.mock("../composerDraftStore", () => ({
   markPromotedDraftThreadByRef: harness.marked,
   finalizePromotedDraftThreadByRef: harness.finalized,
 }));
-vi.mock("../components/ChatView.logic", () => ({
+vi.mock("../lib/imageCompression", () => ({
   readFileAsDataUrl: async (file: File) => `data:${file.type};base64,${btoa(await file.text())}`,
 }));
 vi.mock("@supacode/client-runtime/state/runtime", async (importOriginal) => ({

@@ -29,7 +29,7 @@ import {
   restoreFailedBackgroundDraftThread,
   useComposerDraftStore,
 } from "../composerDraftStore";
-import { readFileAsDataUrl } from "../components/ChatView.logic";
+import { readFileAsDataUrl } from "../lib/imageCompression";
 import { attachmentEnvironment } from "./attachments";
 import { environmentPresentations } from "./presentation";
 import { environmentShell } from "./shell";

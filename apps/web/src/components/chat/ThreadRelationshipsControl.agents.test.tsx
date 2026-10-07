@@ -32,6 +32,10 @@ vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => ({ snapshots: [] }),
 }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.command }));
+vi.mock("../../state/threadOutbox", () => ({
+  readPendingThreadCreation: () => null,
+  webThreadOutbox: { isLoaded: () => true, subscribe: () => () => {} },
+}));
 vi.mock("../../state/use-orchestration-command", () => ({
   useOrchestrationCommand: () => state.command,
 }));
