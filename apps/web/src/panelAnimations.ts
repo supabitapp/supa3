@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { type PanelAnimationDurationMs } from "@supacode/contracts/settings";
 
 import { useMediaQuery } from "./hooks/useMediaQuery";
-import { useClientSettings } from "./hooks/useSettings";
+
+const PANEL_ANIMATION_DURATION_MS = 200;
 
 const PanelAnimationSuppressionContext = createContext(false);
 
@@ -33,21 +33,21 @@ export function usePanelNavigationSuppression(navigationKey: string): boolean {
 
 export function usePanelAnimationSettings(): {
   active: boolean;
-  durationMs: PanelAnimationDurationMs;
+  durationMs: number;
 } {
-  const durationMs = useClientSettings((settings) => settings.panelAnimationDurationMs);
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const suppressed = useContext(PanelAnimationSuppressionContext);
-  return { active: durationMs > 0 && !prefersReducedMotion && !suppressed, durationMs };
+  const active = !prefersReducedMotion && !suppressed;
+  return { active, durationMs: active ? PANEL_ANIMATION_DURATION_MS : 0 };
 }
 
-/** Keeps closing panel content mounted until its opt-in transition ends. */
+/** Keeps closing panel content mounted until its transition ends. */
 export function usePanelPresence<T>(
   open: boolean,
   value: T | null,
   animated: boolean,
   scopeKey: string | null,
-  durationMs: PanelAnimationDurationMs,
+  durationMs: number,
 ): { present: boolean; value: T | null } {
   const [present, setPresent] = useState(open);
   const [retained, setRetained] = useState<{ scopeKey: string | null; value: T | null } | null>(

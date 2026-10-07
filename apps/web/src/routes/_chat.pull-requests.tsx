@@ -2135,7 +2135,7 @@ function PullRequestsRouteView() {
           className={cn(
             "shrink-0",
             rightPanelState.isOpen ? "-ml-3 w-0" : "w-7 sm:w-5",
-            panelAnimationsActive && "transition-[width,margin] ease-out",
+            panelAnimationsActive && "transition-[width,margin] ease-drawer",
           )}
           style={
             panelAnimationsActive
