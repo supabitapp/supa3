@@ -352,6 +352,13 @@ and `creationSource: "mcp"`; provider output uses `creationSource: "provider"`.
 Actor and ingress are separate so agent-authored user-role messages remain
 distinguishable from human-authored messages.
 
+List, read, and launch results include `link`, a Markdown link of the form
+`[title](supacode-thread://v1/<environmentId>/<threadId>)` that clients open as the
+thread. List and read results also report `snoozed` and `snoozedUntil`, and
+`supacode_thread_list` filters on `snoozed`. The server's `isSnoozed` follows the
+client's `effectiveSnoozed`, so agents and the sidebar agree: a snoozed thread
+wakes early when it has a pending request, fails, or completes after the snooze.
+
 ### `supacode_thread_update`
 
 Updates metadata for the calling thread or any other thread in the environment.
