@@ -610,7 +610,25 @@ export function BranchToolbarBranchSelector({
     }
   }
 
-  function renderPickerItem(itemValue: string, index: number) {
+  function isRefSelectable(itemValue: string) {
+    const refName = branchByName.get(itemValue);
+    return (
+      refName !== undefined &&
+      canUpdateThreadBranch &&
+      (canWriteSourceControl ||
+        isSelectingWorktreeBase ||
+        Boolean(
+          activeProjectCwd &&
+          resolveBranchSelectionTarget({
+            activeProjectCwd,
+            activeWorktreePath,
+            refName,
+          }).reuseExistingWorktree,
+        ))
+    );
+  }
+
+  function renderPickerItem(itemValue: string, index: number, jumpLabel: string | null) {
     if (checkoutPullRequestItemValue && itemValue === checkoutPullRequestItemValue) {
       return (
         <ComboboxItem
@@ -655,17 +673,8 @@ export function BranchToolbarBranchSelector({
         projectCwd={activeProjectCwd}
         index={index}
         value={itemValue}
-        disabled={
-          !canUpdateThreadBranch ||
-          (!canWriteSourceControl &&
-            !isSelectingWorktreeBase &&
-            (!activeProjectCwd ||
-              !resolveBranchSelectionTarget({
-                activeProjectCwd,
-                activeWorktreePath,
-                refName,
-              }).reuseExistingWorktree))
-        }
+        disabled={!isRefSelectable(itemValue)}
+        jumpLabel={jumpLabel}
         onClick={() => selectPickerItem(itemValue)}
         onContextMenu={(event) => handleBranchContextMenu(event, itemValue)}
       />
@@ -688,6 +697,7 @@ export function BranchToolbarBranchSelector({
       onLoadNext={branchRefState.loadNext}
       statusText={branchStatusText}
       renderItem={renderPickerItem}
+      isItemShortcutEnabled={isRefSelectable}
       getItemType={(item) =>
         item === checkoutPullRequestItemValue
           ? "checkout-pull-request"

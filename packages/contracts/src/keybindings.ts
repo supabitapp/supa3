@@ -34,6 +34,42 @@ export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
 export type ModelPickerJumpKeybindingCommand =
   (typeof MODEL_PICKER_JUMP_KEYBINDING_COMMANDS)[number];
 
+export const PROJECT_PICKER_JUMP_KEYBINDING_COMMANDS = [
+  "projectPicker.jump.1",
+  "projectPicker.jump.2",
+  "projectPicker.jump.3",
+  "projectPicker.jump.4",
+  "projectPicker.jump.5",
+  "projectPicker.jump.6",
+  "projectPicker.jump.7",
+  "projectPicker.jump.8",
+  "projectPicker.jump.9",
+] as const;
+
+export const HOST_PICKER_JUMP_KEYBINDING_COMMANDS = [
+  "hostPicker.jump.1",
+  "hostPicker.jump.2",
+  "hostPicker.jump.3",
+  "hostPicker.jump.4",
+  "hostPicker.jump.5",
+  "hostPicker.jump.6",
+  "hostPicker.jump.7",
+  "hostPicker.jump.8",
+  "hostPicker.jump.9",
+] as const;
+
+export const BRANCH_PICKER_JUMP_KEYBINDING_COMMANDS = [
+  "branchPicker.jump.1",
+  "branchPicker.jump.2",
+  "branchPicker.jump.3",
+  "branchPicker.jump.4",
+  "branchPicker.jump.5",
+  "branchPicker.jump.6",
+  "branchPicker.jump.7",
+  "branchPicker.jump.8",
+  "branchPicker.jump.9",
+] as const;
+
 const THREAD_KEYBINDING_COMMANDS = [
   "thread.stop",
   "thread.steerQueuedMessage",
@@ -84,6 +120,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "filePicker.toggle",
   "projectSearch.toggle",
   "projectPicker.toggle",
+  ...PROJECT_PICKER_JUMP_KEYBINDING_COMMANDS,
   "usage.open",
   "automations.open",
   "theme.select",
@@ -94,12 +131,14 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "composer.sendBackground",
   "composer.sendAndNewThread",
   "composer.host",
+  ...HOST_PICKER_JUMP_KEYBINDING_COMMANDS,
   "composer.cycleHost",
   "composer.effort",
   "composer.mode",
   "composer.workspace",
   "composer.previousWorktree",
   "composer.branch",
+  ...BRANCH_PICKER_JUMP_KEYBINDING_COMMANDS,
   "chat.new",
   "chat.newLocal",
   "chat.newWithoutProject",

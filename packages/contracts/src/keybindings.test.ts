@@ -125,6 +125,27 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedModelPickerJump.command, "modelPicker.jump.1");
 
+    const parsedProjectPickerJump = yield* decode(KeybindingRule, {
+      key: "mod+1",
+      command: "projectPicker.jump.1",
+      when: "projectPickerOpen && isDesktop",
+    });
+    assert.strictEqual(parsedProjectPickerJump.command, "projectPicker.jump.1");
+
+    const parsedHostPickerJump = yield* decode(KeybindingRule, {
+      key: "mod+2",
+      command: "hostPicker.jump.2",
+      when: "hostPickerOpen && isDesktop",
+    });
+    assert.strictEqual(parsedHostPickerJump.command, "hostPicker.jump.2");
+
+    const parsedBranchPickerJump = yield* decode(KeybindingRule, {
+      key: "mod+3",
+      command: "branchPicker.jump.3",
+      when: "branchPickerOpen && isDesktop",
+    });
+    assert.strictEqual(parsedBranchPickerJump.command, "branchPicker.jump.3");
+
     const parsedThreadPrevious = yield* decode(KeybindingRule, {
       key: "mod+shift+[",
       command: "thread.previous",

@@ -32,6 +32,7 @@ import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { usePickerShortcuts } from "../hooks/usePickerShortcuts";
 import { useTheme } from "../hooks/useTheme";
 import {
   buildFileDiffContentVersion,
@@ -57,6 +58,7 @@ import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/Ann
 import { DiffFileTree } from "./diffs/DiffFileTree";
 import { diffFileTreeEntries } from "./diffs/diffFileTree.logic";
 import { Button } from "./ui/button";
+import { Kbd } from "./ui/kbd";
 import { MorphIcon } from "~/components/MorphIcon";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
 import { Switch } from "./ui/switch";
@@ -82,7 +84,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
-import { serverEnvironment } from "../state/server";
+import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
@@ -210,6 +212,8 @@ export default function DiffPanel({
     Schema.Boolean,
   );
   const [baseRefQuery, setBaseRefQuery] = useState("");
+  const [baseRefPickerOpen, setBaseRefPickerOpen] = useState(false);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [collapsedDiffFiles, setCollapsedDiffFiles] = useState<CollapsedDiffFilesState>(() => ({
     scopeKey: null,
     fileKeys: EMPTY_COLLAPSED_DIFF_FILE_KEYS,
@@ -463,6 +467,26 @@ export default function DiffPanel({
     ...(baseRefQuery.trim().length === 0 ? [AUTOMATIC_BASE_REF] : []),
     ...matchingBaseRefChoices.map(valueForBaseRefChoice),
   ];
+  const showBaseRefPicker =
+    selectedRunId === null && selectedGitScope === "branch" && Boolean(selectedGitSource?.baseRef);
+  const handleBaseRefPickerOpenChange = (open: boolean) => {
+    setBaseRefPickerOpen(open);
+    if (!open) setBaseRefQuery("");
+  };
+  const baseRefJumpLabels = usePickerShortcuts({
+    picker: "branch",
+    open: baseRefPickerOpen && showBaseRefPicker,
+    items: filteredBaseRefItems.filter((item) => item !== AUTOMATIC_BASE_REF),
+    keybindings,
+    onSelect: (item) => {
+      selectBranchBaseRef(item);
+      handleBaseRefPickerOpenChange(false);
+    },
+  });
+  if (!showBaseRefPicker && baseRefPickerOpen) {
+    setBaseRefPickerOpen(false);
+    setBaseRefQuery("");
+  }
   const gitDiff = selectedGitSource?.diff;
 
   const selectedPatch = selectedTurn ? activeCheckpointDiff.data?.diff : gitDiff;
@@ -808,7 +832,7 @@ export default function DiffPanel({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
-        {selectedRunId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
+        {showBaseRefPicker && selectedGitSource && (
           <div
             className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
             aria-label={`Comparing ${selectedGitSource.headRef ?? "HEAD"} against ${selectedGitSource.baseRef}`}
@@ -828,9 +852,8 @@ export default function DiffPanel({
               items={baseRefItems}
               filteredItems={filteredBaseRefItems}
               value={selectedBaseRef ?? AUTOMATIC_BASE_REF}
-              onOpenChange={(open) => {
-                if (!open) setBaseRefQuery("");
-              }}
+              open={baseRefPickerOpen}
+              onOpenChange={handleBaseRefPickerOpenChange}
               onValueChange={(value) => {
                 if (!value) return;
                 selectBranchBaseRef(value === AUTOMATIC_BASE_REF ? null : value);
@@ -879,7 +902,14 @@ export default function DiffPanel({
                         value={item}
                       >
                         <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center overflow-hidden">
-                          <span className="block min-w-0 truncate pe-2">{choice.label}</span>
+                          <span className="flex min-w-0 items-center gap-2 pe-2">
+                            <span className="min-w-0 flex-1 truncate">{choice.label}</span>
+                            {baseRefJumpLabels.has(item) ? (
+                              <Kbd variant="plain" aria-hidden>
+                                {baseRefJumpLabels.get(item)}
+                              </Kbd>
+                            ) : null}
+                          </span>
                           {hasBoth ? (
                             <div
                               className="flex justify-end"

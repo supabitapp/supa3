@@ -145,6 +145,8 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useClientSettings } from "../hooks/useSettings";
+import { usePickerShortcuts } from "../hooks/usePickerShortcuts";
+import { Kbd } from "./ui/kbd";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -2467,6 +2469,20 @@ export default function Sidebar() {
       }),
     [projectScopeFilter, projectScopeItems, projectScopeMenuState.query],
   );
+  const projectScopeJumpItems = useMemo(
+    () => filteredProjectScopeItems.filter((item) => item.value !== "all"),
+    [filteredProjectScopeItems],
+  );
+  const projectScopeJumpLabels = usePickerShortcuts({
+    picker: "project",
+    open: projectScopeMenuState.open,
+    items: projectScopeJumpItems,
+    keybindings,
+    onSelect: (item) => {
+      setProjectScopeKey(item.value);
+      dispatchProjectScopeMenu({ type: "open-changed", open: false });
+    },
+  });
   const scopedProjectGroup = useMemo(
     () =>
       projectScopeKey === null
@@ -4772,6 +4788,11 @@ export default function Sidebar() {
                                     primaryEnvironmentId={primaryEnvironmentId}
                                     machineByEnvironmentId={environmentMachineById}
                                   />
+                                ) : null}
+                                {projectScopeJumpLabels.has(item) ? (
+                                  <Kbd variant="plain" aria-hidden>
+                                    {projectScopeJumpLabels.get(item)}
+                                  </Kbd>
                                 ) : null}
                                 {project ? (
                                   <Button

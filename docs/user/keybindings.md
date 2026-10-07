@@ -95,16 +95,21 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`, `composerDraft`,
+`previewOpen`, `modelPickerOpen`, `projectPickerOpen`, `hostPickerOpen`,
+`branchPickerOpen`, `usagePageOpen`, `composerFocus`, `composerDraft`,
 `turnRunning`, `editableFocus`, `isWeb`, and `isDesktop`.
 `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
 desktop app. Unknown keys evaluate to `false`.
 
-`mod+1` through `mod+9` jump to the first nine threads, and to models while the
-model picker is open. Those defaults use `isDesktop` so they do not steal the
-browser's tab-switch shortcuts. Remove that condition in Settings if you want
-the same jumps in a browser.
+`mod+1` through `mod+9` jump to the first nine threads, or the first nine enabled
+choices in an open model, project, host, or branch picker. Picker shortcuts follow
+the visible search results. The new-thread project picker skips **No project** and
+**Add project**; the sidebar filter skips **All projects**. Branch shortcuts also
+work when choosing a worktree or automation base and a diff comparison target.
+They skip disabled refs, branch creation, PR checkout, and **Automatic** comparison.
+Those defaults use `isDesktop` so they do not steal the browser's tab-switch
+shortcuts. Remove that condition in Settings if you want the same jumps in a browser.
 
 Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 
