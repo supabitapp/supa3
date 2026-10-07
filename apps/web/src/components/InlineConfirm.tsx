@@ -74,7 +74,7 @@ export function InlineConfirmLabel({
         ref={idleRef}
         aria-hidden={armed || undefined}
         className={cn(
-          "col-start-1 row-start-1 justify-self-center",
+          "col-start-1 row-start-1 justify-self-center whitespace-nowrap",
           armed ? LABEL_HIDDEN_CLASS : LABEL_SHOWN_CLASS,
         )}
       >
@@ -84,7 +84,7 @@ export function InlineConfirmLabel({
         ref={confirmRef}
         aria-hidden={!armed || undefined}
         className={cn(
-          "col-start-1 row-start-1 justify-self-center",
+          "col-start-1 row-start-1 justify-self-center whitespace-nowrap",
           armed ? LABEL_SHOWN_CLASS : LABEL_HIDDEN_CLASS,
         )}
       >

@@ -44,6 +44,7 @@ export function useInlineConfirm<Key extends string>() {
 
   return {
     armed,
+    disarm: confirm.disarm,
     bind: (key: Key, run: () => void) => ({
       [TARGET_ATTRIBUTE]: `${scope}:${key}`,
       ref: confirm.attach(key),

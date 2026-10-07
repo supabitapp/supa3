@@ -66,7 +66,6 @@ import {
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
   BrainIcon,
-  CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -275,6 +274,7 @@ import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarT
 import { SidebarPrimaryNavigation } from "./sidebar/SidebarPrimaryNavigation";
 import { SidebarPinButton } from "./sidebar/SidebarPinButton";
 import { SidebarSnoozeButton } from "./sidebar/SidebarSnoozeButton";
+import { SidebarThreadParkButton } from "./sidebar/SidebarThreadParkButton";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
@@ -1200,6 +1200,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   renamingTitle: string;
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
+  onStop: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
     action: SidebarSweepAction,
@@ -1222,6 +1223,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onFileDropThreads,
     onRenameTitleChange,
     onSettle,
+    onStop,
     onActionSweepStart,
     onStartRename,
     onThreadActivate,
@@ -1572,14 +1574,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       onCommitRename(threadRef, renamingTitle, thread.title);
     }
   }, [onCommitRename, renamingTitle, thread.title, threadRef]);
-  const handleSettleClick = useCallback(
-    (event: ReactMouseEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      onSettle(threadRef);
-    },
-    [onSettle, threadRef],
-  );
   const handleActionPointerDown = useCallback(
     (event: ReactPointerEvent) => {
       if (!event.isPrimary || event.button !== 0) return;
@@ -2109,23 +2103,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     />
                   ) : null}
                   {settlementSupported ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-label="Settle thread"
-                            onClick={handleSettleClick}
-                            onPointerDown={handleActionPointerDown}
-                            className="inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-sm text-muted-foreground/65 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        }
-                      >
-                        <CheckIcon aria-hidden className="size-3.5" />
-                        Settle
-                      </TooltipTrigger>
-                      <TooltipPopup shortcut={props.settleShortcut}>Settle thread</TooltipPopup>
-                    </Tooltip>
+                    <SidebarThreadParkButton
+                      thread={thread}
+                      shortcut={props.settleShortcut}
+                      onSettle={() => onSettle(threadRef)}
+                      onStop={() => onStop(threadRef)}
+                      onPointerDown={handleActionPointerDown}
+                    />
                   ) : null}
                 </span>
               </span>
@@ -2236,6 +2220,9 @@ export default function Sidebar() {
     deleteThread,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  const interruptThreadTurn = useOrchestrationCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
@@ -3111,6 +3098,26 @@ export default function Sidebar() {
       });
     },
     [planForwardNavigation, settleThread],
+  );
+  const attemptStop = useCallback(
+    (threadRef: ScopedThreadRef) => {
+      void interruptThreadTurn({
+        environmentId: threadRef.environmentId,
+        input: { threadId: threadRef.threadId },
+      }).then((result) => {
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to stop thread",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      });
+    },
+    [interruptThreadTurn],
   );
   // Post-settle navigation must skip threads settling in this same batch —
   // they are all leaving the card block together. Rows that are already
@@ -4913,6 +4920,7 @@ export default function Sidebar() {
                           renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
                           onContextMenu={handleThreadContextMenu}
                           onSettle={attemptSettle}
+                          onStop={attemptStop}
                           onActionSweepStart={startActionSweep}
                           onUnsettle={attemptUnsettle}
                           onSnooze={attemptSnooze}
