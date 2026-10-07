@@ -139,10 +139,6 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {density === "full" ? (
-                <BranchToolbar layout="panel" panelSection="workspace" {...branchToolbarProps} />
-              ) : null}
-
               {density !== "essential" && props.showOpenInPicker ? (
                 <OpenInPicker
                   keybindings={props.keybindings}
