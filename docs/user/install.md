@@ -66,6 +66,15 @@ Run `supacode --help` for the full reference.
 Build the desktop client from this repository. Distribution artifacts belong to
 Supacode's [GitHub Releases](https://github.com/supabitapp/supacode-next/releases).
 
+### The `supacode` command
+
+The desktop app includes the `supacode` command-line tool. To run it from any
+terminal, open **Settings → General → About** and choose **Install** next to
+**supacode command**. On macOS and Linux it adds a `supacode` link to a folder on your
+`PATH`; on Windows it adds the app's command folder to your `PATH`. Open a new
+terminal afterwards. **Remove** takes it off again. If you already have `supacode`
+from npm, it stays as it is.
+
 ### Windows Subsystem for Linux
 
 Choose a WSL distro in **Settings → Connections** to run agents and projects

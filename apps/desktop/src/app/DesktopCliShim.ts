@@ -14,7 +14,7 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // so its launcher mounts the AppImage itself instead of pointing into it.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
 
-const MARKER = "Written by Supacode: runs the desktop app's bundled supacode CLI.";
+export const MARKER = "Written by Supacode: runs the desktop app's bundled supacode CLI.";
 
 /** Server entry inside the app, relative to its server root (an asar archive when packaged). */
 const SERVER_ENTRY = "apps/server/dist/bin.mjs";
@@ -125,6 +125,14 @@ export const renderCliShim = (input: {
   ].join("\n");
 };
 
+/** Where the packaged app keeps its launcher: `<Supacode home>/bin/supacode`, `supacode.cmd` on Windows. */
+export const launcherPath = (environment: DesktopEnvironment.DesktopEnvironment["Service"]) =>
+  environment.path.join(
+    environment.baseDir,
+    "bin",
+    environment.platform === "win32" ? "supacode.cmd" : "supacode",
+  );
+
 /**
  * Writes the packaged app's launcher to `<Supacode home>/bin` and returns its path
  * for the backend's SUPACODE_CLI_PATH. Development builds run from a checkout
@@ -136,7 +144,7 @@ export const install = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = environment.path;
   const windows = environment.platform === "win32";
-  const shimPath = path.join(environment.baseDir, "bin", windows ? "supacode.cmd" : "supacode");
+  const shimPath = launcherPath(environment);
   const entry = path.join(environment.serverRoot, SERVER_ENTRY);
   const target: CliShimTarget = windows
     ? { kind: "windows", executable: process.execPath, entry }
