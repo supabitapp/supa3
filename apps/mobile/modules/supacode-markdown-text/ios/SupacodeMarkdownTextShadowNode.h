@@ -20,6 +20,8 @@ struct SupacodeMarkdownTextParagraphStyleRange {
   Float firstLineHeadIndent;
   Float headIndent;
   Float paragraphSpacing;
+
+  bool operator==(const SupacodeMarkdownTextParagraphStyleRange &) const = default;
 };
 
 struct SupacodeMarkdownTextAttachmentRange {
@@ -30,6 +32,8 @@ struct SupacodeMarkdownTextAttachmentRange {
   bool tintWithForeground;
   Float chipWidth = 0;
   Float chipHeight = 0;
+
+  bool operator==(const SupacodeMarkdownTextAttachmentRange &) const = default;
 };
 
 inline Float SupacodeMarkdownTextAttachmentSize(const SupacodeMarkdownTextAttachmentRange &) {
@@ -46,6 +50,7 @@ class SupacodeMarkdownTextStateReal final {
   AttributedString attributedString;
   std::vector<SupacodeMarkdownTextParagraphStyleRange> paragraphStyleRanges;
   std::vector<SupacodeMarkdownTextAttachmentRange> attachmentRanges;
+  std::vector<std::pair<Tag, bool>> runIdentities;
 };
 
 class SupacodeMarkdownTextShadowNode final : public ConcreteViewShadowNode<

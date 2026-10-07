@@ -65,7 +65,6 @@ const styles = StyleSheet.create({
 
 function runKeySignature(run: NativeMarkdownTextRun): string {
   return [
-    run.text,
     run.bold,
     run.italic,
     run.strikethrough,
@@ -75,7 +74,6 @@ function runKeySignature(run: NativeMarkdownTextRun): string {
     run.fileIcon,
     run.skillName,
     run.skillLabel,
-    run.sourceText,
     run.role,
     run.headingLevel,
     run.depth,
