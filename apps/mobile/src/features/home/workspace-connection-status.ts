@@ -2,8 +2,7 @@ import type { WorkspaceState } from "../../state/workspaceModel";
 
 export interface WorkspaceConnectionStatusPresentation {
   readonly label: string;
-  /** True while actively working (connecting/syncing) — render a spinner. False for offline/error/idle states — render a wifi-slash icon. */
-  readonly showsProgress: boolean;
+  readonly icon: "arrow.clockwise" | "wifi.slash";
 }
 
 function shouldShowWorkspaceConnectionStatus(state: WorkspaceState): boolean {
@@ -38,9 +37,11 @@ export function workspaceConnectionStatusPresentation(
   if (!shouldShowWorkspaceConnectionStatus(state)) return null;
   return {
     label: workspaceConnectionStatusLabel(state),
-    showsProgress:
+    icon:
       state.networkStatus !== "offline" &&
       state.connectionError === null &&
-      (state.connectingEnvironments.length > 0 || state.hasPendingShellSnapshot),
+      (state.connectingEnvironments.length > 0 || state.hasPendingShellSnapshot)
+        ? "arrow.clockwise"
+        : "wifi.slash",
   };
 }

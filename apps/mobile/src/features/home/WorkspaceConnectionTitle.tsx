@@ -1,6 +1,6 @@
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Animated, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -125,16 +125,12 @@ export function WorkspaceConnectionTitle(props: {
             className="flex-row items-center"
             style={{ flexShrink: 1, gap: 4 * scale, marginLeft: props.statusOffset ?? 0 }}
           >
-            {status.showsProgress ? (
-              <ActivityIndicator colorClassName={"accent-icon-muted"} size={12 * scale} />
-            ) : (
-              <SymbolView
-                name="wifi.slash"
-                size={Math.round(12 * scale)}
-                tintColorClassName={"accent-icon-muted"}
-                type="monochrome"
-              />
-            )}
+            <SymbolView
+              name={status.icon}
+              size={Math.round(12 * scale)}
+              tintColorClassName={"accent-icon-muted"}
+              type="monochrome"
+            />
             <Text
               className="text-foreground-muted"
               numberOfLines={1}
