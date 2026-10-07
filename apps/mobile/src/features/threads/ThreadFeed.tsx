@@ -207,6 +207,7 @@ import { ThreadFeedLoading } from "./thread-feed-loading";
 import { useThreadFeedLoading } from "./use-thread-feed-loading";
 import { htmlRenderFrameHeight } from "@supacode/shared/htmlRender";
 import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
+import { mcpAppRowHeight, ThreadMcpApp } from "./McpAppWebView";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
   assetEnvironment,
@@ -1631,6 +1632,20 @@ function renderFeedEntry(
     );
   }
 
+  if (entry.type === "mcp-app") {
+    return (
+      <ThreadMcpApp
+        environmentId={props.environmentId}
+        threadId={entry.sourceThreadId}
+        conversationThreadId={props.threadId}
+        itemId={entry.itemId}
+        revision={entry.revision}
+        app={entry.app}
+        width={props.contentWidth}
+      />
+    );
+  }
+
   if (entry.type === "work-toggle") {
     return (
       <ThreadWorkGroupToggle
@@ -3021,6 +3036,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       if (entry.type === "html-render") {
         return htmlRenderRowHeight(htmlRenderFrameHeight(entry.render, contentWidth));
       }
+      if (entry.type === "mcp-app") return mcpAppRowHeight();
       if (workRowSizing.fixedRowHeight === undefined) {
         return undefined;
       }
