@@ -169,16 +169,48 @@ export function FloatingWorkingControl(props: {
     hasAgents ||
     hasQueue ||
     (props.devicePreview !== null && props.browserPreview !== null);
-  // The queue, agents, and reconnect labels have separate tap targets.
+  // Working opens the sole companion action; multiple actions keep their own targets.
+  const companionActions = [
+    hasQueue
+      ? {
+          onPress: props.onOpenQueue,
+          accessibilityLabel: `Open queue, ${props.queuedCount} messages`,
+        }
+      : null,
+    agents !== null
+      ? {
+          onPress: props.onOpenAgents,
+          accessibilityLabel: `Open agents, ${agents.accessibilityLabel}`,
+        }
+      : null,
+    props.devicePreview !== null
+      ? { onPress: props.devicePreview.onPress, accessibilityLabel: "View devices" }
+      : null,
+    props.browserPreview !== null
+      ? { onPress: props.browserPreview.onPress, accessibilityLabel: "View browser" }
+      : null,
+  ].filter((action) => action !== null);
+  const workingAction =
+    props.status?.kind === "working" && companionActions.length === 1
+      ? companionActions[0]
+      : undefined;
+  const StatusContainer = workingAction ? Pressable : View;
   const statusInteractive = props.status?.kind === "connection";
   const capsuleInteractive = statusInteractive || hasQueue || hasAgents || hasPreview;
   // The host stays centered on the capsule, but its measurement constraint
   // comes from the overlay, independent of the capsule's current width.
   const statusContent =
     props.status !== null ? (
-      <View
-        pointerEvents={props.status.kind === "connection" ? "box-none" : "none"}
-        className="h-11 items-center justify-center"
+      <StatusContainer
+        onPress={workingAction?.onPress}
+        accessibilityRole={workingAction ? "button" : undefined}
+        accessibilityLabel={workingAction?.accessibilityLabel}
+        pointerEvents={workingAction ? "auto" : statusInteractive ? "box-none" : "none"}
+        className={
+          workingAction
+            ? "h-11 items-center justify-center active:opacity-70"
+            : "h-11 items-center justify-center"
+        }
       >
         <Animated.View className="h-11" style={capsuleSizerStyle} />
         <View
@@ -196,7 +228,7 @@ export function FloatingWorkingControl(props: {
             onLayout={handleLabelLayout}
           />
         </View>
-      </View>
+      </StatusContainer>
     ) : null;
 
   const capsuleContent = (
