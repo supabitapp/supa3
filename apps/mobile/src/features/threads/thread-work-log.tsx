@@ -1,7 +1,11 @@
-import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 import { SubagentStatusDot } from "./SubagentStatusDot";
 import { ThreadSubagentGroup } from "./thread-subagent-group";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
+import { MotionPresence } from "../../components/MotionPresence";
+import { useNoticeMotion } from "../../lib/useNoticeMotion";
+import { useForegroundMotion } from "../../lib/useForegroundMotion";
+import { ThreadWorkLogDetail } from "./thread-work-log-detail";
+import { threadWorkRowNeedsMeasurement } from "./thread-feed-item-size";
 import {
   WorkLogLabel,
   WorkLogBlock,
@@ -9,7 +13,6 @@ import {
   WorkLogIconSlot,
   WorkLogPressable,
 } from "./work-log-layout";
-import { QuestionAnswerHistory } from "./QuestionAnswerHistory";
 import {
   getQuestionAnswerPreview,
   hasQuestionAnswer,
@@ -20,7 +23,7 @@ import { type AppSymbolName, SymbolView } from "../../components/AppSymbol";
 import { MaskedView } from "@expo/ui/community/masked-view";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
-import { StackActions, useIsFocused, useNavigation } from "@react-navigation/native";
+import { StackActions, useNavigation } from "@react-navigation/native";
 import {
   memo,
   useCallback,
@@ -33,15 +36,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react";
-import {
-  AccessibilityInfo,
-  AppState,
-  type ColorValue,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { type ColorValue, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
@@ -62,16 +57,9 @@ import { cn } from "../../lib/cn";
 import { THREAD_WORK_ROW_MIN_HEIGHT, type deriveThreadWorkLogSizing } from "../../lib/layout";
 import {
   type AgentSpawnSummary,
-  formatItemFullDetail,
   type ThreadFeedActivity,
   workEntryRowLabel,
 } from "../../lib/threadActivity";
-import {
-  toolCallLines,
-  turnItemOutputImages,
-  turnItemOutputText,
-} from "@supacode/client-runtime/work-log/item-detail";
-import { useTurnItemDetail } from "../../state/queries";
 import {
   resolveThreadWorkGroupInitialScroll,
   shouldFollowThreadWorkGroupAppend,
@@ -79,21 +67,15 @@ import {
 } from "./thread-feed-live-follow";
 import {
   resolveWorkEntryToolPresentation,
-  toolGroupAction,
   type ToolGroupSummaryKind,
-  workEntryViewedImagePath,
 } from "@supacode/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@supacode/client-runtime/work-log/scroll-anchor";
 import { notificationChildThreadId } from "@supacode/client-runtime/state/thread-execution";
 import type { MarkdownImageRenderer } from "../../native/SelectableMarkdownText";
 import type { FilePreviewSource } from "../../components/FilePreviewModal";
-import { ThreadMarkdownImage } from "./ThreadMarkdownImage";
 import Animated, {
   cancelAnimation,
   Easing,
-  FadeIn,
-  FadeOut,
-  LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
@@ -108,10 +90,6 @@ const SHIMMER_WIDTH = 72;
 const SHIMMER_SWEEP_MS = 1_350;
 const SHIMMER_PAUSE_MS = 1_450;
 const SHIMMER_ICON_AND_GAP_WIDTH = 30;
-export const THREAD_DISCLOSURE_TRANSITION_MS = 180;
-const WORK_LOG_LAYOUT_TRANSITION = LinearTransition.duration(THREAD_DISCLOSURE_TRANSITION_MS);
-const WORK_LOG_DETAIL_ENTER_TRANSITION = FadeIn.duration(140);
-const WORK_LOG_DETAIL_EXIT_TRANSITION = FadeOut.duration(120);
 type WorkContentIcon = AppSymbolName | "browser" | "device" | "supacode" | "pull-request";
 
 function WorkLogIcon(props: {
@@ -222,9 +200,7 @@ export function ShimmeringWorkContent(props: {
 }) {
   const [availableWidth, setAvailableWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
-  const [appIsActive, setAppIsActive] = useState(AppState.currentState === "active");
-  const [reducedMotion, setReducedMotion] = useState(true);
-  const screenIsFocused = useIsFocused();
+  const motionEnabled = useForegroundMotion();
   const progress = useSharedValue(0);
   const gradientId = `work-shimmer-${useId().replaceAll(":", "")}`;
   const contentWidth = Math.min(
@@ -233,25 +209,9 @@ export function ShimmeringWorkContent(props: {
   );
 
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      setAppIsActive(state === "active");
-    });
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      setReducedMotion,
-    );
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
     cancelAnimation(progress);
     progress.set(0);
-    if (contentWidth <= 0 || reducedMotion || !appIsActive || !screenIsFocused) return;
+    if (contentWidth <= 0 || !motionEnabled) return;
 
     progress.set(
       withRepeat(
@@ -273,7 +233,7 @@ export function ShimmeringWorkContent(props: {
       ),
     );
     return () => cancelAnimation(progress);
-  }, [appIsActive, contentWidth, progress, reducedMotion, screenIsFocused]);
+  }, [contentWidth, progress, motionEnabled]);
 
   const sweepStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -SHIMMER_WIDTH + progress.value * (contentWidth + SHIMMER_WIDTH) }],
@@ -300,7 +260,7 @@ export function ShimmeringWorkContent(props: {
         toolIcon={props.toolIcon}
         onTextLayout={(event) => setTextWidth(event.nativeEvent.lines[0]?.width ?? 0)}
       />
-      {!reducedMotion && appIsActive && screenIsFocused && contentWidth > 0 ? (
+      {motionEnabled && contentWidth > 0 ? (
         <Animated.View
           className="absolute inset-y-0 left-0 overflow-hidden"
           pointerEvents="none"
@@ -662,7 +622,8 @@ function ThreadWorkGroupList(props: {
   }, []);
   const getFixedItemSize = useCallback(
     (row: ThreadFeedActivity, index: number) =>
-      props.expandedRows[row.id] || props.rowSizing.fixedRowHeight === undefined
+      threadWorkRowNeedsMeasurement(row.id, props.expandedRows) ||
+      props.rowSizing.fixedRowHeight === undefined
         ? undefined
         : props.rowSizing.fixedRowHeight + (index < props.activities.length - 1 ? WORK_ROW_GAP : 0),
     [props.activities.length, props.expandedRows, props.rowSizing.fixedRowHeight],
@@ -828,11 +789,7 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
 ) {
   const { row, expanded } = props;
   const navigation = useNavigation();
-  const fetchedDetail = useTurnItemDetail(
-    expanded && row.fetchesDetail
-      ? { environmentId: props.environmentId, row: row.projectedItem }
-      : null,
-  );
+  const motion = useNoticeMotion();
   const failureItem = row.projectedItem.item;
   if (failureItem.type === "error" && failureItem.status === "failed") {
     const warning = failureItem.failure.class === "usage_limit";
@@ -914,46 +871,6 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
       : undefined;
   const canExpand = row.canExpand && notifiedSubagentThreadId === undefined;
   const reasoning = row.projectedItem.item.type === "reasoning" ? row.projectedItem.item : null;
-  const fetchedItem = fetchedDetail.data?.item ?? null;
-  // Reads keep their path list; the fetched file contents show as output.
-  const isRead = toolGroupAction(row.workEntry) === "read";
-  // Tool calls show the call in the foreground and the result muted below it.
-  const shownItem = fetchedItem ?? row.projectedItem.item;
-  const call =
-    expanded && !isRead && shownItem.type === "command_execution"
-      ? toolCallLines({ command: shownItem.input })
-      : expanded && !isRead && shownItem.type === "dynamic_tool"
-        ? toolCallLines({ args: shownItem.input })
-        : expanded && shownItem.type === "file_search"
-          ? toolCallLines({ args: { pattern: shownItem.pattern } })
-          : expanded && shownItem.type === "web_search"
-            ? toolCallLines({ args: { query: shownItem.patterns?.join(", ") } })
-            : null;
-  const failedExitCode =
-    call && shownItem.type === "command_execution" && shownItem.exitCode
-      ? shownItem.exitCode
-      : null;
-  const fullDetail =
-    expanded && !reasoning && !call
-      ? fetchedItem && !isRead
-        ? formatItemFullDetail(row.projectedItem, fetchedItem)
-        : row.getFullDetail()
-      : null;
-  const outputImages = expanded && fetchedItem ? turnItemOutputImages(fetchedItem) : [];
-  const fetchedOutput = !expanded
-    ? null
-    : shownItem.type === "file_search" || shownItem.type === "web_search"
-      ? turnItemOutputText(shownItem)
-      : fetchedItem
-        ? (turnItemOutputText(fetchedItem) ?? (outputImages.length > 0 ? null : "No output."))
-        : fetchedDetail.error
-          ? `Couldn't load output: ${fetchedDetail.error}`
-          : row.fetchesDetail
-            ? fetchedDetail.data
-              ? "Output is no longer available."
-              : "Loading output…"
-            : null;
-  const viewedImagePath = workEntryViewedImagePath(row.workEntry);
   const toolPresentation = resolveWorkEntryToolPresentation(row.workEntry);
   const previewText = workEntryRowLabel(row.workEntry);
   const answerPreview = row.workEntry.questionAnswer
@@ -974,9 +891,8 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
 
   return (
     <Animated.View
-      layout={WORK_LOG_LAYOUT_TRANSITION}
       className="overflow-hidden"
-      {...(isFreshRow(row.createdAt) ? { entering: FadeIn.duration(200) } : {})}
+      {...(isFreshRow(row.createdAt) ? { entering: motion.entering } : {})}
     >
       <WorkLogPressable
         accessibilityRole={
@@ -1099,91 +1015,17 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
         </View>
       </WorkLogPressable>
 
-      {expanded &&
-      (reasoning ||
-        fullDetail ||
-        call ||
-        fetchedOutput ||
-        viewedImagePath ||
-        outputImages.length > 0 ||
-        row.workEntry.questionAnswer) ? (
-        <Animated.View
-          entering={WORK_LOG_DETAIL_ENTER_TRANSITION}
-          exiting={WORK_LOG_DETAIL_EXIT_TRANSITION}
-          layout={WORK_LOG_LAYOUT_TRANSITION}
-          className={reasoning ? "ml-7 py-1" : "pb-1 pt-0.5"}
-        >
-          {row.workEntry.questionAnswer ? (
-            <QuestionAnswerHistory
-              environmentId={props.environmentId}
-              answer={row.workEntry.questionAnswer}
-            />
-          ) : null}
-          {viewedImagePath ? (
-            <View className="pb-1.5">
-              {props.renderImage({ href: viewedImagePath, alt: null, title: null })}
-            </View>
-          ) : null}
-          {outputImages.map((resource) => (
-            <View key={resource.index} className="pb-1.5">
-              <ThreadMarkdownImage
-                environmentId={props.environmentId}
-                resource={resource}
-                alt={null}
-                onPressPreview={props.onPressPreview}
-              />
-            </View>
-          ))}
-          <ScrollView
-            nestedScrollEnabled
-            directionalLockEnabled
-            showsVerticalScrollIndicator
-            className="max-h-60"
-            contentContainerStyle={{ paddingRight: 8 }}
-          >
-            {reasoning ? (
-              props.renderReasoning(reasoning.text)
-            ) : call ? (
-              withOccurrenceKeys(
-                [
-                  call.command,
-                  ...(call.args ?? []).map(([key, value]) => `${key} ${value}`),
-                  call.argsText,
-                ].flatMap((line) => (line ? [line] : [])),
-                (line) => line,
-              ).map(({ item: line, key }) => (
-                <Text
-                  key={key}
-                  selectable
-                  className="font-mono text-2xs leading-normal text-foreground"
-                >
-                  {line}
-                </Text>
-              ))
-            ) : fullDetail ? (
-              <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
-                {fullDetail}
-              </Text>
-            ) : null}
-            {fetchedOutput ? (
-              <Text
-                selectable
-                className={cn(
-                  "font-mono text-2xs leading-normal text-foreground-muted",
-                  (!call || call.command || call.args || call.argsText) && "mt-1.5",
-                )}
-              >
-                {fetchedOutput}
-              </Text>
-            ) : null}
-            {failedExitCode !== null ? (
-              <Text className="mt-1.5 font-mono text-2xs leading-normal text-danger-foreground">
-                exit {failedExitCode}
-              </Text>
-            ) : null}
-          </ScrollView>
-        </Animated.View>
-      ) : null}
+      <MotionPresence visible={expanded && canExpand}>
+        {() => (
+          <ThreadWorkLogDetail
+            row={row}
+            environmentId={props.environmentId}
+            renderImage={props.renderImage}
+            renderReasoning={props.renderReasoning}
+            onPressPreview={props.onPressPreview}
+          />
+        )}
+      </MotionPresence>
     </Animated.View>
   );
 });
@@ -1281,7 +1123,7 @@ export const ThreadAgentSpawnCard = memo(function ThreadAgentSpawnCard(props: {
   const memberCount = summary.members.length;
   const canExpand = memberCount > 0;
   return (
-    <Animated.View layout={WORK_LOG_LAYOUT_TRANSITION} className="-mx-1 mb-1 px-1">
+    <View className="-mx-1 mb-1 px-1">
       <Pressable
         accessibilityRole={canExpand ? "button" : undefined}
         accessibilityState={canExpand ? { expanded } : undefined}
@@ -1345,37 +1187,33 @@ export const ThreadAgentSpawnCard = memo(function ThreadAgentSpawnCard(props: {
             />
           ) : null}
         </View>
-        {expanded && canExpand ? (
-          <Animated.View
-            entering={WORK_LOG_DETAIL_ENTER_TRANSITION}
-            exiting={WORK_LOG_DETAIL_EXIT_TRANSITION}
-            layout={WORK_LOG_LAYOUT_TRANSITION}
-            className="ml-8 mt-1.5 gap-1.5 border-l border-border pl-3"
-          >
-            {summary.members.map((member) => (
-              <View key={member.title} className="gap-px">
-                <View className="flex-row items-center gap-1.5">
-                  <SubagentStatusDot tone={member.tone} />
-                  <Text className="min-w-0 flex-1 text-xs text-foreground" numberOfLines={1}>
-                    {member.title}
-                  </Text>
-                  <Text className="shrink-0 text-2xs text-foreground-muted">{member.status}</Text>
-                </View>
-                {member.detail ? (
-                  <Text
-                    selectable
-                    className="pl-3 font-mono text-2xs leading-normal text-foreground-muted"
-                    numberOfLines={expanded ? 6 : 1}
-                  >
-                    {member.detail}
-                  </Text>
-                ) : null}
+        <MotionPresence
+          visible={expanded && canExpand}
+          className="ml-8 mt-1.5 gap-1.5 border-l border-border pl-3"
+        >
+          {summary.members.map((member) => (
+            <View key={member.title} className="gap-px">
+              <View className="flex-row items-center gap-1.5">
+                <SubagentStatusDot tone={member.tone} />
+                <Text className="min-w-0 flex-1 text-xs text-foreground" numberOfLines={1}>
+                  {member.title}
+                </Text>
+                <Text className="shrink-0 text-2xs text-foreground-muted">{member.status}</Text>
               </View>
-            ))}
-          </Animated.View>
-        ) : null}
+              {member.detail ? (
+                <Text
+                  selectable
+                  className="pl-3 font-mono text-2xs leading-normal text-foreground-muted"
+                  numberOfLines={6}
+                >
+                  {member.detail}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </MotionPresence>
       </Pressable>
-    </Animated.View>
+    </View>
   );
 });
 

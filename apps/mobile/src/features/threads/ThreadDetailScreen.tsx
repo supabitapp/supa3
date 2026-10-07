@@ -1230,16 +1230,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   />
                 ))}
                 {composerError !== null ? (
-                  <Animated.View
-                    className="shrink-0"
-                    entering={FadeInDown.duration(180)}
-                    exiting={FadeOut.duration(120)}
-                  >
-                    <ComposerErrorNotice
-                      message={composerError}
-                      onDismiss={() => clearThreadComposerError(selectedThreadKey)}
-                    />
-                  </Animated.View>
+                  <ComposerErrorNotice
+                    message={composerError}
+                    onDismiss={() => clearThreadComposerError(selectedThreadKey)}
+                  />
                 ) : null}
                 {usageLimitsReport && activeUserInputRequestId === null ? (
                   <Animated.View

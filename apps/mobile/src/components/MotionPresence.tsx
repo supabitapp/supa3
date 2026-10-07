@@ -16,6 +16,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "../lib/useReducedMotionPreference";
+import { isKeyboardMotionSuppressed } from "../lib/motionInput";
+import { MOTION_ENTER_DURATION_MS, MOTION_EXIT_DURATION_MS } from "../lib/motionTiming";
 
 /** Keeps closing content mounted for its fade; another press retargets the live transition. */
 export function MotionPresence({
@@ -33,7 +35,7 @@ export function MotionPresence({
   readonly offsetY?: number;
   readonly onHidden?: () => void;
 }) {
-  const reducedMotion = useReducedMotionPreference();
+  const reducedMotion = useReducedMotionPreference() || isKeyboardMotionSuppressed();
   const [mounted, setMounted] = useState(visible);
   if (visible && !mounted) setMounted(true);
   const visibility = useSharedValue(visible && !appear ? 1 : 0);
@@ -59,7 +61,7 @@ export function MotionPresence({
       withTiming(
         visible ? 1 : 0,
         {
-          duration: visible ? 180 : 140,
+          duration: visible ? MOTION_ENTER_DURATION_MS : MOTION_EXIT_DURATION_MS,
           easing: Easing.bezier(0.32, 0.72, 0, 1),
           reduceMotion: ReduceMotion.Never,
         },
