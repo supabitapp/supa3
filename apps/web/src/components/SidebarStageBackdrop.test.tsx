@@ -1,26 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import {
-  resolveEnvironmentIdentificationModes,
-  resolveEnvironmentIdentificationPillLabel,
-  StageBackdropArt,
-} from "./SidebarStageBackdrop";
+import { StageBackdropArt } from "./SidebarStageBackdrop";
 
 describe("SidebarStageBackdrop", () => {
-  it("offers only the identification modes that change something", () => {
-    expect(resolveEnvironmentIdentificationModes("Dev")).toEqual(["artwork", "pill", "none"]);
-    expect(resolveEnvironmentIdentificationModes(null)).toEqual(["artwork", "none"]);
-    expect(resolveEnvironmentIdentificationModes("Preview")).toEqual(["none"]);
-  });
-
-  it("resolves supported environment pill labels", () => {
-    expect(resolveEnvironmentIdentificationPillLabel("Dev")).toBe("Dev");
-    expect(resolveEnvironmentIdentificationPillLabel("nightly")).toBe("Nightly");
-    expect(resolveEnvironmentIdentificationPillLabel("Latest")).toBeNull();
-    expect(resolveEnvironmentIdentificationPillLabel(null)).toBeNull();
-  });
-
   it.each(["nightly", "dev", "release"] as const)(
     "uses unique SVG definition ids when %s artwork is rendered more than once",
     (variant) => {

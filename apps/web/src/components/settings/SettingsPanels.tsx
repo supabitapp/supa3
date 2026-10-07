@@ -1,4 +1,5 @@
 import { SettingsGroup } from "./SettingsGroup";
+import { resolveEnvironmentIdentificationModes } from "@supacode/client-runtime/stage-artwork";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
@@ -61,10 +62,7 @@ import {
 } from "../../components/desktopUpdate.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
-import {
-  resolveEnvironmentIdentificationModes,
-  useEnvironmentStageLabel,
-} from "../SidebarStageBackdrop";
+import { useEnvironmentStageLabel } from "../SidebarStageBackdrop";
 import { isElectron } from "../../env";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import { useCustomThemes } from "../../hooks/useCustomThemes";

@@ -7,7 +7,6 @@ import {
   METEOR_SHOWER_STAR_TILE_WIDTH,
   METEOR_SHOWER_STARS,
   NIGHT_SKY_GRADIENT,
-  resolveStageArtworkVariant,
   resolveVisibleStageArtworkVariant,
   SLEIGH_HALO_TRANSFORM,
   SLEIGH_HALO_WIDTH,
@@ -34,7 +33,6 @@ import {
   WIREFRAME_TICKS_PATH,
   WIREFRAME_TILE_WIDTH,
 } from "@supacode/client-runtime/stage-artwork";
-import type { EnvironmentIdentificationMode } from "@supacode/contracts";
 import { type ComponentType, useId, useSyncExternalStore } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
@@ -43,29 +41,7 @@ import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
 import { getThemePreviewAppearance, subscribeToThemePreview } from "../themePalette";
 
-export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
-
 const STAGE_BACKDROP_VIEW_BOX = `0 0 8192 ${STAGE_ARTWORK_HEIGHT}`;
-
-const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
-
-export function resolveEnvironmentIdentificationModes(stageLabel: string | null) {
-  const available = {
-    artwork: resolveStageArtworkVariant(stageLabel) !== null,
-    pill: resolveEnvironmentIdentificationPillLabel(stageLabel) !== null,
-    none: true,
-  } satisfies Record<EnvironmentIdentificationMode, boolean>;
-  return ENVIRONMENT_IDENTIFICATION_MODES.filter((mode) => available[mode]);
-}
-
-export function resolveEnvironmentIdentificationPillLabel(
-  stageLabel: string | null,
-): EnvironmentIdentificationPillLabel | null {
-  const normalized = stageLabel?.trim().toLowerCase();
-  if (normalized === "dev") return "Dev";
-  if (normalized === "nightly") return "Nightly";
-  return null;
-}
 
 export function useEnvironmentStageLabel(): string | null {
   const primaryServerVersion =

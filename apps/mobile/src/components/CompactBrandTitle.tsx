@@ -1,12 +1,10 @@
-import Constants from "expo-constants";
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { Platform, View } from "react-native";
 
 import { AppText as Text } from "./AppText";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
-import { resolveMobileStageLabel } from "../lib/mobileBranding";
-import { useStageArtworkVariant } from "./StageArtworkBackdrop";
 import { useAndroidControlSizing } from "./useAndroidControlSizing";
+import { useEnvironmentIdentification } from "./useEnvironmentIdentification";
 
 /**
  * Horizontal correction applied to content rendered in the brand title slot,
@@ -25,8 +23,7 @@ export function CompactBrandTitle(
     readonly allowFontScaling?: boolean;
   } = {},
 ) {
-  const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
-  const onArtwork = useStageArtworkVariant() !== null;
+  const { artworkVariant, pillLabel } = useEnvironmentIdentification();
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();
 
@@ -42,19 +39,17 @@ export function CompactBrandTitle(
       <Text
         allowFontScaling={props.allowFontScaling}
         className={
-          onArtwork ? "font-supacode-bold text-white" : "font-supacode-bold text-foreground-muted"
+          artworkVariant
+            ? "font-supacode-bold text-white"
+            : "font-supacode-bold text-foreground-muted"
         }
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
       >
         Supacode
       </Text>
-      {stageLabel ? (
+      {pillLabel ? (
         <View
-          className={
-            onArtwork
-              ? "rounded-full bg-white/20 px-1.5 py-0.5"
-              : "rounded-full bg-subtle px-1.5 py-0.5"
-          }
+          className="rounded-full bg-subtle px-1.5 py-0.5"
           style={
             Platform.OS === "android"
               ? { paddingHorizontal: 5.25 * scale, paddingVertical: 1.75 * scale }
@@ -63,14 +58,10 @@ export function CompactBrandTitle(
         >
           <Text
             allowFontScaling={props.allowFontScaling}
-            className={
-              onArtwork
-                ? "font-supacode-bold text-white uppercase"
-                : "font-supacode-bold text-foreground-muted uppercase"
-            }
+            className="font-supacode-bold text-foreground-muted uppercase"
             style={{ fontSize: 9 * scale, letterSpacing: 0.9 * scale }}
           >
-            {stageLabel}
+            {pillLabel}
           </Text>
         </View>
       ) : null}

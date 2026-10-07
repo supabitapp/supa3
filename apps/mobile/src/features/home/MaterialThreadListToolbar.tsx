@@ -11,10 +11,8 @@ import type { MenuAction } from "@react-native-menu/menu";
 
 import { AndroidHeaderIconButton } from "../../components/AndroidScreenHeader";
 import { CompactBrandTitle } from "../../components/CompactBrandTitle";
-import {
-  StageArtworkBackdrop,
-  useStageArtworkVariant,
-} from "../../components/StageArtworkBackdrop";
+import { StageArtworkBackdrop } from "../../components/StageArtworkBackdrop";
+import { useEnvironmentIdentification } from "../../components/useEnvironmentIdentification";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
 import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
 import { ControlPillMenu } from "../../components/ControlPill";
@@ -24,6 +22,8 @@ import { WorkspaceConnectionTitle } from "./WorkspaceConnectionTitle";
 import { useWorkspaceState } from "../../state/workspace";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useMaterialToolbarLayout } from "../../components/useMaterialToolbarLayout";
+
+const TOOLBAR_ARTWORK_FADE_LENGTH = 24;
 
 /** One toolbar height for the compact list and expanded sidebar, including search. */
 export function MaterialThreadListToolbar(props: {
@@ -46,7 +46,7 @@ export function MaterialThreadListToolbar(props: {
   const searchRef = useRef<TextInputInstance>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const searching = searchOpen || props.searchQuery.length > 0;
-  const stageArtworkVariant = useStageArtworkVariant();
+  const stageArtworkVariant = useEnvironmentIdentification().artworkVariant;
   const openSearch = useCallback(() => {
     onRequestVisibility?.();
     setSearchOpen(true);
@@ -103,7 +103,7 @@ export function MaterialThreadListToolbar(props: {
             <StageArtworkBackdrop
               variant={stageArtworkVariant}
               fadeTo="--color-header"
-              fadeStart={0.7}
+              fadeLength={TOOLBAR_ARTWORK_FADE_LENGTH}
             />
           </View>
         ) : null}

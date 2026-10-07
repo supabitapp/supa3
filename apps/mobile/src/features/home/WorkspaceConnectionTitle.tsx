@@ -5,6 +5,7 @@ import { Animated, Pressable, View } from "react-native";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
+import { useEnvironmentIdentification } from "../../components/useEnvironmentIdentification";
 import {
   brandTitleOffset,
   CompactBrandTitle,
@@ -95,6 +96,7 @@ export function WorkspaceConnectionTitle(props: {
   readonly maxWidth?: number;
 }) {
   const status = useDelayedConnectionStatus();
+  const onArtwork = useEnvironmentIdentification().artworkVariant !== null;
   const size = props.size ?? "navbar";
   const { scale } = useAndroidControlSizing();
 
@@ -128,11 +130,11 @@ export function WorkspaceConnectionTitle(props: {
             <SymbolView
               name={status.icon}
               size={Math.round(12 * scale)}
-              tintColorClassName={"accent-icon-muted"}
+              tintColorClassName={onArtwork ? "accent-white/80" : "accent-icon-muted"}
               type="monochrome"
             />
             <Text
-              className="text-foreground-muted"
+              className={onArtwork ? "text-white/80" : "text-foreground-muted"}
               numberOfLines={1}
               style={{
                 flexShrink: 1,

@@ -1,5 +1,8 @@
+import type { EnvironmentIdentificationMode } from "@supacode/contracts";
+import type { ThemeAppearance } from "@supacode/shared/themePalettes";
+
 export type StageArtworkVariant = "nightly" | "dev" | "release";
-export type StageArtworkAppearance = "light" | "dark";
+export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
 
 export interface StageStar {
   readonly cx: number;
@@ -38,11 +41,32 @@ export function resolveStageArtworkVariant(stageLabel: string | null): StageArtw
 /** Dev and nightly keep their artwork in every theme; release only shows the sleigh when dark. */
 export function resolveVisibleStageArtworkVariant(
   stageLabel: string | null,
-  appearance: StageArtworkAppearance,
+  appearance: ThemeAppearance,
 ): StageArtworkVariant | null {
   const variant = resolveStageArtworkVariant(stageLabel);
   if (variant === "release" && appearance !== "dark") return null;
   return variant;
+}
+
+export function resolveEnvironmentIdentificationPillLabel(
+  stageLabel: string | null,
+): EnvironmentIdentificationPillLabel | null {
+  const normalized = stageLabel?.trim().toLowerCase();
+  if (normalized === "dev") return "Dev";
+  if (normalized === "nightly") return "Nightly";
+  return null;
+}
+
+const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
+
+/** The identification modes that change something for this stage, in settings order. */
+export function resolveEnvironmentIdentificationModes(stageLabel: string | null) {
+  const available = {
+    artwork: resolveStageArtworkVariant(stageLabel) !== null,
+    pill: resolveEnvironmentIdentificationPillLabel(stageLabel) !== null,
+    none: true,
+  } satisfies Record<EnvironmentIdentificationMode, boolean>;
+  return ENVIRONMENT_IDENTIFICATION_MODES.filter((mode) => available[mode]);
 }
 
 export function sparklePath({ x, y }: StageSparkle): string {
@@ -54,7 +78,49 @@ export function fourPointStarPath(x: number, y: number, size: number): string {
   return `M${x} ${y - size}Q${x + pinch} ${y - pinch} ${x + size} ${y}Q${x + pinch} ${y + pinch} ${x} ${y + size}Q${x - pinch} ${y + pinch} ${x - size} ${y}Q${x - pinch} ${y - pinch} ${x} ${y - size}Z`;
 }
 
-export const NIGHT_SKY_GRADIENT = { x1: 24, y1: 0, x2: 264, y2: 96 } as const;
+export interface GradientVector {
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+}
+
+/**
+ * Reproduces `spreadMethod="reflect"` for renderers without it, such as react-native-svg. The
+ * vector is stretched to cover a canvas `width` units wide, and the stops alternate between the
+ * gradient's first (`from`) and last (`to`) colors with `via` at every midpoint.
+ */
+export function reflectedGradient(vector: GradientVector, width: number) {
+  const dx = vector.x2 - vector.x1;
+  const dy = vector.y2 - vector.y1;
+  const progressAt = (x: number, y: number) =>
+    ((x - vector.x1) * dx + (y - vector.y1) * dy) / (dx * dx + dy * dy);
+  const corners = [
+    progressAt(0, 0),
+    progressAt(width, 0),
+    progressAt(0, STAGE_ARTWORK_HEIGHT),
+    progressAt(width, STAGE_ARTWORK_HEIGHT),
+  ];
+  const first = Math.floor(Math.min(...corners));
+  const last = Math.ceil(Math.max(...corners));
+  const legs = last - first;
+  const edgeColor = (leg: number) => (Math.abs(leg) % 2 === 0 ? "from" : "to");
+  const stops: Array<{ readonly offset: number; readonly color: "from" | "via" | "to" }> = [];
+  for (let leg = 0; leg < legs; leg++) {
+    stops.push({ offset: leg / legs, color: edgeColor(first + leg) });
+    stops.push({ offset: (leg + 0.5) / legs, color: "via" });
+  }
+  stops.push({ offset: 1, color: edgeColor(last) });
+  return {
+    x1: vector.x1 + dx * first,
+    y1: vector.y1 + dy * first,
+    x2: vector.x1 + dx * last,
+    y2: vector.y1 + dy * last,
+    stops,
+  };
+}
+
+export const NIGHT_SKY_GRADIENT: GradientVector = { x1: 24, y1: 0, x2: 264, y2: 96 };
 
 export const METEOR_SHOWER_STAR_TILE_WIDTH = 288;
 export const METEOR_SHOWER_METEOR_TILE_WIDTH = 384;
@@ -214,7 +280,7 @@ export const METEOR_SHOWER_METEORS: ReadonlyArray<StageMeteor> = [
   { x1: 180, y1: 14, x2: 155.8, y2: 28.0, opacity: 0.6 },
 ];
 
-export const WIREFRAME_PAPER_GRADIENT = { x1: 60, y1: 0, x2: 220, y2: 96 } as const;
+export const WIREFRAME_PAPER_GRADIENT: GradientVector = { x1: 60, y1: 0, x2: 220, y2: 96 };
 export const WIREFRAME_TILE_WIDTH = 512;
 export const WIREFRAME_DOT_SPACING = 8;
 export const WIREFRAME_GLOW_TRANSFORM = "translate(216 14) rotate(137) scale(120 84)";

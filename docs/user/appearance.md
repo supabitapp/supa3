@@ -14,6 +14,10 @@ those modes. Customize these shortcuts under **Settings → Keybindings**.
 On mobile, open **Settings → Appearance**. Mobile has its own themes and text,
 code, and terminal preferences. It does not follow environment themes or defaults.
 
+Dev and Nightly builds show stage artwork behind the sidebar or thread list header, and release
+builds show it under dark themes. To use a version pill instead, or hide it, change
+**Environment identification** in Appearance on desktop and on mobile.
+
 On Android 12 or newer, choose the **Material You** theme in Appearance to use colors from
 your wallpaper. Selecting another theme replaces those colors. Like other themes, Material You
 can be selected separately for light and dark appearances.

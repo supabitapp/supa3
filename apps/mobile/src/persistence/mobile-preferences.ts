@@ -5,7 +5,11 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import type { ProviderInstanceId, SidebarProjectGroupingMode } from "@supacode/contracts";
+import type {
+  EnvironmentIdentificationMode,
+  ProviderInstanceId,
+  SidebarProjectGroupingMode,
+} from "@supacode/contracts";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
 import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
@@ -26,6 +30,8 @@ export interface Preferences {
   readonly markdownFontSize?: number;
   readonly codeFontSize?: number | null;
   readonly codeWordBreak?: boolean;
+  /** Device-local mirror of the web `environmentIdentificationMode` client setting. */
+  readonly environmentIdentificationMode?: EnvironmentIdentificationMode;
   readonly collapsedProjectGroups?: readonly string[];
   /** What the Return key does in the composer on a hardware keyboard. iOS only. */
   readonly composerEnterBehavior?: ComposerEnterBehavior;
@@ -99,6 +105,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     markdownFontSize?: number;
     codeFontSize?: number | null;
     codeWordBreak?: boolean;
+    environmentIdentificationMode?: EnvironmentIdentificationMode;
     collapsedProjectGroups?: readonly string[];
     composerEnterBehavior?: ComposerEnterBehavior;
     showSkillsInSlashMenu?: boolean;
@@ -149,6 +156,13 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.codeFontSize = parsed.codeFontSize;
   }
   if (typeof parsed.codeWordBreak === "boolean") preferences.codeWordBreak = parsed.codeWordBreak;
+  if (
+    parsed.environmentIdentificationMode === "artwork" ||
+    parsed.environmentIdentificationMode === "pill" ||
+    parsed.environmentIdentificationMode === "none"
+  ) {
+    preferences.environmentIdentificationMode = parsed.environmentIdentificationMode;
+  }
   if (Array.isArray(parsed.collapsedProjectGroups)) {
     preferences.collapsedProjectGroups = parsed.collapsedProjectGroups.filter(
       (key): key is string => typeof key === "string",

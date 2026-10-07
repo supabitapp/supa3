@@ -51,6 +51,7 @@ import { ThreadQueueSheet } from "./features/threads/ThreadQueueControl";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
+import { useHomeHeaderArtworkVariant } from "./features/home/HomeHeaderArtwork";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
 import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
 import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
@@ -918,14 +919,19 @@ function ScreenRenderFallback(props: RenderFailureProps & { readonly routeName: 
 export const RootStack = RootStackConfig.with(function AdaptiveRootStack({ Navigator }) {
   const { width, height } = useWindowDimensions();
   const { themeAppearance } = useAppearancePreferences();
-  const usesWorkspaceFlowScreens =
-    Platform.OS === "android" || deriveLayout({ width, height }).usesSplitView;
+  const usesSplitView = deriveLayout({ width, height }).usesSplitView;
+  const usesWorkspaceFlowScreens = Platform.OS === "android" || usesSplitView;
+  // Compact Home draws dark stage art behind its header, so it needs light status bar content.
+  const homeHasArtwork = useHomeHeaderArtworkVariant() !== null && !usesSplitView;
 
   return (
     <Navigator
       screenLayout={GuardedScreenLayout}
       screenOptions={({ route }) => {
-        const statusBarStyle = themeAppearance === "dark" ? "light" : "dark";
+        const statusBarStyle =
+          themeAppearance === "dark" || (route.name === "Home" && homeHasArtwork)
+            ? "light"
+            : "dark";
         const statusBarOptions = Platform.OS === "ios" ? ({ statusBarStyle } as const) : {};
         if (route.name !== "SettingsSheet" && route.name !== "NewTaskSheet") {
           return statusBarOptions;

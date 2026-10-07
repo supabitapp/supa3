@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { resolveEnvironmentIdentificationPillLabel } from "@supacode/client-runtime/stage-artwork";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -12,7 +13,6 @@ import { formatShortcutLabel } from "../../keybindings";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import {
-  resolveEnvironmentIdentificationPillLabel,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
   useSidebarStageBackdropVariant,

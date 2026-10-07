@@ -62,6 +62,7 @@ import {
   type ThreadListV2ListItem,
 } from "../threads/threadListV2";
 import { useThreadListV2ShelfPreferences } from "../threads/use-thread-list-v2-shelf-preferences";
+import { HOME_ARTWORK_OVERHANG, useHomeHeaderArtworkVariant } from "./HomeHeaderArtwork";
 import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
   buildHomeProjectScopes,
@@ -240,6 +241,7 @@ export function HomeScreen(props: HomeScreenProps) {
     Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0;
   const listBottomInset =
     Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 60 + iosBottomToolbarClearance : 0;
+  const listArtworkClearance = useHomeHeaderArtworkVariant() ? HOME_ARTWORK_OVERHANG : 0;
   const searchEnvironmentIds = useMemo(
     () =>
       props.selectedEnvironmentId === null
@@ -990,6 +992,7 @@ export function HomeScreen(props: HomeScreenProps) {
             {...scrollGateHandlers}
             scrollEventThrottle={16}
             contentContainerStyle={{
+              paddingTop: listArtworkClearance,
               paddingBottom:
                 Platform.OS === "ios"
                   ? 8

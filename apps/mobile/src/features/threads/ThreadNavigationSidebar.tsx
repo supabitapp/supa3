@@ -24,10 +24,8 @@ import type { SearchBarCommands } from "react-native-screens";
 
 import { AppText as Text } from "../../components/AppText";
 import { brandTitleOffset, CompactBrandTitle } from "../../components/CompactBrandTitle";
-import {
-  StageArtworkBackdrop,
-  useStageArtworkVariant,
-} from "../../components/StageArtworkBackdrop";
+import { StageArtworkBackdrop } from "../../components/StageArtworkBackdrop";
+import { useEnvironmentIdentification } from "../../components/useEnvironmentIdentification";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { SymbolView } from "../../components/AppSymbol";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
@@ -89,6 +87,10 @@ type SidebarListItem =
   | { readonly type: "v2-show-more"; readonly key: string; readonly hiddenCount: number };
 
 const SIDEBAR_STICKY_HEADER_HEIGHT = 106;
+// Stage art behind the native title bar, fading out over the stacked search field. It starts
+// below the status bar, which iPad shares with the light detail pane.
+const SIDEBAR_ARTWORK_HEIGHT = 80;
+const SIDEBAR_ARTWORK_FADE_LENGTH = 32;
 
 function currentMinute() {
   return new Date().toISOString().slice(0, 16);
@@ -162,7 +164,7 @@ function ThreadNavigationSidebarPane(
 ) {
   const { themeVariables: materialTheme } = useAppearancePreferences();
   const drawerColor = materialTheme["--color-drawer"];
-  const stageArtworkVariant = useStageArtworkVariant();
+  const stageArtworkVariant = useEnvironmentIdentification().artworkVariant;
 
   const insets = useSafeAreaInsets();
   const { fabClearance } = useAndroidControlSizing();
@@ -925,7 +927,7 @@ function ThreadNavigationSidebarPane(
             <StageArtworkBackdrop
               variant={stageArtworkVariant}
               fadeTo="--color-drawer"
-              fadeStart={SIDEBAR_TITLE_BAR_HEIGHT / SIDEBAR_ARTWORK_HEIGHT}
+              fadeLength={SIDEBAR_ARTWORK_FADE_LENGTH}
             />
           </View>
         ) : null}
@@ -1102,11 +1104,6 @@ function ThreadNavigationSidebarPane(
     </View>
   );
 }
-
-// The art sits behind the native title bar and fades out over the stacked search field. It
-// starts below the status bar, which iPad shares with the light detail pane.
-const SIDEBAR_TITLE_BAR_HEIGHT = 48;
-const SIDEBAR_ARTWORK_HEIGHT = 80;
 
 const styles = StyleSheet.create({
   threadList: {
