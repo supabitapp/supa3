@@ -68,6 +68,8 @@ export interface PendingUserInputDraftAnswer {
   readonly selectedOptionValues?: ReadonlyArray<string>;
   readonly customAnswer?: string;
   readonly attachmentCount?: number;
+  /** A paste or pick is still converting; unmounting its field drops the files. */
+  readonly attachmentsPreparing?: boolean;
   readonly attachmentsBlocked?: boolean;
 }
 

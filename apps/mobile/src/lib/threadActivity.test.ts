@@ -2038,7 +2038,7 @@ describe("resumePendingUserInputQuestionIndex", () => {
     ).toBe(0);
   });
 
-  it("counts attachment-only answers and skips blocked uploads", () => {
+  it("counts attachment-only answers and treats blocked uploads as unanswered", () => {
     expect(
       resumePendingUserInputQuestionIndex(questions, {
         runtime: { attachmentCount: 1 },

@@ -4,6 +4,7 @@ import type { RuntimeRequestId } from "@supacode/contracts";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Keyboard,
   Platform,
   Pressable,
@@ -103,6 +104,8 @@ const CARD_LAYOUT_TRANSITION = LinearTransition.duration(200);
 /** Long enough to see the picked option highlight before the next question replaces it. */
 const SINGLE_SELECT_ADVANCE_DELAY_MS = 200;
 
+const FALLBACK_TITLE = "Fill in the pending answers";
+
 export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const { requestId, questions } = props.pendingUserInput;
   const questionCount = questions.length;
@@ -122,10 +125,11 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   }
   const questionIndex = Math.min(page.index, Math.max(questionCount - 1, 0));
   const question = questions[questionIndex];
+  const activeDraft = question ? props.drafts[question.id] : undefined;
   const isLastQuestion = questionIndex >= questionCount - 1;
   const questionAnswered =
-    question !== undefined &&
-    isPendingUserInputQuestionAnswered(question, props.drafts[question.id]);
+    question !== undefined && isPendingUserInputQuestionAnswered(question, activeDraft);
+  const attachmentsPreparing = activeDraft?.attachmentsPreparing === true;
   const canSubmit = props.canOperateThread && !responseDisabled && props.answers !== null;
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,11 +140,20 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     }
   }, []);
   useEffect(() => cancelAutoAdvance, [cancelAutoAdvance]);
+  const describeQuestion = (index: number) => {
+    const header = questions[index]?.header ?? FALLBACK_TITLE;
+    return questionCount > 1 ? `${header}, question ${index + 1} of ${questionCount}` : header;
+  };
   const goToQuestion = (index: number) => {
     cancelAutoAdvance();
-    // The page's answer field unmounts; release the keyboard with it.
+    // Leaving unmounts the page's answer field, which would drop a paste or
+    // pick that is still converting.
+    if (attachmentsPreparing) {
+      return;
+    }
     Keyboard.dismiss();
     setPage({ requestId, index });
+    AccessibilityInfo.announceForAccessibility(describeQuestion(index));
   };
   const advance = (scheduledRequestId: RuntimeRequestId) => {
     if (scheduledRequestId !== requestId) {
@@ -311,7 +324,8 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Collapse user input"
+        accessibilityLabel={describeQuestion(questionIndex)}
+        accessibilityHint="Collapses user input"
         onPress={props.onToggleCollapsed}
         className="flex-row items-start gap-2"
       >
@@ -321,16 +335,13 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               User input needed
             </Text>
             {questionCount > 1 ? (
-              <Text
-                accessibilityLabel={`Question ${questionIndex + 1} of ${questionCount}`}
-                className="font-sans text-xs tabular-nums text-foreground-muted"
-              >
+              <Text className="font-sans text-xs tabular-nums text-foreground-muted">
                 {questionIndex + 1} of {questionCount}
               </Text>
             ) : null}
           </View>
           <Text className="font-supacode-bold text-lg text-foreground">
-            {question?.header ?? "Fill in the pending answers"}
+            {question?.header ?? FALLBACK_TITLE}
           </Text>
         </View>
         <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
@@ -374,7 +385,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                 const optionValue = option.value ?? option.label.trim();
                 const selected = isPendingUserInputOptionSelected(
                   question,
-                  props.drafts[question.id],
+                  activeDraft,
                   optionValue,
                 );
                 const description =
@@ -416,7 +427,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                 question={question}
                 questions={questions}
                 disabled={responseDisabled}
-                value={props.drafts[question.id]?.customAnswer ?? ""}
+                value={activeDraft?.customAnswer ?? ""}
                 onChangeText={(value) => props.onChangeCustomAnswer(requestId, question.id, value)}
                 onInputFocusChange={props.onInputFocusChange}
               />
@@ -430,6 +441,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             label="Back"
             size="large"
             tone="secondary"
+            disabled={attachmentsPreparing}
             onPress={() => goToQuestion(questionIndex - 1)}
           />
         ) : null}
@@ -440,7 +452,10 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               size="large"
               tone={props.answers ? "primary" : "secondary"}
               disabled={!canSubmit}
-              onPress={() => void props.onSubmit()}
+              onPress={() => {
+                cancelAutoAdvance();
+                void props.onSubmit();
+              }}
             />
           ) : (
             <RequestActionButton
@@ -458,7 +473,10 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           accessibilityRole="button"
           className="items-center justify-center rounded-2xl px-4 py-2.5 active:opacity-70"
           disabled={isResponding}
-          onPress={() => void props.onDismiss()}
+          onPress={() => {
+            cancelAutoAdvance();
+            void props.onDismiss();
+          }}
         >
           <Text className="font-supacode-bold text-sm text-foreground-muted">
             Dismiss without answering
