@@ -11,7 +11,7 @@ import type {
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
 
-import { presentThreadShell } from "./state/shell";
+import { presentThreadShell } from "./state/shell.ts";
 
 export interface PendingCreationMessage {
   readonly environmentId: EnvironmentId;
