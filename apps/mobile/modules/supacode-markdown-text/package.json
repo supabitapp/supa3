@@ -31,6 +31,7 @@
   "peerDependencies": {
     "@supacode/client-runtime": "*",
     "@supacode/shared": "*",
+    "@types/react": "*",
     "expo": "*",
     "expo-asset": "*",
     "expo-clipboard": "*",
@@ -39,6 +40,11 @@
     "react": "*",
     "react-native": "*",
     "react-native-nitro-markdown": "*"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
   },
   "codegenConfig": {
     "name": "SupacodeMarkdownTextSpec",
