@@ -453,6 +453,27 @@ describe("formatModelSelectionEffort", () => {
     );
   });
 
+  it("names Pi thinking levels, including disabled thinking", () => {
+    const models = catalog({}).map((model) => ({
+      ...model,
+      capabilities: {
+        optionDescriptors: model.capabilities.optionDescriptors.map((descriptor) => ({
+          ...descriptor,
+          id: "thinking",
+          label: "Thinking",
+          options: [{ id: "off", label: "Off" }, ...descriptor.options],
+        })),
+      },
+    }));
+    expect(formatModelSelectionEffort(selection(), models)).toBe("High");
+    expect(
+      formatModelSelectionEffort(selection([{ id: "thinking", value: "xhigh" }]), models),
+    ).toBe("Extra High");
+    expect(formatModelSelectionEffort(selection([{ id: "thinking", value: "off" }]), models)).toBe(
+      "Off",
+    );
+  });
+
   it("shows nothing for a model the catalog does not describe", () => {
     expect(formatModelSelectionEffort(selection([{ id: "effort", value: "high" }]))).toBeNull();
     expect(
