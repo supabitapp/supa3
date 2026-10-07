@@ -1100,6 +1100,44 @@ describe("buildThreadListV2ListItems", () => {
     expect(items.map((item) => item.type)).toEqual(["v2-thread", "v2-pending"]);
   });
 
+  it("keeps drafts in a separate section from tasks that send on reconnect", () => {
+    const makeDraftTask = (id: string): PendingNewTask => ({
+      kind: "draft",
+      key: `draft-task:new-task:${id}`,
+      environmentId,
+      projectId: ProjectId.make("project-1"),
+      projectTitle: undefined,
+      projectCwd: undefined,
+      branch: null,
+      title: id,
+      createdAt: NOW,
+      draftKey: `new-task:${id}`,
+      draft: { text: id, attachments: [] },
+    });
+    const items = buildThreadListV2ListItems({
+      items: [],
+      pendingTasks: [
+        makeDraftTask("draft-1"),
+        makeDraftTask("draft-2"),
+        makePendingTask("queued-1"),
+        makePendingTask("queued-2"),
+      ],
+    });
+
+    expect(
+      items.map((item) =>
+        item.type === "v2-pending"
+          ? [item.pendingTask.kind, item.showPendingDivider, item.showTrailingDivider]
+          : item.type,
+      ),
+    ).toEqual([
+      ["draft", true, true],
+      ["draft", false, false],
+      ["pending", true, true],
+      ["pending", false, false],
+    ]);
+  });
+
   it("keeps the settled shelf between active and settled rows when nothing is queued", () => {
     const items = buildThreadListV2ListItems({
       items: layout.items,

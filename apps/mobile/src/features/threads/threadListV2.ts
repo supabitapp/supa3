@@ -315,7 +315,7 @@ export interface ThreadListV2PendingListItem {
   readonly type: "v2-pending";
   readonly key: string;
   readonly pendingTask: PendingNewTask;
-  /** First queued row after the active block draws the PENDING divider. */
+  /** The first draft or queued row draws its section's divider. */
   readonly showPendingDivider: boolean;
   /** Same rule as the thread rows: a hairline unless the next row carries its
       own section rule or none follows. */
@@ -556,7 +556,7 @@ export function buildThreadListV2ListItems(input: {
     type: "v2-pending",
     key: `v2-${pendingTask.key}`,
     pendingTask,
-    showPendingDivider: index === 0,
+    showPendingDivider: index === 0 || input.pendingTasks[index - 1]?.kind !== pendingTask.kind,
     showTrailingDivider: false,
   }));
   const workingCount = input.workingCount ?? 0;
