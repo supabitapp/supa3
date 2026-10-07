@@ -68,6 +68,8 @@ export interface PendingUserInputDraftAnswer {
   readonly selectedOptionValues?: ReadonlyArray<string>;
   readonly customAnswer?: string;
   readonly attachmentCount?: number;
+  /** A paste or pick is still converting; unmounting its field drops the files. */
+  readonly attachmentsPreparing?: boolean;
   readonly attachmentsBlocked?: boolean;
 }
 
@@ -1636,6 +1638,24 @@ export function togglePendingUserInputOptionSelection(
     customAnswer: "",
     selectedOptionValues: [resolvedOptionValue],
   };
+}
+
+export function isPendingUserInputQuestionAnswered(
+  question: ThreadUserInputQuestion,
+  draft: PendingUserInputDraftAnswer | undefined,
+): boolean {
+  return resolvePendingUserInputAnswer(question, draft) !== null;
+}
+
+/** Where a questionnaire resumes: the first unanswered question, else the last one. */
+export function resumePendingUserInputQuestionIndex(
+  questions: ReadonlyArray<ThreadUserInputQuestion>,
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
+): number {
+  const index = questions.findIndex(
+    (question) => !isPendingUserInputQuestionAnswered(question, draftAnswers[question.id]),
+  );
+  return index === -1 ? Math.max(questions.length - 1, 0) : index;
 }
 
 export function buildPendingUserInputAnswers(

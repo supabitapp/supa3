@@ -149,6 +149,7 @@ export function useSelectedThreadRequests() {
               question.id,
             );
             const attachments = attachmentDrafts[key]?.attachments ?? [];
+            const attachmentsPreparing = (preparationCounts[key] ?? 0) > 0;
             const uploadInput = {
               environmentId: selectedThreadShell.environmentId,
               attachments,
@@ -165,11 +166,12 @@ export function useSelectedThreadRequests() {
                   )
                 ]?.[question.id],
                 attachmentCount: attachments.length,
+                attachmentsPreparing,
                 attachmentsBlocked:
                   (attachments.length > 0 &&
                     questionServerConfigs.get(selectedThreadShell.environmentId)?.environment
                       .capabilities.questionAttachments !== true) ||
-                  (preparationCounts[key] ?? 0) > 0 ||
+                  attachmentsPreparing ||
                   composerAttachmentsStillUploading(uploadInput) ||
                   composerAttachmentUploadBlockReason({
                     ...uploadInput,
