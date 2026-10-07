@@ -1,0 +1,24 @@
+name: CI Parallel Step Probe
+on:
+  push:
+    branches: [supacode/ci-parallel-benchmark]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 2
+    steps:
+      - name: Start independent work
+        id: independent
+        background: true
+        run: echo background-step-supported
+      - name: Run foreground work
+        run: echo foreground-step-supported
+      - name: Join independent work
+        wait: independent
+      - parallel:
+          - name: First grouped step
+            run: echo parallel-group-supported
+          - name: Second grouped step
+            run: echo parallel-group-supported
