@@ -214,6 +214,7 @@ overrides:
   '@effect/vitest': 4.0.1
   '@effect/vitest>vitest': '-'
   '@expo/dom-webview': 58.0.2
+  '@expo/fingerprint': 0.21.2
   '@expo/metro-config': 58.0.6
   expo-constants: 58.0.9
   expo-router: 58.0.10
@@ -240,6 +241,7 @@ pnpmfileChecksum: sha256-nVOmFZ6JT8FxIhcN+S5sJXuP1DtIhTre5ZGvjJU+4tk=
 
 patchedDependencies:
   '@effect/vitest@4.0.1': 359f6fb2f7b3ec145bb72208edb9034f02489791aa2491a55cdbd69bd56ee0d2
+  '@expo/fingerprint@0.21.2': 2db5c6908c5b0fb5d07b358ad12a0e1fd23acf1740e545589504d8cb79688601
   '@expo/metro-config@58.0.6': 90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760
   '@ff-labs/fff-node@0.9.4': c4e3cc2420ceb9dc650f9d189e9c24baf7e83f342998bacda5f459a4ce7927a8
   '@legendapp/list@3.3.5': 9d4759ae887de512b821e487dbaa3b567155569b3f04ed5aac31d39bea5f1b6a
@@ -11951,7 +11953,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/fingerprint@0.21.2(supports-color@8.1.1)':
+  '@expo/fingerprint@0.21.2(patch_hash=2db5c6908c5b0fb5d07b358ad12a0e1fd23acf1740e545589504d8cb79688601)(supports-color@8.1.1)':
     dependencies:
       '@expo/env': 2.5.1(supports-color@8.1.1)
       '@expo/spawn-async': 1.8.0
@@ -16502,7 +16504,7 @@ snapshots:
       '@expo/config-plugins': 58.0.4(supports-color@8.1.1)(typescript@7.0.2)
       '@expo/devtools': 58.0.2(@types/react@19.3.0)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       '@expo/dom-webview': 58.0.2(@types/react@19.3.0)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
-      '@expo/fingerprint': 0.21.2(supports-color@8.1.1)
+      '@expo/fingerprint': 0.21.2(patch_hash=2db5c6908c5b0fb5d07b358ad12a0e1fd23acf1740e545589504d8cb79688601)(supports-color@8.1.1)
       '@expo/local-build-cache-provider': 58.0.1(supports-color@8.1.1)(typescript@7.0.2)
       '@expo/log-box': 58.0.8(@expo/dom-webview@58.0.2)(@types/react@19.3.0)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       '@expo/log-box-utils': 58.0.1
