@@ -2,7 +2,7 @@ import { RequestActionButton } from "./RequestActionButton";
 import { QuestionAttachments } from "./QuestionAttachments";
 import type { RuntimeRequestId } from "@supacode/contracts";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Keyboard,
   Platform,
@@ -126,6 +126,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const questionAnswered =
     question !== undefined &&
     isPendingUserInputQuestionAnswered(question, props.drafts[question.id]);
+  const canSubmit = props.canOperateThread && !responseDisabled && props.answers !== null;
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelAutoAdvance = useCallback(() => {
@@ -141,17 +142,33 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     Keyboard.dismiss();
     setPage({ requestId, index });
   };
+  const advance = (scheduledRequestId: RuntimeRequestId) => {
+    if (scheduledRequestId !== requestId) {
+      return;
+    }
+    if (!isLastQuestion) {
+      goToQuestion(questionIndex + 1);
+    } else if (canSubmit) {
+      void props.onSubmit();
+    }
+  };
+  // The delayed advance must see the answer the tap just recorded, so it reads
+  // the latest render's advance instead of the one that scheduled it, and skips
+  // a request that replaced the one tapped.
+  const advanceRef = useRef(advance);
+  useLayoutEffect(() => {
+    advanceRef.current = advance;
+  });
   const selectOption = (selectedQuestion: ThreadUserInputQuestion, optionValue: string) => {
     props.onSelectOption(requestId, selectedQuestion, optionValue);
-    if (selectedQuestion.multiSelect || isLastQuestion) {
+    if (selectedQuestion.multiSelect) {
       return;
     }
     cancelAutoAdvance();
-    // A request swapped in meanwhile resets the stale page on the next render.
-    advanceTimerRef.current = setTimeout(
-      () => goToQuestion(questionIndex + 1),
-      SINGLE_SELECT_ADVANCE_DELAY_MS,
-    );
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null;
+      advanceRef.current(requestId);
+    }, SINGLE_SELECT_ADVANCE_DELAY_MS);
   };
 
   const cardCoverage = props.cardCoverage;
@@ -422,7 +439,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               label={questionCount > 1 ? "Submit answers" : "Submit answer"}
               size="large"
               tone={props.answers ? "primary" : "secondary"}
-              disabled={!props.canOperateThread || responseDisabled || props.answers === null}
+              disabled={!canSubmit}
               onPress={() => void props.onSubmit()}
             />
           ) : (
