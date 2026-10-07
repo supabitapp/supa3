@@ -136,6 +136,7 @@ import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
+import { desktopUpdateRestart } from "../state/desktopUpdateRestart";
 
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useInlineConfirm } from "../hooks/useInlineConfirm";
@@ -3745,20 +3746,8 @@ export default function LegacySidebar() {
         setDesktopUpdateActionPending(false);
         return;
       }
-      void bridge
-        .installUpdate()
-        .then((result) => {
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: actionError,
-            }),
-          );
-        })
+      void desktopUpdateRestart
+        .install(bridge)
         .catch((error) => {
           toastManager.add(
             stackedThreadToast({
