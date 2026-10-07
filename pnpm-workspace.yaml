@@ -204,6 +204,10 @@ patchedDependencies:
   expo-blur@58.0.3: patches/expo-blur@58.0.3.patch
   expo-audio@58.0.4: patches/expo-audio@58.0.4.patch
   "@effect/vitest@4.0.1": patches/@effect__vitest@4.0.1.patch
+  # Forwards Node's module format through the config loader's compile hook, so the TypeScript
+  # that app.config.ts imports gets its types stripped and the Expo config stays in the
+  # fingerprint. Drop once an @expo/fingerprint release includes expo/expo#51168.
+  "@expo/fingerprint@0.21.2": patches/@expo__fingerprint@0.21.2.patch
   "@expo/metro-config@58.0.6": patches/@expo__metro-config@58.0.6.patch
   expo-sharing@58.0.13: patches/expo-sharing@58.0.13.patch
   expo-widgets@58.0.11: patches/expo-widgets@58.0.11.patch
