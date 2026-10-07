@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -10,7 +10,6 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
-import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -26,7 +25,6 @@ export type ReasoningSliderRowProps = {
   readonly choices: ReadonlyArray<{
     readonly id: string;
     readonly label: string;
-    readonly isDefault?: boolean;
   }>;
   readonly selectedIndex: number;
   readonly onChange: (value: string) => void;
@@ -103,11 +101,9 @@ function createReasoningGesture(input: {
 /** Moves the thumb on the UI thread; previews stops in JS and saves only on release. */
 export function ReasoningSliderRow(props: ReasoningSliderRowProps) {
   const { selectedIndex, choices, onChange } = props;
-  const { themeAppearance, themeVariables: colors } = useAppearancePreferences();
-  const accent = themeAppearance === "dark" ? "#70A4A7" : "#38787D";
+  const { themeVariables: colors } = useAppearancePreferences();
   const max = choices.length - 1;
   const disabled = max < 1;
-  const defaultIndex = choices.findIndex((choice) => choice.isDefault);
   const progress = useSharedValue(max > 0 ? selectedIndex / max : 0);
   const trackWidth = useSharedValue(0);
   const dragging = useSharedValue(false);
@@ -169,40 +165,13 @@ export function ReasoningSliderRow(props: ReasoningSliderRowProps) {
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * Math.max(0, trackWidth.value - THUMB_SIZE) }],
   }));
-  const canReset = !disabled && defaultIndex >= 0 && previewIndex !== defaultIndex;
 
   return (
     <View className="border-b border-border-subtle bg-grouped-card px-4 pb-2 pt-1">
-      <View className="flex-row items-center">
-        <View
-          className="h-8 w-11 justify-center"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          <SymbolView name={{ ios: "bolt.fill", android: "bolt" }} size={18} tintColor={accent} />
-        </View>
-        <Text
-          className="min-w-0 flex-1 text-center text-sm font-supacode-medium"
-          style={{ color: accent }}
-        >
+      <View className="h-8 flex-row items-center">
+        <Text className="min-w-0 flex-1 text-center text-sm font-supacode-medium text-primary-text">
           {choices[previewIndex]?.label}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Reset ${props.label.toLowerCase()} to default`}
-          accessibilityState={{ disabled: !canReset }}
-          disabled={!canReset}
-          className="h-8 w-11 items-end justify-center"
-          hitSlop={{ top: 6, bottom: 6 }}
-          style={{ opacity: canReset ? 1 : 0.35 }}
-          onPress={() => select(defaultIndex)}
-        >
-          <SymbolView
-            name="arrow.clockwise"
-            size={18}
-            tintColor={colors["--color-foreground-muted"]}
-          />
-        </Pressable>
       </View>
       <GestureDetector gesture={gesture}>
         <View
@@ -235,7 +204,7 @@ export function ReasoningSliderRow(props: ReasoningSliderRowProps) {
           >
             <Animated.View
               className="h-full rounded-full"
-              style={[{ backgroundColor: accent }, fillStyle]}
+              style={[{ backgroundColor: colors["--color-primary"] }, fillStyle]}
             />
           </View>
           <View
@@ -255,7 +224,9 @@ export function ReasoningSliderRow(props: ReasoningSliderRowProps) {
                   width: DOT_SIZE,
                   height: DOT_SIZE,
                   backgroundColor:
-                    index <= previewIndex ? "#FFFFFF99" : colors["--color-foreground-muted"],
+                    index <= previewIndex
+                      ? themeColorWithAlpha(colors["--color-primary-foreground"], 0.6)
+                      : colors["--color-foreground-muted"],
                 }}
               />
             ))}
@@ -268,8 +239,8 @@ export function ReasoningSliderRow(props: ReasoningSliderRowProps) {
                 top: (TOUCH_HEIGHT - THUMB_SIZE) / 2,
                 width: THUMB_SIZE,
                 height: THUMB_SIZE,
-                backgroundColor: "#FFFFFF",
-                shadowColor: "#000000",
+                backgroundColor: colors["--color-primary-foreground"],
+                shadowColor: colors["--color-primary-shadow"],
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.15,
                 shadowRadius: 2,
