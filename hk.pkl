@@ -17,7 +17,8 @@ steps {
   ["case-conflicts"] = Builtins.check_case_conflict
   ["actionlint"] {
     glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
-    check = "actionlint {{files}}"
+    // Remove this compatibility exception when https://github.com/rhysd/actionlint/pull/694 ships.
+    check = "actionlint -ignore '^unexpected key \"background\" for step to run (shell command|action)\\.' {{files}}"
   }
   ["shellcheck"] {
     glob = List("**/*.sh", "**/*.bash")

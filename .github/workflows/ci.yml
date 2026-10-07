@@ -41,7 +41,9 @@ jobs:
         run: vp run --filter @supacode/desktop ensure:electron
 
       # Files/dependencies are repo-wide; export checks cover clean workspaces only.
+      # The runner waits for background checks before cleanup and propagates failures.
       - name: Check unused code
+        background: true
         run: vp run knip:check
 
       - name: Check
