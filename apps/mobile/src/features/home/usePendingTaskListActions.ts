@@ -9,8 +9,8 @@ import { clearComposerDraftContent } from "../../state/use-composer-drafts";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import {
   dispatchingQueuedMessageIdAtom,
-  holdEditingQueuedMessage,
-  releaseEditingQueuedMessage,
+  holdDeletingQueuedMessage,
+  releaseDeletingQueuedMessage,
 } from "../../state/use-thread-outbox";
 
 export function usePendingTaskListActions(): {
@@ -69,7 +69,7 @@ export function usePendingTaskListActions(): {
           style: "destructive",
           onPress: () => {
             const messageId = pendingTask.message.messageId;
-            if (!holdEditingQueuedMessage(messageId)) {
+            if (!holdDeletingQueuedMessage(messageId)) {
               Alert.alert(
                 "Pending task is open",
                 "Close the pending task editor before deleting it.",
@@ -84,12 +84,12 @@ export function usePendingTaskListActions(): {
                   undefined,
                   () => appAtomRegistry.get(dispatchingQueuedMessageIdAtom) !== messageId,
                 );
-                releaseEditingQueuedMessage(messageId);
+                releaseDeletingQueuedMessage(messageId, removed);
                 return removed;
               },
               (result) => result,
             ).catch((error) => {
-              releaseEditingQueuedMessage(messageId);
+              releaseDeletingQueuedMessage(messageId, false);
               Alert.alert(
                 "Could not delete pending task",
                 error instanceof Error ? error.message : "The pending task could not be removed.",
