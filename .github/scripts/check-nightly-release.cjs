@@ -1,5 +1,3 @@
-const MINIMUM_RELEASE_GAP_MS = 6 * 60 * 60 * 1000;
-
 function repositoryDefaultBranch(context) {
   const branch = context.payload.repository?.default_branch;
   if (!branch) {
@@ -52,17 +50,12 @@ async function findLatestNightly({ github, context }) {
 }
 
 // Runs after the workflow acquires the nightly concurrency lock.
-async function shouldReleaseNightly({ github, context, core, now = Date.now() }) {
+async function shouldReleaseNightly({ github, context, core }) {
   const lastNightly = await findLatestNightly({ github, context });
 
   if (!lastNightly) {
     core.info("No published nightly found. Proceeding with release.");
     return true;
-  }
-
-  if (now - Date.parse(lastNightly.published_at) < MINIMUM_RELEASE_GAP_MS) {
-    core.info(`Nightly ${lastNightly.tag_name} was published less than six hours ago. Skipping.`);
-    return false;
   }
 
   const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
@@ -77,7 +70,7 @@ async function shouldReleaseNightly({ github, context, core, now = Date.now() })
     return false;
   }
 
-  core.info(`New commits since ${lastNightly.tag_name}, and the six-hour gap has passed.`);
+  core.info(`New commits since ${lastNightly.tag_name}. Proceeding with release.`);
   return true;
 }
 
