@@ -110,8 +110,8 @@ it("resolves automatic message delivery from authoritative provider capabilities
   );
 });
 
-it.each(["preparing", "starting"] as const)(
-  "queues an automatic message while the handoff run is %s",
+it.each(["preparing", "starting", "waiting"] as const)(
+  "queues an automatic message while the run is %s",
   (status) => {
     const projection = dispatchProjection(baseCapabilities);
     assert.deepEqual(
@@ -128,6 +128,9 @@ it.each(["preparing", "starting"] as const)(
 it.each([
   { state: "missing", override: null },
   { state: "pending", override: { status: "pending" } },
+  { state: "interrupted", override: { status: "interrupted" } },
+  { state: "failed", override: { status: "failed" } },
+  { state: "cancelled", override: { status: "cancelled" } },
   { state: "previous-attempt", override: { runAttemptId: RunAttemptId.make("previous-attempt") } },
   { state: "child-node", override: { nodeId: NodeId.make("child-node") } },
 ] as const)("queues automatic delivery when the root provider turn is $state", ({ override }) => {
@@ -142,6 +145,19 @@ it.each([
     ),
     { type: "queue_after_active" },
   );
+  for (const deliveryIntent of ["steer", "restart"] as const) {
+    assert.deepEqual(
+      CommandPolicy.resolveMessageDispatchIntent(
+        { ...projection, providerTurns },
+        { type: "start_immediately" },
+        deliveryIntent,
+      ),
+      {
+        type: deliveryIntent === "steer" ? "steer_active" : "restart_active",
+        targetRunId: activeRunId,
+      },
+    );
+  }
 });
 
 it.each([
@@ -176,18 +192,26 @@ it.each([
   },
 );
 
-it("preserves completed-turn delivery for the orchestrator to start a follow-up", () => {
+it.each([
+  { status: "running", expected: "steer_active" },
+  { status: "waiting", expected: "steer_active" },
+  { status: "preparing", expected: "queue_after_active" },
+  { status: "starting", expected: "queue_after_active" },
+] as const)("resolves completed-turn delivery while the run is $status", ({ status, expected }) => {
   const projection = dispatchProjection(baseCapabilities);
   assert.deepEqual(
     CommandPolicy.resolveMessageDispatchIntent(
       {
         ...projection,
+        runs: projection.runs.map((run) => ({ ...run, status })),
         providerTurns: projection.providerTurns.map((turn) => ({ ...turn, status: "completed" })),
       },
       { type: "start_immediately" },
       "auto",
     ),
-    { type: "steer_active", targetRunId: activeRunId },
+    expected === "steer_active"
+      ? { type: "steer_active", targetRunId: activeRunId }
+      : { type: "queue_after_active" },
   );
 });
 

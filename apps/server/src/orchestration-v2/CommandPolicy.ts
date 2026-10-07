@@ -143,12 +143,11 @@ export function resolveMessageDispatchIntent(
     projection.providerTurns.filter((turn) => turn.nodeId === activeRun.rootNodeId),
     activeRun.activeAttemptId,
   );
-  if (
-    activeRun.status === "preparing" ||
-    activeRun.status === "starting" ||
-    providerTurn === undefined ||
-    providerTurn.status === "pending"
-  ) {
+  const canSteerRunningTurn = activeRun.status === "running" && providerTurn?.status === "running";
+  const canStartAfterCompletedTurn =
+    (activeRun.status === "running" || activeRun.status === "waiting") &&
+    providerTurn?.status === "completed";
+  if (!canSteerRunningTurn && !canStartAfterCompletedTurn) {
     return { type: "queue_after_active" };
   }
 

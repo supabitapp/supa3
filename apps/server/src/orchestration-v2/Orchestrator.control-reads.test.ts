@@ -51,13 +51,26 @@ const layerTest = Layer.mergeAll(
   ),
 );
 
-it.effect.each(["web", "mobile", "mcp"] as const)(
-  "delivers a %s message queued before the first provider turn exists",
-  (creationSource) =>
+it.effect.each([
+  { creationSource: "web", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "mobile", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "mcp", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "web", runStatus: "running", turnStatus: "pending" },
+  { creationSource: "web", runStatus: "running", turnStatus: "interrupted" },
+  { creationSource: "web", runStatus: "running", turnStatus: "failed" },
+  { creationSource: "web", runStatus: "running", turnStatus: "cancelled" },
+  { creationSource: "web", runStatus: "waiting", turnStatus: "running" },
+  { creationSource: "web", runStatus: "running", turnStatus: "completed" },
+  { creationSource: "web", runStatus: "waiting", turnStatus: "completed" },
+] as const)(
+  "delivers a $creationSource message with a $runStatus run and $turnStatus provider turn",
+  ({ creationSource, runStatus, turnStatus }) =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const sink = yield* EventSink.EventSinkV2;
-      const threadId = ThreadId.make(`thread:startup-delivery:${creationSource}`);
+      const threadId = ThreadId.make(
+        `thread:automatic-delivery:${creationSource}:${runStatus}:${turnStatus}`,
+      );
       yield* orchestrator.dispatch({
         type: "thread.create",
         commandId: CommandId.make("startup-create"),
@@ -127,17 +140,40 @@ it.effect.each(["web", "mobile", "mcp"] as const)(
             type: "run.updated",
             threadId,
             occurredAt: now,
-            payload: { ...run, status: "running", startedAt: now },
+            payload: { ...run, status: runStatus, startedAt: now },
           },
         ],
       });
+      if (turnStatus !== "missing") {
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make("startup-provider-turn"),
+              type: "provider-turn.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: ProviderTurnId.make("startup-provider-turn"),
+                providerThreadId: providerThread.id,
+                nodeId: run.rootNodeId!,
+                runAttemptId: run.activeAttemptId,
+                nativeTurnRef: null,
+                ordinal: 1,
+                status: turnStatus,
+                startedAt: turnStatus === "pending" ? null : now,
+                completedAt: turnStatus === "pending" || turnStatus === "running" ? null : now,
+              },
+            },
+          ],
+        });
+      }
       const messageId = MessageId.make("startup-follow-up");
       const followUpCommand = {
         type: "message.dispatch" as const,
         commandId: CommandId.make("startup-follow-up"),
         threadId,
         messageId,
-        text: "Follow-up during provider startup",
+        text: "Follow-up while the provider cannot be steered",
         attachments: [],
         dispatchMode: { type: "start_immediately" as const },
         deliveryIntent: "auto" as const,
