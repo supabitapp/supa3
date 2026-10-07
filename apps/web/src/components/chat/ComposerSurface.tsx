@@ -5,14 +5,14 @@ import { ComposerBanner } from "./ComposerBanner";
 
 /** One glass backdrop until a top attachment needs the composer to cover its overlap. */
 function Shell({
-  contextStrip = false,
+  bottomStrip = false,
   className,
   ...props
-}: ComponentProps<"div"> & { contextStrip?: boolean }) {
+}: ComponentProps<"div"> & { bottomStrip?: boolean }) {
   return (
     <div
       data-slot="composer-shell"
-      data-with-context={contextStrip || undefined}
+      data-with-context={bottomStrip || undefined}
       className={cn(
         "@container/composer-surface group/composer-surface relative isolate mx-auto w-full max-w-(--chat-content-max-width)",
         "[--chat-composer-drawer-inset:1.375rem] [--chat-composer-glass-surface:var(--card)] [--chat-composer-outline:rgb(0_0_0/8%)]",
@@ -23,7 +23,7 @@ function Shell({
         "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-3xl before:bg-(--chat-composer-glass-surface)/(--glass-opacity) before:backdrop-blur-(--glass-blur) before:backdrop-saturate-(--glass-saturation)",
         "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:before:bg-(--chat-composer-glass-surface)",
         "has-data-[composer-banner-surface=attached]:before:hidden data-model-strip-transition:before:hidden",
-        contextStrip && [
+        bottomStrip && [
           "[--chat-composer-context-extension:2.25rem] sm:[--chat-composer-context-extension:2rem]",
           // Keep one continuous backdrop around the fixed-pixel corners and rem-sized strip inset.
           "supports-[clip-path:shape(from_0_0,line_to_1px_1px)]:before:rounded-none",
@@ -82,9 +82,12 @@ function Main({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
+const contextStripRowClasses =
+  "group/composer-context flex items-center gap-2 overflow-x-clip overflow-y-visible ps-1 pe-2";
+
 /**
  * The context controls' drawer. Below the composer it extends the shell's glass; above it, it
- * attaches like a notice so the shell switches to its attached-surface glass.
+ * joins the composer's notice column so the shell switches to its attached-surface glass.
  */
 function ContextStrip({
   placement = "bottom",
@@ -96,10 +99,7 @@ function ContextStrip({
       <ComposerBanner.Attachment>
         <ComposerBanner.Surface
           data-slot="composer-context-strip"
-          className={cn(
-            "group/composer-context flex items-center gap-2 overflow-x-clip overflow-y-visible ps-1 pe-2 pt-1 pb-5",
-            className,
-          )}
+          className={cn(contextStripRowClasses, "pt-1 pb-5", className)}
           {...props}
         />
       </ComposerBanner.Attachment>
@@ -109,7 +109,8 @@ function ContextStrip({
     <div
       data-slot="composer-context-strip"
       className={cn(
-        "group/composer-context relative isolate mx-auto -mt-4 flex w-[calc(100%-2*var(--chat-composer-drawer-inset))] items-center gap-2 overflow-x-clip overflow-y-visible ps-1 pe-2 pt-5 pb-1",
+        contextStripRowClasses,
+        "relative isolate mx-auto -mt-4 w-[calc(100%-2*var(--chat-composer-drawer-inset))] pt-5 pb-1",
         "before:absolute before:inset-0 before:-z-1 before:rounded-b-2xl before:border before:border-(--chat-composer-outline) before:mask-b-from-transparent before:mask-b-from-4 before:mask-b-to-black before:mask-b-to-4 before:shadow-composer",
         "dark:before:border-white/7 dark:before:bg-composer-seam-below dark:before:shadow-composer-dark",
         "group-has-data-[composer-banner-surface=attached]/composer-surface:before:bg-(--chat-composer-glass-surface)/(--glass-opacity) group-has-data-[composer-banner-surface=attached]/composer-surface:before:backdrop-blur-(--glass-blur) group-has-data-[composer-banner-surface=attached]/composer-surface:before:backdrop-saturate-(--glass-saturation)",

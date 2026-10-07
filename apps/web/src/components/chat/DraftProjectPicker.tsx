@@ -300,6 +300,10 @@ export function DraftProjectPicker({
       composerRef?.current?.focusAtEnd();
     },
   });
+  const triggerLabel = isScratchDraft
+    ? "No project"
+    : (activeProjectDisplayName ?? "Choose a project");
+
   if (!canChooseProject) {
     return (
       <ComposerControl
@@ -343,6 +347,7 @@ export function DraftProjectPicker({
             render={
               <ComboboxTrigger
                 render={<ComposerControl size="xs" />}
+                aria-label={`Project: ${triggerLabel}`}
                 data-draft-project-trigger=""
                 className="min-w-0 max-w-full active:scale-100"
               />
@@ -355,9 +360,7 @@ export function DraftProjectPicker({
             ) : (
               <FolderIcon className="size-3 shrink-0" />
             )}
-            <ComposerContextLabel>
-              {isScratchDraft ? "No project" : (activeProjectDisplayName ?? "Choose a project")}
-            </ComposerContextLabel>
+            <ComposerContextLabel>{triggerLabel}</ComposerContextLabel>
             <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
           </TooltipTrigger>
           <TooltipPopup shortcut={projectPickerShortcut}>Select project</TooltipPopup>

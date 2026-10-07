@@ -98,9 +98,12 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
-  /** Leads the composer strip, ahead of the branch and host controls. */
+  /**
+   * Leads the composer strip, ahead of the branch and host controls. A draft
+   * without a project yet still gets a strip holding just this control.
+   */
   projectPicker?: ReactNode;
-  stripPlacement?: "top" | "bottom";
+  contextStripPlacement?: "top" | "bottom";
 }
 
 interface MobileRunContextSelectorProps {
@@ -346,6 +349,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
 });
 
 const COMPOSER_CONTEXT_MOTION_DURATION_MS = 180;
+const CONTEXT_STRIP_CLASS = "gap-1 text-xs font-normal text-muted-foreground/70";
 const COMPOSER_CONTEXT_LABEL_SELECTOR = "[data-composer-label]";
 
 /**
@@ -568,7 +572,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   composerControlsHostRef,
   contextStripVisible = true,
   projectPicker,
-  stripPlacement = "bottom",
+  contextStripPlacement = "bottom",
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
@@ -683,8 +687,8 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (!hasActiveThread || !activeProject) {
     return layout === "composer" && projectPicker ? (
       <ComposerSurface.ContextStrip
-        placement={stripPlacement}
-        className="gap-1 text-xs font-normal text-muted-foreground/70"
+        placement={contextStripPlacement}
+        className={CONTEXT_STRIP_CLASS}
       >
         {projectPicker}
       </ComposerSurface.ContextStrip>
@@ -729,10 +733,10 @@ export const BranchToolbar = memo(function BranchToolbar({
   return (
     <ComposerSurface.ContextStrip
       ref={setStripElement}
-      placement={stripPlacement}
+      placement={contextStripPlacement}
       data-compact={labelsOverflow ? "" : undefined}
       className={cn(
-        "gap-1 text-xs font-normal text-muted-foreground/70",
+        CONTEXT_STRIP_CLASS,
         // A non-Git strip with no visible composer controls should occupy no
         // space, but its host must retain a prospective width so controls can
         // become visible again when the chat view grows.

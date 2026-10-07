@@ -626,6 +626,13 @@ const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const VISIT_DISPATCH_THROTTLE_MS = 10_000;
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+// Measures the prompt surface, not its anchor: the hero's context strip above it
+// and a thread's strip below it come and go with the state change.
+function measureComposerSurface(anchor: HTMLElement | null): DOMRect | null {
+  const surface = anchor?.querySelector('[data-chat-composer-main-surface="true"]') ?? anchor;
+  return surface?.getBoundingClientRect() ?? null;
+}
+
 function useDraftHeroLayoutTransition(
   isDraftHeroState: boolean,
   animationsActive: boolean,
@@ -644,12 +651,12 @@ function useDraftHeroLayoutTransition(
   };
 
   const captureLayout = () => {
-    previousComposerRectRef.current = composerAnchorRef.current?.getBoundingClientRect() ?? null;
+    previousComposerRectRef.current = measureComposerSurface(composerAnchorRef.current);
   };
 
   useLayoutEffect(() => {
     const transitionGroup = transitionGroupRef.current;
-    const nextComposerRect = composerAnchorRef.current?.getBoundingClientRect() ?? null;
+    const nextComposerRect = measureComposerSurface(composerAnchorRef.current);
     const stateChanged = previousStateRef.current !== isDraftHeroState;
     const mobileComposerTransitionActive =
       typeof document !== "undefined" &&
@@ -4390,23 +4397,20 @@ export default function ChatView(props: ChatViewProps) {
           reportedModelSelection,
         );
   const showDraftProjectPicker = isDraftHeroState && !showProviderSubagentBar;
-  const composerContextStripOnTop = showDraftProjectPicker;
-  const mountComposerContextStrip = shouldShowComposerContextStrip({
-    isDraftHeroState,
+  const composerContextStripPlacement = showDraftProjectPicker ? "top" : "bottom";
+  const composerContextStripInput = {
     showProjectPicker: showDraftProjectPicker,
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
     showEnvironmentIndicator: showComposerEnvironmentIndicator,
+  };
+  const mountComposerContextStrip = shouldShowComposerContextStrip({
+    ...composerContextStripInput,
     hostsRestingComposerControls: routeKind === "server",
   });
   const showComposerContextStrip = shouldShowComposerContextStrip({
-    isDraftHeroState,
-    showProjectPicker: showDraftProjectPicker,
-    persistInActiveThreads: settings.persistComposerContextStrip,
-    hasActiveProject: activeProject !== null && !showProviderSubagentBar,
-    isGitRepo,
-    showEnvironmentIndicator: showComposerEnvironmentIndicator,
+    ...composerContextStripInput,
     hostsRestingComposerControls: routeKind === "server" && restingComposerControlsVisible,
   });
   const mountComposerModelStrip =
@@ -10607,54 +10611,52 @@ export default function ChatView(props: ChatViewProps) {
     addFolders: (folders) => composerRef.current?.addDroppedFolders(folders),
   };
   const composerContextStrip = mountComposerContextStrip ? (
-    <div className="pointer-events-auto">
-      <BranchToolbar
-        forceNewWorktree={multipleModelSelections !== null}
-        ref={branchToolbarRef}
-        environmentId={activeThread.environmentId}
-        threadId={activeThread.id}
-        showGitControls={isGitRepo}
-        {...(routeKind === "draft" && draftId ? { draftId } : {})}
-        onEnvModeChange={onEnvModeChange}
-        startFromOrigin={startFromOrigin}
-        onStartFromOriginChange={onStartFromOriginChange}
-        envMode={envMode}
-        activeThreadBranchOverride={activeThreadBranch}
-        {...(canOverrideServerThreadEnvMode
-          ? {
-              onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
-            }
-          : {})}
-        envLocked={envLocked}
-        onComposerFocusRequest={scheduleComposerFocus}
-        {...(canCheckoutPullRequestIntoThread
-          ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-          : {})}
-        {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-        autoEnvironmentLabel={autoEnvironmentLabel}
-        onAutoEnvironment={
-          draftId &&
-          !envLocked &&
-          canAutoBalanceEnvironments &&
-          loadBalancingSettings.loadBalancingEnabled
-            ? onAutoEnvironment
-            : undefined
-        }
-        availableEnvironments={logicalProjectEnvironments}
-        composerControlsHostRef={setRestingComposerControlsHost}
-        contextStripVisible={showComposerContextStrip}
-        stripPlacement={composerContextStripOnTop ? "top" : "bottom"}
-        projectPicker={
-          showDraftProjectPicker ? (
-            <DraftProjectPicker
-              draftId={draftId}
-              activeProjectRef={activeProjectRef}
-              activeProjectTitle={activeProject?.title ?? null}
-            />
-          ) : null
-        }
-      />
-    </div>
+    <BranchToolbar
+      forceNewWorktree={multipleModelSelections !== null}
+      ref={branchToolbarRef}
+      environmentId={activeThread.environmentId}
+      threadId={activeThread.id}
+      showGitControls={isGitRepo}
+      {...(routeKind === "draft" && draftId ? { draftId } : {})}
+      onEnvModeChange={onEnvModeChange}
+      startFromOrigin={startFromOrigin}
+      onStartFromOriginChange={onStartFromOriginChange}
+      envMode={envMode}
+      activeThreadBranchOverride={activeThreadBranch}
+      {...(canOverrideServerThreadEnvMode
+        ? {
+            onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
+          }
+        : {})}
+      envLocked={envLocked}
+      onComposerFocusRequest={scheduleComposerFocus}
+      {...(canCheckoutPullRequestIntoThread
+        ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+        : {})}
+      {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+      autoEnvironmentLabel={autoEnvironmentLabel}
+      onAutoEnvironment={
+        draftId &&
+        !envLocked &&
+        canAutoBalanceEnvironments &&
+        loadBalancingSettings.loadBalancingEnabled
+          ? onAutoEnvironment
+          : undefined
+      }
+      availableEnvironments={logicalProjectEnvironments}
+      composerControlsHostRef={setRestingComposerControlsHost}
+      contextStripVisible={showComposerContextStrip}
+      contextStripPlacement={composerContextStripPlacement}
+      projectPicker={
+        showDraftProjectPicker ? (
+          <DraftProjectPicker
+            draftId={draftId}
+            activeProjectRef={activeProjectRef}
+            activeProjectTitle={activeProject?.title ?? null}
+          />
+        ) : null
+      }
+    />
   ) : null;
 
   return (
@@ -10899,7 +10901,7 @@ export default function ChatView(props: ChatViewProps) {
               <div ref={draftHeroTransitionGroupRef} className="chat-composer-lane w-full">
                 <div
                   data-chat-composer-stack="true"
-                  className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
+                  className="pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
                   <div
                     ref={draftHeroComposerAnchorRef}
@@ -10911,12 +10913,11 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell
-                      contextStrip={
-                        (showComposerContextStrip && !composerContextStripOnTop) ||
+                      bottomStrip={
+                        (composerContextStripPlacement === "bottom" && showComposerContextStrip) ||
                         showComposerModelStrip
                       }
                     >
-                      {composerContextStripOnTop ? composerContextStrip : null}
                       <ComposerSurface.Host
                         inert={isSavingQueuedEdit}
                         aria-busy={isSavingQueuedEdit}
@@ -11003,6 +11004,11 @@ export default function ChatView(props: ChatViewProps) {
                                                 : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree}
+                              attachedContextStrip={
+                                composerContextStripPlacement === "top"
+                                  ? composerContextStrip
+                                  : null
+                              }
                               queuedRunsControl={
                                 <>
                                   <ThreadOutboxControl
@@ -11176,7 +11182,7 @@ export default function ChatView(props: ChatViewProps) {
                               />
                             </ComposerSurface.ContextStrip>
                           ) : null}
-                          {composerContextStripOnTop ? null : composerContextStrip}
+                          {composerContextStripPlacement === "bottom" ? composerContextStrip : null}
                         </div>
                       </div>
                     </ComposerSurface.Shell>
