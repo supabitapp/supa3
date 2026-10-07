@@ -217,10 +217,7 @@ export const ComposerTasksDrawer = memo(function ComposerTasksDrawer(
 ) {
   return (
     <ComposerBanner.Attachment>
-      <ComposerBanner.Root
-        density={props.expanded ? "default" : "comfortable"}
-        data-composer-shoulder-tab={props.expanded ? undefined : true}
-      >
+      <ComposerBanner.Root density={props.expanded ? "default" : "comfortable"}>
         <ComposerTasksContent {...props} />
       </ComposerBanner.Root>
     </ComposerBanner.Attachment>

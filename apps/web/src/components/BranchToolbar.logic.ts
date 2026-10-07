@@ -65,7 +65,8 @@ export function shouldShowEnvironmentIndicator(input: {
 }
 
 export function shouldShowComposerContextStrip(input: {
-  isDraftHeroState: boolean;
+  /** A new draft leads the strip with its project picker, project or not. */
+  showProjectPicker: boolean;
   persistInActiveThreads: boolean;
   hasActiveProject: boolean;
   isGitRepo: boolean;
@@ -73,9 +74,10 @@ export function shouldShowComposerContextStrip(input: {
   /** A collapsed composer's controls currently fit in their measured strip host. */
   hostsRestingComposerControls: boolean;
 }): boolean {
+  if (input.showProjectPicker) return true;
   return (
     input.hasActiveProject &&
-    (input.isDraftHeroState || input.persistInActiveThreads) &&
+    input.persistInActiveThreads &&
     (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
   );
 }

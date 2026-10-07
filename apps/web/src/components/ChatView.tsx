@@ -432,7 +432,7 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { isTimelineScrollTarget } from "./chat/timelineScrollTarget";
-import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { DraftProjectPicker } from "./chat/DraftProjectPicker";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
@@ -495,11 +495,8 @@ import {
 } from "./chat/ContextWindowMeter.logic";
 import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import {
-  captureDraftHeadline,
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
   MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
-  MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME,
-  playDraftHeadlineExit,
   runMobileComposerTransition,
 } from "./chat/draftHeroTransition";
 import { EASE_DRAWER, animationsSettled, prefersReducedMotion } from "../lib/motion";
@@ -629,6 +626,13 @@ const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const VISIT_DISPATCH_THROTTLE_MS = 10_000;
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+// Measures the prompt surface, not its anchor: the hero's context strip above it
+// and a thread's strip below it come and go with the state change.
+function measureComposerSurface(anchor: HTMLElement | null): DOMRect | null {
+  const surface = anchor?.querySelector('[data-chat-composer-main-surface="true"]') ?? anchor;
+  return surface?.getBoundingClientRect() ?? null;
+}
+
 function useDraftHeroLayoutTransition(
   isDraftHeroState: boolean,
   animationsActive: boolean,
@@ -636,10 +640,8 @@ function useDraftHeroLayoutTransition(
 ) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
-  const headlineRef = useRef<HTMLDivElement | null>(null);
   const previousStateRef = useRef(isDraftHeroState);
   const previousComposerRectRef = useRef<DOMRect | null>(null);
-  const headlineGhostRef = useRef<HTMLElement | null>(null);
   const animationRef = useRef<Animation | null>(null);
   const attachTransitionGroupRef = (element: HTMLDivElement | null) => {
     transitionGroupRef.current = element;
@@ -647,20 +649,14 @@ function useDraftHeroLayoutTransition(
   const attachComposerAnchorRef = (element: HTMLDivElement | null) => {
     composerAnchorRef.current = element;
   };
-  const attachHeadlineRef = (element: HTMLDivElement | null) => {
-    headlineRef.current = element;
-  };
 
   const captureLayout = () => {
-    previousComposerRectRef.current = composerAnchorRef.current?.getBoundingClientRect() ?? null;
-    headlineGhostRef.current = headlineRef.current
-      ? captureDraftHeadline(headlineRef.current)
-      : null;
+    previousComposerRectRef.current = measureComposerSurface(composerAnchorRef.current);
   };
 
   useLayoutEffect(() => {
     const transitionGroup = transitionGroupRef.current;
-    const nextComposerRect = composerAnchorRef.current?.getBoundingClientRect() ?? null;
+    const nextComposerRect = measureComposerSurface(composerAnchorRef.current);
     const stateChanged = previousStateRef.current !== isDraftHeroState;
     const mobileComposerTransitionActive =
       typeof document !== "undefined" &&
@@ -669,8 +665,6 @@ function useDraftHeroLayoutTransition(
     animationRef.current?.cancel();
     animationRef.current = null;
     const previousComposerRect = previousComposerRectRef.current;
-    const headlineGhost = headlineGhostRef.current;
-    headlineGhostRef.current = null;
     if (
       stateChanged &&
       animationsActive &&
@@ -700,9 +694,6 @@ function useDraftHeroLayoutTransition(
           .then(() => {
             if (animationRef.current === animation) animationRef.current = null;
           });
-        if (!isDraftHeroState && headlineGhost) {
-          void playDraftHeadlineExit(headlineGhost, animationDurationMs);
-        }
       }
     }
     previousStateRef.current = isDraftHeroState;
@@ -712,7 +703,6 @@ function useDraftHeroLayoutTransition(
   return {
     transitionGroupRef: attachTransitionGroupRef,
     composerAnchorRef: attachComposerAnchorRef,
-    headlineRef: attachHeadlineRef,
     captureLayout,
   } as const;
 }
@@ -4210,7 +4200,6 @@ export default function ChatView(props: ChatViewProps) {
   const {
     transitionGroupRef: draftHeroTransitionGroupRef,
     composerAnchorRef: draftHeroComposerAnchorRef,
-    headlineRef: draftHeroHeadlineRef,
     captureLayout: captureDraftHeroLayout,
   } = useDraftHeroLayoutTransition(
     isDraftHeroState,
@@ -4407,20 +4396,21 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
-  const mountComposerContextStrip = shouldShowComposerContextStrip({
-    isDraftHeroState,
+  const showDraftProjectPicker = isDraftHeroState && !showProviderSubagentBar;
+  const composerContextStripPlacement = showDraftProjectPicker ? "top" : "bottom";
+  const composerContextStripInput = {
+    showProjectPicker: showDraftProjectPicker,
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
     showEnvironmentIndicator: showComposerEnvironmentIndicator,
+  };
+  const mountComposerContextStrip = shouldShowComposerContextStrip({
+    ...composerContextStripInput,
     hostsRestingComposerControls: routeKind === "server",
   });
   const showComposerContextStrip = shouldShowComposerContextStrip({
-    isDraftHeroState,
-    persistInActiveThreads: settings.persistComposerContextStrip,
-    hasActiveProject: activeProject !== null && !showProviderSubagentBar,
-    isGitRepo,
-    showEnvironmentIndicator: showComposerEnvironmentIndicator,
+    ...composerContextStripInput,
     hostsRestingComposerControls: routeKind === "server" && restingComposerControlsVisible,
   });
   const mountComposerModelStrip =
@@ -10620,6 +10610,54 @@ export default function ChatView(props: ChatViewProps) {
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
     addFolders: (folders) => composerRef.current?.addDroppedFolders(folders),
   };
+  const composerContextStrip = mountComposerContextStrip ? (
+    <BranchToolbar
+      forceNewWorktree={multipleModelSelections !== null}
+      ref={branchToolbarRef}
+      environmentId={activeThread.environmentId}
+      threadId={activeThread.id}
+      showGitControls={isGitRepo}
+      {...(routeKind === "draft" && draftId ? { draftId } : {})}
+      onEnvModeChange={onEnvModeChange}
+      startFromOrigin={startFromOrigin}
+      onStartFromOriginChange={onStartFromOriginChange}
+      envMode={envMode}
+      activeThreadBranchOverride={activeThreadBranch}
+      {...(canOverrideServerThreadEnvMode
+        ? {
+            onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
+          }
+        : {})}
+      envLocked={envLocked}
+      onComposerFocusRequest={scheduleComposerFocus}
+      {...(canCheckoutPullRequestIntoThread
+        ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+        : {})}
+      {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+      autoEnvironmentLabel={autoEnvironmentLabel}
+      onAutoEnvironment={
+        draftId &&
+        !envLocked &&
+        canAutoBalanceEnvironments &&
+        loadBalancingSettings.loadBalancingEnabled
+          ? onAutoEnvironment
+          : undefined
+      }
+      availableEnvironments={logicalProjectEnvironments}
+      composerControlsHostRef={setRestingComposerControlsHost}
+      contextStripVisible={showComposerContextStrip}
+      contextStripPlacement={composerContextStripPlacement}
+      projectPicker={
+        showDraftProjectPicker ? (
+          <DraftProjectPicker
+            draftId={draftId}
+            activeProjectRef={activeProjectRef}
+            activeProjectTitle={activeProject?.title ?? null}
+          />
+        ) : null
+      }
+    />
+  ) : null;
 
   return (
     <div
@@ -10863,27 +10901,8 @@ export default function ChatView(props: ChatViewProps) {
               <div ref={draftHeroTransitionGroupRef} className="chat-composer-lane w-full">
                 <div
                   data-chat-composer-stack="true"
-                  className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
+                  className="pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
-                  {isDraftHeroState ? (
-                    <div className="absolute inset-x-0 bottom-full">
-                      <div
-                        ref={draftHeroHeadlineRef}
-                        className="pb-4 group-has-data-[composer-shoulder-tab]/composer-stack:pb-0"
-                        style={
-                          forceExpandedMobileComposer
-                            ? { viewTransitionName: MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME }
-                            : undefined
-                        }
-                      >
-                        <DraftHeroHeadline
-                          draftId={draftId}
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
                   <div
                     ref={draftHeroComposerAnchorRef}
                     className="relative z-10"
@@ -10894,7 +10913,10 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell
-                      contextStrip={showComposerContextStrip || showComposerModelStrip}
+                      bottomStrip={
+                        (composerContextStripPlacement === "bottom" && showComposerContextStrip) ||
+                        showComposerModelStrip
+                      }
                     >
                       <ComposerSurface.Host
                         inert={isSavingQueuedEdit}
@@ -10982,6 +11004,11 @@ export default function ChatView(props: ChatViewProps) {
                                                 : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree}
+                              attachedContextStrip={
+                                composerContextStripPlacement === "top"
+                                  ? composerContextStrip
+                                  : null
+                              }
                               queuedRunsControl={
                                 <>
                                   <ThreadOutboxControl
@@ -11076,7 +11103,9 @@ export default function ChatView(props: ChatViewProps) {
                               restingControlsHost={restingComposerControlsHost}
                               restingControlsHaveLeadingContext={
                                 mountComposerContextStrip &&
-                                (isGitRepo || showComposerEnvironmentIndicator)
+                                (showDraftProjectPicker ||
+                                  isGitRepo ||
+                                  showComposerEnvironmentIndicator)
                               }
                               onRestingControlsVisibilityChange={setRestingComposerControlsVisible}
                               getTimelineScrollableNode={getTimelineScrollableNode}
@@ -11153,47 +11182,7 @@ export default function ChatView(props: ChatViewProps) {
                               />
                             </ComposerSurface.ContextStrip>
                           ) : null}
-                          {mountComposerContextStrip && (
-                            <div className="pointer-events-auto">
-                              <BranchToolbar
-                                forceNewWorktree={multipleModelSelections !== null}
-                                ref={branchToolbarRef}
-                                environmentId={activeThread.environmentId}
-                                threadId={activeThread.id}
-                                showGitControls={isGitRepo}
-                                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                onEnvModeChange={onEnvModeChange}
-                                startFromOrigin={startFromOrigin}
-                                onStartFromOriginChange={onStartFromOriginChange}
-                                envMode={envMode}
-                                activeThreadBranchOverride={activeThreadBranch}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? {
-                                      onActiveThreadBranchOverrideChange:
-                                        setPendingServerThreadBranch,
-                                    }
-                                  : {})}
-                                envLocked={envLocked}
-                                onComposerFocusRequest={scheduleComposerFocus}
-                                {...(canCheckoutPullRequestIntoThread
-                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                                  : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-                                autoEnvironmentLabel={autoEnvironmentLabel}
-                                onAutoEnvironment={
-                                  draftId &&
-                                  !envLocked &&
-                                  canAutoBalanceEnvironments &&
-                                  loadBalancingSettings.loadBalancingEnabled
-                                    ? onAutoEnvironment
-                                    : undefined
-                                }
-                                availableEnvironments={logicalProjectEnvironments}
-                                composerControlsHostRef={setRestingComposerControlsHost}
-                                contextStripVisible={showComposerContextStrip}
-                              />
-                            </div>
-                          )}
+                          {composerContextStripPlacement === "bottom" ? composerContextStrip : null}
                         </div>
                       </div>
                     </ComposerSurface.Shell>
