@@ -24,7 +24,7 @@
           }
         },
         {
-          "glass": true,
+          "glass": false,
           "image-name": "background.svg",
           "name": "Background",
           "position": {

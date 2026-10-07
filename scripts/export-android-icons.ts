@@ -34,8 +34,6 @@ const TEXT = { x: 25.69, y: 37.17, width: 76.4, height: 52.95 };
 // guaranteed), so 0.48 leaves the letters at ~72% of the mask with room for the
 // launcher's own zoom effects.
 const WORDMARK_FRACTION = 0.48;
-// Icon Composer positions layers on a 1024pt canvas, with translation relative to center.
-const COMPOSER_CANVAS_PT = 1024;
 const SVG_DENSITY = 300;
 const OUTPUT_DIRECTORY = "apps/mobile/assets";
 // Production has no background artwork, so its splash composes onto the adaptive color.
@@ -61,10 +59,10 @@ const canvasSvg = (size: number, inner: string) =>
 const fullBleed = (svg: string) =>
   svg.replace(/<rect width="128" height="128" rx="10"\/>/, '<rect width="128" height="128"/>');
 
-const rasterize = (layer: string, svg: string, width: number, height = width) =>
+const rasterize = (layer: string, svg: string, size: number) =>
   Effect.tryPromise({
     try: () =>
-      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(width, height).png().toBuffer(),
+      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(size, size).png().toBuffer(),
     catch: (cause) => new AndroidIconRenderError({ layer, cause }),
   });
 
@@ -116,71 +114,44 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
   );
 });
 
+// Launcher and splash masks only reveal the central two thirds, so the artwork is fitted there
+// to keep the iOS framing. A full-bleed copy underneath fills the parallax margin.
+const renderArtworkBackground = Effect.fn("androidIcons.renderArtworkBackground")(function* (
+  repositoryRoot: string,
+  variant: Exclude<IconVariant, "prod">,
+  size: number,
+) {
+  const layer = `${variant}-background`;
+  const source = yield* readLayerSource(repositoryRoot, variant, "background.svg");
+  const bled = fullBleed(source);
+  if (bled === source) {
+    return yield* new AndroidIconRenderError({
+      layer,
+      cause: "background.svg has no 128pt rounded frame to bleed",
+    });
+  }
+  const visible = Math.round((size * 2) / 3);
+  const inset = Math.round((size - visible) / 2);
+  const margin = yield* rasterize(layer, bled, size);
+  const artwork = yield* rasterize(layer, bled, visible);
+  return yield* composite(layer, margin, [{ input: artwork, left: inset, top: inset }]);
+});
+
 const renderDevelopmentBackground = Effect.fn("androidIcons.renderDevelopmentBackground")(
   function* (repositoryRoot: string, size: number) {
     // The annotation layer shares the wordmark's coordinate space, so it is scaled and
-    // centered the same way to keep the dimension lines around the letters.
+    // centered the same way to keep the wireframe boxes around the letters.
     const annotations = yield* readLayerSource(repositoryRoot, "dev", "annotations.svg");
-    const defs = annotations.match(/<defs>[\s\S]*?<\/defs>/)?.[0] ?? "";
-    const body = annotations.replace(/^[\s\S]*?<\/defs>/, "").replace(/<\/svg>\s*$/, "");
-    const paper = yield* readLayerSource(repositoryRoot, "dev", "background.svg");
-    const background = yield* rasterize("dev-background", fullBleed(paper), size);
+    const body = annotations.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+    const background = yield* renderArtworkBackground(repositoryRoot, "dev", size);
     const overlay = yield* rasterize(
       "dev-annotations",
-      canvasSvg(size, `${defs}<g transform="${wordmarkTransform(size)}">${body}</g>`),
+      canvasSvg(size, `<g transform="${wordmarkTransform(size)}">${body}</g>`),
       size,
     );
     return yield* composite("dev-background", background, [{ input: overlay }]);
   },
 );
-
-const renderNightlyBackground = Effect.fn("androidIcons.renderNightlyBackground")(function* (
-  repositoryRoot: string,
-  size: number,
-) {
-  // Positions mirror assets/nightly/app-icon.icon/icon.json. The SVG blur filter is
-  // dropped because Icon Composer ignores it and it smears at this raster size.
-  const clouds = [
-    { file: "cloud-lower-left.svg", scale: 25, translation: [-309.6375, 268.66077693836917] },
-    {
-      file: "cloud-upper-right.svg",
-      scale: 15,
-      translation: [387.9605131881942, -134.30064713259117],
-    },
-  ] as const;
-  const k = size / COMPOSER_CANVAS_PT;
-  const overlays = yield* Effect.forEach(clouds, (cloud) =>
-    Effect.gen(function* () {
-      const width = Math.round(64 * cloud.scale * k);
-      const height = Math.round(32 * cloud.scale * k);
-      const left = Math.round((COMPOSER_CANVAS_PT / 2 + cloud.translation[0]) * k - width / 2);
-      const top = Math.round((COMPOSER_CANVAS_PT / 2 + cloud.translation[1]) * k - height / 2);
-      const source = yield* readLayerSource(repositoryRoot, "nightly", cloud.file);
-      const png = yield* rasterize(
-        cloud.file,
-        source.replace(/ filter="url\(#soft\)"/, ""),
-        width,
-        height,
-      );
-      const x0 = Math.max(0, left);
-      const y0 = Math.max(0, top);
-      const x1 = Math.min(size, left + width);
-      const y1 = Math.min(size, top + height);
-      const clipped = yield* Effect.tryPromise({
-        try: () =>
-          sharp(png)
-            .extract({ left: x0 - left, top: y0 - top, width: x1 - x0, height: y1 - y0 })
-            .png()
-            .toBuffer(),
-        catch: (cause) => new AndroidIconRenderError({ layer: cloud.file, cause }),
-      });
-      return { input: clipped, left: x0, top: y0 };
-    }),
-  );
-  const sky = yield* readLayerSource(repositoryRoot, "nightly", "background.svg");
-  const background = yield* rasterize("nightly-background", fullBleed(sky), size);
-  return yield* composite("nightly-background", background, overlays);
-});
 
 const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
   repositoryRoot: string,
@@ -191,7 +162,7 @@ const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
     case "dev":
       return yield* renderDevelopmentBackground(repositoryRoot, size);
     case "nightly":
-      return yield* renderNightlyBackground(repositoryRoot, size);
+      return yield* renderArtworkBackground(repositoryRoot, variant, size);
     case "prod":
       return yield* solidCanvas("prod-background", size, PRODUCTION_BACKGROUND_COLOR);
   }
@@ -214,11 +185,11 @@ const exportAndroidIcons = Effect.gen(function* () {
     ["android-icon-foreground.png", yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS)],
     [
       "android-icon-background-dev.png",
-      yield* renderDevelopmentBackground(repositoryRoot, ADAPTIVE_CANVAS),
+      yield* renderBackground(repositoryRoot, "dev", ADAPTIVE_CANVAS),
     ],
     [
       "android-icon-background-nightly.png",
-      yield* renderNightlyBackground(repositoryRoot, ADAPTIVE_CANVAS),
+      yield* renderBackground(repositoryRoot, "nightly", ADAPTIVE_CANVAS),
     ],
     ["android-splash-icon-dev.png", yield* renderSplashIcon(repositoryRoot, "dev")],
     ["android-splash-icon-nightly.png", yield* renderSplashIcon(repositoryRoot, "nightly")],

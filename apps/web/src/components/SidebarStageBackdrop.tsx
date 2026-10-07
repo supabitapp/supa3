@@ -29,15 +29,14 @@ export function resolveSidebarStageBackdropVariant(
   return null;
 }
 
-/** Dark themes share the sleigh scene across release channels. */
+/** Dev and nightly keep their artwork in every theme; release only shows the sleigh when dark. */
 export function resolveVisibleSidebarStageBackdropVariant(
   stageLabel: string | null,
   appearance: ThemeAppearance,
 ): SidebarStageBackdropVariant | null {
   const variant = resolveSidebarStageBackdropVariant(stageLabel);
-  if (variant === null) return null;
-  if (appearance === "dark") return "release";
-  return variant === "release" ? null : variant;
+  if (variant === "release" && appearance !== "dark") return null;
+  return variant;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
@@ -96,8 +95,8 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 const STAGE_BACKDROP_ART = {
-  nightly: NightlySkyArt,
-  dev: DevBlueprintArt,
+  nightly: MeteorShowerArt,
+  dev: WireframeArt,
   release: SleighRideArt,
 } satisfies Record<SidebarStageBackdropVariant, ComponentType<{ compact?: boolean }>>;
 
@@ -170,44 +169,172 @@ function NightStarsPattern({
   );
 }
 
-const NIGHTLY_STARS: ReadonlyArray<StageStar> = [
-  { cx: 14, cy: 10, r: 0.6, opacity: 0.85 },
-  { cx: 38, cy: 22, r: 0.4, opacity: 0.55 },
-  { cx: 58, cy: 8, r: 0.5, opacity: 0.7 },
-  { cx: 84, cy: 16, r: 0.4, opacity: 0.5 },
-  { cx: 104, cy: 7, r: 0.6, opacity: 0.8 },
-  { cx: 126, cy: 20, r: 0.4, opacity: 0.55 },
-  { cx: 148, cy: 11, r: 0.5, opacity: 0.7 },
-  { cx: 170, cy: 24, r: 0.4, opacity: 0.5 },
-  { cx: 192, cy: 9, r: 0.6, opacity: 0.8 },
-  { cx: 214, cy: 18, r: 0.4, opacity: 0.55 },
-  { cx: 236, cy: 8, r: 0.5, opacity: 0.7 },
-  { cx: 258, cy: 20, r: 0.45, opacity: 0.6 },
-  { cx: 278, cy: 11, r: 0.55, opacity: 0.75 },
-  { cx: 26, cy: 34, r: 0.4, opacity: 0.45 },
-  { cx: 118, cy: 34, r: 0.4, opacity: 0.45 },
-  { cx: 202, cy: 32, r: 0.4, opacity: 0.5 },
-  { cx: 268, cy: 34, r: 0.4, opacity: 0.45 },
+const METEOR_SHOWER_STARS: ReadonlyArray<StageStar> = [
+  { cx: 12.2, cy: 50.1, r: 0.3, opacity: 0.3 },
+  { cx: 254.3, cy: 56.4, r: 0.3, opacity: 0.3 },
+  { cx: 168.2, cy: 35.7, r: 0.4, opacity: 0.5 },
+  { cx: 37.5, cy: 5.4, r: 0.9, opacity: 0.9 },
+  { cx: 16.6, cy: 20.8, r: 0.3, opacity: 0.3 },
+  { cx: 62.8, cy: 0.6, r: 0.5, opacity: 0.5 },
+  { cx: 174.5, cy: 21.9, r: 0.3, opacity: 0.5 },
+  { cx: 204.4, cy: 31.9, r: 0.4, opacity: 0.5 },
+  { cx: 33.5, cy: 22, r: 0.4, opacity: 0.3 },
+  { cx: 36.4, cy: 65.3, r: 0.3, opacity: 0.7 },
+  { cx: 108.5, cy: 19.7, r: 0.4, opacity: 0.7 },
+  { cx: 112.1, cy: 40.8, r: 0.3, opacity: 0.6 },
+  { cx: 118.3, cy: 24.3, r: 0.3, opacity: 0.6 },
+  { cx: 232.8, cy: 36.8, r: 0.4, opacity: 0.5 },
+  { cx: 135.5, cy: 43.9, r: 0.4, opacity: 0.4 },
+  { cx: 21.5, cy: 8.4, r: 0.3, opacity: 0.5 },
+  { cx: 125.6, cy: 17.6, r: 0.3, opacity: 0.6 },
+  { cx: 130.1, cy: 58.7, r: 1, opacity: 0.9 },
+  { cx: 91.5, cy: 58.1, r: 0.4, opacity: 0.7 },
+  { cx: 2.8, cy: 57.1, r: 0.3, opacity: 0.3 },
+  { cx: 3.4, cy: 58.9, r: 0.3, opacity: 0.3 },
+  { cx: 103.3, cy: 6.7, r: 0.3, opacity: 0.3 },
+  { cx: 233.8, cy: 57.9, r: 0.3, opacity: 0.5 },
+  { cx: 147.6, cy: 58.9, r: 0.4, opacity: 0.5 },
+  { cx: 2.8, cy: 17, r: 0.3, opacity: 0.5 },
+  { cx: 220.7, cy: 55.1, r: 0.3, opacity: 0.3 },
+  { cx: 98.7, cy: 39.3, r: 0.3, opacity: 0.3 },
+  { cx: 65.6, cy: 27.5, r: 0.5, opacity: 0.3 },
+  { cx: 260.9, cy: 58.5, r: 0.3, opacity: 0.4 },
+  { cx: 269.6, cy: 51.8, r: 0.3, opacity: 0.5 },
+  { cx: 113.9, cy: 67.4, r: 0.9, opacity: 0.9 },
+  { cx: 214.1, cy: 30.3, r: 0.6, opacity: 0.7 },
+  { cx: 171.1, cy: 21.3, r: 0.3, opacity: 0.5 },
+  { cx: 257.8, cy: 51.4, r: 0.4, opacity: 0.5 },
+  { cx: 201.4, cy: 11.3, r: 0.5, opacity: 0.4 },
+  { cx: 199, cy: 58, r: 0.9, opacity: 0.9 },
+  { cx: 230.6, cy: 32.7, r: 0.3, opacity: 0.6 },
+  { cx: 273.7, cy: 21.9, r: 0.6, opacity: 0.3 },
+  { cx: 61.9, cy: 34.2, r: 0.3, opacity: 0.6 },
+  { cx: 127.9, cy: 58.2, r: 0.4, opacity: 0.6 },
+  { cx: 14, cy: 34.5, r: 0.6, opacity: 0.3 },
+  { cx: 59.7, cy: 19.3, r: 1, opacity: 0.9 },
+  { cx: 16.5, cy: 9.7, r: 0.6, opacity: 0.5 },
+  { cx: 211.6, cy: 70.1, r: 0.3, opacity: 0.7 },
+  { cx: 215.1, cy: 47.7, r: 0.6, opacity: 0.3 },
+  { cx: 134.4, cy: 66.6, r: 0.4, opacity: 0.6 },
+  { cx: 244, cy: 53.2, r: 0.4, opacity: 0.7 },
+  { cx: 69.5, cy: 13.6, r: 0.3, opacity: 0.3 },
+  { cx: 28.3, cy: 45.7, r: 0.4, opacity: 0.6 },
+  { cx: 71.9, cy: 53.3, r: 0.3, opacity: 0.7 },
+  { cx: 216.8, cy: 27.3, r: 0.4, opacity: 0.3 },
+  { cx: 156.9, cy: 31.8, r: 0.4, opacity: 0.3 },
+  { cx: 155.5, cy: 11.1, r: 0.4, opacity: 0.7 },
+  { cx: 228.4, cy: 47.4, r: 0.6, opacity: 0.4 },
+  { cx: 275.9, cy: 70.6, r: 0.6, opacity: 0.6 },
+  { cx: 127.5, cy: 18.1, r: 0.3, opacity: 0.4 },
+  { cx: 51.6, cy: 58.7, r: 0.4, opacity: 0.5 },
+  { cx: 38.6, cy: 67.7, r: 0.6, opacity: 0.6 },
+  { cx: 74.7, cy: 9.5, r: 0.4, opacity: 0.7 },
+  { cx: 99.1, cy: 14, r: 0.4, opacity: 0.4 },
+  { cx: 84.4, cy: 38.3, r: 0.3, opacity: 0.7 },
+  { cx: 73.7, cy: 14.8, r: 0.6, opacity: 0.6 },
+  { cx: 52.3, cy: 24.1, r: 0.5, opacity: 0.3 },
+  { cx: 277.5, cy: 17.3, r: 0.3, opacity: 0.6 },
+  { cx: 76.7, cy: 46.3, r: 0.4, opacity: 0.6 },
+  { cx: 216.2, cy: 50.4, r: 0.4, opacity: 0.7 },
+  { cx: 118.8, cy: 64.6, r: 0.4, opacity: 0.7 },
+  { cx: 243.7, cy: 65.3, r: 0.5, opacity: 0.6 },
+  { cx: 42.9, cy: 13.4, r: 0.6, opacity: 0.6 },
+  { cx: 272.6, cy: 46.4, r: 0.3, opacity: 0.6 },
+  { cx: 227, cy: 42.3, r: 0.6, opacity: 0.4 },
+  { cx: 156.2, cy: 26.3, r: 0.6, opacity: 0.3 },
+  { cx: 20, cy: 3.9, r: 0.3, opacity: 0.6 },
+  { cx: 34.5, cy: 11.4, r: 0.3, opacity: 0.3 },
+  { cx: 49.3, cy: 34.4, r: 0.5, opacity: 0.3 },
+  { cx: 45.6, cy: 11.5, r: 0.6, opacity: 0.7 },
+  { cx: 179.2, cy: 39.1, r: 0.6, opacity: 0.4 },
+  { cx: 116.2, cy: 37.2, r: 0.3, opacity: 0.6 },
+  { cx: 175.3, cy: 34.2, r: 0.3, opacity: 0.6 },
+  { cx: 92.1, cy: 70.7, r: 0.3, opacity: 0.6 },
+  { cx: 79.6, cy: 6.3, r: 0.3, opacity: 0.3 },
+  { cx: 164.6, cy: 51.4, r: 0.3, opacity: 0.6 },
+  { cx: 206.2, cy: 48.9, r: 0.4, opacity: 0.5 },
+  { cx: 98.8, cy: 57.3, r: 0.3, opacity: 0.7 },
+  { cx: 44.4, cy: 61.2, r: 0.4, opacity: 0.7 },
+  { cx: 65.1, cy: 28.7, r: 0.5, opacity: 0.5 },
+  { cx: 119.9, cy: 59.4, r: 0.3, opacity: 0.3 },
+  { cx: 65.1, cy: 49.6, r: 0.3, opacity: 0.3 },
+  { cx: 168.6, cy: 5.5, r: 0.8, opacity: 0.9 },
+  { cx: 111.7, cy: 64.9, r: 0.3, opacity: 0.5 },
+  { cx: 196.6, cy: 31.5, r: 0.3, opacity: 0.7 },
+  { cx: 280.9, cy: 28.9, r: 0.5, opacity: 0.5 },
+  { cx: 285.5, cy: 32.2, r: 0.4, opacity: 0.4 },
+  { cx: 85.9, cy: 34.8, r: 0.4, opacity: 0.7 },
+  { cx: 267.4, cy: 57.3, r: 0.5, opacity: 0.7 },
+  { cx: 144.8, cy: 21.4, r: 1, opacity: 0.9 },
+  { cx: 257.8, cy: 32.7, r: 0.3, opacity: 0.4 },
+  { cx: 246.6, cy: 52, r: 0.3, opacity: 0.6 },
+  { cx: 180.2, cy: 62.1, r: 0.5, opacity: 0.6 },
+  { cx: 137.5, cy: 5.5, r: 0.3, opacity: 0.3 },
+  { cx: 280.3, cy: 55.4, r: 0.3, opacity: 0.3 },
+  { cx: 264.7, cy: 60.2, r: 1, opacity: 0.9 },
+  { cx: 16.8, cy: 52.6, r: 0.3, opacity: 0.7 },
+  { cx: 69.9, cy: 69.2, r: 1, opacity: 0.9 },
+  { cx: 142.7, cy: 44.5, r: 0.3, opacity: 0.3 },
+  { cx: 106.3, cy: 29.7, r: 0.9, opacity: 1 },
+  { cx: 153.5, cy: 31.7, r: 0.3, opacity: 0.7 },
+  { cx: 15.5, cy: 9.7, r: 0.4, opacity: 0.5 },
+  { cx: 155.1, cy: 14.3, r: 0.3, opacity: 0.7 },
+  { cx: 67, cy: 23.5, r: 0.3, opacity: 0.7 },
+  { cx: 126, cy: 69.7, r: 0.5, opacity: 0.4 },
+  { cx: 147.4, cy: 38.7, r: 0.6, opacity: 0.3 },
+  { cx: 22.6, cy: 55, r: 0.5, opacity: 0.7 },
+  { cx: 177.2, cy: 1.9, r: 0.3, opacity: 0.3 },
+  { cx: 260.7, cy: 71.6, r: 0.6, opacity: 0.5 },
+  { cx: 105.3, cy: 47.5, r: 0.5, opacity: 0.3 },
+  { cx: 243.2, cy: 32, r: 0.3, opacity: 0.4 },
+  { cx: 10.9, cy: 7.9, r: 0.3, opacity: 0.4 },
+  { cx: 84.7, cy: 64.9, r: 0.4, opacity: 0.7 },
+  { cx: 19.5, cy: 9.5, r: 0.6, opacity: 0.5 },
+  { cx: 111.8, cy: 41.5, r: 0.3, opacity: 0.5 },
+  { cx: 272.9, cy: 50.7, r: 0.3, opacity: 0.4 },
+  { cx: 158.4, cy: 42.6, r: 0.4, opacity: 0.4 },
+  { cx: 198.6, cy: 1.1, r: 0.5, opacity: 0.7 },
+  { cx: 19.3, cy: 44.6, r: 0.6, opacity: 0.7 },
+  { cx: 39, cy: 48, r: 0.4, opacity: 0.7 },
+  { cx: 142.7, cy: 50.8, r: 0.5, opacity: 0.3 },
+  { cx: 102.9, cy: 20.2, r: 0.4, opacity: 0.6 },
+  { cx: 128, cy: 57.5, r: 0.3, opacity: 0.6 },
+  { cx: 284, cy: 39.8, r: 0.3, opacity: 0.3 },
+  { cx: 216.8, cy: 35.9, r: 0.3, opacity: 0.7 },
+  { cx: 122.4, cy: 30.7, r: 0.4, opacity: 0.3 },
+  { cx: 171.6, cy: 50.3, r: 0.3, opacity: 0.5 },
+  { cx: 93.6, cy: 64.4, r: 0.3, opacity: 0.4 },
+  { cx: 256.4, cy: 7.6, r: 0.3, opacity: 0.7 },
+  { cx: 186.1, cy: 19.9, r: 0.3, opacity: 0.3 },
+  { cx: 243.3, cy: 1.7, r: 0.3, opacity: 0.3 },
+  { cx: 203.9, cy: 58.6, r: 0.5, opacity: 0.6 },
+  { cx: 198.5, cy: 10.6, r: 0.3, opacity: 0.4 },
+  { cx: 268.5, cy: 48.6, r: 0.3, opacity: 0.3 },
 ];
 
-const NIGHTLY_SPARKLES: ReadonlyArray<StageSparkle> = [
-  { x: 70, y: 28 },
-  { x: 160, y: 36 },
-  { x: 246, y: 26 },
+const METEOR_SHOWER_SPARKLES: ReadonlyArray<StageSparkle> = [
+  { x: 100, y: 16 },
+  { x: 196, y: 40 },
+  { x: 262, y: 28 },
 ];
 
-function NightlySkyArt({ compact = false }: { compact?: boolean }) {
+const METEORS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number; opacity: number }> =
+  [
+    { x1: 356, y1: 6, x2: 304.0, y2: 36.0, opacity: 1 },
+    { x1: 260, y1: 4, x2: 225.4, y2: 24.0, opacity: 0.8 },
+    { x1: 180, y1: 14, x2: 155.8, y2: 28.0, opacity: 0.6 },
+  ];
+
+function MeteorShowerArt({ compact = false }: { compact?: boolean }) {
   const idPrefix = useId().replaceAll(":", "");
-  const skyId = `${idPrefix}-stage-night-sky`;
-  const glowId = `${idPrefix}-stage-night-glow`;
-  const cloudId = `${idPrefix}-stage-night-cloud`;
-  const softId = `${idPrefix}-stage-night-soft`;
-  const starsId = `${idPrefix}-stage-night-stars`;
-  const glowsId = `${idPrefix}-stage-night-glows`;
+  const skyId = `${idPrefix}-stage-meteor-sky`;
+  const starsId = `${idPrefix}-stage-meteor-stars`;
+  const meteorsId = `${idPrefix}-stage-meteor-trails`;
+  const tailId = (index: number) => `${idPrefix}-stage-meteor-tail-${index}`;
 
   return (
     <svg
-      data-stage-art="nightly"
+      data-stage-art="meteors"
       className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
@@ -216,81 +343,68 @@ function NightlySkyArt({ compact = false }: { compact?: boolean }) {
     >
       <defs>
         <NightSkyGradient id={skyId} />
-        <radialGradient
-          id={glowId}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientTransform="translate(216 18) rotate(137) scale(120 84)"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop style={{ stopColor: "var(--stage-night-glow-highlight)" }} stopOpacity="0.4" />
-          <stop
-            offset="0.5"
-            style={{ stopColor: "var(--stage-night-glow-secondary)" }}
-            stopOpacity="0.16"
-          />
-          <stop offset="1" style={{ stopColor: "var(--stage-night-bottom)" }} stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={cloudId} x1="0" y1="60" x2="288" y2="96" gradientUnits="userSpaceOnUse">
-          <stop style={{ stopColor: "var(--stage-night-highlight)" }} stopOpacity="0.5" />
-          <stop
-            offset="0.52"
-            style={{ stopColor: "var(--stage-night-secondary)" }}
-            stopOpacity="0.62"
-          />
-          <stop offset="1" style={{ stopColor: "var(--stage-night-tertiary)" }} stopOpacity="0.5" />
-        </linearGradient>
-        <filter id={softId} x="-24" y="-24" width="336" height="144" filterUnits="userSpaceOnUse">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
         <NightStarsPattern
           id={starsId}
           width={288}
-          stars={NIGHTLY_STARS}
-          sparkles={NIGHTLY_SPARKLES}
+          stars={METEOR_SHOWER_STARS}
+          sparkles={METEOR_SHOWER_SPARKLES}
         />
-        <pattern id={glowsId} width="640" height="96" patternUnits="userSpaceOnUse">
-          <rect width="640" height="96" fill={`url(#${glowId})`} />
+        {METEORS.map((meteor, index) => (
+          <linearGradient
+            key={meteor.x1}
+            id={tailId(index)}
+            x1={meteor.x1}
+            y1={meteor.y1}
+            x2={meteor.x2}
+            y2={meteor.y2}
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop style={{ stopColor: "var(--stage-night-line)" }} />
+            <stop
+              offset="0.25"
+              style={{ stopColor: "var(--stage-meteor-tail)" }}
+              stopOpacity="0.85"
+            />
+            <stop offset="1" style={{ stopColor: "var(--stage-meteor-tail)" }} stopOpacity="0" />
+          </linearGradient>
+        ))}
+        <pattern id={meteorsId} width="384" height="96" patternUnits="userSpaceOnUse">
+          {METEORS.map((meteor, index) => (
+            <g key={meteor.x1} opacity={meteor.opacity}>
+              <path
+                d={`M${meteor.x1} ${meteor.y1}L${meteor.x2} ${meteor.y2}`}
+                stroke={`url(#${tailId(index)})`}
+                strokeLinecap="round"
+                strokeWidth="1.25"
+              />
+              <circle
+                cx={meteor.x1}
+                cy={meteor.y1}
+                r="1.05"
+                style={{ fill: "var(--stage-night-line)" }}
+              />
+            </g>
+          ))}
         </pattern>
       </defs>
 
       <rect width="100%" height="96" fill={`url(#${skyId})`} />
-      <rect width="100%" height="96" fill={`url(#${glowsId})`} />
       <rect width="100%" height="96" fill={`url(#${starsId})`} />
-
-      <g filter={`url(#${softId})`}>
-        <path
-          d="M-12 88C-12 74 0 63 14 63C18 50 30 41 44 41C58 41 70 49 74 62C79 57 86 54 94 54C110 54 123 66 124 82C132 83 138 88 141 96H-12V88Z"
-          fill={`url(#${cloudId})`}
-        />
-      </g>
-      <g filter={`url(#${softId})`}>
-        <path
-          d="M150 96C151 84 161 75 173 75C176 64 186 57 198 57C210 57 220 64 223 75C231 75 238 80 241 87C250 87 257 91 260 96H150Z"
-          fill={`url(#${cloudId})`}
-          fillOpacity="0.8"
-        />
-      </g>
+      <rect width="100%" height="96" fill={`url(#${meteorsId})`} />
     </svg>
   );
 }
 
-function DevBlueprintArt({ compact = false }: { compact?: boolean }) {
+function WireframeArt({ compact = false }: { compact?: boolean }) {
   const idPrefix = useId().replaceAll(":", "");
-  const paperId = `${idPrefix}-stage-bp-paper`;
-  const glowId = `${idPrefix}-stage-bp-glow`;
-  const celesteGlowId = `${idPrefix}-stage-bp-glow-celeste`;
-  const violetGlowId = `${idPrefix}-stage-bp-glow-violet`;
-  const minorGridId = `${idPrefix}-stage-bp-grid-minor`;
-  const majorGridId = `${idPrefix}-stage-bp-grid-major`;
-  const rulerId = `${idPrefix}-stage-bp-ruler`;
-  const glowsId = `${idPrefix}-stage-bp-glows`;
-  const annotationsId = `${idPrefix}-stage-bp-annotations`;
+  const paperId = `${idPrefix}-stage-wireframe-paper`;
+  const glowId = `${idPrefix}-stage-wireframe-glow`;
+  const dotsId = `${idPrefix}-stage-wireframe-dots`;
+  const frameId = `${idPrefix}-stage-wireframe-frames`;
 
   return (
     <svg
-      data-stage-art="blueprint"
+      data-stage-art="wireframe"
       className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
@@ -307,9 +421,9 @@ function DevBlueprintArt({ compact = false }: { compact?: boolean }) {
           gradientUnits="userSpaceOnUse"
           spreadMethod="reflect"
         >
-          <stop style={{ stopColor: "var(--stage-art-bottom)" }} />
-          <stop offset="0.5" style={{ stopColor: "var(--stage-art-mid)" }} />
-          <stop offset="1" style={{ stopColor: "var(--stage-art-top)" }} />
+          <stop style={{ stopColor: "var(--stage-wireframe-bottom)" }} />
+          <stop offset="0.5" style={{ stopColor: "var(--stage-wireframe-mid)" }} />
+          <stop offset="1" style={{ stopColor: "var(--stage-wireframe-top)" }} />
         </linearGradient>
         <radialGradient
           id={glowId}
@@ -319,140 +433,43 @@ function DevBlueprintArt({ compact = false }: { compact?: boolean }) {
           gradientTransform="translate(216 14) rotate(137) scale(120 84)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop style={{ stopColor: "var(--stage-art-highlight)" }} stopOpacity="0.4" />
-          <stop
-            offset="0.52"
-            style={{ stopColor: "var(--stage-art-secondary)" }}
-            stopOpacity="0.16"
-          />
-          <stop offset="1" style={{ stopColor: "var(--stage-art-bottom)" }} stopOpacity="0" />
+          <stop style={{ stopColor: "var(--stage-wireframe-highlight)" }} stopOpacity="0.4" />
+          <stop offset="1" style={{ stopColor: "var(--stage-wireframe-bottom)" }} stopOpacity="0" />
         </radialGradient>
-        <radialGradient
-          id={celesteGlowId}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientTransform="translate(474 44) rotate(166) scale(156 92)"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop style={{ stopColor: "var(--stage-art-celeste-highlight)" }} stopOpacity="0.34" />
-          <stop
-            offset="0.5"
-            style={{ stopColor: "var(--stage-art-celeste-secondary)" }}
-            stopOpacity="0.18"
-          />
-          <stop offset="1" style={{ stopColor: "var(--stage-art-bottom)" }} stopOpacity="0" />
-        </radialGradient>
-        <radialGradient
-          id={violetGlowId}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientTransform="translate(704 18) rotate(145) scale(132 88)"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop style={{ stopColor: "var(--stage-art-violet-highlight)" }} stopOpacity="0.3" />
-          <stop
-            offset="0.52"
-            style={{ stopColor: "var(--stage-art-tertiary)" }}
-            stopOpacity="0.14"
-          />
-          <stop offset="1" style={{ stopColor: "var(--stage-art-bottom)" }} stopOpacity="0" />
-        </radialGradient>
-        <pattern id={minorGridId} width="8" height="8" patternUnits="userSpaceOnUse">
-          <path
-            d="M8 0H0V8"
-            style={{ stroke: "var(--stage-art-grid-line)" }}
-            strokeOpacity="0.14"
-            strokeWidth="0.5"
+        <pattern id={dotsId} width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle
+            cx="4"
+            cy="4"
+            r="0.5"
+            style={{ fill: "var(--stage-wireframe-line)" }}
+            fillOpacity="0.35"
           />
         </pattern>
-        <pattern id={majorGridId} width="32" height="32" patternUnits="userSpaceOnUse">
-          <path
-            d="M32 0H0V32"
-            style={{ stroke: "var(--stage-art-grid-line)" }}
-            strokeOpacity="0.26"
-            strokeWidth="0.6"
-          />
-        </pattern>
-        <pattern id={rulerId} width="32" height="6" patternUnits="userSpaceOnUse">
-          <path
-            d="M4 0V2.5M12 0V2.5M20 0V4M28 0V2.5"
-            style={{ stroke: "var(--stage-art-line)" }}
-            strokeOpacity="0.5"
-            strokeWidth="0.5"
-          />
-        </pattern>
-        <pattern id={glowsId} width="768" height="96" patternUnits="userSpaceOnUse">
-          <rect width="768" height="96" fill={`url(#${glowId})`} />
-          <rect width="768" height="96" fill={`url(#${celesteGlowId})`} />
-          <rect width="768" height="96" fill={`url(#${violetGlowId})`} />
-        </pattern>
-        <pattern id={annotationsId} width="768" height="96" patternUnits="userSpaceOnUse">
+        <pattern id={frameId} width="512" height="96" patternUnits="userSpaceOnUse">
+          <rect width="512" height="96" fill={`url(#${glowId})`} />
           <g
-            style={{ stroke: "var(--stage-art-line)" }}
-            strokeLinecap="round"
+            style={{ stroke: "var(--stage-wireframe-line)" }}
+            strokeOpacity="0.7"
+            strokeWidth="0.6"
+            strokeDasharray="2 2"
+          >
+            <rect x="200" y="10" width="64" height="30" />
+            <rect x="276" y="10" width="40" height="30" />
+            <path d="M200 52H330" />
+          </g>
+          <g
+            style={{ stroke: "var(--stage-wireframe-line)" }}
             strokeOpacity="0.6"
-            strokeWidth="0.7"
-          >
-            <path d="M180 64H264" strokeDasharray="5 4" />
-            <path d="M180 61V67M264 61V67" />
-            <path d="M276 10V44" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <path d="M273 10H279M273 44H279" strokeOpacity="0.5" />
-            <path d="M348 30H428" strokeDasharray="3.5 5" strokeOpacity="0.5" />
-            <path d="M348 27V33M428 27V33" strokeOpacity="0.5" />
-            <path d="M512 48V80" strokeDasharray="5 3" strokeOpacity="0.45" />
-            <path d="M509 48H515M509 80H515" strokeOpacity="0.45" />
-            <path d="M590 70H724" strokeDasharray="7 4" strokeOpacity="0.55" />
-            <path d="M590 67V73M724 67V73" strokeOpacity="0.55" />
-          </g>
-
-          <g
-            style={{ stroke: "var(--stage-art-line)" }}
-            strokeLinecap="round"
-            strokeOpacity="0.55"
             strokeWidth="0.6"
           >
-            <g>
-              <path d="M34 60L38 64M38 60L34 64" />
-            </g>
-            <g>
-              <path d="M228 26H234M231 23V29" />
-            </g>
-            <g>
-              <path d="M143 51H149M146 48V54" />
-            </g>
-            <g>
-              <path d="M316 16L322 22M322 16L316 22" />
-            </g>
-            <g>
-              <path d="M468 70H476M472 66V74" />
-            </g>
-            <g>
-              <path d="M558 28L564 34M564 28L558 34" />
-            </g>
-            <g>
-              <path d="M742 44H750M746 40V48" />
-            </g>
-          </g>
-
-          <g style={{ stroke: "var(--stage-art-line)" }} strokeOpacity="0.35" strokeWidth="0.6">
-            <circle cx="196" cy="38" r="13" strokeDasharray="3.5 4" />
-            <path d="M196 33V43M191 38H201" strokeOpacity="0.6" strokeWidth="0.4" />
-            <circle cx="414" cy="64" r="10" strokeDasharray="2.5 3.5" />
-            <path d="M414 60V68M410 64H418" strokeOpacity="0.6" strokeWidth="0.4" />
-            <circle cx="648" cy="32" r="15" strokeDasharray="4 5" />
-            <path d="M648 26V38M642 32H654" strokeOpacity="0.6" strokeWidth="0.4" />
+            <path d="M200 6V2M264 6V2M276 6V2M316 6V2" />
           </g>
         </pattern>
       </defs>
 
       <rect width="100%" height="96" fill={`url(#${paperId})`} />
-      <rect width="100%" height="96" fill={`url(#${glowsId})`} />
-      <rect width="100%" height="96" fill={`url(#${minorGridId})`} />
-      <rect width="100%" height="96" fill={`url(#${majorGridId})`} />
-      <rect width="100%" height="6" fill={`url(#${rulerId})`} />
-      <rect width="100%" height="96" fill={`url(#${annotationsId})`} />
+      <rect width="100%" height="96" fill={`url(#${dotsId})`} />
+      <rect width="100%" height="96" fill={`url(#${frameId})`} />
     </svg>
   );
 }

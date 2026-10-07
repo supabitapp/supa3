@@ -18,18 +18,16 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveSidebarStageBackdropVariant("Preview")).toBeNull();
   });
 
-  it.each([null, "Latest", "Nightly", "Dev"])(
-    "shows the sleigh under dark themes for the %s channel",
-    (stageLabel) => {
-      expect(resolveVisibleSidebarStageBackdropVariant(stageLabel, "dark")).toBe("release");
-    },
-  );
+  it.each(["light", "dark"] as const)("keeps channel artwork under %s themes", (appearance) => {
+    expect(resolveVisibleSidebarStageBackdropVariant("Nightly", appearance)).toBe("nightly");
+    expect(resolveVisibleSidebarStageBackdropVariant("Dev", appearance)).toBe("dev");
+  });
 
-  it("keeps channel artwork under light themes", () => {
+  it("shows the release sleigh only under dark themes", () => {
+    expect(resolveVisibleSidebarStageBackdropVariant(null, "dark")).toBe("release");
+    expect(resolveVisibleSidebarStageBackdropVariant("Latest", "dark")).toBe("release");
     expect(resolveVisibleSidebarStageBackdropVariant(null, "light")).toBeNull();
     expect(resolveVisibleSidebarStageBackdropVariant("Latest", "light")).toBeNull();
-    expect(resolveVisibleSidebarStageBackdropVariant("Nightly", "light")).toBe("nightly");
-    expect(resolveVisibleSidebarStageBackdropVariant("Dev", "light")).toBe("dev");
   });
 
   it.each(["light", "dark"] as const)(
