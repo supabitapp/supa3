@@ -3,11 +3,14 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { EnvironmentId } from "@supacode/contracts";
 import { ScaleIcon } from "lucide-react";
-import { memo, useMemo } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { memo, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { cn } from "../lib/utils";
 import { useShortcutLabel } from "../hooks/useShortcutLabel";
+import { usePickerShortcuts } from "../hooks/usePickerShortcuts";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
@@ -21,7 +24,9 @@ import {
   ComboboxList,
   ComboboxEmpty,
   ComboboxItem,
+  useComboboxFilter,
 } from "./ui/combobox";
+import { Kbd } from "./ui/kbd";
 
 interface BranchToolbarEnvironmentSelectorProps {
   autoEnvironmentLabel?: string | undefined;
@@ -44,6 +49,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const hostShortcut = useShortcutLabel(displayMode === "toolbar" ? "composer.host" : null);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const hostFilter = useComboboxFilter();
   const activeEnvironment = useMemo(() => {
     return availableEnvironments.find((env) => env.environmentId === environmentId) ?? null;
   }, [availableEnvironments, environmentId]);
@@ -60,6 +69,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     ],
     [availableEnvironments, autoEnvironmentLabel, onAutoEnvironment],
   );
+  const filteredEnvironmentItems = useMemo(
+    () => environmentItems.filter((item) => hostFilter.contains(item.label, query)),
+    [environmentItems, hostFilter, query],
+  );
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery("");
+  };
+  const selectEnvironmentItem = (item: (typeof environmentItems)[number]) => {
+    if (item.value === "auto") onAutoEnvironment?.();
+    else onEnvironmentChange?.(item.value as EnvironmentId);
+  };
+  const hostJumpLabels = usePickerShortcuts({
+    picker: "host",
+    open: open && !envLocked && onEnvironmentChange !== undefined,
+    items: filteredEnvironmentItems,
+    keybindings,
+    onSelect: (item) => {
+      selectEnvironmentItem(item);
+      handleOpenChange(false);
+    },
+  });
 
   // The static label carries the xs control's height (h-7 sm:h-6) as well as
   // its padding: the composer context strip has no min-height of its own, and
@@ -95,6 +126,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   return (
     <Combobox
       autoHighlight
+      open={open}
+      onOpenChange={handleOpenChange}
+      filteredItems={filteredEnvironmentItems}
+      filter={null}
       itemToStringLabel={(item) => item.label}
       itemToStringValue={(item) => item.value}
       value={
@@ -104,8 +139,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       }
       onValueChange={(item) => {
         if (!item) return;
-        if (item.value === "auto") onAutoEnvironment?.();
-        else onEnvironmentChange(item.value as EnvironmentId);
+        selectEnvironmentItem(item);
       }}
       items={environmentItems}
     >
@@ -152,7 +186,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             }
           : {})}
       >
-        <ComboboxSearchInput autoFocus aria-label="Search hosts" placeholder="Search hosts..." />
+        <ComboboxSearchInput
+          autoFocus
+          aria-label="Search hosts"
+          placeholder="Search hosts..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
         <ComboboxEmpty>No matches found.</ComboboxEmpty>
         <ComboboxList>
           {(item: (typeof environmentItems)[number]) => (
@@ -167,8 +207,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   }
                   className="size-3"
                 />
-              )}{" "}
-              {item.label}
+              )}
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {hostJumpLabels.has(item) ? (
+                <Kbd variant="plain" aria-hidden>
+                  {hostJumpLabels.get(item)}
+                </Kbd>
+              ) : null}
             </ComboboxItem>
           )}
         </ComboboxList>

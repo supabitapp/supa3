@@ -1,10 +1,12 @@
 import type { VcsRef } from "@supacode/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { useAtomValue } from "@effect/atom-react";
 import {
   useCallback,
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
@@ -14,6 +16,9 @@ import {
 import { MiddleTruncate } from "./ui/middle-truncate";
 import { cn } from "../lib/utils";
 import { shouldLoadNextBranchPageAfterScroll } from "../state/paginatedBranches";
+import { primaryServerKeybindingsAtom } from "../state/server";
+import { usePickerShortcuts } from "../hooks/usePickerShortcuts";
+import { Kbd } from "./ui/kbd";
 import { RefreshIcon } from "./ui/refresh-icon";
 import { Switch } from "./ui/switch";
 import { getVirtualizedScrollFadeClassName } from "./ui/scroll-area";
@@ -47,6 +52,7 @@ export function BranchPicker({
   popupProps,
   renderItem,
   getItemType,
+  isItemShortcutEnabled,
   children,
 }: {
   items: string[];
@@ -64,8 +70,9 @@ export function BranchPicker({
   statusText: string | null;
   originControl?: { checked: boolean; onCheckedChange: (checked: boolean) => void } | undefined;
   popupProps: Omit<ComponentProps<typeof ComboboxPopup>, "children">;
-  renderItem: (value: string, index: number) => ReactNode;
+  renderItem: (value: string, index: number, jumpLabel: string | null) => ReactNode;
   getItemType?: ((value: string) => string) | undefined;
+  isItemShortcutEnabled?: ((value: string) => boolean) | undefined;
   children: ReactNode;
 }) {
   const highlightedValueRef = useRef<string | null>(null);
@@ -80,6 +87,21 @@ export function BranchPicker({
     },
     [onOpenChange],
   );
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const shortcutItems = useMemo(
+    () => filteredItems.filter((item) => isItemShortcutEnabled?.(item) ?? true),
+    [filteredItems, isItemShortcutEnabled],
+  );
+  const branchJumpLabels = usePickerShortcuts({
+    picker: "branch",
+    open,
+    items: shortcutItems,
+    keybindings,
+    onSelect: (item) => {
+      handleOpenChange(false);
+      onSelectItem(item);
+    },
+  });
   const [showTopBranchScrollFade, setShowTopBranchScrollFade] = useState(false);
   const [showBottomBranchScrollFade, setShowBottomBranchScrollFade] = useState(false);
   const fetchNextBranchPage = useCallback(() => {
@@ -202,7 +224,10 @@ export function BranchPicker({
                 data={filteredItems}
                 keyExtractor={(item) => item}
                 {...(getItemType ? { getItemType } : {})}
-                renderItem={({ item, index }) => renderItem(item, index)}
+                extraData={branchJumpLabels}
+                renderItem={({ item, index }) =>
+                  renderItem(item, index, branchJumpLabels.get(item) ?? null)
+                }
                 estimatedItemSize={28}
                 drawDistance={336}
                 onLayout={() => {
@@ -265,6 +290,7 @@ export function BranchPickerRefItem({
   index,
   value,
   disabled,
+  jumpLabel,
   onClick,
   onContextMenu,
 }: {
@@ -273,6 +299,7 @@ export function BranchPickerRefItem({
   index: number;
   value?: string;
   disabled?: boolean;
+  jumpLabel?: string | null;
   onClick: ComponentProps<typeof ComboboxItem>["onClick"];
   onContextMenu?: ComponentProps<typeof ComboboxItem>["onContextMenu"];
 }) {
@@ -301,6 +328,11 @@ export function BranchPickerRefItem({
       <div className="flex w-full min-w-0 items-center justify-between gap-2">
         <MiddleTruncate value={itemValue} className="flex-1" />
         {badge && <span className="shrink-0 text-3xs text-muted-foreground/45">{badge}</span>}
+        {jumpLabel ? (
+          <Kbd variant="plain" aria-hidden>
+            {jumpLabel}
+          </Kbd>
+        ) : null}
       </div>
     </ComboboxItem>
   );

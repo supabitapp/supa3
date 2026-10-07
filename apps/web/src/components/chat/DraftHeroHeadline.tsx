@@ -13,6 +13,7 @@ import { shortcutLabelForCommand } from "~/keybindings";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { useScratchProject } from "~/hooks/useScratchProject";
 import { useClientSettings } from "~/hooks/useSettings";
+import { usePickerShortcuts } from "~/hooks/usePickerShortcuts";
 import { hasExplicitComposerModelSelection } from "~/lib/chatThreadActions";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -240,8 +241,10 @@ export function DraftHeroHeadline({
     }
   };
 
+  const noProjectItem =
+    scratchWorkspaceRoot === null ? undefined : { value: NO_PROJECT_VALUE, label: "No project" };
   const pickerItems = [
-    ...(scratchWorkspaceRoot === null ? [] : [{ value: NO_PROJECT_VALUE, label: "No project" }]),
+    ...(noProjectItem ? [noProjectItem] : []),
     ...menuEntries.map(({ group }) => ({ value: group.projectKey, label: group.displayName })),
     { value: "add-project", label: "Add project" },
   ];
@@ -270,6 +273,34 @@ export function DraftHeroHeadline({
         .toSorted((left, right) => left.score - right.score)
         .map((result) => result.item)
     : pickerItems;
+  const selectPickerItem = (item: (typeof pickerItems)[number]) => {
+    if (item.value === "add-project") {
+      openAddProject();
+      return;
+    }
+    if (item.value === NO_PROJECT_VALUE) {
+      void startScratch();
+      return;
+    }
+    const entry = projectEntryByKey.get(item.value);
+    if (entry && item.value !== activeProjectKey)
+      selectProject(entry.targetProject, entry.group.projectKey);
+  };
+  const projectJumpLabels = usePickerShortcuts({
+    picker: "project",
+    open: projectMenuOpen,
+    items: filteredPickerItems.filter((item) => projectEntryByKey.has(item.value)),
+    fixedChoice: noProjectItem
+      ? { item: noProjectItem, command: "projectPicker.noProject" }
+      : undefined,
+    keybindings,
+    onSelect: (item) => {
+      selectPickerItem(item);
+      setProjectMenuOpen(false);
+      setProjectQuery("");
+      composerRef?.current?.focusAtEnd();
+    },
+  });
   const projectSelector = shouldShowProjectMenu ? (
     <Combobox
       items={pickerItems}
@@ -285,17 +316,7 @@ export function DraftHeroHeadline({
       }
       onValueChange={(item) => {
         if (!item) return;
-        if (item.value === "add-project") {
-          openAddProject();
-          return;
-        }
-        if (item.value === NO_PROJECT_VALUE) {
-          void startScratch();
-          return;
-        }
-        const entry = projectEntryByKey.get(item.value);
-        if (entry && item.value !== activeProjectKey)
-          selectProject(entry.targetProject, entry.group.projectKey);
+        selectPickerItem(item);
       }}
       open={projectMenuOpen}
       onOpenChange={(open) => {
@@ -346,18 +367,18 @@ export function DraftHeroHeadline({
                 ) : (
                   <FolderPlusIcon className="size-4 shrink-0" />
                 )}
-                <span className="min-w-0 truncate">{item.label}</span>
-                {item.value === NO_PROJECT_VALUE && noProjectShortcut ? (
-                  <Kbd variant="plain" className="ms-auto" aria-hidden>
-                    {noProjectShortcut}
-                  </Kbd>
-                ) : null}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
                 {entry && showProjectEnvironments ? (
                   <ProjectEnvironmentBadge
                     group={entry.group}
                     primaryEnvironmentId={primaryEnvironmentId}
                     machineByEnvironmentId={environmentMachineById}
                   />
+                ) : null}
+                {projectJumpLabels.has(item) ? (
+                  <Kbd variant="plain" aria-hidden>
+                    {projectJumpLabels.get(item)}
+                  </Kbd>
                 ) : null}
               </ComboboxItem>
             );
