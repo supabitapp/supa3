@@ -1,8 +1,8 @@
 import { useIsFocused } from "@react-navigation/native";
+import { shouldShowFloatingBrowser } from "@supacode/client-runtime/preview/floating-browser";
 import type { EnvironmentId, PreviewSessionSnapshot, ThreadId } from "@supacode/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Pressable, View } from "react-native";
-import Animated, { FadeIn, FadeOut, ReduceMotion } from "react-native-reanimated";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -10,8 +10,6 @@ import { browserTabTitle } from "./browserTabs";
 import { PreviewStreamWebView } from "./PreviewStreamWebView";
 
 const PLAYER_LONG_SIDE = 184;
-const PLAYER_ENTERING = FadeIn.duration(180).reduceMotion(ReduceMotion.System);
-const PLAYER_EXITING = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
 
 export function ThreadBrowserFloat(props: {
   readonly environmentId: EnvironmentId;
@@ -57,6 +55,7 @@ export function ThreadBrowserFloat(props: {
   if (!tab || !focused) return null;
   return (
     <FloatingBrowserPlayer
+      key={`${props.environmentId}:${props.threadId}:${tab.tabId}`}
       environmentId={props.environmentId}
       threadId={props.threadId}
       tab={tab}
@@ -77,19 +76,35 @@ function FloatingBrowserPlayer(props: {
   readonly onOpen: () => void;
   readonly onClose: () => void;
 }) {
+  const [wasVisible, setWasVisible] = useState(false);
+  const visible = shouldShowFloatingBrowser(props.tab.navStatus, wasVisible);
+  if (visible !== wasVisible) setWasVisible(visible);
+  if (!visible) return null;
+  return <FloatingBrowserStream {...props} />;
+}
+
+function FloatingBrowserStream(props: ComponentProps<typeof FloatingBrowserPlayer>) {
   const { themeVariables } = useAppearancePreferences();
   const [viewport, setViewport] = useState<{ width: number; height: number } | null>(null);
+  const [streaming, setStreaming] = useState(false);
   // The page keeps its own size; the player scales it into a box of the same shape.
   const aspect = Math.min(Math.max(viewport ? viewport.width / viewport.height : 16 / 10, 0.5), 2);
   const width = aspect >= 1 ? PLAYER_LONG_SIDE : Math.round(PLAYER_LONG_SIDE * aspect);
   const height = Math.round(width / aspect);
   const background = themeVariables["--color-sheet-solid"];
   return (
-    <Animated.View
-      entering={PLAYER_ENTERING}
-      exiting={PLAYER_EXITING}
+    <View
+      pointerEvents={streaming ? "auto" : "none"}
+      accessibilityElementsHidden={!streaming}
+      importantForAccessibility={streaming ? "auto" : "no-hide-descendants"}
       className="absolute right-3 z-30 overflow-hidden rounded-2xl border border-border shadow-md shadow-black/20"
-      style={{ top: props.top, width, height, backgroundColor: background }}
+      style={{
+        top: props.top,
+        width,
+        height,
+        backgroundColor: background,
+        opacity: streaming ? 1 : 0,
+      }}
     >
       <Pressable
         accessibilityRole="button"
@@ -108,6 +123,7 @@ function FloatingBrowserPlayer(props: {
             compact
             paused={!props.live}
             onViewport={setViewport}
+            onStreamingChange={setStreaming}
             onGone={props.onClose}
           />
         </View>
@@ -121,6 +137,6 @@ function FloatingBrowserPlayer(props: {
       >
         <SymbolView name="xmark" size={11} tintColor="#ffffff" type="monochrome" />
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }

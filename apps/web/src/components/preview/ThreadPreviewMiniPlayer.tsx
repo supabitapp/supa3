@@ -1,6 +1,7 @@
 "use client";
 
 import { FILL_PREVIEW_VIEWPORT, type ScopedThreadRef } from "@supacode/contracts";
+import { shouldShowFloatingBrowser } from "@supacode/client-runtime/preview/floating-browser";
 import { PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -59,6 +60,7 @@ import {
   resizePreviewMiniPlayer,
   resolveDeviceMiniPlayerCornerRadius,
   resolveDeviceMiniPlayerSourceSize,
+  resolvePreviewMiniPlayerFrame,
   resolvePreviewMiniPlayerSourceSize,
 } from "./previewMiniPlayerLayout";
 
@@ -102,7 +104,7 @@ export function ThreadPreviewMiniPlayer({ threadRef, miniPlayer }: Props) {
   const { source } = miniPlayer;
   return source.kind === "browser" ? (
     <BrowserMiniPlayer
-      key={source.tabId}
+      key={`${threadRef.environmentId}:${threadRef.threadId}:${source.tabId}`}
       threadRef={threadRef}
       tabId={source.tabId}
       miniPlayer={miniPlayer}
@@ -120,6 +122,9 @@ export function ThreadPreviewMiniPlayer({ threadRef, miniPlayer }: Props) {
 function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly tabId: string }) {
   const previewState = useThreadPreviewState(threadRef);
   const snapshot = previewState.sessions[tabId] ?? null;
+  const [wasVisible, setWasVisible] = useState(false);
+  const pageVisible = shouldShowFloatingBrowser(snapshot?.navStatus ?? null, wasVisible);
+  if (pageVisible !== wasVisible) setWasVisible(pageVisible);
   const runtimeTabId = previewRuntimeTabId(threadRef, previewState.serverEpoch, tabId);
   const recordingTabIds = useActiveBrowserRecordingTabIds();
   const recording =
@@ -132,6 +137,8 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
   );
   const nativeServerTab = useRendersServerTabNatively(threadRef.environmentId, snapshot);
   const serverTab = snapshot?.runtime === "server" && !nativeServerTab;
+  const [streamFrameTabId, setStreamFrameTabId] = useState<string | null>(null);
+  if (!pageVisible && streamFrameTabId !== null) setStreamFrameTabId(null);
   const [streamViewport, setStreamViewport] = useState<PreviewStreamViewport | null>(null);
   const serverSurfaceRef = useRef<ServerBrowserHandle | null>(null);
   const serverPictureInPicture =
@@ -175,7 +182,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
     }
   };
 
-  if (!snapshot) return null;
+  if (!snapshot || !pageVisible) return null;
   const poppedOut = serverTab ? serverPictureInPicture : Boolean(desktopOverlay?.pictureInPicture);
   const canPopOut = serverTab ? supportsServerPictureInPicture() : true;
 
@@ -183,6 +190,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
     <MiniPlayerShell
       threadRef={threadRef}
       miniPlayer={miniPlayer}
+      visible={!serverTab || streamFrameTabId === runtimeTabId}
       sourceSize={sourceSize}
       label="Floating browser preview"
       recording={recording}
@@ -221,6 +229,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
             style={{ zIndex: PREVIEW_MINI_PLAYER_WEBVIEW_Z_INDEX }}
           >
             <ServerBrowserSurface
+              key={runtimeTabId}
               ref={serverSurfaceRef}
               environmentId={threadRef.environmentId}
               threadId={threadRef.threadId}
@@ -228,6 +237,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
               visible
               followSize={false}
               controlPosition="bottom"
+              onFirstFrame={() => setStreamFrameTabId(runtimeTabId)}
               onViewport={setStreamViewport}
               className="size-full"
             />
@@ -328,6 +338,7 @@ function MiniPlayerShell({
   openInPanelShortcut,
   pillActions,
   recording = false,
+  visible = true,
   cornerRadius = frameCornerRadius,
   children,
 }: {
@@ -340,6 +351,8 @@ function MiniPlayerShell({
   readonly openInPanelShortcut?: string | null;
   readonly pillActions?: ReactNode;
   readonly recording?: boolean;
+  /** Keep the stream measurable before its first frame without showing a floating card. */
+  readonly visible?: boolean;
   /** The clip radius for a given frame; the pill stays inside the curve. */
   readonly cornerRadius?: (frame: PreviewMiniPlayerSize) => number;
   readonly children: (frame: PreviewMiniPlayerFrame) => ReactNode;
@@ -364,11 +377,25 @@ function MiniPlayerShell({
   const container = canvas?.container ?? null;
   const obstacles = NO_PREVIEW_MINI_PLAYER_OBSTACLES;
   const sourceKey = previewMiniPlayerSourceKey(miniPlayer.source);
-  const frame = canvas?.previewKey === sourceKey ? canvas.layout.frame : null;
+  const frame =
+    canvas?.previewKey === sourceKey
+      ? canvas.layout.frame
+      : container && container.width > 0 && container.height > 0
+        ? resolvePreviewMiniPlayerFrame({
+            container,
+            width: miniPlayer.width,
+            position: miniPlayer.position,
+            source: sourceSize,
+          })
+        : null;
   const { width: sourceWidth, height: sourceHeight } = sourceSize;
   const reportPreview = canvas?.reportPreview;
   const clearPreview = canvas?.clearPreview;
   useLayoutEffect(() => {
+    if (!visible) {
+      clearPreview?.(sourceKey);
+      return;
+    }
     reportPreview?.({
       key: sourceKey,
       width: miniPlayer.width,
@@ -384,6 +411,8 @@ function MiniPlayerShell({
     miniPlayer.lastInteraction,
     sourceWidth,
     sourceHeight,
+    visible,
+    clearPreview,
   ]);
   useLayoutEffect(() => () => clearPreview?.(sourceKey), [clearPreview, sourceKey]);
 
@@ -464,6 +493,8 @@ function MiniPlayerShell({
       {frame ? (
         <section
           aria-label={label}
+          aria-hidden={!visible}
+          inert={!visible}
           data-preview-mini-player={sourceKey}
           className="pointer-events-none absolute select-none"
           style={{
@@ -472,6 +503,7 @@ function MiniPlayerShell({
             width: frame.width,
             height: frame.height,
             borderRadius: radius,
+            opacity: visible ? undefined : 0,
           }}
         >
           <div
