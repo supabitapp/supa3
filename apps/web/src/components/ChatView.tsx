@@ -432,7 +432,7 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { isTimelineScrollTarget } from "./chat/timelineScrollTarget";
-import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { DraftProjectPicker } from "./chat/DraftProjectPicker";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
@@ -495,11 +495,8 @@ import {
 } from "./chat/ContextWindowMeter.logic";
 import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import {
-  captureDraftHeadline,
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
   MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
-  MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME,
-  playDraftHeadlineExit,
   runMobileComposerTransition,
 } from "./chat/draftHeroTransition";
 import { EASE_DRAWER, animationsSettled, prefersReducedMotion } from "../lib/motion";
@@ -636,10 +633,8 @@ function useDraftHeroLayoutTransition(
 ) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
-  const headlineRef = useRef<HTMLDivElement | null>(null);
   const previousStateRef = useRef(isDraftHeroState);
   const previousComposerRectRef = useRef<DOMRect | null>(null);
-  const headlineGhostRef = useRef<HTMLElement | null>(null);
   const animationRef = useRef<Animation | null>(null);
   const attachTransitionGroupRef = (element: HTMLDivElement | null) => {
     transitionGroupRef.current = element;
@@ -647,15 +642,9 @@ function useDraftHeroLayoutTransition(
   const attachComposerAnchorRef = (element: HTMLDivElement | null) => {
     composerAnchorRef.current = element;
   };
-  const attachHeadlineRef = (element: HTMLDivElement | null) => {
-    headlineRef.current = element;
-  };
 
   const captureLayout = () => {
     previousComposerRectRef.current = composerAnchorRef.current?.getBoundingClientRect() ?? null;
-    headlineGhostRef.current = headlineRef.current
-      ? captureDraftHeadline(headlineRef.current)
-      : null;
   };
 
   useLayoutEffect(() => {
@@ -669,8 +658,6 @@ function useDraftHeroLayoutTransition(
     animationRef.current?.cancel();
     animationRef.current = null;
     const previousComposerRect = previousComposerRectRef.current;
-    const headlineGhost = headlineGhostRef.current;
-    headlineGhostRef.current = null;
     if (
       stateChanged &&
       animationsActive &&
@@ -700,9 +687,6 @@ function useDraftHeroLayoutTransition(
           .then(() => {
             if (animationRef.current === animation) animationRef.current = null;
           });
-        if (!isDraftHeroState && headlineGhost) {
-          void playDraftHeadlineExit(headlineGhost, animationDurationMs);
-        }
       }
     }
     previousStateRef.current = isDraftHeroState;
@@ -712,7 +696,6 @@ function useDraftHeroLayoutTransition(
   return {
     transitionGroupRef: attachTransitionGroupRef,
     composerAnchorRef: attachComposerAnchorRef,
-    headlineRef: attachHeadlineRef,
     captureLayout,
   } as const;
 }
@@ -4210,7 +4193,6 @@ export default function ChatView(props: ChatViewProps) {
   const {
     transitionGroupRef: draftHeroTransitionGroupRef,
     composerAnchorRef: draftHeroComposerAnchorRef,
-    headlineRef: draftHeroHeadlineRef,
     captureLayout: captureDraftHeroLayout,
   } = useDraftHeroLayoutTransition(
     isDraftHeroState,
@@ -4407,8 +4389,10 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const showDraftProjectPicker = isDraftHeroState && !showProviderSubagentBar;
   const mountComposerContextStrip = shouldShowComposerContextStrip({
     isDraftHeroState,
+    showProjectPicker: showDraftProjectPicker,
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
@@ -4417,6 +4401,7 @@ export default function ChatView(props: ChatViewProps) {
   });
   const showComposerContextStrip = shouldShowComposerContextStrip({
     isDraftHeroState,
+    showProjectPicker: showDraftProjectPicker,
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
@@ -10865,25 +10850,6 @@ export default function ChatView(props: ChatViewProps) {
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
-                  {isDraftHeroState ? (
-                    <div className="absolute inset-x-0 bottom-full">
-                      <div
-                        ref={draftHeroHeadlineRef}
-                        className="pb-4 group-has-data-[composer-shoulder-tab]/composer-stack:pb-0"
-                        style={
-                          forceExpandedMobileComposer
-                            ? { viewTransitionName: MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME }
-                            : undefined
-                        }
-                      >
-                        <DraftHeroHeadline
-                          draftId={draftId}
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
                   <div
                     ref={draftHeroComposerAnchorRef}
                     className="relative z-10"
@@ -11076,7 +11042,9 @@ export default function ChatView(props: ChatViewProps) {
                               restingControlsHost={restingComposerControlsHost}
                               restingControlsHaveLeadingContext={
                                 mountComposerContextStrip &&
-                                (isGitRepo || showComposerEnvironmentIndicator)
+                                (showDraftProjectPicker ||
+                                  isGitRepo ||
+                                  showComposerEnvironmentIndicator)
                               }
                               onRestingControlsVisibilityChange={setRestingComposerControlsVisible}
                               getTimelineScrollableNode={getTimelineScrollableNode}
@@ -11191,6 +11159,15 @@ export default function ChatView(props: ChatViewProps) {
                                 availableEnvironments={logicalProjectEnvironments}
                                 composerControlsHostRef={setRestingComposerControlsHost}
                                 contextStripVisible={showComposerContextStrip}
+                                projectPicker={
+                                  showDraftProjectPicker ? (
+                                    <DraftProjectPicker
+                                      draftId={draftId}
+                                      activeProjectRef={activeProjectRef}
+                                      activeProjectTitle={activeProject?.title ?? null}
+                                    />
+                                  ) : null
+                                }
                               />
                             </div>
                           )}

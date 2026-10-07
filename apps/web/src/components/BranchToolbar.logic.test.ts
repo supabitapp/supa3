@@ -494,6 +494,7 @@ describe("shouldShowComposerContextStrip", () => {
     (hostsRestingComposerControls) => {
       const input = {
         isDraftHeroState: false,
+        showProjectPicker: false,
         hasActiveProject: true,
         isGitRepo: true,
         showEnvironmentIndicator: true,
@@ -510,6 +511,7 @@ describe("shouldShowComposerContextStrip", () => {
     expect(
       shouldShowComposerContextStrip({
         isDraftHeroState: true,
+        showProjectPicker: false,
         persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
@@ -523,6 +525,7 @@ describe("shouldShowComposerContextStrip", () => {
     expect(
       shouldShowComposerContextStrip({
         isDraftHeroState: true,
+        showProjectPicker: false,
         persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
@@ -536,6 +539,7 @@ describe("shouldShowComposerContextStrip", () => {
     expect(
       shouldShowComposerContextStrip({
         isDraftHeroState: true,
+        showProjectPicker: false,
         persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: false,
@@ -545,10 +549,25 @@ describe("shouldShowComposerContextStrip", () => {
     ).toBe(true);
   });
 
+  it("keeps the strip for a new draft's project picker without a project", () => {
+    expect(
+      shouldShowComposerContextStrip({
+        isDraftHeroState: true,
+        showProjectPicker: true,
+        persistInActiveThreads: false,
+        hasActiveProject: false,
+        isGitRepo: false,
+        showEnvironmentIndicator: false,
+        hostsRestingComposerControls: false,
+      }),
+    ).toBe(true);
+  });
+
   it("shows Git controls without requiring an environment indicator", () => {
     expect(
       shouldShowComposerContextStrip({
         isDraftHeroState: true,
+        showProjectPicker: false,
         persistInActiveThreads: false,
         hasActiveProject: true,
         isGitRepo: true,

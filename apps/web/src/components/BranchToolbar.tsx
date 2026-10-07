@@ -9,6 +9,7 @@ import {
   ScaleIcon,
 } from "lucide-react";
 import {
+  type ReactNode,
   type Ref,
   memo,
   useImperativeHandle,
@@ -97,6 +98,8 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
+  /** Leads the composer strip, ahead of the branch and host controls. */
+  projectPicker?: ReactNode;
 }
 
 interface MobileRunContextSelectorProps {
@@ -563,6 +566,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   onEnvironmentChange,
   composerControlsHostRef,
   contextStripVisible = true,
+  projectPicker,
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
@@ -674,7 +678,13 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
-  if (!hasActiveThread || !activeProject) return null;
+  if (!hasActiveThread || !activeProject) {
+    return layout === "composer" && projectPicker ? (
+      <ComposerSurface.ContextStrip className="gap-1 text-xs font-normal text-muted-foreground/70">
+        {projectPicker}
+      </ComposerSurface.ContextStrip>
+    ) : null;
+  }
 
   if (layout === "panel") {
     return (
@@ -723,6 +733,25 @@ export const BranchToolbar = memo(function BranchToolbar({
         !contextStripVisible && "pointer-events-none invisible absolute inset-x-0 top-full",
       )}
     >
+      {projectPicker}
+      {showGitControls ? (
+        <BranchToolbarBranchSelector
+          forceNewWorktree={forceNewWorktree}
+          ref={branchSelectorRef}
+          className="min-w-0 flex-initial"
+          environmentId={environmentId}
+          threadId={threadId}
+          {...(draftId ? { draftId } : {})}
+          envLocked={envLocked}
+          effectiveEnvModeOverride={effectiveEnvMode}
+          {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
+          {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
+          startFromOrigin={startFromOrigin}
+          onStartFromOriginChange={onStartFromOriginChange}
+          {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
+          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+        />
+      ) : null}
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
           <MobileRunContextSelector
@@ -796,25 +825,6 @@ export const BranchToolbar = memo(function BranchToolbar({
           data-composer-context-control
           data-chat-resting-composer-controls-host="true"
           className="flex min-w-0 flex-1 items-center justify-start overflow-x-clip overflow-y-visible"
-        />
-      ) : null}
-
-      {showGitControls ? (
-        <BranchToolbarBranchSelector
-          forceNewWorktree={forceNewWorktree}
-          ref={branchSelectorRef}
-          className="min-w-0 flex-initial justify-end @3xl/composer-surface:ml-auto"
-          environmentId={environmentId}
-          threadId={threadId}
-          {...(draftId ? { draftId } : {})}
-          envLocked={envLocked}
-          effectiveEnvModeOverride={effectiveEnvMode}
-          {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
-          {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
-          startFromOrigin={startFromOrigin}
-          onStartFromOriginChange={onStartFromOriginChange}
-          {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
-          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
       ) : null}
     </ComposerSurface.ContextStrip>

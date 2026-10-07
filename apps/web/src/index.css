@@ -65,29 +65,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(supacode
   }
 }
 
-html[data-mobile-composer-route-transition="true"]::view-transition-group(supacode-mobile-draft-headline) {
-  animation-duration: var(--mobile-composer-transition-duration);
-}
-
-/* Exits finish a quarter sooner than the composer move; playDraftHeadlineExit in
-   draftHeroTransition.ts is the desktop twin. */
-html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode-mobile-draft-headline) {
-  animation: supacode-mobile-draft-headline-exit
-    calc(var(--mobile-composer-transition-duration) * 0.75) var(--ease-in) both;
-  mix-blend-mode: normal;
-}
-
-@keyframes supacode-mobile-draft-headline-exit {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
 :root {
   --app-scrollbar-width: 6px;
   --appearance-contrast-base: 100%;
