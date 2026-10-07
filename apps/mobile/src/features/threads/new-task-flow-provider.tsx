@@ -85,6 +85,7 @@ import {
 } from "../../state/thread-outbox";
 import {
   holdEditingQueuedMessage,
+  pauseEditingQueuedMessage,
   releaseEditingQueuedMessage,
   useThreadOutboxMessages,
 } from "../../state/use-thread-outbox";
@@ -1093,7 +1094,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const beginEditingPendingTask = useCallback(
     (messageId: string): boolean => {
       const message = findQueuedPendingTask(messageId);
-      if (!message?.creation) {
+      if (!message?.creation || !holdEditingQueuedMessage(message.messageId)) {
         return false;
       }
       cancelEnvironmentSwitch();
@@ -1121,8 +1122,6 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       editingPendingTaskRef.current = message;
       editingRevisionRef.current = capturePendingTaskEditorWriteBaseline(message.messageId);
       setEditingPendingTask(message);
-      // Hold the outbox drain off this task while it is open in the editor.
-      holdEditingQueuedMessage(message.messageId);
       return true;
     },
     [cancelEnvironmentSwitch],
@@ -1282,6 +1281,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       if (activeEditingMessageId === editing.messageId) {
         activeEditingMessageId = null;
       }
+      pauseEditingQueuedMessage(editing.messageId);
 
       const message = buildPendingTaskMessage({
         threadId: editing.threadId,

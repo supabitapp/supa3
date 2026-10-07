@@ -104,7 +104,9 @@ vi.mock("./use-atom-command", () => ({
 vi.mock("./use-thread-outbox", async () => {
   const { Atom } = await import("effect/reactivity");
   return {
-    editingQueuedMessageIdsAtom: Atom.make<Record<string, boolean>>({}).pipe(Atom.keepAlive),
+    editingQueuedMessageIdsAtom: Atom.make<Record<string, "editing" | "paused" | "deleting">>(
+      {},
+    ).pipe(Atom.keepAlive),
     useThreadOutboxMessages: () => ({}),
     useThreadOutboxShellStatuses: () => new Map(),
   };
@@ -367,7 +369,7 @@ describe("queued worktree branch resolution", () => {
     await harness.manager.enqueue(message);
     const revision = harness.manager.revisionOf(message.messageId);
     harness.writeOutboxMessage.mockImplementationOnce(async () => {
-      appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+      appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
     });
 
     const result = await prepareQueuedThreadCreation(message, "/repo", async () =>
@@ -397,7 +399,7 @@ describe("queued worktree branch resolution", () => {
     await harness.manager.enqueue(message);
     harness.writeOutboxMessage
       .mockImplementationOnce(async () => {
-        appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+        appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
       })
       .mockRejectedValueOnce(new Error("Storage unavailable"));
 
@@ -426,7 +428,7 @@ describe("thread outbox attachment preparation", () => {
       return preparationBarrier.promise;
     });
     await harness.manager.enqueue(message);
-    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
 
     const preparation = prepareQueuedMessageAttachments(message);
     await preparationStarted.promise;
@@ -461,7 +463,7 @@ describe("thread outbox attachment preparation", () => {
     });
     await harness.manager.enqueue(message);
     const revision = harness.manager.revisionOf(message.messageId);
-    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
 
     await expect(prepareQueuedMessageAttachments(message)).resolves.toMatchObject({
       status: "ready",
@@ -605,7 +607,7 @@ describe("thread outbox drain delivery cleanup", () => {
 
     const cleanup = completeQueuedMessageDelivery(message, deliveryRevision);
     await removeStarted.promise;
-    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+    appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
     removeBarrier.resolve();
 
     await expect(cleanup).resolves.toBe("edited");
@@ -677,7 +679,7 @@ describe("thread outbox delivered creation recovery", () => {
       await harness.manager.enqueue(message);
       const recovery = recoverEditedCreationAfterDelivery(message);
       await mergeCompleted.promise;
-      appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+      appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
 
       releaseRecovery.resolve();
       await expect(recovery).resolves.toBe(true);
@@ -944,7 +946,7 @@ describe("thread outbox recovery rollback", () => {
     const unsubscribe = appAtomRegistry.subscribe(composerDrafts.composerDraftsAtom, (drafts) => {
       if (drafts[threadKey]?.text === "edit me") {
         unsubscribe();
-        appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: true });
+        appAtomRegistry.set(editingQueuedMessageIdsAtom, { [message.messageId]: "editing" });
       }
     });
 

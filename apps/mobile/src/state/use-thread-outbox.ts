@@ -6,6 +6,7 @@ import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "./atom-registry";
 import { environmentShell } from "./shell";
 import { threadOutboxManager } from "./thread-outbox";
+import { composerDraftsAtom } from "./use-composer-drafts";
 
 const threadOutboxShellStatusesAtom = Atom.make(
   (get): ReadonlyMap<EnvironmentId, EnvironmentShellStatus> => {
@@ -22,14 +23,13 @@ const threadOutboxShellStatusesAtom = Atom.make(
 
 /**
  * Queued pending tasks the outbox drain must not deliver right now: the one
- * open in the new-task editor, plus any whose latest edits could not be saved
- * back yet (delivering those would send stale content). Editing sessions hold
- * their message id here and release it once the queued payload is current.
+ * open in an editor, any whose latest edits are still unsaved, and deletions
+ * awaiting the row dismissal. A paused task can be reopened or deleted while
+ * its older queued payload remains withheld from delivery.
  */
-export const editingQueuedMessageIdsAtom = Atom.make<Readonly<Record<MessageId, true>>>({}).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("mobile:thread-outbox:editing-message-ids"),
-);
+export const editingQueuedMessageIdsAtom = Atom.make<
+  Readonly<Record<MessageId, "editing" | "paused" | "deleting">>
+>({}).pipe(Atom.keepAlive, Atom.withLabel("mobile:thread-outbox:editing-message-ids"));
 
 export const dispatchingQueuedMessageIdAtom = Atom.make<MessageId | null>(null).pipe(
   Atom.keepAlive,
@@ -38,20 +38,52 @@ export const dispatchingQueuedMessageIdAtom = Atom.make<MessageId | null>(null).
 
 export function holdEditingQueuedMessage(messageId: MessageId): boolean {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
-  if (current[messageId]) {
+  if (current[messageId] === "editing" || current[messageId] === "deleting") {
     return false;
   }
-  appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: true });
+  appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: "editing" });
+  return true;
+}
+
+/** Ends the editor's ownership while retaining its protection against stale sends. */
+export function pauseEditingQueuedMessage(messageId: MessageId): void {
+  const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
+  if (current[messageId] === "editing") {
+    appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: "paused" });
+  }
+}
+
+/** A dismissed editor's retained draft must not prevent an explicit deletion. */
+export function holdDeletingQueuedMessage(messageId: MessageId): boolean {
+  const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
+  if (current[messageId] === "editing" || current[messageId] === "deleting") {
+    return false;
+  }
+  appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: "deleting" });
   return true;
 }
 
 export function releaseEditingQueuedMessage(messageId: MessageId): void {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
-  if (!current[messageId]) {
+  if (!current[messageId] || current[messageId] === "deleting") {
     return;
   }
   const next = { ...current };
   delete next[messageId];
+  appAtomRegistry.set(editingQueuedMessageIdsAtom, next);
+}
+
+export function releaseDeletingQueuedMessage(messageId: MessageId, removed: boolean): void {
+  const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
+  if (current[messageId] !== "deleting") {
+    return;
+  }
+  const next = { ...current };
+  if (!removed && appAtomRegistry.get(composerDraftsAtom)[`pending-task:${messageId}`]) {
+    next[messageId] = "paused";
+  } else {
+    delete next[messageId];
+  }
   appAtomRegistry.set(editingQueuedMessageIdsAtom, next);
 }
 

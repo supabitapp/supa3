@@ -13,16 +13,32 @@ import {
 } from "@supacode/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useLayoutEffect } from "react";
+import { Alert } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { appAtomRegistry } from "../../state/atom-registry";
 import type { QueuedThreadMessage } from "../../state/thread-outbox";
 import type { ComposerDraft } from "../../state/use-composer-drafts";
+import {
+  editingQueuedMessageIdsAtom,
+  holdDeletingQueuedMessage,
+  holdEditingQueuedMessage,
+  releaseDeletingQueuedMessage,
+} from "../../state/use-thread-outbox";
+import { buildPendingNewTasks } from "../../state/pending-new-tasks-model";
+import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { NewTaskFlowProvider, useNewTaskFlow } from "./new-task-flow-provider";
 
-const transport = vi.hoisted(() => ({ openScratch: vi.fn(), openScratchCommand: Symbol() }));
+const transport = vi.hoisted(() => ({
+  openScratch: vi.fn(),
+  openScratchCommand: Symbol(),
+  editorWrite: vi.fn(),
+  removePendingTask: vi.fn(),
+}));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
+vi.mock("@react-navigation/native", () => ({ useNavigation: () => ({ navigate: vi.fn() }) }));
+vi.mock("../../state/shell", () => ({ environmentShell: {} }));
 vi.mock("../../state/entities", () => ({
   useProjects: () => useAtomValue(projectsAtom),
   useThreadShells: () => [],
@@ -77,7 +93,10 @@ vi.mock("../../state/use-model-option-memory", () => ({
 }));
 vi.mock("../../state/pending-task-editor-writes", () => ({
   capturePendingTaskEditorWriteBaseline: () => Promise.resolve(0),
-  flushPendingTaskEditorWrite: () => Promise.resolve(true),
+  flushPendingTaskEditorWrite: transport.editorWrite,
+}));
+vi.mock("../../state/thread-outbox-removal", () => ({
+  removeThreadOutboxMessage: transport.removePendingTask,
 }));
 vi.mock("../../state/thread-outbox", () => ({
   get threadOutboxManager() {
@@ -86,14 +105,13 @@ vi.mock("../../state/thread-outbox", () => ({
   flattenQueuedThreadMessages: (messages: Record<string, ReadonlyArray<QueuedThreadMessage>>) =>
     Object.values(messages).flat(),
 }));
-vi.mock("../../state/use-thread-outbox", () => ({
+vi.mock("../../state/use-thread-outbox", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../state/use-thread-outbox")>()),
   useThreadOutboxMessages: () => useAtomValue(queueAtom),
-  holdEditingQueuedMessage: () => true,
-  releaseEditingQueuedMessage: () => {},
 }));
 // The provider uses the real atom registry with an in-memory draft store; native
 // persistence and attachment cleanup are outside environment-switch behavior.
-vi.mock("../../state/use-composer-drafts", () => ({
+vi.mock("../../state/use-composer-drafts", async (importOriginal) => ({
   get composerDraftsAtom() {
     return draftsAtom;
   },
@@ -106,8 +124,8 @@ vi.mock("../../state/use-composer-drafts", () => ({
     project: { environmentId: EnvironmentId; projectId: ProjectId },
   ) => updateDraft(key, { project: { ...project, createdAt: timestamp } }),
   isNewTaskDraftKey: (key: string) => key.startsWith("new-task:"),
-  isComposerDraftEmpty: (draft: ComposerDraft) =>
-    draft.text === "" && draft.attachments.length === 0,
+  isComposerDraftEmpty: (await importOriginal<typeof import("../../state/use-composer-drafts")>())
+    .isComposerDraftEmpty,
   setComposerDraftText: (key: string, text: string) => updateDraft(key, { text }),
   setComposerDraftContext: (key: string, context: ComposerDraft["context"]) =>
     updateDraft(key, { context }),
@@ -215,20 +233,31 @@ const pendingTask: QueuedThreadMessage = {
 
 let renderer: ReactTestRenderer | null = null;
 let flow: ReturnType<typeof useNewTaskFlow>;
+let pendingActions: ReturnType<typeof usePendingTaskListActions>;
 function Probe() {
   const current = useNewTaskFlow();
+  const actions = usePendingTaskListActions();
   useLayoutEffect(() => {
     flow = current;
-  }, [current]);
+    pendingActions = actions;
+  }, [actions, current]);
   return null;
 }
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   transport.openScratch.mockReset();
+  transport.editorWrite.mockReset().mockResolvedValue(true);
+  transport.removePendingTask.mockReset().mockImplementation(async () => {
+    appAtomRegistry.set(queueAtom, {});
+    appAtomRegistry.set(draftsAtom, {});
+    return true;
+  });
+  vi.mocked(Alert.alert).mockClear();
   nextDraft = 0;
   appAtomRegistry.set(projectsAtom, [firstProject, secondProject, thirdProject, repositoryProject]);
   appAtomRegistry.set(draftsAtom, {});
   appAtomRegistry.set(queueAtom, {});
+  appAtomRegistry.set(editingQueuedMessageIdsAtom, {});
   await act(() => {
     renderer = create(
       <RegistryContext.Provider value={appAtomRegistry}>
@@ -260,6 +289,93 @@ function beginSwitch(environmentId = secondEnvironment!) {
     complete: (destination = secondProject) => completion.resolve(AsyncResult.success(destination)),
   };
 }
+
+function deletePendingTask() {
+  const task = buildPendingNewTasks({ queuedMessages: [pendingTask], drafts: {} })[0]!;
+  pendingActions.confirmDeletePendingTask(task);
+  const confirmation = vi.mocked(Alert.alert).mock.calls.at(-1)?.[2];
+  const deleteAction = confirmation?.find((action) => action.text === "Delete");
+  if (!deleteAction?.onPress) throw new Error("Missing pending task deletion confirmation");
+  deleteAction.onPress();
+}
+
+describe("pending task editor dismissal", () => {
+  beforeEach(async () => {
+    await act(() => {
+      appAtomRegistry.set(queueAtom, { queued: [pendingTask] });
+      expect(flow.beginEditingPendingTask(pendingTask.messageId)).toBe(true);
+    });
+  });
+
+  it("deletes a closed editor's unsendable draft without delivering the old prompt", async () => {
+    const draftKey = flow.draftKey!;
+    await act(() => flow.setPrompt(""));
+    await act(() => flow.cancelEditingPendingTask());
+
+    expect(flow.editingPendingTask).toBeNull();
+    expect(readDraft(draftKey).text).toBe("");
+    expect(appAtomRegistry.get(editingQueuedMessageIdsAtom)[pendingTask.messageId]).toBe("paused");
+    expect(appAtomRegistry.get(queueAtom).queued).toEqual([pendingTask]);
+    expect(transport.editorWrite).not.toHaveBeenCalled();
+
+    await act(async () => deletePendingTask());
+    expect(transport.removePendingTask).toHaveBeenCalledOnce();
+    expect(appAtomRegistry.get(queueAtom)).toEqual({});
+    expect(appAtomRegistry.get(editingQueuedMessageIdsAtom)[pendingTask.messageId]).toBeUndefined();
+    expect(vi.mocked(Alert.alert).mock.calls.map(([title]) => title)).toEqual([
+      "Delete pending task?",
+    ]);
+  });
+
+  it("keeps deletion blocked while the task is actually open", async () => {
+    await act(async () => deletePendingTask());
+    expect(transport.removePendingTask).not.toHaveBeenCalled();
+    expect(vi.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe("Pending task is open");
+    expect(flow.prompt).toBe(pendingTask.text);
+  });
+
+  it("reopens retained edits after a failed save", async () => {
+    transport.editorWrite.mockResolvedValueOnce(false);
+    await act(() => flow.setPrompt("Changed prompt"));
+    await act(() => flow.cancelEditingPendingTask());
+    expect(appAtomRegistry.get(editingQueuedMessageIdsAtom)[pendingTask.messageId]).toBe("paused");
+
+    await act(() => {
+      expect(flow.beginEditingPendingTask(pendingTask.messageId)).toBe(true);
+    });
+    expect(flow.prompt).toBe("Changed prompt");
+    expect(holdDeletingQueuedMessage(pendingTask.messageId)).toBe(false);
+    await act(() => flow.cancelEditingPendingTask());
+    expect(appAtomRegistry.get(editingQueuedMessageIdsAtom)[pendingTask.messageId]).toBeUndefined();
+  });
+
+  it("does not let a dismissed editor's save release a deletion in progress", async () => {
+    const save = Promise.withResolvers<boolean>();
+    transport.editorWrite.mockReturnValueOnce(save.promise);
+    await act(() => flow.cancelEditingPendingTask());
+    expect(holdDeletingQueuedMessage(pendingTask.messageId)).toBe(true);
+    expect(flow.beginEditingPendingTask(pendingTask.messageId)).toBe(false);
+    await act(() => save.resolve(true));
+    expect(holdEditingQueuedMessage(pendingTask.messageId)).toBe(false);
+
+    releaseDeletingQueuedMessage(pendingTask.messageId, false);
+    expect(holdEditingQueuedMessage(pendingTask.messageId)).toBe(true);
+  });
+
+  it("restores the stale-send hold when deleting retained edits fails", async () => {
+    transport.removePendingTask.mockRejectedValueOnce(new Error("Outbox storage unavailable"));
+    await act(() => flow.setPrompt(""));
+    await act(() => flow.cancelEditingPendingTask());
+    await act(async () => deletePendingTask());
+    expect(appAtomRegistry.get(editingQueuedMessageIdsAtom)[pendingTask.messageId]).toBe("paused");
+    expect(appAtomRegistry.get(queueAtom).queued).toEqual([pendingTask]);
+    expect(vi.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe("Could not delete pending task");
+    await act(() => {
+      expect(flow.beginEditingPendingTask(pendingTask.messageId)).toBe(true);
+    });
+    expect(flow.prompt).toBe("");
+  });
+});
 
 describe("new-task environment switching", () => {
   it("blocks an immediate submission before the pending switch rerenders", async () => {
