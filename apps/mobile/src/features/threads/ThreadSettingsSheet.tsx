@@ -54,7 +54,10 @@ import { ProviderIcon } from "../../components/ProviderIcon";
 import { ThemedSwitch } from "../../components/ThemedSwitch";
 import { cn } from "../../lib/cn";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
-import { applyProviderOptionSelection } from "../../lib/providerOptions";
+import {
+  applyProviderOptionSelection,
+  getReasoningOptionDescriptor,
+} from "../../lib/providerOptions";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { rememberModelOptions } from "../../state/use-model-option-memory";
@@ -80,8 +83,10 @@ import {
   NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED,
 } from "../layout/native-mail-search-toolbar";
 import { ModelRow, ChoiceRow } from "./ThreadSettingsRows";
+import { ReasoningSliderRow } from "./ReasoningSliderRow";
 import {
   compatibleRuntimeModeForChoices,
+  reasoningSliderOptions,
   runtimeModeChoicesForSupportedModes,
   selectableChoices,
 } from "./thread-settings-options";
@@ -716,6 +721,7 @@ function ThreadSettingsOptionsItem(props: {
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
   const configs = useAtomValue(environmentServerConfigsAtom);
+  const reasoningDescriptor = getReasoningOptionDescriptor(session.displayedDescriptors);
   const selectedProvider = session.environmentId
     ? (configs
         .get(session.environmentId)
@@ -738,6 +744,17 @@ function ThreadSettingsOptionsItem(props: {
       >
         {session.displayedDescriptors.map((descriptor) => {
           if (descriptor.type === "select") {
+            const sliderOptions =
+              descriptor.id === reasoningDescriptor?.id
+                ? reasoningSliderOptions(
+                    descriptor,
+                    getProviderOptionCurrentValue(
+                      descriptor,
+                      session.displayedModelSelection,
+                      session.reportedModelSelection,
+                    ),
+                  )
+                : null;
             return (
               <Animated.View
                 key={descriptor.id}
@@ -747,15 +764,24 @@ function ThreadSettingsOptionsItem(props: {
                 exiting={props.animationsReady ? THREAD_SETTINGS_OPTION_EXIT_TRANSITION : undefined}
                 layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}
               >
-                <DisclosureRow
-                  label={descriptor.label}
-                  value={getProviderOptionCurrentLabel(
-                    descriptor,
-                    session.displayedModelSelection,
-                    session.reportedModelSelection,
-                  )}
-                  onPress={() => props.onOpenSubmenu({ kind: "descriptor", id: descriptor.id })}
-                />
+                {sliderOptions ? (
+                  <ReasoningSliderRow
+                    key={`${session.displayedModelSelection?.instanceId}:${session.displayedModelSelection?.model}`}
+                    label={descriptor.label}
+                    {...sliderOptions}
+                    onChange={(value) => session.applyOptionChange(descriptor.id, value)}
+                  />
+                ) : (
+                  <DisclosureRow
+                    label={descriptor.label}
+                    value={getProviderOptionCurrentLabel(
+                      descriptor,
+                      session.displayedModelSelection,
+                      session.reportedModelSelection,
+                    )}
+                    onPress={() => props.onOpenSubmenu({ kind: "descriptor", id: descriptor.id })}
+                  />
+                )}
               </Animated.View>
             );
           }
@@ -1421,7 +1447,7 @@ export function ExistingThreadSettingsRouteScreen() {
 /**
  * Native stack hosted by the New Task navigator's form-sheet route. Keeping
  * the sheet presentation in RNS gives UIKit ownership of nested dismissal,
- * while Reasoning and Runtime remain regular pushes inside this navigator.
+ * while choice submenus remain regular pushes inside this navigator.
  */
 export function NewTaskThreadSettingsRouteScreen() {
   const flow = useNewTaskFlow();

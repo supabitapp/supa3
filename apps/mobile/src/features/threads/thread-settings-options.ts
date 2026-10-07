@@ -61,3 +61,13 @@ export function selectableChoices(
     (option) => !injected.has(option.id) && !HIDDEN_EFFORT_OPTION_IDS.has(option.id),
   );
 }
+
+/** Maps the current effort to a stop without substituting a different level. */
+export function reasoningSliderOptions(
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  currentValue: string | boolean | undefined,
+) {
+  const choices = selectableChoices(descriptor);
+  const selectedIndex = choices.findIndex((choice) => choice.id === currentValue);
+  return selectedIndex < 0 ? null : { choices, selectedIndex };
+}
