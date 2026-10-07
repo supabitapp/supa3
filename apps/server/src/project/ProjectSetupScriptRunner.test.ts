@@ -1,7 +1,9 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it, vi } from "@effect/vitest";
 import { ProjectId } from "@supacode/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -35,10 +37,15 @@ it.effect("resolves setup scripts through the standalone project service", () =>
   );
   const listeners: Array<Parameters<TerminalManager.TerminalManager["Service"]["subscribe"]>[0]> =
     [];
+  const unsubscribed = new Set<
+    Parameters<TerminalManager.TerminalManager["Service"]["subscribe"]>[0]
+  >();
   const subscribe: TerminalManager.TerminalManager["Service"]["subscribe"] = (listener) =>
     Effect.sync(() => {
       listeners.push(listener);
-      return () => undefined;
+      return () => {
+        unsubscribed.add(listener);
+      };
     });
   const projectId = ProjectId.make("project:setup-runner-v2");
   const project = {
@@ -179,6 +186,65 @@ it.effect("resolves setup scripts through the standalone project service", () =>
     assert.deepEqual(closeIdle.mock.calls[0]?.[0], {
       threadId: "thread-1",
       terminalId: observedTerminalId,
+    });
+
+    const writeCountBeforeSkip = write.mock.calls.length;
+    const skipped = yield* runner.runForThread({
+      threadId: "thread-1",
+      projectId,
+      worktreePath: "/repo-worktree",
+      trigger: "settle",
+      withCommandWriteGuard: () => Effect.succeed(false),
+    });
+    const skippedTerminalId = open.mock.calls.at(-1)![0].terminalId;
+    assert.deepEqual(skipped, { status: "skipped" });
+    assert.equal(write.mock.calls.length, writeCountBeforeSkip);
+    assert.deepEqual(closeIdle.mock.calls.at(-1)?.[0], {
+      threadId: "thread-1",
+      terminalId: skippedTerminalId,
+    });
+
+    const writeCountBeforeGuardFailure = write.mock.calls.length;
+    const failedGuard = yield* Effect.exit(
+      runner.runForThread({
+        threadId: "thread-1",
+        projectId,
+        worktreePath: "/repo-worktree",
+        trigger: "settle",
+        observeCompletion: {},
+        withCommandWriteGuard: () => Effect.die("projection read failed"),
+      }),
+    );
+    const failedGuardListener = listeners.at(-1)!;
+    const failedGuardTerminalId = open.mock.calls.at(-1)![0].terminalId;
+    assert.isTrue(Exit.isFailure(failedGuard));
+    assert.equal(write.mock.calls.length, writeCountBeforeGuardFailure);
+    assert.isTrue(unsubscribed.has(failedGuardListener));
+    assert.deepEqual(closeIdle.mock.calls.at(-1)?.[0], {
+      threadId: "thread-1",
+      terminalId: failedGuardTerminalId,
+    });
+
+    const guardEntered = yield* Deferred.make<void>();
+    const interruptedRun = yield* Effect.forkChild(
+      runner.runForThread({
+        threadId: "thread-1",
+        projectId,
+        worktreePath: "/repo-worktree",
+        trigger: "settle",
+        observeCompletion: {},
+        withCommandWriteGuard: () =>
+          Deferred.succeed(guardEntered, undefined).pipe(Effect.andThen(Effect.never)),
+      }),
+    );
+    yield* Deferred.await(guardEntered);
+    const interruptedTerminalId = open.mock.calls.at(-1)![0].terminalId;
+    yield* Fiber.interrupt(interruptedRun);
+    const interruptedListener = listeners.at(-1)!;
+    assert.isTrue(unsubscribed.has(interruptedListener));
+    assert.deepEqual(closeIdle.mock.calls.at(-1)?.[0], {
+      threadId: "thread-1",
+      terminalId: interruptedTerminalId,
     });
   }).pipe(Effect.provide(layer));
 });

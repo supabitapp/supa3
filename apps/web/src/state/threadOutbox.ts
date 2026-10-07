@@ -135,7 +135,7 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     );
   },
   deliver: async (entry, savePayload) => {
-    const payload = { ...entry.payload, localAttachments: [...entry.payload.localAttachments] };
+    let payload = { ...entry.payload, localAttachments: [...entry.payload.localAttachments] };
     const { environmentId } = payload;
     const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
     if (!config) throw new Error("Environment is not connected.");
@@ -251,7 +251,7 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     if (!liveConfig) throw new Error("Environment is not connected.");
     const supportsContext = liveConfig.environment.capabilities.inlineMessageContext === true;
     const { context: _, ...message } = payload.input.message;
-    if (payload.compactBeforeSend) {
+    if (payload.compactBeforeSend && payload.compactAccepted !== true) {
       // Both IDs survive reconnects and retries, so acknowledgement loss cannot compact twice.
       await command(directThreadEnvironment.startTurn, {
         ...target,
@@ -270,6 +270,11 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
           dispatchMode: "queue",
         },
       });
+      // Once the compact command is acknowledged, a failed prompt retry must not compact again.
+      // If its acknowledgement was lost, this save never happens and the stable command ID
+      // replays the original compact receipt on reconnect.
+      payload = { ...payload, compactAccepted: true };
+      await savePayload(payload);
     }
     await command(directThreadEnvironment.startTurn, {
       ...target,
@@ -338,16 +343,18 @@ export async function replaceThreadOutboxTurn(entry: PendingThreadTurn, payload:
     entry.status === "failed" && payload.input.bootstrap?.createThread
       ? newThreadId()
       : payload.input.threadId;
+  const compactBeforeSend =
+    payload.compactBeforeSend === true &&
+    threadId === entry.payload.input.threadId &&
+    payload.input.modelSelection?.instanceId === entry.payload.input.modelSelection?.instanceId &&
+    payload.input.message.text.trim().toLowerCase() !== "/compact";
+  const { compactAccepted, ...payloadWithoutCompactAccepted } = payload;
   const changed = await webThreadOutbox.edit(
     entry.id,
     decodeTurn({
-      ...payload,
-      compactBeforeSend:
-        payload.compactBeforeSend === true &&
-        threadId === entry.payload.input.threadId &&
-        payload.input.modelSelection?.instanceId ===
-          entry.payload.input.modelSelection?.instanceId &&
-        payload.input.message.text.trim().toLowerCase() !== "/compact",
+      ...payloadWithoutCompactAccepted,
+      compactBeforeSend,
+      ...(compactBeforeSend && compactAccepted === true ? { compactAccepted: true } : {}),
       input: { ...payload.input, threadId, commandId: CommandId.make(randomUUID()) },
     }),
     scopedThreadKey(scopeThreadRef(payload.environmentId, threadId)),

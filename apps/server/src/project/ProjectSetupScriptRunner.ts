@@ -12,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -22,6 +23,10 @@ import * as ProjectService from "./ProjectService.ts";
 
 export interface ProjectSetupScriptRunnerResultNoScript {
   readonly status: "no-script";
+}
+
+interface ProjectSetupScriptRunnerResultSkipped {
+  readonly status: "skipped";
 }
 
 export interface ProjectSetupScriptRunnerResultStarted {
@@ -53,6 +58,7 @@ export interface ProjectSetupScriptOutputLine {
 
 export type ProjectSetupScriptRunnerResult =
   | ProjectSetupScriptRunnerResultNoScript
+  | ProjectSetupScriptRunnerResultSkipped
   | ProjectSetupScriptRunnerResultStarted;
 
 export interface ProjectSetupScriptRunnerInput {
@@ -76,6 +82,13 @@ export interface ProjectSetupScriptRunnerInput {
   readonly observeCompletion?: {
     readonly onOutputLine?: (line: string) => Effect.Effect<void>;
   };
+  /**
+   * Runs the final eligibility check and terminal write in one caller-owned
+   * critical section. False skips the command after opening the shell.
+   */
+  readonly withCommandWriteGuard?: (
+    writeCommand: Effect.Effect<void, ProjectSetupScriptRunnerError>,
+  ) => Effect.Effect<boolean, ProjectSetupScriptRunnerError>;
 }
 
 export class ProjectSetupScriptOperationError extends Schema.TaggedError<ProjectSetupScriptOperationError>()(
@@ -438,24 +451,39 @@ export const make = Effect.gen(function* () {
           })
         : undefined;
 
-    yield* terminalManager
-      .write({
+    const writeCommand = Effect.suspend(() =>
+      terminalManager.write({
         threadId: input.threadId,
         terminalId,
         data: `${commandLine}\r`,
-      })
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProjectSetupScriptOperationError({
-              ...errorContext,
-              operation: "writeCommand",
-              cause,
-            }),
-        ),
-        // Nothing will ever settle the completion if the command never ran.
-        Effect.tapError(() => Effect.sync(() => observed?.unsubscribe())),
-      );
+      }),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProjectSetupScriptOperationError({
+            ...errorContext,
+            operation: "writeCommand",
+            cause,
+          }),
+      ),
+    );
+    const cleanupUnusedTerminal = Effect.sync(() => observed?.unsubscribe()).pipe(
+      Effect.andThen(
+        Effect.suspend(() => terminalManager.closeIdle({ threadId: input.threadId, terminalId })),
+      ),
+    );
+    const commandWritten = yield* (
+      input.withCommandWriteGuard
+        ? input.withCommandWriteGuard(writeCommand)
+        : writeCommand.pipe(Effect.as(true))
+    ).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) && exit.value ? Effect.void : cleanupUnusedTerminal,
+      ),
+    );
+    if (!commandWritten) {
+      return { status: "skipped" } as const;
+    }
 
     // A clean run leaves only an idle prompt behind; its output stays in the
     // terminal history. A failed run keeps its shell open for a look.

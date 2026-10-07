@@ -278,6 +278,14 @@ export interface OrchestratorV2Shape {
   readonly dispatch: (
     command: OrchestrationV2ServerCommand,
   ) => Effect.Effect<OrchestratorV2DispatchResult, OrchestratorV2Error>;
+  /**
+   * Runs thread-scoped follow-up work in command admission order. The effect
+   * must not dispatch another command for this thread while holding the lock.
+   */
+  readonly withThreadCommandLock: <A, E, R>(
+    threadId: ThreadId,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
   readonly getTimelinePage: (
     threadId: ThreadId,
     options: ProjectionTimelinePageOptions,
@@ -8063,10 +8071,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
       for (const providerThread of input.projection.providerThreads) {
-        // A live process owns its roster and reports clearing it.
+        // A live process owns its roster except when this Stop just returned
+        // without a terminal event. Do not clear a later run's roster on the
+        // same provider thread, or a different live provider thread's roster.
+        const stoppedRunOwnsRoster =
+          providerThread.id === input.stoppedProviderThreadId &&
+          providerThread.lastRunOrdinal !== null &&
+          providerThread.lastRunOrdinal <= input.throughRunOrdinal;
         if (
           (providerThread.pendingBackgroundTasks?.length ?? 0) === 0 ||
-          (yield* hasLiveSession(providerThread.id))
+          ((yield* hasLiveSession(providerThread.id)) && !stoppedRunOwnsRoster)
         ) {
           continue;
         }
@@ -10703,6 +10717,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     recoverDelegatedTask,
     delegatedTaskResultPending,
     dispatch: dispatchWithReceipt,
+    withThreadCommandLock: (threadId, effect) => threadDispatch.withLock(threadId, effect),
     getTimelinePage: (threadId, options) =>
       projectionStore
         .getTimelinePage(threadId, options)

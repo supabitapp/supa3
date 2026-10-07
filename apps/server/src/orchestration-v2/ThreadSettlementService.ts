@@ -543,7 +543,38 @@ export const make = Effect.gen(function* () {
         trigger: "settle",
         // A clean exit closes the script's shell so it does not hold the worktree.
         observeCompletion: {},
+        // Terminal startup stays outside admission; only the final state check
+        // and write must exclude a concurrent run command.
+        withCommandWriteGuard: (writeCommand) =>
+          orchestrator.withThreadCommandLock(
+            threadId,
+            Effect.gen(function* () {
+              const current = yield* projections.getThread(threadId).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProjectSetupScriptRunner.ProjectSetupScriptOperationError({
+                      threadId,
+                      projectId: thread.projectId,
+                      worktreePath,
+                      operation: "writeCommand",
+                      cause,
+                    }),
+                ),
+              );
+              if (
+                current.settledOverride !== "settled" ||
+                toMillis(current.settledAt) !== settledAtMs ||
+                current.projectId !== thread.projectId ||
+                current.worktreePath !== worktreePath
+              ) {
+                return false;
+              }
+              yield* writeCommand;
+              return true;
+            }),
+          ),
       });
+      if (run.status === "skipped") return;
       // Recorded after a successful start, so a failed start retries on the next event.
       settleActionRunAt.set(threadId, settledAtMs);
       if (run.status === "started" && run.completion) {

@@ -55,6 +55,7 @@ const stopEarlierBackgroundWork = ({
     | "missing-session"
     | "missing-session-terminal"
     | "returned-interrupt"
+    | "returned-interrupt-newer-roster"
     | "returned-interrupt-terminal"
     | "superseded-attempt";
 }) =>
@@ -223,6 +224,49 @@ const stopEarlierBackgroundWork = ({
           const run = before.runs[0]!;
           const node = before.nodes.find((candidate) => candidate.id === run.rootNodeId)!;
           const attempt = before.attempts[0]!;
+          if (
+            stalledRun === "returned-interrupt" ||
+            stalledRun === "returned-interrupt-newer-roster"
+          ) {
+            const stoppedProviderThread = before.providerThreads.find(
+              (candidate) => candidate.id === codexTurn.providerThreadId,
+            )!;
+            const unrelatedProviderThreadId = ProviderThreadId.make(
+              "provider-thread:unrelated-live-roster",
+            );
+            yield* sink.write({
+              events: [
+                {
+                  id: EventId.make("stopped-live-roster"),
+                  type: "provider-thread.updated",
+                  threadId,
+                  driver,
+                  providerInstanceId: instanceId,
+                  occurredAt: now,
+                  payload: {
+                    ...stoppedProviderThread,
+                    ...(stalledRun === "returned-interrupt-newer-roster"
+                      ? { lastRunOrdinal: stoppedProviderThread.lastRunOrdinal! + 1 }
+                      : {}),
+                    pendingBackgroundTasks: [{ taskId: "stopped-roster", kind: "command" }],
+                  },
+                },
+                {
+                  id: EventId.make("unrelated-live-roster"),
+                  type: "provider-thread.updated",
+                  threadId,
+                  driver,
+                  providerInstanceId: instanceId,
+                  occurredAt: now,
+                  payload: {
+                    ...stoppedProviderThread,
+                    id: unrelatedProviderThreadId,
+                    pendingBackgroundTasks: [{ taskId: "unrelated-roster", kind: "monitor" }],
+                  },
+                },
+              ],
+            });
+          }
           if (stalledRun === "missing-session" || stalledRun === "missing-session-terminal") {
             const sessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
             const failed = yield* watch(
@@ -390,6 +434,25 @@ const stopEarlierBackgroundWork = ({
             after.turnItems.filter((candidate) => candidate.type === "run_interrupt_result").length,
             interrupted ? 1 : 0,
           );
+          if (
+            stalledRun === "returned-interrupt" ||
+            stalledRun === "returned-interrupt-newer-roster"
+          ) {
+            assert.deepEqual(
+              after.providerThreads.find((candidate) => candidate.id === codexTurn.providerThreadId)
+                ?.pendingBackgroundTasks,
+              stalledRun === "returned-interrupt"
+                ? []
+                : [{ taskId: "stopped-roster", kind: "command" }],
+            );
+            assert.deepEqual(
+              after.providerThreads.find(
+                (candidate) =>
+                  candidate.id === ProviderThreadId.make("provider-thread:unrelated-live-roster"),
+              )?.pendingBackgroundTasks,
+              [{ taskId: "unrelated-roster", kind: "monitor" }],
+            );
+          }
           assert.isEmpty(after.runs.filter((candidate) => candidate.status === "waiting"));
           return;
         }
@@ -787,8 +850,9 @@ it.effect.each([
   "missing-session",
   "missing-session-terminal",
   "returned-interrupt",
+  "returned-interrupt-newer-roster",
   "returned-interrupt-terminal",
   "superseded-attempt",
-] as const)("Stop recovers a stalled run after %s without changing a newer attempt", (stalledRun) =>
+] as const)("Stop recovers a stalled run after %s without changing newer work", (stalledRun) =>
   stopEarlierBackgroundWork({ stalledRun }),
 );

@@ -19,6 +19,7 @@ import {
   type ThreadPullRequestLink,
 } from "@supacode/contracts";
 import { applyServerSettingsPatch } from "@supacode/shared/serverSettings";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -514,6 +515,13 @@ interface HarnessOptions {
   readonly onScriptRun?: (
     input: ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput,
   ) => Effect.Effect<void>;
+  /** Runs only when the settle command passes its admission guard. */
+  readonly onCommandWrite?: (
+    input: ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput,
+  ) => Effect.Effect<void>;
+  readonly onScriptRunnerReturn?: (
+    input: ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput,
+  ) => Effect.Effect<void>;
   /** Runs inside each `closeIdle` call. */
   readonly onCloseIdle?: () => Effect.Effect<void>;
   /** Threads `getThread` returns when a `thread.settled` event is handled. */
@@ -546,6 +554,7 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
   const closedIdle = yield* Queue.unbounded<{ readonly threadId: string }>();
   const scriptRuns =
     yield* Queue.unbounded<ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput>();
+  const threadCommandLock = yield* KeyedLock.make<ThreadId>();
 
   const updateSettings = (patch: ServerSettingsPatch) =>
     Effect.gen(function* () {
@@ -590,6 +599,28 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
     );
   };
 
+  const runForThread: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"] =
+    (input) =>
+      Effect.gen(function* () {
+        yield* Queue.offer(scriptRuns, input);
+        yield* options.onScriptRun?.(input) ?? Effect.void;
+        if (input.withCommandWriteGuard === undefined) return { status: "no-script" } as const;
+        const commandWritten = yield* input.withCommandWriteGuard(
+          options.onCommandWrite?.(input) ?? Effect.void,
+        );
+        yield* options.onScriptRunnerReturn?.(input) ?? Effect.void;
+        if (!commandWritten) return { status: "skipped" } as const;
+        return {
+          status: "started",
+          scriptId: "settle",
+          scriptName: "Settle",
+          scriptCommand: "clean",
+          terminalId: "settle-clean",
+          cwd: input.worktreePath,
+          async: true,
+        } as const;
+      });
+
   const serverSettings = ServerSettings.ServerSettingsService.of({
     start: Effect.void,
     ready: Effect.void,
@@ -629,17 +660,14 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
     Layer.mock(Orchestrator.OrchestratorV2)({
       streamDomainEvents: Stream.fromPubSub(domainEvents),
       dispatch,
+      withThreadCommandLock: (threadId, effect) => threadCommandLock.withLock(threadId, effect),
     }),
     Layer.mock(TerminalManager.TerminalManager)({
       closeIdle: (input) =>
         Queue.offer(closedIdle, input).pipe(Effect.andThen(options.onCloseIdle?.() ?? Effect.void)),
     }),
     Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
-      runForThread: (input) =>
-        Queue.offer(scriptRuns, input).pipe(
-          Effect.andThen(options.onScriptRun?.(input) ?? Effect.void),
-          Effect.as({ status: "no-script" } as const),
-        ),
+      runForThread,
     }),
     Layer.mock(GitManager.GitManager)({
       branchPullRequest,
@@ -672,6 +700,8 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
     invalidatedCwds,
     closedIdle,
     scriptRuns,
+    withThreadCommandLock: <A, E, R>(threadId: ThreadId, effect: Effect.Effect<A, E, R>) =>
+      threadCommandLock.withLock(threadId, effect),
     publishEvent: (event: OrchestrationV2DomainEvent) => PubSub.publish(domainEvents, event),
     updateSettings,
     publishMerge: PubSub.publish(mergedPullRequests, {
@@ -1193,6 +1223,117 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent(settledEvent(settled));
           yield* fixture.publishEvent(settledEvent(marker));
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, marker.id);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("skips the settle command if the thread re-engages while its terminal opens", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const settled = appThread("settle-admission-race", "settled", "/worktrees/race");
+        const currentThreads: OrchestrationV2AppThread[] = [settled];
+        const terminalOpened = yield* Deferred.make<void>();
+        const allowCommandCheck = yield* Deferred.make<void>();
+        const runnerReturned = yield* Deferred.make<void>();
+        const admissionAttempted = yield* Deferred.make<void>();
+        const runAdmitted = yield* Deferred.make<void>();
+        const order = yield* Ref.make<ReadonlyArray<string>>([]);
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads,
+          existingWorktreePaths: ["/worktrees/race"],
+          onScriptRun: () =>
+            Deferred.succeed(terminalOpened, undefined).pipe(
+              Effect.andThen(Deferred.await(allowCommandCheck)),
+            ),
+          onCommandWrite: () => Ref.update(order, (items) => [...items, "script-command-written"]),
+          onScriptRunnerReturn: () => Deferred.succeed(runnerReturned, undefined),
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent(settledEvent(settled));
+          yield* Deferred.await(terminalOpened);
+          assert.deepStrictEqual(yield* Queue.take(fixture.closedIdle), { threadId: settled.id });
+
+          yield* Effect.gen(function* () {
+            yield* Deferred.succeed(admissionAttempted, undefined);
+            yield* fixture.withThreadCommandLock(
+              settled.id,
+              Ref.update(order, (items) => [...items, "user-run-admitted"]).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    currentThreads[0] = { ...settled, settledOverride: "active", settledAt: null };
+                  }),
+                ),
+              ),
+            );
+            yield* Deferred.succeed(runAdmitted, undefined);
+          }).pipe(Effect.forkScoped);
+
+          yield* Deferred.await(admissionAttempted);
+          yield* Deferred.await(runAdmitted);
+          yield* Deferred.succeed(allowCommandCheck, undefined);
+          yield* Deferred.await(runnerReturned);
+          assert.deepStrictEqual(yield* Ref.get(order), ["user-run-admitted"]);
+          assert.strictEqual(currentThreads[0]?.settledOverride, "active");
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("keeps run admission behind the settle script command write", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const settled = appThread("settle-write-admission", "settled", "/worktrees/write-race");
+        const currentThreads: OrchestrationV2AppThread[] = [settled];
+        const commandWriteStarted = yield* Deferred.make<void>();
+        const allowCommandWrite = yield* Deferred.make<void>();
+        const admissionAttempted = yield* Deferred.make<void>();
+        const runAdmitted = yield* Deferred.make<void>();
+        const order = yield* Ref.make<ReadonlyArray<string>>([]);
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads,
+          existingWorktreePaths: ["/worktrees/write-race"],
+          onCommandWrite: () =>
+            Deferred.succeed(commandWriteStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(allowCommandWrite)),
+              Effect.andThen(Ref.update(order, (items) => [...items, "script-command-written"])),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent(settledEvent(settled));
+          yield* Deferred.await(commandWriteStarted);
+
+          yield* Effect.gen(function* () {
+            yield* Deferred.succeed(admissionAttempted, undefined);
+            yield* fixture.withThreadCommandLock(
+              settled.id,
+              Ref.update(order, (items) => [...items, "user-run-admitted"]).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    currentThreads[0] = { ...settled, settledOverride: "active", settledAt: null };
+                  }),
+                ),
+              ),
+            );
+            yield* Deferred.succeed(runAdmitted, undefined);
+          }).pipe(Effect.forkScoped);
+
+          yield* Deferred.await(admissionAttempted);
+          yield* Deferred.succeed(allowCommandWrite, undefined);
+          yield* Deferred.await(runAdmitted);
+          assert.deepStrictEqual(yield* Ref.get(order), [
+            "script-command-written",
+            "user-run-admitted",
+          ]);
+          assert.strictEqual(currentThreads[0]?.settledOverride, "active");
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),

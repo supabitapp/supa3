@@ -171,6 +171,7 @@ describe("web thread outbox delivery", () => {
     });
     const saved = harness.records.get("message")!;
     expect(saved.payload.input.message.text).toBe("Saved prompt");
+    expect(saved.payload.compactAccepted).toBeUndefined();
     harness.records.set("message", { ...saved, retryAt: 0 });
     await webThreadOutbox.drain();
     expect(harness.run.mock.calls[1]![2]).toEqual(compact);
@@ -179,6 +180,44 @@ describe("web thread outbox delivery", () => {
       message: { messageId: "message", text: "Saved prompt" },
       dispatchMode: "queue",
     });
+    expect(harness.records.size).toBe(0);
+  });
+
+  it("does not compact again when a failed prompt is retried after compaction was accepted", async () => {
+    const { enqueueThreadOutboxTurn, replaceThreadOutboxTurn, webThreadOutbox } =
+      await import("./threadOutbox");
+    await enqueueThreadOutboxTurn({ ...target(), compactBeforeSend: true });
+    harness.online = true;
+    harness.run
+      .mockResolvedValueOnce(AsyncResult.success({ sequence: 1 }))
+      .mockImplementationOnce(async () => {
+        expect(harness.records.get("message")?.payload.compactAccepted).toBe(true);
+        return AsyncResult.fail({
+          _tag: "OrchestrationDispatchCommandError",
+          message: "Prompt dispatch was rejected.",
+        });
+      });
+
+    await webThreadOutbox.drain();
+
+    expect(harness.run).toHaveBeenCalledTimes(2);
+    const failed = webThreadOutbox.getSnapshot()[0]!;
+    expect(failed.status).toBe("failed");
+    expect(failed.payload.compactBeforeSend).toBe(true);
+    expect(failed.payload.compactAccepted).toBe(true);
+    expect(harness.run.mock.calls[0]![2].input.message.text).toBe("/compact");
+    expect(harness.run.mock.calls[1]![2].input.message.text).toBe("Saved prompt");
+
+    await replaceThreadOutboxTurn(failed, failed.payload);
+    await webThreadOutbox.drain();
+
+    expect(harness.run).toHaveBeenCalledTimes(3);
+    expect(harness.run.mock.calls[2]![2].input).toMatchObject({
+      commandId: "generated-command",
+      message: { messageId: "message", text: "Saved prompt" },
+      dispatchMode: "queue",
+    });
+    expect(harness.run.mock.calls[2]![2].input.message.text).not.toBe("/compact");
     expect(harness.records.size).toBe(0);
   });
 
@@ -193,6 +232,7 @@ describe("web thread outbox delivery", () => {
     const entry = webThreadOutbox.getSnapshot()[0]!;
     await replaceThreadOutboxTurn(entry, {
       ...entry.payload,
+      compactAccepted: true,
       input: {
         ...entry.payload.input,
         modelSelection: {
@@ -202,6 +242,7 @@ describe("web thread outbox delivery", () => {
         message: { ...entry.payload.input.message, text: edit.text },
       },
     });
+    expect(webThreadOutbox.getSnapshot()[0]?.payload.compactAccepted).toBeUndefined();
     harness.online = true;
     await webThreadOutbox.drain();
     expect(harness.run).toHaveBeenCalledTimes(1);
