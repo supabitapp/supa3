@@ -1,15 +1,18 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import type { ServerInstallation } from "@supacode/contracts";
 import {
   HostProcessArguments,
+  HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessIsExecutable,
   HostProcessPlatform,
 } from "@supacode/shared/hostProcess";
+import { isCommandAvailable } from "@supacode/shared/shell";
 
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -146,15 +149,54 @@ export const resolveCliCommand = (subcommand: string) =>
     }),
   );
 
+/** Quotes `value` for a POSIX shell when it needs it. */
+const shellWord = (value: string) =>
+  /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll("'", `'"'"'`)}'`;
+
+/**
+ * The launcher a person can type to run this install when `supacode` is not on
+ * PATH: the desktop app's `supacode` shim, which the app and the shim itself name in
+ * `SUPACODE_CLI_PATH`, or a standalone binary's own path. Script installs (a
+ * repo checkout) have no single launcher and keep plain `supacode`.
+ */
+const resolveInstallLauncher = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const shim = (yield* HostProcessEnvironment).SUPACODE_CLI_PATH?.trim();
+  if (shim && (yield* fs.exists(shim).pipe(Effect.orElseSucceed(() => false)))) {
+    return Option.some(shim);
+  }
+  return (yield* HostProcessIsExecutable)
+    ? Option.some(yield* HostProcessExecutablePath)
+    : Option.none<string>();
+});
+
+/**
+ * `supacode <subcommand>` for a person to run on this host: `supacode` when it is on PATH,
+ * the package runner this process came from, or else the absolute path of the
+ * launcher for this install, such as the one the desktop app installs.
+ */
+const resolveHostCliCommand = (subcommand: string) =>
+  Effect.gen(function* () {
+    const command = yield* resolveCliCommand(subcommand);
+    if (command !== `supacode ${subcommand}`) return { command, launcher: false };
+    if (yield* isCommandAvailable("supacode")) return { command, launcher: false };
+    const launcher = yield* resolveInstallLauncher;
+    return Option.isSome(launcher)
+      ? { command: `${shellWord(launcher.value)} ${subcommand}`, launcher: true }
+      : { command, launcher: false };
+  });
+
 /**
  * `supacode <subcommand>` as root, for setup a person runs once on the host. `sudo`
  * resets PATH on most distributions, which drops a user-installed Node (nvm,
  * fnm, a tarball) and with it `npx` or a global `supacode`, so the command carries
- * PATH through unless Node is on root's PATH too.
+ * PATH through unless Node is on root's PATH too. An absolute launcher needs
+ * neither.
  */
 export const resolveRootCliCommand = (subcommand: string) =>
   Effect.gen(function* () {
-    const command = yield* resolveCliCommand(subcommand);
+    const { command, launcher } = yield* resolveHostCliCommand(subcommand);
+    if (launcher) return `sudo ${command}`;
     const executablePath = yield* HostProcessExecutablePath;
     const systemNode = ROOT_PATH_DIRECTORIES.some((directory) =>
       executablePath.startsWith(`${directory}/`),
