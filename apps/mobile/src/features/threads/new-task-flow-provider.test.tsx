@@ -1,6 +1,7 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import type { EnvironmentProject } from "@supacode/client-runtime/state/shell";
 import {
+  AuthFilesystemReadScope,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
@@ -35,8 +36,21 @@ vi.mock("../../state/projects", () => ({
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: () => transport.openScratch,
 }));
+vi.mock("../../state/presentation", () => ({
+  useEnvironmentPresentation: () => ({
+    isReady: true,
+    presentation: { connection: { phase: "connected", error: null } },
+  }),
+}));
+vi.mock("../../state/session", () => ({
+  environmentSession: { sessionStateAtom: () => sessionAtom },
+}));
 vi.mock("../../state/query", () => ({
-  useEnvironmentQuery: () => ({ data: null, isPending: false }),
+  useEnvironmentQuery: (atom: unknown) => ({
+    data: atom === sessionAtom ? { authenticated: true, scopes: [AuthFilesystemReadScope] } : null,
+    error: null,
+    isPending: false,
+  }),
 }));
 vi.mock("../../state/vcs", () => ({ vcsEnvironment: { status: () => null } }));
 vi.mock("../../state/queries", () => ({
@@ -169,6 +183,7 @@ const firstProject = project(firstEnvironment!);
 const secondProject = project(secondEnvironment!);
 const thirdProject = project(thirdEnvironment!);
 const repositoryProject = project(firstEnvironment!, false);
+const sessionAtom = Atom.make(AsyncResult.initial());
 const projectsAtom = Atom.make<ReadonlyArray<EnvironmentProject>>([]).pipe(Atom.keepAlive);
 const draftsAtom = Atom.make<Record<string, ComposerDraft>>({}).pipe(Atom.keepAlive);
 const queueAtom = Atom.make<Record<string, ReadonlyArray<QueuedThreadMessage>>>({}).pipe(

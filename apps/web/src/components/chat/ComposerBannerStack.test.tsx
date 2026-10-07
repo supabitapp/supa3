@@ -139,15 +139,15 @@ describe("notice exits", () => {
     await mountStack([a, b, c]);
     await act(() => renderer.update(<ComposerBannerStack items={[a, c]} />));
     expect(banners()).toEqual([
-      ["a", "shown"],
       ["b", "exiting"],
       ["c", "shown"],
+      ["a", "shown"],
     ]);
 
     await act(async () => finishExits());
     expect(banners()).toEqual([
-      ["a", "shown"],
       ["c", "shown"],
+      ["a", "shown"],
     ]);
   });
 
@@ -155,8 +155,8 @@ describe("notice exits", () => {
     await mountStack([a, b]);
     await act(() => renderer.update(<ComposerBannerStack items={[b]} />));
     expect(banners()).toEqual([
-      ["a", "exiting"],
       ["b", "shown"],
+      ["a", "exiting"],
     ]);
 
     await act(async () => finishExits());
