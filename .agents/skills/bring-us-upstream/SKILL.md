@@ -1,6 +1,6 @@
 ---
 name: bring-us-upstream
-description: Review t3codes upstream changes, explain what to port or skip, and get approval before implementation.
+description: Review and port t3code upstream changes, defaulting to compatible work while preserving Supacode's deliberate fork differences.
 ---
 
 # Bring upstream changes
@@ -14,13 +14,15 @@ Before editing:
 - Read repository instructions and identify the baseline and upstream ref or range.
 - Inspect the actual diff and relevant code, tests, contracts, migrations, and docs.
 - Check affected server, client, provider, persistence, and connection surfaces.
+- Default to bringing compatible upstream work, including new capabilities and architectural changes. Size, implementation effort, new dependencies, and routine branding or integration work belong in the port plan.
 - Classify every change:
-  - **Bring:** compatible and in scope.
-  - **Skip:** conflicting, redundant, unsupported, risky, or out of scope.
-  - **Decide:** requires a product, security, migration, or compatibility choice.
+  - **Bring:** compatible with Supacode's goals, including changes that need adaptation, migrations, or additional tests.
+  - **Skip:** already present, tied to an intentionally absent subsystem, outside the requested range, or contrary to a deliberate fork decision. Name the evidence for the exclusion.
+  - **Decide:** a concrete conflict or consequential choice that cannot be resolved from the user's instructions and existing fork behavior. State the alternatives, consequences, and recommendation.
+- Highlight compatibility consequences inside the proposed port. Reserve separate decisions for unresolved choices, such as whether existing users must re-pair or which conflicting local behavior to retain.
 - Use source evidence. Do not rely on commit titles alone.
 
-Do not edit, commit, push, or create a PR before approval.
+Review before implementation. When the user has not already authorized the scope, present it and get approval before editing. Existing approval persists; "bring all" approves the proposed ports and decision bundles unless the user gives a narrower boundary.
 
 ## Present and wait
 
@@ -32,8 +34,8 @@ Show the user:
 - open decisions and non-goals;
 - the exact implementation boundary.
 
-Ask whether to approve all items, selected items, or a revised scope. Stop until the user answers.
+If approval is still needed, ask whether to approve the proposed scope or revise it, then wait. Do not turn routine integration work into a menu of optional upstream features or ask again for approved work.
 
 ## Implement after approval
 
-Implement only approved items. If the scope expands, present a revised proposal first. Preserve local behavior, add focused tests, update docs when needed, and run targeted checks. Report what changed, what was skipped, validation, and remaining manual checks. Create a PR only when requested.
+Implement the approved scope and resolve routine adaptation choices autonomously. Seek another decision only for a material expansion or a newly discovered conflict that the existing authorization does not settle. Preserve deliberate fork behavior, add focused tests, update docs when needed, and run targeted checks. Report what changed, what was skipped, validation, and remaining manual checks. Commit, push, and create a PR only when authorized.
