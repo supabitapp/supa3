@@ -1,5 +1,6 @@
 import {
   CommandId,
+  latestProviderTurnForAttempt,
   ModelSelection,
   type OrchestrationV2Command,
   OrchestrationV2ProviderCapabilities,
@@ -138,9 +139,9 @@ export function resolveMessageDispatchIntent(
   if (deliveryIntent === "restart") {
     return { type: "restart_active", targetRunId: activeRun.id };
   }
-  const providerTurn = projection.providerTurns.find(
-    (turn) =>
-      turn.runAttemptId === activeRun.activeAttemptId && turn.nodeId === activeRun.rootNodeId,
+  const providerTurn = latestProviderTurnForAttempt(
+    projection.providerTurns.filter((turn) => turn.nodeId === activeRun.rootNodeId),
+    activeRun.activeAttemptId,
   );
   if (
     activeRun.status === "preparing" ||

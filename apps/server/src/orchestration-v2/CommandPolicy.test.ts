@@ -45,7 +45,7 @@ function dispatchProjection(
     providerTurns:
       sessionCapabilities === undefined
         ? []
-        : [{ runAttemptId: activeAttemptId, nodeId: rootNodeId, status: "running" }],
+        : [{ runAttemptId: activeAttemptId, nodeId: rootNodeId, ordinal: 1, status: "running" }],
     providerThreads:
       sessionCapabilities === undefined ? [] : [{ id: providerThreadId, providerSessionId }],
     providerSessions:
@@ -143,6 +143,38 @@ it.each([
     { type: "queue_after_active" },
   );
 });
+
+it.each([
+  { earlierStatus: "completed", latestStatus: "pending", expected: "queue_after_active" },
+  { earlierStatus: "pending", latestStatus: "running", expected: "steer_active" },
+] as const)(
+  "uses the latest root provider turn when it is $latestStatus",
+  ({ earlierStatus, latestStatus, expected }) => {
+    const projection = dispatchProjection(baseCapabilities);
+    const turn = projection.providerTurns[0]!;
+    for (const providerTurns of [
+      [
+        { ...turn, ordinal: 1, status: earlierStatus },
+        { ...turn, ordinal: 2, status: latestStatus },
+      ],
+      [
+        { ...turn, ordinal: 2, status: latestStatus },
+        { ...turn, ordinal: 1, status: earlierStatus },
+      ],
+    ]) {
+      assert.deepEqual(
+        CommandPolicy.resolveMessageDispatchIntent(
+          { ...projection, providerTurns },
+          { type: "start_immediately" },
+          "auto",
+        ),
+        expected === "steer_active"
+          ? { type: "steer_active", targetRunId: activeRunId }
+          : { type: "queue_after_active" },
+      );
+    }
+  },
+);
 
 it("preserves completed-turn delivery for the orchestrator to start a follow-up", () => {
   const projection = dispatchProjection(baseCapabilities);
