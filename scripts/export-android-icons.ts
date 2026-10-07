@@ -137,6 +137,22 @@ const renderArtworkBackground = Effect.fn("androidIcons.renderArtworkBackground"
   return yield* composite(layer, margin, [{ input: artwork, left: inset, top: inset }]);
 });
 
+const renderDevelopmentBackground = Effect.fn("androidIcons.renderDevelopmentBackground")(
+  function* (repositoryRoot: string, size: number) {
+    // The annotation layer shares the wordmark's coordinate space, so it is scaled and
+    // centered the same way to keep the wireframe boxes around the letters.
+    const annotations = yield* readLayerSource(repositoryRoot, "dev", "annotations.svg");
+    const body = annotations.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+    const background = yield* renderArtworkBackground(repositoryRoot, "dev", size);
+    const overlay = yield* rasterize(
+      "dev-annotations",
+      canvasSvg(size, `<g transform="${wordmarkTransform(size)}">${body}</g>`),
+      size,
+    );
+    return yield* composite("dev-background", background, [{ input: overlay }]);
+  },
+);
+
 const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
   repositoryRoot: string,
   variant: IconVariant,
@@ -144,6 +160,7 @@ const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
 ) {
   switch (variant) {
     case "dev":
+      return yield* renderDevelopmentBackground(repositoryRoot, size);
     case "nightly":
       return yield* renderArtworkBackground(repositoryRoot, variant, size);
     case "prod":
@@ -168,11 +185,11 @@ const exportAndroidIcons = Effect.gen(function* () {
     ["android-icon-foreground.png", yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS)],
     [
       "android-icon-background-dev.png",
-      yield* renderArtworkBackground(repositoryRoot, "dev", ADAPTIVE_CANVAS),
+      yield* renderBackground(repositoryRoot, "dev", ADAPTIVE_CANVAS),
     ],
     [
       "android-icon-background-nightly.png",
-      yield* renderArtworkBackground(repositoryRoot, "nightly", ADAPTIVE_CANVAS),
+      yield* renderBackground(repositoryRoot, "nightly", ADAPTIVE_CANVAS),
     ],
     ["android-splash-icon-dev.png", yield* renderSplashIcon(repositoryRoot, "dev")],
     ["android-splash-icon-nightly.png", yield* renderSplashIcon(repositoryRoot, "nightly")],

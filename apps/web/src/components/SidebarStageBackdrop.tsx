@@ -96,7 +96,7 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 
 const STAGE_BACKDROP_ART = {
   nightly: StarfieldArt,
-  dev: CautionTapeArt,
+  dev: WireframeArt,
   release: SleighRideArt,
 } satisfies Record<SidebarStageBackdropVariant, ComponentType<{ compact?: boolean }>>;
 
@@ -272,14 +272,16 @@ function StarfieldArt({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function CautionTapeArt({ compact = false }: { compact?: boolean }) {
+function WireframeArt({ compact = false }: { compact?: boolean }) {
   const idPrefix = useId().replaceAll(":", "");
-  const baseId = `${idPrefix}-stage-caution-base`;
-  const stripesId = `${idPrefix}-stage-caution-stripes`;
+  const paperId = `${idPrefix}-stage-wireframe-paper`;
+  const glowId = `${idPrefix}-stage-wireframe-glow`;
+  const dotsId = `${idPrefix}-stage-wireframe-dots`;
+  const frameId = `${idPrefix}-stage-wireframe-frames`;
 
   return (
     <svg
-      data-stage-art="caution"
+      data-stage-art="wireframe"
       className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
@@ -287,31 +289,64 @@ function CautionTapeArt({ compact = false }: { compact?: boolean }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <linearGradient id={baseId} x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
-          <stop style={{ stopColor: "var(--stage-caution-top)" }} />
-          <stop offset="1" style={{ stopColor: "var(--stage-caution-bottom)" }} />
-        </linearGradient>
-        <pattern
-          id={stripesId}
-          width="14"
-          height="14"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
+        <linearGradient
+          id={paperId}
+          x1="60"
+          y1="0"
+          x2="220"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+          spreadMethod="reflect"
         >
-          <rect width="14" height="14" style={{ fill: "var(--stage-caution-ink)" }} />
-          <rect width="7" height="14" style={{ fill: "var(--stage-caution-stripe)" }} />
+          <stop style={{ stopColor: "var(--stage-wireframe-bottom)" }} />
+          <stop offset="0.5" style={{ stopColor: "var(--stage-wireframe-mid)" }} />
+          <stop offset="1" style={{ stopColor: "var(--stage-wireframe-top)" }} />
+        </linearGradient>
+        <radialGradient
+          id={glowId}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientTransform="translate(216 14) rotate(137) scale(120 84)"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop style={{ stopColor: "var(--stage-wireframe-highlight)" }} stopOpacity="0.4" />
+          <stop offset="1" style={{ stopColor: "var(--stage-wireframe-bottom)" }} stopOpacity="0" />
+        </radialGradient>
+        <pattern id={dotsId} width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle
+            cx="4"
+            cy="4"
+            r="0.5"
+            style={{ fill: "var(--stage-wireframe-line)" }}
+            fillOpacity="0.35"
+          />
+        </pattern>
+        <pattern id={frameId} width="512" height="96" patternUnits="userSpaceOnUse">
+          <rect width="512" height="96" fill={`url(#${glowId})`} />
+          <g
+            style={{ stroke: "var(--stage-wireframe-line)" }}
+            strokeOpacity="0.7"
+            strokeWidth="0.6"
+            strokeDasharray="2 2"
+          >
+            <rect x="200" y="10" width="64" height="30" />
+            <rect x="276" y="10" width="40" height="30" />
+            <path d="M200 52H330" />
+          </g>
+          <g
+            style={{ stroke: "var(--stage-wireframe-line)" }}
+            strokeOpacity="0.6"
+            strokeWidth="0.6"
+          >
+            <path d="M200 6V2M264 6V2M276 6V2M316 6V2" />
+          </g>
         </pattern>
       </defs>
 
-      <rect width="100%" height="96" fill={`url(#${baseId})`} />
-      <rect width="100%" height="9" fill={`url(#${stripesId})`} />
-      <rect
-        y="9"
-        width="100%"
-        height="0.8"
-        style={{ fill: "var(--stage-caution-ink)" }}
-        fillOpacity="0.5"
-      />
+      <rect width="100%" height="96" fill={`url(#${paperId})`} />
+      <rect width="100%" height="96" fill={`url(#${dotsId})`} />
+      <rect width="100%" height="96" fill={`url(#${frameId})`} />
     </svg>
   );
 }

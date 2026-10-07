@@ -62,7 +62,8 @@ is instead rendered from the same Icon Composer SVG sources by `vp run icons:exp
   inside the safe zone
 - `apps/mobile/assets/android-icon-background-dev.png` and `-nightly.png`: the variant's
   `background.svg` fitted into the masked central two thirds, over a full-bleed copy that fills
-  the parallax margin. Production uses a solid color.
+  the parallax margin. Dev also draws `annotations.svg` in the wordmark's coordinate space so the
+  wireframe boxes stay around the letters. Production uses a solid color.
 - `apps/mobile/assets/android-splash-icon-*.png`: the two layers composed into one 288dp image, so
   the splash mask reproduces the launcher icon's framing.
 
