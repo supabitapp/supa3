@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { AuthProvidersManageScope } from "@supacode/contracts";
 import type { createServerEnvironmentAtoms } from "@supacode/client-runtime/state/server";
 import { useAtomCommand } from "./use-atom-command";
+import { readEnvironmentScope, useEnvironmentsWithScope } from "./session";
 import {
   orchestrationSkillsView,
   runOrchestrationSkillsAction,
@@ -16,6 +18,7 @@ export function useOrchestrationSkills(
   >,
 ) {
   const [selection] = useState(environments);
+  const permitted = useEnvironmentsWithScope(selection, AuthProvidersManageScope);
   const read = useAtomCommand(commands.orchestrationSkillsStatus, { reportFailure: false });
   const install = useAtomCommand(commands.orchestrationSkillsInstall, { reportFailure: false });
   const uninstall = useAtomCommand(commands.orchestrationSkillsUninstall, { reportFailure: false });
@@ -32,8 +35,20 @@ export function useOrchestrationSkills(
       const execute = action === "Status" ? read : action === "Install" ? install : uninstall;
       setResults(
         await runOrchestrationSkillsAction(selection, async (environmentId) => {
+          const previousStatus =
+            results.find((entry) => entry.environmentId === environmentId)?.status ?? null;
+          if (
+            action !== "Status" &&
+            !readEnvironmentScope(environmentId, AuthProvidersManageScope)
+          ) {
+            return previousStatus;
+          }
           const result = await execute({ environmentId, input: {} });
-          return result._tag === "Success" ? result.value : null;
+          if (result._tag === "Success") return result.value;
+          return action !== "Status" &&
+            !readEnvironmentScope(environmentId, AuthProvidersManageScope)
+            ? previousStatus
+            : null;
         }),
       );
     } finally {
@@ -60,6 +75,7 @@ export function useOrchestrationSkills(
   const entries = results.map((result) => ({
     ...result,
     ...orchestrationSkillsView(result.status),
+    canManage: permitted.has(result.environmentId),
   }));
   const notices = entries.flatMap((entry) => {
     const prefix = selection.length > 1 ? `${entry.label}: ` : "";
@@ -68,6 +84,9 @@ export function useOrchestrationSkills(
         `${prefix}Could not manage skills. Check the connection and provider folder permissions, then retry.`,
       ];
     return [
+      ...(!entry.canManage
+        ? [`${prefix}This connection does not have permission to manage provider skills.`]
+        : []),
       ...(entry.status.targets.length === 0
         ? [`${prefix}No providers support native skill installation.`]
         : []),
@@ -89,7 +108,7 @@ export function useOrchestrationSkills(
       entries.length === selection.length &&
       entries.length > 0 &&
       entries.every((entry) => entry.installed),
-    canInstall: entries.some((entry) => entry.canInstall),
-    canUninstall: entries.some((entry) => entry.canUninstall),
+    canInstall: entries.some((entry) => entry.canManage && entry.canInstall),
+    canUninstall: entries.some((entry) => entry.canManage && entry.canUninstall),
   };
 }

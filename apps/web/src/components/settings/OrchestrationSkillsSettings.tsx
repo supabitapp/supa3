@@ -34,13 +34,24 @@ function SelectedEnvironmentSkills({
         <div className="flex min-h-11 min-w-40 items-center justify-end gap-2">
           {skills.installed ? (
             <Menu>
-              <MenuTrigger render={<Button variant="outline" size="comfortable" disabled={busy} />}>
+              <MenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="comfortable"
+                    disabled={busy || !skills.canUninstall}
+                  />
+                }
+              >
                 <CheckIcon aria-hidden="true" />
                 {skills.pending === "Uninstall" ? "Uninstalling…" : "Installed"}
                 <ChevronDownIcon aria-hidden="true" />
               </MenuTrigger>
               <MenuPopup align="end">
-                <MenuItem onClick={() => void skills.request("Uninstall")}>
+                <MenuItem
+                  disabled={busy || !skills.canUninstall}
+                  onClick={() => void skills.request("Uninstall")}
+                >
                   Uninstall Skills
                 </MenuItem>
               </MenuPopup>
@@ -62,13 +73,22 @@ function SelectedEnvironmentSkills({
               {skills.canUninstall ? (
                 <Menu>
                   <MenuTrigger
-                    render={<Button variant="ghost" size="comfortable" disabled={busy} />}
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="comfortable"
+                        disabled={busy || !skills.canUninstall}
+                      />
+                    }
                   >
                     {skills.pending === "Uninstall" ? "Uninstalling…" : "Manage"}
                     <ChevronDownIcon aria-hidden="true" />
                   </MenuTrigger>
                   <MenuPopup align="end">
-                    <MenuItem onClick={() => void skills.request("Uninstall")}>
+                    <MenuItem
+                      disabled={busy || !skills.canUninstall}
+                      onClick={() => void skills.request("Uninstall")}
+                    >
                       Uninstall Skills
                     </MenuItem>
                   </MenuPopup>

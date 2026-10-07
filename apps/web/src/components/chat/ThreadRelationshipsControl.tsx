@@ -25,7 +25,12 @@ import {
   canDetachThreadProviderSession,
   resolveLatestMergeBackRun,
 } from "@supacode/client-runtime/state/thread-workflows";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@supacode/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  type EnvironmentId,
+  type OrchestrationV2ThreadShell,
+  type ThreadId,
+} from "@supacode/contracts";
 import { groupBy } from "effect/Array";
 import * as DateTime from "effect/DateTime";
 import { useNavigate } from "@tanstack/react-router";
@@ -52,6 +57,8 @@ import {
 } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { useEnvironmentScope } from "../../state/session";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 
@@ -231,10 +238,11 @@ export function ThreadRelationshipsPanel(props: {
   }, [archivedShells, projection, props.environmentId, threadShells]);
   const currentThread = projection?.thread ?? graph.nodes.get(props.threadId)?.thread;
   const currentProject = projects.find((project) => project.id === currentThread?.projectId);
+  const canOperateThread = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
   const navigate = useNavigate();
   const mergeBack = useAtomCommand(threadEnvironment.mergeBack);
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
-  const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn);
+  const interruptTurn = useOrchestrationCommand(threadEnvironment.interruptTurn);
   const [busyAction, setBusyAction] = useState<"merge" | "detach" | null>(null);
   const [stoppingThreadId, setStoppingThreadId] = useState<ThreadId | null>(null);
   const latestMergeBackRun = projection === null ? null : resolveLatestMergeBackRun(projection);
@@ -313,7 +321,7 @@ export function ThreadRelationshipsPanel(props: {
   };
 
   const stopSubagent = async (childThreadId: ThreadId) => {
-    if (stoppingThreadId !== null) return;
+    if (stoppingThreadId !== null || !canOperateThread) return;
     setStoppingThreadId(childThreadId);
     const result = await interruptTurn({
       environmentId: props.environmentId,
@@ -381,6 +389,7 @@ export function ThreadRelationshipsPanel(props: {
                 node?.thread,
               );
               const canStop =
+                canOperateThread &&
                 agent?.origin === "app_owned" &&
                 agent.startedAt &&
                 ["pending", "running", "waiting"].includes(agent.status);

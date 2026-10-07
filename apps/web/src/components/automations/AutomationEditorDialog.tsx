@@ -12,6 +12,7 @@ import type {
   ThreadId,
 } from "@supacode/contracts";
 import {
+  AuthOrchestrationOperateScope,
   MIN_SCHEDULED_TASK_INTERVAL_MS,
   ProviderInstanceId,
   resolveEnvironmentMachineKind,
@@ -30,6 +31,7 @@ import {
 } from "../../providerInstances";
 import { useEnvironment, type EnvironmentPresentation } from "../../state/environments";
 import { useProjects } from "../../state/entities";
+import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -155,6 +157,7 @@ export function AutomationEditorDialog({
 }) {
   const [environmentId, setEnvironmentId] = useState(initialEnvironmentId);
   const environment = useEnvironment(environmentId);
+  const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const connected =
     environment?.connection.phase === "connected" && environment.serverConfig !== null;
   const tasksQuery = useEnvironmentQuery(
@@ -225,6 +228,7 @@ export function AutomationEditorDialog({
       saving ||
       editingTaskMissing ||
       !connected ||
+      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       tasksQuery.data === null
     )
       return;
@@ -313,7 +317,12 @@ export function AutomationEditorDialog({
         </DialogHeader>
 
         <DialogPanel>
-          <fieldset disabled={saving} className="space-y-5">
+          <fieldset disabled={saving || !canOperate} className="space-y-5">
+            {!canOperate ? (
+              <p className="text-sm text-muted-foreground">
+                This connection does not have permission to manage automations.
+              </p>
+            ) : null}
             {!connected ? (
               <p className="text-sm text-destructive">Reconnect this environment before saving.</p>
             ) : null}
@@ -597,7 +606,7 @@ export function AutomationEditorDialog({
           </DialogClose>
           <Button
             size="sm"
-            disabled={saving || editingTaskMissing || !connected || !tasksQuery.data}
+            disabled={saving || editingTaskMissing || !connected || !canOperate || !tasksQuery.data}
             onClick={() => void submit()}
           >
             {draft.editingId ? "Save automation" : "Create automation"}

@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   projects: [] as unknown[],
   configs: new Map<string, unknown>(),
   showTooltips: false,
+  canOperateThread: true,
   command: vi.fn().mockResolvedValue({ _tag: "Success" }),
 }));
 
@@ -31,6 +32,12 @@ vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => ({ snapshots: [] }),
 }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.command }));
+vi.mock("../../state/use-orchestration-command", () => ({
+  useOrchestrationCommand: () => state.command,
+}));
+vi.mock("../../state/session", () => ({
+  useEnvironmentScope: () => state.canOperateThread,
+}));
 vi.mock("../ui/collapsible", () => {
   const OpenContext = createContext(false);
   return {
@@ -59,6 +66,7 @@ afterEach(async () => {
   state.projects = [];
   state.configs.clear();
   state.showTooltips = false;
+  state.canOperateThread = true;
   state.command.mockClear();
   state.projection = null;
 });
@@ -166,6 +174,13 @@ it.each(["codex", "claudeAgent"])(
     };
     await act(async () => renderer.update(cloneElement(panel)));
     expect(renderer.root.findAllByProps({ "aria-label": "Stop subagent Worker" })).toHaveLength(0);
+
+    state.command.mockClear();
+    state.canOperateThread = false;
+    state.projection = { ...projection, subagents: [agent] };
+    await act(async () => renderer.update(cloneElement(panel)));
+    expect(renderer.root.findAllByProps({ "aria-label": "Stop subagent Worker" })).toHaveLength(0);
+    expect(state.command).not.toHaveBeenCalled();
   },
 );
 

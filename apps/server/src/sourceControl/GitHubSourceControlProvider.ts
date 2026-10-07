@@ -16,6 +16,7 @@ import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import * as ServerSettings from "../serverSettings.ts";
 import * as GitHubApi from "./GitHubApi.ts";
 import * as GitHubCli from "./GitHubCli.ts";
+import * as GitHubCredentials from "./GitHubCredentials.ts";
 import {
   effectiveGitHubAccount,
   findAuthenticatedGitHubAccount,
@@ -181,9 +182,58 @@ const decodeViewer = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ login: Schema.String })),
 );
 
-/** The environment variable gh would take a github.com token from, if one is set. */
-function environmentTokenVariable(environment: NodeJS.ProcessEnv): string | null {
-  return ["GH_TOKEN", "GITHUB_TOKEN"].find((name) => environment[name]?.trim()) ?? null;
+/** The environment variable GitHubCredentials would use for this host, if one is set. */
+function environmentTokenVariable(host: string, environment: NodeJS.ProcessEnv): string | null {
+  const token = GitHubCredentials.environmentToken(host, environment);
+  if (token === null) return null;
+  const names =
+    host === "github.com" || host.endsWith(".ghe.com")
+      ? ["GH_TOKEN", "GITHUB_TOKEN"]
+      : ["GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
+  return names.find((name) => environment[name]?.trim() === token) ?? null;
+}
+
+interface DiscoveryTokenHost {
+  readonly host: string;
+  readonly source: "settings" | "environment";
+  readonly environmentVariable?: string;
+}
+
+function discoveryTokenHosts(
+  settings: GitHubSettings,
+  environment: NodeJS.ProcessEnv,
+): ReadonlyArray<DiscoveryTokenHost> {
+  const enabledSavedHosts = Object.entries(settings.tokens)
+    .flatMap(([host, token]) =>
+      token.trim() !== "" && settings.hosts[host]?.enabled !== false
+        ? [{ host, source: "settings" as const }]
+        : [],
+    )
+    .toSorted((left, right) => {
+      // Keep the historical dotcom-first choice when several saved tokens are usable.
+      if (left.host === "github.com") return -1;
+      if (right.host === "github.com") return 1;
+      return left.host.localeCompare(right.host);
+    });
+  const savedHosts = new Set(enabledSavedHosts.map((entry) => entry.host));
+  const seenHosts = new Set(savedHosts);
+  const environmentHosts = ["github.com", environment.GH_HOST?.trim().toLowerCase()].flatMap(
+    (host) => {
+      if (!host || seenHosts.has(host) || settings.hosts[host]?.enabled === false) {
+        return [];
+      }
+      seenHosts.add(host);
+      const environmentVariable = environmentTokenVariable(host, environment);
+      return environmentVariable === null
+        ? []
+        : [{ host, source: "environment" as const, environmentVariable }];
+    },
+  );
+  return [...enabledSavedHosts, ...environmentHosts];
+}
+
+function discoveryTokenAuthAccounts(cli: SourceControlProviderDiscoveryItem) {
+  return cli.auth.accounts === undefined ? {} : { accounts: cli.auth.accounts };
 }
 
 /**
@@ -213,47 +263,84 @@ export const makeDiscovery = Effect.gen(function* () {
         process,
         spec: { ...discovery, parseAuth: (input) => parseGitHubAuth(input, settings) },
       });
-      // A token saved in Settings wins over the environment, which wins over gh.
-      const savedToken = (settings.tokens["github.com"] ?? "").trim() !== "";
-      const variable = environmentTokenVariable(environment);
-      const tokenSource = savedToken ? "the token saved in Settings" : variable;
-      // A host turned off in Settings stays off even with a token.
-      if (tokenSource === null || settings.hosts["github.com"]?.enabled === false) return cli;
-      const viewer = yield* api
-        .rest({ host: "github.com", operation: "discovery", path: "user" })
-        .pipe(Effect.result);
-      const login = Result.isSuccess(viewer)
-        ? Option.getOrUndefined(decodeViewer(viewer.success.body))?.login
-        : undefined;
-      // The per-host logins stay, so the account picker still lists every host gh knows.
-      const accounts = cli.auth.accounts === undefined ? {} : { accounts: cli.auth.accounts };
+      const tokenHosts = discoveryTokenHosts(settings, environment);
+      if (tokenHosts.length === 0) return cli;
+
+      let firstInvalid: DiscoveryTokenHost | undefined;
+      let firstUnknown:
+        | { readonly candidate: DiscoveryTokenHost; readonly detail: string }
+        | undefined;
+      for (const candidate of tokenHosts) {
+        const viewer = yield* api
+          .rest({ host: candidate.host, operation: "discovery", path: "user" })
+          .pipe(Effect.result);
+        if (Result.isSuccess(viewer)) {
+          const login = Option.getOrUndefined(decodeViewer(viewer.success.body))?.login;
+          if (login !== undefined) {
+            return {
+              ...cli,
+              status: "available" as const,
+              auth: {
+                ...providerAuth({
+                  status: "authenticated",
+                  account: login,
+                  host: candidate.host,
+                  detail:
+                    candidate.source === "settings"
+                      ? `Using the token saved for ${candidate.host}; it overrides the environment and gh login for that host.`
+                      : `Using ${candidate.environmentVariable} from the server environment; it overrides the account chosen in Settings.`,
+                }),
+                ...discoveryTokenAuthAccounts(cli),
+              },
+            } satisfies SourceControlProviderDiscoveryItem;
+          }
+          firstUnknown ??= {
+            candidate,
+            detail: `GitHub returned an unreadable account for ${candidate.host}.`,
+          };
+          continue;
+        }
+        if (viewer.failure._tag === "GitHubApiAuthenticationError") {
+          firstInvalid ??= candidate;
+        } else {
+          // Only a refusal says the token is bad; a network error or pause says nothing.
+          firstUnknown ??= { candidate, detail: viewer.failure.message };
+        }
+      }
+
+      const accounts = discoveryTokenAuthAccounts(cli);
+      const failed =
+        firstUnknown ??
+        (firstInvalid === undefined
+          ? undefined
+          : {
+              candidate: firstInvalid,
+              detail:
+                firstInvalid.source === "settings"
+                  ? `GitHub refused the token saved for ${firstInvalid.host}. Replace or remove it in Settings → Source Control.`
+                  : `GitHub refused the token in ${firstInvalid.environmentVariable}. Replace it, or unset it to use \`gh auth login\`.`,
+            });
+      if (failed === undefined) return cli;
+      const cliHost = Option.getOrUndefined(cli.auth.host);
+      if (
+        cli.auth.status === "authenticated" &&
+        cliHost !== undefined &&
+        tokenHosts.every((candidate) => candidate.host !== cliHost)
+      ) {
+        return cli;
+      }
       return {
         ...cli,
         status: "available" as const,
         auth: {
-          ...(login !== undefined
-            ? providerAuth({
-                status: "authenticated",
-                account: login,
-                host: "github.com",
-                detail: savedToken
-                  ? "Using the token saved in Settings; it overrides GH_TOKEN and the gh login."
-                  : `Using ${variable} from the server environment; it overrides the account chosen in Settings.`,
-              })
-            : Result.isFailure(viewer) && viewer.failure._tag !== "GitHubApiAuthenticationError"
-              ? // Only a refusal says the token is bad; a network error or a pause says nothing.
-                providerAuth({
-                  status: "unknown",
-                  host: "github.com",
-                  detail: `Could not check ${savedToken ? tokenSource : `the token in ${tokenSource}`}: ${viewer.failure.message}`,
-                })
-              : providerAuth({
-                  status: "unauthenticated",
-                  host: "github.com",
-                  detail: savedToken
-                    ? "GitHub refused the token saved in Settings. Replace or remove it in Settings → Source Control."
-                    : `GitHub refused the token in ${tokenSource}. Replace it, or unset it to use \`gh auth login\`.`,
-                })),
+          ...providerAuth({
+            status: firstUnknown === undefined ? "unauthenticated" : "unknown",
+            host: failed.candidate.host,
+            detail:
+              firstUnknown === undefined
+                ? failed.detail
+                : `Could not check the token for ${failed.candidate.host}: ${failed.detail}`,
+          }),
           ...accounts,
         },
       } satisfies SourceControlProviderDiscoveryItem;

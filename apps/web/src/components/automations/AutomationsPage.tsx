@@ -10,7 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId, ScheduledTask, ScheduledTaskId } from "@supacode/contracts";
-import { resolveEnvironmentMachineKind } from "@supacode/contracts";
+import { AuthOrchestrationOperateScope, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -26,6 +26,11 @@ import {
   usePrimaryEnvironmentId,
   type EnvironmentPresentation,
 } from "../../state/environments";
+import {
+  readEnvironmentScope,
+  useEnvironmentScope,
+  useEnvironmentsWithScope,
+} from "../../state/session";
 import { useThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -84,6 +89,17 @@ export function AutomationsPage() {
     connectedEnvironments,
     environment: defaultEnvironment,
   } = selectScopedSettingsEnvironments(scope, availableEnvironments, primaryEnvironmentId);
+  const writableEnvironmentIds = useEnvironmentsWithScope(
+    connectedEnvironments,
+    AuthOrchestrationOperateScope,
+  );
+  const writableEnvironments = connectedEnvironments.filter((entry) =>
+    writableEnvironmentIds.has(entry.environmentId),
+  );
+  const creationEnvironment =
+    writableEnvironments.find(
+      (entry) => entry.environmentId === defaultEnvironment?.environmentId,
+    ) ?? writableEnvironments[0];
   const projectNameByKey = useMemo(
     () =>
       new Map(
@@ -120,10 +136,14 @@ export function AutomationsPage() {
           <Button
             size="xs"
             variant="outline"
-            disabled={!defaultEnvironment}
+            disabled={!creationEnvironment}
             onClick={() =>
-              defaultEnvironment &&
-              setEditor({ environmentId: defaultEnvironment.environmentId, task: null })
+              creationEnvironment &&
+              readEnvironmentScope(
+                creationEnvironment.environmentId,
+                AuthOrchestrationOperateScope,
+              ) &&
+              setEditor({ environmentId: creationEnvironment.environmentId, task: null })
             }
           >
             <PlusIcon />
@@ -175,7 +195,7 @@ export function AutomationsPage() {
           initialEnvironmentId={editor.environmentId}
           task={editor.task}
           scope={scope}
-          connectedEnvironments={connectedEnvironments}
+          connectedEnvironments={writableEnvironments}
           onClose={closeEditor}
         />
       ) : null}
@@ -288,6 +308,7 @@ function AutomationRow({
   readonly onEdit: () => void;
 }) {
   const navigate = useNavigate();
+  const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const threadRef = useMemo(
     () => (task.threadId ? scopeThreadRef(environmentId, task.threadId) : null),
     [environmentId, task.threadId],
@@ -304,8 +325,11 @@ function AutomationRow({
   const remove = useAtomCommand(serverEnvironment.deleteScheduledTask, {
     label: "scheduled task delete",
   });
+  const edit = () => {
+    if (readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) onEdit();
+  };
   const act = async (action: "toggle" | "run" | "delete") => {
-    if (busy) return;
+    if (busy || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
     setBusy(true);
     const result =
       action === "toggle"
@@ -350,7 +374,7 @@ function AutomationRow({
         <div className="flex items-center gap-2">
           <Switch
             checked={task.enabled}
-            disabled={busy}
+            disabled={busy || !canOperate}
             aria-label={task.enabled ? `Pause ${task.title}` : `Resume ${task.title}`}
             onCheckedChange={() => void act("toggle")}
           />
@@ -368,11 +392,14 @@ function AutomationRow({
               <MoreHorizontalIcon className="size-4" />
             </MenuTrigger>
             <MenuPopup align="end">
-              <MenuItem onClick={onEdit}>
+              <MenuItem disabled={!canOperate} onClick={edit}>
                 <PencilIcon />
                 Edit
               </MenuItem>
-              <MenuItem disabled={task.lastRunStatus === "running"} onClick={() => void act("run")}>
+              <MenuItem
+                disabled={!canOperate || task.lastRunStatus === "running"}
+                onClick={() => void act("run")}
+              >
                 <PlayIcon />
                 Run now
               </MenuItem>
@@ -390,7 +417,11 @@ function AutomationRow({
                 </MenuItem>
               ) : null}
               <MenuSeparator />
-              <MenuItem {...confirm.bind("delete", () => void act("delete"))} variant="destructive">
+              <MenuItem
+                disabled={!canOperate}
+                {...confirm.bind("delete", () => void act("delete"))}
+                variant="destructive"
+              >
                 <Trash2Icon />
                 {confirm.armed === "delete" ? "Confirm delete" : "Delete"}
               </MenuItem>
