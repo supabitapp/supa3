@@ -129,7 +129,7 @@ function ThreadListV2Section(props: {
   const sidebarPane = props.pane === "sidebar";
   const className = cn(
     "flex-row items-center gap-2.5",
-    props.disclosure ? "my-1" : "mb-1.5 mt-4",
+    !props.disclosure && "mb-1.5 mt-4",
     props.pane === "sidebar" ? "px-3" : "px-5",
   );
   const content = (
@@ -181,7 +181,7 @@ function ThreadListV2Section(props: {
       className={className}
       disabled={props.disclosure.disabled}
       onPress={props.disclosure.onToggle}
-      style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.6 : 1 })}
+      style={({ pressed }) => ({ minHeight: 36, opacity: pressed ? 0.6 : 1 })}
     >
       {content}
     </Pressable>
