@@ -1,24 +1,64 @@
-name: CI Parallel Step Probe
+name: CI Parallel Steps Benchmark
 on:
   push:
     branches: [supacode/ci-parallel-benchmark]
 permissions:
   contents: read
 jobs:
-  probe:
+  lint:
+    name: Lint ${{ matrix.mode }} ${{ matrix.sample }}
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [serial, background]
+        sample: [1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Mise
+        uses: ./.github/actions/setup-mise
+      - name: Install workspace dependencies
+        run: mise exec -- vp install
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @supacode/desktop ensure:electron
+      - name: Mark checks start
+        run: date +%s%N > "$RUNNER_TEMP/lint-start"
+      - name: Check unused code (serial)
+        if: matrix.mode == 'serial'
+        run: vp run knip:check
+      - name: Check unused code (background)
+        if: matrix.mode == 'background'
+        background: true
+        run: vp run knip:check
+      - name: Check
+        run: vp check
+      - name: Wait for measurements
+        wait-all:
+      - name: Record checks time
+        run: |
+          elapsed_ns=$(( $(date +%s%N) - $(cat "$RUNNER_TEMP/lint-start") ))
+          echo "mode=${{ matrix.mode }} sample=${{ matrix.sample }} elapsed_ns=$elapsed_ns" | tee -a "$GITHUB_STEP_SUMMARY"
+  failure:
+    name: Verify background failure propagation
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 2
+    continue-on-error: true
+    steps:
+      - name: Fail in background
+        background: true
+        run: exit 17
+      - name: Finish foreground
+        run: echo foreground-completed
+  require_failure:
+    name: Require background failure
+    needs: failure
+    if: always()
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 2
     steps:
-      - name: Start independent work
-        id: independent
-        background: true
-        run: echo background-step-supported
-      - name: Run foreground work
-        run: echo foreground-step-supported
-      - name: Join independent work
-        wait: independent
-      - parallel:
-          - name: First grouped step
-            run: echo parallel-group-supported
-          - name: Second grouped step
-            run: echo parallel-group-supported
+      - name: Require implicit join to fail the job
+        env:
+          RESULT: ${{ needs.failure.result }}
+        run: test "$RESULT" = failure
