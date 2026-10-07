@@ -1,5 +1,6 @@
 import {
   CommandId,
+  latestProviderTurnForAttempt,
   ModelSelection,
   type OrchestrationV2Command,
   OrchestrationV2ProviderCapabilities,
@@ -138,7 +139,15 @@ export function resolveMessageDispatchIntent(
   if (deliveryIntent === "restart") {
     return { type: "restart_active", targetRunId: activeRun.id };
   }
-  if (activeRun.status === "preparing" || activeRun.status === "starting") {
+  const providerTurn = latestProviderTurnForAttempt(
+    projection.providerTurns.filter((turn) => turn.nodeId === activeRun.rootNodeId),
+    activeRun.activeAttemptId,
+  );
+  const canSteerRunningTurn = activeRun.status === "running" && providerTurn?.status === "running";
+  const canStartAfterCompletedTurn =
+    (activeRun.status === "running" || activeRun.status === "waiting") &&
+    providerTurn?.status === "completed";
+  if (!canSteerRunningTurn && !canStartAfterCompletedTurn) {
     return { type: "queue_after_active" };
   }
 

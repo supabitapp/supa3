@@ -20,10 +20,12 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Orchestrator from "./Orchestrator.ts";
+import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import type { ProviderAdapterV2Shape } from "./ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
@@ -47,6 +49,174 @@ const layerTest = Layer.mergeAll(
     ProviderAdapterRegistry.layerFromAdapters([adapter]),
     { databaseLayer: layerDatabase, runEffectWorker: false },
   ),
+);
+
+it.effect.each([
+  { creationSource: "web", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "mobile", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "mcp", runStatus: "running", turnStatus: "missing" },
+  { creationSource: "web", runStatus: "running", turnStatus: "pending" },
+  { creationSource: "web", runStatus: "running", turnStatus: "interrupted" },
+  { creationSource: "web", runStatus: "running", turnStatus: "failed" },
+  { creationSource: "web", runStatus: "running", turnStatus: "cancelled" },
+  { creationSource: "web", runStatus: "waiting", turnStatus: "running" },
+  { creationSource: "web", runStatus: "running", turnStatus: "completed" },
+  { creationSource: "web", runStatus: "waiting", turnStatus: "completed" },
+] as const)(
+  "delivers a $creationSource message with a $runStatus run and $turnStatus provider turn",
+  ({ creationSource, runStatus, turnStatus }) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const threadId = ThreadId.make(
+        `thread:automatic-delivery:${creationSource}:${runStatus}:${turnStatus}`,
+      );
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("startup-create"),
+        threadId,
+        projectId: ProjectId.make("project:startup-delivery"),
+        title: "Startup delivery",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature",
+        worktreePath: "/repo/worktree",
+        createdBy: "user",
+        creationSource,
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("startup-message"),
+        threadId,
+        messageId: MessageId.make("startup-message"),
+        text: "First message",
+        attachments: [],
+        dispatchMode: { type: "defer_start" },
+        createdBy: "user",
+        creationSource,
+      });
+      const preparing = (yield* orchestrator.getThreadProjection(threadId)).runs[0]!;
+      yield* orchestrator.dispatch({
+        type: "prepared-run.release",
+        commandId: CommandId.make("startup-release"),
+        threadId,
+        runId: preparing.id,
+      });
+      const projection = yield* orchestrator.getThreadProjection(threadId);
+      const run = projection.runs[0]!;
+      const providerThread = projection.providerThreads[0]!;
+      const providerSessionId = ProviderSessionId.make("startup-session");
+      const now = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("startup-session-attached"),
+            type: "provider-session.attached",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: providerSessionId,
+              driver: adapter.driver,
+              providerInstanceId: instanceId,
+              status: "ready",
+              cwd: "/repo/worktree",
+              model: modelSelection.model,
+              capabilities: CodexProviderCapabilitiesV2,
+              createdAt: now,
+              updatedAt: now,
+              lastError: null,
+            },
+          },
+          {
+            id: EventId.make("startup-provider-thread"),
+            type: "provider-thread.updated",
+            threadId,
+            occurredAt: now,
+            payload: { ...providerThread, providerSessionId },
+          },
+          {
+            id: EventId.make("startup-run-running"),
+            type: "run.updated",
+            threadId,
+            occurredAt: now,
+            payload: { ...run, status: runStatus, startedAt: now },
+          },
+        ],
+      });
+      if (turnStatus !== "missing") {
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make("startup-provider-turn"),
+              type: "provider-turn.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: ProviderTurnId.make("startup-provider-turn"),
+                providerThreadId: providerThread.id,
+                nodeId: run.rootNodeId!,
+                runAttemptId: run.activeAttemptId,
+                nativeTurnRef: null,
+                ordinal: 1,
+                status: turnStatus,
+                startedAt: turnStatus === "pending" ? null : now,
+                completedAt: turnStatus === "pending" || turnStatus === "running" ? null : now,
+              },
+            },
+          ],
+        });
+      }
+      const messageId = MessageId.make("startup-follow-up");
+      const followUpCommand = {
+        type: "message.dispatch" as const,
+        commandId: CommandId.make("startup-follow-up"),
+        threadId,
+        messageId,
+        text: "Follow-up while the provider cannot be steered",
+        attachments: [],
+        dispatchMode: { type: "start_immediately" as const },
+        deliveryIntent: "auto" as const,
+        createdBy: "user" as const,
+        creationSource,
+      };
+      yield* orchestrator.dispatch(followUpCommand);
+      yield* orchestrator.dispatch(followUpCommand);
+      const queued = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(queued.runs.length, 2);
+      const followUp = queued.runs.find((candidate) => candidate.userMessageId === messageId)!;
+      assert.equal(followUp.status, "queued");
+      assert.equal(queued.messages.filter((message) => message.id === messageId).length, 1);
+
+      const afterSequence = yield* orchestrator.getThreadEventSequence(threadId);
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("startup-run-completed"),
+            type: "run.updated",
+            threadId,
+            occurredAt: now,
+            payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+          },
+        ],
+      });
+      yield* orchestrator.streamStoredEventsFrom({ threadId, afterSequence }).pipe(
+        Stream.filter(
+          ({ event }) =>
+            event.type === "run.updated" &&
+            event.payload.id === followUp.id &&
+            event.payload.status === "starting",
+        ),
+        Stream.take(1),
+        Stream.runDrain,
+      );
+      const started = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(
+        started.runs.find((candidate) => candidate.id === followUp.id)?.status,
+        "starting",
+      );
+      assert.equal(started.turnItems.filter((item) => item.type === "user_message").length, 2);
+    }).pipe(Effect.provide(layerTest)),
 );
 
 it.effect(
