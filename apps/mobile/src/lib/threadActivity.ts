@@ -1638,6 +1638,24 @@ export function togglePendingUserInputOptionSelection(
   };
 }
 
+export function isPendingUserInputQuestionAnswered(
+  question: ThreadUserInputQuestion,
+  draft: PendingUserInputDraftAnswer | undefined,
+): boolean {
+  return resolvePendingUserInputAnswer(question, draft) !== null;
+}
+
+/** Where a questionnaire resumes: the first unanswered question, else the last one. */
+export function resumePendingUserInputQuestionIndex(
+  questions: ReadonlyArray<ThreadUserInputQuestion>,
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
+): number {
+  const index = questions.findIndex(
+    (question) => !isPendingUserInputQuestionAnswered(question, draftAnswers[question.id]),
+  );
+  return index === -1 ? Math.max(questions.length - 1, 0) : index;
+}
+
 export function buildPendingUserInputAnswers(
   questions: ReadonlyArray<ThreadUserInputQuestion>,
   draftAnswers: Record<string, PendingUserInputDraftAnswer>,

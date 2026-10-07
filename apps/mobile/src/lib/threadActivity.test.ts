@@ -37,6 +37,7 @@ import {
   setPendingUserInputCustomAnswer,
   isPendingUserInputOptionSelected,
   buildPendingUserInputAnswers,
+  resumePendingUserInputQuestionIndex,
 } from "./threadActivity";
 
 const threadId = ThreadId.make("thread-1");
@@ -2017,6 +2018,47 @@ describe("pending user input answers", () => {
         "  Orders  ",
       ),
     ).toBe(false);
+  });
+});
+
+describe("resumePendingUserInputQuestionIndex", () => {
+  const questions = [singleSelectQuestion, multiSelectQuestion];
+
+  it("resumes at the first question that still lacks an answer", () => {
+    expect(resumePendingUserInputQuestionIndex(questions, {})).toBe(0);
+    expect(
+      resumePendingUserInputQuestionIndex(questions, {
+        runtime: { selectedOptionValues: ["Go"] },
+      }),
+    ).toBe(1);
+    expect(
+      resumePendingUserInputQuestionIndex(questions, {
+        scope: { selectedOptionValues: ["Orders"] },
+      }),
+    ).toBe(0);
+  });
+
+  it("counts attachment-only answers and skips blocked uploads", () => {
+    expect(
+      resumePendingUserInputQuestionIndex(questions, {
+        runtime: { attachmentCount: 1 },
+      }),
+    ).toBe(1);
+    expect(
+      resumePendingUserInputQuestionIndex(questions, {
+        runtime: { selectedOptionValues: ["Go"], attachmentsBlocked: true },
+      }),
+    ).toBe(0);
+  });
+
+  it("lands on the last question once every answer is filled in", () => {
+    expect(
+      resumePendingUserInputQuestionIndex(questions, {
+        runtime: { customAnswer: "Deno" },
+        scope: { selectedOptionValues: ["Listings"] },
+      }),
+    ).toBe(1);
+    expect(resumePendingUserInputQuestionIndex([], {})).toBe(0);
   });
 });
 
