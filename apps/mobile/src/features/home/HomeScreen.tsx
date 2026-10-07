@@ -569,19 +569,12 @@ export function HomeScreen(props: HomeScreenProps) {
   const threadListV2Items = useMemo(
     () =>
       buildThreadListV2ListItems({
-        items: threadListV2Layout.items,
+        ...threadListV2Layout,
         pendingTasks: v2PendingTasks,
-        pinnedCount: threadListV2Layout.pinnedCount,
-        workingCount: threadListV2Layout.workingCount,
         pinnedShelfExpanded,
         workingShelfExpanded,
-        workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
-        snoozedCount: threadListV2Layout.snoozedCount,
         snoozedShelfExpanded,
-        snoozedShelfHeaderIndex: threadListV2Layout.snoozedShelfHeaderIndex,
-        settledCount: threadListV2Layout.settledCount,
         settledShelfExpanded,
-        settledShelfHeaderIndex: threadListV2Layout.settledShelfHeaderIndex,
         snoozeLabelNow: `${nowMinute}:00.000Z`,
         snoozeEnvironmentIds,
         queuedThreadKeys,

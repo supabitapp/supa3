@@ -518,8 +518,9 @@ export function buildThreadListV2ListItems(input: {
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
-  /** Fills an empty Active block above the shelves. Callers turn it off while
-      searching so the list's "No results" state speaks instead. */
+  /** Heads the shelves with "All caught up" when nothing sits above them; a
+      collapsed Pinned shelf counts, since pins can still need the user.
+      Callers turn it off while searching: results are a lookup, not the inbox. */
   readonly showActiveEmpty?: boolean;
 }): ThreadListV2ListItem[] {
   const threadItems = input.items.map((item): ThreadListV2ListItem => {
@@ -585,13 +586,7 @@ export function buildThreadListV2ListItems(input: {
     }
   }
   result.push(...threadItems.slice(pinnedEnd, activeEnd), ...pendingItems);
-  if (
-    input.showActiveEmpty === true &&
-    result.length === 0 &&
-    workingCount + snoozedCount + settledCount > 0
-  ) {
-    result.push({ type: "v2-active-empty", key: "v2-active-empty" });
-  }
+  const nothingAboveShelves = result.length === 0;
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({
       type: "v2-working-shelf",
@@ -621,6 +616,9 @@ export function buildThreadListV2ListItems(input: {
       disabled: shelfDisabled,
     });
     result.push(...threadItems.slice(settledShelfHeaderIndex));
+  }
+  if (input.showActiveEmpty === true && nothingAboveShelves && result.length > 0) {
+    result.unshift({ type: "v2-active-empty", key: "v2-active-empty" });
   }
   // Hairlines depend on the final neighbour, so they are stamped after the
   // splice: a recycled cell only re-renders when its divider actually flips.
