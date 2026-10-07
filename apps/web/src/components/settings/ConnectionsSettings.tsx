@@ -1642,7 +1642,9 @@ function SavedBackendListRow({
   const status = savedBackendStatus(environment);
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   const machineKind = resolveEnvironmentMachineKind(environment.serverConfig);
-  const mcpUrl = environmentMcpUrl({ entry: environment.entry });
+  const prepared = usePreparedConnection(environmentId);
+  const connectedTarget = isConnected && prepared._tag === "Some" ? prepared.value.target : null;
+  const mcpUrl = environmentMcpUrl({ entry: environment.entry, connectedTarget });
   const subtitleText = [
     environmentTransportLabel(environment),
     resumingServerUpdate ? "Restarting" : status.text,

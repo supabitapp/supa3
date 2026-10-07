@@ -2,7 +2,8 @@ import type { ServerConfig } from "@supacode/contracts";
 import * as Option from "effect/Option";
 
 import type { ConnectionCatalogEntry } from "./catalog.ts";
-import type { SupervisorConnectionState } from "./model.ts";
+import type { ConnectionTarget, SupervisorConnectionState } from "./model.ts";
+import { connectionRouteId, connectionRoutes, routeHttpBaseUrl } from "./routes.ts";
 
 export type EnvironmentConnectionPhase =
   | "available"
@@ -98,28 +99,35 @@ export function presentEnvironmentConnection(
 
 /**
  * The address an agent outside Supacode (Claude Code, Codex) uses to reach this
- * environment's MCP server. Only HTTPS and loopback addresses qualify: MCP
- * clients refuse to sign in through a plain-http token endpoint elsewhere.
- * SSH connections ride a local forward that disappears with the client, so
- * they have no stable address to hand out.
+ * environment's MCP server: the route this device is connected over, since an
+ * agent beside this client can reach it too, else the first route in
+ * preference order that has an address. SSH connections ride a local forward
+ * that disappears with the client, so they have no stable address.
  */
 export function environmentMcpUrl(input: {
   readonly entry: ConnectionCatalogEntry;
+  readonly connectedTarget?: ConnectionTarget | null | undefined;
 }): string | null {
-  const httpBaseUrl =
-    input.entry.target._tag === "SshConnectionTarget"
-      ? null
-      : connectionCatalogDisplayUrl(input.entry);
-  if (httpBaseUrl === null) return null;
+  const connectedRouteId = input.connectedTarget ? connectionRouteId(input.connectedTarget) : null;
+  const routes = connectionRoutes(input.entry);
+  const connectedRoute = routes.find(
+    (route) => connectionRouteId(route.target) === connectedRouteId,
+  );
+  for (const route of connectedRoute ? [connectedRoute, ...routes] : routes) {
+    const httpBaseUrl = routeHttpBaseUrl(route);
+    const mcpUrl = httpBaseUrl === null ? null : mcpUrlFromBase(httpBaseUrl);
+    if (mcpUrl !== null) return mcpUrl;
+  }
+  return null;
+}
+
+function mcpUrlFromBase(httpBaseUrl: string): string | null {
   let url: URL;
   try {
     url = new URL(httpBaseUrl);
   } catch {
     return null;
   }
-  const loopback =
-    url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) return null;
   url.pathname = "/mcp";
   url.search = "";
   url.hash = "";
