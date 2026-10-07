@@ -37,3 +37,10 @@ it("restores goal and unread completion labels when connected", () => {
     resolveThreadListV2RowStatusLabel({ ...state, status: "ready", isUnread: true })?.label,
   ).toBe("Done");
 });
+
+it("uses the working color for waiting rows", () => {
+  const working = resolveThreadListV2RowStatusLabel({ ...state, status: "working" });
+  const waiting = resolveThreadListV2RowStatusLabel({ ...state, status: "waiting" });
+
+  expect(waiting?.className).toBe(working?.className);
+});

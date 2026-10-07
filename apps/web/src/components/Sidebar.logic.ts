@@ -1087,8 +1087,8 @@ export function resolveThreadStatusPill(input: {
   if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) {
     return {
       label: "Waiting",
-      colorClass: "text-sidebar-muted-foreground",
-      dotClass: "bg-sidebar-muted-foreground",
+      colorClass: "text-sky-600 dark:text-sky-300/80",
+      dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: false,
     };
   }

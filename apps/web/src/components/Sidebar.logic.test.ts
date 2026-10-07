@@ -1214,8 +1214,8 @@ describe("resolveThreadStatusPill", () => {
       }),
     ).toMatchObject({
       label: "Waiting",
-      colorClass: "text-sidebar-muted-foreground",
-      dotClass: "bg-sidebar-muted-foreground",
+      colorClass: "text-sky-600 dark:text-sky-300/80",
+      dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: false,
     });
   });
@@ -1351,8 +1351,8 @@ describe("resolveProjectStatusIndicator", () => {
   it("ranks waiting below active work and above plan-ready", () => {
     const waiting = {
       label: "Waiting" as const,
-      colorClass: "text-sidebar-muted-foreground",
-      dotClass: "bg-sidebar-muted-foreground",
+      colorClass: "text-sky-600 dark:text-sky-300/80",
+      dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: false,
     };
 
