@@ -7,6 +7,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
 import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
+import { desktopUpdateRestart } from "../../state/desktopUpdateRestart";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   canCheckForUpdate,
@@ -242,20 +243,8 @@ function SidebarUpdateControl() {
         setIsActionPending(false);
         return;
       }
-      void bridge
-        .installUpdate()
-        .then((result) => {
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: actionError,
-            }),
-          );
-        })
+      void desktopUpdateRestart
+        .install(bridge)
         .catch((error) => {
           toastManager.add(
             stackedThreadToast({

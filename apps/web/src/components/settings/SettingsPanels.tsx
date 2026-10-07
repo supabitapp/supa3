@@ -85,6 +85,7 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
+import { desktopUpdateRestart } from "../../state/desktopUpdateRestart";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -356,8 +357,8 @@ function AboutVersionSection() {
         setIsUpdateActionPending(false);
         return;
       }
-      void bridge
-        .installUpdate()
+      void desktopUpdateRestart
+        .install(bridge)
         .catch((error: unknown) => {
           toastManager.add(
             stackedThreadToast({
