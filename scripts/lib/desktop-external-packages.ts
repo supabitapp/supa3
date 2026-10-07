@@ -17,16 +17,13 @@ export const DESKTOP_RUNTIME_EXTERNAL_PREFIXES = [
   "@crowecawcaw/xa11y",
   "ffi-rs",
   "@yuuang/",
-  // Reads lib/coreBundle.js as text after resolving the package metadata.
+  // Desktop injection reads coreBundle.js; the server browser loads the full runtime.
   "playwright-core",
 ] as const;
 
 export const DESKTOP_RUNTIME_FILE_EXCLUSIONS = [
   // Cursor's createRequire entry uses only CommonJS and its computed chunks.
   "!**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
-  // Browser injection reads only coreBundle.js and the package metadata.
-  "!**/node_modules/playwright-core/!(package.json|LICENSE|NOTICE|ThirdPartyNotices.txt|lib){,/**/*}",
-  "!**/node_modules/playwright-core/lib/!(coreBundle.js){,/**/*}",
 ] as const;
 
 export function isDesktopRuntimeExternalDependency(id: string): boolean {

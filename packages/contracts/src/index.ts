@@ -8,6 +8,7 @@ export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
 export * from "./desktopBootstrap.ts";
+export * from "./desktopBrowser.ts";
 export * from "./desktopAppActivation.ts";
 export * from "./remoteAccess.ts";
 export * from "./ipc.ts";
@@ -59,5 +60,5 @@ export * from "./worktreeMcp.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
-
 export * from "./orchestrationSkills.ts";
+export * from "./clientRpcPermissions.ts";

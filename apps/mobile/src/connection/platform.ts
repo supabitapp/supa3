@@ -4,7 +4,6 @@ import {
   Persistence,
 } from "@supacode/client-runtime/platform";
 import { ConnectionBlockedError, Connectivity, Wakeups } from "@supacode/client-runtime/connection";
-import { AuthStandardClientScopes } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -153,7 +152,6 @@ const layerCapabilities = Layer.succeedContext(
       ClientCapabilities.ClientPresentation,
       ClientCapabilities.ClientPresentation.of({
         metadata: authClientMetadata(Constants.expoConfig?.version),
-        scopes: AuthStandardClientScopes,
       }),
     ),
     Context.add(

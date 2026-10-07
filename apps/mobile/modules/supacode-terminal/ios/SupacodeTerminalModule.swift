@@ -27,6 +27,10 @@ public class SupacodeTerminalModule: Module {
         view.focusRequest = focusRequest
       }
 
+      Prop("readOnly") { (view: SupacodeTerminalView, readOnly: Bool) in
+        view.readOnly = readOnly
+      }
+
       Prop("autoFocus") { (view: SupacodeTerminalView, autoFocus: Bool) in
         view.autoFocus = autoFocus
       }

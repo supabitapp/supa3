@@ -1,4 +1,5 @@
 import { ProcessSignalActions } from "./ProcessSignalActions";
+import { AuthEnvironmentMaintainScope } from "@supacode/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
   ActivityIcon,
@@ -39,6 +40,7 @@ import {
 } from "../../lib/resourceTelemetryState";
 import { cn } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
+import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatRelativeTime } from "../../timestampFormat";
 import { Button } from "../ui/button";
@@ -519,10 +521,12 @@ function canSignalProcess(process: ResourceTelemetryProcess): boolean {
 
 function ProcessActions({
   process,
+  canMaintainEnvironment,
   signalingKeys,
   onSignal,
 }: {
   process: ResourceTelemetryProcess;
+  canMaintainEnvironment: boolean;
   signalingKeys: ReadonlySet<string>;
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
@@ -533,7 +537,7 @@ function ProcessActions({
   return (
     <ProcessSignalActions
       pid={process.identity.pid}
-      disabled={isSignaling}
+      disabled={!canMaintainEnvironment || isSignaling}
       onSignal={(signal) => onSignal(process, signal)}
     />
   );
@@ -541,10 +545,12 @@ function ProcessActions({
 
 function ProcessTable({
   processes,
+  canMaintainEnvironment,
   signalingKeys,
   onSignal,
 }: {
   processes: ReadonlyArray<ResourceTelemetryProcess>;
+  canMaintainEnvironment: boolean;
   signalingKeys: ReadonlySet<string>;
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
@@ -653,6 +659,7 @@ function ProcessTable({
                 <td className="px-2 py-2 text-right sm:pr-4">
                   <ProcessActions
                     process={process}
+                    canMaintainEnvironment={canMaintainEnvironment}
                     signalingKeys={signalingKeys}
                     onSignal={onSignal}
                   />
@@ -823,6 +830,7 @@ export function ResourceTelemetryDiagnostics({
   const [windowMs, setWindowMs] = useState(15 * 60_000);
   const selectedWindow =
     HISTORY_WINDOWS.find((option) => option.windowMs === windowMs) ?? HISTORY_WINDOWS[1];
+  const canMaintainEnvironment = useEnvironmentScope(environmentId, AuthEnvironmentMaintainScope);
   const telemetry = useResourceTelemetry(environmentId);
   const retryTelemetry = telemetry.retry;
   const history = useResourceTelemetryHistory(
@@ -843,7 +851,11 @@ export function ResourceTelemetryDiagnostics({
 
   const signalProcess = useCallback(
     (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
-      if (environmentId === null) return;
+      if (
+        environmentId === null ||
+        !readEnvironmentScope(environmentId, AuthEnvironmentMaintainScope)
+      )
+        return;
       const identityKey = processIdentityKey(process);
       if (signalingKeysRef.current.has(identityKey)) return;
       const nextSignalingKeys = new Set(signalingKeysRef.current).add(identityKey);
@@ -890,6 +902,11 @@ export function ResourceTelemetryDiagnostics({
   );
 
   const retryCollector = useCallback(() => {
+    if (
+      environmentId === null ||
+      !readEnvironmentScope(environmentId, AuthEnvironmentMaintainScope)
+    )
+      return;
     setIsRetrying(true);
     void retryTelemetry()
       .catch((error: unknown) => {
@@ -903,7 +920,7 @@ export function ResourceTelemetryDiagnostics({
       .finally(() => {
         setIsRetrying(false);
       });
-  }, [retryTelemetry]);
+  }, [environmentId, retryTelemetry]);
 
   const speedLimit = snapshot ? Option.getOrNull(snapshot.speedLimitPercent) : null;
   const collectorNeedsRetry = shouldShowResourceMonitorRetry({
@@ -1227,6 +1244,7 @@ export function ResourceTelemetryDiagnostics({
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs/5">
           <ProcessTable
             processes={snapshot?.processes ?? []}
+            canMaintainEnvironment={canMaintainEnvironment}
             signalingKeys={signalingKeys}
             onSignal={signalProcess}
           />

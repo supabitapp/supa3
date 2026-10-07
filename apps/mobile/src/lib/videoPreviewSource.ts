@@ -2,7 +2,7 @@ import type { AssetResource, ChatFileAttachment, EnvironmentId } from "@supacode
 import { videoMimeType } from "@supacode/shared/video";
 
 import type { DraftComposerFileAttachment } from "./composerImages";
-import type { MediaActionsSource } from "./mediaActions";
+import type { MediaActionsSource } from "./mediaActionsSource";
 
 export type MediaVideoPreviewSource = {
   readonly type: "media";

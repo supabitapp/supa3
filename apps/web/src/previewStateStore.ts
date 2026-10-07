@@ -43,6 +43,8 @@ export interface ThreadPreviewState {
   desktopOverlay: DesktopPreviewOverlay | null;
   desktopByTabId: Record<string, DesktopPreviewOverlay>;
   recentlySeenUrls: string[];
+  /** Whether the first authoritative tab list has arrived. */
+  listLoaded: boolean;
   /** Server process currently authoritative for revision ordering. */
   serverEpoch: string | null;
   /** Latest ordered server revision applied from a list response or event. */
@@ -57,6 +59,7 @@ const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   desktopOverlay: null,
   desktopByTabId: {},
   recentlySeenUrls: [] as string[],
+  listLoaded: false,
   serverEpoch: null,
   serverRevision: 0,
 });
@@ -181,7 +184,8 @@ export function applyPreviewServerEvent(ref: ScopedThreadRef, event: PreviewEven
       switch (event.type) {
         case "opened":
         case "navigated":
-        case "resized": {
+        case "resized":
+        case "backingChanged": {
           const snapshot = event.snapshot;
           if (current.suppressedTabIds.has(snapshot.tabId)) return current;
           const recentlySeenUrls =
@@ -311,7 +315,9 @@ export function reconcilePreviewServerSessions(
 ): void {
   updateThreadPreviewState(ref, (current) => {
     const sameServer = current.serverEpoch === result.serverEpoch;
-    if (sameServer && result.revision < current.serverRevision) return current;
+    if (sameServer && result.revision < current.serverRevision) {
+      return current;
+    }
     const snapshots = result.sessions;
     const sessions: Record<string, PreviewSessionSnapshot> = {};
     const currentSuppressedTabIds = sameServer ? current.suppressedTabIds : new Set<string>();
@@ -349,6 +355,7 @@ export function reconcilePreviewServerSessions(
       desktopByTabId,
       desktopOverlay: activeTabId ? (desktopByTabId[activeTabId] ?? null) : null,
       recentlySeenUrls,
+      listLoaded: true,
       serverEpoch: result.serverEpoch,
       serverRevision: result.revision,
     };

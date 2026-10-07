@@ -41,6 +41,7 @@ import { ReviewCommentComposerSheet } from "./features/review/ReviewCommentCompo
 import { ReviewSheet } from "./features/review/ReviewSheet";
 import { ThreadTerminalRouteScreen } from "./features/terminal/ThreadTerminalRouteScreen";
 import { DevicePreviewRouteScreen } from "./features/devices/DevicePreviewRouteScreen";
+import { BrowserPreviewRouteScreen } from "./features/browser/BrowserPreviewRouteScreen";
 import { GitBranchesSheet } from "./features/threads/git/GitBranchesSheet";
 import { GitCommitSheet } from "./features/threads/git/GitCommitSheet";
 import { GitConfirmSheet } from "./features/threads/git/GitConfirmSheet";
@@ -531,6 +532,7 @@ const WORKSPACE_OVERLAY_ROUTES = new Set([
   "ThreadQueue",
   "ThreadReviewComment",
   "ThreadDevicePreview",
+  "ThreadBrowserPreview",
   "ThreadSettingsSheet",
 ]);
 
@@ -696,6 +698,15 @@ const RootStackConfig = createNativeStackNavigator({
         autoHideHomeIndicator: true,
         navigationBarHidden: true,
         statusBarHidden: Platform.OS === "ios" ? true : undefined,
+      },
+    }),
+    ThreadBrowserPreview: createNativeStackScreen({
+      screen: BrowserPreviewRouteScreen,
+      linking: `${THREAD_LINKING_PREFIX}/browser`,
+      options: {
+        presentation: "fullScreenModal",
+        headerShown: false,
+        gestureEnabled: false,
       },
     }),
     ThreadReview: createNativeStackScreen({

@@ -1,6 +1,7 @@
 import { EnvironmentId, type ThreadPullRequestLink } from "@supacode/contracts";
 import type { DesktopPreviewFavicon, PreviewSessionSnapshot } from "@supacode/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -98,6 +99,15 @@ function renderTabs(
   return renderToStaticMarkup(
     <RightPanelTabs
       mode="inline"
+      keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+      getShortcutContext={() => ({
+        terminalFocus: false,
+        terminalOpen: false,
+        previewFocus: false,
+        previewOpen: false,
+        isWeb: true,
+        isDesktop: false,
+      })}
       surfaces={second ? [previewSurface, secondSurface] : [previewSurface]}
       environmentId={null}
       activeSurfaceId={previewSurface.id}

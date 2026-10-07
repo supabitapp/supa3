@@ -3,6 +3,7 @@ import { HostProcessEnvironment, HostProcessPlatform } from "@supacode/shared/ho
 import {
   projectScriptRuntimeEnv,
   resolveProjectScripts,
+  settleProjectScript,
   setupProjectScript,
 } from "@supacode/shared/projectScripts";
 
@@ -11,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -21,6 +23,10 @@ import * as ProjectService from "./ProjectService.ts";
 
 export interface ProjectSetupScriptRunnerResultNoScript {
   readonly status: "no-script";
+}
+
+interface ProjectSetupScriptRunnerResultSkipped {
+  readonly status: "skipped";
 }
 
 export interface ProjectSetupScriptRunnerResultStarted {
@@ -52,6 +58,7 @@ export interface ProjectSetupScriptOutputLine {
 
 export type ProjectSetupScriptRunnerResult =
   | ProjectSetupScriptRunnerResultNoScript
+  | ProjectSetupScriptRunnerResultSkipped
   | ProjectSetupScriptRunnerResultStarted;
 
 export interface ProjectSetupScriptRunnerInput {
@@ -60,6 +67,8 @@ export interface ProjectSetupScriptRunnerInput {
   readonly projectCwd?: string;
   readonly worktreePath: string;
   readonly preferredTerminalId?: string;
+  /** Which project script to run. Defaults to the worktree setup script. */
+  readonly trigger?: "setup" | "settle";
   readonly project?: {
     readonly id: ProjectId;
     readonly workspaceRoot: string;
@@ -73,6 +82,13 @@ export interface ProjectSetupScriptRunnerInput {
   readonly observeCompletion?: {
     readonly onOutputLine?: (line: string) => Effect.Effect<void>;
   };
+  /**
+   * Runs the final eligibility check and terminal write in one caller-owned
+   * critical section. False skips the command after opening the shell.
+   */
+  readonly withCommandWriteGuard?: (
+    writeCommand: Effect.Effect<void, ProjectSetupScriptRunnerError>,
+  ) => Effect.Effect<boolean, ProjectSetupScriptRunnerError>;
 }
 
 export class ProjectSetupScriptOperationError extends Schema.TaggedError<ProjectSetupScriptOperationError>()(
@@ -225,6 +241,9 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const startedAtMs = yield* Clock.currentTimeMillis;
       const done = yield* Deferred.make<ProjectSetupScriptCompletion>();
+      // The shell redraws its prompt just after the sentinel. Closing before
+      // that would read the redraw as new activity and keep an idle shell.
+      const promptReturned = yield* Deferred.make<void>();
       let lineBuffer = "";
       let settled = false;
 
@@ -278,15 +297,26 @@ export const make = Effect.gen(function* () {
           if (lineBuffer.length > PARTIAL_LINE_MAX_LENGTH) {
             lineBuffer = lineBuffer.slice(-PARTIAL_LINE_MAX_LENGTH);
           }
-          return Effect.forEach(lines, handleLine, { discard: true });
+          return Effect.forEach(lines, handleLine, { discard: true }).pipe(
+            // A prompt has no newline, so it is what remains once the sentinel is in.
+            Effect.andThen(
+              Effect.suspend(() =>
+                settled && lineBuffer.length > 0
+                  ? Deferred.succeed(promptReturned, undefined).pipe(Effect.asVoid)
+                  : Effect.void,
+              ),
+            ),
+          );
         }
         if (event.type === "exited" || event.type === "closed") {
-          return settle(null);
+          return settle(null).pipe(Effect.andThen(Deferred.succeed(promptReturned, undefined)));
         }
         return Effect.void;
       });
 
       const completion = Deferred.await(done).pipe(
+        // A shell with an empty prompt never prints one; do not wait forever.
+        Effect.tap(() => Deferred.await(promptReturned).pipe(Effect.timeoutOption("1 second"))),
         Effect.ensuring(Effect.sync(() => unsubscribe())),
       );
       return { completion, unsubscribe };
@@ -348,14 +378,23 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
-    const script = setupProjectScript(resolveProjectScripts(settings, project));
+    const trigger = input.trigger ?? "setup";
+    const scripts = resolveProjectScripts(settings, project);
+    const script =
+      trigger === "settle" ? settleProjectScript(scripts) : setupProjectScript(scripts);
     if (!script) {
       return {
         status: "no-script",
       } as const;
     }
 
-    const terminalId = input.preferredTerminalId ?? `setup-${script.id}`;
+    // A thread settles again after it is resumed, and an earlier settle shell
+    // may still be busy; typing into it would feed its foreground program.
+    const terminalId =
+      input.preferredTerminalId ??
+      (trigger === "settle"
+        ? `settle-${script.id}-${(yield* crypto.randomUUIDv4.pipe(Effect.orDie)).slice(0, 8)}`
+        : `setup-${script.id}`);
     const cwd = input.worktreePath;
     const env = {
       ...projectScriptRuntimeEnv({
@@ -412,24 +451,39 @@ export const make = Effect.gen(function* () {
           })
         : undefined;
 
-    yield* terminalManager
-      .write({
+    const writeCommand = Effect.suspend(() =>
+      terminalManager.write({
         threadId: input.threadId,
         terminalId,
         data: `${commandLine}\r`,
-      })
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProjectSetupScriptOperationError({
-              ...errorContext,
-              operation: "writeCommand",
-              cause,
-            }),
-        ),
-        // Nothing will ever settle the completion if the command never ran.
-        Effect.tapError(() => Effect.sync(() => observed?.unsubscribe())),
-      );
+      }),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProjectSetupScriptOperationError({
+            ...errorContext,
+            operation: "writeCommand",
+            cause,
+          }),
+      ),
+    );
+    const cleanupUnusedTerminal = Effect.sync(() => observed?.unsubscribe()).pipe(
+      Effect.andThen(
+        Effect.suspend(() => terminalManager.closeIdle({ threadId: input.threadId, terminalId })),
+      ),
+    );
+    const commandWritten = yield* (
+      input.withCommandWriteGuard
+        ? input.withCommandWriteGuard(writeCommand)
+        : writeCommand.pipe(Effect.as(true))
+    ).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) && exit.value ? Effect.void : cleanupUnusedTerminal,
+      ),
+    );
+    if (!commandWritten) {
+      return { status: "skipped" } as const;
+    }
 
     // A clean run leaves only an idle prompt behind; its output stays in the
     // terminal history. A failed run keeps its shell open for a look.

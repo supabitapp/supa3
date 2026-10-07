@@ -1,3 +1,4 @@
+import { useAtomCommand } from "~/state/use-atom-command";
 import type {
   EnvironmentId,
   PullRequestComment,
@@ -17,7 +18,6 @@ import {
 import { useRef, useState, type ReactNode } from "react";
 import { withOccurrenceKeys } from "@supacode/shared/occurrenceKeys";
 
-import { useAtomCommand } from "~/state/use-atom-command";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { cn } from "~/lib/utils";
 import { useOpenLink } from "~/browser/useOpenLink";

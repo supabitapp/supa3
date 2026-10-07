@@ -9,6 +9,7 @@ import {
 } from "@supacode/client-runtime/state/attachments";
 import {
   CommandId,
+  MessageId,
   ChatAttachment,
   AttachmentCreateUploadUrlInput,
   type EnvironmentId,
@@ -134,7 +135,7 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     );
   },
   deliver: async (entry, savePayload) => {
-    const payload = { ...entry.payload, localAttachments: [...entry.payload.localAttachments] };
+    let payload = { ...entry.payload, localAttachments: [...entry.payload.localAttachments] };
     const { environmentId } = payload;
     const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
     if (!config) throw new Error("Environment is not connected.");
@@ -250,10 +251,36 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     if (!liveConfig) throw new Error("Environment is not connected.");
     const supportsContext = liveConfig.environment.capabilities.inlineMessageContext === true;
     const { context: _, ...message } = payload.input.message;
+    if (payload.compactBeforeSend && payload.compactAccepted !== true) {
+      // Both IDs survive reconnects and retries, so acknowledgement loss cannot compact twice.
+      await command(directThreadEnvironment.startTurn, {
+        ...target,
+        input: {
+          commandId: CommandId.make(`${payload.input.commandId}:compact`),
+          threadId: payload.input.threadId,
+          message: {
+            messageId: MessageId.make(`${payload.input.message.messageId}:compact`),
+            role: "user",
+            text: "/compact",
+            attachments: [],
+          },
+          ...(payload.input.modelSelection ? { modelSelection: payload.input.modelSelection } : {}),
+          runtimeMode: payload.input.runtimeMode,
+          interactionMode: payload.input.interactionMode,
+          dispatchMode: "queue",
+        },
+      });
+      // Once the compact command is acknowledged, a failed prompt retry must not compact again.
+      // If its acknowledgement was lost, this save never happens and the stable command ID
+      // replays the original compact receipt on reconnect.
+      payload = { ...payload, compactAccepted: true };
+      await savePayload(payload);
+    }
     await command(directThreadEnvironment.startTurn, {
       ...target,
       input: {
         ...payload.input,
+        ...(payload.compactBeforeSend ? { dispatchMode: "queue" as const } : {}),
         message: {
           ...message,
           attachments,
@@ -280,12 +307,14 @@ function prepareThreadOutboxTurn(target: {
   readonly branch?: string;
   readonly draftId?: DraftId;
   readonly background?: boolean;
+  readonly compactBeforeSend?: boolean;
 }) {
   const commandId = target.input.commandId ?? CommandId.make(randomUUID());
   const payload = decodeTurn({
     environmentId: target.environmentId,
     input: { ...target.input, commandId },
     localAttachments: target.localAttachments ?? [],
+    ...(target.compactBeforeSend ? { compactBeforeSend: true } : {}),
     ...(target.branch === undefined ? {} : { branch: target.branch }),
     ...(target.draftId === undefined ? {} : { draftId: target.draftId }),
     ...(target.background === undefined ? {} : { background: target.background }),
@@ -314,10 +343,18 @@ export async function replaceThreadOutboxTurn(entry: PendingThreadTurn, payload:
     entry.status === "failed" && payload.input.bootstrap?.createThread
       ? newThreadId()
       : payload.input.threadId;
+  const compactBeforeSend =
+    payload.compactBeforeSend === true &&
+    threadId === entry.payload.input.threadId &&
+    payload.input.modelSelection?.instanceId === entry.payload.input.modelSelection?.instanceId &&
+    payload.input.message.text.trim().toLowerCase() !== "/compact";
+  const { compactAccepted, ...payloadWithoutCompactAccepted } = payload;
   const changed = await webThreadOutbox.edit(
     entry.id,
     decodeTurn({
-      ...payload,
+      ...payloadWithoutCompactAccepted,
+      compactBeforeSend,
+      ...(compactBeforeSend && compactAccepted === true ? { compactAccepted: true } : {}),
       input: { ...payload.input, threadId, commandId: CommandId.make(randomUUID()) },
     }),
     scopedThreadKey(scopeThreadRef(payload.environmentId, threadId)),

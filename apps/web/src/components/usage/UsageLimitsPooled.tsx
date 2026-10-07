@@ -201,7 +201,11 @@ function SegmentPopover({
         <div className="border-t border-border/60 pt-2.5 text-muted-foreground">
           <span className="flex items-center justify-between gap-3">
             <span className="tabular-nums">{resetCreditsSummary(credits, now, true)}</span>
-            <ResetCreditButton busy={redeem.busy} onRedeem={onRedeem} />
+            <ResetCreditButton
+              busy={redeem.busy}
+              disabled={!redeem.canManageProviders}
+              onRedeem={onRedeem}
+            />
           </span>
         </div>
       ) : null}

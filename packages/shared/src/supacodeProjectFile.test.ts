@@ -51,6 +51,7 @@ describe("buildSupacodeProjectFileJsonSchema", () => {
       "icon",
       "name",
       "previewUrl",
+      "runOnSettle",
       "runOnWorktreeCreate",
     ]);
   });

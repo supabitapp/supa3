@@ -1,4 +1,4 @@
-import { AuthStandardClientScopes, EnvironmentId } from "@supacode/contracts";
+import { EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -26,7 +26,9 @@ const DESCRIPTOR = {
   },
 };
 
-function recordedFetch(responses: ReadonlyArray<Response>) {
+type RecordedResponse = Response | ((init: RequestInit) => Response);
+
+function recordedFetch(responses: ReadonlyArray<RecordedResponse>) {
   const calls: Array<readonly [RequestInfo | URL, RequestInit]> = [];
   let responseIndex = 0;
   const fetchFn = ((input, init) => {
@@ -34,7 +36,7 @@ function recordedFetch(responses: ReadonlyArray<Response>) {
     const response = responses[responseIndex++];
     return response === undefined
       ? Promise.reject(new Error(`Unexpected fetch call to ${String(input)}`))
-      : Promise.resolve(response);
+      : Promise.resolve(typeof response === "function" ? response(init ?? {}) : response);
   }) satisfies typeof fetch;
   return { calls, fetchFn };
 }
@@ -59,7 +61,6 @@ function makeHarness(responses: ReadonlyArray<Response>) {
               deviceType: "mobile",
               os: "test",
             },
-            scopes: AuthStandardClientScopes,
           }),
         ),
       ),

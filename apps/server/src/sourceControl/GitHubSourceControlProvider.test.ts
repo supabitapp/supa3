@@ -3,11 +3,15 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
+import { VcsProcessSpawnError } from "@supacode/contracts";
+import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 
+import * as ServerSettings from "../serverSettings.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import * as GitHubApi from "./GitHubApi.ts";
 import * as GitHubCli from "./GitHubCli.ts";
-import * as GitHubGraphQlBudget from "./githubGraphQlBudget.ts";
 import { parseGitHubAuthStatus } from "./gitHubAuthStatus.ts";
 import * as GitHubSourceControlProvider from "./GitHubSourceControlProvider.ts";
 
@@ -25,37 +29,70 @@ const processResult = (
   stderrTruncated: false,
 });
 
-function makeProvider(github: Partial<GitHubCli.GitHubCli["Service"]>) {
+function makeProvider(
+  github: Partial<GitHubCli.GitHubCli["Service"]>,
+  api: Partial<GitHubApi.GitHubApi["Service"]> = {},
+) {
   return GitHubSourceControlProvider.make.pipe(
-    Effect.provide(Layer.mock(GitHubCli.GitHubCli)(github)),
+    Effect.provide(
+      Layer.merge(Layer.mock(GitHubCli.GitHubCli)(github), Layer.mock(GitHubApi.GitHubApi)(api)),
+    ),
   );
 }
 
-it.effect("uses the enterprise quota for a current-repository default branch read", () =>
-  Effect.gen(function* () {
-    // github.com is out of quota; the enterprise read must not be priced against it.
-    const budget = yield* GitHubGraphQlBudget.GitHubGraphQlBudget;
-    yield* budget.observe(
-      "github.com",
-      '{"data":{"rateLimit":{"cost":1,"limit":5000,"remaining":0,"resetAt":"2099-01-01T00:00:00Z"}}}',
-    );
-    const provider = yield* GitHubSourceControlProvider.make;
-    const branch = yield* provider.getDefaultBranch({
-      cwd: "/enterprise-repo",
-      context: {
-        provider: { kind: "github", name: "GitHub Enterprise", baseUrl: "https://enterprise.test" },
-        remoteName: "origin",
-        remoteUrl: "https://enterprise.test/acme/web.git",
-      },
-    });
-    assert.strictEqual(branch, "main");
-  }).pipe(
-    Effect.provide(GitHubCli.layer),
-    Effect.provideService(VcsProcess.VcsProcess, {
-      run: () => Effect.succeed(processResult("main")),
-    }),
-  ),
-);
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+const restResponse = (body: string): GitHubApi.GitHubRestResponse => ({
+  status: 200,
+  headers: {},
+  body,
+  truncated: false,
+  invalidUtf8: false,
+});
+
+function probeGitHubDiscovery(input: {
+  readonly hosts?: Record<string, { readonly enabled?: boolean; readonly account?: string }>;
+  readonly tokens?: Record<string, string>;
+  readonly ghAvailable?: boolean;
+  readonly ghAuthStatus?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly rest: (
+    host: string,
+  ) => Effect.Effect<GitHubApi.GitHubRestResponse, GitHubApi.GitHubApiError>;
+}) {
+  const process = Layer.mock(VcsProcess.VcsProcess)({
+    run: (request) =>
+      request.args[0] === "--version"
+        ? input.ghAvailable
+          ? Effect.succeed(processResult("gh version 2.81.0"))
+          : Effect.fail(
+              new VcsProcessSpawnError({
+                operation: request.operation,
+                command: "gh",
+                cwd: request.cwd,
+                cause: new Error("gh not found"),
+              }),
+            )
+        : Effect.succeed(processResult(input.ghAuthStatus ?? '{"hosts":{}}')),
+  });
+  const settings = ServerSettings.ServerSettingsService.layerTest({
+    github: {
+      hosts: input.hosts ?? {},
+      tokens: input.tokens ?? {},
+    },
+  });
+  return GitHubSourceControlProvider.makeDiscovery.pipe(
+    Effect.flatMap((discovery) => discovery.probe("/repo")),
+    Effect.provide(
+      Layer.mergeAll(
+        settings,
+        process,
+        Layer.mock(GitHubApi.GitHubApi)({ rest: ({ host }) => input.rest(host) }),
+      ),
+    ),
+    Effect.provideService(HostProcessEnvironment, input.environment ?? {}),
+  );
+}
 
 it.effect("maps GitHub PR summaries into provider-neutral change requests", () =>
   Effect.gen(function* () {
@@ -340,6 +377,7 @@ it("parses GitHub auth status accounts by host and active state", () => {
         authenticated: true,
         active: true,
         error: null,
+        environmentVariable: null,
       },
       {
         host: "github.com",
@@ -347,6 +385,7 @@ it("parses GitHub auth status accounts by host and active state", () => {
         authenticated: false,
         active: false,
         error: null,
+        environmentVariable: null,
       },
       {
         host: "github.example.test",
@@ -354,6 +393,7 @@ it("parses GitHub auth status accounts by host and active state", () => {
         authenticated: true,
         active: false,
         error: null,
+        environmentVariable: null,
       },
     ],
   );
@@ -413,27 +453,20 @@ it.effect.each(["pull", "issues"])(
   "resolves %s subjects on the linked host without using the checkout",
   (kind) =>
     Effect.gen(function* () {
-      const provider = yield* makeProvider({
-        execute: (input) => {
-          assert.deepStrictEqual(input.args, [
-            "api",
-            "--hostname",
-            "github.com",
-            "repos/owner/repo/issues/42",
-            "--jq",
-            "{title, body}",
-          ]);
-          assert.strictEqual(input.maxOutputBytes, 32_000);
-          assert.strictEqual(input.timeoutMs, 3_000);
-          return Effect.succeed({
-            exitCode: ChildProcessSpawner.ExitCode(0),
-            stdout: JSON.stringify({ title: "Pairing expiry", body: "Preserve remote access" }),
-            stderr: "",
-            stdoutTruncated: false,
-            stderrTruncated: false,
-          });
+      const provider = yield* makeProvider(
+        {},
+        {
+          rest: (input) => {
+            assert.strictEqual(input.host, "github.com");
+            assert.strictEqual(input.path, "repos/owner/repo/issues/42");
+            return Effect.succeed(
+              restResponse(
+                encodeJson({ title: "Pairing expiry", body: "Preserve remote access", id: 1 }),
+              ),
+            );
+          },
         },
-      });
+      );
       const lookup = provider.resolveLink?.({
         cwd: "/unrelated",
         url: new URL(`https://github.com/owner/repo/${kind}/42`),
@@ -457,23 +490,20 @@ it.effect.each(["read", "decode"] as const)(
   "retains the %s failure without exposing its raw contents",
   (stage) =>
     Effect.gen(function* () {
-      const cause = new GitHubCli.GitHubCliCommandError({
-        command: "gh",
-        cwd: "/repo",
-        cause: new Error("private response text"),
+      const cause = new GitHubApi.GitHubApiResponseError({
+        host: "github.com",
+        operation: "resolveLink",
+        status: 500,
       });
-      const provider = yield* makeProvider({
-        execute: () =>
-          stage === "read"
-            ? Effect.fail(cause)
-            : Effect.succeed({
-                exitCode: ChildProcessSpawner.ExitCode(0),
-                stdout: "private response text",
-                stderr: "",
-                stdoutTruncated: false,
-                stderrTruncated: false,
-              }),
-      });
+      const provider = yield* makeProvider(
+        {},
+        {
+          rest: () =>
+            stage === "read"
+              ? Effect.fail(cause)
+              : Effect.succeed(restResponse("private response text")),
+        },
+      );
       const lookup = provider.resolveLink?.({
         cwd: "/repo",
         url: new URL("https://github.com/owner/repo/issues/42"),
@@ -487,3 +517,283 @@ it.effect.each(["read", "decode"] as const)(
       else assert.propertyVal(error.cause, "_tag", "SchemaError");
     }),
 );
+
+const multiAccountStatus = (extra: ReadonlyArray<Record<string, unknown>> = []) =>
+  processResult(
+    JSON.stringify({
+      hosts: {
+        "github.com": [
+          { state: "success", active: true, host: "github.com", login: "personal" },
+          { state: "success", active: false, host: "github.com", login: "work" },
+          ...extra,
+        ],
+        "ghe.acme.test": [
+          { state: "error", active: true, host: "ghe.acme.test", login: "jm", error: "expired" },
+        ],
+      },
+    }),
+  );
+
+it("reports every gh login and leads with the account Settings pin", () => {
+  const auth = GitHubSourceControlProvider.parseGitHubAuth(multiAccountStatus(), {
+    hosts: { "github.com": { account: "work", enabled: true } },
+    tokens: {},
+  });
+  assert.deepStrictEqual(auth.account, Option.some("work"));
+  assert.deepStrictEqual(auth.accounts, [
+    { host: "github.com", account: "personal", active: true, authenticated: true },
+    { host: "github.com", account: "work", active: false, authenticated: true },
+    { host: "ghe.acme.test", account: "jm", active: true, authenticated: false, error: "expired" },
+  ]);
+});
+
+it("falls back to gh's active login when the pinned account is gone", () => {
+  const auth = GitHubSourceControlProvider.parseGitHubAuth(multiAccountStatus(), {
+    hosts: { "github.com": { account: "former-job", enabled: true } },
+    tokens: {},
+  });
+  assert.deepStrictEqual(auth.account, Option.some("personal"));
+});
+
+it("reports unauthenticated when Settings turn off every signed-in host", () => {
+  const auth = GitHubSourceControlProvider.parseGitHubAuth(multiAccountStatus(), {
+    hosts: { "github.com": { enabled: false } },
+    tokens: {},
+  });
+  assert.strictEqual(auth.status, "unauthenticated");
+  assert.deepStrictEqual(
+    auth.detail,
+    Option.some("Every GitHub host gh is signed in to is turned off in Settings → Source Control."),
+  );
+});
+
+it("names the environment token that overrides the Settings choice", () => {
+  const auth = GitHubSourceControlProvider.parseGitHubAuth(
+    multiAccountStatus([
+      {
+        state: "success",
+        active: false,
+        host: "github.com",
+        login: "bot",
+        tokenSource: "GH_TOKEN",
+      },
+    ]),
+    { hosts: { "github.com": { account: "work", enabled: true } }, tokens: {} },
+  );
+  assert.deepStrictEqual(auth.account, Option.some("bot"));
+  assert.deepStrictEqual(
+    auth.detail,
+    Option.some(
+      "Using GH_TOKEN from the server environment; it overrides the account chosen in Settings.",
+    ),
+  );
+  assert.strictEqual(auth.accounts?.[2]?.environmentVariable, "GH_TOKEN");
+});
+
+it.effect("discovers an enabled saved GHES token without the GitHub CLI", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      tokens: { "ghe.acme.test": "saved-token" },
+      rest: (host) => {
+        hosts.push(host);
+        return Effect.succeed(restResponse('{"login":"enterprise-user"}'));
+      },
+    });
+
+    assert.strictEqual(item.status, "available");
+    assert.deepStrictEqual(item.auth.account, Option.some("enterprise-user"));
+    assert.deepStrictEqual(item.auth.host, Option.some("ghe.acme.test"));
+    assert.deepStrictEqual(hosts, ["ghe.acme.test"]);
+  });
+});
+
+it.effect("discovers a GHES environment token only for the configured GH_HOST", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      environment: {
+        GH_HOST: "ghe.acme.test",
+        GH_ENTERPRISE_TOKEN: "enterprise-env-token",
+      },
+      rest: (host) => {
+        hosts.push(host);
+        return Effect.succeed(restResponse('{"login":"enterprise-user"}'));
+      },
+    });
+
+    assert.strictEqual(item.status, "available");
+    assert.deepStrictEqual(item.auth.account, Option.some("enterprise-user"));
+    assert.deepStrictEqual(item.auth.host, Option.some("ghe.acme.test"));
+    assert.deepStrictEqual(
+      item.auth.detail,
+      Option.some(
+        "Using GH_ENTERPRISE_TOKEN from the server environment; it overrides the account chosen in Settings.",
+      ),
+    );
+    assert.deepStrictEqual(hosts, ["ghe.acme.test"]);
+  });
+});
+
+it.effect("reports an invalid saved token for its own host", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      ghAvailable: true,
+      ghAuthStatus: JSON.stringify({
+        hosts: {
+          "ghe.acme.test": [
+            { state: "success", active: true, host: "ghe.acme.test", login: "cli-user" },
+          ],
+        },
+      }),
+      tokens: { "ghe.acme.test": "bad-token" },
+      rest: (host) => {
+        hosts.push(host);
+        return Effect.fail(
+          new GitHubApi.GitHubApiAuthenticationError({ host, operation: "discovery" }),
+        );
+      },
+    });
+
+    assert.strictEqual(item.status, "available");
+    assert.strictEqual(item.auth.status, "unauthenticated");
+    assert.deepStrictEqual(item.auth.host, Option.some("ghe.acme.test"));
+    assert.deepStrictEqual(item.auth.accounts, [
+      {
+        host: "ghe.acme.test",
+        account: "cli-user",
+        active: true,
+        authenticated: true,
+      },
+    ]);
+    assert.deepStrictEqual(hosts, ["ghe.acme.test"]);
+  });
+});
+
+it.effect.each(["invalid", "network"] as const)(
+  "keeps valid CLI auth for a different host after a GHES %s failure",
+  (failure) => {
+    const hosts: string[] = [];
+    return Effect.gen(function* () {
+      const item = yield* probeGitHubDiscovery({
+        ghAvailable: true,
+        ghAuthStatus: JSON.stringify({
+          hosts: {
+            "github.com": [
+              { state: "success", active: true, host: "github.com", login: "cli-user" },
+            ],
+          },
+        }),
+        tokens: { "ghe.acme.test": "enterprise-token" },
+        rest: (host) => {
+          hosts.push(host);
+          return failure === "invalid"
+            ? Effect.fail(
+                new GitHubApi.GitHubApiAuthenticationError({ host, operation: "discovery" }),
+              )
+            : Effect.fail(
+                new GitHubApi.GitHubApiRequestError({
+                  host,
+                  operation: "discovery",
+                  cause: new Error("network unavailable"),
+                }),
+              );
+        },
+      });
+
+      assert.strictEqual(item.status, "available");
+      assert.strictEqual(item.auth.status, "authenticated");
+      assert.deepStrictEqual(item.auth.account, Option.some("cli-user"));
+      assert.deepStrictEqual(item.auth.host, Option.some("github.com"));
+      assert.deepStrictEqual(item.auth.accounts, [
+        {
+          host: "github.com",
+          account: "cli-user",
+          active: true,
+          authenticated: true,
+        },
+      ]);
+      assert.deepStrictEqual(hosts, ["ghe.acme.test"]);
+    });
+  },
+);
+
+it.effect("uses a valid enabled saved host after another host refuses its token", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      ghAvailable: true,
+      ghAuthStatus: JSON.stringify({
+        hosts: {
+          "github.com": [{ state: "success", active: true, host: "github.com", login: "cli-user" }],
+        },
+      }),
+      hosts: { "ghe.disabled.test": { enabled: false } },
+      tokens: {
+        "github.com": "bad-dotcom-token",
+        "ghe.acme.test": "valid-enterprise-token",
+        "ghe.disabled.test": "disabled-token",
+      },
+      rest: (host) => {
+        hosts.push(host);
+        return host === "github.com"
+          ? Effect.fail(
+              new GitHubApi.GitHubApiAuthenticationError({ host, operation: "discovery" }),
+            )
+          : Effect.succeed(restResponse('{"login":"enterprise-user"}'));
+      },
+    });
+
+    assert.strictEqual(item.status, "available");
+    assert.strictEqual(item.auth.status, "authenticated");
+    assert.deepStrictEqual(item.auth.account, Option.some("enterprise-user"));
+    assert.deepStrictEqual(item.auth.host, Option.some("ghe.acme.test"));
+    assert.deepStrictEqual(item.auth.accounts, [
+      {
+        host: "github.com",
+        account: "cli-user",
+        active: true,
+        authenticated: true,
+      },
+    ]);
+    assert.deepStrictEqual(hosts, ["github.com", "ghe.acme.test"]);
+  });
+});
+
+it.effect("does not probe saved or environment tokens for a disabled host", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      hosts: { "ghe.acme.test": { enabled: false } },
+      tokens: { "ghe.acme.test": "disabled-token" },
+      environment: {
+        GH_HOST: "ghe.acme.test",
+        GH_ENTERPRISE_TOKEN: "disabled-env-token",
+      },
+      rest: (host) => {
+        hosts.push(host);
+        return Effect.succeed(restResponse('{"login":"should-not-be-used"}'));
+      },
+    });
+
+    assert.strictEqual(item.status, "missing");
+    assert.deepStrictEqual(hosts, []);
+  });
+});
+
+it.effect("ignores an empty normalized GH_HOST", () => {
+  const hosts: string[] = [];
+  return Effect.gen(function* () {
+    const item = yield* probeGitHubDiscovery({
+      environment: { GH_HOST: "   ", GH_ENTERPRISE_TOKEN: "enterprise-env-token" },
+      rest: (host) => {
+        hosts.push(host);
+        return Effect.succeed(restResponse('{"login":"should-not-be-used"}'));
+      },
+    });
+
+    assert.strictEqual(item.status, "missing");
+    assert.deepStrictEqual(hosts, []);
+  });
+});

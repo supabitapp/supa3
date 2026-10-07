@@ -120,9 +120,11 @@ const presenceClassName =
 interface ComposerBannerStackProps {
   readonly className?: string;
   readonly items: ReadonlyArray<ComposerBannerStackEntry>;
+  /** Attachments between the stacked notices and the front item, such as the queue. */
+  readonly attachedAbove?: ReactNode;
 }
 
-export function ComposerBannerStack({ className, items }: ComposerBannerStackProps) {
+export function ComposerBannerStack({ className, items, attachedAbove }: ComposerBannerStackProps) {
   const [stackExpanded, setStackExpanded] = useState(false);
   const noticesRef = useRef<HTMLDivElement>(null);
   const peekRef = useRef<HTMLButtonElement>(null);
@@ -195,7 +197,13 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
   // Activity stays attached. Urgency and severity only order the notices behind it.
   const { front, stacked } = arrangeSlots(slots);
   if (!front) {
-    return null;
+    return (
+      <>
+        {null}
+        {attachedAbove}
+        {null}
+      </>
+    );
   }
   const hasStack = stacked.length > 0;
   const firstStackedItem = (stacked.find((slot) => !slot.exiting) ?? stacked[0])?.item;
@@ -220,12 +228,98 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
   };
 
   return (
-    <ComposerBanner.Attachment
-      className={className}
-      data-composer-banner-drawer="true"
-      data-chat-composer-collapsed-controls="true"
-    >
-      <div className={cn("relative flex flex-col-reverse", hasStack && stackExpanded && "z-50")}>
+    <>
+      {hasStack ? (
+        <div
+          ref={noticesRef}
+          data-chat-composer-collapsed-controls="true"
+          className={cn("relative z-20 min-h-3", stackExpanded && "z-50")}
+          onPointerEnter={(event) => {
+            if (event.pointerType === "touch") return;
+            if (document.activeElement === peekRef.current) {
+              pendingFocusRef.current = "notice";
+            }
+            setStackExpanded(true);
+          }}
+          onPointerLeave={(event) => {
+            if (!event.currentTarget.contains(document.activeElement)) setStackExpanded(false);
+          }}
+          onBlurCapture={(event) => {
+            if (
+              !event.currentTarget.contains(event.relatedTarget) &&
+              !event.currentTarget.matches(":hover")
+            ) {
+              setStackExpanded(false);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || !stackExpanded) return;
+            event.preventDefault();
+            event.stopPropagation();
+            pendingFocusRef.current = "peek";
+            setStackExpanded(false);
+          }}
+        >
+          {showCollapsedStackCap ? (
+            <ComposerBanner.Peek
+              ref={peekRef}
+              variant={firstStackedItem.variant}
+              aria-label="Show other notices"
+              aria-expanded={stackExpanded}
+              aria-controls={expandedItemsId}
+              aria-hidden={stackExpanded || undefined}
+              tabIndex={stackExpanded ? -1 : 0}
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                pendingFocusRef.current = "notice";
+                setStackExpanded(true);
+              }}
+              className={cn(
+                (stackExpanded || stackLeaving) && "pointer-events-none invisible opacity-0",
+              )}
+            />
+          ) : null}
+          <div
+            id={expandedItemsId}
+            ref={expandedItemsRef}
+            role="group"
+            aria-label="Other notices"
+            tabIndex={-1}
+            data-composer-banner-stack-expanded-items="true"
+            className={cn(
+              "grid transition-[grid-template-rows] duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+              stackExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div
+                className={cn(
+                  "space-y-2 pb-2 transition-[opacity,translate,visibility] duration-150 ease-out motion-reduce:transition-none",
+                  stackExpanded
+                    ? "pointer-events-auto visible translate-y-0 opacity-100"
+                    : "pointer-events-none invisible translate-y-1 opacity-0",
+                )}
+              >
+                {stacked.map((slot) => (
+                  <div key={slot.item.id} {...slotProps(slot)} className={presenceClassName}>
+                    <ComposerBannerStackAlert
+                      slot={slot}
+                      attached={false}
+                      onDismissRequest={() => requestDismiss(slot.item)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {attachedAbove}
+      <ComposerBanner.Attachment
+        className={className}
+        data-composer-banner-drawer="true"
+        data-chat-composer-collapsed-controls="true"
+      >
         <div
           key={front.item.id}
           {...slotProps(front)}
@@ -247,92 +341,8 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
             onDismissRequest={() => requestDismiss(front.item)}
           />
         </div>
-        {hasStack ? (
-          <div
-            ref={noticesRef}
-            className="relative z-20 min-h-3"
-            onPointerEnter={(event) => {
-              if (event.pointerType === "touch") return;
-              if (document.activeElement === peekRef.current) {
-                pendingFocusRef.current = "notice";
-              }
-              setStackExpanded(true);
-            }}
-            onPointerLeave={(event) => {
-              if (!event.currentTarget.contains(document.activeElement)) setStackExpanded(false);
-            }}
-            onBlurCapture={(event) => {
-              if (
-                !event.currentTarget.contains(event.relatedTarget) &&
-                !event.currentTarget.matches(":hover")
-              ) {
-                setStackExpanded(false);
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape" || !stackExpanded) return;
-              event.preventDefault();
-              event.stopPropagation();
-              pendingFocusRef.current = "peek";
-              setStackExpanded(false);
-            }}
-          >
-            {showCollapsedStackCap ? (
-              <ComposerBanner.Peek
-                ref={peekRef}
-                variant={firstStackedItem.variant}
-                aria-label="Show other notices"
-                aria-expanded={stackExpanded}
-                aria-controls={expandedItemsId}
-                aria-hidden={stackExpanded || undefined}
-                tabIndex={stackExpanded ? -1 : 0}
-                onClick={(event) => {
-                  event.currentTarget.focus({ preventScroll: true });
-                  pendingFocusRef.current = "notice";
-                  setStackExpanded(true);
-                }}
-                className={cn(
-                  (stackExpanded || stackLeaving) && "pointer-events-none invisible opacity-0",
-                )}
-              />
-            ) : null}
-            <div
-              id={expandedItemsId}
-              ref={expandedItemsRef}
-              role="group"
-              aria-label="Other notices"
-              tabIndex={-1}
-              data-composer-banner-stack-expanded-items="true"
-              className={cn(
-                "grid transition-[grid-template-rows] duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
-                stackExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-              )}
-            >
-              <div className="min-h-0 overflow-hidden">
-                <div
-                  className={cn(
-                    "space-y-2 pb-2 transition-[opacity,translate,visibility] duration-150 ease-out motion-reduce:transition-none",
-                    stackExpanded
-                      ? "pointer-events-auto visible translate-y-0 opacity-100"
-                      : "pointer-events-none invisible translate-y-1 opacity-0",
-                  )}
-                >
-                  {stacked.map((slot) => (
-                    <div key={slot.item.id} {...slotProps(slot)} className={presenceClassName}>
-                      <ComposerBannerStackAlert
-                        slot={slot}
-                        attached={false}
-                        onDismissRequest={() => requestDismiss(slot.item)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </ComposerBanner.Attachment>
+      </ComposerBanner.Attachment>
+    </>
   );
 }
 

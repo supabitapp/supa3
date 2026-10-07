@@ -30,6 +30,7 @@ function renderPendingActions(isRunning: boolean) {
     createElement(ComposerPrimaryActions, {
       compact: true,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+      canOperateThread: true,
       pendingAction: {
         questionIndex: 0,
         isLastQuestion: true,
@@ -59,6 +60,7 @@ function renderRunningActions(hasSendableContent: boolean) {
     createElement(ComposerPrimaryActions, {
       compact: true,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+      canOperateThread: true,
       pendingAction: null,
       isRunning: true,
       canInterrupt: true,
@@ -86,6 +88,7 @@ function renderSendButton(
     createElement(ComposerPrimaryActions, {
       compact: true,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+      canOperateThread: true,
       pendingAction: null,
       isRunning: false,
       canInterrupt: false,

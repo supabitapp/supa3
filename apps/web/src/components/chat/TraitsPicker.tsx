@@ -569,6 +569,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   shortcutLabel = null,
   size = "sm",
   hidden = false,
+  disabled = false,
   ...persistence
 }: TraitsMenuContentProps &
   TraitsPersistence & {
@@ -576,9 +577,10 @@ export const TraitsPicker = memo(function TraitsPicker({
     hidden?: boolean;
     /** The key that opens the picker, shown on its trigger. */
     shortcutLabel?: string | null;
+    disabled?: boolean;
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
+  const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden || disabled);
   const updateModelOptions = useUpdateModelOptions(provider, instanceId, model, persistence);
   const {
     descriptors,
@@ -611,6 +613,7 @@ export const TraitsPicker = memo(function TraitsPicker({
             activeBackground={false}
             aria-pressed={speedOn}
             aria-label="Fast mode"
+            disabled={disabled}
             onClick={() =>
               updateModelOptions(
                 buildProviderOptionSelectionsFromDescriptors(
@@ -655,7 +658,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       <Menu
         open={isMenuOpen}
         onOpenChange={(open) => {
-          setIsMenuOpen(open);
+          setIsMenuOpen(open && !disabled);
         }}
       >
         <Tooltip>
@@ -664,6 +667,7 @@ export const TraitsPicker = memo(function TraitsPicker({
               <MenuTrigger
                 render={
                   <ComposerControl
+                    disabled={disabled}
                     aria-label={triggerLabel}
                     data-composer-shortcut={isComposerOwned ? "composer.effort" : undefined}
                     size={size}
