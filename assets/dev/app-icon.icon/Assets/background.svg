@@ -1,4 +1,30 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="128" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#26272B" stop-opacity="1"/><stop offset="1" stop-color="#131416" stop-opacity="1"/></linearGradient><pattern id="stripes" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="#151515"/><rect width="6" height="12" fill="#FFC21A"/></pattern><radialGradient id="vig" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 62) rotate(90) scale(80 80)"><stop offset="0.62" stop-color="#000" stop-opacity="0"/><stop offset="0.7" stop-color="#000" stop-opacity="0.08"/><stop offset="0.77" stop-color="#000" stop-opacity="0.2"/><stop offset="0.85" stop-color="#000" stop-opacity="0.32"/><stop offset="0.92" stop-color="#000" stop-opacity="0.41"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/></radialGradient><clipPath id="frame"><rect width="128" height="128" rx="10"/></clipPath></defs>
-  <g clip-path="url(#frame)"><rect width="128" height="128" fill="url(#bg)" /><rect y="0" width="128" height="22" fill="url(#stripes)"/><rect y="106" width="128" height="22" fill="url(#stripes)"/><path d="M0 22H128M0 106H128" stroke="#000" stroke-width="0.8" opacity="0.5"/><rect width="128" height="128" fill="url(#vig)" /></g>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#26272B" stop-opacity="1"/>
+      <stop offset="1" stop-color="#131416" stop-opacity="1"/>
+    </linearGradient>
+    <pattern id="stripes" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="12" height="12" fill="#151515"/>
+      <rect width="6" height="12" fill="#FFC21A"/>
+    </pattern>
+    <radialGradient id="vig" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 62) rotate(90) scale(80 80)">
+      <stop offset="0.62" stop-color="#000" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#000" stop-opacity="0.08"/>
+      <stop offset="0.77" stop-color="#000" stop-opacity="0.2"/>
+      <stop offset="0.85" stop-color="#000" stop-opacity="0.32"/>
+      <stop offset="0.92" stop-color="#000" stop-opacity="0.41"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.45"/>
+    </radialGradient>
+    <clipPath id="frame">
+      <rect width="128" height="128" rx="10"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="128" height="128" fill="url(#bg)"/>
+    <rect y="0" width="128" height="22" fill="url(#stripes)"/>
+    <rect y="106" width="128" height="22" fill="url(#stripes)"/>
+    <path d="M0 22H128M0 106H128" stroke="#000" stroke-width="0.8" opacity="0.5"/>
+    <rect width="128" height="128" fill="url(#vig)"/>
+  </g>
 </svg>

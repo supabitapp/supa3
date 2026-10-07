@@ -59,10 +59,10 @@ const canvasSvg = (size: number, inner: string) =>
 const fullBleed = (svg: string) =>
   svg.replace(/<rect width="128" height="128" rx="10"\/>/, '<rect width="128" height="128"/>');
 
-const rasterize = (layer: string, svg: string, width: number, height = width) =>
+const rasterize = (layer: string, svg: string, size: number) =>
   Effect.tryPromise({
     try: () =>
-      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(width, height).png().toBuffer(),
+      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(size, size).png().toBuffer(),
     catch: (cause) => new AndroidIconRenderError({ layer, cause }),
   });
 
@@ -114,13 +114,27 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
   );
 });
 
+// Launcher and splash masks only reveal the central two thirds, so the artwork is fitted there
+// to keep the iOS framing. A full-bleed copy underneath fills the parallax margin.
 const renderArtworkBackground = Effect.fn("androidIcons.renderArtworkBackground")(function* (
   repositoryRoot: string,
-  variant: "dev" | "nightly",
+  variant: Exclude<IconVariant, "prod">,
   size: number,
 ) {
+  const layer = `${variant}-background`;
   const source = yield* readLayerSource(repositoryRoot, variant, "background.svg");
-  return yield* rasterize(`${variant}-background`, fullBleed(source), size);
+  const bled = fullBleed(source);
+  if (bled === source) {
+    return yield* new AndroidIconRenderError({
+      layer,
+      cause: "background.svg has no 128pt rounded frame to bleed",
+    });
+  }
+  const visible = Math.round((size * 2) / 3);
+  const inset = Math.round((size - visible) / 2);
+  const margin = yield* rasterize(layer, bled, size);
+  const artwork = yield* rasterize(layer, bled, visible);
+  return yield* composite(layer, margin, [{ input: artwork, left: inset, top: inset }]);
 });
 
 const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
