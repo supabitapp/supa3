@@ -20,12 +20,12 @@ const screenshot = await getImage({
 
     <div class="hero-float" aria-hidden="true">
       {[
-        { key: "opencode", icon: "/harnesses/opencode-dark.svg", cls: "hf-opencode" },
+        { key: "opencode", icon: "/harnesses/opencode.svg", cls: "hf-opencode" },
         { key: "antigravity", icon: "/harnesses/antigravity.svg", cls: "hf-antigravity" },
         { key: "claude", icon: "/harnesses/claude-ai-icon.svg", cls: "hf-claude" },
-        { key: "codex", icon: "/harnesses/openai_dark.svg", cls: "hf-codex" },
-        { key: "grok", icon: "/harnesses/grok-dark.svg", cls: "hf-grok" },
-        { key: "cursor", icon: "/harnesses/cursor_light.svg", cls: "hf-cursor" },
+        { key: "codex", icon: "/harnesses/openai.svg", cls: "hf-codex" },
+        { key: "grok", icon: "/harnesses/grok.svg", cls: "hf-grok" },
+        { key: "cursor", icon: "/harnesses/cursor.svg", cls: "hf-cursor" },
       ].map((m) => (
         <span class:list={["hero-float-mark", m.cls]}>
           <span class="hero-float-card"><img src={m.icon} alt="" /></span>
@@ -111,28 +111,28 @@ const screenshot = await getImage({
           </div>
         </div>
         <div class="harness">
-          <div class="harness-mark"><img src="/harnesses/openai_dark.svg" alt="" /></div>
+          <div class="harness-mark"><img src="/harnesses/openai.svg" alt="" /></div>
           <div class="harness-meta">
             <div class="harness-name">Codex CLI</div>
             <div class="harness-tag">codex login</div>
           </div>
         </div>
         <div class="harness">
-          <div class="harness-mark"><img src="/harnesses/opencode-dark.svg" alt="" /></div>
+          <div class="harness-mark"><img src="/harnesses/opencode.svg" alt="" /></div>
           <div class="harness-meta">
             <div class="harness-name">OpenCode</div>
             <div class="harness-tag">opencode auth</div>
           </div>
         </div>
         <div class="harness">
-          <div class="harness-mark"><img src="/harnesses/cursor_light.svg" alt="" /></div>
+          <div class="harness-mark"><img src="/harnesses/cursor.svg" alt="" /></div>
           <div class="harness-meta">
             <div class="harness-name">Cursor</div>
             <div class="harness-tag">@cursor/sdk</div>
           </div>
         </div>
         <div class="harness">
-          <div class="harness-mark"><img src="/harnesses/grok-dark.svg" alt="" /></div>
+          <div class="harness-mark"><img src="/harnesses/grok.svg" alt="" /></div>
           <div class="harness-meta">
             <div class="harness-name">Grok CLI</div>
             <div class="harness-tag">grok login</div>
@@ -449,9 +449,10 @@ const screenshot = await getImage({
     position: absolute;
     inset: 0;
     pointer-events: none;
+    --grid-line: color-mix(in srgb, var(--border) 45%, transparent);
     background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
     background-size: 48px 48px;
     mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
     -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
@@ -558,11 +559,9 @@ const screenshot = await getImage({
     width: 100%;
     height: 100%;
     border-radius: 25%;
-    background: radial-gradient(circle at 30% 25%, var(--tint, rgba(255, 255, 255, 0.08)), rgba(20, 20, 24, 0.92) 65%);
+    background: radial-gradient(circle at 30% 25%, var(--tint, var(--bg-raised)), var(--bg) 65%);
     border: 1px solid var(--border);
-    box-shadow:
-      0 20px 48px -16px rgba(0, 0, 0, 0.65),
-      0 2px 0 0 rgba(255, 255, 255, 0.04) inset;
+    box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.18);
     animation:
       mark-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d) both,
       mark-drift var(--dur) ease-in-out calc(var(--d) + 1s) infinite;
@@ -587,7 +586,7 @@ const screenshot = await getImage({
 
   .hf-opencode    { --x: max(-300px, -19vw); --y: 20px; --s: 64px; --rot: 6deg; --depth: 0.6; --d: 620ms; --dur: 8.5s; --dx: 2px; --dy: -8px; --wob: 3deg; --fx: -40px; --fy: -80px; }
   .hf-antigravity { --x: min(300px, 19vw); --y: 20px; --s: 64px; --rot: -5deg; --depth: 0.6; --d: 580ms; --dur: 9.8s; --dx: -2px; --dy: -9px; --wob: -3deg; --fx: 40px; --fy: -80px; }
-  .hf-claude   { --x: max(-560px, -38vw); --y: 128px; --s: 96px; --rot: -8deg; --depth: 1.2; --d: 380ms; --dur: 10.5s; --dx: 4px; --dy: -12px; --wob: -2deg; --fx: -160px; --fy: -40px; --tint: rgba(217, 119, 87, 0.22); }
+  .hf-claude   { --x: max(-560px, -38vw); --y: 128px; --s: 96px; --rot: -8deg; --depth: 1.2; --d: 380ms; --dur: 10.5s; --dx: 4px; --dy: -12px; --wob: -2deg; --fx: -160px; --fy: -40px; --tint: rgba(217, 119, 87, 0.14); }
   .hf-codex    { --x: min(560px, 38vw); --y: 128px; --s: 96px; --rot: 7deg; --depth: 1.2; --d: 460ms; --dur: 9.2s; --dx: -4px; --dy: -10px; --wob: 2deg; --fx: 160px; --fy: -40px; }
   .hf-grok     { --x: max(-440px, -30vw); --y: 440px; --s: 80px; --rot: 4deg; --depth: 0.9; --d: 540ms; --dur: 11.5s; --dx: 3px; --dy: -9px; --wob: -3deg; --fx: -120px; --fy: 80px; }
   .hf-cursor   { --x: min(440px, 30vw); --y: 440px; --s: 80px; --rot: -5deg; --depth: 0.9; --d: 700ms; --dur: 7.8s; --dx: -3px; --dy: -11px; --wob: 3deg; --fx: 120px; --fy: 80px; }
@@ -646,8 +645,10 @@ const screenshot = await getImage({
     overflow: hidden;
     aspect-ratio: 2880 / 1800;
     border-radius: 14px;
-    background: #0a0a0c;
-    box-shadow: 0 28px 64px -28px rgba(0, 0, 0, 0.75);
+    background: var(--bg);
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 28px 64px -28px rgba(0, 0, 0, 0.22);
   }
 
   .hero-screenshot-frame picture {
@@ -665,8 +666,6 @@ const screenshot = await getImage({
   }
 
   /* ── Harnesses ─────────────────────────────────────────── */
-  .sec-harness { background: #09090b; }
-
   .harness-grid {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -680,11 +679,11 @@ const screenshot = await getImage({
     padding: 22px 20px;
     display: flex; align-items: center; gap: 14px;
     border-right: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
+    background: linear-gradient(180deg, var(--bg-raised), transparent);
     transition: background 0.2s ease;
   }
   .harness:last-child { border-right: 0; }
-  .harness:hover { background: rgba(255, 255, 255, 0.025); }
+  .harness:hover { background: var(--bg-raised); }
 
   .harness-mark {
     color: var(--fg); opacity: 0.95;
@@ -784,15 +783,15 @@ const screenshot = await getImage({
   .pr-button {
     display: inline-flex; align-items: center; gap: 10px;
     padding: 12px 20px;
-    background: var(--fg); color: #09090b;
+    background: var(--primary); color: var(--primary-fg);
     font-weight: 600; font-size: 13px;
     line-height: normal;
     border-radius: 10px;
-    box-shadow: 0 8px 24px -8px rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
   }
   .pr-button-kbd {
     font-family: var(--font-mono); font-size: 10px;
-    background: rgba(0, 0, 0, 0.1);
+    background: color-mix(in srgb, var(--primary-fg) 16%, transparent);
     padding: 2px 6px; border-radius: 4px;
   }
 
@@ -812,11 +811,11 @@ const screenshot = await getImage({
   .open-term-head {
     display: flex; align-items: center; gap: 6px;
     padding: 10px 14px; border-bottom: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-raised);
   }
   .open-term-head span {
     width: 10px; height: 10px; border-radius: 999px;
-    background: #2a2a30; display: block;
+    background: var(--border-strong); display: block;
   }
   .open-term-title {
     margin-left: 10px;
@@ -863,8 +862,8 @@ const screenshot = await getImage({
     justify-content: center;
     gap: 32px;
     background:
-      radial-gradient(110% 75% at 100% 0%, var(--accent-dim), transparent 60%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+      radial-gradient(110% 75% at 100% 0%, var(--accent-surface), transparent 60%),
+      linear-gradient(180deg, var(--bg-raised), transparent);
   }
 
   .open-pitch-list {
@@ -897,7 +896,7 @@ const screenshot = await getImage({
     margin-top: 1px;
     border-radius: 7px;
     color: var(--accent);
-    background: var(--accent-dim);
+    background: var(--accent-surface);
     border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   }
 
@@ -949,7 +948,7 @@ const screenshot = await getImage({
     position: absolute;
     inset: auto 0 -50% 0;
     height: 60%;
-    background: radial-gradient(ellipse at center, var(--accent-dim) 0%, transparent 60%);
+    background: radial-gradient(ellipse at center, var(--accent-surface) 0%, transparent 60%);
     pointer-events: none;
     opacity: 0.6;
   }

@@ -3,6 +3,7 @@ import { getImage, Image } from "astro:assets";
 import appIcon from "../assets/icon.webp";
 import socialCard from "../assets/social-card.webp";
 import dmSansLatinUrl from "../assets/fonts/dm-sans-latin.woff2?url";
+import { SUPACODE_LIGHT_THEME_COLORS as theme } from "@supacode/shared/themePalettes";
 import "../styles/fonts.css";
 import { GITHUB_REPOSITORY_URL } from "../lib/site";
 
@@ -32,9 +33,28 @@ const socialImageUrl = new URL(socialImage.src, Astro.site);
 const socialImageAlt =
   "Supacode: the open-source control plane for coding agents, with Claude Code, Codex, Cursor, OpenCode, Grok and Antigravity.";
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+
+// Site colors come from the app's default light palette.
+const themeStyle = {
+  "--bg": theme.canvas,
+  "--bg-raised": theme.surfaceRaised,
+  "--bg-muted": theme.muted,
+  "--bg-code": theme.codeBackground,
+  "--fg": theme.text,
+  "--fg-muted": theme.mutedForeground,
+  "--fg-dim": theme.textMuted,
+  "--border": theme.border,
+  "--border-strong": theme.input,
+  "--accent": theme.accent,
+  "--accent-surface": theme.accentSurface,
+  "--primary": theme.messageAction,
+  "--primary-fg": theme.messageActionForeground,
+  "--primary-hover": theme.messageActionHover,
+  "--warn": theme.warning,
+};
 ---
 
-<html lang="en">
+<html lang="en" style={themeStyle}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -138,20 +158,9 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 
 <style is:global>
   :root {
-    --bg: #09090b;
-    --bg-elev: #0c0c0e;
-    --bg-card: #111113;
-    --fg: #fafafa;
-    --fg-muted: #a1a1aa;
-    --fg-dim: #71717a;
-    --fg-faint: #52525b;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --accent-h: 250;
-    --accent: oklch(0.68 0.17 var(--accent-h));
-    --accent-dim: oklch(0.68 0.17 var(--accent-h) / 0.15);
-    --ok: oklch(0.72 0.16 150);
-    --warn: oklch(0.76 0.15 75);
+    --fg-faint: color-mix(in srgb, var(--fg-dim) 60%, var(--bg));
+    /* The app's light --success-foreground; the theme palette has no success role. */
+    --ok: oklch(0.508 0.118 165.612);
     --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
     --radius: 12px;
@@ -166,7 +175,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
   }
 
   html {
-    color-scheme: dark;
+    color-scheme: light;
     scroll-behavior: smooth;
   }
 
@@ -250,14 +259,14 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
   }
 
   .btn-primary {
-    background: var(--fg);
-    color: #09090b;
+    background: var(--primary);
+    color: var(--primary-fg);
     font-weight: 600;
   }
 
   .btn-primary:hover {
     transform: translateY(-1px);
-    background: #fff;
+    background: var(--primary-hover);
   }
 
   .btn-primary:active {
@@ -273,7 +282,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
   .btn-ghost:hover {
     color: var(--fg);
     border-color: var(--border-strong);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-raised);
   }
 
   .btn-lg {
@@ -286,7 +295,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+    background: linear-gradient(180deg, var(--bg-raised), transparent);
     overflow: hidden;
   }
 
@@ -358,11 +367,6 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     display: inline-flex;
     align-items: center;
     color: var(--fg);
-    transition: color 0.2s ease;
-  }
-
-  .nav-brand:hover {
-    color: #fff;
   }
 
   .nav-brand-name {
@@ -399,7 +403,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     padding: 0 14px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-raised);
     color: var(--fg-muted);
     font-size: 13px;
     letter-spacing: -0.01em;
@@ -410,7 +414,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
   .nav-stars:hover {
     color: var(--fg);
     border-color: var(--border-strong);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-muted);
   }
 
   .nav-stars svg {
