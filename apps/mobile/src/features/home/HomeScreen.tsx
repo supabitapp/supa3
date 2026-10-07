@@ -43,6 +43,7 @@ import { threadListEnvironmentsAtom } from "../../state/server";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
+  ThreadListV2ActiveEmpty,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -568,25 +569,20 @@ export function HomeScreen(props: HomeScreenProps) {
   const threadListV2Items = useMemo(
     () =>
       buildThreadListV2ListItems({
-        items: threadListV2Layout.items,
+        ...threadListV2Layout,
         pendingTasks: v2PendingTasks,
-        pinnedCount: threadListV2Layout.pinnedCount,
-        workingCount: threadListV2Layout.workingCount,
         pinnedShelfExpanded,
         workingShelfExpanded,
-        workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
-        snoozedCount: threadListV2Layout.snoozedCount,
         snoozedShelfExpanded,
-        snoozedShelfHeaderIndex: threadListV2Layout.snoozedShelfHeaderIndex,
-        settledCount: threadListV2Layout.settledCount,
         settledShelfExpanded,
-        settledShelfHeaderIndex: threadListV2Layout.settledShelfHeaderIndex,
         snoozeLabelNow: `${nowMinute}:00.000Z`,
         snoozeEnvironmentIds,
         queuedThreadKeys,
         shelfPreferencesLoading: !shelfPreferencesLoaded,
+        showActiveEmpty: !hasSearchQuery,
       }),
     [
+      hasSearchQuery,
       nowMinute,
       queuedThreadKeys,
       settledShelfExpanded,
@@ -643,6 +639,9 @@ export function HomeScreen(props: HomeScreenProps) {
       }
       if (item.type === "v2-active-header") {
         return <ThreadListV2SectionDivider label="Active" />;
+      }
+      if (item.type === "v2-active-empty") {
+        return <ThreadListV2ActiveEmpty />;
       }
       if (item.type === "v2-pinned-shelf") {
         return (

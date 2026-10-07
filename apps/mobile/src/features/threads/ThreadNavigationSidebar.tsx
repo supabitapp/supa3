@@ -58,6 +58,7 @@ import { SidebarFilterButton } from "./sidebar-filter-button";
 import { createSidebarHeaderItems } from "./sidebar-native-header-items";
 import { SidebarNavigationShell } from "./sidebar-navigation-shell";
 import {
+  ThreadListV2ActiveEmpty,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -402,23 +403,17 @@ function ThreadNavigationSidebarPane(
           pendingTask.title.toLocaleLowerCase().includes(v2SearchQuery)),
     );
     const items: SidebarListItem[] = buildThreadListV2ListItems({
-      items: threadListV2Layout.items,
+      ...threadListV2Layout,
       pendingTasks: v2PendingTasks,
-      pinnedCount: threadListV2Layout.pinnedCount,
-      workingCount: threadListV2Layout.workingCount,
       pinnedShelfExpanded,
       workingShelfExpanded,
-      workingShelfHeaderIndex: threadListV2Layout.workingShelfHeaderIndex,
-      snoozedCount: threadListV2Layout.snoozedCount,
       snoozedShelfExpanded,
-      snoozedShelfHeaderIndex: threadListV2Layout.snoozedShelfHeaderIndex,
-      settledCount: threadListV2Layout.settledCount,
       settledShelfExpanded,
-      settledShelfHeaderIndex: threadListV2Layout.settledShelfHeaderIndex,
       snoozeLabelNow: `${nowMinute}:00.000Z`,
       snoozeEnvironmentIds,
       queuedThreadKeys,
       shelfPreferencesLoading: !shelfPreferencesLoaded,
+      showActiveEmpty: v2SearchQuery.length === 0,
     });
     if (settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0) {
       items.push({
@@ -722,6 +717,8 @@ function ThreadNavigationSidebarPane(
         }
         case "v2-active-header":
           return <ThreadListV2SectionDivider label="Active" pane="sidebar" />;
+        case "v2-active-empty":
+          return <ThreadListV2ActiveEmpty pane="sidebar" />;
         case "v2-pinned-shelf":
           return (
             <ThreadListV2PinnedShelfHeader

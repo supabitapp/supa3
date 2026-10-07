@@ -335,6 +335,11 @@ export interface ThreadListV2ActiveHeaderListItem {
   readonly key: "v2-active-header";
 }
 
+export interface ThreadListV2ActiveEmptyListItem {
+  readonly type: "v2-active-empty";
+  readonly key: "v2-active-empty";
+}
+
 export interface ThreadListV2WorkingShelfListItem {
   readonly type: "v2-working-shelf";
   readonly key: "v2-working-shelf";
@@ -370,6 +375,7 @@ export type ThreadListV2ListItem =
   | ThreadListV2PendingListItem
   | ThreadListV2PinnedShelfListItem
   | ThreadListV2ActiveHeaderListItem
+  | ThreadListV2ActiveEmptyListItem
   | ThreadListV2WorkingShelfListItem
   | ThreadListV2SnoozedShelfListItem
   | ThreadListV2SettledShelfListItem;
@@ -384,6 +390,7 @@ export function isThreadListV2ListItem(value: {
     value.type === "v2-pending" ||
     value.type === "v2-pinned-shelf" ||
     value.type === "v2-active-header" ||
+    value.type === "v2-active-empty" ||
     value.type === "v2-working-shelf" ||
     value.type === "v2-snoozed-shelf" ||
     value.type === "v2-settled-shelf"
@@ -425,6 +432,7 @@ export function threadListV2ListItemsAreEqual(
         previous.showTrailingDivider === item.showTrailingDivider
       );
     case "v2-active-header":
+    case "v2-active-empty":
       return previous.type === item.type;
     case "v2-pinned-shelf":
       return (
@@ -510,6 +518,10 @@ export function buildThreadListV2ListItems(input: {
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
+  /** Heads the shelves with "All caught up" when nothing sits above them; a
+      collapsed Pinned shelf counts, since pins can still need the user.
+      Callers turn it off while searching: results are a lookup, not the inbox. */
+  readonly showActiveEmpty?: boolean;
 }): ThreadListV2ListItem[] {
   const threadItems = input.items.map((item): ThreadListV2ListItem => {
     const snoozeWakeLabelText =
@@ -574,6 +586,7 @@ export function buildThreadListV2ListItems(input: {
     }
   }
   result.push(...threadItems.slice(pinnedEnd, activeEnd), ...pendingItems);
+  const nothingAboveShelves = result.length === 0;
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({
       type: "v2-working-shelf",
@@ -603,6 +616,9 @@ export function buildThreadListV2ListItems(input: {
       disabled: shelfDisabled,
     });
     result.push(...threadItems.slice(settledShelfHeaderIndex));
+  }
+  if (input.showActiveEmpty === true && nothingAboveShelves && result.length > 0) {
+    result.unshift({ type: "v2-active-empty", key: "v2-active-empty" });
   }
   // Hairlines depend on the final neighbour, so they are stamped after the
   // splice: a recycled cell only re-renders when its divider actually flips.

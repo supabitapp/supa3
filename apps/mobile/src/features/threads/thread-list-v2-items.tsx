@@ -257,6 +257,41 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   return <ThreadListV2ShelfHeader {...props} kind="settled" />;
 });
 
+/** Stands in for an empty Active block so the shelves never float alone. */
+export const ThreadListV2ActiveEmpty = memo(function ThreadListV2ActiveEmpty(props: {
+  readonly pane?: "screen" | "sidebar";
+}) {
+  const sidebarPane = props.pane === "sidebar";
+  return (
+    <View accessible className={cn("items-center", sidebarPane ? "px-3 py-6" : "px-8 pb-6 pt-10")}>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <SymbolView
+          name="checkmark.circle"
+          size={sidebarPane ? 18 : 22}
+          tintColorClassName={sidebarPane ? "accent-drawer-foreground-muted" : "accent-icon-muted"}
+          type="monochrome"
+        />
+      </View>
+      <Text
+        className={cn(
+          "mt-2.5 font-supacode-medium",
+          sidebarPane ? "text-sm text-drawer-foreground" : "text-base text-foreground-secondary",
+        )}
+      >
+        All caught up
+      </Text>
+      <Text
+        className={cn(
+          "mt-1 text-center font-sans",
+          sidebarPane ? "text-xs text-drawer-foreground-muted" : "text-sm text-foreground-tertiary",
+        )}
+      >
+        Threads land here when they need you.
+      </Text>
+    </View>
+  );
+});
+
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
   readonly hiddenCount: number;
