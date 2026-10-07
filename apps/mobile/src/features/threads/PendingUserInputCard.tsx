@@ -2,7 +2,7 @@ import { RequestActionButton } from "./RequestActionButton";
 import { QuestionAttachments } from "./QuestionAttachments";
 import type { RuntimeRequestId } from "@supacode/contracts";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
   Keyboard,
@@ -11,15 +11,22 @@ import {
   ScrollView,
   View,
   type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import Animated, {
   Easing,
   FadeInUp,
   FadeOutDown,
+  LayoutAnimationConfig,
   LinearTransition,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type EntryAnimationsValues,
+  type ExitAnimationsValues,
+  type LayoutAnimation,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -106,6 +113,71 @@ const SINGLE_SELECT_ADVANCE_DELAY_MS = 200;
 
 const FALLBACK_TITLE = "Fill in the pending answers";
 
+/**
+ * Both pages travel the window width on one curve, so they move as a unit and
+ * sit side by side instead of overlapping; the card clips whatever is outside it.
+ */
+const QUESTION_PUSH_TIMING = {
+  duration: 300,
+  easing: Easing.bezier(0.32, 0.72, 0, 1),
+  reduceMotion: ReduceMotion.System,
+};
+
+/**
+ * Keyed by question so paging pushes the old question out and the new one in.
+ * The config skips both when the card itself mounts or unmounts, so only a
+ * page change animates.
+ */
+function QuestionPage(props: {
+  readonly questionId: string | undefined;
+  /** 1 when paging forward (pages move left), -1 when paging back. */
+  readonly direction: SharedValue<number>;
+  readonly className?: string;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly children: ReactNode;
+}) {
+  const { direction } = props;
+  // The worklets read the direction when they run, because the outgoing page
+  // keeps the exiting prop it last rendered with.
+  const pushIn = useCallback(
+    (values: EntryAnimationsValues): LayoutAnimation => {
+      "worklet";
+      return {
+        initialValues: { transform: [{ translateX: values.windowWidth * direction.get() }] },
+        animations: { transform: [{ translateX: withTiming(0, QUESTION_PUSH_TIMING) }] },
+      };
+    },
+    [direction],
+  );
+  const pushOut = useCallback(
+    (values: ExitAnimationsValues): LayoutAnimation => {
+      "worklet";
+      return {
+        initialValues: { transform: [{ translateX: 0 }] },
+        animations: {
+          transform: [
+            { translateX: withTiming(-values.windowWidth * direction.get(), QUESTION_PUSH_TIMING) },
+          ],
+        },
+      };
+    },
+    [direction],
+  );
+  return (
+    <LayoutAnimationConfig skipEntering skipExiting>
+      <Animated.View
+        key={props.questionId}
+        entering={pushIn}
+        exiting={pushOut}
+        className={props.className}
+        style={props.style}
+      >
+        {props.children}
+      </Animated.View>
+    </LayoutAnimationConfig>
+  );
+}
+
 export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const { requestId, questions } = props.pendingUserInput;
   const questionCount = questions.length;
@@ -140,6 +212,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     }
   }, []);
   useEffect(() => cancelAutoAdvance, [cancelAutoAdvance]);
+  const pushDirection = useSharedValue(1);
   const describeQuestion = (index: number) => {
     const header = questions[index]?.header ?? FALLBACK_TITLE;
     return questionCount > 1 ? `${header}, question ${index + 1} of ${questionCount}` : header;
@@ -152,6 +225,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       return;
     }
     Keyboard.dismiss();
+    pushDirection.set(index > questionIndex ? 1 : -1);
     setPage({ requestId, index });
     AccessibilityInfo.announceForAccessibility(describeQuestion(index));
   };
@@ -340,9 +414,11 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               </Text>
             ) : null}
           </View>
-          <Text className="font-supacode-bold text-lg text-foreground">
-            {question?.header ?? FALLBACK_TITLE}
-          </Text>
+          <QuestionPage questionId={question?.id} direction={pushDirection}>
+            <Text className="font-supacode-bold text-lg text-foreground">
+              {question?.header ?? FALLBACK_TITLE}
+            </Text>
+          </QuestionPage>
         </View>
         <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
           <SymbolView
@@ -353,88 +429,96 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           />
         </View>
       </Pressable>
-      <ScrollView
-        // Remounting per question starts each page scrolled to its top.
-        key={question?.id}
-        bounces={false}
+      {/* Remounting per question also starts each page scrolled to its top. */}
+      <QuestionPage
+        questionId={question?.id}
+        direction={pushDirection}
         className="min-h-0"
-        contentContainerClassName="gap-2 pb-1"
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-        showsVerticalScrollIndicator
         style={{ flexShrink: 1 }}
       >
-        {!canRespond ? (
-          <Text className="font-sans text-sm leading-5 text-adaptive-neutral-600-400">
-            The provider process for this request is no longer available. Interrupt or restart the
-            run to continue.
-          </Text>
-        ) : null}
-        {question ? (
-          <>
-            <Text className="font-sans text-base leading-snug text-foreground">
-              {question.question}
+        <ScrollView
+          bounces={false}
+          className="min-h-0"
+          contentContainerClassName="gap-2 pb-1"
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          style={{ flexShrink: 1 }}
+        >
+          {!canRespond ? (
+            <Text className="font-sans text-sm leading-5 text-adaptive-neutral-600-400">
+              The provider process for this request is no longer available. Interrupt or restart the
+              run to continue.
             </Text>
-            {question.multiSelect ? (
-              <Text className="font-sans text-xs text-foreground-muted">
-                Select one or more options.
+          ) : null}
+          {question ? (
+            <>
+              <Text className="font-sans text-base leading-snug text-foreground">
+                {question.question}
               </Text>
-            ) : null}
-            <View className="gap-2">
-              {question.options.map((option) => {
-                const optionValue = option.value ?? option.label.trim();
-                const selected = isPendingUserInputOptionSelected(
-                  question,
-                  activeDraft,
-                  optionValue,
-                );
-                const description =
-                  option.description !== option.label ? option.description : undefined;
-                return (
-                  <Pressable
-                    key={optionValue}
-                    accessibilityRole={question.multiSelect ? "checkbox" : "radio"}
-                    accessibilityState={{ checked: selected, disabled: responseDisabled }}
-                    disabled={responseDisabled}
-                    className={cn(
-                      "min-h-12 w-full rounded-2xl border px-3.5 py-3",
-                      selected ? "border-primary bg-primary/10" : "border-border bg-input",
-                    )}
-                    onPress={() => selectOption(question, optionValue)}
-                  >
-                    <View className="min-w-0 flex-1 gap-0.5">
-                      <Text
-                        className={cn(
-                          "font-supacode-bold text-sm",
-                          selected ? "text-foreground" : "text-foreground-secondary",
-                        )}
-                      >
-                        {option.label}
-                      </Text>
-                      {description ? (
-                        <Text className="font-sans text-sm leading-5 text-foreground-muted">
-                          {description}
+              {question.multiSelect ? (
+                <Text className="font-sans text-xs text-foreground-muted">
+                  Select one or more options.
+                </Text>
+              ) : null}
+              <View className="gap-2">
+                {question.options.map((option) => {
+                  const optionValue = option.value ?? option.label.trim();
+                  const selected = isPendingUserInputOptionSelected(
+                    question,
+                    activeDraft,
+                    optionValue,
+                  );
+                  const description =
+                    option.description !== option.label ? option.description : undefined;
+                  return (
+                    <Pressable
+                      key={optionValue}
+                      accessibilityRole={question.multiSelect ? "checkbox" : "radio"}
+                      accessibilityState={{ checked: selected, disabled: responseDisabled }}
+                      disabled={responseDisabled}
+                      className={cn(
+                        "min-h-12 w-full rounded-2xl border px-3.5 py-3",
+                        selected ? "border-primary bg-primary/10" : "border-border bg-input",
+                      )}
+                      onPress={() => selectOption(question, optionValue)}
+                    >
+                      <View className="min-w-0 flex-1 gap-0.5">
+                        <Text
+                          className={cn(
+                            "font-supacode-bold text-sm",
+                            selected ? "text-foreground" : "text-foreground-secondary",
+                          )}
+                        >
+                          {option.label}
                         </Text>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {question.allowCustomAnswer !== false ? (
-              <QuestionAttachments
-                requestId={requestId}
-                question={question}
-                questions={questions}
-                disabled={responseDisabled}
-                value={activeDraft?.customAnswer ?? ""}
-                onChangeText={(value) => props.onChangeCustomAnswer(requestId, question.id, value)}
-                onInputFocusChange={props.onInputFocusChange}
-              />
-            ) : null}
-          </>
-        ) : null}
-      </ScrollView>
+                        {description ? (
+                          <Text className="font-sans text-sm leading-5 text-foreground-muted">
+                            {description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {question.allowCustomAnswer !== false ? (
+                <QuestionAttachments
+                  requestId={requestId}
+                  question={question}
+                  questions={questions}
+                  disabled={responseDisabled}
+                  value={activeDraft?.customAnswer ?? ""}
+                  onChangeText={(value) =>
+                    props.onChangeCustomAnswer(requestId, question.id, value)
+                  }
+                  onInputFocusChange={props.onInputFocusChange}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </ScrollView>
+      </QuestionPage>
       <View className="flex-row gap-2.5">
         {questionIndex > 0 ? (
           <RequestActionButton
