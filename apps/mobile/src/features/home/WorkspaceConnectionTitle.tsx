@@ -126,7 +126,7 @@ export function WorkspaceConnectionTitle(props: {
             style={{ flexShrink: 1, gap: 4 * scale, marginLeft: props.statusOffset ?? 0 }}
           >
             <SymbolView
-              name={status.showsProgress ? "arrow.clockwise" : "wifi.slash"}
+              name={status.icon}
               size={Math.round(12 * scale)}
               tintColorClassName={"accent-icon-muted"}
               type="monochrome"
