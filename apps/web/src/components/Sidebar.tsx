@@ -11,6 +11,12 @@ import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@supacode/shared/threadPullRequests";
+import { getProviderOptionDescriptors } from "@supacode/shared/model";
+import { formatModelSelectionEffort } from "@supacode/client-runtime/state/thread-execution";
+import {
+  getSpeedToggle,
+  SPEED_TOGGLE_LABELS,
+} from "@supacode/client-runtime/provider-speed-toggle";
 import { useAtomValue } from "@effect/atom-react";
 import { isEnvironmentConnected } from "@supacode/client-runtime/connection";
 import { replaceComposerContextReferences } from "@supacode/shared/composerContextReferences";
@@ -59,6 +65,7 @@ import {
   AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
+  BrainIcon,
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
@@ -76,6 +83,7 @@ import {
   TerminalIcon,
   Undo2Icon,
   XIcon,
+  ZapIcon,
 } from "lucide-react";
 import {
   memo,
@@ -453,7 +461,6 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
-  statusLabel,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -471,9 +478,18 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
-  statusLabel: string | null;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
+  const models = providerEntry?.models ?? [];
+  const effortLabel = formatModelSelectionEffort(thread.modelSelection, models);
+  const selectedModel = models.find((model) => model.slug === thread.modelSelection.model);
+  const descriptors = selectedModel?.capabilities
+    ? getProviderOptionDescriptors({
+        caps: selectedModel.capabilities,
+        selections: thread.modelSelection.options,
+      })
+    : [];
+  const speedToggle = getSpeedToggle(driverKind, descriptors);
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
@@ -490,7 +506,6 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
-        {statusLabel ? <div>{statusLabel}</div> : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -540,6 +555,20 @@ function SidebarThreadTooltip({
               {showInstanceBadge && providerEntry
                 ? `${modelLabel} · ${providerEntry.displayName}`
                 : modelLabel}
+            </div>
+          </div>
+        ) : null}
+        {effortLabel ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <BrainIcon aria-hidden className="size-3 shrink-0 stroke-muted-foreground" />
+            <div className="min-w-0 truncate text-foreground/75">Thinking: {effortLabel}</div>
+          </div>
+        ) : null}
+        {speedToggle ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <ZapIcon aria-hidden className="size-3 shrink-0 stroke-muted-foreground" />
+            <div className="min-w-0 truncate text-foreground/75">
+              {SPEED_TOGGLE_LABELS[speedToggle.level]}
             </div>
           </div>
         ) : null}
@@ -1399,10 +1428,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
-      statusLabel={
-        topStatus?.label ??
-        (variantAction === "unsnooze" ? "Snoozed" : isParked ? "Settled" : "Ready")
-      }
     />
   );
 
