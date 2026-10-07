@@ -1,7 +1,6 @@
 import type { AssetResource } from "@supacode/contracts";
 import {
   AssetAttachmentNotFoundError,
-  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   AssetGitHubMediaUrlValidationError,
   AssetPreviewTypeValidationError,
   AssetProjectFaviconInspectionError,
@@ -33,7 +32,7 @@ import {
 } from "@supacode/shared/imageDimensions";
 import { githubMediaFetchUrl, githubMediaFileName } from "@supacode/shared/githubMedia";
 import { PROJECT_FAVICON_FALLBACK_MARKER } from "@supacode/shared/projectFavicon";
-import { toolOutputImages } from "@supacode/shared/toolOutput";
+import { MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH, toolOutputImages } from "@supacode/shared/toolOutput";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -215,9 +214,6 @@ const optionOnNotFound = <A, R>(
         error.reason._tag === "NotFound" ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
     }),
   );
-
-// The largest image a provider turn accepts, as base64 (4 characters per 3 bytes).
-const MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH = Math.ceil(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / 3) * 4;
 
 /**
  * Decodes one image a tool returned inline; null when the stored item has no

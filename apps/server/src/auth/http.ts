@@ -1,8 +1,10 @@
 import {
+  authScopeRequiredResponse,
   AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthEnvironmentScope,
   AuthStandardClientScopes,
+  AuthGrantScope,
   EnvironmentAuthInvalidError,
   type EnvironmentAuthInvalidReason,
   EnvironmentHttpApi,
@@ -21,6 +23,7 @@ import { parseOAuthScope } from "@supacode/shared/oauthScope";
 import { causeErrorTag } from "@supacode/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Cookies from "effect/http/Cookies";
@@ -40,8 +43,6 @@ const CREDENTIAL_RESPONSE_HEADERS = {
 const appendCredentialResponseHeaders = HttpEffect.appendPreResponseHandler((_request, response) =>
   Effect.succeed(HttpServerResponse.setHeaders(response, CREDENTIAL_RESPONSE_HEADERS)),
 );
-
-const isAuthEnvironmentScope = Schema.is(AuthEnvironmentScope);
 
 const currentEnvironmentTraceId = Effect.currentParentSpan.pipe(
   Effect.map((span) => span.traceId),
@@ -101,7 +102,7 @@ export function failEnvironmentScopeRequired(requiredScope: AuthEnvironmentScope
       Effect.fail(
         new EnvironmentScopeRequiredError({
           code: "insufficient_scope",
-          requiredScope,
+          ...authScopeRequiredResponse(requiredScope),
           traceId,
         }),
       ),
@@ -130,6 +131,35 @@ export function failEnvironmentNotFound(reason: EnvironmentResourceNotFoundReaso
     ),
   );
 }
+
+/**
+ * `<img>` and WebSocket cannot set headers, so media routes (device hub,
+ * preview stream) authenticate the way the `/ws` upgrade does: a cookie for browser
+ * sessions, or a short-lived `wsTicket` minted over authenticated HTTP for
+ * bearer clients. The upgrade authenticator already implements that
+ * fallback order, so it is used for plain requests as well.
+ */
+export const authenticateMediaRequest = (requiredScope: AuthEnvironmentScope) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+    const session = yield* serverAuth.authenticateWebSocketUpgrade(request).pipe(
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          if (EnvironmentAuth.isServerAuthCredentialError(error)) {
+            return yield* failEnvironmentAuthInvalid(
+              EnvironmentAuth.serverAuthCredentialReason(error),
+            );
+          }
+          return yield* failEnvironmentInternal("internal_error", error);
+        }),
+      ),
+    );
+    if (!session.scopes.includes(requiredScope)) {
+      return yield* failEnvironmentScopeRequired(requiredScope);
+    }
+    return session;
+  });
 
 export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, error?: unknown) {
   return Effect.gen(function* () {
@@ -239,9 +269,18 @@ export const layer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const request = yield* HttpServerRequest.HttpServerRequest;
+            const previousCredential = EnvironmentAuth.selectRequestCredential(
+              request,
+              sessions.cookieName,
+              sessions.legacyCookieName,
+            );
             const result = yield* serverAuth.createBrowserSession(
               args.payload.credential,
               deriveAuthClientMetadata({ request }),
+              previousCredential?.source === "cookie" ||
+                previousCredential?.source === "legacy-cookie"
+                ? previousCredential.token
+                : undefined,
             );
             const cookieName = result.cookieName ?? sessions.cookieName;
             const selectedCookie = yield* Effect.fromResult(
@@ -282,10 +321,11 @@ export const layer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const request = yield* HttpServerRequest.HttpServerRequest;
-            const parsedScopes =
-              args.payload.scope === undefined ? undefined : parseOAuthScope(args.payload.scope);
-            const requestedScopes = parsedScopes?.filter(isAuthEnvironmentScope);
-            if (parsedScopes === null || requestedScopes?.length === 0) {
+            const requestedScopes =
+              args.payload.scope === undefined
+                ? undefined
+                : (parseOAuthScope(args.payload.scope)?.filter(Schema.is(AuthGrantScope)) ?? null);
+            if (requestedScopes === null || requestedScopes?.length === 0) {
               return yield* failEnvironmentInvalidRequest("invalid_scope");
             }
             yield* appendCredentialResponseHeaders;

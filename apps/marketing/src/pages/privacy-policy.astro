@@ -63,6 +63,12 @@ const sections = [
           </p>
           <ul>
             <li>
+              <strong>Product usage data.</strong> By default, Supacode sends us anonymous usage
+              data, such as which provider and model a turn used, whether it succeeded, and your app
+              version and operating system. We use it to improve the product. You can turn this off
+              at any time; see “Product Usage Data” under Your Choices below.
+            </li>
+            <li>
               <strong>Information you provide to us.</strong> We collect information that you choose
               to provide when you request support, send feedback, or otherwise communicate with us.
             </li>
@@ -134,8 +140,8 @@ const sections = [
             <li>To monitor reliability, prevent abuse, and investigate security incidents;</li>
             <li>To comply with applicable law and enforce the terms governing the Services; and</li>
             <li>
-              To analyze and improve Supacode using aggregated, de-identified, or other anonymous
-              operational information.
+              To analyze and improve Supacode using product usage data and aggregated,
+              de-identified, or other anonymous operational information.
             </li>
           </ul>
 
@@ -191,6 +197,14 @@ const sections = [
               You can view Cloudflare's privacy policy here:{" "}<a
                 href="https://www.cloudflare.com/privacypolicy/"
                 >https://www.cloudflare.com/privacypolicy/</a
+              >.
+            </li>
+            <li>
+              <strong>PostHog</strong> <em>(PostHog, Inc.)</em>.<br />
+              We use PostHog to receive and analyze product usage data.<br />
+              You can view PostHog's privacy policy here:{" "}<a href="https://posthog.com/privacy"
+                >https://posthog.com/privacy</a
+
               >.
             </li>
             <li>
@@ -270,6 +284,13 @@ const sections = [
             You can disconnect environments, disable optional notifications, and clear local caches
             from Settings. You can grant or revoke camera, photo, local-network, and notification
             permissions in your device settings.
+          </p>
+
+          <h3>Product Usage Data</h3>
+          <p>
+            To stop sending product usage data, set the environment variable{" "}
+            <code>SUPACODE_TELEMETRY_ENABLED=false</code>{" "}where Supacode runs, for example in your
+            shell profile, and restart Supacode.
           </p>
 
           <h3>Cookies and Local Data</h3>

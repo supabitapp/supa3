@@ -185,7 +185,9 @@ export default defineConfig({
       "supacode/no-inline-schema-compile": "error",
       "supacode/no-manual-effect-runtime-in-tests": "error",
       "supacode/no-native-title-tooltip": "error",
+      "supacode/no-raw-mcp-registration": "error",
       "supacode/no-test-in-loop": "error",
+      "supacode/no-rpc-permission-bypass": ["error", { allowRawClientAccess: true }],
       "supacode/no-unscoped-has": "error",
       "supacode/namespace-node-imports": "error",
       "supacode/prefer-catch-tags": "error",
@@ -219,9 +221,54 @@ export default defineConfig({
         rules: { "test-waits/no-long-waits": "off" },
       },
       {
+        files: ["packages/client-runtime/src/state/**", "apps/{web,mobile,desktop}/src/**"],
+        rules: { "supacode/no-rpc-permission-bypass": ["error", { allowRawClientAccess: false }] },
+      },
+      {
+        // Only shared command boundaries install the session-backed permission guard.
+        files: [
+          "packages/client-runtime/src/state/runtime.ts",
+          "packages/client-runtime/src/state/vcsAction.ts",
+        ],
+        rules: {
+          "supacode/no-rpc-permission-bypass": [
+            "error",
+            { allowGuardInstallation: true, allowRawClientAccess: false },
+          ],
+        },
+      },
+      {
+        // These clients are session metadata, device streams, and an Expo update adapter.
+        files: [
+          "apps/web/src/components/settings/ConnectionsSettings.tsx",
+          "apps/mobile/src/features/updates/app-updates.ts",
+          "apps/web/src/components/device/DevicePhoneViewport.tsx",
+          "apps/web/src/components/device/DeviceDuoViewport.tsx",
+        ],
+        rules: { "supacode/no-rpc-permission-bypass": ["error", { allowRawClientAccess: true }] },
+      },
+      {
+        // Incompatible hosts cannot open a normal session; their updater uses a dedicated socket.
+        files: ["packages/client-runtime/src/connection/outdatedHostUpdate.ts"],
+        rules: { "supacode/no-rpc-permission-bypass": "off" },
+      },
+      {
+        // RPC implementation and transport test fixtures need the raw client.
+        files: [
+          "packages/client-runtime/src/rpc/**",
+          "**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        ],
+        rules: { "supacode/no-rpc-permission-bypass": "off" },
+      },
+      {
         // The one place that reads the host platform to seed the injected references.
         files: ["packages/shared/src/hostProcess.ts"],
         rules: { "supacode/no-global-process-runtime": "off" },
+      },
+      {
+        // The registration helpers that only accept handlers built by McpToolAccess.
+        files: ["apps/server/src/mcp/McpHttpServer.ts"],
+        rules: { "supacode/no-raw-mcp-registration": "off" },
       },
       {
         files: ["apps/web/src/**"],

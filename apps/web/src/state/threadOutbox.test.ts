@@ -156,6 +156,59 @@ beforeEach(() => {
 });
 
 describe("web thread outbox delivery", () => {
+  it("retries compaction with the same IDs and queues the saved prompt only after acknowledgement", async () => {
+    const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+    await enqueueThreadOutboxTurn({ ...target(), compactBeforeSend: true });
+    harness.online = true;
+    harness.run.mockResolvedValueOnce(AsyncResult.fail({ _tag: "RpcClientError" }));
+    await webThreadOutbox.drain();
+    expect(harness.run).toHaveBeenCalledTimes(1);
+    const compact = harness.run.mock.calls[0]![2];
+    expect(compact.input).toMatchObject({
+      commandId: "stable-command:compact",
+      message: { messageId: "message:compact", text: "/compact", attachments: [] },
+      dispatchMode: "queue",
+    });
+    const saved = harness.records.get("message")!;
+    expect(saved.payload.input.message.text).toBe("Saved prompt");
+    harness.records.set("message", { ...saved, retryAt: 0 });
+    await webThreadOutbox.drain();
+    expect(harness.run.mock.calls[1]![2]).toEqual(compact);
+    expect(harness.run.mock.calls[2]![2].input).toMatchObject({
+      commandId: "stable-command",
+      message: { messageId: "message", text: "Saved prompt" },
+      dispatchMode: "queue",
+    });
+    expect(harness.records.size).toBe(0);
+  });
+
+  it.each([
+    { instanceId: "different-provider", text: "Edited prompt" },
+    { instanceId: "codex", text: "/compact" },
+  ])("drops automatic compaction when an edit changes its target: %j", async (edit) => {
+    const { enqueueThreadOutboxTurn, webThreadOutbox, replaceThreadOutboxTurn } =
+      await import("./threadOutbox");
+    await enqueueThreadOutboxTurn({ ...target(), compactBeforeSend: true });
+    await webThreadOutbox.pause("message", true);
+    const entry = webThreadOutbox.getSnapshot()[0]!;
+    await replaceThreadOutboxTurn(entry, {
+      ...entry.payload,
+      input: {
+        ...entry.payload.input,
+        modelSelection: {
+          instanceId: ProviderInstanceId.make(edit.instanceId),
+          model: "test-model",
+        },
+        message: { ...entry.payload.input.message, text: edit.text },
+      },
+    });
+    harness.online = true;
+    await webThreadOutbox.drain();
+    expect(harness.run).toHaveBeenCalledTimes(1);
+    expect(harness.run.mock.calls[0]![2].input.message.text).toBe(edit.text);
+    expect(harness.records.size).toBe(0);
+  });
+
   it("persists an edited message with a new command ID before delivering it", async () => {
     const { enqueueThreadOutboxTurn, webThreadOutbox, replaceThreadOutboxTurn } =
       await import("./threadOutbox");

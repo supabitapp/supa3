@@ -1,4 +1,9 @@
 import { ProcessSignalActions } from "./ProcessSignalActions";
+import { resolveUsageAccess } from "@supacode/client-runtime/state/usage-access";
+import { environmentSession } from "../../state/session";
+import { AuthOrchestrationOperateScope } from "@supacode/contracts";
+import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
+import { AuthEnvironmentMaintainScope } from "@supacode/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { AlertTriangleIcon, CopyIcon, FolderOpenIcon, InfoIcon } from "lucide-react";
 import { ChevronDown, ChevronRight } from "lucide";
@@ -16,11 +21,10 @@ import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
 import { cn } from "../../lib/utils";
-import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
+import { useOpenInPreferredEditor } from "../../editorPreferences";
 import { formatRelativeTimeLabel, getRelativeTimeState } from "../../timestampFormat";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { shellEnvironment } from "../../state/shell";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -295,11 +299,13 @@ function ProcessNameCell({
 
 function ProcessDiagnosticsTable({
   processes,
+  canMaintainEnvironment,
   signalingPid,
   onSignal,
   emptyLabel,
 }: {
   processes: ReadonlyArray<ServerProcessDiagnosticsEntry>;
+  canMaintainEnvironment: boolean;
   signalingPid: number | null;
   onSignal: (process: ServerProcessDiagnosticsEntry, signal: ServerProcessSignal) => void;
   emptyLabel?: string;
@@ -408,7 +414,7 @@ function ProcessDiagnosticsTable({
                 <td className="p-2 align-middle sm:pr-4">
                   <ProcessSignalActions
                     pid={process.pid}
-                    disabled={signalingPid === process.pid}
+                    disabled={!canMaintainEnvironment || signalingPid === process.pid}
                     onSignal={(signal) => onSignal(process, signal)}
                   />
                 </td>
@@ -710,20 +716,29 @@ export function DiagnosticsSettingsPanel() {
   // The boundary only mounts this page when the selection resolves to one
   // connected environment, so the representative is the one to inspect.
   const environmentId = environment?.environmentId ?? null;
+  const canMaintainEnvironment = useEnvironmentScope(environmentId, AuthEnvironmentMaintainScope);
   const observability = environment?.serverConfig?.observability;
   const availableEditors = environment?.serverConfig?.availableEditors;
+  const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const session = useEnvironmentQuery(
+    environmentId === null ? null : environmentSession.sessionStateAtom(environmentId),
+  );
+  const diagnosticsAccess = resolveUsageAccess({
+    connectionPhase: environment?.connection.phase ?? "available",
+    session: session.data,
+    hasSessionError: session.error !== null,
+  });
+  const canReadDiagnostics = diagnosticsAccess.canReadDiagnostics;
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
     reportFailure: false,
   });
-  const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
-    reportFailure: false,
-  });
+  const openInEditor = useOpenInPreferredEditor(environmentId, availableEditors ?? []);
   const [resourceWindowMs, setResourceWindowMs] = useState(15 * 60_000);
   const selectedResourceWindow =
     RESOURCE_HISTORY_WINDOWS.find((option) => option.windowMs === resourceWindowMs) ??
     RESOURCE_HISTORY_WINDOWS[1];
   const { data, error, isPending, refresh } = useEnvironmentQuery(
-    environmentId === null
+    environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.traceDiagnostics({ environmentId, input: {} }),
   );
@@ -733,7 +748,7 @@ export function DiagnosticsSettingsPanel() {
     isPending: isProcessPending,
     refresh: refreshProcesses,
   } = useEnvironmentQuery(
-    environmentId === null
+    environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.processDiagnostics({ environmentId, input: {} }),
   );
@@ -743,7 +758,7 @@ export function DiagnosticsSettingsPanel() {
     isPending: isResourcePending,
     refresh: refreshResources,
   } = useEnvironmentQuery(
-    environmentId === null
+    environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.processResourceHistory({
           environmentId,
@@ -762,26 +777,17 @@ export function DiagnosticsSettingsPanel() {
     const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
     if (!logsDirectoryPath) return;
 
-    const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
-    if (!editor) {
-      setOpenLogsDirectoryError("No available editors found.");
-      return;
-    }
-    if (environmentId === null) {
-      setOpenLogsDirectoryError("No environment is selected.");
+    if (
+      environmentId === null ||
+      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
+    ) {
       return;
     }
 
     setIsOpeningLogsDirectory(true);
     setOpenLogsDirectoryError(null);
     void (async () => {
-      const result = await openInEditor({
-        environmentId,
-        input: {
-          cwd: logsDirectoryPath,
-          editor,
-        },
-      });
+      const result = await openInEditor(logsDirectoryPath);
       setIsOpeningLogsDirectory(false);
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
@@ -790,13 +796,18 @@ export function DiagnosticsSettingsPanel() {
         );
       }
     })();
-  }, [availableEditors, environmentId, observability?.logsDirectoryPath, openInEditor]);
+  }, [environmentId, observability?.logsDirectoryPath, openInEditor]);
 
   const isInitialLoading = isPending && data === null;
   const isProcessInitialLoading = isProcessPending && processData === null;
   const signalProcess = useCallback(
     (process: ServerProcessDiagnosticsEntry, signal: ServerProcessSignal) => {
-      if (environmentId === null || signalingPidRef.current !== null) return;
+      if (
+        environmentId === null ||
+        signalingPidRef.current !== null ||
+        !readEnvironmentScope(environmentId, AuthEnvironmentMaintainScope)
+      )
+        return;
       signalingPidRef.current = process.pid;
       setSignalingPid(process.pid);
       void signalServerProcess({
@@ -851,6 +862,20 @@ export function DiagnosticsSettingsPanel() {
   const traceDiagnosticsPartialFailure = data
     ? Option.getOrElse(data.partialFailure, () => false)
     : false;
+
+  if (!canReadDiagnostics) {
+    return (
+      <SettingsPageContainer>
+        <p className="text-sm text-muted-foreground">
+          {environmentId === null
+            ? "Connect an environment to see diagnostics."
+            : diagnosticsAccess.isPending
+              ? "Checking diagnostics access…"
+              : diagnosticsAccess.error}
+        </p>
+      </SettingsPageContainer>
+    );
+  }
 
   return (
     <SettingsPageContainer width="expanded" className="gap-10">
@@ -907,6 +932,7 @@ export function DiagnosticsSettingsPanel() {
         ) : null}
         <ProcessDiagnosticsTable
           processes={processData?.processes ?? []}
+          canMaintainEnvironment={canMaintainEnvironment}
           signalingPid={signalingPid}
           onSignal={signalProcess}
           emptyLabel={
@@ -992,7 +1018,11 @@ export function DiagnosticsSettingsPanel() {
                   <Button
                     size="icon-xs"
                     variant="ghost-muted"
-                    disabled={!observability?.logsDirectoryPath || isOpeningLogsDirectory}
+                    disabled={
+                      !canOpenHostEditor ||
+                      !observability?.logsDirectoryPath ||
+                      isOpeningLogsDirectory
+                    }
                     onClick={openLogsDirectory}
                     aria-label="Open logs folder"
                   >

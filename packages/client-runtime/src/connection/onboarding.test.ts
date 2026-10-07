@@ -1,6 +1,8 @@
 import {
+  AuthAdministrativeScopes,
   AuthStandardClientScopes,
   EnvironmentId,
+  type AuthEnvironmentScope,
   ORCHESTRATION_PROTOCOL_VERSION,
 } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
@@ -15,6 +17,7 @@ import { buildPairingUrl } from "@supacode/shared/remote";
 
 import * as RpcHttp from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
+import { fetchRemoteSessionState } from "../authorization/remote.ts";
 import {
   BearerConnectionCredential,
   BearerConnectionProfile,
@@ -44,7 +47,6 @@ const layerClientPresentation = Layer.succeed(
       deviceType: "desktop",
       os: "Test OS",
     },
-    scopes: AuthStandardClientScopes,
   }),
 );
 
@@ -84,7 +86,11 @@ function pairingServer(options?: {
   readonly failDescriptor?: boolean;
   readonly failSession?: boolean;
   readonly acceptedTokens?: ReadonlyArray<string>;
+  readonly grantScopes?: ReadonlyArray<AuthEnvironmentScope>;
 }): Server {
+  const grantScopes = options?.grantScopes ?? AuthStandardClientScopes;
+  let sessionScopes: ReadonlyArray<string> = [];
+  let exchanged = false;
   return (path, init) => {
     if (path === "/.well-known/supacode/environment") {
       if (options?.failDescriptor === true) {
@@ -106,12 +112,28 @@ function pairingServer(options?: {
       });
     }
     if (path === "/oauth/token") {
+      const body =
+        init.body instanceof Uint8Array ? new TextDecoder().decode(init.body) : String(init.body);
+      const requestedScope = new URLSearchParams(body).get("scope");
+      sessionScopes = requestedScope === null ? grantScopes : requestedScope.split(" ");
+      if (!sessionScopes.every((scope) => grantScopes.some((granted) => granted === scope))) {
+        return Response.json(
+          {
+            _tag: "EnvironmentRequestInvalidError",
+            code: "invalid_request",
+            reason: "scope_not_granted",
+            traceId: "pairing-scope-test",
+          },
+          { status: 400 },
+        );
+      }
+      exchanged = true;
       return Response.json({
         access_token: "bearer-token",
         issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
         token_type: "Bearer",
         expires_in: 3600,
-        scope: AuthStandardClientScopes.join(" "),
+        scope: sessionScopes.join(" "),
       });
     }
     if (path === "/api/auth/session") {
@@ -119,13 +141,17 @@ function pairingServer(options?: {
         return Response.json({ message: "unavailable" }, { status: 500 });
       }
       return Response.json({
-        authenticated: (options?.acceptedTokens ?? []).includes(bearerToken(init) ?? ""),
+        authenticated:
+          (options?.acceptedTokens ?? []).includes(bearerToken(init) ?? "") ||
+          (exchanged && bearerToken(init) === "bearer-token"),
         auth: {
           policy: "remote-reachable",
           bootstrapMethods: ["one-time-token"],
           sessionMethods: ["bearer-access-token"],
           sessionCookieName: "supacode_session",
         },
+        scopes: sessionScopes,
+        sessionMethod: "bearer-access-token",
       });
     }
     return Response.json({ message: "not found" }, { status: 404 });
@@ -440,8 +466,10 @@ describe("connection onboarding", () => {
           : String(tokenRequest?.init.body);
       const tokenParams = new URLSearchParams(tokenBody);
       expect(tokenParams.get("subject_token")).toBe("pairing-token");
-      expect(tokenParams.get("scope")).toBe(AuthStandardClientScopes.join(" "));
+      expect(tokenParams.has("scope")).toBe(false);
       expect(tokenParams.get("client_label")).toBe("Supacode Test");
+      expect(tokenParams.get("client_device_type")).toBe("desktop");
+      expect(tokenParams.get("client_os")).toBe("Test OS");
     }),
   );
 
@@ -469,6 +497,32 @@ describe("connection onboarding", () => {
       expect(calls.map((call) => call.url)).toEqual([
         "https://remote.example.test/.well-known/supacode/environment",
       ]);
+    }),
+  );
+  it.effect.each([
+    { label: "read-only", scopes: ["orchestration:read"] },
+    { label: "administrative", scopes: AuthAdministrativeScopes },
+  ] as const)("preserves the $label grant when pairing a remote environment", ({ scopes }) =>
+    Effect.gen(function* () {
+      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+      const httpLayer = layerRoutedHttp(calls, {
+        [REMOTE]: pairingServer({ grantScopes: scopes }),
+      });
+      const { registration } = yield* preparePairingRegistration(
+        {
+          host: "remote.example.test",
+          pairingCode: "pairing-token",
+        },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(Effect.provide(Layer.mergeAll(layerClientPresentation, httpLayer)));
+
+      const session = yield* fetchRemoteSessionState({
+        httpBaseUrl: registration.profile.httpBaseUrl,
+        bearerToken: registration.credential.token,
+      }).pipe(Effect.provide(httpLayer));
+
+      expect(session.authenticated).toBe(true);
+      expect(session.scopes).toEqual(scopes);
     }),
   );
 

@@ -1,4 +1,5 @@
 import {
+  AuthProvidersManageScope,
   type EnvironmentId,
   type ProviderConsumeResetCreditOutcome,
   ProviderConsumeResetCreditInput,
@@ -22,6 +23,7 @@ import { Fragment, type ReactNode, useState } from "react";
 import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { environmentPresentations } from "../../state/presentation";
+import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
@@ -199,11 +201,13 @@ export function useResetCredit(
   environmentId: EnvironmentId,
   input: ProviderConsumeResetCreditInput,
 ) {
+  const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const consume = useAtomCommand(serverEnvironment.consumeResetCredit, { reportFailure: false });
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const redeem = async () => {
+    if (!readEnvironmentScope(environmentId, AuthProvidersManageScope)) return;
     setBusy(true);
     setStatus(null);
     const result = await consume({ environmentId, input });
@@ -219,15 +223,17 @@ export function useResetCredit(
     );
   };
 
-  return { busy, status, redeem };
+  return { canManageProviders, busy, status, redeem };
 }
 
 export function ResetCreditButton({
   busy,
   onRedeem,
+  disabled = false,
 }: {
   readonly busy: boolean;
   readonly onRedeem: () => void;
+  readonly disabled?: boolean;
 }) {
   const confirm = useInlineConfirm<"redeem">();
   const armed = confirm.armed === "redeem";
@@ -235,7 +241,12 @@ export function ResetCreditButton({
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button size="xs" variant="outline" disabled={busy} {...confirm.bind("redeem", onRedeem)}>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={busy || disabled}
+            {...confirm.bind("redeem", onRedeem)}
+          >
             <InlineConfirmLabel
               armed={armed}
               idle={busy ? "Using…" : "Use reset"}
@@ -282,13 +293,17 @@ export function ResetCredits({
   readonly credits: ServerProviderResetCredits;
   readonly now: number;
 }) {
-  const { busy, status, redeem } = useResetCredit(environmentId, input);
+  const { canManageProviders, busy, status, redeem } = useResetCredit(environmentId, input);
   if (credits.availableCount === 0 && status === null) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <span className="tabular-nums">{resetCreditsSummary(credits, now)}</span>
       {credits.availableCount > 0 ? (
-        <ResetCreditButton busy={busy} onRedeem={() => void redeem()} />
+        <ResetCreditButton
+          busy={busy}
+          disabled={!canManageProviders}
+          onRedeem={() => void redeem()}
+        />
       ) : null}
       {status ? <span className="text-foreground">{status}</span> : null}
     </div>

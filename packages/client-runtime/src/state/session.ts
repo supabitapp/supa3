@@ -1,9 +1,10 @@
 import type { AuthSessionState, EnvironmentId, ServerConfig } from "@supacode/contracts";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import type { HttpClient } from "effect/http";
+import { HttpClient } from "effect/http";
 import { AsyncResult, Atom } from "effect/reactivity";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
@@ -19,7 +20,12 @@ import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "./environmentHttpAuth.ts";
-import { followStreamInEnvironment } from "./runtime.ts";
+import { followStreamInEnvironment } from "./environmentStreams.ts";
+
+/** @public Required to name the error in consumers' inferred session results. */
+export class SessionHttpClientUnavailable extends Data.TaggedError(
+  "SessionHttpClientUnavailable",
+) {}
 
 function initialConfigOption<E>(
   initialConfig: Effect.Effect<ServerConfig, E>,
@@ -55,8 +61,8 @@ export const fetchEnvironmentSessionState = Effect.fn(
   });
 });
 
-export function createEnvironmentSessionAtoms<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | HttpClient.HttpClient | R, E>,
+function makeEnvironmentSessionAtoms<R, E>(
+  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
 ) {
   const initialConfigAtom = Atom.family((environmentId: EnvironmentId) =>
     runtime.atom(
@@ -126,7 +132,13 @@ export function createEnvironmentSessionAtoms<R, E>(
         if (prepared === null) {
           return Effect.never;
         }
-        return fetchEnvironmentSessionState({ prepared });
+        return Effect.gen(function* () {
+          const client = yield* Effect.serviceOption(HttpClient.HttpClient);
+          if (Option.isNone(client)) return yield* new SessionHttpClientUnavailable();
+          return yield* fetchEnvironmentSessionState({ prepared }).pipe(
+            Effect.provideService(HttpClient.HttpClient, client.value),
+          );
+        });
       })
       .pipe(
         Atom.swr({ staleTime: 30_000, revalidateOnMount: true }),
@@ -147,7 +159,13 @@ export function createEnvironmentSessionAtoms<R, E>(
     const resultAtom = runtime
       .atom((get) => {
         if (route.target._tag !== "SshConnectionTarget") {
-          return measureConnectionRouteLatency({ route });
+          return Effect.gen(function* () {
+            const client = yield* Effect.serviceOption(HttpClient.HttpClient);
+            if (Option.isNone(client)) return yield* new SessionHttpClientUnavailable();
+            return yield* measureConnectionRouteLatency({ route }).pipe(
+              Effect.provideService(HttpClient.HttpClient, client.value),
+            );
+          });
         }
         const environmentId = route.target.environmentId;
         const config = get(initialConfigValueAtom(environmentId));
@@ -174,10 +192,12 @@ export function createEnvironmentSessionAtoms<R, E>(
                 ) {
                   return { status: "unmeasured" } as const;
                 }
+                const client = yield* Effect.serviceOption(HttpClient.HttpClient);
+                if (Option.isNone(client)) return yield* new SessionHttpClientUnavailable();
                 return yield* measureConnectionRouteLatency({
                   route,
                   sshProbe: session.value.probe,
-                });
+                }).pipe(Effect.provideService(HttpClient.HttpClient, client.value));
               }),
             ),
           ),
@@ -212,4 +232,17 @@ export function createEnvironmentSessionAtoms<R, E>(
     sessionStateValueAtom,
     routeLatencyAtoms,
   };
+}
+
+const sessionAtomsByRuntime = new WeakMap<object, ReturnType<typeof makeEnvironmentSessionAtoms>>();
+
+/** Commands and UI share one session fetch and the same reconnect invalidation. */
+export function createEnvironmentSessionAtoms<R, E>(
+  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
+): ReturnType<typeof makeEnvironmentSessionAtoms<R, E>> {
+  const existing = sessionAtomsByRuntime.get(runtime);
+  if (existing) return existing as ReturnType<typeof makeEnvironmentSessionAtoms<R, E>>;
+  const atoms = makeEnvironmentSessionAtoms(runtime);
+  sessionAtomsByRuntime.set(runtime, atoms);
+  return atoms;
 }

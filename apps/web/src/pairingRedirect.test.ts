@@ -4,11 +4,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { ConnectionOnboarding } from "@supacode/client-runtime/connection";
 import { ClientCapabilities } from "@supacode/client-runtime/platform";
 import { layerRemoteHttpClient } from "@supacode/client-runtime/rpc";
-import {
-  AuthStandardClientScopes,
-  EnvironmentId,
-  ORCHESTRATION_PROTOCOL_VERSION,
-} from "@supacode/contracts";
+import { EnvironmentId, ORCHESTRATION_PROTOCOL_VERSION } from "@supacode/contracts";
 import { buildPairingUrl } from "@supacode/shared/remote";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -65,7 +61,6 @@ describe("pairing redirects", () => {
           Layer.mergeAll(
             Layer.succeed(ClientCapabilities.ClientPresentation, {
               metadata: { label: "Supacode Test", deviceType: "desktop", os: "Test OS" },
-              scopes: AuthStandardClientScopes,
             }),
             layerRemoteHttpClient(fetch),
           ),

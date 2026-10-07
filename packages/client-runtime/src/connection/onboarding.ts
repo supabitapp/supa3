@@ -153,7 +153,6 @@ export const preparePairingRegistration = Effect.fn(
     const access = yield* bootstrapRemoteBearerSession({
       httpBaseUrl: reached.httpBaseUrl,
       credential: target.credential,
-      scopes: presentation.scopes,
       clientMetadata: presentation.metadata,
     }).pipe(Effect.mapError(mapRemoteEnvironmentError));
     const registrationHttpBaseUrl =

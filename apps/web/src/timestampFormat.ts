@@ -290,10 +290,13 @@ export function formatElapsedDurationLabel(isoDate: string, nowMs: number = Date
 /**
  * Relative time until an ISO instant (e.g. expiry). Mirrors {@link formatRelativeTime} but for future times.
  */
-export function formatRelativeTimeUntil(isoDate: string): RelativeTimeParts | null {
+export function formatRelativeTimeUntil(
+  isoDate: string,
+  nowMs: number = Date.now(),
+): RelativeTimeParts | null {
   const date = parseTimestampDate(isoDate);
   if (!date) return null;
-  const diffMs = date.getTime() - Date.now();
+  const diffMs = date.getTime() - nowMs;
   if (diffMs <= 0) return { value: "Expired", suffix: null };
   const seconds = Math.floor(diffMs / 1000);
   if (seconds < 5) return { value: "Soon", suffix: null };
@@ -306,8 +309,8 @@ export function formatRelativeTimeUntil(isoDate: string): RelativeTimeParts | nu
   return { value: `${days}d`, suffix: "left" };
 }
 
-export function formatRelativeTimeUntilLabel(isoDate: string): string {
-  const relative = formatRelativeTimeUntil(isoDate);
+export function formatRelativeTimeUntilLabel(isoDate: string, nowMs: number = Date.now()): string {
+  const relative = formatRelativeTimeUntil(isoDate, nowMs);
   if (!relative) return "";
   return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
 }

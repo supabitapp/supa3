@@ -9,6 +9,7 @@ import packageJson from "../package.json" with { type: "json" };
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { appCommand } from "./cli/app.ts";
+import { browserCommand } from "./cli/browser.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
@@ -44,6 +45,7 @@ export const makeCli = () =>
       appCommand,
       pairCommand,
       authCommand,
+      browserCommand,
       projectCommand,
       serviceCommand,
       updateCommand,

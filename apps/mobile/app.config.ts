@@ -248,6 +248,9 @@ const config: ExpoConfig = {
       NSLocalNetworkUsageDescription:
         "Allow Supacode to connect to Supacode servers on your local network or tailnet.",
       NSPhotoLibraryAddUsageDescription: "Allow Supacode to save images to your photo library.",
+      // "Audio, AirPlay, and Picture in Picture": the browser screen's system
+      // picture in picture needs it to start and to stay up outside the app.
+      UIBackgroundModes: ["audio"],
       ITSAppUsesNonExemptEncryption: false,
       ...(process.env.SUPACODE_SHOWCASE_CAPTURE_BUILD === "1"
         ? {
