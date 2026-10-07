@@ -263,7 +263,7 @@ export const ThreadListV2ActiveEmpty = memo(function ThreadListV2ActiveEmpty(pro
 }) {
   const sidebarPane = props.pane === "sidebar";
   return (
-    <View accessible className={cn("items-center", sidebarPane ? "px-3 py-6" : "px-8 pb-6 pt-10")}>
+    <View accessible className={cn("items-center", sidebarPane ? "px-3 py-6" : "px-8 py-8")}>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <SymbolView
           name="checkmark.circle"

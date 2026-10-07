@@ -641,7 +641,11 @@ export function HomeScreen(props: HomeScreenProps) {
         return <ThreadListV2SectionDivider label="Active" />;
       }
       if (item.type === "v2-active-empty") {
-        return <ThreadListV2ActiveEmpty />;
+        return (
+          <Animated.View style={listMotion.alignmentGapCenterStyle}>
+            <ThreadListV2ActiveEmpty />
+          </Animated.View>
+        );
       }
       if (item.type === "v2-pinned-shelf") {
         return (
@@ -757,6 +761,7 @@ export function HomeScreen(props: HomeScreenProps) {
       autoSettleOptOutEnvironmentIds,
       pinningEnvironmentIds,
       autoSettleOptOutEnvironmentIds,
+      listMotion.alignmentGapCenterStyle,
       machineByEnvironmentId,
       pinReorderEnvironmentIds,
       projectByKey,
