@@ -1044,6 +1044,22 @@ function makePendingTask(id: string): PendingNewTask {
   };
 }
 
+function makeDraftTask(id: string): PendingNewTask {
+  return {
+    kind: "draft",
+    key: `draft-task:new-task:${id}`,
+    environmentId,
+    projectId: ProjectId.make("project-1"),
+    projectTitle: undefined,
+    projectCwd: undefined,
+    branch: null,
+    title: id,
+    createdAt: NOW,
+    draftKey: `new-task:${id}`,
+    draft: { text: id, attachments: [] },
+  };
+}
+
 describe("buildThreadListV2ListItems", () => {
   const layout = buildThreadListV2Items({
     threads: [
@@ -1100,22 +1116,11 @@ describe("buildThreadListV2ListItems", () => {
     expect(items.map((item) => item.type)).toEqual(["v2-thread", "v2-pending"]);
   });
 
-  it("keeps drafts in a separate section from tasks that send on reconnect", () => {
-    const makeDraftTask = (id: string): PendingNewTask => ({
-      kind: "draft",
-      key: `draft-task:new-task:${id}`,
-      environmentId,
-      projectId: ProjectId.make("project-1"),
-      projectTitle: undefined,
-      projectCwd: undefined,
-      branch: null,
-      title: id,
-      createdAt: NOW,
-      draftKey: `new-task:${id}`,
-      draft: { text: id, attachments: [] },
-    });
+  it("puts the Drafts section below threads while queued tasks stay above shelves", () => {
     const items = buildThreadListV2ListItems({
-      items: [],
+      items: layout.items,
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
       pendingTasks: [
         makeDraftTask("draft-1"),
         makeDraftTask("draft-2"),
@@ -1126,15 +1131,30 @@ describe("buildThreadListV2ListItems", () => {
 
     expect(
       items.map((item) =>
-        item.type === "v2-pending"
-          ? [item.pendingTask.kind, item.showPendingDivider, item.showTrailingDivider]
-          : item.type,
+        item.type === "v2-thread"
+          ? item.item.thread.id
+          : item.type === "v2-pending"
+            ? item.pendingTask.title
+            : item.type,
       ),
     ).toEqual([
-      ["draft", true, true],
-      ["draft", false, false],
+      "active",
+      "queued-1",
+      "queued-2",
+      "v2-settled-shelf",
+      "settled",
+      "draft-1",
+      "draft-2",
+    ]);
+    expect(
+      items
+        .filter((item) => item.type === "v2-pending")
+        .map((item) => [item.pendingTask.kind, item.showPendingDivider, item.showTrailingDivider]),
+    ).toEqual([
       ["pending", true, true],
       ["pending", false, false],
+      ["draft", true, true],
+      ["draft", false, false],
     ]);
   });
 
@@ -1257,7 +1277,7 @@ describe("buildThreadListV2ListItems empty Active block", () => {
     expect(listTypes([snoozed])).toEqual(["v2-active-empty", "v2-snoozed-shelf"]);
   });
 
-  it("stays out while active rows, pins, or queued tasks sit above the shelves", () => {
+  it("stays out while active rows, pins, queued tasks, or drafts need attention", () => {
     const active = makeThread({ id: ThreadId.make("active"), title: "active" });
 
     expect(listTypes([active, settled])).toEqual(["v2-thread", "v2-settled-shelf"]);
@@ -1273,6 +1293,10 @@ describe("buildThreadListV2ListItems empty Active block", () => {
     expect(listTypes([settled], { pendingTasks: [makePendingTask("queued")] })).toEqual([
       "v2-pending",
       "v2-settled-shelf",
+    ]);
+    expect(listTypes([settled], { pendingTasks: [makeDraftTask("draft")] })).toEqual([
+      "v2-settled-shelf",
+      "v2-pending",
     ]);
   });
 
@@ -2383,7 +2407,7 @@ describe("Working section", () => {
     });
     const items = buildThreadListV2ListItems({
       items: layout.items,
-      pendingTasks: [makePendingTask("queued")],
+      pendingTasks: [makeDraftTask("draft"), makePendingTask("queued")],
       workingCount: layout.workingCount,
       workingShelfExpanded: true,
       workingShelfHeaderIndex: layout.workingShelfHeaderIndex,
@@ -2410,6 +2434,7 @@ describe("Working section", () => {
       "snoozed",
       "v2-settled-shelf",
       "settled",
+      "draft",
     ]);
   });
 });

@@ -939,8 +939,8 @@ function readSidebarDraftRow(routeDraftId: string | null) {
     : null;
 }
 
-// Draft sessions with user content live in their own section above pinned
-// threads. Own store subscriptions keep per-keystroke composer updates
+// Draft sessions with user content live below the thread sections.
+// Own store subscriptions keep per-keystroke composer updates
 // inside this block. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   projectByKey: ReadonlyMap<string, EnvironmentProject>;
@@ -1053,11 +1053,6 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
           />
         );
       })}
-      <li
-        aria-hidden
-        data-testid="sidebar-draft-divider"
-        className="mx-2.5 my-1.5 h-px list-none bg-sidebar-border/60"
-      />
     </>
   );
 });
@@ -4927,17 +4922,7 @@ export default function Sidebar() {
                       );
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const items: ReactNode[] = [
-                      <SidebarDraftBlock
-                        key="draft-sessions"
-                        projectByKey={projectByKey}
-                        projectDisplayNameByKey={projectDisplayNameByKey}
-                        scopedProjectKeys={scopedProjectKeys}
-                        routeDraftId={routeDraftIdForRows}
-                        onNavigateToDraft={navigateToDraft}
-                        onDraftContextMenu={handleDraftContextMenu}
-                      />,
-                    ];
+                    const items: ReactNode[] = [];
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
@@ -5093,6 +5078,14 @@ export default function Sidebar() {
                       </button>
                     </li>
                   ) : null}
+                  <SidebarDraftBlock
+                    projectByKey={projectByKey}
+                    projectDisplayNameByKey={projectDisplayNameByKey}
+                    scopedProjectKeys={scopedProjectKeys}
+                    routeDraftId={routeDraftIdForRows}
+                    onNavigateToDraft={navigateToDraft}
+                    onDraftContextMenu={handleDraftContextMenu}
+                  />
                 </ul>
               </SortableContext>
             </DndContext>
