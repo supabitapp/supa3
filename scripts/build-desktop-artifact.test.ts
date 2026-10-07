@@ -538,8 +538,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     assert.deepStrictEqual(DESKTOP_FILE_EXCLUSIONS, [
       "!**/node_modules/@cursor/sdk/dist/{esm,bundled}/**/*",
-      "!**/node_modules/playwright-core/!(package.json|LICENSE|NOTICE|ThirdPartyNotices.txt|lib){,/**/*}",
-      "!**/node_modules/playwright-core/lib/!(coreBundle.js){,/**/*}",
       "!**/node_modules/@cursor/sdk-*/**/*",
       "!apps/desktop/prod-resources/cursor-sdk",
       "!apps/desktop/prod-resources/cursor-sdk/**/*",
