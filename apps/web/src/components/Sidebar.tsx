@@ -284,6 +284,8 @@ const PINNED_SHELF_EXPANDED_KEY = "supacode:sidebar:pinned-expanded";
 const SETTLED_SHELF_EXPANDED_KEY = "supacode:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "supacode:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "supacode:sidebar:working-expanded";
+const PARKED_ACTION_BUTTON_CLASS_NAME =
+  "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 group-focus-within/sidebar-row:pointer-events-auto group-focus-within/sidebar-row:opacity-100";
 
 // When this client saw each thread leave the Working shelf.
 // Module scope keeps the inbox order across routes that unmount the sidebar.
@@ -1227,7 +1229,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const replaceSettledTimeOnHover = variantAction === "unsettle" && settlementSupported && !isWoke;
+  const parkedActionSupported =
+    variantAction === "unsnooze" ? snoozeSupported : settlementSupported;
+  const replaceTimeOnHover = parkedActionSupported && !isWoke;
+  const reserveActionGutter = parkedActionSupported && isWoke;
   // Background work always recedes when it is not selected: an unread parent
   // completion must not pull a still-working thread back into the foreground.
   // Ready and action-required rows keep their unread and wake prominence.
@@ -1797,7 +1802,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 Regenerating title
               </span>
             ) : null}
-            {/* Keep PR badges and wake notifications visible when Unsettle replaces the time. */}
+            {/* Keep PR badges and wake notifications visible when the parked action replaces the time. */}
             <span className={cn("contents", jumpHintIndicatorsClassName)}>{prBadge}</span>
             {sortable?.isDragging ? (
               dragDestination
@@ -1805,14 +1810,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <span
                 className={cn(
                   "relative ml-auto flex h-6 min-w-8 shrink-0 items-center justify-end",
-                  !replaceSettledTimeOnHover && "pr-6",
+                  reserveActionGutter && "pr-6",
                   props.sweepAction !== null && "hidden",
                 )}
               >
                 <span
                   className={cn(
                     "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
-                    replaceSettledTimeOnHover &&
+                    replaceTimeOnHover &&
                       "group-any-hover/sidebar-row:opacity-0 group-focus-within/sidebar-row:opacity-0",
                     jumpHintIndicatorsClassName,
                   )}
@@ -1854,21 +1859,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     </span>
                   )}
                 </span>
-                {variantAction === "unsnooze" ? (
-                  !snoozeSupported ? null : (
-                    <button
-                      type="button"
-                      aria-label="Wake thread now"
-                      onClick={handleUnsnoozeClick}
-                      onPointerDown={handleActionPointerDown}
-                      className={cn(
-                        "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
-                      )}
+                {!parkedActionSupported ? null : variantAction === "unsnooze" ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Wake thread now"
+                          onClick={handleUnsnoozeClick}
+                          onPointerDown={handleActionPointerDown}
+                          className={PARKED_ACTION_BUTTON_CLASS_NAME}
+                        />
+                      }
                     >
                       <AlarmClockOffIcon className="mb-px size-3" />
-                    </button>
-                  )
-                ) : !settlementSupported ? null : (
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">Wake thread now</TooltipPopup>
+                  </Tooltip>
+                ) : (
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -1877,9 +1885,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           aria-label="Un-settle thread"
                           onClick={handleUnsettleClick}
                           onPointerDown={handleActionPointerDown}
-                          className={cn(
-                            "pointer-events-none absolute inset-y-0 right-0 -mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100 group-focus-within/sidebar-row:pointer-events-auto group-focus-within/sidebar-row:opacity-100",
-                          )}
+                          className={PARKED_ACTION_BUTTON_CLASS_NAME}
                         />
                       }
                     >
