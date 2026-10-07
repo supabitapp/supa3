@@ -1313,13 +1313,8 @@ export function NewTaskDraftScreen(props: {
 
     const editingPendingTask = flow.editingPendingTask;
 
-    // Every submission goes through the outbox: the drain uploads the
-    // attachments and delivers the creation, retrying across reconnects.
-    // When it can send now the thread screen opens immediately with the
-    // queued prompt and reports setup progress there, like the web draft
-    // does. Offline, or with uploads still in flight, the task stays a
-    // pending task and the sheet closes. Editing an existing pending task
-    // re-queues it under its original identifiers.
+    // Persist locally, then open the reserved thread on every connection state.
+    // The outbox owns uploads and server creation after navigation.
     const metadata = editingPendingTask
       ? {
           threadId: editingPendingTask.threadId,
@@ -1365,8 +1360,17 @@ export function NewTaskDraftScreen(props: {
         deferAttachmentCleanup: true,
       });
     }
+    const previousRoute = (navigation.getParent() ?? navigation).getState()?.routes.at(-2);
+    const returnsToPendingThread =
+      editingPendingTask &&
+      previousRoute?.name === "Thread" &&
+      previousRoute.params &&
+      "environmentId" in previousRoute.params &&
+      "threadId" in previousRoute.params &&
+      previousRoute.params.environmentId === message.environmentId &&
+      previousRoute.params.threadId === message.threadId;
     setSubmitNavigationAction(
-      queuesInsteadOfStarting
+      returnsToPendingThread
         ? CommonActions.goBack()
         : StackActions.replace("Thread", {
             environmentId: String(message.environmentId),

@@ -67,6 +67,19 @@ describe("pending timeline messages", () => {
     expect(anchored.draftAttachments).toBeUndefined();
   });
 
+  it("keeps a queued creation editable until delivery, without duplicating the prompt", () => {
+    const queued = pending("creation");
+    const optimistic = appendPendingThreadMessages([], [], [queued])[0]!;
+    const anchored = { ...optimistic, pendingMessage: undefined };
+    const feed = retainPendingCreationAttachments([anchored], queued, true);
+    const presented = appendPendingThreadMessages(feed, feed, [queued]);
+    expect(presented).toHaveLength(1);
+    expect(presented[0]?.pendingMessage).toBe(queued);
+    expect(
+      retainPendingCreationAttachments([anchored], queued, false)[0]?.pendingMessage,
+    ).toBeUndefined();
+  });
+
   it("keeps local preview sources on queued messages", () => {
     const attachment = {
       id: "local-pdf",

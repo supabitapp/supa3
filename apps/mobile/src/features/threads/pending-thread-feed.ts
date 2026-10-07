@@ -11,11 +11,16 @@ export type PendingThreadFeedEntry = ThreadFeedEntry & {
 export function retainPendingCreationAttachments(
   feed: ReadonlyArray<ThreadFeedEntry>,
   pendingMessage: QueuedThreadMessage | null,
+  queued = false,
 ): ReadonlyArray<PendingThreadFeedEntry> {
   if (!pendingMessage) return feed;
   return feed.map((entry) =>
     entry.type === "message" && entry.message.id === pendingMessage.messageId
-      ? { ...entry, draftAttachments: pendingMessage.attachments }
+      ? {
+          ...entry,
+          draftAttachments: pendingMessage.attachments,
+          ...(queued ? { pendingMessage } : {}),
+        }
       : entry,
   );
 }

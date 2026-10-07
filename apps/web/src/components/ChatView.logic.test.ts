@@ -147,6 +147,25 @@ describe("resolveDraftPromotionNavigationTarget", () => {
     completedAt: null,
   };
 
+  it("opens a persisted pending creation before the offline host creates the thread", () => {
+    expect(
+      resolveDraftPromotionNavigationTarget({
+        serverThreadRef: null,
+        serverThread: null,
+        pendingThreadRef: serverThreadRef,
+        backgroundSubmissionPending: false,
+      }),
+    ).toBe(serverThreadRef);
+    expect(
+      resolveDraftPromotionNavigationTarget({
+        serverThreadRef: null,
+        serverThread: null,
+        pendingThreadRef: serverThreadRef,
+        backgroundSubmissionPending: true,
+      }),
+    ).toBeNull();
+  });
+
   it("stays on the draft until the server owns the send", () => {
     expect(
       resolveDraftPromotionNavigationTarget({

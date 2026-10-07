@@ -21,85 +21,106 @@ export function usePendingTaskListActions(): {
 
   const openPendingTask = useCallback(
     (pendingTask: PendingNewTask) => {
+      if (pendingTask.kind === "pending") {
+        navigation.navigate("Thread", {
+          environmentId: String(pendingTask.environmentId),
+          threadId: String(pendingTask.message.threadId),
+        });
+        return;
+      }
       navigation.navigate("NewTaskSheet", {
         screen: "NewTaskDraft",
         params: {
           environmentId: String(pendingTask.environmentId),
           projectId: String(pendingTask.projectId),
-          ...(pendingTask.kind === "pending"
-            ? { pendingTaskId: String(pendingTask.message.messageId) }
-            : { draftId: pendingTask.draftKey }),
+          draftId: pendingTask.draftKey,
         },
       });
     },
     [navigation],
   );
 
-  const confirmDeletePendingTask = useCallback((pendingTask: PendingNewTask) => {
-    if (pendingTask.kind === "draft") {
-      Alert.alert("Discard draft?", `“${pendingTask.title}” will be removed.`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Discard",
-          style: "destructive",
-          onPress: () => {
-            void withThreadDismissal(
-              pendingTask.key,
-              async () => {
-                clearComposerDraftContent(pendingTask.draftKey, {
-                  clearModelSelection: true,
-                  clearWorkspaceSelection: true,
-                });
-                return true;
-              },
-              (result) => result,
-            );
-          },
-        },
-      ]);
-      return;
-    }
-    Alert.alert(
-      "Delete pending task?",
-      `“${pendingTask.title}” has not been sent yet and will be removed from the outbox.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            const messageId = pendingTask.message.messageId;
-            if (!holdDeletingQueuedMessage(messageId)) {
-              Alert.alert(
-                "Pending task is open",
-                "Close the pending task editor before deleting it.",
+  const confirmDeletePendingTask = useCallback(
+    (pendingTask: PendingNewTask) => {
+      if (pendingTask.kind === "draft") {
+        Alert.alert("Discard draft?", `“${pendingTask.title}” will be removed.`, [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              void withThreadDismissal(
+                pendingTask.key,
+                async () => {
+                  clearComposerDraftContent(pendingTask.draftKey, {
+                    clearModelSelection: true,
+                    clearWorkspaceSelection: true,
+                  });
+                  return true;
+                },
+                (result) => result,
               );
-              return;
-            }
-            void withThreadDismissal(
-              pendingTask.key,
-              async () => {
-                const removed = await removeThreadOutboxMessage(
-                  pendingTask.message,
-                  undefined,
-                  () => appAtomRegistry.get(dispatchingQueuedMessageIdAtom) !== messageId,
+            },
+          },
+        ]);
+        return;
+      }
+      Alert.alert(
+        "Delete pending task?",
+        `“${pendingTask.title}” has not been sent yet and will be removed from the outbox.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => {
+              const messageId = pendingTask.message.messageId;
+              if (!holdDeletingQueuedMessage(messageId)) {
+                Alert.alert(
+                  "Pending task is open",
+                  "Close the pending task editor before deleting it.",
                 );
-                releaseDeletingQueuedMessage(messageId, removed);
-                return removed;
-              },
-              (result) => result,
-            ).catch((error) => {
-              releaseDeletingQueuedMessage(messageId, false);
-              Alert.alert(
-                "Could not delete pending task",
-                error instanceof Error ? error.message : "The pending task could not be removed.",
-              );
-            });
+                return;
+              }
+              void withThreadDismissal(
+                pendingTask.key,
+                async () => {
+                  const removed = await removeThreadOutboxMessage(
+                    pendingTask.message,
+                    undefined,
+                    () => appAtomRegistry.get(dispatchingQueuedMessageIdAtom) !== messageId,
+                  );
+                  releaseDeletingQueuedMessage(messageId, removed);
+                  const route = navigation.getState()?.routes.at(-1);
+                  if (
+                    removed &&
+                    route?.name === "Thread" &&
+                    route.params &&
+                    "environmentId" in route.params &&
+                    "threadId" in route.params &&
+                    route.params.environmentId === pendingTask.environmentId &&
+                    route.params.threadId === pendingTask.message.threadId
+                  ) {
+                    if (navigation.canGoBack()) navigation.goBack();
+                    else navigation.navigate("Home");
+                  }
+                  return removed;
+                },
+                (result) => result,
+              ).catch((error) => {
+                releaseDeletingQueuedMessage(messageId, false);
+                Alert.alert(
+                  "Could not delete pending task",
+                  error instanceof Error ? error.message : "The pending task could not be removed.",
+                );
+              });
+            },
           },
-        },
-      ],
-    );
-  }, []);
+        ],
+      );
+    },
+    [navigation],
+  );
 
   return { openPendingTask, confirmDeletePendingTask };
 }

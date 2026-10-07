@@ -124,6 +124,31 @@ describe("threadRoutes", () => {
     ).toBe("ready");
   });
 
+  it("opens a durable pending thread before the offline environment bootstraps", () => {
+    expect(
+      resolveThreadRouteRenderState({
+        bootstrapComplete: false,
+        serverThreadExists: false,
+        serverThreadDeleted: false,
+        draftThreadExists: false,
+        pendingThreadExists: true,
+        outboxLoaded: true,
+      }),
+    ).toBe("ready");
+  });
+
+  it("waits for durable pending threads to load before treating a route as missing", () => {
+    expect(
+      resolveThreadRouteRenderState({
+        bootstrapComplete: true,
+        serverThreadExists: false,
+        serverThreadDeleted: false,
+        draftThreadExists: false,
+        outboxLoaded: false,
+      }),
+    ).toBe("loading");
+  });
+
   it("distinguishes bootstrap loading from a missing thread", () => {
     expect(
       resolveThreadRouteRenderState({

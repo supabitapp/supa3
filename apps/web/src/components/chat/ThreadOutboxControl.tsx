@@ -1,5 +1,5 @@
 import { scopeThreadRef, scopedThreadKey } from "@supacode/client-runtime/environment";
-import type { EnvironmentId, ThreadId, ProjectId } from "@supacode/contracts";
+import type { EnvironmentId, ThreadId } from "@supacode/contracts";
 import { Clock3Icon, PencilIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -24,21 +24,13 @@ import { useThreadOutboxVisibility } from "./useThreadOutboxVisibility";
 export function ThreadOutboxControl(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
-  readonly projectId?: ProjectId | undefined;
   readonly editingMessageId: string | null;
   readonly onEditMessage: (entry: PendingThreadTurn) => Promise<void>;
   readonly onCancelEdit: () => void;
 }) {
   const entries = useThreadOutbox();
   const scope = scopedThreadKey(scopeThreadRef(props.environmentId, props.threadId));
-  const pending = entries.filter(
-    (entry) =>
-      (entry.scope === scope ||
-        (entry.payload.environmentId === props.environmentId &&
-          props.projectId !== undefined &&
-          entry.payload.input.bootstrap?.createThread?.projectId === props.projectId)) &&
-      entry.status !== "delivered",
-  );
+  const pending = entries.filter((entry) => entry.scope === scope && entry.status !== "delivered");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -94,20 +86,24 @@ export function ThreadOutboxControl(props: {
                     <Clock3Icon />
                   </ComposerBanner.Icon>
                   <ComposerBanner.Content>
-                    <span className="block truncate">
-                      {replaceComposerContextReferences(
-                        entry.payload.input.message.text,
-                        (reference) => reference.label,
-                      ) || "Attachment"}
-                    </span>
-                    {status ? <span className="block text-muted-foreground">{status}</span> : null}
-                    {entry.payload.localAttachments.length > 0 ? (
-                      <span className="block truncate text-muted-foreground">
-                        {entry.payload.localAttachments
-                          .map((attachment) => attachment.name)
-                          .join(", ")}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">
+                        {replaceComposerContextReferences(
+                          entry.payload.input.message.text,
+                          (reference) => reference.label,
+                        ) || "Attachment"}
                       </span>
-                    ) : null}
+                      {status ? (
+                        <span className="block text-muted-foreground">{status}</span>
+                      ) : null}
+                      {entry.payload.localAttachments.length > 0 ? (
+                        <span className="block truncate text-muted-foreground">
+                          {entry.payload.localAttachments
+                            .map((attachment) => attachment.name)
+                            .join(", ")}
+                        </span>
+                      ) : null}
+                    </span>
                   </ComposerBanner.Content>
                   <ComposerBanner.Actions>
                     {entry.status === "failed" && !isEditing ? (
@@ -117,9 +113,13 @@ export function ThreadOutboxControl(props: {
                         disabled={busy}
                         onClick={() => {
                           void act(async () => {
-                            const draftId = await replaceThreadOutboxTurn(entry, entry.payload);
-                            if (draftId)
-                              void navigate({ to: "/draft/$draftId", params: { draftId } });
+                            const threadRef = await replaceThreadOutboxTurn(entry, entry.payload);
+                            if (threadRef)
+                              void navigate({
+                                to: "/$environmentId/$threadId",
+                                params: threadRef,
+                                replace: true,
+                              });
                           });
                         }}
                       >
@@ -171,6 +171,8 @@ export function ThreadOutboxControl(props: {
                                   entry.status === "failed" ? newThreadId() : draft.threadId,
                                 );
                               void navigate({ to: "/draft/$draftId", params: { draftId } });
+                            } else if (entry.payload.input.bootstrap?.createThread) {
+                              void navigate({ to: "/" });
                             }
                           });
                         }}

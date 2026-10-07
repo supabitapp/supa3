@@ -17,6 +17,8 @@ import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { useEnvironmentThreadRefs, useThreadRefs, useThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
+import { usePendingThreadCreation, useThreadOutboxLoaded } from "../state/threadOutbox";
+import { scopeThreadRef } from "@supacode/client-runtime/environment";
 import {
   buildThreadRouteParams,
   resolveThreadRouteRenderState,
@@ -55,6 +57,11 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   const serverThreadRef: ScopedThreadRef | null =
     target.kind === "server" ? target.threadRef : (draftSession?.promotedTo ?? inferredThreadRef);
   const serverThread = useThreadShell(serverThreadRef);
+  const pendingCreation = usePendingThreadCreation(
+    serverThreadRef ??
+      (draftSession ? scopeThreadRef(draftSession.environmentId, draftSession.threadId) : null),
+  );
+  const outboxLoaded = useThreadOutboxLoaded();
   const backgroundSubmissionPending = useBackgroundDraftSubmissionPending(
     target.kind === "draft" ? serverThreadRef : null,
   );
@@ -64,6 +71,13 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
           serverThreadRef,
           serverThread,
           backgroundSubmissionPending,
+          pendingThreadRef:
+            pendingCreation && !pendingCreation.payload.background
+              ? scopeThreadRef(
+                  pendingCreation.payload.environmentId,
+                  pendingCreation.payload.input.threadId,
+                )
+              : null,
         })
       : null;
 
@@ -103,6 +117,8 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     serverThreadExists: serverThreadShell !== null,
     serverThreadDeleted: serverThreadShell?.deletedAt != null,
     draftThreadExists: draftThread !== null,
+    pendingThreadExists: pendingCreation !== null,
+    outboxLoaded,
   });
   const serverThreadStarted = threadHasStarted(serverThreadShell);
   const environmentHasAnyThreads = environmentThreadRefs.length > 0 || environmentHasDraftThreads;

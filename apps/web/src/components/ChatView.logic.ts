@@ -419,10 +419,12 @@ export function resolveDraftPromotionNavigationTarget(input: {
   serverThreadRef: ScopedThreadRef | null;
   serverThread: Pick<Thread, "latestRun" | "latestUserMessageAt"> | null | undefined;
   backgroundSubmissionPending: boolean;
+  pendingThreadRef?: ScopedThreadRef | null;
 }): ScopedThreadRef | null {
   if (input.backgroundSubmissionPending) {
     return null;
   }
+  if (input.pendingThreadRef) return input.pendingThreadRef;
   const latestRun = input.serverThread?.latestRun ?? null;
   const runStarted = latestRun?.startedAt != null;
   const startupStopped =

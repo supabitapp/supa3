@@ -1,3 +1,5 @@
+import { SidebarPendingThreadRow } from "./SidebarPendingThreadRow";
+import { useThreadOutbox } from "../state/threadOutbox";
 import { type EnvironmentId } from "@supacode/contracts";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -2511,6 +2513,20 @@ export default function Sidebar() {
     }
     return count;
   });
+  const outboxEntries = useThreadOutbox();
+  const pendingThreads = useMemo(
+    () =>
+      outboxEntries.filter((entry) => {
+        const creation = entry.payload.input.bootstrap?.createThread;
+        return (
+          creation &&
+          !serverThreadKeys.has(entry.scope) &&
+          (scopedProjectKeys === null ||
+            scopedProjectKeys.has(`${entry.payload.environmentId}:${creation.projectId}`))
+        );
+      }),
+    [outboxEntries, serverThreadKeys, scopedProjectKeys],
+  );
   // Scope flips drop the selection: rows selected under the old scope may be
   // hidden now, and bulk actions must never count or touch invisible rows.
   const selectionProjectScopeKeyRef = useRef<string | null | undefined>(undefined);
@@ -3546,7 +3562,8 @@ export default function Sidebar() {
         .join("\0"),
     [sidebarListItems],
   );
-  const sidebarListHasRows = sidebarListItems.length + visibleDraftSessionCount > 0;
+  const sidebarListHasRows =
+    sidebarListItems.length + visibleDraftSessionCount + pendingThreads.length > 0;
   // The undo notice resizes the footer and shifts the bottom-pinned settled
   // shelf. It mounts and expires apart from any reorder, so it needs its own pass.
   const undoNoticeShown = useThreadUndoNotice((state) => state.notice !== null);
@@ -3556,6 +3573,7 @@ export default function Sidebar() {
       orderKey: sidebarListOrderKey,
       routeDraftId: routeDraftIdForRows,
       draftCount: visibleDraftSessionCount,
+      pendingCount: pendingThreads.length,
       undoNoticeShown,
       animate: !listMotionPaused && sidebarListHasRows,
     }),
@@ -3566,6 +3584,7 @@ export default function Sidebar() {
       sidebarListOrderKey,
       undoNoticeShown,
       visibleDraftSessionCount,
+      pendingThreads.length,
     ],
   );
   useLayoutEffect(() => {
@@ -4949,7 +4968,21 @@ export default function Sidebar() {
                       );
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const items: ReactNode[] = [];
+                    const items: ReactNode[] = pendingThreads.map((entry) => (
+                      <SidebarPendingThreadRow
+                        key={`pending:${entry.scope}`}
+                        entry={entry}
+                        projectTitle={
+                          entry.payload.input.bootstrap?.createThread
+                            ? projectDisplayNameByKey.get(
+                                `${entry.payload.environmentId}:${entry.payload.input.bootstrap.createThread.projectId}`,
+                              )
+                            : undefined
+                        }
+                        active={entry.scope === routeThreadKey}
+                        onNavigate={navigateToThread}
+                      />
+                    ));
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
@@ -5123,6 +5156,7 @@ export default function Sidebar() {
             </DndContext>
           </TooltipProvider>
           {visibleDraftSessionCount === 0 &&
+          pendingThreads.length === 0 &&
           pinnedThreads.length +
             activeThreads.length +
             workingThreads.length +

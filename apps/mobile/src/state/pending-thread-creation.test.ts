@@ -248,6 +248,7 @@ describe("pendingThreadCreationMessage", () => {
       id: creation.messageId,
       role: "user",
       text: creation.text,
+      runId: null,
       streaming: false,
       createdAt: creation.createdAt,
       updatedAt: creation.createdAt,

@@ -1,3 +1,12 @@
+import {
+  pendingThreadCreationMessage,
+  resolvePendingThreadCreation,
+} from "@supacode/client-runtime/pending-thread-creation";
+import {
+  pendingThreadCreation as presentPendingThreadCreation,
+  type WebPendingThreadCreation,
+} from "../state/pendingThreadCreation";
+import { useThreadOutboxAttachments } from "../state/threadOutboxEditing";
 import { ChatCanvas } from "./chat/ChatCanvas";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
@@ -1657,7 +1666,11 @@ export default function ChatView(props: ChatViewProps) {
     [environmentId, threadId],
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
-  const pendingThreadCreation = usePendingThreadCreation(routeThreadRef);
+  const pendingCreationEntry = usePendingThreadCreation(routeThreadRef);
+  const queuedCreation = useMemo(
+    () => (pendingCreationEntry ? presentPendingThreadCreation(pendingCreationEntry) : null),
+    [pendingCreationEntry],
+  );
   const currentRouteThreadKeyRef = useRef<string | null>(routeThreadKey);
   useLayoutEffect(() => {
     currentRouteThreadKeyRef.current = routeThreadKey;
@@ -1771,10 +1784,35 @@ export default function ChatView(props: ChatViewProps) {
   const serverThread = useThreadShell(routeThreadRef);
   const routeThreadDetailRef = resolveThreadDetailRef(routeThreadRef, {
     shellExists: serverThread !== null,
-    waitForShell: draftThread !== null,
+    waitForShell: draftThread !== null || pendingCreationEntry !== null,
   });
   const serverThreadProjection = useThreadProjection(routeThreadDetailRef);
   const serverProjection = serverThreadProjection?.projection ?? null;
+  const [previousCreation, setPreviousCreation] = useState<WebPendingThreadCreation | null>(null);
+  const pendingThreadCreation = resolvePendingThreadCreation({
+    threadKey: routeThreadKey,
+    pending: queuedCreation,
+    previous: routeKind === "draft" && !draftThread?.promotedTo ? null : previousCreation,
+    detail: serverProjection,
+  });
+  if (previousCreation !== pendingThreadCreation) setPreviousCreation(pendingThreadCreation);
+  const pendingCreationAttachments = useThreadOutboxAttachments(
+    pendingThreadCreation?.message.entry,
+  );
+  const pendingCreationMessages = useMemo<ChatMessage[]>(() => {
+    const message = pendingThreadCreation?.message;
+    if (!message || serverProjection?.messages.some((item) => item.id === message.messageId))
+      return [];
+    return [
+      {
+        ...pendingThreadCreationMessage(message),
+        attachments: pendingCreationAttachments.map(({ attachment, url }) => ({
+          ...attachment,
+          ...(url ? { previewUrl: url } : {}),
+        })),
+      },
+    ];
+  }, [pendingThreadCreation, pendingCreationAttachments, serverProjection]);
   const reportedModelSelection = serverProjection
     ? deriveReportedModelSelection(serverProjection)
     : null;
@@ -2175,7 +2213,7 @@ export default function ChatView(props: ChatViewProps) {
     [draftThread, fallbackDraftProject, settings, threadId],
   );
   const isServerThread = serverThread !== null;
-  const activeThread = isServerThread ? serverThread : localDraftThread;
+  const activeThread = serverThread ?? pendingThreadCreation?.message.shell ?? localDraftThread;
   const serverLatestRun = useMemo(
     () => (serverProjection === null ? null : deriveLatestThreadRun(serverProjection)),
     [serverProjection],
@@ -2268,9 +2306,10 @@ export default function ChatView(props: ChatViewProps) {
   // Explicit composer choices and existing server threads retain their permissions.
   const runtimeMode =
     composerRuntimeMode ??
-    (isServerThread ? activeThread?.runtimeMode : undefined) ??
+    (isServerThread || pendingThreadCreation ? activeThread?.runtimeMode : undefined) ??
     defaultRuntimeMode;
-  const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
+  const isLocalDraftThread =
+    !isServerThread && !pendingThreadCreation && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = canWriteSourceControl && isLocalDraftThread;
   const activeThreadId = activeThread?.id ?? null;
   // Prefer the larger of turn-item-committed ids and projection messages so
@@ -3986,7 +4025,7 @@ export default function ChatView(props: ChatViewProps) {
         {
           visibleTurnItems: serverVisibleTurnItems,
           optimisticMessages: optimisticUserMessages,
-          anchoredMessages: anchoredTimelineMessages,
+          anchoredMessages: [...pendingCreationMessages, ...anchoredTimelineMessages],
           attachmentUrlById: timelineAttachmentUrlById,
           ...(serverProjection === null
             ? {}
@@ -4001,6 +4040,7 @@ export default function ChatView(props: ChatViewProps) {
     [
       activeThreadKey,
       anchoredTimelineMessages,
+      pendingCreationMessages,
       optimisticUserMessages,
       projectTimelineEntries,
       serverVisibleTurnItems,
@@ -4010,7 +4050,7 @@ export default function ChatView(props: ChatViewProps) {
   );
   const draftTimelineEntries = useMemo(
     () =>
-      optimisticUserMessages.map(
+      [...pendingCreationMessages, ...optimisticUserMessages].map(
         (message) =>
           ({
             id: message.id,
@@ -4019,7 +4059,7 @@ export default function ChatView(props: ChatViewProps) {
             message,
           }) as const,
       ),
-    [optimisticUserMessages],
+    [pendingCreationMessages, optimisticUserMessages],
   );
   const timelineEntries = isServerThread ? serverTimelineEntries : draftTimelineEntries;
   const timelineMessages = useMemo(
@@ -4157,6 +4197,9 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [activeThreadRef, storeEnsureTerminal, worktreeSetup]);
   const [dockedDraftHeroThreadKey, setDockedDraftHeroThreadKey] = useState<string | null>(null);
+  if (isLocalDraftThread && !draftThread?.promotedTo && dockedDraftHeroThreadKey !== null) {
+    setDockedDraftHeroThreadKey(null);
+  }
   const draftHeroDockRequested =
     activeThreadKey !== null && dockedDraftHeroThreadKey === activeThreadKey;
   const isDraftHeroState = resolveDraftHeroState({
@@ -8737,7 +8780,7 @@ export default function ChatView(props: ChatViewProps) {
             })),
           }),
         });
-        const nextDraftId = await outboxEditor.editor.save({
+        const nextThreadRef = await outboxEditor.editor.save({
           ...payload,
           input: {
             ...payload.input,
@@ -8748,7 +8791,8 @@ export default function ChatView(props: ChatViewProps) {
         });
         setThreadError(threadId, null);
         composerRef.current?.resetCursorState();
-        if (nextDraftId) void navigate({ to: "/draft/$draftId", params: { draftId: nextDraftId } });
+        if (nextThreadRef)
+          void navigate({ to: "/$environmentId/$threadId", params: nextThreadRef, replace: true });
         scheduleComposerFocus();
       } catch (error) {
         setThreadError(
@@ -9484,6 +9528,13 @@ export default function ChatView(props: ChatViewProps) {
         markPromotedDraftThreadByRef(scopeThreadRef(environmentId, threadIdForSend));
       clearUsageLimitsFor(routeThreadKey);
       if (submissionIntent === "background") handleNewThreadInActiveProject();
+      else if (isLocalDraftThread && targets[0]) {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId, threadId: targets[0].threadId },
+          replace: true,
+        });
+      }
     } catch (error) {
       setThreadError(
         threadIdForSend,
@@ -10951,7 +11002,6 @@ export default function ChatView(props: ChatViewProps) {
                                   <ThreadOutboxControl
                                     environmentId={environmentId}
                                     threadId={threadId}
-                                    projectId={isLocalDraftThread ? activeProject?.id : undefined}
                                     editingMessageId={outboxEditor.editing?.entry.id ?? null}
                                     onEditMessage={beginEditingOutboxMessage}
                                     onCancelEdit={cancelEditingOutboxMessage}

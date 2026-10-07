@@ -275,6 +275,9 @@ export function useThreadComposerState() {
         nodes: selectedThreadNodes,
       }),
       pendingCreation.length > 0 ? pendingCreationMessage : null,
+      selectedThreadQueuedMessages.some(
+        (message) => message.messageId === pendingCreationMessage?.messageId,
+      ),
     );
     const pendingAcknowledgments = acknowledgedMessages.filter(
       (message) =>

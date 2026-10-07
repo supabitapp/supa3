@@ -7,6 +7,7 @@ import { createThreadNavigation } from "../lib/threadNavigation";
 import { readThreadShell, waitForSidebarThreadShell } from "../state/entities";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { buildThreadRouteParams } from "../threadRoutes";
+import { readPendingThreadCreation } from "../state/threadOutbox";
 
 export function useSidebarThreadNavigation() {
   const router = useRouter();
@@ -16,7 +17,8 @@ export function useSidebarThreadNavigation() {
     () =>
       createThreadNavigation({
         getLocation: () => router.state.location,
-        isReady: (threadRef) => readThreadShell(threadRef) !== null,
+        isReady: (threadRef) =>
+          readThreadShell(threadRef) !== null || readPendingThreadCreation(threadRef) !== null,
         waitForThread: waitForSidebarThreadShell,
         navigate: (threadRef) => {
           const selection = useThreadSelectionStore.getState();

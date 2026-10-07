@@ -33,12 +33,22 @@ import { NewTaskFlowProvider, useNewTaskFlow } from "./new-task-flow-provider";
 
 const transport = vi.hoisted(() => ({
   openScratch: vi.fn(),
+  navigate: vi.fn(),
+  goBack: vi.fn(),
+  navigationState: vi.fn(),
   openScratchCommand: Symbol(),
   editorWrite: vi.fn(),
   removePendingTask: vi.fn(),
 }));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
-vi.mock("@react-navigation/native", () => ({ useNavigation: () => ({ navigate: vi.fn() }) }));
+vi.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({
+    navigate: transport.navigate,
+    getState: transport.navigationState,
+    goBack: transport.goBack,
+    canGoBack: () => true,
+  }),
+}));
 vi.mock("../../state/shell", () => ({ environmentShell: {} }));
 vi.mock("../../state/entities", () => ({
   useProjects: () => useAtomValue(projectsAtom),
@@ -261,6 +271,9 @@ function Probe() {
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   transport.openScratch.mockReset();
+  transport.navigate.mockReset();
+  transport.goBack.mockReset();
+  transport.navigationState.mockReset();
   transport.editorWrite.mockReset().mockResolvedValue(true);
   transport.removePendingTask.mockReset().mockImplementation(async () => {
     appAtomRegistry.set(queueAtom, {});
@@ -320,6 +333,29 @@ describe("pending task editor dismissal", () => {
       appAtomRegistry.set(queueAtom, { queued: [pendingTask] });
       expect(flow.beginEditingPendingTask(pendingTask.messageId)).toBe(true);
     });
+  });
+
+  it("opens a queued creation's reserved thread from the list", () => {
+    const task = buildPendingNewTasks({ queuedMessages: [pendingTask], drafts: {} })[0]!;
+    pendingActions.openPendingTask(task);
+    expect(transport.navigate).toHaveBeenCalledWith("Thread", {
+      environmentId: pendingTask.environmentId,
+      threadId: pendingTask.threadId,
+    });
+  });
+
+  it("leaves the local thread after cancelling its pending creation", async () => {
+    await act(() => flow.cancelEditingPendingTask());
+    transport.navigationState.mockReturnValue({
+      routes: [
+        {
+          name: "Thread",
+          params: { environmentId: pendingTask.environmentId, threadId: pendingTask.threadId },
+        },
+      ],
+    });
+    await act(async () => deletePendingTask());
+    expect(transport.goBack).toHaveBeenCalledOnce();
   });
 
   it("deletes a closed editor's unsendable draft without delivering the old prompt", async () => {
