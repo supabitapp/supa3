@@ -4,6 +4,9 @@ packages:
   - packages/*
   - scripts
 
+# Reuse installed dependency graphs across worktrees on the same machine.
+virtualStoreType: global
+
 # Successor to onlyBuiltDependencies/ignoredBuiltDependencies (pnpm 11).
 # true = allowed to run build scripts; false mirrors the pnpm 10 behavior
 # where anything outside onlyBuiltDependencies was silently not built.
@@ -178,6 +181,14 @@ overrides:
   yaml: "catalog:"
 
 packageExtensions:
+  # Legend List omits devDependencies, so types-fixer cannot infer this missing type peer.
+  "@legendapp/list@*":
+    peerDependencies:
+      "@types/react": "*"
+  "@react-navigation/native-stack@*":
+    # Its generated declarations import core directly through an undeclared dependency.
+    dependencies:
+      "@react-navigation/core": ^7.21.2
   # Our patch makes @effect/vitest import vite-plus/test. A catalog: spec here
   # resolves through the vite-plus override above.
   "@effect/vitest@*":
@@ -229,3 +240,7 @@ supportedArchitectures:
   cpu: [current, x64]
   libc: [current, glibc]
   os: [current, linux]
+
+# Expose undeclared @types dependencies beside packages outside the worktree.
+configDependencies:
+  "@pnpm/plugin-types-fixer": 0.1.0

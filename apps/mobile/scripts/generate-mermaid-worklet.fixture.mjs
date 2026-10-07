@@ -13,6 +13,7 @@ const workletsRequire = NodeModule.createRequire(
   mobileRequire.resolve("react-native-worklets/plugin"),
 );
 const { transformFileSync } = workletsRequire("@babel/core");
+const babelRequire = NodeModule.createRequire(mobileRequire.resolve("babel-preset-expo"));
 const sources = JSON.parse(NodeFS.readFileSync(0, "utf8"));
 const outputRoot = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mermaid-worklet-"));
 
@@ -30,7 +31,7 @@ try {
       babelrc: false,
       caller: { name: "metro", bundler: "metro", platform, supportsStaticESM: false },
     });
-    const context = { module: { exports: {} }, global: globalThis, require: workletsRequire };
+    const context = { module: { exports: {} }, global: globalThis, require: babelRequire };
     NodeVM.runInNewContext(transformed.code, context);
     const worklet = context.module.exports;
     const runtime = NodeVM.createContext({ performance });

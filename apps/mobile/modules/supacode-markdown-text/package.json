@@ -31,6 +31,7 @@
   "peerDependencies": {
     "@supacode/client-runtime": "*",
     "@supacode/shared": "*",
+    "@types/react": "*",
     "expo": "*",
     "expo-asset": "*",
     "expo-clipboard": "*",

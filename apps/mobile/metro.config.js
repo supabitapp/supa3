@@ -35,7 +35,6 @@ const resolveShikiDependencyRoot = (packageName) => {
   return currentDir;
 };
 
-config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
   ...config.resolver,
   blockList: [

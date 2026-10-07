@@ -1076,7 +1076,7 @@ describe("ClaudeAdapterV2 approval cancellation", () => {
       const controller = new AbortController();
       let removes = 0;
       const removeEventListener = controller.signal.removeEventListener.bind(controller.signal);
-      controller.signal.removeEventListener = (...args) => {
+      controller.signal.removeEventListener = (...args: Parameters<typeof removeEventListener>) => {
         removes += 1;
         return removeEventListener(...args);
       };
