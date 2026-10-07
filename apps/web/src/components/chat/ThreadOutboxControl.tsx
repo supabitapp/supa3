@@ -69,6 +69,13 @@ export function ThreadOutboxControl(props: {
           {pending.map((entry) => {
             const canChange = !entry.attempted || entry.status === "failed";
             const isEditing = props.editingMessageId === entry.id;
+            const status = isEditing
+              ? "Editing"
+              : entry.status === "failed"
+                ? entry.error
+                : webThreadOutbox.isSending(entry.id)
+                  ? "Sending…"
+                  : null;
             return (
               <div
                 key={entry.id}
@@ -86,17 +93,7 @@ export function ThreadOutboxControl(props: {
                         (reference) => reference.label,
                       ) || "Attachment"}
                     </span>
-                    <span className="block text-muted-foreground">
-                      {isEditing
-                        ? "Editing"
-                        : entry.status === "failed"
-                          ? entry.error
-                          : webThreadOutbox.isSending(entry.id)
-                            ? "Sending…"
-                            : entry.attempted
-                              ? "Waiting to confirm delivery"
-                              : "Waiting to send"}
-                    </span>
+                    {status ? <span className="block text-muted-foreground">{status}</span> : null}
                     {entry.payload.localAttachments.length > 0 ? (
                       <span className="block truncate text-muted-foreground">
                         {entry.payload.localAttachments
