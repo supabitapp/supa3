@@ -1,0 +1,2 @@
+export const MOTION_ENTER_DURATION_MS = 180;
+export const MOTION_EXIT_DURATION_MS = 140;

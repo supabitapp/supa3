@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { Easing, FadeIn, FadeOut, ReduceMotion } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "./useReducedMotionPreference";
+import { isKeyboardMotionSuppressed } from "./motionInput";
 
 export function useNoticeMotion() {
-  const reducedMotion = useReducedMotionPreference();
+  const reducedMotion = useReducedMotionPreference() || isKeyboardMotionSuppressed();
   return useMemo(
     () => ({
       entering: reducedMotion

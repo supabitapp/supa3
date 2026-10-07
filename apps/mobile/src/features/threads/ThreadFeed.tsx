@@ -107,12 +107,14 @@ import Animated, {
   FadeOut,
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
+import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
+import { isKeyboardMotionSuppressed } from "../../lib/motionInput";
+import { MOTION_ENTER_DURATION_MS } from "../../lib/motionTiming";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { useFontFamily } from "../../lib/useFontFamily";
 import { scopedThreadKey } from "../../lib/scopedEntities";
@@ -189,7 +191,6 @@ import {
 import {
   collapsedWorkLogHeight,
   ThreadDisclosureChevron,
-  THREAD_DISCLOSURE_TRANSITION_MS,
   ThreadWorkGroupToggle,
   ThreadThinkingRow,
   ThreadWorkLog,
@@ -197,7 +198,10 @@ import {
 } from "./thread-work-log";
 import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
-import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
+import {
+  resolveThreadFeedFixedItemSize,
+  threadWorkRowNeedsMeasurement,
+} from "./thread-feed-item-size";
 import { ThreadFeedLoading } from "./thread-feed-loading";
 import { useThreadFeedLoading } from "./use-thread-feed-loading";
 import { htmlRenderFrameHeight } from "@supacode/shared/htmlRender";
@@ -262,10 +266,9 @@ const TURN_FOLD_HEIGHT = 42; // min-h-11 (38.5) + mb-1 (3.5), with the mobile 14
 // assistant rows. Images size their frame from these before their own layout.
 const USER_BUBBLE_HORIZONTAL_PADDING = 3.5 * 3.5;
 const ASSISTANT_ROW_HORIZONTAL_PADDING = 3.5;
-// Let neighboring rows move out of the new rows' space before showing their text.
-const THREAD_FEED_DISCLOSURE_ENTER_TRANSITION = FadeIn.delay(
-  THREAD_DISCLOSURE_TRANSITION_MS,
-).duration(140);
+const THREAD_FEED_DISCLOSURE_ENTER_TRANSITION = FadeIn.duration(MOTION_ENTER_DURATION_MS)
+  .easing(Easing.bezier(0.32, 0.72, 0, 1))
+  .reduceMotion(ReduceMotion.Never);
 
 // Entering animations must only play for rows born just now — LegendList
 // remounts rows when they scroll back into view, and replaying an entrance for
@@ -1544,6 +1547,7 @@ function renderFeedEntry(
     | "workspaceRoot"
   > & {
     readonly copiedRowId: string | null;
+    readonly motionEnabled: boolean;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly workRowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
     readonly workGroupScrollPositions: Map<string, ThreadWorkGroupScrollPosition>;
@@ -1695,7 +1699,7 @@ function renderFeedEntry(
       !message.streaming;
 
     if (isUser) {
-      const enterAnimated = isFreshTimestamp(message.createdAt);
+      const enterAnimated = props.motionEnabled && isFreshTimestamp(message.createdAt);
       const intentBadge = resolveUserMessageIntentBadge(message.inputIntent);
       const referenceIds = new Set(
         collectComposerContextReferences(message.text).map((reference) => reference.contextId),
@@ -1890,7 +1894,7 @@ function renderFeedEntry(
     // bubbles: wide markdown blocks cause children to be positioned at
     // intrinsic width before the container is clamped, overlapping the
     // timestamp/copy button row. Pinning the width removes that pass.
-    const enterAnimated = isFreshTimestamp(message.createdAt);
+    const enterAnimated = props.motionEnabled && isFreshTimestamp(message.createdAt);
     return (
       <Animated.View
         className={cn(
@@ -2745,7 +2749,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     hasQueuedMessages: props.queuedMessages.length > 0,
   });
   const feedOpacity = useSharedValue(feedLoading ? 0 : 1);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionPreference();
   useLayoutEffect(() => {
     const opacity = feedLoading ? 0 : 1;
     feedOpacity.set(
@@ -2754,7 +2758,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         : withTiming(opacity, {
             duration: feedLoading ? 0 : 180,
             easing: Easing.out(Easing.cubic),
-            reduceMotion: ReduceMotion.System,
+            reduceMotion: ReduceMotion.Never,
           }),
     );
   }, [feedLoading, feedOpacity, reduceMotion]);
@@ -2832,6 +2836,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     };
   }, []);
 
+  const disclosureMotionUntilRef = useRef(0);
   const settleDisclosureAfterLayout = useCallback(() => {
     if (disclosureSettleFrameRef.current !== null) {
       cancelAnimationFrame(disclosureSettleFrameRef.current);
@@ -2839,7 +2844,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     if (disclosureSettleSecondFrameRef.current !== null) {
       cancelAnimationFrame(disclosureSettleSecondFrameRef.current);
     }
-    disclosureSettleFrameRef.current = requestAnimationFrame(() => {
+    disclosureSettleFrameRef.current = requestAnimationFrame(function waitForMotion() {
+      if (performance.now() < disclosureMotionUntilRef.current) {
+        disclosureSettleFrameRef.current = requestAnimationFrame(waitForMotion);
+        return;
+      }
       disclosureSettleSecondFrameRef.current = requestAnimationFrame(() => {
         // A disclosure can leave the reader above the end without a drag.
         // Reconcile follow before a later layout or resume can re-pin it.
@@ -2859,10 +2868,17 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     });
   }, [listRef, transitionEndFollow]);
 
-  const suspendEndScrollMaintenanceForDisclosure = useCallback((anchorKey: string | null) => {
-    disclosureAnchorKeyRef.current = anchorKey;
-    setDisclosureToggleSettling(true);
-  }, []);
+  const suspendEndScrollMaintenanceForDisclosure = useCallback(
+    (anchorKey: string | null, retainDetail = false) => {
+      disclosureAnchorKeyRef.current = anchorKey;
+      disclosureMotionUntilRef.current =
+        retainDetail && !reduceMotion && !isKeyboardMotionSuppressed()
+          ? performance.now() + MOTION_ENTER_DURATION_MS
+          : 0;
+      setDisclosureToggleSettling(true);
+    },
+    [reduceMotion],
+  );
 
   // Start the quiet-frame countdown after React has committed the disclosure.
   // Every measured item-size change restarts it, so end maintenance cannot
@@ -2936,7 +2952,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
 
   const onToggleWorkRow = useCallback(
     (rowId: string, anchorKey?: string) => {
-      suspendEndScrollMaintenanceForDisclosure(anchorKey ?? null);
+      suspendEndScrollMaintenanceForDisclosure(anchorKey ?? null, true);
       setInteractionState((current) => ({
         ...current,
         expandedWorkRows: {
@@ -3013,10 +3029,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           ) {
             return undefined;
           }
-          // Expanded rows append a variable detail block — fall back to
-          // measurement for those groups.
+          // Once opened, keep details measured through their closing fade.
+          // Unopened work rows retain their premeasured fast path.
           return entry.activities.some(
-            (activity) => activity.prominent || expandedWorkRows[activity.id],
+            (activity) =>
+              activity.prominent || threadWorkRowNeedsMeasurement(activity.id, expandedWorkRows),
           )
             ? undefined
             : collapsedWorkLogHeight(entry.activities, entry.continuesWorkLog);
@@ -3040,12 +3057,16 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   }, [contentWidth, hasHtmlRenders, props.listRef]);
 
   // Disclosures can mount existing offscreen rows as well as new work rows.
-  // Fade those in after movement; never retain removed rows over replacements.
+  // Fade those in immediately; never retain removed rows over replacements.
   const renderItem = useCallback(
     (info: { item: PendingThreadFeedEntry; index: number }) => (
       <Animated.View
         key={info.item.id}
-        entering={disclosureToggleSettling ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION : undefined}
+        entering={
+          disclosureToggleSettling && !reduceMotion && !isKeyboardMotionSuppressed()
+            ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION
+            : undefined
+        }
       >
         <ThreadMediaVisibility>
           {renderFeedEntry(info, {
@@ -3055,6 +3076,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onUseArtifactTemplate: props.onUseArtifactTemplate,
             threadId: props.threadId,
             copiedRowId,
+            motionEnabled: !reduceMotion && !isKeyboardMotionSuppressed(),
             expandedWorkRows,
             workRowSizing,
             workGroupScrollPositions,
@@ -3102,6 +3124,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.onEditPendingMessage,
       copiedRowId,
       disclosureToggleSettling,
+      reduceMotion,
       expandedWorkRows,
       workRowSizing,
       workGroupScrollPositions,
@@ -3300,7 +3323,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                 ? undefined
                 : FadeOut.duration(180)
                     .easing(Easing.out(Easing.cubic))
-                    .reduceMotion(ReduceMotion.System)
+                    .reduceMotion(ReduceMotion.Never)
             }
           >
             <ThreadFeedLoading

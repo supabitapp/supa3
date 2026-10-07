@@ -8,6 +8,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "../lib/useReducedMotionPreference";
+import { isKeyboardMotionSuppressed } from "../lib/motionInput";
+import { MOTION_ENTER_DURATION_MS } from "../lib/motionTiming";
 import { SymbolView } from "./AppSymbol";
 
 export function DisclosureChevron(
@@ -17,10 +19,10 @@ export function DisclosureChevron(
     readonly duration?: number;
   },
 ) {
-  const reducedMotion = useReducedMotionPreference();
+  const reducedMotion = useReducedMotionPreference() || isKeyboardMotionSuppressed();
   const direction = props.collapsedDirection ?? "down";
   const angle = props.expanded ? (direction === "right" ? 90 : 180) : 0;
-  const duration = props.duration ?? 180;
+  const duration = props.duration ?? MOTION_ENTER_DURATION_MS;
   const rotation = useSharedValue(angle);
   useLayoutEffect(() => {
     rotation.set(
