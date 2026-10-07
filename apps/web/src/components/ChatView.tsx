@@ -4390,6 +4390,7 @@ export default function ChatView(props: ChatViewProps) {
           reportedModelSelection,
         );
   const showDraftProjectPicker = isDraftHeroState && !showProviderSubagentBar;
+  const composerContextStripOnTop = showDraftProjectPicker;
   const mountComposerContextStrip = shouldShowComposerContextStrip({
     isDraftHeroState,
     showProjectPicker: showDraftProjectPicker,
@@ -10605,6 +10606,56 @@ export default function ChatView(props: ChatViewProps) {
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
     addFolders: (folders) => composerRef.current?.addDroppedFolders(folders),
   };
+  const composerContextStrip = mountComposerContextStrip ? (
+    <div className="pointer-events-auto">
+      <BranchToolbar
+        forceNewWorktree={multipleModelSelections !== null}
+        ref={branchToolbarRef}
+        environmentId={activeThread.environmentId}
+        threadId={activeThread.id}
+        showGitControls={isGitRepo}
+        {...(routeKind === "draft" && draftId ? { draftId } : {})}
+        onEnvModeChange={onEnvModeChange}
+        startFromOrigin={startFromOrigin}
+        onStartFromOriginChange={onStartFromOriginChange}
+        envMode={envMode}
+        activeThreadBranchOverride={activeThreadBranch}
+        {...(canOverrideServerThreadEnvMode
+          ? {
+              onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
+            }
+          : {})}
+        envLocked={envLocked}
+        onComposerFocusRequest={scheduleComposerFocus}
+        {...(canCheckoutPullRequestIntoThread
+          ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+          : {})}
+        {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+        autoEnvironmentLabel={autoEnvironmentLabel}
+        onAutoEnvironment={
+          draftId &&
+          !envLocked &&
+          canAutoBalanceEnvironments &&
+          loadBalancingSettings.loadBalancingEnabled
+            ? onAutoEnvironment
+            : undefined
+        }
+        availableEnvironments={logicalProjectEnvironments}
+        composerControlsHostRef={setRestingComposerControlsHost}
+        contextStripVisible={showComposerContextStrip}
+        stripPlacement={composerContextStripOnTop ? "top" : "bottom"}
+        projectPicker={
+          showDraftProjectPicker ? (
+            <DraftProjectPicker
+              draftId={draftId}
+              activeProjectRef={activeProjectRef}
+              activeProjectTitle={activeProject?.title ?? null}
+            />
+          ) : null
+        }
+      />
+    </div>
+  ) : null;
 
   return (
     <div
@@ -10860,8 +10911,12 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell
-                      contextStrip={showComposerContextStrip || showComposerModelStrip}
+                      contextStrip={
+                        (showComposerContextStrip && !composerContextStripOnTop) ||
+                        showComposerModelStrip
+                      }
                     >
+                      {composerContextStripOnTop ? composerContextStrip : null}
                       <ComposerSurface.Host
                         inert={isSavingQueuedEdit}
                         aria-busy={isSavingQueuedEdit}
@@ -11121,56 +11176,7 @@ export default function ChatView(props: ChatViewProps) {
                               />
                             </ComposerSurface.ContextStrip>
                           ) : null}
-                          {mountComposerContextStrip && (
-                            <div className="pointer-events-auto">
-                              <BranchToolbar
-                                forceNewWorktree={multipleModelSelections !== null}
-                                ref={branchToolbarRef}
-                                environmentId={activeThread.environmentId}
-                                threadId={activeThread.id}
-                                showGitControls={isGitRepo}
-                                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                onEnvModeChange={onEnvModeChange}
-                                startFromOrigin={startFromOrigin}
-                                onStartFromOriginChange={onStartFromOriginChange}
-                                envMode={envMode}
-                                activeThreadBranchOverride={activeThreadBranch}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? {
-                                      onActiveThreadBranchOverrideChange:
-                                        setPendingServerThreadBranch,
-                                    }
-                                  : {})}
-                                envLocked={envLocked}
-                                onComposerFocusRequest={scheduleComposerFocus}
-                                {...(canCheckoutPullRequestIntoThread
-                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                                  : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-                                autoEnvironmentLabel={autoEnvironmentLabel}
-                                onAutoEnvironment={
-                                  draftId &&
-                                  !envLocked &&
-                                  canAutoBalanceEnvironments &&
-                                  loadBalancingSettings.loadBalancingEnabled
-                                    ? onAutoEnvironment
-                                    : undefined
-                                }
-                                availableEnvironments={logicalProjectEnvironments}
-                                composerControlsHostRef={setRestingComposerControlsHost}
-                                contextStripVisible={showComposerContextStrip}
-                                projectPicker={
-                                  showDraftProjectPicker ? (
-                                    <DraftProjectPicker
-                                      draftId={draftId}
-                                      activeProjectRef={activeProjectRef}
-                                      activeProjectTitle={activeProject?.title ?? null}
-                                    />
-                                  ) : null
-                                }
-                              />
-                            </div>
-                          )}
+                          {composerContextStripOnTop ? null : composerContextStrip}
                         </div>
                       </div>
                     </ComposerSurface.Shell>

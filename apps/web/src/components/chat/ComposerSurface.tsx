@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { cn } from "~/lib/utils";
+import { ComposerBanner } from "./ComposerBanner";
 
 /** One glass backdrop until a top attachment needs the composer to cover its overlap. */
 function Shell({
@@ -81,7 +82,29 @@ function Main({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-function ContextStrip({ className, ...props }: ComponentProps<"div">) {
+/**
+ * The context controls' drawer. Below the composer it extends the shell's glass; above it, it
+ * attaches like a notice so the shell switches to its attached-surface glass.
+ */
+function ContextStrip({
+  placement = "bottom",
+  className,
+  ...props
+}: ComponentProps<"div"> & { placement?: "top" | "bottom" }) {
+  if (placement === "top") {
+    return (
+      <ComposerBanner.Attachment>
+        <ComposerBanner.Surface
+          data-slot="composer-context-strip"
+          className={cn(
+            "group/composer-context flex items-center gap-2 overflow-x-clip overflow-y-visible ps-1 pe-2 pt-1 pb-5",
+            className,
+          )}
+          {...props}
+        />
+      </ComposerBanner.Attachment>
+    );
+  }
   return (
     <div
       data-slot="composer-context-strip"

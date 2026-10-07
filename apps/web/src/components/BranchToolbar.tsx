@@ -100,6 +100,7 @@ interface BranchToolbarProps {
   contextStripVisible?: boolean;
   /** Leads the composer strip, ahead of the branch and host controls. */
   projectPicker?: ReactNode;
+  stripPlacement?: "top" | "bottom";
 }
 
 interface MobileRunContextSelectorProps {
@@ -567,6 +568,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   composerControlsHostRef,
   contextStripVisible = true,
   projectPicker,
+  stripPlacement = "bottom",
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
@@ -680,7 +682,10 @@ export const BranchToolbar = memo(function BranchToolbar({
 
   if (!hasActiveThread || !activeProject) {
     return layout === "composer" && projectPicker ? (
-      <ComposerSurface.ContextStrip className="gap-1 text-xs font-normal text-muted-foreground/70">
+      <ComposerSurface.ContextStrip
+        placement={stripPlacement}
+        className="gap-1 text-xs font-normal text-muted-foreground/70"
+      >
         {projectPicker}
       </ComposerSurface.ContextStrip>
     ) : null;
@@ -724,6 +729,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   return (
     <ComposerSurface.ContextStrip
       ref={setStripElement}
+      placement={stripPlacement}
       data-compact={labelsOverflow ? "" : undefined}
       className={cn(
         "gap-1 text-xs font-normal text-muted-foreground/70",
