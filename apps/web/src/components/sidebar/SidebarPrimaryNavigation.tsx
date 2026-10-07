@@ -2,7 +2,7 @@
  * The sidebar's top rows: start a thread, search through the command palette,
  * and open Automations. Both the default and the legacy sidebar render it.
  */
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 import { CalendarClockIcon, SearchIcon, SquarePenIcon } from "lucide-react";
 
 import { openCommandPalette } from "../../commandPaletteBus";
@@ -17,6 +17,10 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
   const searchShortcut = useShortcutLabel("commandPalette.toggle");
   const automationsShortcut = useShortcutLabel("automations.open");
   const startNewThreadInCurrentProject = useStartNewThreadInCurrentProject();
+  const newThreadActive = useParams({
+    strict: false,
+    select: (params) => Boolean(params.draftId),
+  });
   const automationsActive = useLocation({
     select: (location) => location.pathname === "/automations",
   });
@@ -33,6 +37,7 @@ export function SidebarPrimaryNavigation({ projectGroupCount }: { projectGroupCo
       <SidebarMenuItem>
         <SidebarMenuButton
           size={size}
+          isActive={newThreadActive}
           disabled={projectGroupCount === 0}
           onClick={handleNewThread}
           shortcut={newThreadShortcut}
