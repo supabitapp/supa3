@@ -113,6 +113,8 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
 /** Rounded-row radius shared with the v1 sidebar rows. */
 const SIDEBAR_V2_ROW_RADIUS = 12;
 
+const SHELF_HEADER_HIT_SLOP = { top: 6, bottom: 6 };
+
 function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
@@ -129,7 +131,7 @@ function ThreadListV2Section(props: {
   const sidebarPane = props.pane === "sidebar";
   const className = cn(
     "flex-row items-center gap-2.5",
-    props.disclosure ? "my-1" : "mb-1.5 mt-4",
+    !props.disclosure && "mb-1.5 mt-4",
     props.pane === "sidebar" ? "px-3" : "px-5",
   );
   const content = (
@@ -180,8 +182,9 @@ function ThreadListV2Section(props: {
       }}
       className={className}
       disabled={props.disclosure.disabled}
+      hitSlop={SHELF_HEADER_HIT_SLOP}
       onPress={props.disclosure.onToggle}
-      style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.6 : 1 })}
+      style={({ pressed }) => ({ minHeight: 32, opacity: pressed ? 0.6 : 1 })}
     >
       {content}
     </Pressable>

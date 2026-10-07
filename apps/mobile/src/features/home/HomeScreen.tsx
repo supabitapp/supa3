@@ -234,7 +234,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const listTopInset =
     Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0;
   const listBottomInset =
-    Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 72 + iosBottomToolbarClearance : 0;
+    Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 60 + iosBottomToolbarClearance : 0;
   const searchEnvironmentIds = useMemo(
     () =>
       props.selectedEnvironmentId === null
@@ -984,7 +984,7 @@ export function HomeScreen(props: HomeScreenProps) {
             contentContainerStyle={{
               paddingBottom:
                 Platform.OS === "ios"
-                  ? 16
+                  ? 8
                   : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
             }}
           />
