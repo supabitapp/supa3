@@ -29,7 +29,9 @@ class SupacodeReactNativeFlagsPackage : Package {
 // have been read yet. The React host starts later, with the first activity.
 private object FeatureFlagOverrides : ApplicationLifecycleListener {
   override fun onCreate(application: Application?) {
-    val accessedFlags = ReactNativeFeatureFlags.dangerouslyForceOverride(SupacodeFeatureFlagsProvider())
+    val accessedFlags = ReactNativeFeatureFlags.dangerouslyForceOverride(
+      SupacodeFeatureFlagsProvider()
+    )
     if (ReactBuildConfig.DEBUG) {
       check(accessedFlags?.split(", ")?.contains("preventShadowTreeCommitExhaustion") != true) {
         "React Native read preventShadowTreeCommitExhaustion before SupacodeReactNativeFlags overrode it"
