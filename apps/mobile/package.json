@@ -134,7 +134,8 @@
     "babel-preset-expo": "~58.0.8",
     "react-test-renderer": "19.3.0",
     "tailwindcss": "^4.0.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "yaml": "catalog:"
   },
   "expo": {
     "install": {

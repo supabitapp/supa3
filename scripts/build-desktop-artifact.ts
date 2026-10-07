@@ -37,6 +37,7 @@ import {
   selectDesktopRuntimeExternalDependencies,
 } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { readInstalledPackages } from "./lib/installed-packages.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -1632,30 +1633,6 @@ const decodeNativeMarkerManifest = Schema.decodeUnknownSync(
   Schema.fromJsonString(NativeMarkerManifest),
 );
 
-/** Locate a package inside the pnpm store, which is where the real files live. */
-const findStorePackageDirectory = Effect.fn("findStorePackageDirectory")(function* (
-  repoRoot: string,
-  packageName: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const storeDir = path.join(repoRoot, "node_modules/.pnpm");
-  const exists = (candidate: string) =>
-    fs.exists(candidate).pipe(Effect.orElseSucceed(() => false));
-  if (!(yield* exists(storeDir))) return null;
-
-  const flattened = `${packageName.replace("/", "+")}@`;
-  const entries = yield* fs
-    .readDirectory(storeDir)
-    .pipe(Effect.orElseSucceed(() => [] as string[]));
-  for (const entry of entries) {
-    if (!entry.startsWith(flattened)) continue;
-    const candidate = path.join(storeDir, entry, "node_modules", packageName);
-    if (yield* exists(candidate)) return candidate;
-  }
-  return null;
-});
-
 /** Whether a package builds or ships a native addon it loads at runtime. */
 const hasNativeLoaderMarkers = Effect.fn("hasNativeLoaderMarkers")(function* (packageDir: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -3219,16 +3196,19 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     // correctly bundled build.
     // The list-based check above only sees packages someone already thought to
     // list. bufferutil and utf-8-validate were inlined for exactly that reason:
-    // native, but absent from the list, so nothing flagged them. Ask the store
-    // what each inlined package actually is instead.
-    const nativeInlined: string[] = [];
-    for (const name of [...inlinedPackages].sort()) {
-      const packageDir = yield* findStorePackageDirectory(repoRoot, name);
-      if (packageDir === null) continue;
-      if (yield* hasNativeLoaderMarkers(packageDir)) nativeInlined.push(name);
+    // native, but absent from the list, so nothing flagged them. Inspect the
+    // installed graph, including packages in pnpm's shared virtual store.
+    const installed = yield* readInstalledPackages([
+      path.join(repoRoot, "apps/server"),
+      path.join(repoRoot, "apps/desktop"),
+    ]);
+    const nativeInlined = new Set<string>();
+    for (const [packageDir, manifest] of installed) {
+      if (!inlinedPackages.has(manifest.name)) continue;
+      if (yield* hasNativeLoaderMarkers(packageDir)) nativeInlined.add(manifest.name);
     }
-    if (nativeInlined.length > 0) {
-      return yield* new InlinedNativePackageError({ packages: nativeInlined });
+    if (nativeInlined.size > 0) {
+      return yield* new InlinedNativePackageError({ packages: [...nativeInlined].sort() });
     }
 
     if (!inlinedPackages.has(BUNDLE_SELF_CONTAINED_SENTINEL)) {

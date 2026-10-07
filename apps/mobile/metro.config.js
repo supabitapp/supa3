@@ -3,6 +3,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withUniwindConfig } = require("uniwind/metro");
+const { parse } = require("yaml");
 const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
@@ -35,7 +36,22 @@ const resolveShikiDependencyRoot = (packageName) => {
   return currentDir;
 };
 
-config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
+// Metro must see symlink targets even during offline exports. pnpm records
+// the installed virtual store relative to node_modules, including custom stores.
+const modulesDirectory = path.join(workspaceRoot, "node_modules");
+const modulesManifest = path.join(modulesDirectory, ".modules.yaml");
+const virtualStoreDir = fs.existsSync(modulesManifest)
+  ? parse(fs.readFileSync(modulesManifest, "utf8"))?.virtualStoreDir
+  : undefined;
+config.watchFolders = [
+  ...new Set([
+    ...(config.watchFolders ?? []),
+    workspaceRoot,
+    ...(typeof virtualStoreDir === "string"
+      ? [path.resolve(modulesDirectory, virtualStoreDir)]
+      : []),
+  ]),
+];
 config.resolver = {
   ...config.resolver,
   blockList: [
