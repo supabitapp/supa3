@@ -1,0 +1,28 @@
+name: CI Background Failure Probe
+on:
+  push:
+    branches: [supacode/ci-parallel-benchmark]
+permissions:
+  contents: read
+jobs:
+  failure:
+    name: Verify background failure propagation
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 2
+    steps:
+      - name: Fail in background
+        background: true
+        run: exit 17
+      - name: Finish foreground
+        run: echo foreground-completed
+  require_failure:
+    name: Require background failure
+    needs: failure
+    if: always()
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 2
+    steps:
+      - name: Require implicit join to fail the job
+        env:
+          RESULT: ${{ needs.failure.result }}
+        run: test "$RESULT" = failure
