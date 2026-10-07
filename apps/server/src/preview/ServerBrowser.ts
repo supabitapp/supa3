@@ -705,6 +705,14 @@ const make = Effect.gen(function* () {
       adopted === undefined && (await desktopRenders(snapshot))
         ? await connectDesktop(snapshot)
         : null;
+    const opener =
+      adopted?.openerTabId === undefined
+        ? undefined
+        : tabs.get(tabKey(snapshot.threadId, adopted.openerTabId));
+    const browserBacking =
+      desktop !== null || (opener !== undefined && opener.desktop !== null)
+        ? "desktop"
+        : "headless";
     const isolatedContext =
       adopted === undefined &&
       desktop === null &&
@@ -833,6 +841,18 @@ const make = Effect.gen(function* () {
     page.on("close", () => dropTab(tab, true));
     page.on("crash", () => dropTab(tab, true));
     tabs.set(key, tab);
+    try {
+      await Effect.runPromise(
+        manager.setBrowserBacking({
+          threadId: snapshot.threadId,
+          tabId: snapshot.tabId,
+          browserBacking,
+        }),
+      );
+    } catch (cause) {
+      dropTab(tab, false);
+      throw cause;
+    }
     reportLiveTabs();
     // A popup is already loading its own URL, and the desktop loads its tab's.
     if (!adopted && !desktop && snapshot.navStatus._tag === "Loading") {
@@ -1738,6 +1758,8 @@ const make = Effect.gen(function* () {
         await ensureTab(event.snapshot).catch(constVoid);
         return;
       }
+      // A backing change only selects the client renderer; the page did not navigate or resize.
+      if (event.type === "backingChanged") return;
       const key = tabKey(event.threadId, event.tabId);
       const tab = tabs.get(key);
       if (event.type === "closed" && !tab && pendingTabs.has(key)) closedPendingTabs.add(key);

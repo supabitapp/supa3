@@ -160,8 +160,8 @@ export function PreviewView({
         : findActiveBrowserRecordingRuntimeTabId(threadRef, tabId)
       : null;
   const snapshot = tabId ? (previewState.sessions[tabId] ?? null) : null;
-  // Server tabs run in the environment's browser and stream to any client, except the
-  // desktop app's own server's tabs, which render here natively while the server drives them.
+  // Server tabs stream to every client when the server owns a headless page; an attached
+  // primary desktop can render its own page natively while the server drives it.
   const nativeServerTab = useRendersServerTabNatively(threadRef.environmentId, snapshot);
   const isServerTab = snapshot?.runtime === "server" && !nativeServerTab;
   /** The server owns this tab's appearance, zoom, and size, whoever renders it. */

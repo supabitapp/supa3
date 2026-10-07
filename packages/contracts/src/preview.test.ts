@@ -91,10 +91,12 @@ describe("PreviewSessionSnapshot", () => {
       },
       canGoBack: false,
       canGoForward: false,
+      browserBacking: "headless",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(snapshot.tabId).toBe("preview-thread-1");
     expect(snapshot.navStatus._tag).toBe("Success");
+    expect(snapshot.browserBacking).toBe("headless");
   });
 });
 
@@ -282,6 +284,30 @@ describe("PreviewEvent", () => {
       },
     });
     expect(event.type).toBe("resized");
+  });
+
+  it("decodes a backing change without navigation fields", () => {
+    const event = decodePreviewEvent({
+      type: "backingChanged",
+      threadId: "t",
+      tabId: "preview-t",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      serverEpoch: "server-a",
+      revision: 2,
+      snapshot: {
+        threadId: "t",
+        tabId: "preview-t",
+        navStatus: { _tag: "Idle" },
+        canGoBack: false,
+        canGoForward: false,
+        browserBacking: "headless",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    expect(event).toMatchObject({
+      type: "backingChanged",
+      snapshot: { browserBacking: "headless" },
+    });
   });
 
   it("decodes closed without snapshot", () => {

@@ -2,7 +2,10 @@ import { useAtomValue } from "@effect/atom-react";
 import { parseScopedThreadKey, scopedThreadKey } from "@supacode/client-runtime/environment";
 import { PREVIEW_STREAM_BASE_PATH } from "@supacode/client-runtime/preview/server-browser-stream";
 import { createPreviewEnvironmentAtoms } from "@supacode/client-runtime/state/preview";
-import { resolveDeviceHubAccess } from "@supacode/client-runtime/state/deviceHubAccess";
+import {
+  type DeviceHubAccess,
+  resolveDeviceHubAccess,
+} from "@supacode/client-runtime/state/deviceHubAccess";
 import type {
   EnvironmentId,
   PreviewEvent,
@@ -12,12 +15,13 @@ import type {
 } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { useEnvironmentQuery } from "./query";
 import { environmentSession, usePreparedConnection } from "./session";
+import { appAtomRegistry } from "./atom-registry";
 
 export const previewEnvironment = createPreviewEnvironmentAtoms(connectionAtomRuntime);
 
@@ -163,4 +167,23 @@ export function usePreviewStreamAccess(environmentId: EnvironmentId) {
   const query = useEnvironmentQuery(previewStreamAccessAtom(environmentId));
   const access = query.data && query.error === null && Option.isSome(prepared) ? query.data : null;
   return { access, error: query.error, refresh: query.refresh };
+}
+
+/** Resolves fresh access without refreshing the ticket held by an active viewer. */
+export function readFreshPreviewStreamAccess(
+  environmentId: EnvironmentId,
+): Promise<DeviceHubAccess | null> {
+  const prepared = Option.getOrNull(
+    appAtomRegistry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
+  );
+  if (prepared === null) return Promise.resolve(null);
+  const freshAccessAtom = connectionAtomRuntime
+    .atom(resolveDeviceHubAccess({ prepared, hubBasePath: PREVIEW_STREAM_BASE_PATH }))
+    .pipe(Atom.withLabel(`mobile-preview-transfer-access:${environmentId}`));
+  return Effect.runPromise(
+    AtomRegistry.getResult(appAtomRegistry, freshAccessAtom, { suspendOnWaiting: true }).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.orElseSucceed(() => null),
+    ),
+  );
 }

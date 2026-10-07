@@ -5,6 +5,7 @@ import {
   createPreviewStreamClient,
   previewStreamControlLabel,
   previewStreamModifiers,
+  resolvePreviewStreamDownload,
   type PreviewStreamClient,
   type PreviewStreamControl,
   type PreviewStreamDownload,
@@ -21,6 +22,7 @@ import type {
   PreviewStreamHostSetup,
   PreviewViewportSetting,
 } from "@supacode/contracts";
+import { readFreshPreviewStreamAccess } from "~/state/previewStream";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -124,7 +126,14 @@ async function copyPageText(text: string) {
 }
 
 /** The download happens on the environment; this hands the finished file to this device. */
-function offerDownload(download: PreviewStreamDownload) {
+function offerDownload(
+  download: PreviewStreamDownload,
+  target: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: string;
+    readonly tabId: string;
+  },
+) {
   const id = toastManager.add({
     type: "info",
     title: `Downloaded ${download.fileName}`,
@@ -132,10 +141,24 @@ function offerDownload(download: PreviewStreamDownload) {
       children: "Save",
       onClick: () => {
         toastManager.close(id);
-        const anchor = document.createElement("a");
-        anchor.href = download.url;
-        anchor.download = download.fileName;
-        anchor.click();
+        void resolvePreviewStreamDownload(download, {
+          threadId: target.threadId,
+          tabId: target.tabId,
+          resolveAccess: () => readFreshPreviewStreamAccess(target.environmentId),
+        }).then(
+          (url) => {
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = download.fileName;
+            anchor.click();
+          },
+          (cause: unknown) =>
+            toastManager.add({
+              type: "error",
+              title: "Could not save the download",
+              description: cause instanceof Error ? cause.message : undefined,
+            }),
+        );
       },
     },
   });
@@ -187,7 +210,11 @@ export function ServerBrowserSurface(props: {
     const chooser = fileChooser;
     if (!chooser) return;
     setFileChooser(null);
-    void uploadPreviewStreamFiles(chooser, files).catch((cause: unknown) =>
+    void uploadPreviewStreamFiles(chooser, files, {
+      threadId,
+      tabId,
+      resolveAccess: () => readFreshPreviewStreamAccess(environmentId),
+    }).catch((cause: unknown) =>
       toastManager.add({
         type: "error",
         title: "Could not send the files to the page",
@@ -396,7 +423,7 @@ export function ServerBrowserSurface(props: {
           if (placed) setAgentCursor(placed);
         },
         onClipboard: (text) => void copyPageText(text),
-        onDownload: offerDownload,
+        onDownload: (download) => offerDownload(download, { environmentId, threadId, tabId }),
         onFileChooser: setFileChooser,
         onViewport: (viewport) => {
           viewportRef.current = viewport;

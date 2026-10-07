@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createPreviewStreamClient, type PreviewStreamControl } from "./serverBrowserStream.ts";
+import {
+  createPreviewStreamClient,
+  resolvePreviewStreamDownload,
+  type PreviewStreamControl,
+  uploadPreviewStreamFiles,
+} from "./serverBrowserStream.ts";
 
 class FakeSocket extends EventTarget {
   static readonly OPEN = 1;
@@ -142,11 +147,11 @@ describe("preview stream control", () => {
   });
 });
 
-describe("preview stream downloads", () => {
+describe("preview stream transfers", () => {
   beforeEach(() => vi.stubGlobal("WebSocket", FakeSocket));
   afterEach(() => vi.unstubAllGlobals());
 
-  it("offers a download at a URL carrying the stream's ticket", () => {
+  it("offers a download descriptor without embedding the stream's expiring ticket", () => {
     const onDownload = vi.fn();
     createPreviewStreamClient(
       {
@@ -165,9 +170,55 @@ describe("preview stream downloads", () => {
       JSON.stringify({ type: "download", id: "d1", fileName: "a b.csv", sizeBytes: 3 }),
     );
     expect(onDownload).toHaveBeenCalledExactlyOnceWith({
+      id: "d1",
       fileName: "a b.csv",
       sizeBytes: 3,
-      url: "http://preview.test/api/preview-stream/download?threadId=thread&tabId=tab&id=d1&wsTicket=ticket",
+    });
+  });
+
+  it("resolves download URLs with access refreshed at save time", async () => {
+    const resolveAccess = vi.fn(async () => ({
+      httpBase: "http://preview.test/api/preview-stream",
+      wsBase: "ws://preview.test/api/preview-stream",
+      query: { wsTicket: "fresh-ticket" },
+      credentials: false,
+    }));
+
+    await expect(
+      resolvePreviewStreamDownload(
+        { id: "d1" },
+        { threadId: "thread", tabId: "tab", resolveAccess },
+      ),
+    ).resolves.toBe(
+      "http://preview.test/api/preview-stream/download?threadId=thread&tabId=tab&id=d1&wsTicket=fresh-ticket",
+    );
+    expect(resolveAccess).toHaveBeenCalledOnce();
+  });
+
+  it("resolves upload access after the user finishes choosing files", async () => {
+    const resolveAccess = vi.fn(async () => ({
+      httpBase: "http://preview.test/api/preview-stream",
+      wsBase: "ws://preview.test/api/preview-stream",
+      query: { wsTicket: "fresh-ticket" },
+      credentials: false,
+    }));
+    const fetchMock = vi.fn(async (_input: string | URL, _init?: RequestInit) => ({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await uploadPreviewStreamFiles(
+      { id: "chooser-1", multiple: true, accept: ".csv" },
+      [new Blob(["file contents"], { type: "text/csv" })],
+      { threadId: "thread", tabId: "tab", resolveAccess },
+    );
+
+    expect(resolveAccess).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://preview.test/api/preview-stream/upload?threadId=thread&tabId=tab&chooser=chooser-1&wsTicket=fresh-ticket",
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      credentials: "omit",
     });
   });
 });

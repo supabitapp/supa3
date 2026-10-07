@@ -69,6 +69,31 @@ it.layer(layer)("PreviewManager", (it) => {
     }),
   );
 
+  it.effect("publishes server backing separately from navigation", () =>
+    Effect.gen(function* () {
+      const threadId = freshThreadId();
+      const manager = yield* PreviewManager.PreviewManager;
+      const collector = yield* collectEvents;
+      const opened = yield* manager.open({ threadId, runtime: "server" });
+
+      yield* manager.setBrowserBacking({
+        threadId,
+        tabId: opened.tabId,
+        browserBacking: "headless",
+      });
+
+      const listed = yield* manager.list({ threadId });
+      expect(listed.sessions[0]?.browserBacking).toBe("headless");
+      const events = yield* collector.drain;
+      expect(events.map((event) => event.type)).toEqual(["opened", "backingChanged"]);
+      const changed = events[1];
+      expect(changed).toMatchObject({
+        type: "backingChanged",
+        snapshot: { browserBacking: "headless", navStatus: { _tag: "Idle" } },
+      });
+    }),
+  );
+
   it.effect("keeps the tab's profile across navigation and status reports", () =>
     Effect.gen(function* () {
       const threadId = freshThreadId();

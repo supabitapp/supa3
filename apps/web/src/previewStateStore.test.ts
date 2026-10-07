@@ -133,6 +133,29 @@ describe("previewStateStore (single-tab)", () => {
     }
   });
 
+  it("backing changes update renderer metadata without adding a navigation", () => {
+    const snapshot = makeSnapshot();
+    applyPreviewServerEvent(ref, {
+      type: "opened",
+      threadId: "thread-1",
+      tabId: snapshot.tabId,
+      createdAt: snapshot.updatedAt,
+      snapshot,
+    });
+    applyPreviewServerEvent(ref, {
+      type: "backingChanged",
+      threadId: "thread-1",
+      tabId: snapshot.tabId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      snapshot: { ...snapshot, browserBacking: "headless", updatedAt: "2026-01-01T00:00:01.000Z" },
+    });
+
+    const state = readThreadPreviewState(ref);
+    expect(state.snapshot?.browserBacking).toBe("headless");
+    expect(state.snapshot?.navStatus).toEqual(snapshot.navStatus);
+    expect(state.recentlySeenUrls).toEqual(["http://localhost:5173/"]);
+  });
+
   it("resized event updates tab viewport without changing the active tab", () => {
     const active = makeSnapshot({ tabId: "tab_a" });
     const background = makeSnapshot({ tabId: "tab_b" });

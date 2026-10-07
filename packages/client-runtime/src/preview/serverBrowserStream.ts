@@ -95,62 +95,73 @@ export type PreviewStreamInput =
   | { readonly type: "probe"; readonly x: number; readonly y: number };
 
 export interface PreviewStreamDownload {
+  readonly id: string;
   readonly fileName: string;
   readonly sizeBytes: number;
-  /** Authenticated with the stream's own access; cookie sessions must send credentials. */
-  readonly url: string;
 }
 
 export interface PreviewStreamFileChooser {
+  readonly id: string;
   readonly multiple: boolean;
   /** The input's `accept` attribute, ready for a local `<input type=file>`. */
   readonly accept: string;
-  /** POST multipart `file` parts here; an empty form cancels the page's picker. */
-  readonly uploadUrl: string;
-  /** Cookie sessions must send credentials with the upload. */
-  readonly credentials: boolean;
+}
+
+export interface PreviewStreamTransferTarget {
+  readonly threadId: string;
+  readonly tabId: string;
+  /** Resolve current credentials when the user starts a transfer, not when the stream connects. */
+  readonly resolveAccess: () => Promise<DeviceHubAccess | null>;
 }
 
 const previewStreamUploadUrl = (
-  target: Pick<PreviewStreamTarget, "access" | "threadId" | "tabId">,
-  chooser: string,
+  access: DeviceHubAccess,
+  target: Pick<PreviewStreamTransferTarget, "threadId" | "tabId">,
+  chooserId: string,
 ): string =>
   withDeviceHubQuery(
-    `${target.access.httpBase}/upload?${new URLSearchParams({
+    `${access.httpBase}/upload?${new URLSearchParams({
       threadId: target.threadId,
       tabId: target.tabId,
-      chooser,
+      chooser: chooserId,
     }).toString()}`,
-    target.access,
+    access,
   );
 
-/** Sends files to a page's open picker. Rejects when the server refuses them. */
+/** Creates a download URL with credentials fetched when the user chooses to save it. */
+export async function resolvePreviewStreamDownload(
+  download: Pick<PreviewStreamDownload, "id">,
+  target: PreviewStreamTransferTarget,
+): Promise<string> {
+  const access = await target.resolveAccess();
+  if (!access) throw new Error("The browser stream is no longer available.");
+  return withDeviceHubQuery(
+    `${access.httpBase}/download?${new URLSearchParams({
+      threadId: target.threadId,
+      tabId: target.tabId,
+      id: download.id,
+    }).toString()}`,
+    access,
+  );
+}
+
+/** Sends files to a page's open picker with credentials fetched immediately before upload. */
 export async function uploadPreviewStreamFiles(
   chooser: PreviewStreamFileChooser,
   files: ReadonlyArray<Blob & { readonly name?: string }>,
+  target: PreviewStreamTransferTarget,
 ): Promise<void> {
   const body = new FormData();
   for (const file of files) body.append("file", file, file.name ?? "file");
-  const response = await fetch(chooser.uploadUrl, {
+  const access = await target.resolveAccess();
+  if (!access) throw new Error("The browser stream is no longer available.");
+  const response = await fetch(previewStreamUploadUrl(access, target, chooser.id), {
     method: "POST",
     body,
-    credentials: chooser.credentials ? "include" : "omit",
+    credentials: access.credentials ? "include" : "omit",
   });
   if (!response.ok) throw new Error((await response.text()) || "The upload was refused.");
 }
-
-const previewStreamDownloadUrl = (
-  target: Pick<PreviewStreamTarget, "access" | "threadId" | "tabId">,
-  id: string,
-): string =>
-  withDeviceHubQuery(
-    `${target.access.httpBase}/download?${new URLSearchParams({
-      threadId: target.threadId,
-      tabId: target.tabId,
-      id,
-    }).toString()}`,
-    target.access,
-  );
 
 /** Answer to a `probe`, echoing its point. */
 export interface PreviewStreamProbe {
@@ -295,10 +306,9 @@ export function createPreviewStreamClient(
       ) {
         fileChooser = id;
         events.onFileChooser?.({
+          id,
           multiple,
           accept,
-          uploadUrl: previewStreamUploadUrl(target, id),
-          credentials: target.access.credentials,
         });
       } else if (type === "fileChooserClosed" && typeof id === "string") {
         if (fileChooser !== id) return;
@@ -321,9 +331,9 @@ export function createPreviewStreamClient(
         typeof sizeBytes === "number"
       ) {
         events.onDownload?.({
+          id,
           fileName,
           sizeBytes,
-          url: previewStreamDownloadUrl(target, id),
         });
       } else if (type === "viewport" && typeof width === "number" && typeof height === "number") {
         failures = 0;

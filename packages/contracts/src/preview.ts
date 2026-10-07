@@ -171,6 +171,10 @@ export type PreviewNavStatus = typeof PreviewNavStatus.Type;
 export const PreviewRuntime = Schema.Literals(["desktop", "server"]);
 export type PreviewRuntime = typeof PreviewRuntime.Type;
 
+/** Where a server tab is rendered; absence preserves the existing client-specific selection. */
+export const PreviewBrowserBacking = Schema.Literals(["desktop", "headless"]);
+export type PreviewBrowserBacking = typeof PreviewBrowserBacking.Type;
+
 /**
  * Host setup the server's browser is missing, sent as JSON in the reason when
  * the preview stream closes with code 4503. Fixing it needs the host's
@@ -204,6 +208,8 @@ export const PreviewSessionSnapshot = Schema.Struct({
    */
   profileId: Schema.optional(BrowserProfileId),
   runtime: Schema.optional(PreviewRuntime),
+  /** Server tabs only; headless tabs must be viewed through the server preview stream. */
+  browserBacking: Schema.optional(PreviewBrowserBacking),
   /** Authenticated provider session owning an isolated server tab. */
   automationOwner: Schema.optional(Schema.String),
   /** An agent opened this tab and asked to show it, so viewers float it. */
@@ -340,6 +346,12 @@ const PreviewResizedEvent = Schema.Struct({
   ),
 });
 
+const PreviewBackingChangedEvent = Schema.Struct({
+  ...PreviewEventBaseSchema.fields,
+  type: Schema.Literal("backingChanged"),
+  snapshot: PreviewSessionSnapshot,
+});
+
 const PreviewFailedEvent = Schema.Struct({
   ...PreviewEventBaseSchema.fields,
   type: Schema.Literal("failed"),
@@ -358,6 +370,7 @@ export const PreviewEvent = Schema.Union([
   PreviewOpenedEvent,
   PreviewNavigatedEvent,
   PreviewResizedEvent,
+  PreviewBackingChangedEvent,
   PreviewFailedEvent,
   PreviewClosedEvent,
 ]);

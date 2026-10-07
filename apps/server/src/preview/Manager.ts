@@ -14,6 +14,7 @@ import {
   type PreviewEvent,
   type PreviewError,
   PreviewInvalidUrlError,
+  type PreviewBrowserBacking,
   type PreviewListInput,
   type PreviewListResult,
   type PreviewNavigateInput,
@@ -58,6 +59,12 @@ export class PreviewManager extends Context.Service<
     readonly reportStatus: (
       input: PreviewReportStatusInput & { readonly serverControlled?: boolean },
     ) => Effect.Effect<void, PreviewError>;
+    /** Publishes which renderer currently backs a server tab without reporting a navigation. */
+    readonly setBrowserBacking: (input: {
+      readonly threadId: string;
+      readonly tabId: string;
+      readonly browserBacking: PreviewBrowserBacking;
+    }) => Effect.Effect<void, PreviewError>;
     readonly requestReveal: (
       input: PreviewCloseInput & { readonly tabId: string; readonly force: boolean },
     ) => Effect.Effect<void, PreviewError>;
@@ -334,6 +341,40 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     );
   });
 
+  const setBrowserBacking: PreviewManager["Service"]["setBrowserBacking"] = Effect.fn(
+    "PreviewManager.setBrowserBacking",
+  )(function* (input) {
+    yield* mutateExistingSession(
+      input.threadId,
+      input.tabId,
+      Effect.fn("PreviewManager.setBrowserBackingSession")(function* (session) {
+        if (
+          session.snapshot.runtime !== "server" ||
+          session.snapshot.browserBacking === input.browserBacking
+        ) {
+          return { next: session, emit: null, result: undefined as void };
+        }
+        const updatedAt = yield* currentIsoTimestamp;
+        const snapshot: PreviewSessionSnapshot = {
+          ...session.snapshot,
+          browserBacking: input.browserBacking,
+          updatedAt,
+        };
+        return {
+          next: { ...session, snapshot },
+          emit: {
+            type: "backingChanged",
+            threadId: session.threadId,
+            tabId: session.tabId,
+            createdAt: snapshot.updatedAt,
+            snapshot,
+          },
+          result: undefined as void,
+        };
+      }),
+    );
+  });
+
   const resize: PreviewManager["Service"]["resize"] = Effect.fn("PreviewManager.resize")(
     function* (input) {
       return yield* mutateExistingSession(
@@ -501,6 +542,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     requestReveal,
     navigate,
     reportStatus,
+    setBrowserBacking,
     resize,
     adjust,
     refresh,

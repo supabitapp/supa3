@@ -49,3 +49,22 @@ export function readPreviewStreamAccess(
     ),
   );
 }
+
+/** Resolves fresh access without refreshing the ticket held by an active viewer. */
+export function readFreshPreviewStreamAccess(
+  environmentId: EnvironmentId,
+): Promise<DeviceHubAccess | null> {
+  const prepared = Option.getOrNull(
+    appAtomRegistry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
+  );
+  if (prepared === null) return Promise.resolve(null);
+  const freshAccessAtom = connectionAtomRuntime
+    .atom(resolveDeviceHubAccess({ prepared, hubBasePath: PREVIEW_STREAM_BASE_PATH }))
+    .pipe(Atom.withLabel(`preview-transfer-access:${environmentId}`));
+  return Effect.runPromise(
+    AtomRegistry.getResult(appAtomRegistry, freshAccessAtom, { suspendOnWaiting: true }).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.orElseSucceed(() => null),
+    ),
+  );
+}

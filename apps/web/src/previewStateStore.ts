@@ -184,7 +184,8 @@ export function applyPreviewServerEvent(ref: ScopedThreadRef, event: PreviewEven
       switch (event.type) {
         case "opened":
         case "navigated":
-        case "resized": {
+        case "resized":
+        case "backingChanged": {
           const snapshot = event.snapshot;
           if (current.suppressedTabIds.has(snapshot.tabId)) return current;
           const recentlySeenUrls =

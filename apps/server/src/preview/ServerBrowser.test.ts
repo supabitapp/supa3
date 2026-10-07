@@ -702,7 +702,10 @@ it.live("a popup becomes the agent's own tab and keeps its opener page", () =>
       }
       const popupTab = sessions.find((session) => session.tabId !== tabId)!;
       const opened = sessions.find((session) => session.tabId === tabId)!;
-      expect(popupTab).toMatchObject({ automationOwner: opened.automationOwner, reveal: false });
+      expect(popupTab).toMatchObject({
+        automationOwner: opened.automationOwner,
+        reveal: false,
+      });
       const status = yield* broker.invoke<PreviewAutomationStatus>({
         scope,
         tabId,
@@ -1026,6 +1029,34 @@ it.live("viewers see the agent's pointer move to its target and click there", ()
   ).pipe(Effect.provide(layer)),
 );
 
+it.live("keeps an existing headless tab authoritative when desktop becomes available later", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { broker, tabId } = yield* ready;
+      const manager = yield* Manager.PreviewManager;
+      const headless = contexts[0]!;
+      const opened = (yield* manager.list({ threadId: scope.thread.threadId })).sessions.find(
+        (session) => session.tabId === tabId,
+      );
+      expect(opened?.browserBacking).toBe("headless");
+
+      // The desktop attaches after the server selected and opened its page.
+      desktopTabs.add(tabId);
+      const url = "https://example.test/authoritative";
+      yield* broker.invoke({ scope, tabId, operation: "navigate", input: { url } });
+
+      expect(desktopConnections).toHaveLength(0);
+      expect(contexts).toHaveLength(1);
+      expect(headless.page.goto).toHaveBeenCalledWith(url, expect.anything());
+      const listed = yield* manager.list({ threadId: scope.thread.threadId });
+      expect(listed.sessions.find((session) => session.tabId === tabId)).toMatchObject({
+        browserBacking: "headless",
+        navStatus: { _tag: "Success", url },
+      });
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
 it.live("drives the desktop's own page for a tab the desktop renders", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -1036,6 +1067,11 @@ it.live("drives the desktop's own page for a tab the desktop renders", () =>
       desktopRendersNext = true;
       const opened = yield* manager.open({ threadId: scope.thread.threadId, runtime: "server" });
       const viewer = yield* browser.attachViewer(viewerInput(opened.tabId, true));
+      expect(
+        (yield* manager.list({ threadId: scope.thread.threadId })).sessions.find(
+          (session) => session.tabId === opened.tabId,
+        )?.browserBacking,
+      ).toBe("desktop");
       expect(desktopConnections.map((connection) => connection.endpoint)).toEqual([
         `ws://desktop/${opened.tabId}`,
       ]);

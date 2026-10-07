@@ -6,6 +6,8 @@ import {
   type PreviewStreamDownload,
   type PreviewStreamFileChooser,
   type PreviewStreamInput,
+  resolvePreviewStreamDownload,
+  uploadPreviewStreamFiles,
 } from "@supacode/client-runtime/preview/server-browser-stream";
 import type { EnvironmentId, PreviewStreamHostSetup } from "@supacode/contracts";
 import {
@@ -25,7 +27,7 @@ import * as Clipboard from "expo-clipboard";
 import { AppText } from "../../components/AppText";
 import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
 import { beginForegroundHandoff } from "../../lib/foreground-handoff";
-import { usePreviewStreamAccess } from "../../state/preview";
+import { readFreshPreviewStreamAccess, usePreviewStreamAccess } from "../../state/preview";
 
 import {
   previewStreamDocument,
@@ -60,8 +62,16 @@ type NativeStreamBridge = {
 };
 
 /** Picks files on this device and sends them to the page's open picker; none cancels it. */
-async function sendFilesToPage(chooser: PreviewStreamFileChooser, pick: boolean) {
-  const body = new FormData();
+async function sendFilesToPage(
+  chooser: PreviewStreamFileChooser,
+  pick: boolean,
+  target: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: string;
+    readonly tabId: string;
+  },
+) {
+  const files: Array<Blob & { readonly name?: string }> = [];
   if (pick) {
     const { getDocumentAsync } = await import("expo-document-picker");
     const endHandoff = beginForegroundHandoff();
@@ -73,38 +83,53 @@ async function sendFilesToPage(chooser: PreviewStreamFileChooser, pick: boolean)
     }
     for (const asset of result.canceled ? [] : result.assets) {
       // React Native's FormData uploads a file part from its URI.
-      body.append("file", {
+      files.push({
         uri: asset.uri,
         name: asset.name,
         type: asset.mimeType ?? "application/octet-stream",
-      } as unknown as Blob);
+      } as unknown as Blob & { readonly name: string });
     }
   }
-  const response = await fetch(chooser.uploadUrl, {
-    method: "POST",
-    body,
-    credentials: chooser.credentials ? "include" : "omit",
+  await uploadPreviewStreamFiles(chooser, files, {
+    threadId: target.threadId,
+    tabId: target.tabId,
+    resolveAccess: () => readFreshPreviewStreamAccess(target.environmentId),
   });
-  if (!response.ok) throw new Error((await response.text()) || "The upload was refused.");
 }
 
 /** The file is on the environment; saving it here goes through the share sheet. */
-function offerDownload(download: PreviewStreamDownload) {
+function offerDownload(
+  download: PreviewStreamDownload,
+  target: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: string;
+    readonly tabId: string;
+  },
+) {
   Alert.alert(`Downloaded ${download.fileName}`, undefined, [
     { text: "Not now", style: "cancel" },
     {
       text: "Save or share",
-      onPress: () =>
-        void downloadAndShareAttachment({
-          url: download.url,
-          attachment: { name: download.fileName, mimeType: "application/octet-stream" },
-          signal: new AbortController().signal,
-        }).catch((cause: unknown) =>
-          Alert.alert(
-            "Could not save the download",
-            cause instanceof Error ? cause.message : undefined,
-          ),
-        ),
+      onPress: () => {
+        void resolvePreviewStreamDownload(download, {
+          threadId: target.threadId,
+          tabId: target.tabId,
+          resolveAccess: () => readFreshPreviewStreamAccess(target.environmentId),
+        })
+          .then((url) =>
+            downloadAndShareAttachment({
+              url,
+              attachment: { name: download.fileName, mimeType: "application/octet-stream" },
+              signal: new AbortController().signal,
+            }),
+          )
+          .catch((cause: unknown) =>
+            Alert.alert(
+              "Could not save the download",
+              cause instanceof Error ? cause.message : undefined,
+            ),
+          );
+      },
     },
   ]);
 }
@@ -160,8 +185,9 @@ export function PreviewStreamWebView(
 
 function AuthorizedPreviewStream({
   ref,
+  environmentId,
   ...props
-}: PreviewStreamConfiguration & NativeStreamBridge) {
+}: PreviewStreamConfiguration & NativeStreamBridge & { readonly environmentId: EnvironmentId }) {
   const [attempt, setAttempt] = useState(0);
   const [previousAccess, setPreviousAccess] = useState(props.access);
   // Wait for refreshed access, including cookie credentials with unchanged JSON.
@@ -189,6 +215,7 @@ function AuthorizedPreviewStream({
     <PreviewStreamDocumentView
       key={`${attempt}:${configuration}`}
       {...props}
+      environmentId={environmentId}
       ref={ref}
       configuration={configuration}
       onUnauthorized={() => {
@@ -226,6 +253,9 @@ function AuthorizedPreviewStream({
 
 function PreviewStreamDocumentView({
   ref,
+  environmentId,
+  threadId,
+  tabId,
   configuration,
   background,
   compact,
@@ -239,6 +269,9 @@ function PreviewStreamDocumentView({
   onStreaming,
   onRecoverProcess,
 }: Omit<NativeStreamBridge, "onUnauthorized"> & {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: string;
+  readonly tabId: string;
   readonly configuration: string;
   readonly background: string;
   /** False when the view should stop retrying and fail. */
@@ -262,7 +295,11 @@ function PreviewStreamDocumentView({
     const chooser = fileChooser;
     if (!chooser) return;
     setFileChooser(null);
-    void sendFilesToPage(chooser, pick).catch((cause: unknown) =>
+    void sendFilesToPage(chooser, pick, {
+      environmentId,
+      threadId,
+      tabId,
+    }).catch((cause: unknown) =>
       Alert.alert(
         "Could not send the files to the page",
         cause instanceof Error ? cause.message : undefined,
@@ -397,7 +434,11 @@ function PreviewStreamDocumentView({
               void Clipboard.setStringAsync(message.text).catch(() => undefined);
               return;
             case "download":
-              offerDownload(message);
+              offerDownload(message, {
+                environmentId,
+                threadId,
+                tabId,
+              });
               return;
             case "fileChooser":
               setFileChooser(message.chooser);
