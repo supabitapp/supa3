@@ -947,6 +947,7 @@ export function createEnvironmentThreadStateAtoms<R, E>(
     | R,
     E
   >,
+  canLoadAtom?: (environmentId: EnvironmentIdType, threadId: ThreadIdType) => Atom.Atom<boolean>,
 ) {
   // Cache definitions must outlive collectible live-atom definitions. The
   // registry retains these nodes without retaining environment or RPC scopes.
@@ -967,6 +968,11 @@ export function createEnvironmentThreadStateAtoms<R, E>(
         (get) => {
           get.mount(resumeAtom);
           const resume = get.once(resumeAtom);
+          if (canLoadAtom !== undefined && !get(canLoadAtom(environmentId, threadId))) {
+            resume.owner = undefined;
+            resume.snapshot = undefined;
+            return Stream.succeed(EMPTY_ENVIRONMENT_THREAD_STATE);
+          }
           const live = threadStateChanges(environmentId, threadId, resume);
           return resume.snapshot === undefined
             ? live

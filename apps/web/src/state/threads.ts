@@ -15,16 +15,21 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { directThreadEnvironment } from "./threadCommands";
+import { createThreadDetailReadiness } from "./threadDetailReadiness";
 
 export const threadEnvironment = directThreadEnvironment;
-const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
-export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
-  environmentThreads.stateAtom,
-);
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: threadEnvironment.snapshotAtom,
 });
+const threadDetailReadyAtom = createThreadDetailReadiness(environmentThreadShells.threadShellAtom);
+const environmentThreads = createEnvironmentThreadStateAtoms(
+  connectionAtomRuntime,
+  (environmentId, threadId) => threadDetailReadyAtom({ environmentId, threadId }),
+);
+export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
+  environmentThreads.stateAtom,
+);
 export const sidebarThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: threadEnvironment.sidebarSnapshotAtom,
