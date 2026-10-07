@@ -1,3 +1,4 @@
+import { pendingThreadCreationLabel } from "@supacode/client-runtime/pending-thread-creation";
 import { useSelectedThreadComposerMetadata } from "../../state/use-thread-detail";
 import { useAtomValue } from "@effect/atom-react";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
@@ -487,7 +488,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       if (props.worktreeSetup) return null;
       return {
         kind: "preparing",
-        label: props.creationState.preparingWorktree ? "Setting up worktree…" : "Starting…",
+        label: pendingThreadCreationLabel({
+          connected: props.connectionStateLabel === "connected",
+          preparingWorktree: props.creationState.preparingWorktree,
+        }),
       };
     }
     if (props.creationState?.kind === "failed") {
@@ -1019,21 +1023,35 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     ],
   );
 
-  const handleEditPendingMessage = useCallback(async (message: QueuedThreadMessage) => {
-    try {
-      if (
-        (await editPendingThreadMessage(message)) &&
-        selectedThreadKeyRef.current === scopedThreadKey(message.environmentId, message.threadId)
-      ) {
-        composerEditorRef.current?.focus();
+  const handleEditPendingMessage = useCallback(
+    async (message: QueuedThreadMessage) => {
+      if (message.creation) {
+        navigation.navigate("NewTaskSheet", {
+          screen: "NewTaskDraft",
+          params: {
+            environmentId: String(message.environmentId),
+            projectId: String(message.creation.projectId),
+            pendingTaskId: String(message.messageId),
+          },
+        });
+        return;
       }
-    } catch (error) {
-      Alert.alert(
-        "Could not edit message",
-        error instanceof Error ? error.message : "Please try again.",
-      );
-    }
-  }, []);
+      try {
+        if (
+          (await editPendingThreadMessage(message)) &&
+          selectedThreadKeyRef.current === scopedThreadKey(message.environmentId, message.threadId)
+        ) {
+          composerEditorRef.current?.focus();
+        }
+      } catch (error) {
+        Alert.alert(
+          "Could not edit message",
+          error instanceof Error ? error.message : "Please try again.",
+        );
+      }
+    },
+    [navigation],
+  );
 
   const collapseComposer = useCallback(() => {
     composerEditorRef.current?.blur();
@@ -1410,7 +1428,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       // them against a thread id the server may still reject
                       // would strand them in the outbox.
                       sendBlockedReason={
-                        props.creationState?.kind === "preparing" ? "Starting the task…" : null
+                        props.creationState?.kind === "preparing"
+                          ? pendingThreadCreationLabel({
+                              connected: props.connectionStateLabel === "connected",
+                              preparingWorktree: props.creationState.preparingWorktree,
+                            })
+                          : null
                       }
                       draftKey={props.composerDraftKey ?? undefined}
                       followUpBehavior={props.followUpBehavior}

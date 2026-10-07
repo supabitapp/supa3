@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => ({
   supportsUploads: false,
   online: false,
   existingThread: false,
+  archivedThread: false,
 }));
 
 vi.mock("../rpc/atomRegistry", async () => {
@@ -39,6 +40,7 @@ vi.mock("../rpc/atomRegistry", async () => {
         if (atom === "shell") return { status: harness.online ? "live" : "cached" };
         if (atom === "snapshot")
           return {
+            archivedThreads: harness.archivedThread ? [{ id: "thread" }] : [],
             threads: harness.existingThread
               ? [
                   {
@@ -89,7 +91,10 @@ vi.mock("./assets", () => ({ assetEnvironment: { createUrl: { label: "verify" } 
 vi.mock("./session", () => ({
   readPreparedConnection: () => ({ httpBaseUrl: "https://environment.example" }),
 }));
-vi.mock("../lib/utils", () => ({ randomUUID: () => "generated-command" }));
+vi.mock("../lib/utils", () => ({
+  randomUUID: () => "generated-command",
+  newThreadId: () => ThreadId.make("replacement-thread"),
+}));
 vi.mock("../composerDraftStore", () => ({
   DraftId: { make: (id: string) => id },
   markPromotedDraftThreadByRef: harness.marked,
@@ -151,6 +156,7 @@ beforeEach(() => {
   harness.online = false;
   harness.supportsUploads = false;
   harness.existingThread = false;
+  harness.archivedThread = false;
   harness.run.mockResolvedValue(AsyncResult.success({ sequence: 1 }));
   harness.verify.mockResolvedValue({ status: "verified" });
 });
@@ -475,12 +481,56 @@ describe("web thread outbox delivery", () => {
     expect([...harness.records.keys()]).toEqual(["other-message"]);
   });
 
-  it("keeps the foreground draft until its server route can take over", async () => {
-    const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+  it("recovers separate pending threads in the same project without mixing their messages", async () => {
+    const { enqueueThreadOutboxTurns, webThreadOutbox } = await import("./threadOutbox");
+    const base = target();
+    const creation = {
+      projectId: ProjectId.make("project"),
+      title: "Offline task",
+      modelSelection: base.input.modelSelection,
+      runtimeMode: base.input.runtimeMode,
+      interactionMode: base.input.interactionMode,
+      branch: "main",
+      worktreePath: null,
+      createdAt: "2026-10-06T00:00:00Z",
+    };
+    await enqueueThreadOutboxTurns(
+      ["first", "second"].map((id) => ({
+        ...base,
+        input: {
+          ...base.input,
+          threadId: ThreadId.make(id),
+          commandId: CommandId.make(id),
+          message: { ...base.input.message, messageId: MessageId.make(id), text: id },
+          bootstrap: { createThread: { ...creation, title: id } },
+        },
+      })),
+    );
+    await webThreadOutbox.drain();
+    expect(harness.run).not.toHaveBeenCalled();
+    vi.resetModules();
+    const recovered = await import("./threadOutbox");
+    await recovered.webThreadOutbox.load();
+    expect(recovered.webThreadOutbox.isLoaded()).toBe(true);
+    const first = recovered.readPendingThreadCreation({
+      environmentId: base.environmentId,
+      threadId: ThreadId.make("first"),
+    });
+    const second = recovered.readPendingThreadCreation({
+      environmentId: base.environmentId,
+      threadId: ThreadId.make("second"),
+    });
+    expect(first?.payload.input.message.text).toBe("first");
+    expect(second?.payload.input.message.text).toBe("second");
+    expect(first?.scope).not.toBe(second?.scope);
+  });
+
+  it("returns the replacement pending thread when retrying a rejected creation without a draft", async () => {
+    const { enqueueThreadOutboxTurn, replaceThreadOutboxTurn, webThreadOutbox } =
+      await import("./threadOutbox");
     const original = target();
     await enqueueThreadOutboxTurn({
       ...original,
-      draftId: DraftId.make("draft"),
       input: {
         ...original.input,
         bootstrap: {
@@ -498,8 +548,71 @@ describe("web thread outbox delivery", () => {
       },
     });
     harness.online = true;
+    harness.run.mockResolvedValueOnce(
+      AsyncResult.fail({ _tag: "OrchestrationDispatchCommandError", message: "Rejected." }),
+    );
     await webThreadOutbox.drain();
-    expect(harness.marked).toHaveBeenCalled();
-    expect(harness.finalized).not.toHaveBeenCalled();
+    const failed = webThreadOutbox.getSnapshot()[0]!;
+    expect(failed.status).toBe("failed");
+    harness.online = false;
+    expect(await replaceThreadOutboxTurn(failed, failed.payload)).toEqual({
+      environmentId: "environment",
+      threadId: "replacement-thread",
+    });
+    expect(webThreadOutbox.getSnapshot()[0]).toMatchObject({
+      scope: "environment:replacement-thread",
+      status: "pending",
+      attempted: false,
+      payload: {
+        input: { threadId: "replacement-thread", commandId: "generated-command" },
+      },
+    });
   });
+
+  it.each(["arrived", "archived"])(
+    "keeps an acknowledged creation until the server snapshot confirms it %s",
+    async (state) => {
+      const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+      const original = target();
+      await enqueueThreadOutboxTurn({
+        ...original,
+        draftId: DraftId.make("draft"),
+        input: {
+          ...original.input,
+          bootstrap: {
+            createThread: {
+              projectId: ProjectId.make("project"),
+              title: "Task",
+              modelSelection: original.input.modelSelection,
+              runtimeMode: original.input.runtimeMode,
+              interactionMode: original.input.interactionMode,
+              branch: null,
+              worktreePath: null,
+              createdAt: "2026-10-06T00:00:00Z",
+            },
+          },
+        },
+      });
+      harness.online = true;
+      await webThreadOutbox.drain();
+      expect(harness.marked).toHaveBeenCalled();
+      expect(harness.finalized).not.toHaveBeenCalled();
+      expect(webThreadOutbox.getSnapshot()[0]?.status).toBe("delivered");
+      const recovered = (await import("./pendingThreadCreation")).pendingThreadCreation(
+        webThreadOutbox.getSnapshot()[0]!,
+      );
+      expect(recovered?.message.shell).toMatchObject({
+        id: "thread",
+        title: "Task",
+        projectId: "project",
+      });
+      await webThreadOutbox.drain();
+      expect(harness.run).toHaveBeenCalledTimes(1);
+      harness.existingThread = state === "arrived";
+      harness.archivedThread = state === "archived";
+      await webThreadOutbox.drain();
+      expect(webThreadOutbox.getSnapshot()).toEqual([]);
+      expect(harness.run).toHaveBeenCalledTimes(1);
+    },
+  );
 });

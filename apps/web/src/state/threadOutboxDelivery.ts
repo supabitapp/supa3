@@ -48,6 +48,8 @@ export function createBrowserThreadOutbox<Payload>(options: {
   };
   readonly now: () => number;
   readonly canDeliver: (entry: ThreadOutboxEntry<Payload>) => boolean;
+  /** Keep an acknowledged creation visible until its server shell reaches the client. */
+  readonly canRemoveDelivered?: (entry: ThreadOutboxEntry<Payload>) => boolean;
   readonly deliver: (
     entry: ThreadOutboxEntry<Payload>,
     savePayload: (payload: Payload) => Promise<void>,
@@ -76,6 +78,7 @@ export function createBrowserThreadOutbox<Payload>(options: {
   const listeners = new Set<() => void>();
   const sending = new Set<string>();
   let loadPromise: Promise<void> | null = null;
+  let loaded = false;
   let drainPromise: Promise<number | null> | null = null;
   let position = 0;
 
@@ -113,12 +116,14 @@ export function createBrowserThreadOutbox<Payload>(options: {
   }
 
   function load() {
-    loadPromise ??= manager.load().then((loaded) => {
-      if (!loaded) {
+    loadPromise ??= manager.load().then((didLoad) => {
+      if (!didLoad) {
         loadPromise = null;
         throw new Error("Pending messages could not be loaded.");
       }
       refreshPosition();
+      loaded = true;
+      for (const listener of listeners) listener();
     });
     return loadPromise;
   }
@@ -224,6 +229,7 @@ export function createBrowserThreadOutbox<Payload>(options: {
         );
         if (!head) return { next: options.now() };
         if (head.status === "delivered") {
+          if (options.canRemoveDelivered?.(head) === false) return { next: null };
           await remove(head.id);
           return { next: options.now() };
         }
@@ -262,6 +268,7 @@ export function createBrowserThreadOutbox<Payload>(options: {
         }
         // Record acknowledgement before cleanup, so failed deletion can never resend the turn.
         await save({ ...current, status: "delivered", error: null });
+        if (options.canRemoveDelivered?.(current) === false) return { next: null };
         await remove(current.id);
         return { next: options.now() };
       });
@@ -312,6 +319,7 @@ export function createBrowserThreadOutbox<Payload>(options: {
     cancel,
     drain,
     getSnapshot,
+    isLoaded: () => loaded,
     clearEnvironment: async (environmentId: EnvironmentId) => {
       await mutation(manager.clearEnvironment(environmentId));
       if (

@@ -184,9 +184,9 @@ export function createThreadOutboxEditor(routeKey: string) {
     save: async (payload: OutboxTurn) => {
       const current = editing;
       if (!current) return null;
-      const draftId = await replaceThreadOutboxTurn(current.entry, payload);
+      const threadRef = await replaceThreadOutboxTurn(current.entry, payload);
       if (editing === current) finish(true);
-      return draftId;
+      return threadRef;
     },
     cancel,
   };
@@ -205,6 +205,14 @@ export function useThreadOutboxEditor(routeKey: string) {
     }, 20_000);
     return () => clearInterval(timer);
   }, [editingId]);
+  const previews = useThreadOutboxAttachments(entry);
+  const attachments = editing
+    ? previews.filter(({ attachment }) => editing.keptAttachmentIds.includes(attachment.id))
+    : null;
+  return { editor, editing, attachments };
+}
+
+export function useThreadOutboxAttachments(entry: PendingThreadTurn | undefined) {
   const previews = useMemo(
     () =>
       entry
@@ -224,8 +232,5 @@ export function useThreadOutboxEditor(routeKey: string) {
     },
     [previews],
   );
-  const attachments = editing
-    ? previews.filter(({ attachment }) => editing.keptAttachmentIds.includes(attachment.id))
-    : null;
-  return { editor, editing, attachments };
+  return previews;
 }

@@ -1844,7 +1844,6 @@ function renderFeedEntry(
             {props.onEditPendingMessage !== null &&
             entry.pendingMessage &&
             !entry.acknowledged &&
-            !entry.pendingMessage.creation &&
             entry.pendingMessage.messageId !== props.dispatchingMessageId ? (
               <Pressable
                 accessibilityRole="button"

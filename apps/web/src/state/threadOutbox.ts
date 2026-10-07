@@ -123,6 +123,17 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     threadId: payload.input.threadId,
   }),
   now: () => Date.now(),
+  canRemoveDelivered: (entry) => {
+    if (!entry.payload.input.bootstrap?.createThread) return true;
+    const snapshot = appAtomRegistry.get(
+      directThreadEnvironment.snapshotAtom(entry.payload.environmentId),
+    );
+    if (!snapshot) return false;
+    return (
+      snapshot.threads.some((thread) => thread.id === entry.payload.input.threadId) ||
+      snapshot.archivedThreads.some((thread) => thread.id === entry.payload.input.threadId)
+    );
+  },
   canDeliver: (entry) => {
     const environmentId = entry.payload.environmentId;
     const presentation = appAtomRegistry.get(
@@ -364,30 +375,45 @@ export async function replaceThreadOutboxTurn(entry: PendingThreadTurn, payload:
     const draftId = DraftId.make(payload.draftId);
     const draft = useComposerDraftStore.getState().getDraftSession(draftId);
     if (draft) restoreFailedBackgroundDraftThread(draftId, draft, threadId);
-    return draftId;
   }
-  return null;
+  return threadId !== entry.payload.input.threadId
+    ? scopeThreadRef(payload.environmentId, threadId)
+    : null;
 }
 
 export function useThreadOutbox() {
   return useSyncExternalStore(webThreadOutbox.subscribe, webThreadOutbox.getSnapshot);
 }
 
-export function usePendingThreadCreation(ref: ScopedThreadRef) {
-  const scope = scopedThreadKey(ref);
+export function usePendingThreadCreation(ref: ScopedThreadRef | null) {
+  const scope = ref ? scopedThreadKey(ref) : null;
   const snapshot = useCallback(
     () =>
       webThreadOutbox
         .getSnapshot()
-        .some(
+        .find(
           (entry) =>
-            entry.scope === scope &&
-            entry.status !== "delivered" &&
-            entry.payload.input.bootstrap?.createThread !== undefined,
-        ),
+            entry.scope === scope && entry.payload.input.bootstrap?.createThread !== undefined,
+        ) ?? null,
     [scope],
   );
   return useSyncExternalStore(webThreadOutbox.subscribe, snapshot);
+}
+
+export function readPendingThreadCreation(ref: ScopedThreadRef) {
+  const scope = scopedThreadKey(ref);
+  return (
+    webThreadOutbox
+      .getSnapshot()
+      .find(
+        (entry) =>
+          entry.scope === scope && entry.payload.input.bootstrap?.createThread !== undefined,
+      ) ?? null
+  );
+}
+
+export function useThreadOutboxLoaded() {
+  return useSyncExternalStore(webThreadOutbox.subscribe, webThreadOutbox.isLoaded);
 }
 
 export async function clearThreadOutboxEnvironment(environmentId: EnvironmentId) {

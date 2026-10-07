@@ -1,3 +1,5 @@
+import { SidebarPendingThreadRow } from "./SidebarPendingThreadRow";
+import { useThreadOutbox, type PendingThreadTurn } from "../state/threadOutbox";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@supacode/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -935,6 +937,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 });
 
 interface SidebarProjectThreadListProps {
+  pendingThreads: readonly PendingThreadTurn[];
   projectKey: string;
   projectExpanded: boolean;
   hasOverflowingThreads: boolean;
@@ -988,6 +991,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
   props: SidebarProjectThreadListProps,
 ) {
   const {
+    pendingThreads,
     projectKey,
     projectExpanded,
     hasOverflowingThreads,
@@ -1029,6 +1033,15 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
       ref={attachThreadListAutoAnimateRef}
       className="mx-0.5 my-0 w-full translate-x-0 overflow-hidden sm:mx-1"
     >
+      {pendingThreads.map((entry) => (
+        <SidebarPendingThreadRow
+          key={`pending:${entry.scope}`}
+          entry={entry}
+          projectTitle={undefined}
+          active={entry.scope === activeRouteThreadKey}
+          onNavigate={navigateToThread}
+        />
+      ))}
       {shouldShowThreadPanel && showEmptyThreadState ? (
         <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
           <div
@@ -1247,6 +1260,23 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     sidebarThreadByKeyRef.current = sidebarThreadByKey;
   });
   const projectThreads = sidebarThreads;
+  const outboxEntries = useThreadOutbox();
+  const pendingThreads = useMemo(
+    () =>
+      outboxEntries.filter((entry) => {
+        const creation = entry.payload.input.bootstrap?.createThread;
+        return (
+          creation &&
+          !sidebarThreadByKey.has(entry.scope) &&
+          project.memberProjectRefs.some(
+            (ref) =>
+              ref.environmentId === entry.payload.environmentId &&
+              ref.projectId === creation.projectId,
+          )
+        );
+      }),
+    [outboxEntries, project.memberProjectRefs, sidebarThreadByKey],
+  );
   const projectPreferenceKeys = useMemo(() => projectExpansionPreferenceKeys(project), [project]);
   const projectExpanded = useUiStateStore((state) =>
     resolveProjectExpanded(state.projectExpandedById, projectPreferenceKeys),
@@ -2481,13 +2511,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       </div>
 
       <SidebarProjectThreadList
+        pendingThreads={
+          projectExpanded
+            ? pendingThreads
+            : pendingThreads.filter((entry) => entry.scope === activeRouteThreadKey)
+        }
         projectKey={project.projectKey}
         projectExpanded={projectExpanded}
         hasOverflowingThreads={hasOverflowingThreads}
         hiddenThreadStatus={hiddenThreadStatus}
         orderedProjectThreadKeys={orderedProjectThreadKeys}
         renderedThreads={renderedThreads}
-        showEmptyThreadState={showEmptyThreadState}
+        showEmptyThreadState={showEmptyThreadState && pendingThreads.length === 0}
         shouldShowThreadPanel={shouldShowThreadPanel}
         isThreadListExpanded={isThreadListExpanded}
         activeRouteThreadKey={activeRouteThreadKey}

@@ -391,6 +391,10 @@
       "types": "./src/device/duoControl.ts",
       "default": "./src/device/duoControl.ts"
     },
+    "./pending-thread-creation": {
+      "types": "./src/pendingThreadCreation.ts",
+      "default": "./src/pendingThreadCreation.ts"
+    },
     "./thread-outbox": {
       "types": "./src/threadOutbox.ts",
       "default": "./src/threadOutbox.ts"

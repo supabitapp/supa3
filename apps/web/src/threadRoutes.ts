@@ -25,7 +25,10 @@ export function resolveThreadRouteRenderState(input: {
   serverThreadExists: boolean;
   serverThreadDeleted: boolean;
   draftThreadExists: boolean;
+  pendingThreadExists?: boolean;
+  outboxLoaded?: boolean;
 }): ThreadRouteRenderState {
+  if (input.pendingThreadExists) return "ready";
   if (!input.bootstrapComplete) {
     return "loading";
   }
@@ -35,7 +38,7 @@ export function resolveThreadRouteRenderState(input: {
   if (input.serverThreadDeleted) {
     return "missing";
   }
-  return input.serverThreadExists ? "ready" : "missing";
+  return input.serverThreadExists ? "ready" : input.outboxLoaded === false ? "loading" : "missing";
 }
 
 export function buildThreadRouteParams(ref: ScopedThreadRef): {
