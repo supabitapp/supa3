@@ -224,7 +224,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "environment-identification",
     title: "Environment identification",
     to: "/settings/appearance",
-    searchTerms: ["dev nightly artwork pill label hide none christmas sleigh wireframe starfield"],
+    searchTerms: [
+      "dev nightly artwork pill label hide none christmas sleigh wireframe meteor shower",
+    ],
     // The setting is stage-dependent, so its parent section is the stable destination.
     targetId: "appearance-interface",
   },

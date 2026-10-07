@@ -640,6 +640,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     --stage-night-secondary: oklch(0.600473 0.182225 277.296);
     --stage-night-line: oklch(0.938794 0.029114 273.103);
     --stage-night-sparkle: oklch(0.880867 0.057747 269.011);
+    --stage-meteor-tail: oklch(0.81 0.09 294);
     --stage-wireframe-top: oklch(0.782169 0.123386 240.226);
     --stage-wireframe-mid: oklch(0.616111 0.195824 259.735);
     --stage-wireframe-bottom: oklch(0.441553 0.232394 265.474);
@@ -693,7 +694,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(supacode
     display: none;
   }
 
-  /* Each maintainer palette tints the night sky behind the starfield and sleigh.
+  /* Each maintainer palette tints the night sky behind the meteor shower and sleigh.
      These colors stay deliberately deep at the top edge so the white stage
      wordmark and controls retain contrast in both appearance modes. */
   html[data-theme-id="supacode-chat"] {
