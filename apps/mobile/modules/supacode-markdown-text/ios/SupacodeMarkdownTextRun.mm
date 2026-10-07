@@ -44,6 +44,12 @@ using namespace facebook::react;
 
   if (newViewProps.contextMenuConfig != oldViewProps.contextMenuConfig) {
     _contextMenuConfig = [NSString stringWithUTF8String:newViewProps.contextMenuConfig.c_str()];
+    // Menu availability changes link attributes without changing text measurement.
+    if (newViewProps.contextMenuConfig.empty() != oldViewProps.contextMenuConfig.empty()) {
+      UIView *owner = self.superview;
+      while (owner != nil && ![owner isKindOfClass:SupacodeMarkdownText.class]) owner = owner.superview;
+      [owner setNeedsLayout];
+    }
   }
 
   [super updateProps:props oldProps:oldProps];

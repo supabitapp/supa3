@@ -1,5 +1,7 @@
 #include "SupacodeMarkdownTextShadowNode.h"
 #include "SupacodeMarkdownTextRunShadowNode.h"
+#include "SupacodeMarkdownTextMeasurementCache.h"
+#include "SupacodeMarkdownTextConversion.h"
 #import "SupacodeContextChip.h"
 #include <react/renderer/components/view/ViewShadowNode.h>
 #import <react/renderer/textlayoutmanager/RCTAttributedTextUtils.h>
@@ -13,6 +15,8 @@ static constexpr Float ParagraphStyleEncodingOffset = 1000;
 static constexpr auto FileAttachmentNativeIdPrefix = "supacode-file:";
 static constexpr auto SkillAttachmentNativeIdPrefix = "supacode-skill:";
 static constexpr auto LinkAttachmentNativeIdPrefix = "supacode-link:";
+
+static SupacodeMarkdownTextMeasurementCache measurementCache;
 
 static void applyParagraphStyles(
     NSMutableAttributedString *attributedString,
@@ -83,12 +87,16 @@ static void applyAttachments(
 SupacodeMarkdownTextShadowNode::SupacodeMarkdownTextShadowNode(
    const ShadowNode& sourceShadowNode,
    const ShadowNodeFragment& fragment
-) : ConcreteViewShadowNode(sourceShadowNode, fragment) {
+) : ConcreteViewShadowNode(sourceShadowNode, fragment),
+    _attributedString(static_cast<const SupacodeMarkdownTextShadowNode &>(sourceShadowNode)._attributedString),
+    _paragraphStyleRanges(static_cast<const SupacodeMarkdownTextShadowNode &>(sourceShadowNode)._paragraphStyleRanges),
+    _attachmentRanges(static_cast<const SupacodeMarkdownTextShadowNode &>(sourceShadowNode)._attachmentRanges) {
 };
 
 Size SupacodeMarkdownTextShadowNode::measureContent(
   const LayoutContext& layoutContext,
   const LayoutConstraints& layoutConstraints) const {
+  @autoreleasepool {
     const auto &baseProps = getConcreteProps();
 
     auto baseTextAttributes = TextAttributes::defaultTextAttributes();
@@ -248,8 +256,15 @@ Size SupacodeMarkdownTextShadowNode::measureContent(
     _paragraphStyleRanges = paragraphStyleRanges;
     _attachmentRanges = attachmentRanges;
 
+    SupacodeMarkdownTextMeasurementKey measurementKey{
+        std::move(baseAttributedString), paragraphStyleRanges, attachmentRanges,
+        layoutConstraints, fontSizeMultiplier, layoutContext.pointScaleFactor,
+        baseProps.numberOfLines, baseProps.ellipsizeMode,
+    };
+    if (const auto cached = measurementCache.get(measurementKey)) return *cached;
+
     NSMutableAttributedString *convertedAttributedString =
-        [RCTNSAttributedStringFromAttributedString(baseAttributedString) mutableCopy];
+        SupacodeMarkdownTextConvertAttributedString(measurementKey.attributedString);
     applyParagraphStyles(convertedAttributedString, paragraphStyleRanges);
     applyAttachments(convertedAttributedString, attachmentRanges);
     // TextKit stacks a paragraph's extra line height above the glyphs. React Native's own
@@ -282,7 +297,7 @@ Size SupacodeMarkdownTextShadowNode::measureContent(
     [layoutManager ensureLayoutForTextContainer:textContainer];
     const CGRect usedRect = [layoutManager usedRectForTextContainer:textContainer];
 
-    return {
+    const Size size{
         std::clamp(
             static_cast<Float>(std::ceil(usedRect.size.width)),
             layoutConstraints.minimumSize.width,
@@ -292,14 +307,31 @@ Size SupacodeMarkdownTextShadowNode::measureContent(
             layoutConstraints.minimumSize.height,
             layoutConstraints.maximumSize.height),
     };
+    measurementCache.set(std::move(measurementKey), size);
+    return size;
+  }
 }
 
 void SupacodeMarkdownTextShadowNode::layout(LayoutContext layoutContext) {
+  // Link attributes in the native view target run tags. Publish new identities
+  // even when replacing a run leaves the measured text and styles unchanged.
+  std::vector<std::pair<Tag, bool>> runIdentities;
+  for (const auto &child : getChildren()) {
+    if (const auto run = dynamic_cast<const SupacodeMarkdownTextRunShadowNode *>(child.get())) {
+      runIdentities.emplace_back(run->getTag(), !run->getConcreteProps().contextMenuConfig.empty());
+    }
+  }
+  const auto &state = getStateData();
+  if (state.attributedString == _attributedString &&
+      state.paragraphStyleRanges == _paragraphStyleRanges &&
+      state.attachmentRanges == _attachmentRanges &&
+      state.runIdentities == runIdentities) return;
   ensureUnsealed();
   setStateData(SupacodeMarkdownTextStateReal{
     _attributedString,
     _paragraphStyleRanges,
     _attachmentRanges,
+    std::move(runIdentities),
   });
 }
 }

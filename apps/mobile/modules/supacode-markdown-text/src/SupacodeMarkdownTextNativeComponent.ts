@@ -4,10 +4,6 @@ interface TargetedEvent {
   target: CodegenTypes.Int32;
 }
 
-interface TextLayoutEvent extends TargetedEvent {
-  lines: string[];
-}
-
 /**
  * Event fired when text selection changes in the MarkdownTextPrimitive.
  * @property target - The view tag identifier
@@ -27,7 +23,6 @@ interface NativeProps extends ViewProps {
   allowFontScaling?: CodegenTypes.WithDefault<boolean, true>;
   ellipsizeMode?: CodegenTypes.WithDefault<EllipsizeMode, "tail">;
   selectable?: boolean;
-  onTextLayout?: CodegenTypes.BubblingEventHandler<TextLayoutEvent>;
   /**
    * Callback fired when the text selection changes.
    *

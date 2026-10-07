@@ -28,9 +28,6 @@ const textDefaults = {
 
 const useTextAncestorContext = () => React.useContext(TextAncestorContext);
 
-const childText = (child: React.ReactNode) =>
-  typeof child === "string" || typeof child === "number" ? child.toString() : "";
-
 /**
  * Event fired by `onSelectionChange`. `start`/`end` are 0-based UTF-16 indices
  * into the rendered string. `start === end` means the selection was cleared.
@@ -44,8 +41,7 @@ export type ContextMenuActionEvent = {
 };
 
 /**
- * `onTextLayout` is not offered: the native view reports plain line strings
- * while the React Native Text fallback reports measured `TextLayoutLine`s.
+ * The selectable native renderer does not offer `onTextLayout`.
  */
 export type MarkdownTextPrimitiveProps = Omit<TextProps, "onTextLayout"> & {
   nativeTextRef?: Ref<TextInstance>;
@@ -77,7 +73,8 @@ function MarkdownTextPrimitiveChild({
     () => [true, flattenedStyle],
     [flattenedStyle],
   );
-  const nativeChildren = withOccurrenceKeys(React.Children.toArray(children), childText).map(
+  // A text slot keeps its native identity while its streamed content grows.
+  const nativeChildren = withOccurrenceKeys(React.Children.toArray(children), () => "text").map(
     ({ item: child, key }) => {
       if (React.isValidElement(child)) {
         return child;

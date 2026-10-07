@@ -1,5 +1,6 @@
 #import "SupacodeMarkdownText.h"
 #import "SupacodeMarkdownTextShadowNode.h"
+#import "SupacodeMarkdownTextConversion.h"
 #import "SupacodeMarkdownTextComponentDescriptor.h"
 #import "SupacodeMarkdownTextRun.h"
 #import "SupacodeContextChip.h"
@@ -270,7 +271,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
 }
 
 @interface SupacodeMarkdownText () <RCTSupacodeMarkdownTextViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
-
+- (void)updateTextView;
 @end
 
 @interface SupacodeMarkdownText () <SupacodeMarkdownOutsideTapTarget>
@@ -280,6 +281,8 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   UIView * _view;
   SupacodeContextCopyTextView * _textView;
   SupacodeMarkdownTextShadowNode::ConcreteState::Shared _state;
+  SupacodeMarkdownTextShadowNode::ConcreteState::Shared _renderedState;
+  std::vector<std::pair<Tag, bool>> _renderedRunTags;
   __weak UIWindow * _outsideTapWindow;
   BOOL _suppressSelectionChange;
   NSMutableDictionary<NSString *, UIImage *> * _attachmentImages;
@@ -379,6 +382,8 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   [coordinator removeTarget:self];
   _outsideTapWindow = nil;
   _state.reset();
+  _renderedState.reset();
+  _renderedRunTags.clear();
 
   // Reset the frame to zero so that when it properly lays out on the next use
   _textView.frame = CGRectZero;
@@ -389,26 +394,29 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
 - (void)layoutSubviews
 {
   [super layoutSubviews];
-  // _textView's frame is assigned inside drawRect, which only fires when
-  // state changes. Trigger a redraw whenever the host frame moves out from
-  // under it (rotation, parent relayout) so the text view resizes and
-  // onTextLayout re-fires with the new line wrapping.
-  if (!CGRectEqualToRect(_textView.frame, _view.frame)) {
-    [self setNeedsDisplay];
-  }
+  [self updateTextView];
 }
 
-- (void)drawRect:(CGRect)rect
+// Updating the child text view is layout work. A drawRect override would give
+// this entire, potentially very tall container an unnecessary backing bitmap.
+- (void)updateTextView
 {
   if (!_state) {
     return;
   }
 
-  const auto &props = *std::static_pointer_cast<SupacodeMarkdownTextProps const>(_props);
+  std::vector<std::pair<Tag, bool>> runTags;
+  for (UIView *child in self.subviews) {
+    if ([child isKindOfClass:SupacodeMarkdownTextRun.class]) {
+      runTags.emplace_back(static_cast<Tag>(child.tag), [(SupacodeMarkdownTextRun *)child hasContextMenu]);
+    }
+  }
+  if (_renderedState == _state && runTags == _renderedRunTags &&
+      CGRectEqualToRect(_textView.frame, _view.frame)) return;
 
-  const auto attrString = _state->getData().attributedString;
+  const auto &attrString = _state->getData().attributedString;
   NSMutableAttributedString *convertedAttrString =
-      [RCTNSAttributedStringFromAttributedString(attrString) mutableCopy];
+      SupacodeMarkdownTextConvertAttributedString(attrString);
   SupacodeMarkdownTextApplyParagraphStyles(
       convertedAttrString,
       _state->getData().paragraphStyleRanges);
@@ -449,6 +457,8 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
     }
   }
   [self loadAttachmentImages:_state->getData().attachmentRanges];
+  _renderedState = _state;
+  _renderedRunTags = std::move(runTags);
 
   // Setting attributedText clears any active text selection, and re-assigning
   // the frame triggers a layout flush that has the same effect. Bail out
@@ -515,28 +525,6 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
     [accessibleElements addObject:element];
   }
   _contextAccessibilityElements = accessibleElements;
-
-  __block std::vector<std::string> lines;
-  const int maxLines = props.numberOfLines;
-  [_textView.layoutManager enumerateLineFragmentsForGlyphRange:NSMakeRange(0, convertedAttrString.string.length) usingBlock:^(CGRect rect,
-                                                                                              CGRect usedRect,
-                                                                                              NSTextContainer * _Nonnull textContainer,
-                                                                                              NSRange glyphRange,
-                                                                                              BOOL * _Nonnull stop) {
-    const auto charRange = [self->_textView.layoutManager characterRangeForGlyphRange:glyphRange actualGlyphRange:nil];
-    const auto line = [self->_textView.text substringWithRange:charRange];
-    lines.push_back(line.UTF8String);
-    // enumerateLineFragments overshoots maximumNumberOfLines by one on iOS
-    // 18, so cap explicitly.
-    if (maxLines > 0 && lines.size() >= (size_t)maxLines) {
-      *stop = YES;
-    }
-  }];
-
-  if (_eventEmitter != nullptr) {
-    std::dynamic_pointer_cast<const facebook::react::SupacodeMarkdownTextEventEmitter>(_eventEmitter)
-    ->onTextLayout(facebook::react::SupacodeMarkdownTextEventEmitter::OnTextLayout{static_cast<int>(self.tag), lines});
-  };
 }
 
 - (void)loadAttachmentImages:(const std::vector<SupacodeMarkdownTextAttachmentRange> &)attachmentRanges
@@ -659,7 +647,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
 - (void)updateState:(const facebook::react::State::Shared &)state oldState:(const facebook::react::State::Shared &)oldState
 {
   _state = std::static_pointer_cast<const SupacodeMarkdownTextShadowNode::ConcreteState>(state);
-  [self setNeedsDisplay];
+  [self setNeedsLayout];
 }
 
 // MARK: - UIGestureRecognizerDelegate
