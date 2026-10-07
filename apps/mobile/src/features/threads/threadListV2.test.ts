@@ -1116,7 +1116,7 @@ describe("buildThreadListV2ListItems", () => {
     expect(items.map((item) => item.type)).toEqual(["v2-thread", "v2-pending"]);
   });
 
-  it("puts the Drafts section below threads while queued tasks stay above shelves", () => {
+  it("puts Drafts just above Settled while queued tasks stay above shelves", () => {
     const items = buildThreadListV2ListItems({
       items: layout.items,
       settledCount: layout.settledCount,
@@ -1141,10 +1141,10 @@ describe("buildThreadListV2ListItems", () => {
       "active",
       "queued-1",
       "queued-2",
-      "v2-settled-shelf",
-      "settled",
       "draft-1",
       "draft-2",
+      "v2-settled-shelf",
+      "settled",
     ]);
     expect(
       items
@@ -1295,8 +1295,8 @@ describe("buildThreadListV2ListItems empty Active block", () => {
       "v2-settled-shelf",
     ]);
     expect(listTypes([settled], { pendingTasks: [makeDraftTask("draft")] })).toEqual([
-      "v2-settled-shelf",
       "v2-pending",
+      "v2-settled-shelf",
     ]);
   });
 
@@ -2432,9 +2432,9 @@ describe("Working section", () => {
       "working",
       "v2-snoozed-shelf",
       "snoozed",
+      "draft",
       "v2-settled-shelf",
       "settled",
-      "draft",
     ]);
   });
 });

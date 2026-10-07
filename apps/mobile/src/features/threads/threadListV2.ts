@@ -612,6 +612,7 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(snoozedShelfHeaderIndex, snoozedEnd));
   }
+  result.push(...draftItems);
   if (settledShelfHeaderIndex !== null && settledCount > 0) {
     result.push({
       type: "v2-settled-shelf",
@@ -625,7 +626,6 @@ export function buildThreadListV2ListItems(input: {
   if (input.showActiveEmpty === true && inboxEmpty && result.length > 0) {
     result.unshift({ type: "v2-active-empty", key: "v2-active-empty" });
   }
-  result.push(...draftItems);
   // Hairlines depend on the final neighbour, so they are stamped after the
   // splice: a recycled cell only re-renders when its divider actually flips.
   return result.map((entry, index) => {

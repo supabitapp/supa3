@@ -939,7 +939,7 @@ function readSidebarDraftRow(routeDraftId: string | null) {
     : null;
 }
 
-// Draft sessions with user content live below the thread sections.
+// Draft sessions with user content live just above the Settled section.
 // Own store subscriptions keep per-keystroke composer updates
 // inside this block. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
@@ -5024,12 +5024,25 @@ export default function Sidebar() {
                           break;
                         case "settled-header":
                           items.push(
+                            workingThreads.length + snoozedThreads.length === 0 ? (
+                              <li
+                                key="settled-shelf-spacer"
+                                aria-hidden
+                                className="mt-auto h-0 list-none"
+                              />
+                            ) : null,
+                            <SidebarDraftBlock
+                              key="draft-sessions"
+                              projectByKey={projectByKey}
+                              projectDisplayNameByKey={projectDisplayNameByKey}
+                              scopedProjectKeys={scopedProjectKeys}
+                              routeDraftId={routeDraftIdForRows}
+                              onNavigateToDraft={navigateToDraft}
+                              onDraftContextMenu={handleDraftContextMenu}
+                            />,
                             <SidebarSectionHeader
                               key="settled-shelf-header"
                               marker="settled-header"
-                              className={cn(
-                                workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
-                              )}
                               label={
                                 settledShelfExpanded
                                   ? "Settled"
@@ -5078,14 +5091,6 @@ export default function Sidebar() {
                       </button>
                     </li>
                   ) : null}
-                  <SidebarDraftBlock
-                    projectByKey={projectByKey}
-                    projectDisplayNameByKey={projectDisplayNameByKey}
-                    scopedProjectKeys={scopedProjectKeys}
-                    routeDraftId={routeDraftIdForRows}
-                    onNavigateToDraft={navigateToDraft}
-                    onDraftContextMenu={handleDraftContextMenu}
-                  />
                 </ul>
               </SortableContext>
             </DndContext>
