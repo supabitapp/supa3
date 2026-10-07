@@ -2,13 +2,12 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*.*.*"
       - "!v*-nightly.*"
       - "!v*-preview.*"
-  schedule:
-    # Avoid minute zero, when GitHub scheduled jobs are busiest.
-    - cron: "8,38 * * * *"
   workflow_dispatch:
     inputs:
       channel:
@@ -25,14 +24,14 @@ on:
         required: false
         type: string
 
-# Serialize nightlies (scheduled and manual) so overlapping runs cannot build
+# Serialize nightlies (push and manual) so overlapping runs cannot build
 # the same commit twice or publish out of order. Stable tag releases get their
 # own group so a nightly never blocks them. Running publishers are never
 # canceled, and queue: max keeps every pending run instead of the default
 # newest-wins single slot, so a queued stable tag can never be silently
-# dropped. Automatic nightlies recheck the release gap after leaving the queue.
+# dropped. Automatic nightlies recheck for new commits after leaving the queue.
 concurrency:
-  group: release-${{ (github.event_name == 'schedule' || inputs.channel == 'nightly' || inputs.channel == 'preview') && 'nightly' || 'stable' }}
+  group: release-${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.channel == 'nightly' || inputs.channel == 'preview') && 'nightly' || 'stable' }}
   cancel-in-progress: false
   queue: max
 
@@ -47,7 +46,7 @@ jobs:
   # Picks the commit every later job builds. Nightlies and tag pushes build the
   # triggering commit. Manual stable releases build the commit of the latest
   # published nightly, so stable only ever ships a build that nightly users
-  # have already run. Scheduled runs also decide here whether a nightly is due.
+  # have already run. Automatic runs also check for new commits here.
   resolve_commit:
     name: Resolve release commit
     runs-on: depot-ubuntu-24.04-8
@@ -77,7 +76,8 @@ jobs:
             } = require('./.github/scripts/check-nightly-release.cjs');
 
             const dispatchChannel = process.env.DISPATCH_CHANNEL || 'preview';
-            const releaseChannel = context.eventName === 'schedule'
+            const automaticNightly = context.eventName === 'push' && context.ref === 'refs/heads/main';
+            const releaseChannel = automaticNightly
               ? 'nightly'
               : context.eventName === 'workflow_dispatch'
                 ? dispatchChannel
@@ -85,7 +85,7 @@ jobs:
 
             await assertReleaseSource({ github, context, releaseChannel });
 
-            if (context.eventName === 'schedule') {
+            if (automaticNightly) {
               core.setOutput('has_changes', await shouldReleaseNightly({ github, context, core }));
               core.setOutput('ref', context.sha);
             } else if (context.eventName === 'workflow_dispatch' && dispatchChannel === 'stable') {
@@ -103,7 +103,7 @@ jobs:
     needs: [resolve_commit]
     if: |
       needs.resolve_commit.result == 'success' &&
-      (github.event_name != 'schedule' || needs.resolve_commit.outputs.has_changes == 'true')
+      needs.resolve_commit.outputs.has_changes != 'false'
     runs-on: depot-ubuntu-24.04-8
     timeout-minutes: 10
     outputs:
@@ -142,7 +142,7 @@ jobs:
           NIGHTLY_SHA: ${{ needs.resolve_commit.outputs.ref }}
           NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "schedule" || ( "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "nightly" ) ]]; then
+          if [[ ( "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ) || ( "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "nightly" ) ]]; then
             nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
 
             node scripts/resolve-nightly-release.ts \
@@ -157,7 +157,7 @@ jobs:
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "preview" ]]; then
             # Manual-only test train: exercises the whole release flow for a
-            # commit end users must never receive. Never scheduled.
+            # commit end users must never receive.
             # Same versioning as nightly under its own prerelease identifier.
             # A preview release is reachable only by asking for it: npm gets it
             # under the `preview` dist-tag, which nothing resolves by default,

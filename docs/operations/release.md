@@ -20,9 +20,9 @@ bumps require a new store binary under the existing OTA fingerprint policy.
     and nightly dispatches must select `main`; preview may select any branch. The channel defaults
     to preview so an omitted selection cannot publish a stable release.
   - push tag matching `v*.*.*` for a stable release of an explicit commit
-  - scheduled nightly check every 30 minutes
+  - push to `main` for a nightly release
   - manual `workflow_dispatch` with `channel=nightly`
-  - manual `workflow_dispatch` with `channel=preview`, the maintainers' test train. It exercises the whole release flow (build, sign, notarize, smoke, publish) for a commit that end users must never receive, which is how an unmerged branch or a risky change gets a real release run before it lands. It builds the triggering commit with nightly's versioning under the `preview` prerelease identifier (`0.0.41-preview.<date>.<run>`) and publishes a GitHub prerelease plus the npm packages under the `preview` dist-tag. Preview is not on the schedule, no default npm dist-tag points at it, its desktop builds carry no update feed, and no updater manifest (`latest*.yml`, `nightly*.yml`, blockmaps) is attached, so a stable or nightly install cannot be offered one. The only ways onto it are downloading the release by hand, `npx supacode@preview`, `SUPACODE_CHANNEL=preview` for the install scripts, or `supacode update --channel preview` from a terminal; each prints a warning, and the CLI asks for confirmation when the running build is not itself a preview. The release itself is named as a maintainer test build and its body is a warning rather than generated notes: a changelog of unmerged branch history is not a changelog, and nightly and stable notes are unaffected because each series resolves its previous tag within its own channel. The hosted web app and AUR are skipped. Keep it; it costs nothing when idle.
+  - manual `workflow_dispatch` with `channel=preview`, the maintainers' test train. It exercises the whole release flow (build, sign, notarize, smoke, publish) for a commit that end users must never receive, which is how an unmerged branch or a risky change gets a real release run before it lands. It builds the triggering commit with nightly's versioning under the `preview` prerelease identifier (`0.0.41-preview.<date>.<run>`) and publishes a GitHub prerelease plus the npm packages under the `preview` dist-tag. Preview runs only on manual dispatch, no default npm dist-tag points at it, its desktop builds carry no update feed, and no updater manifest (`latest*.yml`, `nightly*.yml`, blockmaps) is attached, so a stable or nightly install cannot be offered one. The only ways onto it are downloading the release by hand, `npx supacode@preview`, `SUPACODE_CHANNEL=preview` for the install scripts, or `supacode update --channel preview` from a terminal; each prints a warning, and the CLI asks for confirmation when the running build is not itself a preview. The release itself is named as a maintainer test build and its body is a warning rather than generated notes: a changelog of unmerged branch history is not a changelog, and nightly and stable notes are unaffected because each series resolves its previous tag within its own channel. The hosted web app and AUR are skipped. Keep it; it costs nothing when idle.
 - A manual stable release builds the commit of the latest published nightly, not `main` HEAD.
   Nightly is the release candidate: verify the nightly, then promote it. Merges to `main` keep
   landing while you verify and never leak into the stable build.
@@ -117,7 +117,7 @@ on the signing runner. The
 
 Store `OP_SERVICE_ACCOUNT_TOKEN` in the GitHub `release` environment. Its read-only 1Password service
 account needs access to the `Supacode CI` vault. The environment must allow `main` for manual and
-scheduled releases, plus release tags for tag-triggered runs. Preview branches need explicit access
+push-triggered releases, plus release tags for tag-triggered runs. Preview branches need explicit access
 before dispatch. The fnox profiles in [`.github/fnox.toml`](../../.github/fnox.toml) resolve the Apple
 signing fields from `Apple Desktop Signing` and these fields from `GitHub Release App`:
 
@@ -155,10 +155,10 @@ and pair a reachable server under Settings → Connections.
 
 - Workflow: `.github/workflows/release.yml`
 - Triggers:
-  - scheduled check every 30 minutes
+  - push to `main`
   - manual `workflow_dispatch` with `channel=nightly`
-- Automatic nightlies require new commits and at least six hours since the last nightly was published, including manual nightlies.
-- Manual nightlies bypass the time and change checks. Nightly runs remain serialized. Scheduled runs wait for an active nightly to finish, then check the publication gap before building.
+- Automatic nightlies require commits ahead of the latest published nightly, including manual nightlies, with no minimum time between releases.
+- Manual nightlies bypass the change check. Nightly runs remain serialized. Automatic runs wait for an active nightly to finish, then skip commits already included in the latest nightly.
 - Runs the same desktop quality gates and artifact matrix as the tagged release flow.
 - Publishes a GitHub prerelease only:
   - current tag format: `vX.Y.Z-nightly.YYYYMMDD.<run_number>`
