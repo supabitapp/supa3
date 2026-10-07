@@ -15,7 +15,7 @@ import {
 import { type EnvironmentId, type SidebarProjectGroupingMode } from "@supacode/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { HeaderHeightContext } from "@react-navigation/elements";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -226,7 +226,11 @@ export function HomeScreen(props: HomeScreenProps) {
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
   const navigationHeaderHeight = useContext(HeaderHeightContext) ?? insets.top + 44;
-  const keyboardVisible = useKeyboardState((state) => state.isVisible);
+  const navigation = useNavigation();
+  // Sample focus on keyboard events so returning from a sheet cannot claim its still-dismissing keyboard.
+  const searchKeyboardVisible = useKeyboardState(
+    (state) => state.isVisible && navigation.isFocused(),
+  );
   const { fabClearance } = useAndroidControlSizing();
   const iosBottomToolbarClearance =
     Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
@@ -604,7 +608,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const listMotion = useThreadListMotion({
     items: threadListV2Items,
     scope: settledResetKey,
-    searching: hasSearchQuery || keyboardVisible,
+    searching: hasSearchQuery || searchKeyboardVisible,
     scrolling: !swipeEnabled,
     ready: shelfPreferencesLoaded && !props.catalogState.isLoadingConnections,
   });
@@ -977,7 +981,7 @@ export function HomeScreen(props: HomeScreenProps) {
             style={{ flex: 1 }}
             sharedValues={listMotion.sharedValues}
             itemsContainerStyle={listMotion.alignmentStyle}
-            alignItemsAtEnd={!hasSearchQuery && !keyboardVisible}
+            alignItemsAtEnd={!hasSearchQuery && !searchKeyboardVisible}
             automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
             contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
