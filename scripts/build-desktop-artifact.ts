@@ -30,6 +30,7 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
+  readInstalledPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
 import {
@@ -37,7 +38,6 @@ import {
   selectDesktopRuntimeExternalDependencies,
 } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
-import { readInstalledPackages } from "./lib/installed-packages.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";

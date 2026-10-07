@@ -7,11 +7,11 @@ import * as Effect from "effect/Effect";
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
 
 import { findEsmImportsOfExternalPackages } from "./cli-executable-imports.ts";
-import { readInstalledPackages } from "./installed-packages.ts";
 
 import {
   isRuntimeExternalCliDependency,
   findInlinedExternalPackages,
+  readInstalledPackages,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
 } from "./cli-external-packages.ts";
