@@ -260,11 +260,10 @@ patchedDependencies:
   expo-sharing@58.0.13: fe40d857765bcd6a77aac1fed275e5b8f9415c29b972decdce05fb96de5665e6
   expo-widgets@58.0.11: 7efd2cba020c3afeec34d13838792ccfbe37ea5bb6a9dc89f4d2652d7abb92b8
   node-pty@1.2.0-beta.15: f2fe901c61cde17986240002d05c172d5d0272d83ffaab8d0ebeb922763be414
-  react-native-gesture-handler@3.2.1: d518a937e3cb2df5e7d67f1ab6b265c74a8639e4572d1b032b7b747e9b1c01a9
+  react-native-gesture-handler@3.2.1: 3037216c0dd1b14e8877441bde1a7404d1c6e9c09f835bd184c3cdba4aa066ad
   react-native-keyboard-controller@1.22.6: 35bd21475cf5fae448fef0d730569ca31d83d2195c618c77e0e2fe9fc1385caf
   react-native-nitro-markdown@0.5.8: 642b47830730acff3761fe29cf54271d18b493c0070c750097850b7ea032e00c
   react-native-nitro-modules@0.35.9: daf4a639ce3f951af630a3711e4082d58e3a11e5a79f45efb0b59925327ebde2
-  react-native-screens@4.28.0: 7addf2336b9edc36cbf82e1bdd9b7e398a2d18ae69442508acb0bd85f34c1cff
 
 importers:
 
@@ -424,7 +423,7 @@ importers:
         version: 7.3.4(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       '@react-navigation/native-stack':
         specifier: 7.17.6
-        version: 7.17.6(patch_hash=e667c3cef8c78bb9ff4882ee5bd23a432247b843060a9499eb5f07e9e2295552)(f8734624dd945511369371b141f1df3d)
+        version: 7.17.6(patch_hash=e667c3cef8c78bb9ff4882ee5bd23a432247b843060a9499eb5f07e9e2295552)(69a33226f33b260f62ff1f517b1686b5)
       '@shikijs/core':
         specifier: 4.2.0
         version: 4.2.0
@@ -586,7 +585,7 @@ importers:
         version: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       react-native-gesture-handler:
         specifier: ~3.2.1
-        version: 3.2.1(patch_hash=d518a937e3cb2df5e7d67f1ab6b265c74a8639e4572d1b032b7b747e9b1c01a9)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
+        version: 3.2.1(patch_hash=3037216c0dd1b14e8877441bde1a7404d1c6e9c09f835bd184c3cdba4aa066ad)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       react-native-image-viewing:
         specifier: ^0.2.2
         version: 0.2.2(@types/react-native@0.72.8(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)))(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -606,8 +605,8 @@ importers:
         specifier: ~5.9.1
         version: 5.9.1(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       react-native-screens:
-        specifier: ~4.28.0
-        version: 4.28.0(patch_hash=7addf2336b9edc36cbf82e1bdd9b7e398a2d18ae69442508acb0bd85f34c1cff)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
+        specifier: file:deps/react-native-screens-5.0.0-t3.7.tgz
+        version: file:apps/mobile/deps/react-native-screens-5.0.0-t3.7.tgz(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       react-native-shiki-engine:
         specifier: ^0.3.12
         version: 0.3.12(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -8979,8 +8978,9 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-screens@4.28.0:
-    resolution: {integrity: sha512-0/79Z8RCibuaAHti+DJ2Dq0m6UFWh4+p1bH58K3cjiQ7IDWs5kU9tCAj4lXcJMHHonbF2mIE2BeaPSEvOpIiFg==}
+  react-native-screens@file:apps/mobile/deps/react-native-screens-5.0.0-t3.7.tgz:
+    resolution: {integrity: sha512-Di1+YTCuhWpk9helKBxkvXAVAQTCSRo24tpFBGXdbTAT4vPm2vGPbtPe+lnIXcePjNHbTEaI1ha5n9PqQKl5lg==, tarball: file:apps/mobile/deps/react-native-screens-5.0.0-t3.7.tgz}
+    version: 5.0.0-t3.7
     peerDependencies:
       '@types/react': '*'
       react: '*'
@@ -13322,7 +13322,7 @@ snapshots:
     optionalDependencies:
       '@react-native-masked-view/masked-view': 0.3.2(@types/react-native@0.72.8(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)))(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
 
-  '@react-navigation/native-stack@7.17.6(patch_hash=e667c3cef8c78bb9ff4882ee5bd23a432247b843060a9499eb5f07e9e2295552)(f8734624dd945511369371b141f1df3d)':
+  '@react-navigation/native-stack@7.17.6(patch_hash=e667c3cef8c78bb9ff4882ee5bd23a432247b843060a9499eb5f07e9e2295552)(69a33226f33b260f62ff1f517b1686b5)':
     dependencies:
       '@react-navigation/core': 7.21.13(@types/react@19.3.0)(react@19.3.0)
       '@react-navigation/elements': 2.9.26(9c4674cba0f1b7c65e262d00e6877097)
@@ -13332,7 +13332,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       react-native-safe-area-context: 5.9.1(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
-      react-native-screens: 4.28.0(patch_hash=7addf2336b9edc36cbf82e1bdd9b7e398a2d18ae69442508acb0bd85f34c1cff)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
+      react-native-screens: file:apps/mobile/deps/react-native-screens-5.0.0-t3.7.tgz(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
       sf-symbols-typescript: 2.2.0
       warn-once: 0.1.1
     transitivePeerDependencies:
@@ -18917,7 +18917,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  react-native-gesture-handler@3.2.1(patch_hash=d518a937e3cb2df5e7d67f1ab6b265c74a8639e4572d1b032b7b747e9b1c01a9)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0):
+  react-native-gesture-handler@3.2.1(patch_hash=3037216c0dd1b14e8877441bde1a7404d1c6e9c09f835bd184c3cdba4aa066ad)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0):
     dependencies:
       '@types/invariant': 2.2.37
       '@types/react': 19.3.0
@@ -18978,7 +18978,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
 
-  react-native-screens@4.28.0(patch_hash=7addf2336b9edc36cbf82e1bdd9b7e398a2d18ae69442508acb0bd85f34c1cff)(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0):
+  react-native-screens@file:apps/mobile/deps/react-native-screens-5.0.0-t3.7.tgz(@types/react@19.3.0)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0):
     dependencies:
       '@types/react': 19.3.0
       react: 19.3.0

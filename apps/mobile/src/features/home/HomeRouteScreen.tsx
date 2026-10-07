@@ -1,3 +1,5 @@
+import { use } from "react";
+import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
@@ -12,6 +14,7 @@ import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
 import { useWorkspaceState } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
 import { useStartNewTask } from "../threads/use-start-new-task";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
@@ -30,6 +33,9 @@ import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle
 
 export function HomeRouteScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const nativePrimaryColumn = use(NativePrimaryColumnContext);
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const headerWidth = nativePrimaryColumn ? (columnMetrics?.width ?? windowWidth) : windowWidth;
   const { layout, panes } = useAdaptiveWorkspaceLayout();
   const projects = useProjects();
   const threads = useNavigationThreadShells();
@@ -119,7 +125,7 @@ export function HomeRouteScreen() {
 
   // In split layouts the persistent sidebar IS the thread list — Home becomes
   // an empty detail pane so selecting a thread never transitions layouts.
-  if (layout.usesSplitView) {
+  if (layout.usesSplitView && !nativePrimaryColumn) {
     return (
       <>
         <NativeStackScreenOptions
@@ -164,10 +170,12 @@ export function HomeRouteScreen() {
             shallow-merged. Connection status appears beneath the brand
             while an environment reconnects. */}
         <NativeStackScreenOptions
-          optionsVersion={windowWidth}
+          optionsVersion={headerWidth}
           options={{
             ...getConnectionAwareBrandHeaderOptions({
-              headerWidth: windowWidth,
+              headerWidth,
+              trailingItemCount:
+                nativePrimaryColumn && Platform.OS === "ios" && Platform.isPad ? 2 : 1,
               onOpenEnvironments: () =>
                 navigation.navigate("SettingsSheet", {
                   screen: "SettingsContent",

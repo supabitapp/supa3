@@ -11,6 +11,17 @@ public final class SupacodeNativeControlsModule: Module {
   private var filePresentation: SupacodeNativeFilePresentation?
 
   public func definition() -> ModuleDefinition {
+    Constants {
+      if #available(iOS 26.0, *) {
+        return ["supportsWorkspaceColumns": NSClassFromString("RNSSplitHostComponentView") != nil]
+      }
+      return ["supportsWorkspaceColumns": false]
+    }
+    View(SupacodeLayoutMetricsView.self) {
+      ViewName("LayoutMetrics")
+      Events("onMetricsChange")
+    }
+
     AsyncFunction("presentVideo") { (url: URL, title: String, sourceIdentifier: String, identifier: String, promise: Promise) in
       try self.presentVideo(
         url: url,

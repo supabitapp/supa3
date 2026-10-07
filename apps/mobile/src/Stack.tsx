@@ -1,5 +1,10 @@
 import { useAtomMount } from "@effect/atom-react";
 import {
+  createV5StackNavigator as createNativeStackNavigator,
+  createV5SheetStackNavigator,
+} from "./native/createV5StackNavigator";
+import { createWorkspaceStackNavigator } from "./features/layout/createWorkspaceStackNavigator";
+import {
   createPathConfigForStaticNavigation,
   getPathFromState,
   NavigationState,
@@ -7,7 +12,6 @@ import {
   useNavigation,
 } from "@react-navigation/native";
 import {
-  createNativeStackNavigator,
   createNativeStackScreen,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
@@ -187,7 +191,7 @@ const LEGAL_DOCUMENT_HEADER_OPTIONS: AppScreenOptions = {
   presentation: "fullScreenModal",
 };
 
-const SettingsContentStack = createNativeStackNavigator({
+const SettingsContentStack = createV5SheetStackNavigator({
   initialRouteName: "Settings",
   screenOptions: {
     ...GLASS_HEADER_OPTIONS,
@@ -392,7 +396,7 @@ const SettingsContentStack = createNativeStackNavigator({
 // The outer stack never owns visible chrome. Settings routes render inside a
 // nested stack whose native header remains mounted. Keeping bar visibility
 // invariant avoids iOS 26's headerless-to-headered jump.
-const SettingsSheetStack = createNativeStackNavigator({
+const SettingsSheetStack = createV5SheetStackNavigator({
   initialRouteName: "SettingsContent",
   screenOptions: {
     headerShown: false,
@@ -658,7 +662,7 @@ function NotFoundScreen() {
   );
 }
 
-const RootStackConfig = createNativeStackNavigator({
+const RootStackConfig = createWorkspaceStackNavigator({
   initialRouteName: "Home",
   layout: RootStackLayout,
   screenOptions: {

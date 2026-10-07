@@ -290,6 +290,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   UILongPressGestureRecognizer *_longPressGestureRecognizer;
   UITapGestureRecognizer *_pressGestureRecognizer;
   NSArray *_contextAccessibilityElements;
+  BOOL _textLayoutNeedsUpdate;
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
@@ -389,6 +390,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   _textView.frame = CGRectZero;
   _textView.attributedText = nil;
   _contextAccessibilityElements = nil;
+  _textLayoutNeedsUpdate = YES;
 }
 
 - (void)layoutSubviews
@@ -465,7 +467,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   // entirely when nothing actually changed so a JS-side state update made in
   // response to onSelectionChange doesn't deselect what the user is selecting.
   const BOOL textChanged = ![_textView.attributedText isEqualToAttributedString:convertedAttrString];
-  const BOOL frameChanged = !CGRectEqualToRect(_textView.frame, _view.frame);
+  const BOOL frameChanged = _textLayoutNeedsUpdate;
   if (!textChanged && !frameChanged) {
     return;
   }
@@ -492,9 +494,9 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
     _suppressSelectionChange = NO;
   }
   if (frameChanged) {
-    _textView.frame = _view.frame;
     _textView.textContainer.size = CGSizeMake(CGRectGetWidth(_view.frame), CGFLOAT_MAX);
   }
+  _textLayoutNeedsUpdate = NO;
 
   // Text attachments have no native link element. Expose their existing runs
   // at the measured glyph bounds, without inserting views into text layout.
