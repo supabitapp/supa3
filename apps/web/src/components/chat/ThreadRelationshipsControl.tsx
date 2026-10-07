@@ -393,6 +393,9 @@ export function ThreadRelationshipsPanel(props: {
                 agent?.origin === "app_owned" &&
                 agent.startedAt &&
                 ["pending", "running", "waiting"].includes(agent.status);
+              const trailingVisibilityClass = canStop
+                ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0"
+                : "";
               const threadTitle = relationshipThreadTitle({
                 title: node?.thread?.title ?? agent?.title ?? threadId,
                 isSubagent,
@@ -443,7 +446,7 @@ export function ThreadRelationshipsPanel(props: {
                   {agent ? (
                     agent.startedAt ? (
                       <span
-                        className={`shrink-0 text-2xs font-normal tabular-nums text-muted-foreground ${canStop ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0" : ""}`}
+                        className={`shrink-0 text-2xs font-normal tabular-nums text-muted-foreground ${trailingVisibilityClass}`}
                       >
                         <AgentElapsed agent={agent} />
                       </span>
@@ -452,7 +455,9 @@ export function ThreadRelationshipsPanel(props: {
                     <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   )}
                   {!isMergeTarget ? (
-                    <span className="shrink-0 text-2xs text-muted-foreground">
+                    <span
+                      className={`shrink-0 text-2xs text-muted-foreground ${trailingVisibilityClass}`}
+                    >
                       {threadRelationshipStatusLabel(status)}
                     </span>
                   ) : null}
@@ -461,7 +466,7 @@ export function ThreadRelationshipsPanel(props: {
               return (
                 <li
                   key={threadId}
-                  className={`group relative flex items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS}`}
+                  className={`group relative flex items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_HEIGHT_CLASS} ${canStop ? THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS : ""}`}
                 >
                   {isMergeTarget ? (
                     <div className={THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS}>
@@ -532,7 +537,7 @@ export function ThreadRelationshipsPanel(props: {
                             variant="ghost"
                             disabled={node?.missing === true}
                             onClick={() => openThread(threadId)}
-                            part="row"
+                            part={canStop ? "group-row" : "row"}
                           />
                         }
                       >
