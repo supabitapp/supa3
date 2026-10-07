@@ -1159,6 +1159,81 @@ describe("buildThreadListV2ListItems", () => {
   });
 });
 
+describe("buildThreadListV2ListItems empty Active block", () => {
+  const working = makeThread({
+    id: ThreadId.make("working"),
+    title: "working",
+    runtime: {
+      status: "running",
+      activeRunId: null,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      providerName: "Codex",
+      lastError: null,
+      updatedAt: NOW,
+    },
+  });
+  const settled = makeThread({
+    id: ThreadId.make("settled"),
+    title: "settled",
+    settledOverride: "settled",
+    settledAt: NOW,
+  });
+  const listTypes = (
+    threads: ReadonlyArray<EnvironmentThreadShell>,
+    input: {
+      readonly pendingTasks?: ReadonlyArray<PendingNewTask>;
+      readonly search?: boolean;
+    } = {},
+  ) => {
+    const layout = buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      settledShelfExpanded: false,
+    });
+    return buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks: input.pendingTasks ?? [],
+      pinnedCount: layout.pinnedCount,
+      workingCount: layout.workingCount,
+      workingShelfHeaderIndex: layout.workingShelfHeaderIndex,
+      settledCount: layout.settledCount,
+      settledShelfExpanded: false,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+      showActiveEmpty: input.search !== true,
+    }).map((item) => item.type);
+  };
+
+  it("fills the Active slot above collapsed shelves", () => {
+    expect(listTypes([working, settled])).toEqual([
+      "v2-active-empty",
+      "v2-working-shelf",
+      "v2-settled-shelf",
+    ]);
+  });
+
+  it("stays out while anything sits above the shelves", () => {
+    const active = makeThread({ id: ThreadId.make("active"), title: "active" });
+    const pinned = makeThread({
+      id: ThreadId.make("pinned"),
+      title: "pinned",
+      pinnedAt: NOW,
+    });
+
+    expect(listTypes([active, working, settled])).not.toContain("v2-active-empty");
+    expect(listTypes([pinned, working, settled])).not.toContain("v2-active-empty");
+    expect(
+      listTypes([working, settled], { pendingTasks: [makePendingTask("queued")] }),
+    ).not.toContain("v2-active-empty");
+  });
+
+  it("leaves search and empty lists to the list's own empty state", () => {
+    expect(listTypes([working, settled], { search: true })).not.toContain("v2-active-empty");
+    expect(listTypes([])).toEqual([]);
+  });
+});
+
 describe("pending mobile thread moves", () => {
   function fixture(section: "active" | "pinned" = "active") {
     const rows = ["a", "b", "c"].map((id, index) =>
@@ -1861,6 +1936,7 @@ describe("isThreadListV2ListItem", () => {
   it("narrows the v2 kinds and rejects the legacy discriminators", () => {
     expect(isThreadListV2ListItem({ type: "v2-thread" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-pending" })).toBe(true);
+    expect(isThreadListV2ListItem({ type: "v2-active-empty" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-snoozed-shelf" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-settled-shelf" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "thread" })).toBe(false);
