@@ -4380,9 +4380,6 @@ packages:
       react: '*'
       react-native: '*'
       react-native-nitro-markdown: '*'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff':
     resolution: {directory: apps/mobile/modules/supacode-review-diff, type: directory}
@@ -13568,6 +13565,7 @@ snapshots:
     dependencies:
       '@supacode/client-runtime': link:packages/client-runtime
       '@supacode/shared': link:packages/shared
+      '@types/react': 19.3.0
       expo: 58.0.2(3d71f6499d3c841467c44ba1a6c879c9)
       expo-asset: 58.0.10(@types/react@19.3.0)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)(supports-color@8.1.1)(typescript@7.0.2)
       expo-clipboard: 58.0.3(@types/react@19.3.0)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -13576,8 +13574,6 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       react-native-nitro-markdown: 0.5.8(patch_hash=642b47830730acff3761fe29cf54271d18b493c0070c750097850b7ea032e00c)(231cd8dedc589ddd8e46fe9920b8afcd)
-    optionalDependencies:
-      '@types/react': 19.3.0
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff': {}
 

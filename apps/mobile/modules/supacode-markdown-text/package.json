@@ -41,11 +41,6 @@
     "react-native": "*",
     "react-native-nitro-markdown": "*"
   },
-  "peerDependenciesMeta": {
-    "@types/react": {
-      "optional": true
-    }
-  },
   "codegenConfig": {
     "name": "SupacodeMarkdownTextSpec",
     "type": "all",

@@ -752,7 +752,7 @@ describe("AcpRegistrySupport", () => {
                 request,
                 request.url === registryUrl
                   ? new Response(makeRegistry(agent))
-                  : new Response(archive),
+                  : new Response(new Uint8Array(archive)),
               ),
             ),
           ),
