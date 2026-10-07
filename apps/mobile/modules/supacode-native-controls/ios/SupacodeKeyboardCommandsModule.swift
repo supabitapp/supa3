@@ -44,6 +44,7 @@ public final class SupacodeKeyboardCommandsView: ExpoView {
       enabledCommand("files", input: "f", modifiers: [.command, .shift], action: #selector(openFiles), title: "Open Files"),
       enabledCommand("terminal", input: "t", modifiers: [.command, .shift], action: #selector(openTerminal), title: "Open Terminal"),
       enabledCommand("review", input: "r", modifiers: [.command, .shift], action: #selector(openReview), title: "Open Review"),
+      enabledCommand("forkThread", input: "f", modifiers: [.command, .alternate], action: #selector(forkThread), title: "Fork Thread"),
       enabledCommand(
         "copyThreadReference",
         input: "c",
@@ -150,6 +151,7 @@ public final class SupacodeKeyboardCommandsView: ExpoView {
   @objc private func openTerminal() { emit("terminal") }
   @objc private func openReview() { emit("review") }
   @objc private func copyThreadReference() { emit("copyThreadReference") }
+  @objc private func forkThread() { emit("forkThread") }
   @objc private func handleToggleSidebar() { emit("toggleSidebar") }
   @objc private func cycleHost() { emit("cycleHost") }
 

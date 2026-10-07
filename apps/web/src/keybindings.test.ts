@@ -1379,6 +1379,58 @@ describe("plus key parsing", () => {
 });
 
 describe("composer and pull request shortcuts", () => {
+  it.each(["MacIntel", "Win32", "Linux"])(
+    "forks with the default shortcut outside terminal focus on %s",
+    (platform) => {
+      const input = event({
+        key: platform === "MacIntel" ? "ƒ" : "f",
+        code: "KeyF",
+        metaKey: platform === "MacIntel",
+        ctrlKey: platform !== "MacIntel",
+        altKey: true,
+      });
+      assert.strictEqual(
+        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+        "thread.fork",
+      );
+      assert.strictEqual(
+        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform,
+          context: { terminalFocus: true },
+        }),
+        null,
+      );
+      assert.strictEqual(
+        shortcutLabelForCommand(DEFAULT_RESOLVED_KEYBINDINGS, "thread.fork", { platform }),
+        platform === "MacIntel" ? "⌥⌘F" : "Ctrl+Alt+F",
+      );
+    },
+  );
+
+  it("uses the customized fork shortcut for matching and hover labels", () => {
+    const bindings = mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "mod+shift+y", command: "thread.fork", when: "!terminalFocus" },
+      ]),
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "y", metaKey: true, shiftKey: true }), bindings, {
+        platform: "MacIntel",
+      }),
+      "thread.fork",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "f", metaKey: true, altKey: true }), bindings, {
+        platform: "MacIntel",
+      }),
+      null,
+    );
+    assert.strictEqual(
+      shortcutLabelForCommand(bindings, "thread.fork", { platform: "MacIntel" }),
+      "⇧⌘Y",
+    );
+  });
+
   it("fills missing number shortcuts without replacing the saved URL binding", () => {
     const olderServerBindings = DEFAULT_RESOLVED_KEYBINDINGS.filter(
       (binding) =>

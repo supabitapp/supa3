@@ -14,6 +14,7 @@ export type HardwareKeyboardCommand =
   | "terminal"
   | "review"
   | "copyThreadReference"
+  | "forkThread"
   | "toggleSidebar"
   | "cycleHost";
 

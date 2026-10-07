@@ -184,6 +184,7 @@ import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import { useActiveThreadRef } from "../hooks/useActiveThreadRef";
+import { useForkThread } from "../hooks/useForkThread";
 import {
   type ComposerSubmissionIntent,
   parseStandaloneComposerSlashCommand,
@@ -426,7 +427,6 @@ import {
   useThreadShell,
   useThreadRefs,
   useThreadVisibleTurnItems,
-  waitForThreadShell,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
@@ -1733,9 +1733,6 @@ export default function ChatView(props: ChatViewProps) {
     reportFailure: false,
   });
   const revertThreadCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
-    reportFailure: false,
-  });
-  const forkThreadFromRun = useAtomCommand(threadEnvironment.forkFromRun, {
     reportFailure: false,
   });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
@@ -8047,6 +8044,29 @@ export default function ChatView(props: ChatViewProps) {
     terminalUiOpenByThreadRef.current[activeThreadKey] = current;
   }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen]);
 
+  const { onForkFromRun: forkFromRun, disabled: forkDisabled } = useForkThread(
+    isServerThread ? activeThread : null,
+    isRevertingCheckpoint || threadDetailLoading || activeEnvironmentUnavailable,
+  );
+  const forkSource = useMemo(
+    () => (serverProjection === null ? null : resolveThreadForkSource(serverProjection)),
+    [serverProjection],
+  );
+  const onForkFromRun = useCallback(
+    async (source: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => {
+      try {
+        await forkFromRun(source);
+      } catch (error) {
+        if (!activeThread) return;
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to fork this response.",
+        );
+      }
+    },
+    [activeThread, forkFromRun, setThreadError],
+  );
+
   const getShortcutContext = useCallback(
     (eventTarget: EventTarget | null = document.activeElement) => ({
       terminalFocus: getTerminalFocusOwner() !== null,
@@ -8104,6 +8124,14 @@ export default function ChatView(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) copyActiveThreadReference();
+        return;
+      }
+
+      if (command === "thread.fork") {
+        if (!forkSource || forkDisabled) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) void onForkFromRun(forkSource);
         return;
       }
 
@@ -8379,6 +8407,9 @@ export default function ChatView(props: ChatViewProps) {
     supportsSettlement,
     confirmAndUnpinThread,
     copyActiveThreadReference,
+    forkDisabled,
+    forkSource,
+    onForkFromRun,
     getShortcutContext,
     toggleRightPanel,
     toggleThreadPanel,
@@ -8594,52 +8625,6 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
-  const onForkFromRun = useCallback(
-    async (input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => {
-      if (!activeThread || activeEnvironmentUnavailable) return;
-      const targetThreadId = newThreadId();
-      const targetThreadRef = scopeThreadRef(environmentId, targetThreadId);
-      const result = await forkThreadFromRun({
-        environmentId,
-        input: {
-          sourceThreadId: input.sourceThreadId,
-          targetThreadId,
-          runId: input.runId,
-          title: `${activeThread.title} fork`,
-        },
-      });
-      if (result._tag === "Failure") {
-        if (!isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          setThreadError(
-            activeThread.id,
-            error instanceof Error ? error.message : "Failed to fork this response.",
-          );
-        }
-        return;
-      }
-      const targetThreadReady = await waitForThreadShell(targetThreadRef);
-      if (!targetThreadReady) {
-        setThreadError(
-          activeThread.id,
-          "The fork was created, but its thread data did not reach this client. Reconnect and try opening it from the sidebar.",
-        );
-        return;
-      }
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(targetThreadRef),
-      });
-    },
-    [
-      activeEnvironmentUnavailable,
-      activeThread,
-      environmentId,
-      forkThreadFromRun,
-      navigate,
-      setThreadError,
-    ],
-  );
   const onCompactContext = () => {
     if (compactDisabled) return;
     void sendStandaloneCommand("/compact", "Failed to compact context.");
@@ -10555,8 +10540,8 @@ export default function ChatView(props: ChatViewProps) {
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
     contextWindow: activeContextWindow,
-    forkSource: serverProjection === null ? null : resolveThreadForkSource(serverProjection),
-    forkDisabled: isRevertingCheckpoint || threadDetailLoading || activeEnvironmentUnavailable,
+    forkSource,
+    forkDisabled,
     onForkFromRun,
   };
   const panelToggleControlProps = {
