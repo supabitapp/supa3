@@ -36,7 +36,12 @@ import {
   type TimelineEntry,
   type WorkLogEntry,
 } from "../../session-logic";
-import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
+import {
+  type ChatMessage,
+  type ProposedPlan,
+  type ThreadShell,
+  type TurnDiffSummary,
+} from "../../types";
 import {
   type MessageId,
   type WorktreeSetupSnapshot,
@@ -175,6 +180,36 @@ export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string
   }
   const heading = normalizeCompactToolLabel(entry.toolTitle || entry.label);
   return `${heading.charAt(0).toUpperCase()}${heading.slice(1)}`;
+}
+
+/** The trimmed thread id a `supacode_thread_read` call targets, or null for any other entry. */
+export function threadReadTargetId(entry: Pick<WorkLogEntry, "structuredPayload">) {
+  const item = entry.structuredPayload;
+  if (item?.type !== "dynamic_tool") return null;
+  if (resolveSupacodeMcpToolDefinition(item.toolName)?.summaryAction !== "thread-read") return null;
+  const input = item.input;
+  const threadId =
+    input !== null && typeof input === "object" && "threadId" in input ? input.threadId : null;
+  return typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : null;
+}
+
+const THREAD_READ_OBJECT = " a Supacode thread";
+
+export function threadReadTargetTitle(
+  shell: Pick<ThreadShell, "title" | "archivedAt" | "deletedAt"> | null,
+) {
+  if (!shell || shell.archivedAt !== null || shell.deletedAt !== null) return null;
+  return shell.title.trim() || null;
+}
+
+/**
+ * Names the read thread in place of the generic object ("Read a Supacode thread" becomes
+ * `Read thread “Title”`), keeping the label's tense. Null keeps the generic label.
+ */
+export function threadReadLabelPrefix(label: string) {
+  return label.endsWith(THREAD_READ_OBJECT)
+    ? `${label.slice(0, -THREAD_READ_OBJECT.length)} thread`
+    : null;
 }
 
 /** Inspectable read-file output is the path when we have one, otherwise nothing. */
