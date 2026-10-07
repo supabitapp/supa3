@@ -5,6 +5,7 @@ import type {
 } from "@supacode/client-runtime/state/thread-requests";
 import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/turn-item-presentation";
 import { formatSubagentDisplayTitle } from "@supacode/client-runtime/state/subagent-display";
+import { isLiveSubagentTurnItem } from "@supacode/client-runtime/state/subagentRuntime";
 import { extractToolActivityPresentation } from "@supacode/client-runtime/work-log/tool-presentation";
 import {
   turnItemHasDetail,
@@ -1096,7 +1097,10 @@ function deriveThreadFeedRunFolds(
                 (activity) =>
                   activity.prominent ||
                   activity.projectedItem.item.type === "notification" ||
-                  activity.projectedItem.item.type === "handoff",
+                  activity.projectedItem.item.type === "handoff" ||
+                  // A child still working outlives its settled launching run;
+                  // its group stays visible while any member is live.
+                  isLiveSubagentTurnItem(activity.projectedItem.item),
               )
             ),
         )
