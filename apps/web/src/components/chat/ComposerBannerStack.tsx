@@ -161,6 +161,10 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
     return fresh && fresh !== slot.item ? { ...slot, item: fresh } : slot;
   });
   const exitingKey = slots.flatMap((slot) => (slot.exiting ? [slot.item.id] : [])).join("\n");
+  const { front, stacked } = arrangeSlots(slots);
+  const stackedActivity = stacked.filter((slot) => slot.item.priority === "activity");
+  const stackedNotices = stacked.filter((slot) => slot.item.priority !== "activity");
+  const hasStack = stackedNotices.length > 0;
 
   useEffect(() => {
     if (exitingKey === "") return;
@@ -177,7 +181,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
     };
   }, [exitingKey, slotElementsRef]);
 
-  if (live.length < 2 && stackExpanded) {
+  if (!hasStack && stackExpanded) {
     setStackExpanded(false);
   }
 
@@ -194,8 +198,6 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
     }
   }, [stackExpanded]);
 
-  // Activity stays attached. Urgency and severity only order the notices behind it.
-  const { front, stacked } = arrangeSlots(slots);
   if (!front) {
     return (
       <>
@@ -205,10 +207,10 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
       </>
     );
   }
-  const hasStack = stacked.length > 0;
-  const firstStackedItem = (stacked.find((slot) => !slot.exiting) ?? stacked[0])?.item;
+  const firstStackedItem = (stackedNotices.find((slot) => !slot.exiting) ?? stackedNotices[0])
+    ?.item;
   const showCollapsedStackCap = firstStackedItem !== undefined && !front.exiting;
-  const stackLeaving = stacked.every((slot) => slot.exiting);
+  const stackLeaving = stackedNotices.every((slot) => slot.exiting);
 
   const slotProps = (slot: StackSlot) => ({
     ref: (element: HTMLDivElement | null) => {
@@ -300,7 +302,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
                     : "pointer-events-none invisible translate-y-1 opacity-0",
                 )}
               >
-                {stacked.map((slot) => (
+                {stackedNotices.map((slot) => (
                   <div key={slot.item.id} {...slotProps(slot)} className={presenceClassName}>
                     <ComposerBannerStackAlert
                       slot={slot}
@@ -312,6 +314,19 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {stackedActivity.length > 0 ? (
+        <div className="relative z-20 space-y-2 pb-2" data-chat-composer-collapsed-controls="true">
+          {stackedActivity.map((slot) => (
+            <div key={slot.item.id} {...slotProps(slot)} className={presenceClassName}>
+              <ComposerBannerStackAlert
+                slot={slot}
+                attached={false}
+                onDismissRequest={() => requestDismiss(slot.item)}
+              />
+            </div>
+          ))}
         </div>
       ) : null}
       {attachedAbove}
