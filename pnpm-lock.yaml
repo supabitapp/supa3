@@ -234,7 +234,7 @@ overrides:
   vite-plus: 1.0.0
   yaml: ^2.9.0
 
-packageExtensionsChecksum: sha256-mFfsZ3L9X7jruNo2eQdNwfkTwEe7Ng1NWpAUeZ0yNjQ=
+packageExtensionsChecksum: sha256-AzbYLakXpNBVExfbbhXO7sa9DS7FX3NAsXtxC2zBqIs=
 
 pnpmfileChecksum: sha256-nVOmFZ6JT8FxIhcN+S5sJXuP1DtIhTre5ZGvjJU+4tk=
 
@@ -3834,10 +3834,6 @@ packages:
         optional: true
       react-dom:
         optional: true
-
-  '@pierre/theme@1.1.0':
-    resolution: {integrity: sha512-GC2OWTAfTIIWWYhPCygwG8t2EtePQkRfON4MI2rwIkJylmiyqIttJID2dCL8sUD8cNdEvYkEyfEHHKMeCiDLoQ==}
-    engines: {vscode: ^1.0.0}
 
   '@pierre/theme@2.0.0':
     resolution: {integrity: sha512-yNDd9GYLQl1mEUJR8AneJ5e4ohLIHQd/wZLWr4fagt78vS2RwwZNW530vVgHqXFAyFVcFlRmGUD5ramXH46OXw==}
@@ -13079,8 +13075,6 @@ snapshots:
     transitivePeerDependencies:
       - '@shikijs/themes'
 
-  '@pierre/theme@1.1.0': {}
-
   '@pierre/theme@2.0.0': {}
 
   '@pierre/theming@1.0.0(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)':
@@ -16380,6 +16374,7 @@ snapshots:
 
   expo-quick-actions@6.0.2(expo@58.0.2)(supports-color@8.1.1)(typescript@7.0.2):
     dependencies:
+      '@expo/config-plugins': 58.0.4(supports-color@8.1.1)(typescript@7.0.2)
       '@expo/image-utils': 0.8.14(supports-color@8.1.1)(typescript@7.0.2)
       expo: 58.0.2(3d71f6499d3c841467c44ba1a6c879c9)
       schema-utils: 4.3.3

@@ -185,6 +185,10 @@ packageExtensions:
   "@legendapp/list@*":
     peerDependencies:
       "@types/react": "*"
+  # Its config plugin requires @expo/config-plugins but declares it only as a devDependency.
+  expo-quick-actions@*:
+    dependencies:
+      "@expo/config-plugins": 58.0.4
   "@react-navigation/native-stack@*":
     # Its generated declarations import core directly through an undeclared dependency.
     dependencies:
