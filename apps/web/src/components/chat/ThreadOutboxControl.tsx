@@ -19,6 +19,7 @@ import {
 } from "../../state/threadOutbox";
 import { Button } from "../ui/button";
 import { ComposerBanner } from "./ComposerBanner";
+import { useThreadOutboxVisibility } from "./useThreadOutboxVisibility";
 
 export function ThreadOutboxControl(props: {
   readonly environmentId: EnvironmentId;
@@ -41,6 +42,12 @@ export function ThreadOutboxControl(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const open = useThreadOutboxVisibility(
+    scope,
+    pending.length > 0,
+    props.editingMessageId !== null ||
+      pending.some((entry) => entry.status === "failed" || entry.error !== null),
+  );
 
   async function act(action: () => Promise<void>) {
     setBusy(true);
@@ -55,7 +62,7 @@ export function ThreadOutboxControl(props: {
   }
 
   return (
-    <ComposerBanner.Drawer open={pending.length > 0}>
+    <ComposerBanner.Drawer open={open}>
       <ComposerBanner.Root>
         <ComposerBanner.Row>
           <ComposerBanner.Icon>
