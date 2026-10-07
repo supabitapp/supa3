@@ -101,7 +101,7 @@ export function getDesktopUpdateInstallConfirmationMessage(
   state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion">,
 ): string {
   const version = state.downloadedVersion ?? state.availableVersion;
-  return `Install update${version ? ` ${version}` : ""} and restart Supacode?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.`;
+  return `Click again to install update${version ? ` ${version}` : ""} and restart Supacode. Running tasks will be interrupted.`;
 }
 
 export function getDesktopUpdateActionError(result: DesktopUpdateActionResult): string | null {

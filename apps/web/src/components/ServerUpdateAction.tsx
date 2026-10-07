@@ -19,7 +19,6 @@ import {
 import { CircleArrowUpIcon } from "lucide-react";
 import { type ComponentProps, useRef, useState } from "react";
 
-import { requestConfirmDialog } from "~/confirmDialog";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "~/hooks/useSettings";
 import { serverEnvironment, updateOutdatedServer } from "~/state/server";
@@ -27,6 +26,7 @@ import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { manualServerUpdateCommand } from "~/versionSkew";
 import { Button } from "./ui/button";
+import { InlineConfirmButton } from "./InlineConfirm";
 import { toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
@@ -127,6 +127,7 @@ export function ServerUpdatesAction({
       target.selfUpdate !== null &&
       (target.selfUpdate !== "desktop-managed" || target.desktopAppUpdate),
   );
+  const desktopTargets = eligible.filter((target) => target.selfUpdate === "desktop-managed");
   const handleUpdate = async () => {
     if (pending.current) return;
     pending.current = true;
@@ -135,14 +136,6 @@ export function ServerUpdatesAction({
       const available = eligible.filter(
         (target) => !pendingUpdateEnvironmentIds.has(target.environmentId),
       );
-      const desktopTargets = available.filter((target) => target.selfUpdate === "desktop-managed");
-      if (desktopTargets.length > 0) {
-        const confirmed =
-          (await requestConfirmDialog(
-            `Update the Supacode desktop apps on ${desktopTargets.map((target) => target.serverLabel).join(", ")}? They will close and relaunch on those machines.`,
-          )) ?? true;
-        if (!confirmed) return;
-      }
       await Promise.all(
         available.map((target) => update(target, `${target.serverLabel} update failed`)),
       );
@@ -152,15 +145,21 @@ export function ServerUpdatesAction({
     }
   };
   return (
-    <Button
+    <InlineConfirmButton
+      key={desktopTargets
+        .map((target) => `${target.environmentId}:${target.targetVersion}`)
+        .join(",")}
       size={size}
       variant={variant}
       className={className}
       disabled={isPending || eligible.length === 0}
-      onClick={() => void handleUpdate()}
-    >
-      {label}
-    </Button>
+      required={desktopTargets.length > 0}
+      label={label}
+      confirmLabel="Confirm update all"
+      tooltip={label}
+      confirmTooltip={`Click again to update the desktop apps on ${desktopTargets.map((target) => target.serverLabel).join(", ")}. They will close and relaunch on those machines. Running threads may be interrupted.`}
+      onConfirm={() => void handleUpdate()}
+    />
   );
 }
 
@@ -258,19 +257,6 @@ export function ServerUpdateAction({
     ) {
       return;
     }
-    if (isDesktopAppUpdate) {
-      // No themed host mounted (undefined) means proceed: the click itself
-      // was the request. This is the only confirmation in the flow; the
-      // remote machine installs without asking anyone there.
-      const confirmed =
-        (await requestConfirmDialog(
-          `Update the Supacode desktop app that runs the ${serverLabel}? It will close and relaunch on that machine.`,
-        )) ?? true;
-      if (!confirmed) {
-        return;
-      }
-    }
-    if (!canUpdateServer(appAtomRegistry.get(sessionStateAtom))) return;
     await update({
       environmentId,
       serverLabel,
@@ -302,6 +288,26 @@ export function ServerUpdateAction({
     manualCommand !== null
       ? () => copyToClipboard(manualCommand, { command: manualCommand })
       : () => void handleUpdate();
+
+  if (isDesktopAppUpdate) {
+    return (
+      <InlineConfirmButton
+        key={`${environmentId}:${targetVersion}`}
+        size={appearance === "icon" ? "icon-xs" : size}
+        variant={appearance === "icon" ? "ghost-muted" : variant}
+        className={className}
+        disabled={!canUpdate}
+        icon={appearance === "icon" ? <CircleArrowUpIcon className="size-3.5" /> : undefined}
+        label={appearance === "icon" ? `${actionLabel} for ${serverLabel}` : actionLabel}
+        confirmLabel={
+          appearance === "icon" ? `Confirm update for ${serverLabel}` : "Confirm update"
+        }
+        tooltip={actionLabel}
+        confirmTooltip={`Click again to update the desktop app on ${serverLabel}. It will close and relaunch on that machine. Running threads may be interrupted.`}
+        onConfirm={onClick}
+      />
+    );
+  }
 
   if (appearance === "icon") {
     return (

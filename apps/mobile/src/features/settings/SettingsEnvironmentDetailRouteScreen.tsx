@@ -9,7 +9,7 @@ import {
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -21,6 +21,7 @@ import { environmentSession, useEnvironmentScope, readEnvironmentScope } from ".
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import { ConnectionEnvironmentRow } from "../connection/ConnectionEnvironmentRow";
+import { useInlineConfirm } from "../../lib/useInlineConfirm";
 import { EnvironmentRoutesSection } from "./EnvironmentRoutesSection";
 import { SettingsActionRow } from "./components/SettingsActionRow";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -111,42 +112,31 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
     const targetVersion = checkedRelease?.targetVersion;
     if (disabled || !targetVersion || !capabilities || !supportsEnvironmentUpdate(capabilities))
       return;
-    Alert.alert(
-      `Update ${environment?.environmentLabel ?? "environment"}?`,
-      `Install Supacode ${targetVersion}. ${capabilities.serverSelfUpdate === "desktop-managed" ? "The desktop app will close and relaunch." : "The server will restart and reconnect."} Running threads may be interrupted.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Update",
-          onPress: () =>
-            void run("server", async () => {
-              if (
-                AsyncResult.isFailure(
-                  appAtomRegistry.get(environmentSession.sessionStateAtom(environmentId)),
-                ) ||
-                !canMaintainEnvironment(
-                  appAtomRegistry.get(environmentSession.sessionStateValueAtom(environmentId)),
-                  connected,
-                )
-              )
-                return;
-              const result = await updateServer({
-                environmentId,
-                input: {
-                  targetVersion,
-                  ...(capabilities.serverUpdateThreadContinuation &&
-                  config?.settings.continueThreadsAfterServerUpdate
-                    ? { continueRunningThreads: true }
-                    : {}),
-                },
-              });
-              if (AsyncResult.isFailure(result)) throw squashAtomCommandFailure(result);
-              setRelease(null);
-              setNotice(`Updated to ${result.value.targetVersion}.`);
-            }),
+    void run("server", async () => {
+      if (
+        AsyncResult.isFailure(
+          appAtomRegistry.get(environmentSession.sessionStateAtom(environmentId)),
+        ) ||
+        !canMaintainEnvironment(
+          appAtomRegistry.get(environmentSession.sessionStateValueAtom(environmentId)),
+          connected,
+        )
+      )
+        return;
+      const result = await updateServer({
+        environmentId,
+        input: {
+          targetVersion,
+          ...(capabilities.serverUpdateThreadContinuation &&
+          config?.settings.continueThreadsAfterServerUpdate
+            ? { continueRunningThreads: true }
+            : {}),
         },
-      ],
-    );
+      });
+      if (AsyncResult.isFailure(result)) throw squashAtomCommandFailure(result);
+      setRelease(null);
+      setNotice(`Updated to ${result.value.targetVersion}.`);
+    });
   }
 
   function requestProviderUpdate(provider: ServerProvider) {
@@ -282,12 +272,13 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                   />
                   {checkedRelease?.targetVersion &&
                   supportsEnvironmentUpdate(config.environment.capabilities) ? (
-                    <SettingsActionRow
-                      icon="arrow.up.circle"
-                      label={`Update to ${checkedRelease.targetVersion}`}
+                    <EnvironmentUpdateAction
+                      key={checkedRelease.targetVersion}
+                      targetVersion={checkedRelease.targetVersion}
+                      desktopAppUpdate={capabilities?.serverSelfUpdate === "desktop-managed"}
                       disabled={disabled}
                       loading={pending === "server" || running}
-                      onPress={requestServerUpdate}
+                      onUpdate={requestServerUpdate}
                     />
                   ) : null}
                 </SettingsSection>
@@ -375,5 +366,42 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
         )}
       </ScreenScrollView>
     </SettingsScreen>
+  );
+}
+
+function EnvironmentUpdateAction({
+  targetVersion,
+  desktopAppUpdate,
+  disabled,
+  loading,
+  onUpdate,
+}: {
+  readonly targetVersion: string;
+  readonly desktopAppUpdate: boolean;
+  readonly disabled: boolean;
+  readonly loading: boolean;
+  readonly onUpdate: () => void;
+}) {
+  const confirm = useInlineConfirm<"update">();
+  const armed = confirm.armed === "update";
+  return (
+    <>
+      <SettingsActionRow
+        icon={armed ? "checkmark" : "arrow.up.circle"}
+        label={`${armed ? "Confirm update" : "Update"} to ${targetVersion}`}
+        disabled={disabled}
+        loading={loading}
+        {...confirm.bind("update", onUpdate)}
+      />
+      {armed ? (
+        <Text className="px-4 pb-4 text-sm text-foreground-muted">
+          Tap again to update.{" "}
+          {desktopAppUpdate
+            ? "The desktop app will close and relaunch."
+            : "The server will restart and reconnect."}{" "}
+          Running threads may be interrupted.
+        </Text>
+      ) : null}
+    </>
   );
 }

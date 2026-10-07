@@ -102,6 +102,7 @@ import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";
+import { InlineConfirmButton } from "../InlineConfirm";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   Dialog,
@@ -335,28 +336,6 @@ function AboutVersionSection() {
     if (action === "install") {
       if (isUpdateActionPending) return;
       setIsUpdateActionPending(true);
-      let confirmed = false;
-      try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(
-            updateState ?? { availableVersion: null, downloadedVersion: null },
-          ),
-        );
-      } catch (error) {
-        setIsUpdateActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
-        );
-        return;
-      }
-      if (!confirmed) {
-        setIsUpdateActionPending(false);
-        return;
-      }
       void desktopUpdateRestart
         .install(bridge)
         .catch((error: unknown) => {
@@ -424,21 +403,20 @@ function AboutVersionSection() {
         title={<AboutVersionTitle />}
         description={description}
         control={
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={buttonDisabled || isUpdateActionPending}
-                  onClick={handleButtonClick}
-                >
-                  {buttonLabel}
-                </Button>
-              }
-            />
-            {buttonTooltip ? <TooltipPopup>{buttonTooltip}</TooltipPopup> : null}
-          </Tooltip>
+          <InlineConfirmButton
+            key={`${action}:${updateState?.downloadedVersion ?? updateState?.availableVersion ?? ""}`}
+            size="sm"
+            variant="outline"
+            disabled={buttonDisabled || isUpdateActionPending}
+            required={action === "install"}
+            label={buttonLabel}
+            confirmLabel="Confirm restart"
+            tooltip={buttonTooltip}
+            confirmTooltip={getDesktopUpdateInstallConfirmationMessage(
+              updateState ?? { availableVersion: null, downloadedVersion: null },
+            )}
+            onConfirm={() => void handleButtonClick()}
+          />
         }
       />
       {hasDesktopBridge ? (

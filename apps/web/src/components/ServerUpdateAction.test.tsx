@@ -1,5 +1,7 @@
-import { act, type ReactElement } from "react";
-import { create, type ReactTestRenderer } from "react-test-renderer";
+// @vitest-environment jsdom
+
+import { act, type ComponentProps } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AuthSessionState, type EnvironmentId, type ServerInstallation } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
@@ -51,7 +53,6 @@ import {
   readConfirmDialogState,
   registerConfirmDialogHost,
   resetConfirmDialogForTests,
-  respondToConfirmDialog,
 } from "~/confirmDialog";
 import {
   ServerUpdateAction,
@@ -61,18 +62,50 @@ import {
 } from "./ServerUpdateAction";
 
 const decodeSessionState = Schema.decodeUnknownSync(AuthSessionState);
+let root: Root | undefined;
+let container: HTMLDivElement;
 
-type ActionElement = ReactElement<{
-  readonly onClick?: () => void;
-}>;
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  resetConfirmDialogForTests();
+  container = document.createElement("div");
+  document.body.append(container);
+});
 
-function renderAction(): ActionElement {
-  return ServerUpdateAction({
+afterEach(() => {
+  act(() => root?.unmount());
+  root = undefined;
+  container.remove();
+  resetConfirmDialogForTests();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+function mountAction(props: ComponentProps<typeof ServerUpdateAction>) {
+  root = createRoot(container);
+  act(() => root!.render(<ServerUpdateAction {...props} />));
+  return container.querySelector("button")!;
+}
+
+async function press(button: HTMLButtonElement, at: number) {
+  const event = new MouseEvent("click", { bubbles: true });
+  Object.defineProperty(event, "timeStamp", { value: at + 1 });
+  await act(async () => {
+    button.dispatchEvent(event);
+  });
+}
+
+function renderAction() {
+  return mountAction({
     environmentId: "env-test" as EnvironmentId,
     serverLabel: "Test server",
     selfUpdate: "boot-service",
     targetVersion: "0.0.31",
-  }) as ActionElement;
+  });
+}
+
+function click(button: HTMLButtonElement) {
+  act(() => button.click());
 }
 
 async function flushPromises(): Promise<void> {
@@ -135,7 +168,7 @@ describe("ServerUpdateAction", () => {
         AsyncResult.success({ targetVersion: "0.0.31", method: "boot-service" as const }),
       );
 
-      renderAction().props.onClick?.();
+      click(renderAction());
       await flushPromises();
 
       expect(testState.updateServer).toHaveBeenCalledTimes(allowed ? 1 : 0);
@@ -148,7 +181,7 @@ describe("ServerUpdateAction", () => {
       AsyncResult.success({ targetVersion: "0.0.31", method: "boot-service" as const }),
     );
 
-    renderAction().props.onClick?.();
+    click(renderAction());
     await flushPromises();
 
     expect(testState.updateServer).toHaveBeenCalledOnce();
@@ -157,7 +190,7 @@ describe("ServerUpdateAction", () => {
   it("does not dispatch an update after maintenance access is removed", async () => {
     const action = renderAction();
     testState.session = AsyncResult.success({ ...currentSession, scopes: [] });
-    action.props.onClick?.();
+    click(action);
     await flushPromises();
     expect(testState.updateServer).not.toHaveBeenCalled();
   });
@@ -184,14 +217,14 @@ describe("ServerUpdateAction", () => {
   ] satisfies ReadonlyArray<readonly [ServerInstallation | undefined, string, string, string]>)(
     "copies an honest manual command for %j without invoking remote update",
     (installation, command, title, guidance) => {
-      const action = ServerUpdateAction({
+      const action = mountAction({
         environmentId: "env-test" as EnvironmentId,
         serverLabel: "Test server",
         selfUpdate: null,
         installation,
         targetVersion: "0.0.45",
-      }) as ActionElement;
-      action.props.onClick?.();
+      });
+      click(action);
       expect(testState.clipboard).toHaveBeenCalledWith(command);
       expect(testState.toast).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -208,7 +241,7 @@ describe("ServerUpdateAction", () => {
       AsyncResult.success({ targetVersion: "0.0.31", method: "boot-service" as const }),
     );
 
-    renderAction().props.onClick?.();
+    click(renderAction());
     await flushPromises();
 
     expect(testState.updateServer).toHaveBeenCalledWith({
@@ -235,8 +268,8 @@ describe("ServerUpdateAction", () => {
     );
 
     const action = renderAction();
-    action.props.onClick?.();
-    action.props.onClick?.();
+    click(action);
+    click(action);
 
     expect(testState.updateServer).toHaveBeenCalledTimes(1);
     finishUpdate?.();
@@ -247,7 +280,7 @@ describe("ServerUpdateAction", () => {
   it("quietly releases the action when the operation is interrupted", async () => {
     testState.updateServer.mockResolvedValue(AsyncResult.failure(Cause.interrupt()));
 
-    renderAction().props.onClick?.();
+    click(renderAction());
     await flushPromises();
 
     expect(testState.toast).not.toHaveBeenCalled();
@@ -267,48 +300,86 @@ describe("ServerUpdateAction", () => {
     expect(markup).not.toContain("<button");
   });
 
-  it("updates remote desktop apps through the shared update flow", async () => {
-    testState.updateServer.mockResolvedValue(
-      AsyncResult.success({ targetVersion: "0.0.34", method: "desktop-app" as const }),
-    );
+  it.each(["button", "icon"] as const)(
+    "confirms remote desktop updates in the same %s before updating",
+    async (appearance) => {
+      registerConfirmDialogHost();
+      testState.updateServer.mockResolvedValue(
+        AsyncResult.success({ targetVersion: "0.0.34", method: "desktop-app" as const }),
+      );
 
-    const action = ServerUpdateAction({
+      const button = mountAction({
+        environmentId: "env-test" as EnvironmentId,
+        serverLabel: "Test server",
+        selfUpdate: "desktop-managed",
+        desktopAppUpdate: true,
+        targetVersion: "0.0.31",
+        appearance,
+      });
+      await press(button, 0);
+      expect(testState.updateServer).not.toHaveBeenCalled();
+      expect(readConfirmDialogState()).toEqual({ status: "idle" });
+      expect(container.querySelector("button")).toBe(button);
+      expect(
+        appearance === "icon" ? button.getAttribute("aria-label") : button.textContent,
+      ).toContain("Confirm update");
+      await press(button, 200);
+      expect(testState.updateServer).not.toHaveBeenCalled();
+      await press(button, 500);
+
+      expect(testState.updateServer).toHaveBeenCalledWith({
+        environmentId: "env-test",
+        input: { targetVersion: "0.0.31" },
+      });
+      expect(testState.toast).toHaveBeenCalledWith({
+        type: "success",
+        title: "Test server updated",
+        description: "Desktop app relaunched on 0.0.34.",
+      });
+    },
+  );
+
+  it("cancels an armed desktop update on Escape", async () => {
+    const button = mountAction({
       environmentId: "env-test" as EnvironmentId,
       serverLabel: "Test server",
       selfUpdate: "desktop-managed",
       desktopAppUpdate: true,
       targetVersion: "0.0.31",
-    }) as ActionElement;
-
-    // No confirm-dialog host is mounted in this test, which the component
-    // treats as consent: the click itself was the request.
-    action.props.onClick?.();
-    await flushPromises();
-
-    expect(testState.updateServer).toHaveBeenCalledWith({
-      environmentId: "env-test",
-      input: { targetVersion: "0.0.31" },
     });
-    expect(testState.toast).toHaveBeenCalledWith({
-      type: "success",
-      title: "Test server updated",
-      description: "Desktop app relaunched on 0.0.34.",
+    await press(button, 0);
+    act(() => button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await press(button, 500);
+    expect(testState.updateServer).not.toHaveBeenCalled();
+  });
+
+  it("rechecks maintenance access when an armed desktop update is confirmed", async () => {
+    const button = mountAction({
+      environmentId: "env-test" as EnvironmentId,
+      serverLabel: "Test server",
+      selfUpdate: "desktop-managed",
+      desktopAppUpdate: true,
+      targetVersion: "0.0.31",
     });
+    await press(button, 0);
+    testState.session = AsyncResult.success({ ...currentSession, scopes: [] });
+    await press(button, 500);
+    expect(testState.updateServer).not.toHaveBeenCalled();
   });
 
   it("leaves thread continuation off by default", async () => {
     testState.updateServer.mockResolvedValue(
       AsyncResult.success({ targetVersion: "0.0.31", method: "boot-service" as const }),
     );
-    const action = ServerUpdateAction({
+    const action = mountAction({
       environmentId: "env-test" as EnvironmentId,
       serverLabel: "Test server",
       selfUpdate: "boot-service",
       threadContinuation: true,
       targetVersion: "0.0.31",
-    }) as ActionElement;
+    });
 
-    action.props.onClick?.();
+    click(action);
     await flushPromises();
 
     expect(testState.updateServer).toHaveBeenCalledWith({
@@ -322,15 +393,15 @@ describe("ServerUpdateAction", () => {
       AsyncResult.success({ targetVersion: "0.0.31", method: "boot-service" as const }),
     );
     testState.continueThreadsAfterServerUpdate = true;
-    const action = ServerUpdateAction({
+    const action = mountAction({
       environmentId: "env-test" as EnvironmentId,
       serverLabel: "Test server",
       selfUpdate: "boot-service",
       threadContinuation: true,
       targetVersion: "0.0.31",
-    }) as ActionElement;
+    });
 
-    action.props.onClick?.();
+    click(action);
     await flushPromises();
 
     expect(testState.updateServer).toHaveBeenCalledWith({
@@ -341,7 +412,6 @@ describe("ServerUpdateAction", () => {
 });
 
 describe("ServerUpdatesAction", () => {
-  let renderer: ReactTestRenderer | undefined;
   const targets: ReadonlyArray<ServerUpdateTarget> = [
     {
       environmentId: "batch-a" as EnvironmentId,
@@ -370,31 +440,25 @@ describe("ServerUpdatesAction", () => {
 
   async function mount(batch = targets) {
     await act(async () => {
-      renderer = create(<ServerUpdatesAction targets={batch} />);
+      root = createRoot(container);
+      root.render(<ServerUpdatesAction targets={batch} />);
     });
-    return renderer!.root.findByType("button");
+    return container.querySelector("button")!;
   }
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     testState.updateServer.mockReset();
     testState.toast.mockReset();
+    testState.session = AsyncResult.success(currentSession);
     resetConfirmDialogForTests();
-  });
-  afterEach(async () => {
-    await act(async () => {
-      renderer?.unmount();
-    });
-    renderer = undefined;
-    resetConfirmDialogForTests();
-    vi.unstubAllGlobals();
   });
 
   it("updates both supported machines with their own continuation preference and skips the manual machine", async () => {
     testState.updateServer.mockResolvedValue(success);
     const button = await mount();
     await act(async () => {
-      button.props.onClick();
+      button.click();
     });
 
     expect(testState.updateServer.mock.calls.map(([target]) => target)).toEqual([
@@ -416,7 +480,7 @@ describe("ServerUpdatesAction", () => {
       .mockResolvedValueOnce(success);
     const button = await mount();
     await act(async () => {
-      button.props.onClick();
+      button.click();
     });
 
     expect(testState.updateServer).toHaveBeenCalledTimes(2);
@@ -428,7 +492,7 @@ describe("ServerUpdatesAction", () => {
     expect(testState.toast).toHaveBeenCalledWith(
       expect.objectContaining({ type: "success", title: "Office updated" }),
     );
-    expect(button.props.disabled).toBe(false);
+    expect(button.disabled).toBe(false);
   });
 
   it("starts each machine once when double-clicked and disables the action until both finish", async () => {
@@ -441,45 +505,42 @@ describe("ServerUpdatesAction", () => {
     );
     const button = await mount();
     await act(async () => {
-      button.props.onClick();
-      button.props.onClick();
+      button.click();
+      button.click();
     });
     expect(testState.updateServer).toHaveBeenCalledTimes(2);
-    expect(button.props.disabled).toBe(true);
+    expect(button.disabled).toBe(true);
     await act(async () => {
       completions[0]!();
     });
-    expect(button.props.disabled).toBe(true);
+    expect(button.disabled).toBe(true);
     await act(async () => {
       completions[1]!();
     });
-    expect(button.props.disabled).toBe(false);
+    expect(button.disabled).toBe(false);
     expect(testState.toast).toHaveBeenCalledTimes(2);
   });
 
-  it("asks once for desktop machines and cancels the entire batch", async () => {
+  it("confirms a batch containing desktop machines in place before updating any machine", async () => {
     registerConfirmDialogHost();
-    const button = await mount(
-      targets.map((target, index) =>
-        index < 2 ? { ...target, selfUpdate: "desktop-managed", desktopAppUpdate: true } : target,
-      ),
+    testState.updateServer.mockResolvedValue(success);
+    const batch = targets.map((target, index) =>
+      index === 0
+        ? { ...target, selfUpdate: "desktop-managed" as const, desktopAppUpdate: true }
+        : target,
     );
-    await act(async () => {
-      button.props.onClick();
-    });
-    const confirmation = readConfirmDialogState();
-    expect(confirmation).toEqual(
-      expect.objectContaining({
-        status: "confirming",
-        message: expect.stringContaining("Laptop, Office"),
-      }),
-    );
+    root = createRoot(container);
+    act(() => root!.render(<ServerUpdatesAction targets={batch} />));
+    const button = container.querySelector("button")!;
+    await press(button, 0);
+    expect(readConfirmDialogState()).toEqual({ status: "idle" });
     expect(testState.updateServer).not.toHaveBeenCalled();
-    await act(async () => {
-      respondToConfirmDialog(false);
-    });
+    act(() => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    await press(button, 500);
     expect(testState.updateServer).not.toHaveBeenCalled();
-    expect(button.props.disabled).toBe(false);
+    await press(button, 1000);
+    expect(testState.updateServer).toHaveBeenCalledTimes(2);
+    expect(button.disabled).toBe(false);
   });
 });
 

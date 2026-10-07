@@ -132,7 +132,7 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { ensureLocalApi, readLocalApi } from "../localApi";
+import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
@@ -182,7 +182,7 @@ import {
 } from "./ui/number-field";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { InlineConfirmTooltip } from "./InlineConfirm";
+import { InlineConfirmButton, InlineConfirmTooltip } from "./InlineConfirm";
 import {
   SidebarContent,
   SidebarGroup,
@@ -2926,6 +2926,7 @@ interface SidebarProjectsContentProps {
   desktopUpdateButtonAction: "download" | "install" | "none";
   desktopUpdateButtonDisabled: boolean;
   desktopUpdateActionPending: boolean;
+  desktopUpdateConfirmationMessage: string;
   handleDesktopUpdateButtonClick: () => void;
   projectSortOrder: SidebarProjectSortOrder;
   threadSortOrder: SidebarThreadSortOrder;
@@ -2969,6 +2970,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     desktopUpdateButtonAction,
     desktopUpdateButtonDisabled,
     desktopUpdateActionPending,
+    desktopUpdateConfirmationMessage,
     handleDesktopUpdateButtonClick,
     projectSortOrder,
     threadSortOrder,
@@ -3040,16 +3042,22 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
             <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
             {desktopUpdateButtonAction !== "none" ? (
               <AlertAction>
-                <Button
+                <InlineConfirmButton
+                  key={desktopUpdateConfirmationMessage}
                   size="xs"
                   variant="outline"
                   disabled={desktopUpdateButtonDisabled || desktopUpdateActionPending}
-                  onClick={handleDesktopUpdateButtonClick}
-                >
-                  {desktopUpdateButtonAction === "download"
-                    ? "Download ARM build"
-                    : "Install ARM build"}
-                </Button>
+                  required={desktopUpdateButtonAction === "install"}
+                  label={
+                    desktopUpdateButtonAction === "download"
+                      ? "Download ARM build"
+                      : "Install ARM build"
+                  }
+                  confirmLabel="Confirm restart"
+                  tooltip="Install the ARM build of Supacode"
+                  confirmTooltip={desktopUpdateConfirmationMessage}
+                  onConfirm={handleDesktopUpdateButtonClick}
+                />
               </AlertAction>
             ) : null}
           </Alert>
@@ -3726,26 +3734,6 @@ export default function LegacySidebar() {
     }
 
     if (desktopUpdateButtonAction === "install") {
-      let confirmed = false;
-      try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
-        );
-      } catch (error) {
-        setDesktopUpdateActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
-        );
-        return;
-      }
-      if (!confirmed) {
-        setDesktopUpdateActionPending(false);
-        return;
-      }
       void desktopUpdateRestart
         .install(bridge)
         .catch((error) => {
@@ -3798,6 +3786,9 @@ export default function LegacySidebar() {
         desktopUpdateButtonDisabled={desktopUpdateButtonDisabled}
         desktopUpdateActionPending={desktopUpdateActionPending}
         handleDesktopUpdateButtonClick={handleDesktopUpdateButtonClick}
+        desktopUpdateConfirmationMessage={getDesktopUpdateInstallConfirmationMessage(
+          desktopUpdateState ?? { availableVersion: null, downloadedVersion: null },
+        )}
         projectSortOrder={sidebarProjectSortOrder}
         threadSortOrder={sidebarThreadSortOrder}
         threadPreviewCount={sidebarThreadPreviewCount}

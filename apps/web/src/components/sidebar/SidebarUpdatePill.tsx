@@ -3,9 +3,9 @@ import { TriangleAlertIcon } from "lucide-react";
 import { type ComponentProps, useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { isElectron } from "../../env";
+import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
-import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { desktopUpdateRestart } from "../../state/desktopUpdateRestart";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -21,6 +21,7 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import { InlineConfirmIcon } from "../InlineConfirm";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -115,6 +116,7 @@ export function SidebarUpdatePill() {
 
 function SidebarUpdateControl() {
   const state = useDesktopUpdateState();
+  const confirm = useInlineConfirm<string>();
   const [isActionPending, setIsActionPending] = useState(false);
   const [checkAnimationKey, setCheckAnimationKey] = useState(0);
   const [isCheckAnimationLatched, setIsCheckAnimationLatched] = useState(false);
@@ -154,13 +156,18 @@ function SidebarUpdateControl() {
     isDownloading,
     showCheckIcon,
   });
-  const tooltip = showUpdateDetails
-    ? state
-      ? getDesktopUpdateButtonTooltip(state)
-      : "Update available"
-    : showCheckIcon
-      ? "Checking for updates…"
-      : "Check for updates";
+  const installKey = `install:${state?.downloadedVersion ?? state?.availableVersion ?? ""}`;
+  const armed = action === "install" && confirm.armed === installKey;
+  const tooltip =
+    armed && state
+      ? getDesktopUpdateInstallConfirmationMessage(state)
+      : showUpdateDetails
+        ? state
+          ? getDesktopUpdateButtonTooltip(state)
+          : "Update available"
+        : showCheckIcon
+          ? "Checking for updates…"
+          : "Check for updates";
   const disabled = showCheckIcon
     ? true
     : showUpdateDetails
@@ -223,26 +230,6 @@ function SidebarUpdateControl() {
     }
 
     if (action === "install") {
-      let confirmed = false;
-      try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(state),
-        );
-      } catch (error) {
-        setIsActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
-        );
-        return;
-      }
-      if (!confirmed) {
-        setIsActionPending(false);
-        return;
-      }
       void desktopUpdateRestart
         .install(bridge)
         .catch((error) => {
@@ -296,10 +283,12 @@ function SidebarUpdateControl() {
     );
   }, [prefersReducedMotion, state?.status]);
 
+  const installBinding =
+    action === "install" ? confirm.bind(installKey, () => void handleAction()) : null;
   const updateButton = (
     <button
       type="button"
-      aria-label={tooltip}
+      aria-label={armed ? "Confirm install and restart" : tooltip}
       aria-disabled={isInteractionDisabled || undefined}
       className={cn(
         "inline-flex size-8 items-center justify-center rounded-full outline-hidden ring-ring transition-colors focus-visible:ring-2",
@@ -315,7 +304,12 @@ function SidebarUpdateControl() {
             ),
         disabled && !showUpdateIconState && "opacity-60",
       )}
-      onClick={handleAction}
+      {...installBinding}
+      onClick={(event) => {
+        if (isInteractionDisabled) return;
+        if (installBinding) installBinding.onClick(event);
+        else void handleAction();
+      }}
       onBlur={() => {
         suppressReleaseNotesFocusOpen.current = false;
       }}
@@ -336,13 +330,15 @@ function SidebarUpdateControl() {
         );
       }}
     >
-      <DesktopUpdateStatusIcon
-        key={showCheckIcon ? checkAnimationKey : iconStatus}
-        downloadPercent={state?.downloadPercent ?? null}
-        isCheckAnimating={showCheckIcon && !prefersReducedMotion}
-        onCheckAnimationIteration={handleCheckAnimationIteration}
-        status={iconStatus}
-      />
+      <InlineConfirmIcon armed={armed}>
+        <DesktopUpdateStatusIcon
+          key={showCheckIcon ? checkAnimationKey : iconStatus}
+          downloadPercent={state?.downloadPercent ?? null}
+          isCheckAnimating={showCheckIcon && !prefersReducedMotion}
+          onCheckAnimationIteration={handleCheckAnimationIteration}
+          status={iconStatus}
+        />
+      </InlineConfirmIcon>
     </button>
   );
 
@@ -360,6 +356,7 @@ function SidebarUpdateControl() {
       >
         <Tooltip disabled={showReleaseNotesPopover}>
           <TooltipTrigger
+            closeOnClick={!installBinding || armed}
             id={releaseNotesTriggerId}
             render={
               <PopoverTrigger

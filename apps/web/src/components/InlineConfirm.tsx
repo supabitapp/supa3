@@ -130,6 +130,7 @@ export function InlineConfirmButton({
   size,
   variant,
   disabled,
+  className,
   required = true,
   icon,
   label,
@@ -141,6 +142,7 @@ export function InlineConfirmButton({
   readonly size: ButtonSize;
   readonly variant: ButtonVariant;
   readonly disabled?: boolean;
+  readonly className?: string | undefined;
   readonly required?: boolean;
   readonly icon?: ReactNode;
   readonly label: string;
@@ -163,6 +165,7 @@ export function InlineConfirmButton({
           size={size}
           variant={variant}
           disabled={disabled}
+          className={className}
           {...(required ? confirm.bind("confirm", onConfirm) : { onClick: onConfirm })}
           aria-label={icon === undefined ? undefined : armed ? confirmLabel : label}
         />
