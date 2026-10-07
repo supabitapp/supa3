@@ -625,6 +625,35 @@ function SortableThreadRow(props: {
 // The pen identifies unsent work on both draft sessions and existing threads.
 const draftPenClassName = "size-3 shrink-0 text-warning-foreground";
 
+function SidebarDraftDiscardButton(props: {
+  onClick: (event: ReactMouseEvent) => void;
+  children: ReactNode;
+}) {
+  return (
+    <span className="group/draft-action relative inline-flex size-4 shrink-0 items-center justify-center">
+      <span className="inline-flex items-center justify-center group-any-hover/sidebar-row:invisible group-has-[:focus-visible]/draft-action:invisible">
+        {props.children}
+      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Discard draft"
+              onClick={props.onClick}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="pointer-events-none absolute inset-0 inline-flex cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100"
+            />
+          }
+        >
+          <XIcon aria-hidden className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">Discard draft</TooltipPopup>
+      </Tooltip>
+    </span>
+  );
+}
+
 // Structural list items — the section headers and the
 // empty-section placeholders — take part in the sortable list so they shift
 // with the rows and the gap can open on either side of them. They can't be
@@ -878,7 +907,6 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           <span className="sr-only">{preview}</span>
           <div className="relative z-10 h-12 px-2.5 pt-1.5">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
-              <SquarePenIcon aria-hidden className={draftPenClassName} />
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
@@ -889,21 +917,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
                 {preview}
               </span>
               <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        aria-label="Discard draft"
-                        onClick={handleDiscard}
-                        className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
-                      >
-                        <XIcon className="size-3" />
-                      </button>
-                    }
-                  />
-                  <TooltipPopup side="top">Discard draft</TooltipPopup>
-                </Tooltip>
+                <SidebarDraftDiscardButton onClick={handleDiscard}>
+                  <SquarePenIcon aria-hidden className={draftPenClassName} />
+                </SidebarDraftDiscardButton>
               </span>
             </div>
             <div className="mt-0.5 flex h-4 min-w-0 items-center text-xs text-secondary-label">
@@ -1758,7 +1774,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Jump hints sit over the row's trailing edge. Keep the status metadata's
   // measured space, but remove it visually so the hint is easy to scan.
   const jumpHintIndicatorsClassName = props.jumpLabel !== null ? "invisible" : undefined;
-  // Same pen the new-thread draft rows lead with, so both kinds of unsent
+  // Same pen the new-thread draft rows use, so both kinds of unsent
   // work read the same way in the list.
   const draftIndicator = hasUnsentDraft ? (
     <Tooltip>
@@ -2105,24 +2121,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : (
                 <span className="flex-1" />
               )}
-              {draftIndicator}
               {hasUnsentDraft ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        aria-label="Discard draft"
-                        onClick={handleDiscardDraftClick}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        className="pointer-events-none inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100"
-                      />
-                    }
-                  >
-                    <XIcon aria-hidden className="size-3" />
-                  </TooltipTrigger>
-                  <TooltipPopup>Discard draft</TooltipPopup>
-                </Tooltip>
+                <SidebarDraftDiscardButton onClick={handleDiscardDraftClick}>
+                  {draftIndicator}
+                </SidebarDraftDiscardButton>
               ) : null}
               <span className={cn("contents", jumpHintIndicatorsClassName)}>
                 {terminalStatusIcon}
