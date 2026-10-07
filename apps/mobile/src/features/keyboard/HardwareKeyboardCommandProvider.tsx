@@ -1,5 +1,9 @@
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { resolveThreadReferenceCopyTarget } from "@supacode/shared/threadReference";
+import { scopeThreadRef } from "@supacode/client-runtime/environment";
+import { resolveThreadForkSource } from "@supacode/client-runtime/state/thread-workflows";
+import { AuthOrchestrationOperateScope, ThreadId } from "@supacode/contracts";
+import { Alert } from "react-native";
 import {
   createContext,
   use,
@@ -17,6 +21,16 @@ import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { suppressKeyboardMotion } from "../../lib/motionInput";
 import { SupacodeKeyboardCommands } from "../../native/SupacodeKeyboardCommands";
 import { useThreadShell } from "../../state/entities";
+import { appAtomRegistry } from "../../state/atom-registry";
+import {
+  environmentThreadDetails,
+  environmentThreadShells,
+  threadEnvironment,
+} from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { useEnvironmentScope } from "../../state/session";
+import { uuidv4 } from "../../lib/uuid";
+import { waitForThreadShellReady } from "../threads/threadForkNavigation";
 import type { GitActionProgress } from "../../state/use-vcs-action-state";
 import { GitActionProgressOverlay } from "../threads/GitActionProgressOverlay";
 import { useStartNewTask } from "../threads/use-start-new-task";
@@ -67,6 +81,12 @@ export function HardwareKeyboardCommandProvider({
   const closePalette = useCallback(() => setPaletteOpen(false), []);
   const activeThreadRef = useMemo(() => parseActiveThreadPath(pathname), [pathname]);
   const activeThread = useThreadShell(activeThreadRef);
+  const forkFromRun = useAtomCommand(threadEnvironment.forkFromRun, "fork thread");
+  const canFork = useEnvironmentScope(
+    activeThreadRef?.environmentId ?? null,
+    AuthOrchestrationOperateScope,
+  );
+  const forkInFlight = useRef(false);
   const copyTarget = useMemo(
     () =>
       activeThreadRef === null
@@ -127,9 +147,10 @@ export function HardwareKeyboardCommandProvider({
       commands.add("terminal");
       commands.add("review");
       if (pathname.split("/")[4] !== "terminal") commands.add("copyThreadReference");
+      if (canFork && pathname.split("/")[4] !== "terminal") commands.add("forkThread");
     }
     return [...commands];
-  }, [activeThreadRef, pathname, registeredCommands, navigation]);
+  }, [activeThreadRef, canFork, pathname, registeredCommands, navigation]);
 
   const onCommand = useCallback(
     (command: HardwareKeyboardCommand) => {
@@ -139,6 +160,49 @@ export function HardwareKeyboardCommandProvider({
         return;
       }
       if (dispatchHardwareKeyboardCommand(command)) return;
+
+      if (command === "forkThread") {
+        if (activeThreadRef === null || activeThread === null || !canFork || forkInFlight.current)
+          return;
+        const projection = appAtomRegistry.get(
+          environmentThreadDetails.threadAtom(activeThreadRef),
+        );
+        const source = projection === null ? null : resolveThreadForkSource(projection.projection);
+        if (source === null) return;
+        const { environmentId } = activeThreadRef;
+        const targetThreadId = ThreadId.make(uuidv4());
+        const targetThreadRef = scopeThreadRef(environmentId, targetThreadId);
+        forkInFlight.current = true;
+        void forkFromRun({
+          environmentId,
+          input: {
+            ...source,
+            targetThreadId,
+            title: `${activeThread.title} fork`,
+            creationSource: "mobile",
+          },
+        })
+          .then(async (result) => {
+            if (result._tag !== "Success") return;
+            const ready = await waitForThreadShellReady({
+              read: () =>
+                appAtomRegistry.get(environmentThreadShells.threadShellAtom(targetThreadRef)) !==
+                null,
+            });
+            if (!ready) {
+              Alert.alert(
+                "Fork created",
+                "Its thread data did not reach this client. Reconnect and try opening it from the thread list.",
+              );
+              return;
+            }
+            navigation.navigate("Thread", { environmentId, threadId: targetThreadId });
+          })
+          .finally(() => {
+            forkInFlight.current = false;
+          });
+        return;
+      }
 
       if (command === "copyThreadReference") {
         if (copyTarget === null) return;
@@ -189,7 +253,17 @@ export function HardwareKeyboardCommandProvider({
         navigation.navigate("ThreadReview", thread);
       }
     },
-    [copyTarget, navigation, pathname, showCopyFeedback, startNewTask],
+    [
+      activeThread,
+      activeThreadRef,
+      canFork,
+      copyTarget,
+      forkFromRun,
+      navigation,
+      pathname,
+      showCopyFeedback,
+      startNewTask,
+    ],
   );
 
   const palette = useMemo(

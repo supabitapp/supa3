@@ -1,6 +1,10 @@
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentThreadSearchMatch } from "@supacode/client-runtime/state/thread-search";
-import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@supacode/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  THREAD_JUMP_KEYBINDING_COMMANDS,
+} from "@supacode/contracts";
+import { resolveThreadForkSource } from "@supacode/client-runtime/state/thread-workflows";
 import { threadPullRequestSearchTerms } from "@supacode/shared/threadPullRequests";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -26,6 +30,8 @@ import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { SupacodeKeyboardCommands } from "../../native/SupacodeKeyboardCommands";
 import { useProjects, useThreadShell, useThreadShells } from "../../state/entities";
 import { useThreadSearch } from "../../state/queries";
+import { useThreadProjection } from "../../state/use-thread-detail";
+import { useEnvironmentScope } from "../../state/session";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
@@ -61,6 +67,7 @@ const ACTION_ICONS: Record<string, AppSymbolName> = {
   terminal: "terminal",
   review: "arrow.triangle.pull",
   copyThreadReference: "link",
+  forkThread: "arrow.triangle.branch",
 };
 
 function itemIcon(item: CommandPaletteItem): AppSymbolName {
@@ -145,6 +152,16 @@ export function CommandPalette(props: {
   const threads = useThreadShells();
   const activeThreadRef = useMemo(() => parseActiveThreadPath(props.pathname), [props.pathname]);
   const activeThread = useThreadShell(activeThreadRef);
+  const projection = useThreadProjection({
+    environmentId: activeThreadRef?.environmentId ?? null,
+    threadId: activeThreadRef?.threadId ?? null,
+  });
+  const canOperate = useEnvironmentScope(
+    activeThreadRef?.environmentId ?? null,
+    AuthOrchestrationOperateScope,
+  );
+  const canFork =
+    canOperate && projection !== null && resolveThreadForkSource(projection.projection) !== null;
   const environments = useWorkspaceEnvironments();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const [query, setQuery] = useState("");
@@ -299,6 +316,15 @@ export function CommandPalette(props: {
           run: () => runCommand(command),
         })),
       );
+      if (canFork) {
+        actions.push({
+          key: "forkThread",
+          kind: "action",
+          title: "Fork thread",
+          searchTerms: ["branch", "conversation", "duplicate"],
+          run: () => runCommand("forkThread"),
+        });
+      }
     }
     const projectItems: CommandPaletteItem[] = projects.map((project) => ({
       key: `project:${scopedProjectKey(project.environmentId, project.id)}`,
@@ -345,6 +371,7 @@ export function CommandPalette(props: {
   }, [
     activeThread,
     activeThreadRef,
+    canFork,
     navigation,
     projects,
     runCommand,

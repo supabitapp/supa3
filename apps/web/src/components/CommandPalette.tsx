@@ -3,7 +3,11 @@
 import { threadPullRequestLinkMode } from "@supacode/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@supacode/shared/threadPullRequests";
 
-import { scopeProjectRef, scopeThreadRef } from "@supacode/client-runtime/environment";
+import {
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@supacode/client-runtime/environment";
 import {
   canCreateProjectInEnvironment,
   getCloneDestinationBrowsePath,
@@ -17,6 +21,7 @@ import {
 } from "@supacode/client-runtime/operations/projects";
 import { connectionStatusText } from "@supacode/client-runtime/connection";
 import { threadSearchMatchKey } from "@supacode/client-runtime/state/thread-search";
+import { resolveThreadForkSource } from "@supacode/client-runtime/state/thread-workflows";
 import { resolveThreadReferenceCopyTarget } from "@supacode/shared/threadReference";
 import {
   canPreloadBrowsePath,
@@ -57,6 +62,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  GitForkIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -87,6 +93,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useActiveThreadRef } from "../hooks/useActiveThreadRef";
+import { useForkThread } from "../hooks/useForkThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { useClientSettings } from "../hooks/useSettings";
@@ -115,7 +123,13 @@ import { useScratchProject } from "../hooks/useScratchProject";
 import { useNewProject } from "../hooks/useNewProject";
 import { isScratchProject } from "@supacode/client-runtime/state/projects";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
-import { useProjects, useServerConfigs, useThreadShells, waitForProject } from "../state/entities";
+import {
+  useProjects,
+  useServerConfigs,
+  useThreadProjection,
+  useThreadShells,
+  waitForProject,
+} from "../state/entities";
 import { useThreadSearch } from "../state/queries";
 import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import {
@@ -130,6 +144,7 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
@@ -761,6 +776,17 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const activeThreadRef = useActiveThreadRef(activeThread);
+  const activeThreadProjection = useThreadProjection(activeThreadRef);
+  const isRewinding = useComposerDraftStore(
+    (store) =>
+      activeThreadRef !== null && store.rewindingThreadKeys.has(scopedThreadKey(activeThreadRef)),
+  );
+  const { onForkFromRun, disabled: forkDisabled } = useForkThread(activeThread, isRewinding);
+  const forkSource =
+    activeThreadProjection === null
+      ? null
+      : resolveThreadForkSource(activeThreadProjection.projection);
   const projects = useProjects();
   const referenceThreadRef =
     pathname === "/pull-requests"
@@ -2029,6 +2055,21 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
+  const forkThreadItem: CommandPaletteActionItem | null =
+    forkSource === null
+      ? null
+      : {
+          kind: "action",
+          value: "action:fork-thread",
+          searchTerms: ["fork", "thread", "branch", "conversation", "duplicate"],
+          title: "Fork thread",
+          icon: <GitForkIcon className={ITEM_ICON_CLASS} />,
+          shortcutCommand: "thread.fork",
+          disabled: forkDisabled,
+          run: () => onForkFromRun(forkSource),
+        };
+  if (forkThreadItem !== null) actionItems.push(forkThreadItem);
+
   if (
     activeThread !== null &&
     threadPullRequestLinkMode(activeThreadServerConfig?.environment.capabilities) !== "unsupported"
@@ -3180,6 +3221,13 @@ function OpenCommandPaletteDialog(props: {
       if (activeThreadReferenceCopyTarget === null) return;
       setOpen(false);
       void copyActiveThreadReference();
+      return;
+    }
+
+    if (command === "thread.fork" && forkThreadItem !== null && !forkThreadItem.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) executeItem(forkThreadItem);
       return;
     }
 
