@@ -67,6 +67,10 @@
       "types": "./src/markdownImages.ts",
       "default": "./src/markdownImages.ts"
     },
+    "./stage-artwork": {
+      "types": "./src/stageArtwork.ts",
+      "default": "./src/stageArtwork.ts"
+    },
     "./markdown-links": {
       "types": "./src/markdownLinks.ts",
       "default": "./src/markdownLinks.ts"

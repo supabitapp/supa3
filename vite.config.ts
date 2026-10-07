@@ -392,6 +392,7 @@ export default defineConfig({
           "apps/mobile/src/features/archive/ArchivedThreadsScreen.tsx",
           "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
           "apps/mobile/src/features/files/FileMarkdownPreview.tsx",
+          "apps/mobile/src/components/StageArtworkBackdrop.tsx",
           "apps/mobile/src/features/files/SourceFileSurface.tsx",
           "apps/mobile/src/features/files/AttachmentFileScreen.tsx",
           "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",

@@ -24,6 +24,10 @@ import type { SearchBarCommands } from "react-native-screens";
 
 import { AppText as Text } from "../../components/AppText";
 import { brandTitleOffset, CompactBrandTitle } from "../../components/CompactBrandTitle";
+import {
+  StageArtworkBackdrop,
+  useStageArtworkVariant,
+} from "../../components/StageArtworkBackdrop";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { SymbolView } from "../../components/AppSymbol";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
@@ -158,6 +162,7 @@ function ThreadNavigationSidebarPane(
 ) {
   const { themeVariables: materialTheme } = useAppearancePreferences();
   const drawerColor = materialTheme["--color-drawer"];
+  const stageArtworkVariant = useStageArtworkVariant();
 
   const insets = useSafeAreaInsets();
   const { fabClearance } = useAndroidControlSizing();
@@ -911,6 +916,19 @@ function ThreadNavigationSidebarPane(
             unstable_headerRightItems: () => nativeHeaderItems,
           }}
         />
+        {stageArtworkVariant ? (
+          <View
+            pointerEvents="none"
+            className="absolute inset-x-0"
+            style={{ top: insets.top, height: SIDEBAR_ARTWORK_HEIGHT }}
+          >
+            <StageArtworkBackdrop
+              variant={stageArtworkVariant}
+              fadeTo="--color-drawer"
+              fadeStart={SIDEBAR_TITLE_BAR_HEIGHT / SIDEBAR_ARTWORK_HEIGHT}
+            />
+          </View>
+        ) : null}
         <View className="flex-1">
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
@@ -1084,6 +1102,11 @@ function ThreadNavigationSidebarPane(
     </View>
   );
 }
+
+// The art sits behind the native title bar and fades out over the stacked search field. It
+// starts below the status bar, which iPad shares with the light detail pane.
+const SIDEBAR_TITLE_BAR_HEIGHT = 48;
+const SIDEBAR_ARTWORK_HEIGHT = 80;
 
 const styles = StyleSheet.create({
   threadList: {

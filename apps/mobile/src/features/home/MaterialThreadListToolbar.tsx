@@ -11,6 +11,10 @@ import type { MenuAction } from "@react-native-menu/menu";
 
 import { AndroidHeaderIconButton } from "../../components/AndroidScreenHeader";
 import { CompactBrandTitle } from "../../components/CompactBrandTitle";
+import {
+  StageArtworkBackdrop,
+  useStageArtworkVariant,
+} from "../../components/StageArtworkBackdrop";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
 import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
 import { ControlPillMenu } from "../../components/ControlPill";
@@ -42,6 +46,7 @@ export function MaterialThreadListToolbar(props: {
   const searchRef = useRef<TextInputInstance>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const searching = searchOpen || props.searchQuery.length > 0;
+  const stageArtworkVariant = useStageArtworkVariant();
   const openSearch = useCallback(() => {
     onRequestVisibility?.();
     setSearchOpen(true);
@@ -88,12 +93,27 @@ export function MaterialThreadListToolbar(props: {
         }
         style={headerPadding}
       >
+        {/* Starts below the status bar, whose icon color is app-wide on Android. */}
+        {stageArtworkVariant ? (
+          <View
+            pointerEvents="none"
+            className="absolute inset-x-0 bottom-0"
+            style={{ top: headerPadding.paddingTop }}
+          >
+            <StageArtworkBackdrop
+              variant={stageArtworkVariant}
+              fadeTo="--color-header"
+              fadeStart={0.7}
+            />
+          </View>
+        ) : null}
         <View className="flex-row items-center gap-1" style={{ minHeight: toolbarHeight }}>
           {searching ? (
             <>
               <AndroidHeaderIconButton
                 accessibilityLabel="Close search"
                 icon="arrow.left"
+                onArtwork={stageArtworkVariant !== null}
                 onPress={closeSearch}
               />
               {searchField}
@@ -111,11 +131,13 @@ export function MaterialThreadListToolbar(props: {
               <AndroidHeaderIconButton
                 accessibilityLabel="Search threads"
                 icon="magnifyingglass"
+                onArtwork={stageArtworkVariant !== null}
                 onPress={openSearch}
               />
               <AndroidHeaderIconButton
                 accessibilityLabel="Open settings"
                 icon="gearshape"
+                onArtwork={stageArtworkVariant !== null}
                 onPress={props.onOpenSettings}
               />
             </>

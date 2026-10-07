@@ -23,8 +23,16 @@ export function AndroidHeaderIconButton(props: {
   readonly onPress?: () => void;
   readonly disabled?: boolean;
   readonly selected?: boolean;
+  /** Tints the icon white for legibility over stage artwork. */
+  readonly onArtwork?: boolean;
 }) {
-  return <MaterialIconButton {...props} tintColorClassName="accent-header-foreground" />;
+  const { onArtwork, ...buttonProps } = props;
+  return (
+    <MaterialIconButton
+      {...buttonProps}
+      tintColorClassName={onArtwork ? "accent-white" : "accent-header-foreground"}
+    />
+  );
 }
 
 export function AndroidScreenHeader(props: {

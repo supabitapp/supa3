@@ -1,8 +1,9 @@
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform, useWindowDimensions } from "react-native";
+import { HeaderHeightContext } from "@react-navigation/elements";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Platform, useWindowDimensions, View } from "react-native";
 
 import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 
@@ -15,6 +16,10 @@ import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
 import { useStartNewTask } from "../threads/use-start-new-task";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
+import {
+  StageArtworkBackdrop,
+  useStageArtworkVariant,
+} from "../../components/StageArtworkBackdrop";
 import { checkForAppUpdateOnLaunch, startAppUpdateForegroundRecheck } from "../updates/app-updates";
 import { AndroidHomeFabLayout } from "./AndroidHomeFab";
 import { HomeScreen } from "./HomeScreen";
@@ -257,7 +262,30 @@ export function HomeRouteScreen() {
           selectedProjectKey={selectedProjectKey}
           threads={threads}
         />
+        {Platform.OS === "ios" ? <HomeHeaderArtwork /> : null}
       </>
     </AndroidHomeFabLayout>
+  );
+}
+
+// How far the art runs past the transparent header, fading out over the top of the list.
+const HOME_ARTWORK_OVERHANG = 28;
+
+function HomeHeaderArtwork() {
+  const variant = useStageArtworkVariant();
+  const headerHeight = useContext(HeaderHeightContext);
+  if (!variant || !headerHeight) return null;
+  const height = headerHeight + HOME_ARTWORK_OVERHANG;
+
+  return (
+    <View pointerEvents="none" className="absolute inset-x-0 top-0" style={{ height }}>
+      {/* Per-screen, so pushed screens keep the theme's status bar. */}
+      <NativeStackScreenOptions options={{ statusBarStyle: "light" }} />
+      <StageArtworkBackdrop
+        variant={variant}
+        fadeTo="--color-screen"
+        fadeStart={(headerHeight - 6) / height}
+      />
+    </View>
   );
 }
