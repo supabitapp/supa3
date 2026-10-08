@@ -1,3 +1,5 @@
+import { collectAssistantCitations } from "@supacode/shared/assistantCitations";
+
 /**
  * Converts a DOM selection inside rendered chat markdown back into markdown
  * source so highlight-and-copy keeps formatting (links, emphasis, lists,
@@ -366,6 +368,20 @@ export function serializeTableElementToCsv(table: Element): string {
 
 function sanitizedHtmlFrom(container: Element): string {
   for (const node of container.querySelectorAll(SANITIZED_HTML_SELECTOR)) {
+    const markdownCopy = node.getAttribute("data-markdown-copy");
+    if (
+      node.tagName === "BUTTON" &&
+      markdownCopy !== null &&
+      node.getAttribute("aria-hidden") !== "true" &&
+      !SKIPPED_CLASS_NAMES.some((className) => node.classList.contains(className)) &&
+      collectAssistantCitations(markdownCopy)[0]?.source === markdownCopy
+    ) {
+      const citation = node.ownerDocument.createElement("span");
+      citation.setAttribute("data-markdown-copy", markdownCopy);
+      citation.append(...node.childNodes);
+      node.replaceWith(citation);
+      continue;
+    }
     if (
       node.classList.contains("chat-markdown-file-link") ||
       node.closest(".chat-markdown-file-link")

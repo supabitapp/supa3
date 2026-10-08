@@ -8,6 +8,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
   AuthOrchestrationOperateScope,
+  AuthOrchestrationReadScope,
   AuthSourceControlWriteScope,
   ThreadId,
   EnvironmentId,
@@ -58,6 +59,40 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("gates app reads and mutations against the destination grant", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthOrchestrationReadScope],
+            permissions: [AuthOrchestrationReadScope],
+          }),
+        );
+        const reads = createCommandPermissions(runtime, WS_METHODS.mcpAppsReadResource);
+        const writes = createCommandPermissions(runtime, WS_METHODS.mcpAppsCallTool);
+        const context = createCommandPermissions(runtime, WS_METHODS.mcpAppsUpdateModelContext);
+        expect(registry.get(reads.permissionAtom(env))).toBe(true);
+        yield* reads.authorize(registry, env);
+        expect(registry.get(writes.permissionAtom(env))).toBe(false);
+        expect((yield* writes.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthOrchestrationOperateScope,
+        );
+        expect((yield* context.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthOrchestrationOperateScope,
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(writes.permissionAtom(env))).toBe(true);
+        yield* writes.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect((yield* reads.authorize(registry, other).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthOrchestrationReadScope,
+        );
+      }),
+    ),
+  );
   it.effect("uses the target grant for both availability and execution", () =>
     Effect.scoped(
       Effect.gen(function* () {

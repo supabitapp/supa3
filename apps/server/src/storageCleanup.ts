@@ -14,6 +14,7 @@ import type {
 } from "@supacode/contracts";
 import { resolveWorktreeCleanup } from "@supacode/shared/projectSettings";
 import { makeDrainableWorker } from "@supacode/shared/DrainableWorker";
+import { normalizeGitRemoteUrl } from "@supacode/shared/git";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -86,7 +87,12 @@ export function storageCleanupThreadIdle(thread: OrchestrationV2ThreadShell, now
     thread.branch !== null &&
     thread.worktreePath !== null &&
     thread.activeRunId === null &&
-    (thread.status === "idle" || thread.status === "failed") &&
+    (thread.status === "idle" ||
+      thread.status === "completed" ||
+      thread.status === "interrupted" ||
+      thread.status === "failed" ||
+      thread.status === "cancelled" ||
+      thread.status === "rolled_back") &&
     (thread.pendingBackgroundTasks?.length ?? 0) === 0 &&
     thread.pendingRuntimeRequest === null &&
     !threadHasQueuedTurnStart(thread, now)
@@ -103,6 +109,30 @@ export function storageCleanupActivityAt(thread: OrchestrationV2ThreadShell): nu
       thread.latestRunStartedAt,
       thread.latestRunCompletedAt,
     ].flatMap((value) => (value == null ? [] : [DateTime.toEpochMillis(value)])),
+  );
+}
+
+export function storageCleanupPullRequestMerged(
+  pullRequest: Pick<
+    GitManager.GitBranchPullRequest,
+    "state" | "headRef" | "baseRef" | "headSha" | "repositoryKey"
+  > | null,
+  worktree: {
+    readonly branch: string;
+    readonly defaultBranch: string;
+    readonly headSha: string;
+    readonly integrated: boolean;
+    readonly defaultRepositoryKey: string | null;
+  },
+): boolean {
+  return (
+    pullRequest?.state === "merged" &&
+    (worktree.integrated ||
+      (pullRequest.headRef === worktree.branch &&
+        pullRequest.baseRef === worktree.defaultBranch &&
+        worktree.defaultRepositoryKey !== null &&
+        pullRequest.repositoryKey?.toLowerCase() === worktree.defaultRepositoryKey.toLowerCase() &&
+        pullRequest.headSha === worktree.headSha))
   );
 }
 
@@ -154,6 +184,23 @@ export const make = Effect.gen(function* () {
     const archived = yield* projections.getShellSnapshot({ location: "archive" });
     const projects = yield* projectStore.listShells();
     return { projects, threads: [...active.threads, ...archived.threads] };
+  });
+
+  const hasUnfinishedWorkspaceEffects = Effect.fnUntraced(function* (
+    threadId: OrchestrationV2ThreadShell["id"],
+    deleted: boolean,
+  ) {
+    const effects = yield* sql`
+      SELECT 1 FROM orchestration_v2_effect_outbox
+      WHERE thread_id = ${threadId} AND status NOT IN ('succeeded', 'cancelled')
+        AND (${deleted ? 1 : 0} = 1 OR effect_type IN (
+          'checkpoint.capture', 'provider-thread.rollback', 'provider-runtime.continue',
+          'provider-turn.start', 'provider-turn.restart', 'provider-turn.steer',
+          'provider-turn.interrupt', 'provider-session.detach', 'delegated-tasks.stop'
+        ))
+      LIMIT 1
+    `;
+    return effects.length > 0;
   });
 
   // Local threads under another project need not have a worktreePath of their own.
@@ -264,6 +311,7 @@ export const make = Effect.gen(function* () {
             .some((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry))
         )
           return;
+        if (yield* hasUnfinishedWorkspaceEffects(thread.id, deleted)) return;
         const old =
           !deleted &&
           settings.worktreeAfterDays !== null &&
@@ -295,14 +343,21 @@ export const make = Effect.gen(function* () {
             args: ["merge-base", "--is-ancestor", head.commitSha, base.commitSha],
             allowNonZeroExit: true,
           });
-          if (ancestor.exitCode !== 0) return;
-          eligible = settings.worktreeUnchanged;
+          const integrated = ancestor.exitCode === 0;
+          eligible = integrated && settings.worktreeUnchanged;
           if (!eligible && settings.worktreeOnMerge && thread.branch !== null) {
+            const remoteUrl = yield* git.readConfigValue(repositoryCwd, `remote.${remote}.url`);
             const pullRequest = yield* gitManager.branchPullRequest(
               { cwd: worktreePath, branch: thread.branch },
               { refresh: true },
             );
-            eligible = pullRequest?.state === "merged";
+            eligible = storageCleanupPullRequestMerged(pullRequest, {
+              branch: thread.branch,
+              defaultBranch: branch,
+              headSha: head.commitSha,
+              integrated,
+              defaultRepositoryKey: remoteUrl === null ? null : normalizeGitRemoteUrl(remoteUrl),
+            });
           }
         }
         if (!eligible) return;
@@ -322,13 +377,6 @@ export const make = Effect.gen(function* () {
               .worktreeOnDelete
           )
             return;
-          // V2 deletion queues durable cleanup. Do not remove its checkout until
-          // every effect has finished successfully or was explicitly cancelled.
-          const pendingCleanup = yield* sql`
-            SELECT 1 FROM orchestration_v2_effect_outbox
-            WHERE thread_id = ${thread.id} AND status NOT IN ('succeeded', 'cancelled') LIMIT 1
-          `;
-          if (pendingCleanup.length > 0) return;
         } else if (
           latest.length !== 1 ||
           latest[0]!.id !== thread.id ||
@@ -387,6 +435,7 @@ export const make = Effect.gen(function* () {
           )
         )
           return;
+        if (yield* hasUnfinishedWorkspaceEffects(thread.id, deleted)) return;
         yield* git.removeWorktree({ cwd: project.workspaceRoot, path: worktreePath, force: false });
         yield* gitManager.invalidateStatus(project.workspaceRoot);
         // Preserve branch and path: ProviderTurnStartService recreates the checkout

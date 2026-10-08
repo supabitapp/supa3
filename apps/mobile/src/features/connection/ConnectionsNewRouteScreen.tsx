@@ -1,7 +1,9 @@
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
 import {
   StackActions,
+  useIsFocused,
   useNavigation,
   useRoute,
   type StaticScreenProps,
@@ -9,16 +11,21 @@ import {
 import type { EnvironmentId } from "@supacode/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Platform, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
+import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { cn } from "../../lib/cn";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
-import { AppText as Text } from "../../components/AppText";
-import { ErrorBanner } from "../../components/ErrorBanner";
-import { ConnectionFormField } from "./ConnectionFormField";
-import { ConnectionSheetButton } from "./ConnectionSheetButton";
+import { AppText as Text, AppTextInput, type AppTextInputProps } from "../../components/AppText";
+import { FrostedCutout } from "../../components/FrostedCutout";
 import { pairingUrlForFields, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
-import { useRemoteConnections } from "../../state/use-remote-environment-registry";
+import {
+  setPendingConnectionError,
+  useRemoteConnections,
+} from "../../state/use-remote-environment-registry";
+import { SymbolView } from "../../components/AppSymbol";
 
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
@@ -51,9 +58,14 @@ export function ConnectionsNewRouteScreen({
   const [codeInput, setCodeInput] = useState("");
   const [originalPairingUrl, setOriginalPairingUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showScanner, setShowScanner] = useState(params.mode === "scan_qr");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const screenFocused = useIsFocused();
   const [scannerLocked, setScannerLocked] = useState(false);
+
+  const [scanComplete, setScanComplete] = useState(false);
+  const scannerPaused = useRef(false);
+  const pairingInFlight = useRef(false);
+  const scanPermissionRequest = useRef(0);
   const attemptedAutoConnectRef = useRef<string | null>(null);
 
   const headerIconColor = useUniwindTheme()["--color-icon"];
@@ -92,43 +104,58 @@ export function ConnectionsNewRouteScreen({
     }
   }
 
-  const handleHostChange = useCallback((value: string) => {
-    const parsed = parsePairingUrl(value);
-    if (parsed.code) {
-      setOriginalPairingUrl(value.trim());
-      setHostInput(parsed.host);
-      setCodeInput(parsed.code);
-      return;
-    }
-    setHostInput(value);
+  const pauseScanner = useCallback(() => {
+    scannerPaused.current = true;
+    scanPermissionRequest.current += 1;
+    setScanComplete(true);
   }, []);
 
-  const handleCodeChange = useCallback((value: string) => {
-    setCodeInput(value);
-  }, []);
+  const handleHostChange = useCallback(
+    (value: string) => {
+      pauseScanner();
+      const parsed = parsePairingUrl(value);
+      if (parsed.code) {
+        setOriginalPairingUrl(value.trim());
+        setHostInput(parsed.host);
+        setCodeInput(parsed.code);
+      } else {
+        setHostInput(value);
+      }
+      setPendingConnectionError(null);
+    },
+    [pauseScanner],
+  );
 
-  const openScanner = useCallback(async () => {
-    if (cameraPermission?.granted) {
-      setScannerLocked(false);
-      setShowScanner(true);
-      return;
-    }
+  const handleCodeChange = useCallback(
+    (value: string) => {
+      pauseScanner();
+      setCodeInput(value);
+      setPendingConnectionError(null);
+    },
+    [pauseScanner],
+  );
 
-    const permission = await requestCameraPermission();
+  useEffect(
+    () => () => {
+      scanPermissionRequest.current += 1;
+      setPendingConnectionError(null);
+    },
+    [],
+  );
+
+  const handleScanPress = useCallback(async () => {
+    if (pairingInFlight.current) return;
+    const requestId = ++scanPermissionRequest.current;
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+    if (requestId !== scanPermissionRequest.current) return;
     if (permission.granted) {
-      setScannerLocked(false);
-      setShowScanner(true);
+      scannerPaused.current = false;
+      setScanComplete(false);
       return;
     }
-
-    if (permission.canAskAgain) {
-      Alert.alert(
-        "Camera access needed",
-        "Allow camera access to scan an environment pairing QR code.",
-      );
-      return;
-    }
-
+    if (permission.canAskAgain) return;
     Alert.alert(
       "Camera access needed",
       "Camera access was denied for this app. Open Settings to enable it.",
@@ -137,16 +164,11 @@ export function ConnectionsNewRouteScreen({
         { text: "Open Settings", onPress: () => void Linking.openSettings() },
       ],
     );
-  }, [cameraPermission?.granted, requestCameraPermission]);
-
-  const closeScanner = useCallback(() => {
-    setShowScanner(false);
-    setScannerLocked(false);
-  }, []);
+  }, [cameraPermission, requestCameraPermission]);
 
   const handleQrScan = useCallback(
     ({ data }: { readonly data: string }) => {
-      if (scannerLocked) {
+      if (scannerLocked || scannerPaused.current || pairingInFlight.current || scanComplete) {
         return;
       }
 
@@ -155,31 +177,40 @@ export function ConnectionsNewRouteScreen({
       try {
         const pairingUrl = extractPairingUrlFromQrPayload(data);
         const { host, code } = parsePairingUrl(pairingUrl);
+        pauseScanner();
         setOriginalPairingUrl(pairingUrl);
         setHostInput(host);
         setCodeInput(code);
         onChangeConnectionPairingUrl(pairingUrl);
-        setShowScanner(false);
+        setScannerLocked(false);
       } catch (error) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(
           "Invalid QR code",
           error instanceof Error ? error.message : "Scanned QR code was not recognized.",
         );
-      } finally {
         setTimeout(() => {
           setScannerLocked(false);
         }, 600);
       }
     },
-    [onChangeConnectionPairingUrl, scannerLocked],
+    [onChangeConnectionPairingUrl, pauseScanner, scannerLocked, scanComplete],
   );
 
   const connectAndClose = useCallback(
     async (pairingUrl: string, replaceWithHome: boolean) => {
+      if (pairingInFlight.current) return;
+      pairingInFlight.current = true;
+      pauseScanner();
       setIsSubmitting(true);
       onChangeConnectionPairingUrl(pairingUrl);
       const connect = async () => {
         const result = await onConnectPress(pairingUrl, params.routeFor);
+        void Haptics.notificationAsync(
+          AsyncResult.isSuccess(result)
+            ? Haptics.NotificationFeedbackType.Success
+            : Haptics.NotificationFeedbackType.Error,
+        );
         if (AsyncResult.isSuccess(result)) {
           if (replaceWithHome || !navigation.canGoBack()) {
             navigation.dispatch(StackActions.replace("Home"));
@@ -188,9 +219,12 @@ export function ConnectionsNewRouteScreen({
           }
         }
       };
-      await connect().finally(() => setIsSubmitting(false));
+      await connect().finally(() => {
+        pairingInFlight.current = false;
+        setIsSubmitting(false);
+      });
     },
-    [navigation, onChangeConnectionPairingUrl, onConnectPress, params.routeFor],
+    [navigation, onChangeConnectionPairingUrl, onConnectPress, params.routeFor, pauseScanner],
   );
 
   const handleSubmit = useCallback(async () => {
@@ -209,98 +243,214 @@ export function ConnectionsNewRouteScreen({
   return (
     <SettingsScreen
       formSheet={routeName === "ConnectionsNew"}
-      title={showScanner ? "Scan QR Code" : params.routeFor ? "Add Route" : "Add Environment"}
+      title={params.routeFor ? "Add route" : "Add environment"}
       actions={[
         {
-          accessibilityLabel: showScanner ? "Close scanner" : "Scan QR code",
-          icon: showScanner ? "xmark" : Platform.OS === "ios" ? "qrcode.viewfinder" : "camera",
+          accessibilityLabel: isSubmitting
+            ? "Connecting"
+            : params.routeFor
+              ? "Add route"
+              : "Add environment",
+          loading: isSubmitting,
+          icon: "checkmark",
           tintColor: headerIconColor,
+          disabled: connectDisabled,
           onPress: () => {
-            if (showScanner) {
-              closeScanner();
-            } else {
-              void openScanner();
-            }
+            void handleSubmit();
           },
         },
       ]}
     >
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         className="flex-1"
         contentInset={{ bottom: Math.max(insets.bottom, 18) + 18 }}
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 16,
+          paddingHorizontal: 16,
+          paddingTop: 4,
         }}
       >
-        <View collapsable={false} className="gap-5">
-          {showScanner ? (
-            cameraPermission?.granted ? (
-              <View className="overflow-hidden rounded-[24px] border-continuous">
-                <CameraView
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={handleQrScan}
-                  style={{ aspectRatio: 1, width: "100%" }}
-                />
-              </View>
-            ) : (
-              <View className="items-center gap-3 rounded-[24px] border-continuous bg-grouped-card px-5 py-8">
-                <Text className="text-center text-sm leading-normal text-foreground-muted">
-                  Camera permission is required to scan a QR code.
-                </Text>
-                <ConnectionSheetButton
-                  compact
-                  icon="camera"
-                  label="Allow camera"
-                  tone="secondary"
-                  onPress={() => {
-                    void openScanner();
-                  }}
-                />
-              </View>
-            )
-          ) : (
-            <View collapsable={false} className="gap-4 rounded-[24px] bg-grouped-card p-4">
-              <ConnectionFormField
-                label="Host"
-                autoCapitalize="none"
-                autoCorrect={false}
+        <View collapsable={false} className="gap-6.5">
+          <PairingScanCard
+            cameraActive={
+              cameraPermission?.granted === true && screenFocused && !scanComplete && !isSubmitting
+            }
+            disabled={isSubmitting}
+            onScan={handleQrScan}
+            onScanPress={() => {
+              void handleScanPress();
+            }}
+          />
+
+          <View collapsable={false} className="gap-2">
+            <Text className="px-4 text-sm font-supacode-medium text-foreground-muted">
+              Or enter it
+            </Text>
+            <View
+              collapsable={false}
+              className={cn(
+                "overflow-hidden rounded-[26px] border-continuous border bg-grouped-card",
+                pairingConnectionError ? "border-danger-foreground" : "border-transparent",
+              )}
+            >
+              <PairingInputRow
+                label="Address"
                 keyboardType="url"
-                placeholder="192.168.1.100:8080"
+                placeholder="192.168.1.100:3773"
                 value={hostInput}
+                onFocus={pauseScanner}
                 onChangeText={handleHostChange}
               />
-
-              <ConnectionFormField
-                label="Pairing code"
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="abc-123-xyz"
+              <View className="ml-4 border-t border-border-subtle" />
+              <PairingInputRow
+                label="Code"
+                placeholder="Pairing code"
+                returnKeyType="go"
                 value={codeInput}
+                onFocus={pauseScanner}
                 onChangeText={handleCodeChange}
+                onSubmitEditing={() => {
+                  if (!connectDisabled) void handleSubmit();
+                }}
               />
-
-              {pairingConnectionError ? <ErrorBanner message={pairingConnectionError} /> : null}
-
-              <View className="android:flex-row android:justify-end">
-                <ConnectionSheetButton
-                  icon="plus"
-                  label={
-                    isSubmitting ? "Pairing..." : params.routeFor ? "Add route" : "Add environment"
-                  }
-                  disabled={connectDisabled}
-                  tone="primary"
-                  onPress={() => {
-                    void handleSubmit();
-                  }}
-                />
-              </View>
             </View>
-          )}
+            <Text
+              accessibilityLiveRegion="polite"
+              className={cn(
+                "px-4 text-sm leading-normal",
+                pairingConnectionError ? "text-danger-foreground" : "text-foreground-muted",
+              )}
+            >
+              {pairingConnectionError ??
+                "For machines on your local network or tailnet. The machine keeps its own provider credentials."}
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SettingsScreen>
+  );
+}
+
+const SCAN_CARD_HEIGHT = 250;
+const SCAN_RETICLE_SIZE = 150;
+const SCAN_RETICLE_TOP = 36;
+const SCAN_RETICLE_RADIUS = 28;
+
+function PairingScanCard(props: {
+  readonly cameraActive: boolean;
+  readonly disabled: boolean;
+  readonly onScan: (result: { readonly data: string }) => void;
+  readonly onScanPress: () => void;
+}) {
+  const light = useAppearancePreferences().themeAppearance === "light";
+  return (
+    <Pressable
+      accessibilityRole={props.cameraActive ? undefined : "button"}
+      accessibilityLabel={props.cameraActive ? undefined : "Scan QR code"}
+      disabled={props.cameraActive || props.disabled}
+      onPress={props.onScanPress}
+      className={cn(
+        "overflow-hidden rounded-[26px] border-continuous",
+        light ? "bg-white" : "bg-black",
+      )}
+      style={{ height: SCAN_CARD_HEIGHT }}
+    >
+      <Svg accessibilityElementsHidden height="100%" style={StyleSheet.absoluteFill} width="100%">
+        <Defs>
+          <RadialGradient id="pairing-scan-backdrop" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={light ? "#f4f4f5" : "#2e2e2e"} />
+            <Stop offset="100%" stopColor={light ? "#d9d9dc" : "#0e0e0e"} />
+          </RadialGradient>
+        </Defs>
+        <Rect fill="url(#pairing-scan-backdrop)" height="100%" width="100%" />
+      </Svg>
+
+      {props.cameraActive ? (
+        <>
+          <CameraView
+            active
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={props.onScan}
+            style={StyleSheet.absoluteFill}
+          />
+          <FrostedCutout
+            cutoutTop={SCAN_RETICLE_TOP}
+            cutoutWidth={SCAN_RETICLE_SIZE}
+            cutoutHeight={SCAN_RETICLE_SIZE}
+            cutoutRadius={SCAN_RETICLE_RADIUS}
+            appearance={light ? "light" : "dark"}
+          />
+        </>
+      ) : null}
+
+      <View
+        pointerEvents="none"
+        className="absolute inset-x-0 items-center gap-3.5"
+        style={{ top: SCAN_RETICLE_TOP }}
+      >
+        <View
+          className={cn(
+            "items-center justify-center gap-2 border-continuous border-[3px]",
+            light ? "border-black/70" : "border-white/80",
+          )}
+          style={{
+            borderRadius: SCAN_RETICLE_RADIUS,
+            height: SCAN_RETICLE_SIZE,
+            width: SCAN_RETICLE_SIZE,
+          }}
+        >
+          {props.cameraActive ? null : (
+            <>
+              <SymbolView
+                name="qrcode.viewfinder"
+                size={44}
+                tintColorClassName={light ? "accent-black/60" : "accent-white/70"}
+                type="monochrome"
+                weight="light"
+              />
+              <Text
+                className={cn(
+                  "font-supacode-medium text-sm",
+                  light ? "text-black/70" : "text-white/80",
+                )}
+              >
+                Tap to scan
+              </Text>
+            </>
+          )}
+        </View>
+        <Text className={cn("text-center text-sm", light ? "text-black/70" : "text-white/80")}>
+          Scan the code from supacode pair or desktop Connections settings
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function PairingInputRow({
+  label,
+  ...inputProps
+}: Omit<AppTextInputProps, "accessibilityLabel" | "className"> & {
+  readonly label: string;
+}) {
+  return (
+    <View collapsable={false} className="h-13 flex-row items-center gap-3 px-4">
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        className="w-20 text-base leading-[23px] text-foreground-muted"
+      >
+        {label}
+      </Text>
+      <AppTextInput
+        {...inputProps}
+        accessibilityLabel={label}
+        autoCapitalize="none"
+        autoCorrect={false}
+        className="min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 text-base leading-[23px]"
+      />
+    </View>
   );
 }

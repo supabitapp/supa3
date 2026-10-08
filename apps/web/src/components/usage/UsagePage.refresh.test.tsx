@@ -1,14 +1,21 @@
-import { EnvironmentId, ProviderInstanceId, USAGE_CONTRACT_VERSION } from "@supacode/contracts";
+import {
+  EnvironmentId,
+  ProviderInstanceId,
+  UsageDay,
+  USAGE_CONTRACT_VERSION,
+} from "@supacode/contracts";
 import { mergeUsage } from "@supacode/shared/usageMerge";
 import { StrictMode, act } from "react";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import type { UsageView } from "../../state/usage";
 
 const state = vi.hoisted(() => ({
   presentations: new Map(),
   refreshProviders: vi.fn(async () => undefined),
   metric: "limits",
+  usage: undefined as UsageView | undefined,
 }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
@@ -29,30 +36,32 @@ vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.ref
 vi.mock("../../env", () => ({ isElectron: false }));
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => "24h" }));
 vi.mock("../../state/usage", () => ({
-  useUsage: () => ({
-    merged: mergeUsage([], USAGE_CONTRACT_VERSION),
-    environments: [
-      {
-        environmentId: EnvironmentId.make("test"),
-        label: "Test",
-        isPending: false,
-        error: null,
-        summary: null,
-      },
-    ],
-    selectedEnvironments: [
-      {
-        environmentId: EnvironmentId.make("test"),
-        label: "Test",
-        isPending: false,
-        error: null,
-        summary: null,
-      },
-    ],
-    isPending: false,
-    isPartial: false,
-    refresh: async () => undefined,
-  }),
+  useUsage: () =>
+    state.usage ?? {
+      merged: mergeUsage([], USAGE_CONTRACT_VERSION),
+      environments: [
+        {
+          environmentId: EnvironmentId.make("test"),
+          label: "Test",
+          isPending: false,
+          error: null,
+          summary: null,
+        },
+      ],
+      selectedEnvironments: [
+        {
+          environmentId: EnvironmentId.make("test"),
+          label: "Test",
+          isPending: false,
+          error: null,
+          summary: null,
+        },
+      ],
+      isPending: false,
+      shown: null,
+      isPartial: false,
+      refresh: async () => undefined,
+    },
 }));
 vi.mock("./usagePagePreferences", () => ({
   readUsagePagePreferences: () => ({ metric: state.metric, windowDays: 30 }),
@@ -102,6 +111,7 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-11T12:00:00Z"));
   environmentNumber += 1;
   state.metric = "limits";
+  state.usage = undefined;
   state.refreshProviders.mockClear();
   state.presentations = new Map([
     [
@@ -281,4 +291,59 @@ it("keeps manual refresh busy until the already-running automatic check settles"
     });
   }
   expect(button().props["aria-busy"]).toBe(false);
+});
+
+it("keeps the previous window's figures and clears busy state when the new window fails", async () => {
+  state.metric = "cost";
+  const merged = { ...mergeUsage([], USAGE_CONTRACT_VERSION), costUsd: 10 };
+  const environment = {
+    environmentId: EnvironmentId.make("pending-usage"),
+    label: "Pending usage",
+    canReadDiagnostics: true,
+    isConnected: true,
+    isPending: true,
+    error: null,
+    summary: null,
+    needsCursorKeychainAccess: false,
+  };
+  state.usage = {
+    merged: mergeUsage([], USAGE_CONTRACT_VERSION),
+    environments: [environment],
+    selectedEnvironments: [environment],
+    isPending: true,
+    shown: {
+      window: {
+        sinceDay: UsageDay.make("2026-08-01"),
+        untilDay: UsageDay.make("2026-08-07"),
+        timeZone: "UTC",
+      },
+      merged,
+    },
+    isPartial: false,
+    refresh: async () => undefined,
+  };
+  await act(() => {
+    renderer = create(<UsagePage />);
+  });
+  const busyContent = () =>
+    renderer.root.findAll((node) => node.type === "div" && "aria-busy" in node.props)[0]!;
+  const visibleContent = () =>
+    JSON.stringify(renderer.toJSON(), (key, value) => (key === "props" ? undefined : value));
+  expect(busyContent().props["aria-busy"]).toBe(true);
+  expect(visibleContent()).toContain("$10.00");
+
+  const failed = {
+    ...environment,
+    isPending: false,
+    error: "This environment could not report usage.",
+  };
+  state.usage = {
+    ...state.usage,
+    environments: [failed],
+    selectedEnvironments: [failed],
+    isPending: false,
+  };
+  await act(() => renderer.update(<UsagePage />));
+  expect(busyContent().props["aria-busy"]).toBe(false);
+  expect(visibleContent()).toContain("$10.00");
 });

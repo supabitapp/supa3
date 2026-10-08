@@ -1,12 +1,17 @@
 import { useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { WebView } from "react-native-webview";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { AppText as Text } from "../../components/AppText";
 import { FilePreviewLoading } from "./FilePreviewFeedback";
 import { LoadingStrip } from "../../components/LoadingStrip";
 
 export function WorkspaceFileWebPreview(props: { readonly uri: string | null }) {
+  const insets = useSafeAreaInsets();
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const headerInsetTop = Platform.OS === "ios" ? (columnMetrics?.safeArea.top ?? insets.top) : 0;
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -25,6 +30,8 @@ export function WorkspaceFileWebPreview(props: { readonly uri: string | null }) 
       ) : null}
       <WebView
         source={{ uri: props.uri }}
+        contentInsetAdjustmentBehavior="never"
+        contentInset={{ top: headerInsetTop }}
         originWhitelist={["*"]}
         allowsBackForwardNavigationGestures
         allowsFullscreenVideo

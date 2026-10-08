@@ -73,11 +73,6 @@ interface ResolvedLink {
   readonly url: string;
 }
 
-/**
- * Which pull request an input names, or why it cannot. A URL carries its own host and
- * repository and may point at any repository on a host this environment has a project for; a
- * bare `#123` can only mean the thread's own repository.
- */
 export function resolveLinkPullRequestInput(input: {
   readonly reference: string;
   readonly project: {
@@ -211,8 +206,8 @@ function LinkPullRequestDialog({
         <DialogHeader>
           <DialogTitle>Link pull request</DialogTitle>
           <DialogDescription>
-            Attach a pull request to this thread. A full URL can point at any repository on a host
-            this environment has a project for.
+            Attach a pull request to this thread by its URL, or by its number for this thread's
+            repository.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>

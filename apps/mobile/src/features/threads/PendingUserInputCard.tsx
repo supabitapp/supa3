@@ -1,6 +1,7 @@
 import { RequestActionButton } from "./RequestActionButton";
 import { QuestionAttachments } from "./QuestionAttachments";
 import type { RuntimeRequestId } from "@supacode/contracts";
+import { userInputAnswerValidationError, userInputSelectionHint } from "@supacode/shared/userInput";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -198,6 +199,11 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const questionIndex = Math.min(page.index, Math.max(questionCount - 1, 0));
   const question = questions[questionIndex];
   const activeDraft = question ? props.drafts[question.id] : undefined;
+  const draftAnswer = activeDraft?.customAnswer?.trim() || activeDraft?.selectedOptionValues || [];
+  const validationError =
+    question && draftAnswer.length > 0
+      ? userInputAnswerValidationError(question, draftAnswer)
+      : null;
   const isLastQuestion = questionIndex >= questionCount - 1;
   const questionAnswered =
     question !== undefined && isPendingUserInputQuestionAnswered(question, activeDraft);
@@ -458,7 +464,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               </Text>
               {question.multiSelect ? (
                 <Text className="font-sans text-xs text-foreground-muted">
-                  Select one or more options.
+                  {userInputSelectionHint(question)}
                 </Text>
               ) : null}
               <View className="gap-2">
@@ -514,6 +520,16 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                   }
                   onInputFocusChange={props.onInputFocusChange}
                 />
+              ) : null}
+              {question.maxCustomAnswerLength !== undefined ? (
+                <Text className="font-sans text-xs text-foreground-muted">
+                  Custom answers can contain up to {question.maxCustomAnswerLength} characters.
+                </Text>
+              ) : null}
+              {validationError ? (
+                <Text accessibilityRole="alert" className="font-sans text-sm text-destructive">
+                  {validationError}
+                </Text>
               ) : null}
             </>
           ) : null}

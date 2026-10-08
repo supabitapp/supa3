@@ -318,9 +318,11 @@ function makeProviderAdapter(
       readonly initialProviderItemIdentityVersion?: 2;
     }) => Effect.Effect<void>;
     readonly hasPendingBackgroundWork?: Effect.Effect<boolean>;
+    readonly hasPendingBackgroundWorkForThread?: Effect.Effect<boolean>;
     readonly hangSessionScopeClose?: boolean;
     readonly startTurn?: Effect.Effect<void>;
     readonly beforeUnload?: Effect.Effect<void>;
+    readonly mcpApps?: ProviderAdapterV2SessionRuntime["mcpApps"];
     /** Registers the process's closeCount finalizer before `beforeOpen` runs. */
     readonly spawnBeforeOpen?: boolean;
     /** Completed when a hanging scope close reaches its wedged finalizer. */
@@ -406,6 +408,11 @@ function makeProviderAdapter(
           ...(options.hasPendingBackgroundWork === undefined
             ? {}
             : { hasPendingBackgroundWork: options.hasPendingBackgroundWork }),
+          ...(options.hasPendingBackgroundWorkForThread === undefined
+            ? {}
+            : {
+                hasPendingBackgroundWorkForThread: () => options.hasPendingBackgroundWorkForThread!,
+              }),
           ensureThread: () => unimplemented("ensureThread unused in test"),
           resumeThread: (threadInput) =>
             Ref.update(state, (current) => ({
@@ -432,6 +439,7 @@ function makeProviderAdapter(
               ),
             ),
           respondToRuntimeRequest: () => Effect.void,
+          ...(options.mcpApps === undefined ? {} : { mcpApps: options.mcpApps }),
           readThreadSnapshot: () => unimplemented("readThreadSnapshot unused in test"),
           rollbackThread: () => unimplemented("rollbackThread unused in test"),
           forkThread: () => unimplemented("forkThread unused in test"),
@@ -462,9 +470,11 @@ function layerTest(input: {
     readonly paused: Deferred.Deferred<void>;
   };
   readonly hasPendingBackgroundWork?: Effect.Effect<boolean>;
+  readonly hasPendingBackgroundWorkForThread?: Effect.Effect<boolean>;
   readonly hangSessionScopeClose?: boolean;
   readonly startTurn?: Effect.Effect<void>;
   readonly beforeUnload?: Effect.Effect<void>;
+  readonly mcpApps?: ProviderAdapterV2SessionRuntime["mcpApps"];
   readonly spawnBeforeOpen?: boolean;
   readonly scopeCloseReached?: Deferred.Deferred<void>;
   readonly serverSettingsLayer?: ReturnType<typeof ServerSettings.layerTest>;
@@ -487,11 +497,15 @@ function layerTest(input: {
       ...(input.hasPendingBackgroundWork === undefined
         ? {}
         : { hasPendingBackgroundWork: input.hasPendingBackgroundWork }),
+      ...(input.hasPendingBackgroundWorkForThread === undefined
+        ? {}
+        : { hasPendingBackgroundWorkForThread: input.hasPendingBackgroundWorkForThread }),
       ...(input.hangSessionScopeClose === undefined
         ? {}
         : { hangSessionScopeClose: input.hangSessionScopeClose }),
       ...(input.startTurn === undefined ? {} : { startTurn: input.startTurn }),
       ...(input.beforeUnload === undefined ? {} : { beforeUnload: input.beforeUnload }),
+      ...(input.mcpApps === undefined ? {} : { mcpApps: input.mcpApps }),
       ...(input.spawnBeforeOpen === undefined ? {} : { spawnBeforeOpen: input.spawnBeforeOpen }),
       ...(input.scopeCloseReached === undefined
         ? {}
@@ -4103,6 +4117,429 @@ it.effect(
         Effect.scoped,
       );
     }),
+);
+
+function runIdleThreadUnloadScenario(
+  name: string,
+  scenario: (input: {
+    readonly state: Ref.Ref<TestProviderRuntimeState>;
+    readonly manager: ProviderSessionManager.ProviderSessionManagerV2Shape;
+    readonly providerSessionId: ProviderSessionId;
+    readonly threadA: ThreadId;
+    readonly threadB: ThreadId;
+    readonly runtime: ProviderAdapterV2SessionRuntime;
+    readonly providerThreadA: OrchestrationV2ProviderThread;
+    readonly reopen: Effect.Effect<void, ProviderSessionManager.ProviderSessionManagerV2Error>;
+
+    readonly startTurn: (threadId: ThreadId, ordinal: number) => Effect.Effect<void>;
+
+    readonly endTurn: (threadId: ThreadId, ordinal: number) => Effect.Effect<void>;
+    readonly resume: (threadId: ThreadId) => Effect.Effect<void>;
+  }) => Effect.Effect<void, ProviderSessionManager.ProviderSessionManagerV2Error>,
+  options: {
+    readonly hasPendingBackgroundWorkForThread?: Effect.Effect<boolean>;
+    readonly mcpApps?: ProviderAdapterV2SessionRuntime["mcpApps"];
+  } = {},
+) {
+  return Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    yield* Effect.gen(function* () {
+      const eventSink = yield* EventSink.EventSinkV2;
+      const idAllocator = yield* IdAllocator.IdAllocatorV2;
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+      const now = yield* DateTime.now;
+      const threadA = ThreadId.make(`thread-provider-session-manager-${name}-a`);
+      const threadB = ThreadId.make(`thread-provider-session-manager-${name}-b`);
+      const providerSessionId = idAllocator.derive.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+      });
+      yield* eventSink.write({
+        events: [
+          yield* makeThreadCreatedEvent({ idAllocator, threadId: threadA, now }),
+          yield* makeThreadCreatedEvent({ idAllocator, threadId: threadB, now }),
+        ],
+      });
+      let runtime = yield* manager.open({
+        threadId: threadA,
+        providerSessionId,
+        modelSelection,
+        runtimePolicy,
+      });
+      yield* manager.open({ threadId: threadB, providerSessionId, modelSelection, runtimePolicy });
+      const providerThreadOf = (threadId: ThreadId) =>
+        makeProviderThread({
+          idAllocator,
+          threadId,
+          providerSessionId,
+          now,
+          nativeThreadId: `native-${threadId}`,
+        });
+      const resume = (threadId: ThreadId) =>
+        runtime
+          .resumeThread({
+            providerThread: providerThreadOf(threadId),
+            threadId,
+            modelSelection,
+            runtimePolicy,
+          })
+          .pipe(Effect.asVoid, Effect.orDie);
+      const startTurn = (threadId: ThreadId, ordinal: number) =>
+        Effect.gen(function* () {
+          yield* resume(threadId);
+          const runId = idAllocator.derive.run({ threadId, ordinal });
+          yield* runtime.startTurn({
+            appThread: (yield* projectionStore.getThreadProjection(threadId)).thread,
+            threadId,
+            runId,
+            runOrdinal: ordinal,
+            providerTurnOrdinal: ordinal,
+            attemptId: idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 }),
+            rootNodeId: idAllocator.derive.rootNode({ runId }),
+            providerThread: providerThreadOf(threadId),
+            message: {
+              createdBy: "user",
+              creationSource: "web",
+              messageId: yield* idAllocator.allocate.message({ threadId, ordinal }),
+              text: "turn",
+              attachments: [],
+            },
+            modelSelection,
+            runtimePolicy,
+          });
+        }).pipe(Effect.orDie);
+      const endTurn = (threadId: ThreadId, ordinal: number) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const subscribe = runtime.subscribeEvents;
+            assert.isDefined(subscribe);
+            const subscription = yield* Effect.acquireRelease(subscribe!, (sub) => sub.close);
+            const received = yield* subscription.events.pipe(
+              Stream.filter((event) => event.type === "turn.terminal"),
+              Stream.runHead,
+              Effect.forkScoped,
+            );
+            const queue = (yield* Ref.get(state)).eventQueues.get(String(providerSessionId));
+            assert.isDefined(queue);
+            yield* Queue.offer(queue!, {
+              type: "turn.terminal",
+              driver: CODEX_DRIVER,
+              providerThreadId: providerThreadOf(threadId).id,
+              providerTurnId: idAllocator.derive.providerTurn({
+                driver: CODEX_DRIVER,
+                nativeTurnId: `native-turn-${threadId}-${ordinal}`,
+              }),
+              runOrdinal: ordinal,
+              status: "completed",
+              failure: null,
+              threadDisposition: "reusable",
+            });
+            yield* Fiber.join(received);
+          }),
+        ).pipe(Effect.orDie);
+
+      yield* startTurn(threadB, 1);
+      const reopen = Effect.gen(function* () {
+        runtime = yield* manager.open({
+          threadId: threadA,
+          providerSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* manager.open({
+          threadId: threadB,
+          providerSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* startTurn(threadB, 2);
+      });
+      yield* scenario({
+        state,
+        manager,
+        providerSessionId,
+        threadA,
+        threadB,
+        runtime,
+        providerThreadA: providerThreadOf(threadA),
+        reopen,
+        startTurn,
+        endTurn,
+        resume,
+      });
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          state,
+          idleTimeoutMs: 1000,
+          ...(options.mcpApps === undefined ? {} : { mcpApps: options.mcpApps }),
+          ...(options.hasPendingBackgroundWorkForThread === undefined
+            ? {}
+            : { hasPendingBackgroundWorkForThread: options.hasPendingBackgroundWorkForThread }),
+        }),
+      ),
+    );
+  });
+}
+
+it.effect(
+  "ProviderSessionManagerV2 unloads a shared-runtime thread left idle, and reloads it on its next turn",
+  () =>
+    runIdleThreadUnloadScenario(
+      "idle-unload",
+      ({ state, manager, providerSessionId, threadA, startTurn, endTurn, resume }) =>
+        Effect.gen(function* () {
+          yield* startTurn(threadA, 1);
+          assert.equal((yield* Ref.get(state)).resumeCount, 2);
+          yield* endTurn(threadA, 1);
+
+          yield* TestClock.adjust("500 millis");
+          yield* startTurn(threadA, 2);
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
+
+          yield* endTurn(threadA, 2);
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [`native-${threadA}`]);
+          assert.isTrue(Option.isSome(yield* manager.get(providerSessionId)));
+          assert.equal((yield* Ref.get(state)).closeCount, 0);
+
+          const resumes = (yield* Ref.get(state)).resumeCount;
+          yield* resume(threadA);
+          assert.equal((yield* Ref.get(state)).resumeCount, resumes + 1);
+        }),
+    ),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 keeps an idle shared-runtime thread loaded while its background work runs",
+  () =>
+    Effect.gen(function* () {
+      const pendingWork = yield* Ref.make(true);
+      yield* runIdleThreadUnloadScenario(
+        "idle-unload-pinned",
+        ({ state, threadA, startTurn, endTurn }) =>
+          Effect.gen(function* () {
+            yield* startTurn(threadA, 1);
+            yield* endTurn(threadA, 1);
+            yield* TestClock.adjust("3 seconds");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
+
+            yield* Ref.set(pendingWork, false);
+            yield* TestClock.adjust("1 second");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [
+              `native-${threadA}`,
+            ]);
+          }),
+        { hasPendingBackgroundWorkForThread: Ref.get(pendingWork) },
+      );
+    }),
+);
+
+it.effect("ProviderSessionManagerV2 cancels thread unloads before reopening the same session", () =>
+  runIdleThreadUnloadScenario(
+    "idle-unload-replacement",
+    ({ state, manager, providerSessionId, threadA, startTurn, endTurn, reopen }) =>
+      Effect.gen(function* () {
+        yield* startTurn(threadA, 1);
+        yield* endTurn(threadA, 1);
+        yield* manager.release({ providerSessionId, reason: "manual_shutdown" });
+        yield* TestClock.adjust("500 millis");
+        yield* reopen;
+        yield* startTurn(threadA, 2);
+        yield* endTurn(threadA, 2);
+
+        yield* TestClock.adjust("500 millis");
+        assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
+        assert.equal((yield* Ref.get(state)).closeCount, 1);
+        yield* TestClock.adjust("500 millis");
+        assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [`native-${threadA}`]);
+        assert.isTrue(Option.isSome(yield* manager.get(providerSessionId)));
+      }),
+  ),
+);
+
+function makeTestMcpApps(
+  activity: Effect.Effect<void, ProviderAdapterProtocolError>,
+): NonNullable<ProviderAdapterV2SessionRuntime["mcpApps"]> {
+  return {
+    listTools: () => activity.pipe(Effect.as([{ name: "test" }])),
+    callTool: () => activity.pipe(Effect.as({ content: [] })),
+    readResource: () => activity.pipe(Effect.as({ contents: [] })),
+  };
+}
+
+function requestTestMcpApp(
+  runtime: ProviderAdapterV2SessionRuntime,
+  providerThread: OrchestrationV2ProviderThread,
+  method: "listTools" | "callTool" | "readResource",
+) {
+  const mcpApps = runtime.mcpApps;
+  assert.isDefined(mcpApps);
+  const input = { providerThread, server: "test", tool: "test", arguments: {}, uri: "ui://test" };
+  const request =
+    method === "listTools"
+      ? mcpApps!.listTools(input).pipe(Effect.asVoid)
+      : method === "callTool"
+        ? mcpApps!.callTool(input).pipe(Effect.asVoid)
+        : mcpApps!.readResource(input).pipe(Effect.asVoid);
+  return request.pipe(Effect.orDie);
+}
+
+it.effect.each(["listTools", "callTool", "readResource"] as const)(
+  "ProviderSessionManagerV2 holds an MCP app thread across a long %s request",
+  (method) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const complete = yield* Deferred.make<void>();
+      yield* runIdleThreadUnloadScenario(
+        `mcp-app-${method}-lease`,
+        ({ state, runtime, providerThreadA, threadA, startTurn, endTurn }) =>
+          Effect.gen(function* () {
+            yield* startTurn(threadA, 1);
+            yield* endTurn(threadA, 1);
+            yield* TestClock.adjust("750 millis");
+            const request = yield* requestTestMcpApp(runtime, providerThreadA, method).pipe(
+              Effect.forkChild,
+            );
+            yield* Deferred.await(started);
+            yield* TestClock.adjust("3 seconds");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
+            assert.equal((yield* Ref.get(state)).resumeCount, 2);
+
+            yield* Deferred.succeed(complete, undefined);
+            yield* Fiber.join(request);
+            yield* TestClock.adjust("999 millis");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
+            yield* TestClock.adjust("1 millis");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [
+              `native-${threadA}`,
+            ]);
+          }),
+        {
+          mcpApps: makeTestMcpApps(
+            Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(complete))),
+          ),
+        },
+      );
+    }),
+);
+
+it.effect.each(["listTools", "callTool", "readResource"] as const)(
+  "ProviderSessionManagerV2 reloads an unloaded MCP app thread for %s",
+  (method) =>
+    runIdleThreadUnloadScenario(
+      `mcp-app-${method}-reload`,
+      ({ state, runtime, providerThreadA, threadA, startTurn, endTurn }) =>
+        Effect.gen(function* () {
+          yield* startTurn(threadA, 1);
+          yield* endTurn(threadA, 1);
+          yield* TestClock.adjust("1 second");
+          const resumeCount = (yield* Ref.get(state)).resumeCount;
+          yield* requestTestMcpApp(runtime, providerThreadA, method);
+          assert.equal((yield* Ref.get(state)).resumeCount, resumeCount + 1);
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [
+            `native-${threadA}`,
+            `native-${threadA}`,
+          ]);
+        }),
+      { mcpApps: makeTestMcpApps(Effect.void) },
+    ),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 keeps the session alive until an MCP app request finishes",
+  () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const complete = yield* Deferred.make<void>();
+      yield* runIdleThreadUnloadScenario(
+        "mcp-app-session-lease",
+        ({ state, manager, providerSessionId, runtime, providerThreadA, threadB, endTurn }) =>
+          Effect.gen(function* () {
+            const request = yield* requestTestMcpApp(runtime, providerThreadA, "callTool").pipe(
+              Effect.forkChild,
+            );
+            yield* Deferred.await(started);
+            yield* endTurn(threadB, 1);
+            yield* TestClock.adjust("3 seconds");
+            assert.equal((yield* Ref.get(state)).closeCount, 0);
+            assert.isTrue(Option.isSome(yield* manager.get(providerSessionId)));
+            yield* Deferred.succeed(complete, undefined);
+            yield* Fiber.join(request);
+            yield* TestClock.adjust("1 second");
+            assert.equal((yield* Ref.get(state)).closeCount, 1);
+          }),
+        {
+          mcpApps: makeTestMcpApps(
+            Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(complete))),
+          ),
+        },
+      );
+    }),
+);
+
+it.effect.each(["failed", "interrupted"] as const)(
+  "ProviderSessionManagerV2 releases an MCP app lease after a %s request",
+  (outcome) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const activity = Deferred.succeed(started, undefined).pipe(
+        Effect.andThen(
+          outcome === "interrupted"
+            ? Effect.never
+            : Effect.fail(
+                new ProviderAdapterProtocolError({
+                  driver: CODEX_DRIVER,
+                  detail: "Request failed.",
+                }),
+              ),
+        ),
+      );
+      yield* runIdleThreadUnloadScenario(
+        `mcp-app-${outcome}-lease`,
+        ({ state, runtime, providerThreadA, threadA, startTurn, endTurn }) =>
+          Effect.gen(function* () {
+            yield* startTurn(threadA, 1);
+            yield* endTurn(threadA, 1);
+            const request = yield* requestTestMcpApp(runtime, providerThreadA, "callTool").pipe(
+              Effect.exit,
+              Effect.forkChild,
+            );
+            yield* Deferred.await(started);
+            if (outcome === "interrupted") yield* Fiber.interrupt(request);
+            else assert.isTrue(Exit.isFailure(yield* Fiber.join(request)));
+            yield* TestClock.adjust("1 second");
+            assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [
+              `native-${threadA}`,
+            ]);
+          }),
+        { mcpApps: makeTestMcpApps(activity) },
+      );
+    }),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 rejects stale MCP app runtimes without pinning a replacement",
+  () =>
+    runIdleThreadUnloadScenario(
+      "mcp-app-stale-runtime",
+      ({ state, manager, providerSessionId, runtime, providerThreadA, threadB, endTurn, reopen }) =>
+        Effect.gen(function* () {
+          yield* manager.release({ providerSessionId, reason: "manual_shutdown" });
+          yield* reopen;
+          assert.isTrue(
+            Exit.isFailure(
+              yield* Effect.exit(requestTestMcpApp(runtime, providerThreadA, "callTool")),
+            ),
+          );
+          yield* endTurn(threadB, 2);
+          yield* TestClock.adjust("1 second");
+          assert.equal((yield* Ref.get(state)).closeCount, 2);
+        }),
+      { mcpApps: makeTestMcpApps(Effect.void) },
+    ),
 );
 
 it.effect(

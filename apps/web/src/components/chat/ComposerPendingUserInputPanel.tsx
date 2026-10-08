@@ -1,4 +1,5 @@
 import { type RuntimeRequestId } from "@supacode/contracts";
+import { userInputAnswerValidationError, userInputSelectionHint } from "@supacode/shared/userInput";
 import { memo, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
@@ -174,6 +175,13 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   }
 
   const customAnswerActive = progress.customAnswer.trim().length > 0;
+  const validationError =
+    customAnswerActive || progress.selectedOptionValues.length > 0
+      ? userInputAnswerValidationError(
+          activeQuestion,
+          customAnswerActive ? progress.customAnswer.trim() : progress.selectedOptionValues,
+        )
+      : null;
 
   return (
     <Collapsible
@@ -241,7 +249,19 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">
             <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
             {activeQuestion.multiSelect ? (
-              <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
+              <p className="mt-1 text-secondary-label text-xs">
+                {userInputSelectionHint(activeQuestion)}
+              </p>
+            ) : null}
+            {activeQuestion.maxCustomAnswerLength !== undefined ? (
+              <p className="mt-1 text-secondary-label text-xs">
+                Custom answers can contain up to {activeQuestion.maxCustomAnswerLength} characters.
+              </p>
+            ) : null}
+            {validationError ? (
+              <p role="alert" className="mt-1 text-destructive text-xs">
+                {validationError}
+              </p>
             ) : null}
             <div className="mt-2 space-y-0.5">
               {activeQuestion.options.map((option, index) => {

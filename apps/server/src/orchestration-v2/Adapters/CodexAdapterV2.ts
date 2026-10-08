@@ -65,11 +65,13 @@ import type {
 import * as CodexClient from "effect-codex-app-server/client";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexSchema from "effect-codex-app-server/schema";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -82,7 +84,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { resolveAttachmentPath, resolveAttachmentPathById } from "../../attachmentStore.ts";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { ServerConfig } from "../../config.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
@@ -107,6 +109,13 @@ import { ProviderEventLoggers } from "../../provider/ProviderEventLoggers.ts";
 import { codexAppServerArgs, resolveCodexLaunchArgs } from "../../provider/codexLaunchArgs.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import {
+  MCP_APP_EXTENSION_ID,
+  MCP_APP_MIME_TYPE,
+  MCP_APP_OUTPUT_KEY,
+  MCP_APP_RESOURCE_SCHEME,
+} from "@supacode/shared/mcpApp";
+import { snapshotMcpApp } from "../../mcpApps/McpAppSnapshot.ts";
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriver,
@@ -146,6 +155,7 @@ import {
   type ProviderAdapterV2ForkThreadInput,
   type ProviderAdapterV2RollbackThreadInput,
   type ProviderAdapterV2RuntimePolicy,
+  type ProviderAdapterV2McpApps,
   type ProviderAdapterV2SessionRuntime,
   type ProviderAdapterV2InterruptInput,
   type ProviderAdapterV2SteerInput,
@@ -232,6 +242,8 @@ const decodeCodexBackgroundTerminalsListResponse = Schema.decodeUnknownEffect(
 const CODEX_CLIENT_CAPABILITIES = {
   experimentalApi: true,
   optOutNotificationMethods: ["turn/diff/updated"],
+
+  extensions: { [MCP_APP_EXTENSION_ID]: { mimeTypes: [MCP_APP_MIME_TYPE] } },
 } as const;
 
 export const CodexProviderCapabilitiesV2 = {
@@ -471,6 +483,14 @@ function codexMcpToolOutput(
     : { error: item.error.message, result: resultOutput };
 }
 
+const MCP_APP_CAPTURE_TIMEOUT = "20 seconds";
+
+function codexMcpAppResourceUri(item: CodexDynamicToolItem): string | undefined {
+  if (item.type !== "mcpToolCall") return undefined;
+  const uri = item.mcpAppUi?.resourceUri ?? item.mcpAppResourceUri ?? item.appContext?.resourceUri;
+  return typeof uri === "string" && uri.startsWith(MCP_APP_RESOURCE_SCHEME) ? uri : undefined;
+}
+
 function codexDynamicToolOutput(
   item: Extract<CodexDynamicToolItem, { readonly type: "dynamicToolCall" }>,
 ): unknown | undefined {
@@ -707,6 +727,8 @@ export function buildCodexTurnStartParams(input: {
   readonly deviceToolsAvailable?: boolean;
   /** ChatGPT token sharing does not accept service tiers. */
   readonly omitServiceTier?: boolean;
+
+  readonly appContext?: ProviderAdapterV2TurnInput["appContext"];
 }) {
   return Effect.gen(function* () {
     const runtimeModeDefaults = codexRuntimeModeTurnDefaults(input.runtimePolicy.runtimeMode);
@@ -732,7 +754,14 @@ export function buildCodexTurnStartParams(input: {
       input.hasSupacodeMcp !== true
         ? undefined
         : buildCodexDeveloperInstructions(input.runtimePolicy.interactionMode);
-    const additionalContext =
+
+    const appContext = Object.fromEntries(
+      (input.appContext ?? []).map((entry) => [
+        entry.key,
+        { kind: "untrusted" as const, value: entry.text },
+      ]),
+    );
+    const supacodeContext =
       input.hasSupacodeMcp === true
         ? buildCodexAdditionalContext(
             { model: input.modelSelection.model, reasoningEffort: effort ?? "medium" },
@@ -742,6 +771,10 @@ export function buildCodexTurnStartParams(input: {
             },
           )
         : undefined;
+    const additionalContext =
+      supacodeContext === undefined && Object.keys(appContext).length === 0
+        ? undefined
+        : { ...supacodeContext, ...appContext };
     const collaborationMode: CodexSchema.ClientRequest__CollaborationMode | undefined =
       input.runtimePolicy.interactionMode !== "plan" && developerInstructions === undefined
         ? undefined
@@ -1313,18 +1346,35 @@ const decodeCodexResumeMetadata = Schema.decodeUnknownEffect(
   Schema.Struct({ thread: Schema.Struct({ id: Schema.String, updatedAt: Schema.Number }) }),
 );
 
-const decodeCodexChildModel = Schema.decodeUnknownEffect(
-  Schema.Struct({
-    thread: Schema.Struct({ id: Schema.String }),
-    model: Schema.NullOr(Schema.String),
-  }),
-);
+const CodexChildSelection = Schema.Struct({
+  thread: Schema.Struct({ id: Schema.String }),
+  model: Schema.NullOr(Schema.String),
+  reasoningEffort: Schema.optional(Schema.NullOr(Schema.String)),
+  serviceTier: Schema.optional(Schema.NullOr(Schema.String)),
+});
+const decodeCodexChildModel = Schema.decodeUnknownEffect(CodexChildSelection);
+
+type CachedCodexChildSelection = Pick<
+  typeof CodexChildSelection.Type,
+  "model" | "reasoningEffort" | "serviceTier"
+>;
+
+function codexChildModelSelection(selection: CachedCodexChildSelection | undefined) {
+  const model = selection?.model?.trim();
+  if (!model) return undefined;
+  const options = [
+    { id: "reasoningEffort", value: selection?.reasoningEffort },
+    { id: "serviceTier", value: selection?.serviceTier },
+  ].flatMap(({ id, value }) => (value?.trim() ? [{ id, value: value.trim() }] : []));
+  return { model, ...(options.length === 0 ? {} : { options }) };
+}
 
 const decodeCodexChildThread = Schema.decodeUnknownEffect(
   Schema.Struct({
     thread: Schema.Struct({
       id: Schema.String,
       model: Schema.optional(Schema.NullOr(Schema.String)),
+      reasoningEffort: Schema.optional(Schema.NullOr(Schema.String)),
     }),
   }),
 );
@@ -1617,11 +1667,25 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             if (!context) return;
             yield* client.request("thread/inject_items", {
               threadId,
-              items: Object.entries(context).map(([key, entry]) => ({
-                type: "message",
-                role: "developer",
-                content: [{ type: "input_text", text: `<${key}>${entry.value}</${key}>` }],
-              })),
+
+              items: Object.entries(context).map(([key, entry]) =>
+                entry.kind === "untrusted"
+                  ? {
+                      type: "message",
+                      role: "user",
+                      content: [
+                        {
+                          type: "input_text",
+                          text: `<external_${key}>${entry.value}</external_${key}>`,
+                        },
+                      ],
+                    }
+                  : {
+                      type: "message",
+                      role: "developer",
+                      content: [{ type: "input_text", text: `<${key}>${entry.value}</${key}>` }],
+                    },
+              ),
             });
           }).pipe(
             Effect.timeout("10 seconds"),
@@ -1709,7 +1773,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
         const pendingRootTurns = yield* Ref.make(new Map<string, ProviderAdapterV2TurnInput>());
         const turnWaiters = yield* Ref.make(new Map<string, Deferred.Deferred<void, never>>());
         const subagentThreads = yield* Ref.make(new Map<string, CodexSubagentThreadContext>());
-        const subagentModels = new Map<string, string>();
+        const subagentSelections = new Map<string, CachedCodexChildSelection>();
         const pendingSubagentTurns = yield* Ref.make(
           new Map<string, ReadonlyArray<PendingCodexSubagentTurnStarted>>(),
         );
@@ -1966,6 +2030,28 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             return [remaining.size === 0, updated] as const;
           });
 
+        interface PendingMcpAppCapture {
+          readonly item: Extract<CodexDynamicToolItem, { readonly type: "mcpToolCall" }>;
+          readonly fiber: Fiber.Fiber<void>;
+        }
+        const pendingMcpAppCaptures = yield* Ref.make(
+          new Map<string, ReadonlyMap<string, PendingMcpAppCapture>>(),
+        );
+
+        const takePendingMcpAppCapture = (nativeTurnId: string, nativeItemId: string) =>
+          Ref.modify(pendingMcpAppCaptures, (current) => {
+            const captures = current.get(nativeTurnId);
+            if (captures === undefined || !captures.has(nativeItemId)) {
+              return [false, current] as const;
+            }
+            const remaining = new Map(captures);
+            remaining.delete(nativeItemId);
+            const updated = new Map(current);
+            if (remaining.size === 0) updated.delete(nativeTurnId);
+            else updated.set(nativeTurnId, remaining);
+            return [true, updated] as const;
+          });
+
         const trackRunningDynamicTool = (nativeTurnId: string, item: CodexDynamicToolItem) =>
           Ref.update(runningDynamicToolsByTurn, (current) => {
             const updated = new Map(current);
@@ -1996,6 +2082,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           Effect.gen(function* () {
             const commands = (yield* Ref.get(runningCommandItemsByTurn)).get(nativeTurnId);
             if (commands !== undefined && commands.size > 0) {
+              return true;
+            }
+            if ((yield* Ref.get(pendingMcpAppCaptures)).has(nativeTurnId)) {
               return true;
             }
             const tools = (yield* Ref.get(runningDynamicToolsByTurn)).get(nativeTurnId);
@@ -2514,16 +2603,48 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             });
           });
 
-        const updateSubagentModel = Effect.fnUntraced(function* (
+        const updateSubagentSelection = Effect.fnUntraced(function* (
           nativeThreadId: string,
           value: string | null,
+          effort?: string | null,
+          tier?: string | null,
+          fillMissing = false,
         ) {
-          const model = value?.trim();
-          if (!model) return;
-          subagentModels.set(nativeThreadId, model);
+          const previous = subagentSelections.get(nativeThreadId);
+          const model =
+            (fillMissing ? previous?.model : undefined) ??
+            (value?.trim() || previous?.model || null);
+          const selection: CachedCodexChildSelection = {
+            model,
+            reasoningEffort:
+              effort === undefined || (fillMissing && previous?.reasoningEffort !== undefined)
+                ? previous?.reasoningEffort
+                : effort,
+            serviceTier:
+              tier === undefined || (fillMissing && previous?.serviceTier !== undefined)
+                ? previous?.serviceTier
+                : tier,
+          };
+          subagentSelections.set(nativeThreadId, selection);
           const subagent = (yield* Ref.get(subagentThreads)).get(nativeThreadId);
-          if (subagent === undefined || subagent.task.model === model) return;
-          subagent.task = { ...subagent.task, model, updatedAt: yield* DateTime.now };
+          if (subagent === undefined) return;
+          const reportedSelection = codexChildModelSelection(selection);
+          if (reportedSelection === undefined) return;
+          const modelSelection = {
+            instanceId: subagent.task.providerInstanceId,
+            ...reportedSelection,
+          };
+          if (
+            subagent.task.modelSelection &&
+            modelSelectionsEqual(subagent.task.modelSelection, modelSelection)
+          )
+            return;
+          subagent.task = {
+            ...subagent.task,
+            model: reportedSelection.model,
+            modelSelection,
+            updatedAt: yield* DateTime.now,
+          };
           yield* emitProviderEvent({
             type: "subagent.updated",
             driver: CODEX_PROVIDER,
@@ -2539,11 +2660,19 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           readonly prompt: string;
           readonly title: string | null;
           readonly model: string | null;
+          readonly reasoningEffort?: string | null | undefined;
           readonly ordinal: number;
           readonly emitInitialPrompt: boolean;
         }) =>
           Effect.gen(function* () {
             const registeredSubagents = yield* Ref.get(subagentThreads);
+            yield* updateSubagentSelection(
+              input.nativeThreadId,
+              input.model,
+              input.reasoningEffort ?? undefined,
+              undefined,
+              true,
+            );
             if (registeredSubagents.has(input.nativeThreadId)) {
               return;
             }
@@ -2589,6 +2718,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               createdAt: now,
               updatedAt: now,
             } satisfies OrchestrationV2ProviderThread;
+            const reportedSelection = codexChildModelSelection(
+              subagentSelections.get(input.nativeThreadId),
+            );
             const task = {
               id: subagentNodeId,
               threadId: input.context.projectionThreadId,
@@ -2603,7 +2735,13 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               nativeTaskRef: codexNativeItemRef(input.nativeItemId),
               prompt: input.prompt,
               title: input.title,
-              model: subagentModels.get(input.nativeThreadId) ?? input.model,
+              model: reportedSelection?.model ?? input.model,
+              modelSelection: reportedSelection
+                ? {
+                    instanceId: input.context.input.modelSelection.instanceId,
+                    ...reportedSelection,
+                  }
+                : undefined,
               status: "running",
               result: null,
               startedAt: now,
@@ -2758,9 +2896,13 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 .request("thread/read", { threadId: input.nativeThreadId, includeTurns: false })
                 .pipe(
                   Effect.flatMap(decodeCodexChildThread),
-                  Effect.map((response) =>
+                  Effect.map((response): typeof CodexChildSelection.Type | null =>
                     response.thread.id === input.nativeThreadId && response.thread.model?.trim()
-                      ? { thread: response.thread, model: response.thread.model }
+                      ? {
+                          thread: response.thread,
+                          model: response.thread.model,
+                          reasoningEffort: response.thread.reasoningEffort,
+                        }
                       : null,
                   ),
                   Effect.catch(() => Effect.succeed(null)),
@@ -2776,9 +2918,14 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   ),
                   Effect.timeout("5 seconds"),
                   Effect.flatMap((response) =>
-                    response.thread.id === input.nativeThreadId &&
-                    !subagentModels.has(input.nativeThreadId)
-                      ? updateSubagentModel(input.nativeThreadId, response.model)
+                    response.thread.id === input.nativeThreadId
+                      ? updateSubagentSelection(
+                          input.nativeThreadId,
+                          response.model,
+                          response.reasoningEffort,
+                          response.serviceTier,
+                          true,
+                        )
                       : Effect.void,
                   ),
                   Effect.catch(() => Effect.void),
@@ -2809,6 +2956,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 prompt: input.item.prompt ?? "",
                 title: null,
                 model,
+                reasoningEffort: input.item.reasoningEffort,
                 ordinal: index + 1,
                 emitInitialPrompt: true,
               });
@@ -3484,6 +3632,133 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             return { node, turnItem };
           });
 
+        const captureMcpApp = (
+          context: ActiveCodexTurnContext,
+          nativeTurnId: string,
+          item: Extract<CodexDynamicToolItem, { readonly type: "mcpToolCall" }>,
+          resourceUri: string,
+        ) =>
+          Effect.gen(function* () {
+            const started = yield* Deferred.make<void>();
+            const fiber = yield* Deferred.await(started).pipe(
+              Effect.andThen(captureMcpAppItem(context, nativeTurnId, item, resourceUri)),
+              Effect.forkIn(scope, { startImmediately: true }),
+            );
+            yield* Ref.update(pendingMcpAppCaptures, (current) => {
+              const updated = new Map(current);
+              updated.set(
+                nativeTurnId,
+                new Map(current.get(nativeTurnId) ?? []).set(item.id, { item, fiber }),
+              );
+              return updated;
+            });
+            yield* Deferred.succeed(started, undefined);
+          });
+
+        const captureMcpAppItem = (
+          context: ActiveCodexTurnContext,
+          nativeTurnId: string,
+          item: Extract<CodexDynamicToolItem, { readonly type: "mcpToolCall" }>,
+          resourceUri: string,
+        ) =>
+          Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              const reference =
+                item.status === "completed" && item.result != null && item.error == null
+                  ? yield* restore(
+                      getNativeThreadId(context.providerThread).pipe(
+                        Effect.flatMap((threadId) =>
+                          client.request("mcpServer/resource/read", {
+                            threadId,
+                            server: item.server,
+                            uri: resourceUri,
+                          }),
+                        ),
+                        Effect.timeout(MCP_APP_CAPTURE_TIMEOUT),
+                        Effect.flatMap((response) =>
+                          snapshotMcpApp({
+                            attachmentsDir: serverConfig.attachmentsDir,
+                            threadId: context.projectionThreadId,
+                            server: item.server,
+                            tool: item.tool,
+                            resourceUri,
+                            contents: response.contents,
+                          }),
+                        ),
+                        Effect.provideService(FileSystem.FileSystem, fileSystem),
+
+                        Effect.catchCauseIf(
+                          (cause) => !Cause.hasInterruptsOnly(cause),
+                          (cause) =>
+                            Effect.logWarning(
+                              "Failed to capture an MCP app; showing a plain tool row.",
+                              { server: item.server, tool: item.tool, resourceUri, cause },
+                            ).pipe(Effect.as(undefined)),
+                        ),
+                        Effect.orDie,
+                      ),
+                    )
+                  : undefined;
+              const artifacts = yield* buildDynamicToolArtifacts(context, item);
+
+              if (!(yield* takePendingMcpAppCapture(nativeTurnId, item.id))) {
+                if (reference !== undefined) {
+                  const filePath = resolveAttachmentPathById({
+                    attachmentsDir: serverConfig.attachmentsDir,
+                    attachmentId: reference.attachmentId,
+                  });
+                  if (filePath !== null) {
+                    yield* fileSystem.remove(filePath, { force: true }).pipe(Effect.ignore);
+                  }
+                }
+                return;
+              }
+              const turnItem =
+                reference === undefined || artifacts.turnItem.type !== "dynamic_tool"
+                  ? artifacts.turnItem
+                  : {
+                      ...artifacts.turnItem,
+
+                      output: { [MCP_APP_OUTPUT_KEY]: reference, result: item.result },
+                    };
+              yield* emitProviderEvent({
+                type: "node.updated",
+                driver: CODEX_PROVIDER,
+                node: artifacts.node,
+              });
+              yield* emitProviderEvent({
+                type: "turn_item.updated",
+                driver: CODEX_PROVIDER,
+                turnItem,
+              });
+
+              if ((yield* Ref.get(settledTurns)).has(nativeTurnId)) {
+                yield* releaseSettledTurnIfIdle(nativeTurnId);
+              }
+            }),
+          );
+
+        const terminalizeMcpAppCaptures = (context: ActiveCodexTurnContext, nativeTurnId: string) =>
+          Effect.gen(function* () {
+            const captures = (yield* Ref.get(pendingMcpAppCaptures)).get(nativeTurnId);
+            if (captures === undefined) return;
+            for (const { item, fiber } of captures.values()) {
+              if (!(yield* takePendingMcpAppCapture(nativeTurnId, item.id))) continue;
+              yield* Fiber.interrupt(fiber);
+              const artifacts = yield* buildDynamicToolArtifacts(context, item);
+              yield* emitProviderEvent({
+                type: "node.updated",
+                driver: CODEX_PROVIDER,
+                node: artifacts.node,
+              });
+              yield* emitProviderEvent({
+                type: "turn_item.updated",
+                driver: CODEX_PROVIDER,
+                turnItem: artifacts.turnItem,
+              });
+            }
+          });
+
         const buildProposedPlanArtifacts = (input: {
           readonly context: ActiveCodexTurnContext;
           readonly nativeItemId: string;
@@ -3990,10 +4265,15 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
         );
 
         yield* client.handleServerNotification("thread/settings/updated", (payload) =>
-          updateSubagentModel(payload.threadId, payload.threadSettings.model),
+          updateSubagentSelection(
+            payload.threadId,
+            payload.threadSettings.model,
+            payload.threadSettings.effort,
+            payload.threadSettings.serviceTier,
+          ),
         );
         yield* client.handleServerNotification("model/rerouted", (payload) =>
-          updateSubagentModel(payload.threadId, payload.toModel),
+          updateSubagentSelection(payload.threadId, payload.toModel),
         );
 
         yield* client.handleServerNotification("turn/started", (payload) =>
@@ -4460,6 +4740,11 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
             if (payload.item.type === "mcpToolCall" || payload.item.type === "dynamicToolCall") {
               yield* clearRunningDynamicTool(payload.turnId, payload.item.id);
+              const appResourceUri = codexMcpAppResourceUri(payload.item);
+              if (appResourceUri !== undefined && payload.item.type === "mcpToolCall") {
+                yield* captureMcpApp(context, payload.turnId, payload.item, appResourceUri);
+                return;
+              }
               const artifacts = yield* buildDynamicToolArtifacts(context, payload.item);
               yield* emitProviderEvent({
                 type: "node.updated",
@@ -5492,6 +5777,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   input.status,
                   input.completedAt,
                 );
+                yield* terminalizeMcpAppCaptures(input.context, input.nativeTurnId);
               }
               const dynamicToolStatus: "cancelled" | "interrupted" | "failed" =
                 input.status === "interrupted" || input.status === "failed"
@@ -5530,6 +5816,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   updated.set(input.nativeTurnId, input.context);
                   return updated;
                 });
+
+                yield* releaseSettledTurnIfIdle(input.nativeTurnId);
               }
               yield* Ref.update(activeTurns, (current) => {
                 const updated = new Map(current);
@@ -5803,6 +6091,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,
+              ...(turnInput.appContext === undefined ? {} : { appContext: turnInput.appContext }),
             });
             yield* Ref.update(pendingRootTurns, (current) => {
               const updated = new Map(current);
@@ -5951,6 +6240,62 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             ),
           );
 
+        const mcpAppsError = (detail: string) => (cause: unknown) =>
+          new ProviderAdapterProtocolError({ driver: CODEX_PROVIDER, detail, payload: cause });
+        const mcpApps: ProviderAdapterV2McpApps = {
+          listTools: (toolsInput) =>
+            Effect.gen(function* () {
+              const threadId = yield* getNativeThreadId(toolsInput.providerThread);
+              const response = yield* ensureInitialized.pipe(
+                Effect.andThen(
+                  client.request("mcpServerStatus/list", {
+                    threadId,
+                    serverName: toolsInput.server,
+                    detail: "toolsAndAuthOnly",
+                  }),
+                ),
+              );
+              const server = response.data.find((entry) => entry.name === toolsInput.server);
+              return Object.values(server?.tools ?? {});
+            }).pipe(Effect.mapError(mcpAppsError("Failed to list Codex MCP tools."))),
+          callTool: (callInput) =>
+            Effect.gen(function* () {
+              const threadId = yield* getNativeThreadId(callInput.providerThread);
+              const response = yield* ensureInitialized.pipe(
+                Effect.andThen(
+                  client.request("mcpServer/tool/call", {
+                    threadId,
+                    server: callInput.server,
+                    tool: callInput.tool,
+                    arguments: callInput.arguments as Schema.Json,
+                  }),
+                ),
+              );
+              return {
+                content: response.content,
+                ...(response.structuredContent === undefined
+                  ? {}
+                  : { structuredContent: response.structuredContent }),
+                ...(response.isError === true ? { isError: true } : {}),
+                ...(response._meta === undefined ? {} : { _meta: response._meta }),
+              };
+            }).pipe(Effect.mapError(mcpAppsError("Codex MCP tool call failed."))),
+          readResource: (readInput) =>
+            Effect.gen(function* () {
+              const threadId = yield* getNativeThreadId(readInput.providerThread);
+              const response = yield* ensureInitialized.pipe(
+                Effect.andThen(
+                  client.request("mcpServer/resource/read", {
+                    threadId,
+                    server: readInput.server,
+                    uri: readInput.uri,
+                  }),
+                ),
+              );
+              return { contents: response.contents };
+            }).pipe(Effect.mapError(mcpAppsError("Codex MCP resource read failed."))),
+        };
+
         const runtime: ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
           driver: CODEX_PROVIDER,
@@ -5973,6 +6318,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 return true;
               }
             }
+            if ((yield* Ref.get(pendingMcpAppCaptures)).size > 0) {
+              return true;
+            }
             for (const subagent of (yield* Ref.get(subagentThreads)).values()) {
               if (subagent.task.status === "running") {
                 return true;
@@ -5986,12 +6334,23 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 ...(yield* Ref.get(activeTurns)).values(),
                 ...(yield* Ref.get(settledTurns)).values(),
               ];
-              const roots = contexts.filter(
-                (context) => context.providerThread.id === providerThread.id,
-              );
+              const belongsToThread = (context: ActiveCodexTurnContext) => {
+                let ancestor: ActiveCodexTurnContext | undefined = context;
+                while (ancestor !== undefined) {
+                  if (ancestor.providerThread.id === providerThread.id) return true;
+                  ancestor = ancestor.subagent?.parentContext;
+                }
+                return false;
+              };
+              for (const subagent of (yield* Ref.get(subagentThreads)).values()) {
+                if (
+                  isOrchestrationV2WorkActive(subagent.task.status) &&
+                  belongsToThread(subagent.parentContext)
+                )
+                  return true;
+              }
               for (const context of contexts) {
-                if (!roots.some((root) => context === root || isDescendantCodexTurn(context, root)))
-                  continue;
+                if (!belongsToThread(context)) continue;
                 if (yield* turnHasRetainedBackgroundWork(context.nativeTurnId)) return true;
                 if (
                   context.subagent !== null &&
@@ -6598,6 +6957,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                         completedAt,
                         true,
                       );
+                      yield* terminalizeMcpAppCaptures(context, context.nativeTurnId);
                       yield* Ref.update(runningCommandItemsByTurn, (current) => {
                         const updated = new Map(current);
                         updated.delete(context.nativeTurnId);
@@ -6694,6 +7054,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   }),
               ),
             ),
+          mcpApps,
           readThreadSnapshot: (threadInput) =>
             Effect.gen(function* () {
               const threadId = yield* getNativeThreadId(threadInput.providerThread);

@@ -3,6 +3,8 @@ import { assert, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
+import * as ProjectStore from "./ProjectStore.ts";
 import {
   CheckpointId,
   EventId,
@@ -215,6 +217,8 @@ it.effect("resolves the thread baseline after a second root run replaces scope o
     const layerQuery = CheckpointDiffQuery.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
+          FileSystem.layerNoop({ exists: () => Effect.succeed(true) }),
+          Layer.mock(ProjectStore.ProjectStoreV2)({}),
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getCheckpointContext: () => Effect.succeed(context),
           }),

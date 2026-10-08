@@ -3383,6 +3383,250 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
+  it.effect.each([false, true])(
+    "settles a thread its own agent settled once the turn completes (already pinned: %s)",
+    (alreadyPinned) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+        const id = `runtime-layer-settle-after-run-${alreadyPinned}`;
+        const projectId = ProjectId.make(`${id}-project`);
+        const threadId = ThreadId.make(`${id}-thread`);
+
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${id}-create`),
+          threadId,
+          projectId,
+          title: "Settle after run",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: "/tmp/runtime-layer-settle-after-run",
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${id}-message`),
+          threadId,
+          messageId: MessageId.make(`${id}-message`),
+          text: "Fix it and then settle this thread.",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs[0];
+        if (run === undefined) return yield* Effect.die(new Error("Run missing."));
+
+        if (alreadyPinned) {
+          yield* orchestrator.dispatch({
+            type: "thread.pin",
+            commandId: CommandId.make(`${id}-pin`),
+            threadId,
+          });
+        }
+
+        const settled = yield* orchestrator
+          .streamStoredEventsFrom({ threadId, afterSequence: 0, eventType: "thread.settled" })
+          .pipe(Stream.runHead, Effect.forkChild);
+        const result = yield* threadManagement.settleThread({
+          threadId,
+          commandId: CommandId.make(`${id}-settle`),
+          byOwnAgent: true,
+        });
+        assert.deepEqual(result, { settlesWhenTurnEnds: true });
+        assert.isNull((yield* orchestrator.getThreadProjection(threadId)).thread.settledOverride);
+        const now = yield* DateTime.now;
+        yield* eventSink.write({
+          commandId: CommandId.make(`${id}-completed`),
+          events: [
+            {
+              id: EventId.make(`${id}-completed`),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+        yield* Fiber.join(settled);
+
+        const projection = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(projection.thread.settledOverride, "settled");
+        assert.isNull(projection.thread.pinnedAt);
+      }),
+  );
+
+  it.effect.each(["pin", "repin", "unsettle", "snooze", "pin-unpin", "snooze-unsnooze"] as const)(
+    "cancels deferred settlement after a %s during registration and allows a renewed request",
+    (action) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const id = `runtime-layer-cancel-deferred-settle-${action}`;
+        const projectId = ProjectId.make(`${id}-project`);
+        const threadId = ThreadId.make(`${id}-thread`);
+
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${id}-create`),
+          threadId,
+          projectId,
+          title: "Keep this thread active",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: "/tmp/runtime-layer-cancel-deferred-settle",
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${id}-message`),
+          threadId,
+          messageId: MessageId.make(`${id}-message`),
+          text: "Fix it and then settle this thread.",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        if (action === "repin") {
+          yield* orchestrator.dispatch({
+            type: "thread.pin",
+            commandId: CommandId.make(`${id}-initial-pin`),
+            threadId,
+          });
+        }
+        const initial = yield* orchestrator.getThreadProjection(threadId);
+        const run = initial.runs[0];
+        if (run === undefined) return yield* Effect.die(new Error("Run missing."));
+        const shellCaptured = yield* Deferred.make<void>();
+        const releaseShell = yield* Deferred.make<void>();
+        const settlementFinished = yield* Deferred.make<void>();
+        const layerThreadManagement = ThreadManagementService.layer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              Orchestrator.OrchestratorV2,
+              Orchestrator.OrchestratorV2.of({
+                ...orchestrator,
+                getThreadShell: (targetId) =>
+                  orchestrator.getThreadShell(targetId).pipe(
+                    Effect.tap(() => Deferred.succeed(shellCaptured, undefined)),
+                    Effect.tap(() => Deferred.await(releaseShell)),
+                  ),
+                dispatch: (command) =>
+                  orchestrator
+                    .dispatch(command)
+                    .pipe(
+                      Effect.tap(() =>
+                        command.type === "thread.settle" &&
+                        command.expectedOrganizationRevision !== undefined
+                          ? Deferred.succeed(settlementFinished, undefined)
+                          : Effect.void,
+                      ),
+                    ),
+              }),
+            ),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+          const registration = yield* threadManagement
+            .settleThread({
+              threadId,
+              commandId: CommandId.make(`${id}-settle`),
+              byOwnAgent: true,
+            })
+            .pipe(Effect.forkChild);
+          yield* Deferred.await(shellCaptured);
+
+          const snoozedUntil = "2099-01-01T00:00:00.000Z";
+          const organize = { commandId: CommandId.make(`${id}-organize`), threadId };
+          yield* orchestrator.dispatch(
+            action === "snooze" || action === "snooze-unsnooze"
+              ? {
+                  ...organize,
+                  type: "thread.snooze",
+                  snoozedUntil,
+                }
+              : action === "unsettle"
+                ? { ...organize, type: "thread.unsettle", reason: "user" }
+                : { ...organize, type: "thread.pin" },
+          );
+          if (action === "pin-unpin" || action === "snooze-unsnooze") {
+            const reverse = { commandId: CommandId.make(`${id}-reverse`), threadId };
+            yield* orchestrator.dispatch(
+              action === "pin-unpin"
+                ? { ...reverse, type: "thread.unpin" }
+                : { ...reverse, type: "thread.unsnooze", reason: "user" },
+            );
+          }
+          yield* Deferred.succeed(releaseShell, undefined);
+          assert.deepEqual(yield* Fiber.join(registration), { settlesWhenTurnEnds: true });
+
+          const now = yield* DateTime.now;
+          yield* eventSink.write({
+            commandId: CommandId.make(`${id}-completed`),
+            events: [
+              {
+                id: EventId.make(`${id}-completed`),
+                type: "run.updated",
+                threadId,
+                runId: run.id,
+                occurredAt: now,
+                payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+              },
+            ],
+          });
+          yield* Deferred.await(settlementFinished);
+
+          const current = yield* orchestrator.getThreadProjection(threadId);
+          assert.notEqual(current.thread.settledOverride, "settled");
+          assert.isNull(current.thread.settledAt);
+          assert.equal(current.thread.pinnedAt != null, action === "pin" || action === "repin");
+          assert.equal(current.thread.settledOverride === "active", action === "unsettle");
+          assert.equal(
+            current.thread.snoozedUntil == null
+              ? null
+              : DateTime.formatIso(current.thread.snoozedUntil),
+            action === "snooze" ? snoozedUntil : null,
+          );
+          const replay = yield* orchestrator.dispatch({
+            type: "thread.settle",
+            commandId: CommandId.make(
+              `server:settle-after-run:${run.id}:${initial.thread.organizationRevision ?? 0}`,
+            ),
+            threadId,
+            expectedOrganizationRevision: current.thread.organizationRevision ?? 0,
+          });
+          assert.deepEqual(replay.storedEvents, []);
+          assert.notEqual(
+            (yield* orchestrator.getThreadProjection(threadId)).thread.settledOverride,
+            "settled",
+          );
+          yield* threadManagement.settleAfterRun({
+            projectId,
+            threadId,
+            runId: run.id,
+            organizationRevision: current.thread.organizationRevision ?? 0,
+          });
+          assert.equal(
+            (yield* orchestrator.getThreadProjection(threadId)).thread.settledOverride,
+            "settled",
+          );
+        }).pipe(Effect.provide(layerThreadManagement));
+      }),
+  );
+
   it.effect("settles past held automatic runs but not held user messages", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

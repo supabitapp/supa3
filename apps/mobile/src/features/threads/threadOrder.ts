@@ -81,18 +81,15 @@ export function createThreadMovePlanner(input: {
   readonly section: PendingThreadOrder["section"];
   readonly reorderableEnvironmentIds: ReadonlySet<EnvironmentId>;
 }) {
-  const orderedIds = input.ordered.map(rowId);
-  const keysById = new Map(
-    (input.allThreads ?? input.ordered).map((row) => [
-      rowId(row),
-      rowOrder(row, input.section).key,
-    ]),
-  );
-  const writableIds = new Set(
-    (input.allThreads ?? input.ordered)
-      .filter((row) => input.reorderableEnvironmentIds.has(row.environmentId))
-      .map(rowId),
-  );
+  const orderedIds: string[] = [];
+  for (const row of input.ordered) orderedIds.push(rowId(row));
+  const keysById = new Map<string, string | null>();
+  const writableIds = new Set<string>();
+  for (const row of input.allThreads ?? input.ordered) {
+    const id = rowId(row);
+    keysById.set(id, rowOrder(row, input.section).key);
+    if (input.reorderableEnvironmentIds.has(row.environmentId)) writableIds.add(id);
+  }
   return (movedId: string, direction: ThreadMoveDestination) => {
     if (!writableIds.has(movedId)) return null;
     const nextIds = threadOrderAfterMove(orderedIds, movedId, direction);

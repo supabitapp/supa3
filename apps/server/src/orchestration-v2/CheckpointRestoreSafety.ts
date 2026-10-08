@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
 import type { ProjectionStoreV2 } from "./ProjectionStore.ts";
 import type * as ProjectStore from "./ProjectStore.ts";
 
@@ -23,6 +24,21 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
     },
   ) {
     const { fileSystem, projections, projects, path } = dependencies;
+    const canonicalPath = Effect.fnUntraced(function* (
+      candidate: string,
+    ): Effect.fn.Return<string, PlatformError> {
+      const absolute = path.resolve(candidate);
+      return yield* fileSystem.realPath(absolute).pipe(
+        Effect.catch((error) => {
+          const parent = path.dirname(absolute);
+          return error.reason._tag === "NotFound" && parent !== absolute
+            ? canonicalPath(parent).pipe(
+                Effect.map((root) => path.join(root, path.basename(absolute))),
+              )
+            : Effect.fail(error);
+        }),
+      );
+    });
     const contains = (parent: string, child: string) => {
       const relative = path.relative(parent, child);
       return (
@@ -33,8 +49,8 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
     const worktreePath = thread.worktreePath;
     let shared = worktreePath == null;
     if (!shared && worktreePath !== null) {
-      const cwd = yield* fileSystem.realPath(scope.cwd);
-      const worktreeCwd = yield* fileSystem.realPath(worktreePath);
+      const cwd = yield* canonicalPath(scope.cwd);
+      const worktreeCwd = yield* canonicalPath(worktreePath);
       shared = cwd !== worktreeCwd;
       if (!shared) {
         const shell = yield* projections.getShellSnapshot();
@@ -67,14 +83,8 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
           for (const candidate of paths) {
             if (checkedPaths.has(candidate)) continue;
             checkedPaths.add(candidate);
-            const otherCwd = yield* fileSystem
-              .realPath(candidate)
-              .pipe(
-                Effect.catch((error) =>
-                  error.reason._tag === "NotFound" ? Effect.succeed(null) : Effect.fail(error),
-                ),
-              );
-            if (otherCwd !== null && (contains(cwd, otherCwd) || contains(otherCwd, cwd))) {
+            const otherCwd = yield* canonicalPath(candidate);
+            if (contains(cwd, otherCwd) || contains(otherCwd, cwd)) {
               shared = true;
               break;
             }

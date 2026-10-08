@@ -70,6 +70,7 @@ import {
   mergeToolCallState,
   parsePermissionRequest,
   parseSessionUpdateEvent,
+  toolCallVisibleOutputChanged,
   type AcpPlanUpdate,
   type AcpAgentTerminalState,
   type AcpSessionModeState,
@@ -1159,6 +1160,7 @@ interface ActiveAcpTurn {
   contextUsage: ThreadTokenUsageSnapshot | null;
   nativeMetadata: OrchestrationV2ProviderThreadNativeMetadata | null;
   readonly tools: Map<string, AcpToolCallState>;
+  readonly toolUpdatesSkipped: Map<string, number>;
   readonly toolStartedAt: Map<string, DateTime.Utc>;
   readonly subagents: Map<string, ActiveAcpSubagent>;
   readonly subagentsBySessionId: Map<string, ActiveAcpSubagent>;
@@ -1455,6 +1457,28 @@ interface SnapshotMessageState {
   loadingRole: "user" | "assistant" | "thought" | null;
   loadingMessageId: string | null;
   loadingIndex: number;
+}
+
+const TOOL_UPDATE_PERSIST_EVERY = 10;
+
+function shouldPersistToolUpdate(
+  context: ActiveAcpTurn,
+  key: string,
+  previous: AcpToolCallState | undefined,
+  next: AcpToolCallState,
+  reportedStatus: AcpToolCallState["status"],
+): boolean {
+  const skipped = context.toolUpdatesSkipped.get(key) ?? 0;
+  const persist =
+    reportedStatus === "completed" ||
+    reportedStatus === "failed" ||
+    previous === undefined ||
+    previous.status !== next.status ||
+    previous.title !== next.title ||
+    toolCallVisibleOutputChanged(previous, next) ||
+    skipped + 1 >= TOOL_UPDATE_PERSIST_EVERY;
+  context.toolUpdatesSkipped.set(key, persist ? 0 : skipped + 1);
+  return persist;
 }
 
 export function makeAcpAdapterV2(
@@ -2656,6 +2680,80 @@ export function makeAcpAdapterV2(
           }
         });
 
+        const emitSubagentTool = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          subagent: ActiveAcpSubagent,
+          toolCall: AcpToolCallState,
+        ) {
+          const nativeTaskId = subagent.task.nativeTaskRef?.nativeId ?? String(subagent.task.id);
+          const key = `${nativeTaskId}:tool:${toolCall.toolCallId}`;
+          const mcpIdentity = extractMcpToolCallIdentity(toolCall, {
+            embeddedTerminalCommands: [
+              ...embeddedTerminalCommands(
+                subagent.childSessionId ?? nativeTaskId,
+                toolCall.toolCallId,
+              ),
+              ...embeddedTerminalCommands(context.nativeThreadId, toolCall.toolCallId),
+            ],
+          });
+          const now = yield* DateTime.now;
+          const status = toolStatus(toolCall.status);
+          const startedAt = context.toolStartedAt.get(key) ?? now;
+          context.toolStartedAt.set(key, startedAt);
+          const ordinal = resolveSubagentChildOrdinal(subagent, key);
+          yield* emitProviderEvent({
+            type: "turn_item.updated",
+            driver,
+            turnItem: {
+              id: providerTurnItemId(key),
+              threadId: subagent.childThreadId,
+              runId: null,
+              nodeId: subagent.childRootNodeId,
+              providerThreadId: subagent.task.providerThreadId,
+              providerTurnId: null,
+              nativeItemRef: { driver, nativeId: key, strength: "strong" },
+              parentItemId: null,
+              ordinal,
+              status,
+              title: toolCall.title ?? toolCall.kind ?? "Tool",
+              startedAt,
+              completedAt: completedAtForStatus(status, now),
+              updatedAt: now,
+              type: "dynamic_tool",
+              ...(mcpIdentity === undefined
+                ? {}
+                : mcpToolPresentation({
+                    serverName: mcpIdentity.server,
+                    toolName: mcpIdentity.tool,
+                    source: unknownRecord(
+                      (
+                        unknownRecord(unknownRecord(toolCall.data.rawOutput)?.result) ??
+                        unknownRecord(toolCall.data.rawOutput)
+                      )?._meta,
+                    )?.source,
+                  })),
+              toolName:
+                mcpIdentity === undefined
+                  ? (toolCall.title ?? toolCall.kind ?? "Tool")
+                  : `${mcpIdentity.server}.${mcpIdentity.tool}`,
+              input: toolCall.data.rawInput ?? null,
+              output: toolCall.data.rawOutput ?? toolCall.data.content ?? null,
+            },
+          });
+          context.toolUpdatesSkipped.set(key, 0);
+        });
+
+        const flushSubagentToolUpdates = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          subagent: ActiveAcpSubagent,
+        ) {
+          for (const key of subagent.childItemOrdinals.keys()) {
+            if ((context.toolUpdatesSkipped.get(key) ?? 0) === 0) continue;
+            const tool = context.tools.get(key);
+            if (tool !== undefined) yield* emitSubagentTool(context, subagent, tool);
+          }
+        });
+
         const emitSubagent = Effect.fnUntraced(function* (
           context: ActiveAcpTurn,
           update: AcpAdapterV2SubagentUpdate,
@@ -2859,6 +2957,7 @@ export function makeAcpAdapterV2(
             completedAt: acpSubagentStatusIsTerminal(taskStatus) ? now : null,
             updatedAt: now,
           };
+          if (updateIsTerminal) yield* flushSubagentToolUpdates(context, subagent);
           const providerThreadId = subagent.task.providerThreadId;
           yield* emitProviderEvent({
             type: "node.updated",
@@ -3195,6 +3294,19 @@ export function makeAcpAdapterV2(
               return;
             }
           }
+          if (
+            projectedStatus === undefined &&
+            !shouldPersistToolUpdate(
+              context,
+              toolCall.toolCallId,
+              previous,
+              toolCall,
+              merged.status,
+            )
+          ) {
+            yield* rearmDeferredFinalize(context);
+            return;
+          }
           const status = projectedStatus ?? toolStatus(toolCall.status);
           const now = yield* DateTime.now;
           const nativeItemId = `${context.nativeThreadId}:tool:${toolCall.toolCallId}`;
@@ -3328,6 +3440,7 @@ export function makeAcpAdapterV2(
               ...(rawOutput === undefined ? {} : { output: acpMcpToolCallOutput(rawOutput) }),
             };
             yield* emitProviderEvent({ type: "turn_item.updated", driver, turnItem });
+            context.toolUpdatesSkipped.set(toolCall.toolCallId, 0);
             yield* rearmDeferredFinalize(context);
             return;
           } else if (changes.length > 0) {
@@ -3476,7 +3589,21 @@ export function makeAcpAdapterV2(
             }
           }
           yield* emitProviderEvent({ type: "turn_item.updated", driver, turnItem });
+          context.toolUpdatesSkipped.set(toolCall.toolCallId, 0);
           yield* rearmDeferredFinalize(context);
+        });
+
+        const flushToolUpdates = Effect.fnUntraced(function* (context: ActiveAcpTurn) {
+          for (const subagent of context.subagents.values()) {
+            yield* flushSubagentToolUpdates(context, subagent);
+          }
+          for (const [key, skipped] of context.toolUpdatesSkipped) {
+            if (skipped === 0) continue;
+            const tool = context.tools.get(key);
+            if (tool !== undefined && key === tool.toolCallId) {
+              yield* emitTool(context, tool, toolStatus(tool.status));
+            }
+          }
         });
 
         const emitPlan = Effect.fnUntraced(function* (
@@ -4368,63 +4495,12 @@ export function makeAcpAdapterV2(
                   continue;
                 }
                 const key = `${nativeTaskId}:tool:${toolCall.toolCallId}`;
-                const merged = mergeToolCallState(context.tools.get(key), toolCall);
+                const previous = context.tools.get(key);
+                const merged = mergeToolCallState(previous, toolCall);
                 context.tools.set(key, merged);
-                // Terminals are remembered under the raw session id: the child's
-                // own session, or the root one when the flavor routes child
-                // updates out of it (Devin).
-                const mcpIdentity = extractMcpToolCallIdentity(merged, {
-                  embeddedTerminalCommands: [
-                    ...embeddedTerminalCommands(notification.sessionId, toolCall.toolCallId),
-                    ...(rootSessionId === null
-                      ? []
-                      : embeddedTerminalCommands(rootSessionId, toolCall.toolCallId)),
-                  ],
-                });
-                const now = yield* DateTime.now;
-                const status = toolStatus(merged.status);
-                const startedAt = context.toolStartedAt.get(key) ?? now;
-                context.toolStartedAt.set(key, startedAt);
-                const ordinal = resolveSubagentChildOrdinal(subagent, key);
-                yield* emitProviderEvent({
-                  type: "turn_item.updated",
-                  driver,
-                  turnItem: {
-                    id: providerTurnItemId(key),
-                    threadId: subagent.childThreadId,
-                    runId: null,
-                    nodeId: subagent.childRootNodeId,
-                    providerThreadId: subagent.task.providerThreadId,
-                    providerTurnId: null,
-                    nativeItemRef: { driver, nativeId: key, strength: "strong" },
-                    parentItemId: null,
-                    ordinal,
-                    status,
-                    title: merged.title ?? merged.kind ?? "Tool",
-                    startedAt,
-                    completedAt: completedAtForStatus(status, now),
-                    updatedAt: now,
-                    type: "dynamic_tool",
-                    ...(mcpIdentity === undefined
-                      ? {}
-                      : mcpToolPresentation({
-                          serverName: mcpIdentity.server,
-                          toolName: mcpIdentity.tool,
-                          source: unknownRecord(
-                            (
-                              unknownRecord(unknownRecord(merged.data.rawOutput)?.result) ??
-                              unknownRecord(merged.data.rawOutput)
-                            )?._meta,
-                          )?.source,
-                        })),
-                    toolName:
-                      mcpIdentity === undefined
-                        ? (merged.title ?? merged.kind ?? "Tool")
-                        : `${mcpIdentity.server}.${mcpIdentity.tool}`,
-                    input: merged.data.rawInput ?? null,
-                    output: merged.data.rawOutput ?? merged.data.content ?? null,
-                  },
-                });
+                if (!shouldPersistToolUpdate(context, key, previous, merged, merged.status))
+                  continue;
+                yield* emitSubagentTool(context, subagent, merged);
               }
               return;
             }
@@ -6543,6 +6619,7 @@ export function makeAcpAdapterV2(
               terminalizeSubagents: directStopQuarantine,
             });
           }
+          yield* flushToolUpdates(context);
           yield* closeTextStreams(context);
           if (settledStatus !== "failed") {
             yield* emitProviderRetry(context, settledStatus);
@@ -6952,6 +7029,7 @@ export function makeAcpAdapterV2(
               contextUsage: rememberedContextUsage ?? turnInput.providerThread.contextUsage ?? null,
               nativeMetadata: initialNativeMetadata,
               tools: new Map(),
+              toolUpdatesSkipped: new Map(),
               toolStartedAt: new Map(),
               subagents: new Map(),
               subagentsBySessionId: new Map(),

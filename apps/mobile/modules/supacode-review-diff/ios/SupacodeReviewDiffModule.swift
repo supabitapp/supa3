@@ -49,6 +49,14 @@ public class SupacodeReviewDiffModule: Module {
         view.setContentWidth(CGFloat(contentWidth))
       }
 
+      Prop("contentInsetTop") { (view: SupacodeReviewDiffView, inset: Double) in
+        view.setContentInsetTop(CGFloat(inset))
+      }
+
+      Prop("contentInsetBottom") { (view: SupacodeReviewDiffView, inset: Double) in
+        view.setContentInsetBottom(CGFloat(inset))
+      }
+
       Prop("initialRowIndex") { (view: SupacodeReviewDiffView, initialRowIndex: Double) in
         view.setInitialRowIndex(initialRowIndex)
       }

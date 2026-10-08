@@ -1,0 +1,153 @@
+import { useIsFocused, useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { EnvironmentId, ThreadId, TurnItemId } from "@supacode/contracts";
+import type { EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
+import { turnItemDetailRevision } from "@supacode/client-runtime/work-log/item-detail";
+import { mcpAppFromToolItem } from "@supacode/shared/toolOutput";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { AppText as Text } from "../../components/AppText";
+import { SymbolView } from "../../components/AppSymbol";
+import { orchestrationEnvironment } from "../../state/orchestration";
+import { scopeThreadRef } from "@supacode/client-runtime/environment";
+import { useThreadShell, useThreadShells } from "../../state/entities";
+import { useEnvironmentQuery } from "../../state/query";
+import { ThreadMcpApp } from "./McpAppWebView";
+
+type McpAppFullscreenScreenProps = StaticScreenProps<{
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly conversationThreadId?: string;
+  readonly itemId: string;
+  readonly revision?: string;
+}>;
+
+function useConversationThreadId(
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  requested: string | undefined,
+): ThreadId {
+  const shells = useThreadShells();
+  return useMemo(
+    () =>
+      requested !== undefined && descendsFrom(shells, environmentId, requested, threadId)
+        ? ThreadId.make(requested)
+        : threadId,
+    [shells, environmentId, threadId, requested],
+  );
+}
+
+function descendsFrom(
+  shells: ReadonlyArray<EnvironmentThreadShell>,
+  environmentId: EnvironmentId,
+  threadId: string,
+  ancestorId: ThreadId,
+): boolean {
+  const parents = new Map(
+    shells.flatMap((shell) =>
+      shell.environmentId === environmentId && shell.lineage.relationshipToParent === "fork"
+        ? [[shell.id as string, shell.lineage.parentThreadId] as const]
+        : [],
+    ),
+  );
+  let current: string | null | undefined = threadId;
+  const seen = new Set<string>();
+  while (current != null && !seen.has(current)) {
+    if (current === ancestorId) return true;
+    seen.add(current);
+    current = parents.get(current);
+  }
+  return false;
+}
+
+export function McpAppFullscreenScreen({ route }: McpAppFullscreenScreenProps) {
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+
+  const focused = useIsFocused();
+  const [exitRequested, setExitRequested] = useState(false);
+  const onClose = useCallback(() => {
+    if (navigation.isFocused()) navigation.goBack();
+    else setExitRequested(true);
+  }, [navigation]);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const params = route.params;
+  const environmentId = EnvironmentId.make(params.environmentId);
+  const threadId = ThreadId.make(params.threadId);
+  const itemId = TurnItemId.make(params.itemId);
+  const conversationThreadId = useConversationThreadId(
+    environmentId,
+    threadId,
+    params.conversationThreadId,
+  );
+  const detail = useEnvironmentQuery(
+    orchestrationEnvironment.turnItem({
+      environmentId,
+      input: {
+        threadId,
+        itemId,
+        ...(params.revision === undefined ? {} : { revision: params.revision }),
+      },
+    }),
+  );
+  const item = detail.data?.item;
+
+  const derived = item?.type === "dynamic_tool" ? mcpAppFromToolItem(item) : undefined;
+  const [app, setApp] = useState(derived);
+  if (derived?.attachmentId !== app?.attachmentId) setApp(derived);
+
+  const conversation = useThreadShell(scopeThreadRef(environmentId, conversationThreadId));
+  const awaitingUser =
+    conversation?.hasPendingApprovals === true || conversation?.hasPendingUserInput === true;
+  useEffect(() => {
+    if ((awaitingUser || exitRequested) && focused) navigation.goBack();
+  }, [awaitingUser, exitRequested, focused, navigation]);
+
+  return (
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+      <View className="h-11 flex-row items-center justify-between px-3">
+        <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
+          {app?.server ?? "App"}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Exit full screen"
+          hitSlop={8}
+          onPress={onClose}
+        >
+          <SymbolView name="xmark" size={18} tintColor="gray" />
+        </Pressable>
+      </View>
+      <View
+        className="flex-1"
+        style={{ paddingBottom: insets.bottom }}
+        onLayout={(event) =>
+          setSize({
+            width: Math.round(event.nativeEvent.layout.width),
+            height: Math.round(event.nativeEvent.layout.height - insets.bottom),
+          })
+        }
+      >
+        {app === undefined ? (
+          detail.data === undefined ? null : (
+            <Text className="m-6 text-sm text-foreground-muted">This app cannot be shown.</Text>
+          )
+        ) : size.width > 0 ? (
+          <ThreadMcpApp
+            environmentId={environmentId}
+            threadId={threadId}
+            conversationThreadId={conversationThreadId}
+            itemId={itemId}
+            revision={params.revision ?? (item == null ? "" : turnItemDetailRevision(item))}
+            app={app}
+            width={size.width}
+            height={size.height}
+            displayMode="fullscreen"
+            onExitFullscreen={onClose}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}

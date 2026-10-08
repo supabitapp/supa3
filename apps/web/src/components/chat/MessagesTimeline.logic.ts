@@ -1,6 +1,15 @@
 import { worktreeSetupAgentStarted } from "@supacode/client-runtime/worktree-setup";
 export { worktreeSetupAgentStarted } from "@supacode/client-runtime/worktree-setup";
+import { isLiveSubagentTurnItem } from "@supacode/client-runtime/state/subagentRuntime";
 import * as Equal from "effect/Equal";
+import {
+  assistantCitationLabel,
+  parseAssistantCitationHref,
+} from "@supacode/shared/assistantCitations";
+import type { Nodes } from "mdast";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import { unified } from "unified";
 import { shallow } from "zustand/vanilla/shallow";
 import { renderCodexDirectivesForCopy } from "@supacode/client-runtime/codex-markdown-directives";
 import {
@@ -33,13 +42,20 @@ import {
   type TimelineEntry,
   type WorkLogEntry,
 } from "../../session-logic";
-import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
+import {
+  type ChatMessage,
+  type ProposedPlan,
+  type ThreadShell,
+  type TurnDiffSummary,
+} from "../../types";
 import {
   type MessageId,
   type WorktreeSetupSnapshot,
   type OrchestrationV2ProjectedTurnItem,
   type RunAttemptId,
   RunId,
+  type ThreadId,
+  type TurnItemId,
 } from "@supacode/contracts";
 import type { ThreadRunSummary } from "@supacode/client-runtime/state/shell";
 import {
@@ -49,6 +65,7 @@ import {
 } from "@supacode/shared/supacodeMcpToolPresentation";
 import { compactDynamicToolOutput } from "@supacode/shared/toolOutput";
 import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@supacode/shared/htmlRender";
+import { mcpAppReferencesEqual, type McpAppReference } from "@supacode/shared/mcpApp";
 import { dynamicToolTitle } from "@supacode/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import {
@@ -65,7 +82,7 @@ function timelineEntryRunId(entry: TimelineEntry): RunId | null {
   if (entry.kind === "proposed-plan") {
     return entry.proposedPlan.runId;
   }
-  if (entry.kind === "html-render") return entry.runId;
+  if (entry.kind === "html-render" || entry.kind === "mcp-app") return entry.runId;
   return entry.kind === "work" ? (entry.entry.runId ?? null) : null;
 }
 
@@ -163,6 +180,31 @@ export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string
   }
   const heading = normalizeCompactToolLabel(entry.toolTitle || entry.label);
   return `${heading.charAt(0).toUpperCase()}${heading.slice(1)}`;
+}
+
+export function threadReadTargetId(entry: Pick<WorkLogEntry, "structuredPayload">) {
+  const item = entry.structuredPayload;
+  if (item?.type !== "dynamic_tool") return null;
+  if (resolveSupacodeMcpToolDefinition(item.toolName)?.summaryAction !== "thread-read") return null;
+  const input = item.input;
+  const threadId =
+    input !== null && typeof input === "object" && "threadId" in input ? input.threadId : null;
+  return typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : null;
+}
+
+const THREAD_READ_OBJECT = " a Supacode thread";
+
+export function threadReadTargetTitle(
+  shell: Pick<ThreadShell, "title" | "archivedAt" | "deletedAt"> | null,
+) {
+  if (!shell || shell.archivedAt !== null || shell.deletedAt !== null) return null;
+  return shell.title.trim() || null;
+}
+
+export function threadReadLabelPrefix(label: string) {
+  return label.endsWith(THREAD_READ_OBJECT)
+    ? `${label.slice(0, -THREAD_READ_OBJECT.length)} thread`
+    : null;
 }
 
 /** Inspectable read-file output is the path when we have one, otherwise nothing. */
@@ -501,6 +543,8 @@ type MessagesTimelineRowContent =
       groupId: string;
       expanded: boolean;
       active: boolean;
+
+      thought?: WorkLogEntry;
     }
   | {
       kind: "working";
@@ -595,6 +639,15 @@ type MessagesTimelineRowContent =
       id: string;
       createdAt: string;
       htmlRender: HtmlRenderReference;
+    }
+  | {
+      kind: "mcp-app";
+      id: string;
+      createdAt: string;
+      sourceThreadId: ThreadId;
+      itemId: TurnItemId;
+      revision: string;
+      mcpApp: McpAppReference;
     };
 
 export interface StableMessagesTimelineRowsState {
@@ -709,6 +762,7 @@ interface SupersededAttemptFold {
 function deriveSupersededAttemptFolds(
   timelineEntries: ReadonlyArray<TimelineEntry>,
   unfoldedRunIds: ReadonlySet<RunId>,
+  liveSubagentEntryIds: ReadonlySet<string>,
 ): ReadonlyMap<string, SupersededAttemptFold> {
   const entriesByAttemptId = new Map<RunAttemptId, TimelineEntry[]>();
   for (const entry of timelineEntries) {
@@ -718,7 +772,9 @@ function deriveSupersededAttemptFolds(
       (entry.kind === "message" && entry.message.role === "user") ||
       // A published page stays visible, as it does when its turn folds.
       entry.kind === "html-render" ||
+      entry.kind === "mcp-app" ||
       timelineEntryIsPersistentResourceCard(entry) ||
+      liveSubagentEntryIds.has(entry.id) ||
       (entry.kind === "work" && entry.entry.itemType === "system_notice")
     ) {
       continue;
@@ -765,6 +821,35 @@ function deriveUnsettledRunId(
     latestRun.status !== "starting" &&
     latestRun.status !== "waiting";
   return isSettled ? null : latestRun.runId;
+}
+
+function liveSubagentCardEntryIds(entries: ReadonlyArray<TimelineEntry>): ReadonlySet<string> {
+  const visible = new Set<string>();
+  let batch: Array<Extract<TimelineEntry, { kind: "event" }>> = [];
+  const flush = () => {
+    if (batch.length === 0) return;
+    if (batch.some((entry) => isLiveSubagentTurnItem(entry.projectedItem.item))) {
+      for (const entry of batch) visible.add(entry.id);
+    }
+    batch = [];
+  };
+  for (const entry of entries) {
+    if (entry.kind !== "event" || entry.projectedItem.item.type !== "subagent") {
+      flush();
+      continue;
+    }
+    const item = entry.projectedItem.item;
+    const previous = batch.at(-1)?.projectedItem.item;
+    if (
+      previous !== undefined &&
+      (previous.runId !== item.runId || previous.providerTurnId !== item.providerTurnId)
+    ) {
+      flush();
+    }
+    batch.push(entry);
+  }
+  flush();
+  return visible;
 }
 
 /** `runlessKey` stands in for the run of entries that have none. */
@@ -874,6 +959,7 @@ function deriveTurnFolds(input: {
   unfoldedRunIds: ReadonlySet<RunId>;
   /** Keeps the latest runless response open; V2 work must not reopen imported turns. */
   runlessWorkActive: boolean;
+  liveSubagentEntryIds: ReadonlySet<string>;
 }): ReadonlyMap<string, TurnFold> {
   const interruptedRunIds = new Set<RunId>();
   for (const entry of input.timelineEntries) {
@@ -986,9 +1072,11 @@ function deriveTurnFolds(input: {
       if (!isCompaction && index > terminalEntryIndex && !isFoldableTrailingActivity) {
         continue;
       }
-      // Linked resources can outlive their launching run and stay visible
-      // after the surrounding work folds.
-      if (timelineEntryIsPersistentResourceCard(entry)) {
+
+      if (
+        timelineEntryIsPersistentResourceCard(entry) ||
+        input.liveSubagentEntryIds.has(entry.id)
+      ) {
         continue;
       }
       if (entry.kind === "work" && entry.entry.itemType === "notification") continue;
@@ -1242,9 +1330,11 @@ export function deriveMessagesTimelineRows(input: {
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(timelineEntries);
   const unsettledRunId = deriveUnsettledRunId(input.latestRun ?? null, input.runningRunId ?? null);
   const failedRunIds = failedTimelineRunIds(timelineEntries, input.latestRun ?? null);
+  const liveSubagentEntryIds = liveSubagentCardEntryIds(timelineEntries);
   const supersededFoldsByAnchorEntryId = deriveSupersededAttemptFolds(
     timelineEntries,
     failedRunIds,
+    liveSubagentEntryIds,
   );
   const activeVisualResponseRunIds = deriveActiveVisualResponseRunIds({
     timelineEntries: timelineEntries,
@@ -1258,6 +1348,7 @@ export function deriveMessagesTimelineRows(input: {
     latestRun: input.latestRun ?? null,
     unfoldedRunIds: new Set([...activeVisualResponseRunIds, ...failedRunIds]),
     runlessWorkActive,
+    liveSubagentEntryIds,
   });
   const collapsedEntryIds = new Set<string>();
   for (const fold of foldsByAnchorEntryId.values()) {
@@ -1338,6 +1429,9 @@ export function deriveMessagesTimelineRows(input: {
     latestVisibleToolEntry.entry.toolLifecycleStatus !== "declined" &&
     workEntryDisplayIndicatesToolFailure(latestVisibleToolEntry.entry);
 
+  const latestThoughtEntry = visibleActiveToolEntries.findLast(
+    (entry) => entry.entry.itemType === "reasoning" && (entry.entry.detail?.trim() ?? "") !== "",
+  );
   const activeWorkPlacementEntryId = latestVisibleToolEntry?.id;
   const activeWorkRow =
     activeWorkAnchor && latestVisibleToolEntry && !latestToolFailed
@@ -1354,6 +1448,7 @@ export function deriveMessagesTimelineRows(input: {
             groupId,
             expanded: input.expandedWorkGroupIds?.has(groupId) ?? false,
             active: latestToolKeepsActivityLive,
+            ...(latestThoughtEntry ? { thought: latestThoughtEntry.entry } : {}),
           };
         })()
       : null;
@@ -1622,6 +1717,19 @@ export function deriveMessagesTimelineRows(input: {
         id: timelineEntry.id,
         createdAt: timelineEntry.createdAt,
         htmlRender: timelineEntry.htmlRender,
+      });
+      continue;
+    }
+
+    if (timelineEntry.kind === "mcp-app") {
+      nextRows.push({
+        kind: "mcp-app",
+        id: timelineEntry.id,
+        createdAt: timelineEntry.createdAt,
+        sourceThreadId: timelineEntry.sourceThreadId,
+        itemId: timelineEntry.itemId,
+        revision: timelineEntry.revision,
+        mcpApp: timelineEntry.mcpApp,
       });
       continue;
     }
@@ -2042,6 +2150,15 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return a.createdAt === bh.createdAt && htmlRenderReferencesEqual(a.htmlRender, bh.htmlRender);
     }
 
+    case "mcp-app": {
+      const bm = b as typeof a;
+      return (
+        a.createdAt === bm.createdAt &&
+        a.revision === bm.revision &&
+        mcpAppReferencesEqual(a.mcpApp, bm.mcpApp)
+      );
+    }
+
     case "event":
       return (
         a.projectedItem === (b as typeof a).projectedItem &&
@@ -2100,4 +2217,57 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       );
     }
   }
+}
+
+const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;
+const MAX_COLLAPSED_USER_MESSAGE_LENGTH = 600;
+const userMessageMarkdown = unified().use(remarkParse).use(remarkGfm).freeze();
+
+function markdownLinkLabel(node: Nodes): string {
+  if ("alt" in node) return node.alt ?? "";
+  if ("value" in node) return node.value;
+  return "children" in node ? node.children.map(markdownLinkLabel).join("") : "";
+}
+
+function visibleUserMessageText(text: string): string {
+  let visible = "";
+  let cursor = 0;
+  const visit = (node: Nodes): void => {
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (
+      (node.type === "link" || node.type === "image") &&
+      start !== undefined &&
+      end !== undefined
+    ) {
+      const citation = parseAssistantCitationHref(node.url);
+      visible +=
+        text.slice(cursor, start) +
+        (citation ? assistantCitationLabel(citation) : markdownLinkLabel(node));
+      cursor = end;
+      return;
+    }
+    if ("children" in node) node.children.forEach(visit);
+  };
+  visit(userMessageMarkdown.parse(text));
+  return visible + text.slice(cursor);
+}
+
+export function shouldCollapseUserMessage(text: string): boolean {
+  if (
+    text.trim().length === 0 ||
+    (text.length <= MAX_COLLAPSED_USER_MESSAGE_LENGTH &&
+      text.split("\n").length <= MAX_COLLAPSED_USER_MESSAGE_LINES)
+  ) {
+    return false;
+  }
+  const visible = text.includes("[") ? visibleUserMessageText(text) : text;
+  if (visible.trim().length === 0) {
+    return false;
+  }
+
+  return (
+    visible.length > MAX_COLLAPSED_USER_MESSAGE_LENGTH ||
+    visible.split("\n").length > MAX_COLLAPSED_USER_MESSAGE_LINES
+  );
 }

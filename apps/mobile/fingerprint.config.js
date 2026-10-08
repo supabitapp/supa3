@@ -1,6 +1,7 @@
 // @ts-check
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 // Expo's fingerprint ignores the app version, so binaries of different majors
 // share a runtime version whenever native code is unchanged, and a production
@@ -23,7 +24,8 @@ const workspaceConfig = fs.readFileSync(path.join(repoRoot, "pnpm-workspace.yaml
 const appliedPatches = [...workspaceConfig.matchAll(/: (patches\/\S+\.patch)$/gm)].flatMap(
   ([, patch]) => (patch ? [patch] : []),
 );
-const nativePath = /^(ios|android|cpp)\/|\.podspec$|(^|\/)Native\w*\.tsx?$|NativeComponent\.tsx?$/;
+const nativePath =
+  /^(ios|android|apple|common|cpp)\/|\.podspec$|(^|\/)Native\w*\.tsx?$|NativeComponent\.tsx?$/;
 const nativePatchSources = appliedPatches.flatMap((patch) => {
   const contents = fs.readFileSync(path.join(repoRoot, patch), "utf8");
   const touchesNative = [...contents.matchAll(/^diff --git a\/(\S+)/gm)].some(([, touched = ""]) =>
@@ -32,9 +34,21 @@ const nativePatchSources = appliedPatches.flatMap((patch) => {
   return touchesNative ? [{ type: /** @type {const} */ ("contents"), id: patch, contents }] : [];
 });
 
+const mobilePackage = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+const screensDependency = mobilePackage.dependencies["react-native-screens"];
+if (!screensDependency.startsWith("file:")) {
+  throw new Error("The native Screens dependency must use a pinned local archive.");
+}
+const screensArchive = path.join(__dirname, screensDependency.slice("file:".length));
+const screensDigest = crypto
+  .createHash("sha256")
+  .update(fs.readFileSync(screensArchive))
+  .digest("hex");
+
 module.exports = {
   extraSources: [
     { type: "contents", id: "appMajorVersion", contents: majorVersion },
+    { type: "contents", id: "nativeScreensArchive", contents: screensDigest },
     ...nativePatchSources,
   ],
 };

@@ -14,6 +14,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Path from "effect/Path";
+import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
@@ -52,6 +54,7 @@ export const layer: Layer.Layer<
   | EventSink.EventSinkV2
   | IdAllocator.IdAllocatorV2
   | ProjectionStore.ProjectionStoreV2
+  | Path.Path
 > = Layer.effect(
   CheckpointCaptureServiceV2,
   Effect.gen(function* () {
@@ -59,6 +62,7 @@ export const layer: Layer.Layer<
     const eventSink = yield* EventSink.EventSinkV2;
     const ids = yield* IdAllocator.IdAllocatorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const path = yield* Path.Path;
 
     const execute = Effect.fn("orchestrationV2.checkpointCapture.execute")(function* (input: {
       readonly threadId: ThreadId;
@@ -240,7 +244,12 @@ export const layer: Layer.Layer<
 
     return CheckpointCaptureServiceV2.of({
       execute: (input) =>
-        execute(input).pipe(
+        projections.getCheckpointCaptureContext(input.threadId, input).pipe(
+          Effect.flatMap(({ scope }) =>
+            scope === undefined
+              ? execute(input)
+              : withWorkspaceLease(path.resolve(scope.cwd), execute(input)),
+          ),
           Effect.mapError((cause) =>
             isCheckpointCaptureExecutionError(cause)
               ? cause

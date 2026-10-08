@@ -22,6 +22,7 @@ import * as GitVcsDriver from "./GitVcsDriver.ts";
 import type * as VcsDriver from "./VcsDriver.ts";
 import * as VcsDriverRegistry from "./VcsDriverRegistry.ts";
 import * as VcsProcess from "./VcsProcess.ts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { runVcsDriverContractSuite } from "./testing/VcsDriverContractHarness.ts";
 
 const layerServerConfig = ServerConfig.layerTest(process.cwd(), {
@@ -1206,3 +1207,56 @@ it.effect("GitVcsDriver flushes checkpoint objects and refs to disk before publi
     ),
   );
 });
+
+it.effect("Windows checkpoint commands retain inherited config and enable long paths", () =>
+  Effect.gen(function* () {
+    const nativePlatform = yield* HostProcessPlatform;
+    return yield* Effect.gen(function* () {
+      const delegate = yield* VcsProcess.VcsProcess;
+      const checkpointCommands: VcsProcess.VcsProcessInput[] = [];
+      const run: VcsProcess.VcsProcess["Service"]["run"] = (input) => {
+        if (input.operation === VcsProcess.CHECKPOINT_CAPTURE_OPERATION)
+          checkpointCommands.push(input);
+        return delegate.run(input).pipe(Effect.provideService(HostProcessPlatform, nativePlatform));
+      };
+      const driver = yield* GitVcsDriver.makeVcsDriverShape().pipe(
+        Effect.provideService(VcsProcess.VcsProcess, { run }),
+      );
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-checkpoint-longpaths-" });
+      const configured = yield* driver.execute({
+        operation: "longpaths-test",
+        cwd,
+        args: ["config", "--get", "core.longpaths"],
+        env: {
+          GIT_CONFIG_COUNT: "2",
+          GIT_CONFIG_KEY_0: "user.name",
+          GIT_CONFIG_VALUE_0: "inherited",
+          GIT_CONFIG_KEY_1: "core.longpaths",
+          GIT_CONFIG_VALUE_1: "false",
+        },
+      });
+      assert.equal(configured.stdout.trim(), "true");
+      const { checkpointRef } = yield* makeCheckpointFixture(driver, cwd);
+      yield* driver.checkpoints!.captureCheckpoint({ cwd, checkpointRef });
+      assert.isAbove(checkpointCommands.length, 0);
+      for (const input of checkpointCommands) {
+        const config = yield* run({
+          operation: "longpaths-test",
+          command: "git",
+          cwd,
+          args: ["-C", cwd, "config", "--get", "core.longpaths"],
+          ...(input.env === undefined ? {} : { env: input.env }),
+        });
+        assert.equal(config.stdout.trim(), "true");
+      }
+      yield* fs.writeFileString(path.join(cwd, "file.txt"), "later\n");
+      yield* driver.checkpoints!.restoreCheckpoint({ cwd, checkpointRef });
+      assert.equal(yield* fs.readFileString(path.join(cwd, "file.txt")), "unstaged\n");
+    }).pipe(Effect.provideService(HostProcessPlatform, "win32"));
+  }).pipe(
+    Effect.provide(VcsProcess.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+    Effect.scoped,
+  ),
+);

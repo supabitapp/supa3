@@ -45,7 +45,11 @@ import {
 } from "../ClaudeProvider.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
-import { resolveClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
+import {
+  resolveClaudeModelCatalog,
+  scopeClaudeModelCatalog,
+  scopeClaudeModelCatalogForVersion,
+} from "../ClaudeModelCatalog.ts";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -126,6 +130,10 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const serverSettings = yield* ServerSettings.ServerSettingsService;
       const modelManifest = yield* ModelManifest.ModelManifest;
       const modelCatalog = modelManifest.current.pipe(Effect.map(resolveClaudeModelCatalog));
+      let runtimeModelCatalog = scopeClaudeModelCatalog(
+        scopeClaudeModelCatalogForVersion(yield* modelCatalog, null),
+        config.customModels,
+      );
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
@@ -174,7 +182,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
           enabled,
           config,
         },
-        { scopedLimitNames, onUsageLimits: (update) => snapshot.applyUsageLimits(update) },
+        {
+          scopedLimitNames,
+          onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+          modelCatalog: () => runtimeModelCatalog,
+        },
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -189,7 +201,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const textGeneration = yield* makeClaudeTextGeneration(
         effectiveConfig,
         processEnv,
-        modelCatalog,
+        Effect.sync(() => runtimeModelCatalog),
       );
 
       // Per-instance capabilities cache: keyed on binary + resolved HOME so
@@ -213,13 +225,14 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const checkProvider = modelManifest.refreshInBackground.pipe(
         Effect.andThen(
           modelManifest.current.pipe(
-            Effect.flatMap((manifest) =>
-              checkClaudeProviderStatus(
+            Effect.flatMap((manifest) => {
+              const catalog = resolveClaudeModelCatalog(manifest);
+              return checkClaudeProviderStatus(
                 effectiveConfig,
                 () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
                 processEnv,
                 cwd,
-                resolveClaudeModelCatalog(manifest),
+                catalog,
                 scopedLimitNames,
                 (version) =>
                   ClaudeResetCredits.readClaudeResetCredits(configDir, version).pipe(
@@ -227,8 +240,17 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
                     Effect.provideService(FileSystem.FileSystem, fileSystem),
                     Effect.provideService(Path.Path, path),
                   ),
-              ),
-            ),
+              ).pipe(
+                Effect.tap((provider) =>
+                  Effect.sync(() => {
+                    runtimeModelCatalog = scopeClaudeModelCatalog(
+                      scopeClaudeModelCatalogForVersion(catalog, provider.version),
+                      config.customModels,
+                    );
+                  }),
+                ),
+              );
+            }),
             Effect.map(stampIdentity),
           ),
         ),

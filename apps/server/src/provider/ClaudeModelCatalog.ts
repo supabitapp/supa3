@@ -167,6 +167,19 @@ export function resolveClaudeModelsForVersion(
     .map((entry) => entry.model);
 }
 
+export function scopeClaudeModelCatalogForVersion(
+  catalog: ClaudeModelCatalog,
+  version: string | null | undefined,
+): ClaudeModelCatalog {
+  return {
+    models: catalog.models.map((entry) =>
+      isVersionSupported(entry.compatibility, version)
+        ? entry
+        : { ...entry, model: { ...entry.model, aliases: [] } },
+    ),
+  };
+}
+
 export function formatClaudeVersionUpgradeMessage(
   catalog: ClaudeModelCatalog,
   version: string | null,
@@ -215,7 +228,7 @@ export function isClaudeCatalogUltracodeEffort(effort: string | null | undefined
   return effort === "ultracode";
 }
 
-export function resolveClaudeCatalogContextWindow(
+function resolveClaudeCatalogContextWindow(
   catalog: ClaudeModelCatalog,
   modelSelection: ModelSelection | undefined,
 ): string | undefined {

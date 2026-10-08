@@ -36,7 +36,9 @@ import {
   makeGitVcsDriverCore,
   PATCH_RENDER_PREFIX_ARGS,
   splitNullSeparatedGitStdoutPaths,
+  windowsLongPathConfigEnv,
 } from "./GitVcsDriverCore.ts";
+import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
@@ -503,7 +505,7 @@ function parseGitRemoteVerboseOutput(
   return remotes;
 }
 
-const gitCommand = (
+const gitCommand = Effect.fnUntraced(function* (
   process: VcsProcess.VcsProcess["Service"],
   operation: string,
   cwd: string,
@@ -517,15 +519,20 @@ const gitCommand = (
     readonly outputMode?: VcsProcess.VcsProcessInput["outputMode"];
     readonly appendTruncationMarker?: boolean;
   },
-) =>
-  process.run({
+) {
+  const platform = yield* HostProcessPlatform;
+  const env = { ...globalThis.process.env, ...options?.env };
+  const longPaths = windowsLongPathConfigEnv(platform, env);
+  return yield* process.run({
     operation,
     command: "git",
     args: ["-C", cwd, ...args],
     cwd,
     spawnCwd: globalThis.process.cwd(),
     ...(options?.stdin !== undefined ? { stdin: options.stdin } : {}),
-    ...(options?.env !== undefined ? { env: options.env } : {}),
+    ...(options?.env !== undefined || Object.keys(longPaths).length > 0
+      ? { env: { ...options?.env, ...longPaths } }
+      : {}),
     ...(options?.allowNonZeroExit !== undefined
       ? { allowNonZeroExit: options.allowNonZeroExit }
       : {}),
@@ -536,12 +543,14 @@ const gitCommand = (
       ? { appendTruncationMarker: options.appendTruncationMarker }
       : {}),
   });
+});
 
 export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
   const crypto = yield* Crypto.Crypto;
+  const platform = yield* HostProcessPlatform;
   const capabilities = {
     kind: "git" as const,
     supportsWorktrees: true,
@@ -826,6 +835,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         GIT_AUTHOR_EMAIL: "supacode@users.noreply.github.com",
         GIT_COMMITTER_NAME: "supacode",
         GIT_COMMITTER_EMAIL: "supacode@users.noreply.github.com",
+        ...windowsLongPathConfigEnv(platform, process.env),
       };
 
       // Forced process termination can leave Git's private index lock behind.

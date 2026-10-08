@@ -1,6 +1,7 @@
 import {
   isProviderSendTurnSupportedImageMimeType,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+  type McpAppCallToolResult,
 } from "@supacode/contracts";
 import * as Predicate from "effect/Predicate";
 
@@ -9,6 +10,7 @@ import {
   readHtmlRenderReference,
   type HtmlRenderReference,
 } from "./htmlRender.ts";
+import { MCP_APP_OUTPUT_KEY, readMcpAppReference, type McpAppReference } from "./mcpApp.ts";
 import { resolveSupacodeMcpToolId } from "./supacodeMcpToolPresentation.ts";
 
 const MAX_PARSED_BYTES = 16_384;
@@ -39,6 +41,7 @@ interface CompactToolOutput {
   scheduledTaskId?: string;
   status?: "rolled_back";
   htmlRender?: HtmlRenderReference;
+  [MCP_APP_OUTPUT_KEY]?: McpAppReference;
   thread?: { threadId: string };
   threads?: Array<{ threadId?: string; status?: "rolled_back" }>;
 }
@@ -124,6 +127,9 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
     if (data.status === "rolled_back") output.status = "rolled_back";
     const htmlRender = readHtmlRenderReference(data.htmlRender);
     if (htmlRender !== undefined) output.htmlRender = htmlRender;
+    const mcpApp = readMcpAppReference(data[MCP_APP_OUTPUT_KEY]);
+
+    if (mcpApp !== undefined) output[MCP_APP_OUTPUT_KEY] = mcpApp;
     const nestedThreadId = Predicate.isObject(data.thread)
       ? boundedId(data.thread.threadId)
       : undefined;
@@ -159,11 +165,19 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
       }
     }
   }
-  if (encoder.encode(JSON.stringify(output)).byteLength > MAX_METADATA_BYTES) {
+  const oversized = () => encoder.encode(JSON.stringify(output)).byteLength > MAX_METADATA_BYTES;
+  if (oversized()) {
     delete output.threads;
     delete output.threadId;
     delete output.status;
   }
+
+  const app = output[MCP_APP_OUTPUT_KEY];
+  if (app?.csp !== undefined && oversized()) {
+    const { csp: _csp, ...rest } = app;
+    output[MCP_APP_OUTPUT_KEY] = rest;
+  }
+  if (oversized()) delete output[MCP_APP_OUTPUT_KEY];
   return Object.keys(output).length === 0 ? undefined : output;
 }
 
@@ -175,6 +189,34 @@ export function htmlRenderFromToolItem(item: {
   if (resolveSupacodeMcpToolId(item.toolName) !== HTML_RENDER_TOOL_NAME) return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
+}
+
+export function mcpAppFromToolItem(item: {
+  readonly toolName: string | null | undefined;
+  readonly output?: unknown;
+}): McpAppReference | undefined {
+  const app = compactDynamicToolOutput(item.output)?.[MCP_APP_OUTPUT_KEY];
+  return app !== undefined && item.toolName === `${app.server}.${app.tool}` ? app : undefined;
+}
+
+export function readMcpAppToolResult(output: unknown): McpAppCallToolResult | undefined {
+  if (
+    !Predicate.isObject(output) ||
+    readMcpAppReference(output[MCP_APP_OUTPUT_KEY]) === undefined ||
+    !Predicate.isObject(output.result)
+  ) {
+    return undefined;
+  }
+  const result = output.result;
+  if (!Array.isArray(result.content)) return undefined;
+  return {
+    content: result.content,
+    ...(result.structuredContent === undefined
+      ? {}
+      : { structuredContent: result.structuredContent }),
+    ...(typeof result.isError === "boolean" ? { isError: result.isError } : {}),
+    ...(result._meta === undefined ? {} : { _meta: result._meta }),
+  };
 }
 
 /** Some providers report completion even when command output describes a failure. */
@@ -219,6 +261,8 @@ export function readToolOutputImage(block: unknown): ToolOutputImage | null {
 /** Tools return a block, a list of blocks, or an MCP result with a `content` list. */
 function outputBlocks(value: unknown): ReadonlyArray<unknown> {
   if (Array.isArray(value)) return value;
+  const appResult = readMcpAppToolResult(value);
+  if (appResult !== undefined) return appResult.content;
   if (Predicate.isObject(value) && Array.isArray(value.content)) return value.content;
   return [value];
 }
@@ -260,9 +304,15 @@ export function toolOutputImages(value: unknown): ReadonlyArray<ToolOutputImage>
 export function omitToolOutputImageData(value: unknown): unknown {
   const omit = (block: unknown) => {
     const image = readToolOutputImage(block);
-    return image?.data === undefined ? block : { type: "image", mimeType: image.mimeType };
+    if (image?.data === undefined || !Predicate.isObject(block)) return block;
+    const { data: _data, source: _source, ...metadata } = block;
+    return { ...metadata, type: "image", mimeType: image.mimeType };
   };
   if (Array.isArray(value)) return value.map(omit);
+  const appResult = readMcpAppToolResult(value);
+  if (appResult !== undefined && Predicate.isObject(value)) {
+    return { ...value, result: { ...appResult, content: appResult.content.map(omit) } };
+  }
   if (Predicate.isObject(value) && Array.isArray(value.content)) {
     return { ...value, content: value.content.map(omit) };
   }

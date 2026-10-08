@@ -30,8 +30,11 @@ import * as PullRequestFilesViewed from "../persistence/PullRequestFilesViewed.t
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "../sourceControl/SourceControlRateLimit.ts";
+import * as GitHubApi from "../sourceControl/GitHubApi.ts";
+import * as GitHubQuota from "../sourceControl/githubQuota.ts";
 import * as ForgejoCli from "../sourceControl/ForgejoCli.ts";
 import * as ForgejoPullRequestProvider from "./ForgejoPullRequestProvider.ts";
+import { gitHubProviderFailure } from "./GitHubPullRequestProvider.ts";
 import {
   PullRequestProviderError,
   type ProviderChangeRequest,
@@ -1962,6 +1965,75 @@ it.effect("stops new reads after a rate limit while leaving manual actions avail
     assert.lengthOf(first.errors, 1);
     assert.lengthOf(paused.errors, 1);
   }),
+);
+
+it.effect.each([false, true])(
+  "keeps reserve refusals local to their quota and recovers after an interactive read (serialized cause: %s)",
+  (serialized) =>
+    Effect.gen(function* () {
+      const quota = yield* GitHubQuota.GitHubQuota;
+      const reset = Date.parse("2099-08-13T14:00:00Z");
+      const headers = (resource: string, remaining: number) => ({
+        "x-ratelimit-resource": resource,
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": String(remaining),
+        "x-ratelimit-reset": String(reset / 1000),
+      });
+      yield* quota.observe("github.com", headers("core", 499));
+      yield* quota.observe("github.com", headers("graphql", 5000));
+      const mapQuotaError = (operation: string) => (cause: GitHubQuota.GitHubQuotaPausedError) =>
+        new PullRequestProviderError({
+          provider: "github",
+          operation,
+          ...gitHubProviderFailure(cause),
+          detail: cause.message,
+          cause: serialized
+            ? {
+                _tag: cause._tag,
+                host: cause.host,
+                resource: cause.resource,
+                retryAt: cause.retryAt,
+              }
+            : cause,
+        });
+      const service = yield* makeService({
+        projects: [
+          project({ id: "p1", title: "cloud", workspaceRoot: "/cloud", repository: "acme/web" }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            getChangeRequestChecks: () =>
+              quota
+                .admit("github.com", "core")
+                .pipe(
+                  Effect.as(hostedChangeRequest("recovered")),
+                  Effect.mapError(mapQuotaError("getChangeRequestChecks")),
+                ),
+            getChangeRequestSummary: () =>
+              quota
+                .admit("github.com", "graphql")
+                .pipe(
+                  Effect.as(changeRequest(1, "2026-07-02T00:00:00Z")),
+                  Effect.mapError(mapQuotaError("getChangeRequestSummary")),
+                ),
+            runAction: () =>
+              Effect.gen(function* () {
+                yield* quota.admit("github.com", "core", {
+                  allowReserve: yield* GitHubApi.AllowGitHubReserve,
+                });
+                yield* quota.observe("github.com", headers("core", 900));
+              }).pipe(Effect.mapError(mapQuotaError("runAction"))),
+          }),
+        ],
+      });
+      const reference = { projectId: "p1" as ProjectId, repository: "acme/web", number: 1 };
+
+      const refused = yield* Effect.flip(service.checks(reference));
+      assert.strictEqual(refused._tag, "PullRequestOperationError");
+      assert.strictEqual((yield* service.summary(reference)).title, "Change request 1");
+      yield* service.runAction({ ...reference, action: "close" });
+      assert.strictEqual((yield* service.checks(reference))?.state, "open");
+    }).pipe(Effect.provide(GitHubQuota.layer)),
 );
 
 for (const [provider, host] of [

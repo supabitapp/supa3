@@ -235,6 +235,10 @@
       "types": "./src/state/usage.ts",
       "default": "./src/state/usage.ts"
     },
+    "./state/usage-progress": {
+      "types": "./src/state/usageProgress.ts",
+      "default": "./src/state/usageProgress.ts"
+    },
     "./state/server": {
       "types": "./src/state/server.ts",
       "default": "./src/state/server.ts"
@@ -402,6 +406,26 @@
     "./thread-outbox": {
       "types": "./src/threadOutbox.ts",
       "default": "./src/threadOutbox.ts"
+    },
+    "./mcp-apps": {
+      "types": "./src/mcpApps/host.ts",
+      "default": "./src/mcpApps/host.ts"
+    },
+    "./mcp-apps/actions": {
+      "types": "./src/mcpApps/actions.ts",
+      "default": "./src/mcpApps/actions.ts"
+    },
+    "./mcp-apps/document-url": {
+      "types": "./src/mcpApps/documentUrl.ts",
+      "default": "./src/mcpApps/documentUrl.ts"
+    },
+    "./mcp-apps/tool-call": {
+      "types": "./src/mcpApps/toolCall.ts",
+      "default": "./src/mcpApps/toolCall.ts"
+    },
+    "./state/mcp-apps": {
+      "types": "./src/state/mcpApps.ts",
+      "default": "./src/state/mcpApps.ts"
     }
   },
   "scripts": {

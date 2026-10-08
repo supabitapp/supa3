@@ -55,13 +55,19 @@ function parseListMarker(line: string): { marker: ListMarker; markerEnd: number 
   return null;
 }
 
+export function nextOrderedMarkerText(marker: string): string {
+  const numberText = marker.slice(0, -1);
+  const delimiter = marker.slice(-1);
+  const number = Number.parseInt(numberText, 10);
+  const next = Number.isSafeInteger(number)
+    ? String(number + 1).padStart(numberText.length, "0")
+    : numberText;
+  return `${next}${delimiter}`;
+}
+
 function nextMarkerText(marker: ListMarker): string {
   if (marker.kind === "ordered") {
-    const number = Number.parseInt(marker.numberText, 10);
-    const next = Number.isSafeInteger(number)
-      ? String(number + 1).padStart(marker.numberText.length, "0")
-      : marker.numberText;
-    return `${marker.indent}${next}${marker.delimiter} `;
+    return `${marker.indent}${nextOrderedMarkerText(`${marker.numberText}${marker.delimiter}`)} `;
   }
   if (marker.kind === "task") {
     return `${marker.indent}- [ ] `;

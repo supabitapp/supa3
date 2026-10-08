@@ -226,4 +226,35 @@ describe("toolOutputImages", () => {
       { mimeType: "image/png" },
     ]);
   });
+
+  it("externalizes images inside captured MCP app results with stable asset indices", () => {
+    const output = {
+      supacodeMcpApp: {
+        attachmentId: "thread-1-app-html",
+        server: "weather",
+        tool: "get_weather",
+        resourceUri: "ui://weather/dashboard",
+      },
+      result: {
+        content: [text, mcpImage, claudeImage],
+        structuredContent: { temperature: 21 },
+      },
+    };
+    expect(toolOutputImages(output)).toEqual([
+      { mimeType: "image/png", data: "AAAA" },
+      { mimeType: "image/jpeg", data: "BBBB" },
+    ]);
+    expect(omitToolOutputImageData(output)).toEqual({
+      ...output,
+      result: {
+        ...output.result,
+        content: [
+          text,
+          { type: "image", mimeType: "image/png" },
+          { type: "image", mimeType: "image/jpeg" },
+        ],
+      },
+    });
+    expect(output.result.content[1]).toBe(mcpImage);
+  });
 });

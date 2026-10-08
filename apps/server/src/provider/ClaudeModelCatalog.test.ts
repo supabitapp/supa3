@@ -13,6 +13,7 @@ import {
   resolveClaudeModelsForVersion,
   resolveClaudeModelSlug,
   scopeClaudeModelCatalog,
+  scopeClaudeModelCatalogForVersion,
 } from "./ClaudeModelCatalog.ts";
 
 /**
@@ -165,6 +166,49 @@ describe("Claude model catalog", () => {
         model: "synthetic",
       }),
       "claude-synthetic-next[large]",
+    );
+  });
+
+  it("resolves shared aliases to supported predecessors without changing canonical selections", () => {
+    const source = manifest();
+    const provider = source.providers!.claudeAgent!;
+    const catalog = resolveClaudeModelCatalog({
+      ...source,
+      providers: {
+        claudeAgent: {
+          ...provider,
+          models: [
+            ...provider.models,
+            {
+              slug: "claude-synthetic-previous",
+              name: "Claude Synthetic Previous",
+              aliases: ["synthetic"],
+              status: "legacy",
+            },
+          ],
+        },
+      },
+    });
+    const older = scopeClaudeModelCatalogForVersion(catalog, "3.1.9");
+    const newer = scopeClaudeModelCatalogForVersion(catalog, "3.2.0");
+    assert.equal(resolveClaudeModelSlug(older, "synthetic"), "claude-synthetic-previous");
+    assert.equal(resolveClaudeModelSlug(newer, "synthetic"), "claude-synthetic-next");
+    assert.equal(
+      resolveClaudeCatalogApiModelId(older, {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-synthetic-next",
+      }),
+      "claude-synthetic-next[large]",
+    );
+    assert.equal(
+      resolveClaudeModelsForVersion(catalog, "3.1.9").find((model) =>
+        model.aliases?.includes("synthetic"),
+      )?.slug,
+      resolveClaudeModelSlug(older, "synthetic"),
+    );
+    assert.equal(
+      resolveClaudeModelSlug(scopeClaudeModelCatalog(older, ["synthetic"]), "synthetic"),
+      "synthetic",
     );
   });
 

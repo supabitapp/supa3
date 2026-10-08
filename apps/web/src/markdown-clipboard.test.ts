@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { serializeRenderedMarkdownFragment } from "./markdown-clipboard";
+import {
+  chatMarkdownClipboardPayload,
+  serializeRenderedMarkdownFragment,
+} from "./markdown-clipboard";
 import { EnvironmentId, MessageId, ThreadId } from "@supacode/contracts";
 import {
   collectAssistantCitations,
@@ -9,6 +14,50 @@ import {
 
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
+
+describe("chatMarkdownClipboardPayload", () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it("preserves a citation and its label in both clipboard formats while removing controls", () => {
+    const citation = {
+      version: 1 as const,
+      environmentId: EnvironmentId.make("environment"),
+      threadId: ThreadId.make("thread"),
+      messageId: MessageId.make("message"),
+      text: "The complete quoted text.",
+      comment: "What does this mean?",
+      start: 0,
+      end: 25,
+      prefix: "",
+      suffix: "",
+    };
+    const source = serializeAssistantCitation(citation);
+    const content = document.createElement("p");
+    content.innerHTML =
+      'Explain <button data-markdown-copy=""><svg><title>Quote</title></svg><span>What does this mean?</span></button> please.<button>Copy message</button><input value="ignored"><script>ignored</script><span aria-hidden="true">ignored</span>';
+    content.querySelector("button")!.setAttribute("data-markdown-copy", source);
+    document.body.append(content);
+    const range = document.createRange();
+    range.selectNodeContents(content);
+    const selection = window.getSelection()!;
+    selection.addRange(range);
+
+    const payload = chatMarkdownClipboardPayload(selection)!;
+    expect(payload.text).toBe(`Explain ${source} please.`);
+    const pasted = document.createElement("div");
+    pasted.innerHTML = payload.html;
+    expect(pasted.textContent).toBe("Explain What does this mean? please.");
+    expect(pasted.querySelector("button, input, script, svg, [aria-hidden]")).toBeNull();
+    expect(
+      collectAssistantCitations(
+        pasted.querySelector("[data-markdown-copy]")!.getAttribute("data-markdown-copy")!,
+      ),
+    ).toMatchObject([{ citation }]);
+  });
+});
 
 class FakeText {
   readonly nodeType = TEXT_NODE;

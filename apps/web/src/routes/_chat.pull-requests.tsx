@@ -1883,9 +1883,9 @@ function PullRequestsRouteView() {
       terminalOpen={false}
       terminalShortcutLabel={null}
       threadPanelOpen={false}
+      threadPanelHasAttention={false}
       threadPanelPresentation="inline"
       threadPanelShortcutLabel={null}
-      threadPanelHasAttention={false}
       onToggleThreadPanel={() => undefined}
       rightPanelAvailable={rightPanelAvailable}
       rightPanelOpen={rightPanelState.isOpen}

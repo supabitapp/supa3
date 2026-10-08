@@ -369,9 +369,48 @@ it.effect(
             updatedAt: now,
             type: "user_input_request",
             requestId,
-            questions: [],
+            questions:
+              mode === "live"
+                ? [
+                    {
+                      id: "scope",
+                      header: "Scope",
+                      question: "Which areas?",
+                      options: ["Server", "Web", "Mobile"].map((label) => ({
+                        label,
+                        description: label,
+                      })),
+                      multiSelect: true,
+                      minSelections: 2,
+                      maxSelections: 2,
+                      maxCustomAnswerLength: 500,
+                    },
+                  ]
+                : [],
           },
         });
+        if (mode === "live") {
+          for (const [index, answer] of [
+            "x".repeat(501),
+            ["Server"],
+            ["Server", "Web", "Mobile"],
+          ].entries()) {
+            const rejected = yield* orchestrator
+              .dispatch({
+                type: "runtime-request.respond",
+                commandId: CommandId.make(`invalid-answer:${index}`),
+                threadId,
+                requestId,
+                answers: { scope: answer },
+              })
+              .pipe(Effect.exit);
+            assert.equal(rejected._tag, "Failure");
+            const pending = yield* projections.getRuntimeResponseContext(threadId, requestId);
+            assert.equal(pending.request?.status, "pending");
+            assert.equal(pending.node?.status, "waiting");
+            assert.equal(pending.item?.status, "waiting");
+          }
+        }
         yield* orchestrator.dispatch(
           mode === "live"
             ? {
@@ -380,6 +419,7 @@ it.effect(
                 threadId,
                 requestId,
                 decision: "accept",
+                answers: { scope: ["Server", "Web"] },
               }
             : {
                 type: "thread.user-input.dismiss",

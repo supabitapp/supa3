@@ -1,5 +1,7 @@
+import { useState } from "react";
 import {
   duoFoldState,
+  duoHoldOrientation,
   type DuoCommand,
   type DuoControlState,
 } from "@supacode/client-runtime/device/duo-control";
@@ -31,7 +33,18 @@ export function DeviceDuoControls(props: {
   onCommand: (command: DuoCommand) => void;
 }) {
   const { screen } = props;
-  const { fold, stand, phoneVertical } = duoFoldState(screen);
+  const { fold, stand, phoneVertical: reportedVertical, settled } = duoFoldState(screen);
+
+  const [settledVertical, setSettledVertical] = useState(reportedVertical);
+  if (settled && settledVertical !== reportedVertical) setSettledVertical(reportedVertical);
+
+  const [standHold, setStandHold] = useState({ active: stand, vertical: settledVertical });
+  if (standHold.active !== stand)
+    setStandHold({ active: stand, vertical: stand ? settledVertical : standHold.vertical });
+  const standVertical = standHold.vertical;
+  const phoneVertical = stand ? standVertical : settledVertical;
+
+  const foldWaits = props.state.pending && (stand || props.state.requested?.control === "pose");
   const foldLabels = {
     closed: "Closed",
     half: phoneVertical ? "Book" : "Laptop",
@@ -43,6 +56,7 @@ export function DeviceDuoControls(props: {
     pressed: boolean,
     onClick: () => void,
     glyph: React.ReactNode,
+    waits = false,
   ) => (
     <Tooltip key={key}>
       <TooltipTrigger
@@ -50,7 +64,7 @@ export function DeviceDuoControls(props: {
           <Button
             size="icon"
             variant={pressed ? "secondary" : "ghost"}
-            disabled={!props.enabled}
+            disabled={!props.enabled || waits}
             aria-label={label}
             aria-pressed={pressed}
             data-pressed={pressed ? "" : undefined}
@@ -73,8 +87,16 @@ export function DeviceDuoControls(props: {
             id,
             foldLabels[id],
             !stand && fold === id,
-            () => props.onCommand({ control: "angle", value }),
+            () => {
+              if (stand)
+                props.onCommand({
+                  control: "orientation",
+                  value: duoHoldOrientation(standVertical, screen.screenId),
+                });
+              props.onCommand({ control: "angle", value });
+            },
             <DeviceDuoGlyph pose={id === "half" ? "book" : id} rotated={!phoneVertical} />,
+            foldWaits,
           ),
         )}
       </div>

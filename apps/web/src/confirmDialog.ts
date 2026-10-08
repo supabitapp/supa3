@@ -101,6 +101,10 @@ export function requestConfirmDialog(
   return confirmation;
 }
 
+export function isConfirmDialogActive(): boolean {
+  return state.status !== "idle" || activeConfirmation !== null || queuedConfirmations.length > 0;
+}
+
 export function respondToConfirmDialog(confirmed: boolean): void {
   if (state.status !== "confirming" || !activeConfirmation) return;
 

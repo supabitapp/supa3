@@ -3,6 +3,7 @@ import { assert, it, vi } from "@effect/vitest";
 import {
   CheckpointId,
   CheckpointScopeId,
+  ProjectId,
   type OrchestrationV2ThreadProjection,
   ProviderInstanceId,
   ProviderSessionId,
@@ -13,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import { symlinksSupported } from "@supacode/shared/testing/symlinks";
 import * as Layer from "effect/Layer";
 
@@ -20,6 +22,8 @@ import { resolveCodexRollbackTurnCount } from "./Adapters/CodexAdapterV2.ts";
 import { isCheckpointRestoreIsolated } from "./CheckpointRestoreSafety.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as CheckpointRollbackService from "./CheckpointRollbackService.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -27,6 +31,7 @@ import * as ProjectStore from "./ProjectStore.ts";
 import type { ProviderAdapterV2RollbackThreadInput } from "./ProviderAdapter.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 
 // A root that does not exist never overlaps, so other owners decide isolation.
 const unrelatedProject = Option.some({
@@ -37,6 +42,7 @@ const layerCheckpointRollbackService = CheckpointRollbackService.layer.pipe(
     Layer.mergeAll(
       NodeServices.layer,
       Layer.mock(ProjectStore.ProjectStoreV2)({ get: () => Effect.succeed(unrelatedProject) }),
+      Layer.mock(GitWorkflowService.GitWorkflowService)({}),
     ),
   ),
 );
@@ -64,6 +70,7 @@ it.effect("rejects a non-ready checkpoint before opening a session or restoring 
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
+        ThreadCommandExecutor.layer,
         Layer.mock(CheckpointService.CheckpointServiceV2)({ restore }),
         Layer.mock(EventSink.EventSinkV2)({}),
         IdAllocator.layer,
@@ -141,6 +148,7 @@ it.effect("rejects a rollback when another provider thread became active", () =>
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
+        ThreadCommandExecutor.layer,
         Layer.mock(CheckpointService.CheckpointServiceV2)({ restore }),
         Layer.mock(EventSink.EventSinkV2)({}),
         IdAllocator.layer,
@@ -221,6 +229,7 @@ it.effect("rejects a rollback when provider selection changed before execution",
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
+        ThreadCommandExecutor.layer,
         Layer.mock(CheckpointService.CheckpointServiceV2)({ restore }),
         Layer.mock(EventSink.EventSinkV2)({}),
         IdAllocator.layer,
@@ -292,6 +301,7 @@ it.effect("reports a missing provider turn as a structured rollback failure", ()
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
+        ThreadCommandExecutor.layer,
         Layer.mock(CheckpointService.CheckpointServiceV2)({ restore }),
         Layer.mock(EventSink.EventSinkV2)({}),
         IdAllocator.layer,
@@ -352,6 +362,15 @@ it.effect.each([
   const checkpointId = CheckpointId.make("rewind-start");
   const scopeId = CheckpointScopeId.make("rewind-scope");
   const calls: string[] = [];
+  let lockedThreads = Effect.succeed<ReadonlyArray<ThreadId>>([]);
+  const layerThreadCommands = Layer.effect(
+    ThreadCommandExecutor.ThreadCommandExecutor,
+    Effect.tap(KeyedLock.make<ThreadId>(), (lock) =>
+      Effect.sync(() => {
+        lockedThreads = lock.activeKeys;
+      }),
+    ),
+  );
   const providerThread = {
     id: providerThreadId,
     providerSessionId,
@@ -390,6 +409,7 @@ it.effect.each([
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
+        layerThreadCommands,
         Layer.mock(CheckpointService.CheckpointServiceV2)({
           restore: () =>
             Effect.sync(() => {
@@ -398,7 +418,8 @@ it.effect.each([
         }),
         Layer.mock(EventSink.EventSinkV2)({
           write: ({ events }) =>
-            Effect.sync(() => {
+            Effect.map(lockedThreads, (locked) => {
+              assert.include(locked, threadId);
               assert.ok(
                 events.some(
                   (event) => event.type === "run.updated" && event.payload.status === "rolled_back",
@@ -508,4 +529,125 @@ it.effect.skipIf(!symlinksSupported)(
       );
       assert.isFalse(isolated);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect.each([false, true])("restores a cleaned worktree safely, shared=%s", (shared) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "supacode-restore-cleaned-" });
+    const worktreePath = path.join(root, "removed");
+    const threadId = ThreadId.make("thread:restore-cleaned");
+    const otherId = ThreadId.make("thread:restore-cleaned-other");
+    const projectId = ProjectId.make("project:restore-cleaned");
+    const providerThreadId = ProviderThreadId.make("provider-thread:restore-cleaned");
+    const providerSessionId = ProviderSessionId.make("provider-session:restore-cleaned");
+    const providerInstanceId = ProviderInstanceId.make("provider_restore_cleaned");
+    const checkpointId = CheckpointId.make("checkpoint:restore-cleaned");
+    const scopeId = CheckpointScopeId.make("scope:restore-cleaned");
+    const thread = {
+      id: threadId,
+      projectId,
+      worktreePath,
+      branch: "retained",
+      activeProviderThreadId: providerThreadId,
+      modelSelection: { instanceId: providerInstanceId, model: "test-model" },
+    };
+    const scope = { id: scopeId, cwd: worktreePath };
+    const projection = {
+      thread,
+      providerThreads: [{ id: providerThreadId, providerSessionId, providerInstanceId }],
+      providerSessions: [],
+      checkpoints: [{ id: checkpointId, scopeId, status: "ready", appRunOrdinal: 0 }],
+      checkpointScopes: [scope],
+      runs: [],
+      attempts: [],
+      nodes: [],
+      providerTurns: [],
+    } as unknown as OrchestrationV2ThreadProjection;
+    const projections = ProjectionStore.ProjectionStoreV2.of({
+      getThreadRecords: () => Effect.succeed(projection),
+      getShellSnapshot: () =>
+        Effect.succeed({
+          schemaVersion: 1,
+          snapshotSequence: 0,
+          threads: shared ? [{ id: otherId, worktreePath, deletedAt: null } as never] : [],
+          archivedThreads: [],
+        }),
+      getCheckpointContext: () =>
+        Effect.succeed({ runs: [], checkpointScopes: [], checkpoints: [] }),
+      getThreadProviderContext: () => Effect.succeed({ providerSessions: [] } as never),
+    } as never);
+    const projects = ProjectStore.ProjectStoreV2.of({
+      get: () => Effect.succeed(Option.some({ workspaceRoot: root } as never)),
+    } as never);
+    const isolated = yield* isCheckpointRestoreIsolated(thread, scope, {
+      fileSystem: fs,
+      path,
+      projections,
+      projects,
+    });
+    assert.equal(isolated, !shared);
+    assert.isFalse(yield* fs.exists(worktreePath));
+    const createWorktree = vi.fn((input: { path?: string | null }) =>
+      Effect.gen(function* () {
+        assert.equal(input.path, worktreePath);
+        yield* fs.makeDirectory(worktreePath).pipe(Effect.orDie);
+        return { worktree: { path: worktreePath, refName: "retained" } };
+      }),
+    );
+    const restore = vi.fn(() =>
+      fs
+        .writeFileString(path.join(worktreePath, "restored.txt"), "checkpoint content")
+        .pipe(Effect.orDie),
+    );
+    const serviceLayer = CheckpointRollbackService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          ThreadCommandExecutor.layer,
+          IdAllocator.layer,
+          Layer.succeed(ProjectionStore.ProjectionStoreV2, projections),
+          Layer.succeed(ProjectStore.ProjectStoreV2, projects),
+          Layer.mock(GitWorkflowService.GitWorkflowService)({
+            listLocalBranchNames: () => Effect.succeed(["retained"]),
+            pruneWorktrees: () => Effect.void,
+            createWorktree,
+          }),
+          Layer.mock(CheckpointService.CheckpointServiceV2)({
+            restore,
+            deleteStaleRefs: () => Effect.void,
+          }),
+          Layer.mock(EventSink.EventSinkV2)({ write: () => Effect.succeed([]) }),
+          Layer.mock(RuntimePolicy.RuntimePolicyV2)({
+            resolve: () => Effect.succeed({ cwd: worktreePath } as never),
+          }),
+          Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
+            open: () =>
+              Effect.gen(function* () {
+                assert.isTrue(yield* fs.exists(worktreePath).pipe(Effect.orDie));
+                return {} as never;
+              }),
+          }),
+        ),
+      ),
+    );
+    const result = yield* Effect.gen(function* () {
+      const service = yield* CheckpointRollbackService.CheckpointRollbackServiceV2;
+      return yield* Effect.result(
+        service.execute({ threadId, providerThreadId, checkpointId, scopeId }),
+      );
+    }).pipe(Effect.provide(serviceLayer));
+    if (shared) {
+      assert.isTrue(Result.isFailure(result));
+      assert.equal(createWorktree.mock.calls.length, 0);
+      assert.equal(restore.mock.calls.length, 0);
+      assert.isFalse(yield* fs.exists(worktreePath));
+    } else {
+      assert.isTrue(Result.isSuccess(result));
+      assert.equal(
+        yield* fs.readFileString(path.join(worktreePath, "restored.txt")),
+        "checkpoint content",
+      );
+    }
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

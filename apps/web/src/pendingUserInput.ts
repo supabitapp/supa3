@@ -1,4 +1,5 @@
-import type { UserInputQuestion } from "@supacode/contracts";
+import type { OrchestrationV2UserInputQuestion as UserInputQuestion } from "@supacode/contracts";
+import { userInputAnswerValidationError } from "@supacode/shared/userInput";
 
 export interface PendingUserInputDraftAnswer {
   selectedOptionValues?: string[];
@@ -47,12 +48,13 @@ export function resolvePendingUserInputAnswer(
   const customAnswer =
     question.allowCustomAnswer === false ? null : normalizeDraftAnswer(draft?.customAnswer);
   if (customAnswer) {
-    return customAnswer;
+    return userInputAnswerValidationError(question, customAnswer) === null ? customAnswer : null;
   }
 
   const selectedOptionValues = normalizeSelectedOptionValues(draft?.selectedOptionValues).filter(
     (value) => question.options.some((option) => (option.value ?? option.label) === value),
   );
+  if (userInputAnswerValidationError(question, selectedOptionValues) !== null) return null;
   if (question.multiSelect) {
     return selectedOptionValues.length > 0
       ? selectedOptionValues

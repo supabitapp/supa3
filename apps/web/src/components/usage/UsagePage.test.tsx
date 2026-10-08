@@ -39,6 +39,7 @@ vi.mock("./usageProviders", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./usageProviders")>();
   return {
     ...actual,
+    PROVIDER_ORDER: ["codex", "claude"],
     PROVIDER_PRESENTATION: {
       codex: { color: "white", label: "Codex", mark: "span" },
       claude: { color: "orange", label: "Claude Code", mark: "span" },
@@ -74,6 +75,7 @@ beforeEach(() => {
     environments,
     selectedEnvironments: environments,
     isPending: false,
+    shown: null,
     isPartial: false,
     refresh: vi.fn(),
   });
@@ -136,6 +138,31 @@ describe("UsagePage Escape navigation", () => {
     await act(() => {
       document.activeElement!.dispatchEvent(escape());
     });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(back).not.toHaveBeenCalled();
+
+    document.body.dispatchEvent(escape());
+    expect(back).toHaveBeenCalledOnce();
+  });
+
+  it("closes compact controls and their nested menu before Escape navigates back", async () => {
+    const trigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Usage controls"]',
+    )!;
+    await act(() => trigger.click());
+    const popup = document.querySelector('[data-slot="popover-popup"]')!;
+    const environmentTrigger = popup.querySelector<HTMLButtonElement>(
+      '[data-slot="menu-trigger"]',
+    )!;
+    await act(() => environmentTrigger.click());
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
+
+    await act(() => document.activeElement!.dispatchEvent(escape()));
+    expect(environmentTrigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(back).not.toHaveBeenCalled();
+
+    await act(() => document.activeElement!.dispatchEvent(escape()));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(back).not.toHaveBeenCalled();
 

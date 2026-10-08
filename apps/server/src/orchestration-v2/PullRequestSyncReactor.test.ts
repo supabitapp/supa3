@@ -33,7 +33,9 @@ import * as Struct from "effect/Struct";
 import { TestClock } from "effect/testing";
 
 import { PullRequestProviderError } from "../pullRequest/PullRequestProvider.ts";
+import * as GitManager from "../git/GitManager.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
+import * as GitHubQuota from "../sourceControl/githubQuota.ts";
 import * as ServerActivation from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -222,6 +224,9 @@ const makeHarness = Effect.fn("makePullRequestSyncHarness")(function* (options: 
       stack,
       invalidate: options.invalidate ?? (() => Effect.void),
       subscribeStateChanges: Effect.succeed(Stream.fromQueue(stateChanges)),
+    }),
+    Layer.mock(GitManager.GitManager)({
+      subscribePullRequestStateChanges: Effect.succeed(Stream.empty),
     }),
     Layer.mock(ProjectionStore.ProjectionStoreV2)({
       // Mirrors the store's filter: active threads that have at least one link.
@@ -1064,6 +1069,69 @@ describe("PullRequestSyncReactor", () => {
       }),
     );
   });
+
+  it.effect("keeps syncing a host after a stack quota refusal and retries once it recovers", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const retryAt = Date.parse(NOW) + 60 * 60_000;
+        let limited = true;
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("one", { pullRequests: [makeLink(7, null)] }),
+            makeThread("two", { pullRequests: [makeLink(8, null)] }),
+          ]),
+          stack: (input) => {
+            if (input.number !== 7 || !limited) return Effect.succeed(null);
+            const cause = new GitHubQuota.GitHubQuotaPausedError({
+              host: "github.com",
+              resource: "core",
+              retryAt,
+            });
+            return Effect.fail(
+              new PullRequestOperationError({
+                operation: "stack",
+                detail: cause.message,
+                cause: new PullRequestProviderError({
+                  provider: "github",
+                  operation: "getChangeRequestStack",
+                  reason: "rate-limited",
+                  detail: cause.message,
+                  retryAt,
+                  cause,
+                }),
+              }),
+            );
+          },
+        });
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          assert.sameMembers(
+            (yield* Ref.get(fixture.summaryCalls)).map((input) => input.number),
+            [7, 8],
+          );
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.syncCommands)).map((command) => command.number),
+            [8],
+          );
+
+          limited = false;
+          yield* reactor.requestSync({
+            host: "github.com",
+            repository: "owner/repository",
+            number: 7,
+          });
+          yield* Queue.take(fixture.snapshotReads);
+          yield* reactor.drain;
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.syncCommands)).map((command) => command.number),
+            [8, 7],
+          );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
 
   it.effect("pauses the host when only its stack read is rate limited", () =>
     Effect.scoped(

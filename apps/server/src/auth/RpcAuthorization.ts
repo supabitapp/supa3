@@ -150,6 +150,11 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.attachmentsCreateUploadUrl]: AuthOrchestrationOperateScope,
   [WS_METHODS.attachmentsDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerUploadFeedback]: AuthOrchestrationOperateScope,
+
+  [WS_METHODS.mcpAppsCallTool]: AuthOrchestrationOperateScope,
+  [WS_METHODS.mcpAppsToolInfo]: AuthOrchestrationReadScope,
+  [WS_METHODS.mcpAppsReadResource]: AuthOrchestrationReadScope,
+  [WS_METHODS.mcpAppsUpdateModelContext]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscribeVcsStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeWorktreeSetup]: AuthOrchestrationReadScope,
   [WS_METHODS.worktreeSetupCancel]: AuthOrchestrationOperateScope,

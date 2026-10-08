@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo } from "react";
 
 import { EnvironmentProject, EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import type { AtomCommandResult } from "@supacode/client-runtime/state/runtime";
@@ -41,7 +41,9 @@ export function useSelectedThreadGitActions() {
   const createRef = useAtomCommand(vcsEnvironment.createRef, { reportFailure: false });
   const createWorktree = useAtomCommand(vcsEnvironment.createWorktree, { reportFailure: false });
   const pull = useAtomCommand(vcsEnvironment.pull, { reportFailure: false });
-  const { selectedThread, selectedThreadProject } = useThreadSelection();
+  const { selectedThread, selectedThreadProject, selectedEnvironmentRuntime } =
+    useThreadSelection();
+
   const selectedThreadId = selectedThread?.id ?? null;
   const selectedEnvironmentId = selectedThread?.environmentId ?? null;
   const selectedProjectId = selectedThreadProject?.id ?? null;
@@ -143,35 +145,33 @@ export function useSelectedThreadGitActions() {
     [refreshStatus, selectedEnvironmentId, selectedThreadCwd, selectedProjectId],
   );
 
-  // Text and timestamp updates keep this identity; git and run transitions refresh status.
-  const refreshContext = useMemo(
-    () => ({
-      threadId: selectedThreadId,
-      projectId: selectedProjectId,
-      branch: selectedThread?.branch,
-      worktreePath: selectedThread?.worktreePath,
-      status: selectedThread?.runtime?.status,
-      activeRunId: selectedThread?.runtime?.activeRunId,
-      latestRunId: selectedThread?.latestRun?.runId,
-      latestRunStatus: selectedThread?.latestRun?.status,
-    }),
-    [
-      selectedThreadId,
-      selectedProjectId,
-      selectedThread?.branch,
-      selectedThread?.worktreePath,
-      selectedThread?.runtime?.status,
-      selectedThread?.runtime?.activeRunId,
-      selectedThread?.latestRun?.runId,
-      selectedThread?.latestRun?.status,
-    ],
-  );
+  const failedRunId =
+    selectedThread?.latestRun?.status === "failed" ? selectedThread.latestRun.runId : null;
+  const hasSelectedThreadProject = selectedThreadProject !== null;
+  const isEnvironmentConnected = selectedEnvironmentRuntime?.connectionState === "connected";
+  const refreshOnSelection = useEffectEvent(() => {
+    void refreshSelectedThreadGitStatus({ quiet: true });
+  });
   useEffect(() => {
-    if (!refreshContext.threadId || !refreshContext.projectId) {
+    if (
+      selectedEnvironmentId === null ||
+      selectedThreadId === null ||
+      !hasSelectedThreadProject ||
+      selectedThreadCwd === null ||
+      !isEnvironmentConnected
+    ) {
       return;
     }
-    void refreshSelectedThreadGitStatus({ quiet: true });
-  }, [refreshSelectedThreadGitStatus, refreshContext]);
+    refreshOnSelection();
+  }, [
+    selectedEnvironmentId,
+    selectedThreadId,
+    hasSelectedThreadProject,
+    selectedThreadCwd,
+    isEnvironmentConnected,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Failed runs do not publish local Git status.
+    failedRunId,
+  ]);
 
   const runSelectedThreadGitMutation = useCallback(
     async <T, E>(

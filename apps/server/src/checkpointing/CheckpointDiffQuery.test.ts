@@ -1,8 +1,11 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it, vi } from "@effect/vitest";
-import { CheckpointRef, CheckpointScopeId, RunId, ThreadId } from "@supacode/contracts";
+import { CheckpointRef, CheckpointScopeId, ProjectId, RunId, ThreadId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 
 import { checkpointRefForScopeOrdinal } from "../orchestration-v2/CheckpointService.ts";
 import { OrchestratorProjectionError } from "../orchestration-v2/Orchestrator.ts";
@@ -48,12 +51,19 @@ function makeProjection(): ProjectionCheckpointContext {
 function layerFor(input: {
   readonly projection: Effect.Effect<ProjectionCheckpointContext, OrchestratorProjectionError>;
   readonly diffCheckpoints?: CheckpointStore.CheckpointStore["Service"]["diffCheckpoints"];
+  readonly worktreeExists?: boolean;
 }) {
   return CheckpointDiffQuery.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ThreadManagement.ThreadManagementService)({
           getCheckpointContext: () => input.projection,
+          getThreadShell: () =>
+            Effect.succeed({ projectId: ProjectId.make("project:checkpoint-diff") } as never),
+        }),
+        FileSystem.layerNoop({ exists: () => Effect.succeed(input.worktreeExists ?? true) }),
+        Layer.mock(ProjectStore.ProjectStoreV2)({
+          get: () => Effect.succeed(Option.some({ workspaceRoot: "/main-checkout" } as never)),
         }),
         Layer.mock(CheckpointStore.CheckpointStore)({
           diffCheckpoints: input.diffCheckpoints ?? (() => Effect.succeed("diff")),
@@ -91,6 +101,29 @@ it.effect("computes V2 run diffs from projected checkpoint scopes", () => {
       ignoreWhitespace: true,
     });
   }).pipe(Effect.provide(layer));
+});
+
+it.effect("reads retained checkpoint refs from the project checkout after worktree cleanup", () => {
+  const diffCheckpoints = vi.fn((input: CheckpointStore.DiffCheckpointsInput) =>
+    input.cwd === "/main-checkout"
+      ? Effect.succeed("retained checkpoint diff")
+      : Effect.die("Removed worktree cannot run Git"),
+  );
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    const result = yield* query.getFullThreadDiff({ threadId, toTurnCount: 2 });
+    assert.equal(result.diff, "retained checkpoint diff");
+    assert.equal(diffCheckpoints.mock.calls[0]?.[0].toCheckpointRef, secondRef);
+    assert.equal(diffCheckpoints.mock.calls[0]?.[0].fallbackFromToHead, false);
+  }).pipe(
+    Effect.provide(
+      layerFor({
+        projection: Effect.succeed(makeProjection()),
+        diffCheckpoints,
+        worktreeExists: false,
+      }),
+    ),
+  );
 });
 
 it.effect("preserves the typed missing-thread error contract", () => {

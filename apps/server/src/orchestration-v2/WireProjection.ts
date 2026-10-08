@@ -7,9 +7,12 @@ import type {
 import {
   compactDynamicToolOutput,
   omitToolOutputImageData,
+  readMcpAppToolResult,
   toolOutputImages,
   toolOutputIndicatesFailure,
 } from "@supacode/shared/toolOutput";
+import { MCP_APP_OUTPUT_KEY, readMcpAppReference } from "@supacode/shared/mcpApp";
+import * as Predicate from "effect/Predicate";
 
 const MAX_DETAIL_STRING_BYTES = 32_768;
 const MAX_DYNAMIC_VALUE_BYTES = 16_384;
@@ -156,6 +159,22 @@ function boundToolOutput(output: unknown): unknown {
   const omitted = omitToolOutputImageData(output);
   const bounded = boundDynamicValue(omitted);
   if (typeof bounded !== "string" || typeof omitted === "string") return bounded;
+  const appResult = readMcpAppToolResult(omitted);
+  if (appResult !== undefined && Predicate.isObject(omitted)) {
+    const reference = readMcpAppReference(omitted[MCP_APP_OUTPUT_KEY]);
+    const result = {
+      content: [{ type: "text", text: "The app's original tool result is too large to replay." }],
+      isError: true,
+    };
+    const envelope = { [MCP_APP_OUTPUT_KEY]: reference, result };
+    const withStructuredContent = {
+      ...envelope,
+      result: { ...result, structuredContent: appResult.structuredContent },
+    };
+    return typeof boundDynamicValue(withStructuredContent) === "string"
+      ? envelope
+      : withStructuredContent;
+  }
   const images = toolOutputImages(omitted);
   return images.length === 0
     ? bounded

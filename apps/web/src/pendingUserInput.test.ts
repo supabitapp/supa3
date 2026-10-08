@@ -54,6 +54,33 @@ const nativeChoiceQuestion = {
 } as const;
 
 describe("resolvePendingUserInputAnswer", () => {
+  it("keeps bounded questions open until the custom answer or selections are valid", () => {
+    const bounded = {
+      ...multiSelectQuestion,
+      options: [...multiSelectQuestion.options, { label: "Mobile", description: "Mobile" }],
+      minSelections: 2,
+      maxSelections: 2,
+      maxCustomAnswerLength: 500,
+    };
+    for (const draft of [
+      { customAnswer: "x".repeat(501) },
+      { selectedOptionValues: ["Server"] },
+      { selectedOptionValues: ["Server", "Web", "Mobile"] },
+    ]) {
+      const drafts = { areas: draft };
+      expect(buildPendingUserInputAnswers([bounded], drafts)).toBeNull();
+      expect(derivePendingUserInputProgress([bounded], drafts, 0).canAdvance).toBe(false);
+    }
+    expect(
+      buildPendingUserInputAnswers([bounded], { areas: { customAnswer: "x".repeat(500) } }),
+    ).toEqual({ areas: "x".repeat(500) });
+    expect(
+      buildPendingUserInputAnswers([bounded], {
+        areas: { selectedOptionValues: ["Server", "Web"] },
+      }),
+    ).toEqual({ areas: ["Server", "Web"] });
+  });
+
   it("prefers a custom answer over selected options", () => {
     expect(
       resolvePendingUserInputAnswer(singleSelectQuestion, {

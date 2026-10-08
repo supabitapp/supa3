@@ -19,7 +19,11 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
+import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -267,6 +271,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
 
         const committed = yield* Ref.make<ReadonlyArray<OrchestrationV2DomainEvent>>([]);
         const layerCapture = CheckpointCaptureService.layer.pipe(
+          Layer.provide(Path.layer),
           Layer.provide(
             Layer.mergeAll(
               IdAllocator.layer,
@@ -454,6 +459,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
 
       const committed = yield* Ref.make<ReadonlyArray<OrchestrationV2DomainEvent>>([]);
       const layerCapture = CheckpointCaptureService.layer.pipe(
+        Layer.provide(Path.layer),
         Layer.provide(
           Layer.mergeAll(
             IdAllocator.layer,
@@ -683,6 +689,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
       };
       const commits = yield* Ref.make(0);
       const layerCapture = CheckpointCaptureService.layer.pipe(
+        Layer.provide(Path.layer),
         Layer.provide(
           Layer.mergeAll(
             IdAllocator.layer,
@@ -737,3 +744,58 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
     }),
   );
 });
+
+it.effect("checkpoint capture waits for workspace removal to release its lease", () =>
+  Effect.gen(function* () {
+    const waitingForLease = yield* Deferred.make<void>();
+    let captures = 0;
+    const cwd = "/checkpoint-lease-fixture";
+    const context = {
+      run: { id: runId, threadId, ordinal: 1, status: "waiting", checkpointId: null },
+      rootNode: { id: rootNodeId, checkpointScopeId: scopeId },
+      scope: { id: scopeId, cwd },
+      providerThread: { id: providerThreadId, driver },
+      readyCheckpointOrdinals: [0],
+    };
+    const layerCapture = CheckpointCaptureService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Path.layer,
+          IdAllocator.layer,
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getCheckpointCaptureContext: () =>
+              Deferred.succeed(waitingForLease, undefined).pipe(Effect.as(context as never)),
+          }),
+          Layer.mock(CheckpointService.CheckpointServiceV2)({
+            capture: () =>
+              Effect.sync(() => {
+                captures++;
+                return {
+                  id: CheckpointId.make("checkpoint:lease-fixture"),
+                  scopeId,
+                  files: [],
+                } as never;
+              }),
+          }),
+          Layer.mock(EventSink.EventSinkV2)({
+            commitCommand: () => Effect.succeed({ committed: true } as never),
+          }),
+        ),
+      ),
+    );
+    yield* Effect.gen(function* () {
+      const service = yield* CheckpointCaptureService.CheckpointCaptureServiceV2;
+      const captureFiber = yield* withWorkspaceLease(
+        cwd,
+        Effect.gen(function* () {
+          const fiber = yield* Effect.forkScoped(service.execute({ threadId, runId, scopeId }));
+          yield* Deferred.await(waitingForLease);
+          assert.equal(captures, 0);
+          return fiber;
+        }),
+      );
+      yield* Fiber.join(captureFiber);
+      assert.equal(captures, 1);
+    }).pipe(Effect.provide(layerCapture));
+  }).pipe(Effect.scoped),
+);

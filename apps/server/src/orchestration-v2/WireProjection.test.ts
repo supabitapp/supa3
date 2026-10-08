@@ -292,6 +292,91 @@ describe("orchestration V2 wire projection", () => {
     expect(item.output.content[0]?.source.data).toBe(data);
   });
 
+  it("preserves an MCP app's result envelope when its images exceed the detail budget", () => {
+    const data = "A".repeat(600_000);
+    const app = {
+      attachmentId: "thread-1-app-html",
+      server: "weather",
+      tool: "get_weather",
+      resourceUri: "ui://weather/dashboard",
+    };
+    const structuredContent = { temperature: 21 };
+    const item = {
+      ...base,
+      toolName: "weather.get_weather",
+      output: {
+        supacodeMcpApp: app,
+        result: {
+          content: [{ type: "image", mimeType: "image/png", data }],
+          structuredContent,
+        },
+      },
+    };
+    expect(projectTurnItemForDetail(item)).toMatchObject({
+      output: {
+        supacodeMcpApp: app,
+        result: {
+          content: [{ type: "image", mimeType: "image/png" }],
+          structuredContent,
+        },
+      },
+    });
+    expect(JSON.stringify(projectTurnItemForDetail(item)).length).toBeLessThan(2_000);
+    expect(item.output.result.content[0]?.data).toBe(data);
+  });
+
+  it("reports oversized non-image app results through a bounded MCP error result", () => {
+    const app = {
+      attachmentId: "thread-1-app-html",
+      server: "weather",
+      tool: "get_weather",
+      resourceUri: "ui://weather/dashboard",
+    };
+    const item = {
+      ...base,
+      toolName: "weather.get_weather",
+      output: {
+        supacodeMcpApp: app,
+        result: {
+          content: [{ type: "text", text: "A".repeat(300_000) }],
+          structuredContent: { temperature: 21 },
+        },
+      },
+    };
+    expect(projectTurnItemForDetail(item)).toMatchObject({
+      output: {
+        supacodeMcpApp: app,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: expect.stringContaining("too large") }],
+          structuredContent: { temperature: 21 },
+        },
+      },
+    });
+    expect(JSON.stringify(projectTurnItemForDetail(item)).length).toBeLessThan(2_000);
+    expect(item.output.result.content[0]?.text).toHaveLength(300_000);
+  });
+
+  it("bounds oversized app structured content without dropping its error envelope", () => {
+    const item = {
+      ...base,
+      toolName: "weather.get_weather",
+      output: {
+        supacodeMcpApp: {
+          attachmentId: "thread-1-app-html",
+          server: "weather",
+          tool: "get_weather",
+          resourceUri: "ui://weather/dashboard",
+        },
+        result: { content: [], structuredContent: { data: "A".repeat(300_000) } },
+      },
+    };
+    const projected = projectTurnItemForDetail(item);
+    expect(projected).toMatchObject({ output: { result: { isError: true } } });
+    expect(JSON.stringify(projected).length).toBeLessThan(2_000);
+    expect(item.output.result.structuredContent.data).toHaveLength(300_000);
+  });
+
   it("keeps image markers when the rest of a tool output is too large to send", () => {
     const image = {
       type: "image",

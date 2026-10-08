@@ -4,6 +4,7 @@ import * as AzureDevOpsCli from "../sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "../sourceControl/BitbucketApi.ts";
 import * as GitHubApi from "../sourceControl/GitHubApi.ts";
 import * as SourceControlRateLimit from "../sourceControl/SourceControlRateLimit.ts";
+import * as GitHubQuota from "../sourceControl/githubQuota.ts";
 import * as GitLabCli from "../sourceControl/GitLabCli.ts";
 import { azureDevOpsProviderFailure } from "./AzureDevOpsPullRequestProvider.ts";
 import { bitbucketProviderFailure } from "./BitbucketPullRequestProvider.ts";
@@ -61,6 +62,16 @@ it("keeps GitHub's exact retry time", () => {
       new SourceControlRateLimit.SourceControlRateLimitPausedError({
         provider: "github",
         host: "github.com",
+        retryAt: 1_786_802_400_000,
+      }),
+    ),
+    { reason: "rate-limited", retryAt: 1_786_802_400_000 },
+  );
+  assert.deepStrictEqual(
+    gitHubProviderFailure(
+      new GitHubQuota.GitHubQuotaPausedError({
+        host: "github.com",
+        resource: "core",
         retryAt: 1_786_802_400_000,
       }),
     ),

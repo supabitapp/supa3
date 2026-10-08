@@ -77,13 +77,14 @@ import {
 import { resolveProjectSettings } from "@supacode/shared/projectSettings";
 import { detectSourceControlProviderFromRemoteUrl } from "@supacode/shared/sourceControl";
 
-import { AllowGitHubReserve } from "../sourceControl/GitHubCli.ts";
+import { AllowGitHubReserve } from "../sourceControl/GitHubApi.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as PullRequestFilesViewed from "../persistence/PullRequestFilesViewed.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "../sourceControl/SourceControlRateLimit.ts";
+import * as GitHubQuota from "../sourceControl/githubQuota.ts";
 import {
   type ProviderChangeRequest,
   type ProviderListCursor,
@@ -560,7 +561,7 @@ function withRateLimitBackoff(
           Effect.provideService(AllowGitHubReserve, allowPaused),
           Effect.tap(() => limits.recordSuccess({ ...key, lease })),
           Effect.tapError((error) =>
-            error.reason === "rate-limited"
+            error.reason === "rate-limited" && !GitHubQuota.isGitHubQuotaPausedError(error.cause)
               ? limits.recordRateLimit({
                   ...key,
                   lease,

@@ -53,12 +53,14 @@ interface EnvironmentCommandAtomOptions<Input, A, E, R> extends Omit<
   ) => Effect.Effect<A, E, R>;
 }
 
-interface EnvironmentQueryAtomOptions<Input, A, E, R> extends EnvironmentAtomOptions<
-  Input,
-  A,
-  E,
-  R
+interface EnvironmentQueryAtomOptions<Input, A, E, R> extends Omit<
+  EnvironmentAtomOptions<Input, A, E, R>,
+  "execute"
 > {
+  readonly execute: (
+    input: Input,
+    emit: (value: A) => Effect.Effect<void>,
+  ) => Effect.Effect<A, E, R>;
   readonly staleTimeMs?: number;
   readonly idleTtlMs?: number;
   readonly refreshIntervalMs?: number;
@@ -547,10 +549,14 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
           return Effect.never;
         }
         const [connectionState, session] = connection;
+        const emit = (value: A) =>
+          Effect.sync(() => get.setSelf(AsyncResult.success(value, { waiting: true }))).pipe(
+            Effect.andThen(Effect.promise(() => Promise.resolve())),
+          );
         switch (connectionState.phase) {
           case "connected":
             return Option.isSome(session)
-              ? runInEnvironment(target.environmentId, options.execute(target.input))
+              ? runInEnvironment(target.environmentId, options.execute(target.input, emit))
               : Effect.never;
           case "connecting":
           case "backoff":
@@ -650,6 +656,7 @@ export function createEnvironmentRpcQueryAtomFamily<
     readonly tag: TTag;
     readonly execute?: (
       input: EnvironmentRpcInput<TTag>,
+      emit: (value: EnvironmentRpcSuccess<TTag>) => Effect.Effect<void>,
     ) => Effect.Effect<
       EnvironmentRpcSuccess<TTag>,
       EnvironmentRpcFailure<TTag> | EnvironmentRpcUnavailableError,
@@ -672,8 +679,10 @@ export function createEnvironmentRpcQueryAtomFamily<
       ? {}
       : { refreshIntervalMs: options.refreshIntervalMs }),
     ...(options.refreshTrigger === undefined ? {} : { refreshTrigger: options.refreshTrigger }),
-    execute: (input: EnvironmentRpcInput<TTag>) =>
-      options.execute?.(input) ?? request(options.tag, input),
+    execute: (
+      input: EnvironmentRpcInput<TTag>,
+      emit: (value: EnvironmentRpcSuccess<TTag>) => Effect.Effect<void>,
+    ) => options.execute?.(input, emit) ?? request(options.tag, input),
   });
 }
 

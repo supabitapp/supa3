@@ -8,8 +8,10 @@ import {
   type NodeStyleOverrides,
   type PartialMarkdownTheme,
 } from "react-native-nitro-markdown";
-import { RefreshControl, ScrollView, Text as NativeText, View } from "react-native";
+import { Platform, RefreshControl, ScrollView, Text as NativeText, View } from "react-native";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { useFontFamily } from "../../lib/useFontFamily";
 import {
@@ -192,6 +194,7 @@ function useMarkdownPreviewStyles(renderImage?: MarkdownImageRenderer): Markdown
 export function FileMarkdownPreview(props: {
   readonly cwd: string;
   readonly captured?: boolean;
+  readonly headerInsetTop?: number;
   readonly environmentId: EnvironmentId;
   readonly markdown: string;
   readonly relativePath: string;
@@ -199,6 +202,10 @@ export function FileMarkdownPreview(props: {
   readonly threadId: ThreadId | null;
   readonly onRefresh?: () => Promise<void> | void;
 }) {
+  const insets = useSafeAreaInsets();
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const headerInsetTop =
+    Platform.OS === "ios" ? (props.headerInsetTop ?? columnMetrics?.safeArea.top ?? insets.top) : 0;
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const handlePullToRefresh = useCallback(async () => {
     if (!props.onRefresh) {
@@ -253,6 +260,9 @@ export function FileMarkdownPreview(props: {
   return (
     <ScrollView
       className="flex-1 bg-sheet"
+      contentInsetAdjustmentBehavior="never"
+      contentInset={{ top: headerInsetTop }}
+      scrollIndicatorInsets={{ top: headerInsetTop }}
       contentContainerStyle={{ padding: 18 }}
       refreshControl={
         props.onRefresh ? (

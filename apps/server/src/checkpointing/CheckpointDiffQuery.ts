@@ -19,9 +19,12 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 
 import { checkpointRefForScopeOrdinal } from "../orchestration-v2/CheckpointService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
+import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import {
   CheckpointDiffResultInvalidError,
   CheckpointRefUnavailableError,
@@ -79,6 +82,8 @@ export const make = Effect.gen(function* () {
   const threads = yield* ThreadManagement.ThreadManagementService;
   const checkpointStore = yield* CheckpointStore.CheckpointStore;
   const crypto = yield* Crypto.Crypto;
+  const fs = yield* FileSystem.FileSystem;
+  const projects = yield* ProjectStore.ProjectStoreV2;
 
   const getTurnDiff: CheckpointDiffQuery["Service"]["getTurnDiff"] = Effect.fn("getTurnDiff")(
     function* (input) {
@@ -182,9 +187,26 @@ export const make = Effect.gen(function* () {
         });
       }
 
+      const cwd = yield* Effect.gen(function* () {
+        if (yield* fs.exists(toScope.cwd)) return toScope.cwd;
+        const thread = yield* threads.getThreadShell(input.threadId);
+        if (thread === null) return null;
+        const project = yield* projects.get(thread.projectId, { includeDeleted: true });
+        return Option.isSome(project) ? project.value.workspaceRoot : null;
+      }).pipe(
+        Effect.mapError(
+          () => new CheckpointWorkspacePathMissingError({ operation, threadId: input.threadId }),
+        ),
+      );
+      if (cwd === null) {
+        return yield* new CheckpointWorkspacePathMissingError({
+          operation,
+          threadId: input.threadId,
+        });
+      }
       const diff = yield* checkpointStore
         .diffCheckpoints({
-          cwd: toScope.cwd,
+          cwd,
           fromCheckpointRef,
           toCheckpointRef: toCheckpoint.ref,
           fallbackFromToHead: false,
