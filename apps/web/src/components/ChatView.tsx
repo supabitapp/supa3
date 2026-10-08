@@ -586,13 +586,10 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import { ServerUpdateAction } from "./ServerUpdateAction";
-import { useAutoBalanceUpdateBanner } from "./chat/useAutoBalanceUpdateBanner";
+import { ServerUpdateAction, serverUpdateStageLabel } from "./ServerUpdateAction";
+import { useAutoBalanceUpdateNotice } from "./chat/useAutoBalanceUpdateNotice";
 import { InlineConfirmButton } from "./InlineConfirm";
-import {
-  ComposerServerUpdateIcon,
-  ComposerServerUpdateStatus,
-} from "./chat/ComposerServerUpdateStatus";
+import type { ThreadDetailsUpdateNotice } from "./chat/ThreadDetailsServerUpdate";
 import {
   buildVersionMismatchDismissalKey,
   dismissServerUpdateFailure,
@@ -3162,7 +3159,7 @@ export default function ChatView(props: ChatViewProps) {
         : [],
     [automaticEnvironment, logicalProjectEnvironments, environmentById],
   );
-  const autoBalanceUpdateBanner = useAutoBalanceUpdateBanner(autoUpdateEnvironments);
+  const autoBalanceUpdateNotice = useAutoBalanceUpdateNotice(autoUpdateEnvironments);
   const versionMismatch = resolveServerConfigVersionMismatch(serverConfig);
   const versionMismatchDismissKey =
     versionMismatch && activeThread
@@ -3174,7 +3171,7 @@ export default function ChatView(props: ChatViewProps) {
   const versionMismatchDismissed =
     versionMismatchDismissKey === dismissedVersionMismatchKey ||
     isVersionMismatchDismissed(versionMismatchDismissKey);
-  const showVersionMismatchBanner =
+  const showVersionMismatchNotice =
     versionMismatch !== null && versionMismatchDismissKey !== null && !versionMismatchDismissed;
   const hasMultipleRegisteredEnvironments = environments.length > 1;
   const versionMismatchServerLabel =
@@ -3195,8 +3192,9 @@ export default function ChatView(props: ChatViewProps) {
   const serverUpdateFailureDismissed =
     serverUpdateState === dismissedServerUpdateState ||
     isServerUpdateFailureDismissed(serverUpdateState);
-  const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
+  const { systemComposerBannerItems, serverUpdateNotice } = useMemo(() => {
     const items: ComposerBannerStackItem[] = [];
+    let updateNotice: ThreadDetailsUpdateNotice | null = null;
     const updateRunning = serverUpdateState.status === "running";
     const unavailableConnection = activeEnvironmentUnavailableState?.connection ?? null;
     const disconnectAction =
@@ -3217,9 +3215,6 @@ export default function ChatView(props: ChatViewProps) {
       unavailableConnection !== null &&
       (unavailableConnection.phase === "connecting" ||
         unavailableConnection.phase === "reconnecting");
-    // While an update runs, transient connect blips are expected (the server
-    // restarts) and the update banner already shows progress. Hard failure
-    // phases still surface so the Reconnect action stays reachable.
     const suppressUnavailableBanner =
       environmentReconnecting && (updateRunning || !reconnectWarningGraceElapsed);
     if (activeEnvironmentUnavailableState && unavailableConnection && !suppressUnavailableBanner) {
@@ -3252,50 +3247,32 @@ export default function ChatView(props: ChatViewProps) {
       !automaticEnvironment &&
       serverUpdateEnvironmentId &&
       (serverUpdateState.status === "idle"
-        ? showVersionMismatchBanner
+        ? showVersionMismatchNotice
         : !serverUpdateFailureDismissed)
     ) {
       const updateInProgress = serverUpdateState.status === "running";
       const updateFailed = serverUpdateState.status === "failed";
-      items.push({
-        id: `server-version:${serverUpdateEnvironmentId}`,
-        variant: updateFailed ? "error" : "default",
-        // Prioritize update progress over passive notices, but keep activity attached.
-        priority: updateInProgress ? "urgent" : "notice",
-        icon: <ComposerServerUpdateIcon status={serverUpdateState.status} />,
-        title:
-          updateInProgress || updateFailed ? (
-            <ComposerServerUpdateStatus
-              state={serverUpdateState}
-              serverLabel={versionMismatchServerLabel}
-            />
-          ) : versionMismatch ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    className="block max-w-full cursor-help truncate rounded-sm text-left"
-                  >
-                    Server update available
-                  </button>
-                }
-              />
-              <TooltipPopup side="top">
-                {versionMismatchServerLabel} {versionMismatch.serverVersion}{" "}
-                <span aria-hidden="true">→</span> {versionMismatch.clientVersion}
-              </TooltipPopup>
-            </Tooltip>
-          ) : (
-            "Server update available"
-          ),
-        description:
-          !updateInProgress &&
-          !updateFailed &&
-          versionMismatchSelfUpdate !== null &&
-          (versionMismatchSelfUpdate !== "desktop-managed" || !versionMismatchDesktopAppUpdate)
-            ? serverUpdateGuidance(versionMismatchSelfUpdate)
-            : undefined,
+      let description = versionMismatch
+        ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+        : undefined;
+      if (serverUpdateState.status === "failed") {
+        description = serverUpdateState.message;
+      } else if (serverUpdateState.status === "running") {
+        description = serverUpdateStageLabel(serverUpdateState.stage);
+      } else if (
+        versionMismatchSelfUpdate === "desktop-managed" &&
+        !versionMismatchDesktopAppUpdate
+      ) {
+        description = serverUpdateGuidance(versionMismatchSelfUpdate);
+      }
+      updateNotice = {
+        status: serverUpdateState.status,
+        title: updateFailed
+          ? "Could not update server"
+          : updateInProgress
+            ? "Updating server"
+            : "Server update available",
+        description,
         actions: updateInProgress ? (
           disconnectAction
         ) : !versionMismatch ||
@@ -3316,7 +3293,6 @@ export default function ChatView(props: ChatViewProps) {
         ...(updateInProgress || (!updateFailed && !versionMismatchDismissKey)
           ? {}
           : {
-              dismissLabel: "Dismiss update notice",
               onDismiss: () => {
                 if (updateFailed) {
                   dismissServerUpdateFailure(serverUpdateState);
@@ -3326,20 +3302,22 @@ export default function ChatView(props: ChatViewProps) {
                 setDismissedVersionMismatchKey(versionMismatchDismissKey);
               },
             }),
-      });
+      };
     }
-    if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
-    return items;
+    return {
+      systemComposerBannerItems: items,
+      serverUpdateNotice: automaticEnvironment ? autoBalanceUpdateNotice : updateNotice,
+    };
   }, [
     automaticEnvironment,
-    autoBalanceUpdateBanner,
+    autoBalanceUpdateNotice,
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,
     disconnectingEnvironment,
     handleDisconnectActiveEnvironment,
     setDismissedVersionMismatchKey,
-    showVersionMismatchBanner,
+    showVersionMismatchNotice,
     reconnectWarningGraceElapsed,
     serverUpdateFailureDismissed,
     serverUpdateState,
@@ -6180,9 +6158,9 @@ export default function ChatView(props: ChatViewProps) {
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
   }, [activeThreadRef, closePreviewPanel, rightPanelOpen]);
   const toggleThreadPanel = useCallback(() => {
-    if (!activeThreadRef || routeKind === "draft") return;
+    if (!activeThreadRef || (routeKind === "draft" && serverUpdateNotice === null)) return;
     useRightPanelStore.getState().toggleThreadPanel(activeThreadRef, threadPanelPresentation);
-  }, [activeThreadRef, routeKind, threadPanelPresentation]);
+  }, [activeThreadRef, routeKind, serverUpdateNotice, threadPanelPresentation]);
   const toggleRightPanelMaximized = useCallback(() => {
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
@@ -10530,12 +10508,14 @@ export default function ChatView(props: ChatViewProps) {
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
     contextWindow: activeContextWindow,
+    serverUpdateNotice,
     forkSource,
     forkDisabled,
     onForkFromRun,
   };
+  const showThreadDetailsPanel = routeKind === "server" || serverUpdateNotice !== null;
   const panelToggleControlProps = {
-    showThreadPanelControl: routeKind === "server",
+    showThreadPanelControl: showThreadDetailsPanel,
     terminalAvailable: activeProject !== null,
     terminalOpen: terminalUiState.terminalOpen,
     terminalShortcutLabel: shortcutLabelForCommand(keybindings, "terminal.toggle"),
@@ -10543,7 +10523,8 @@ export default function ChatView(props: ChatViewProps) {
     threadPanelPresentation,
     threadPanelPopoverHandle,
     threadPanelShortcutLabel: shortcutLabelForCommand(keybindings, "threadPanel.toggle"),
-    threadPanelHasAttention: activeEnvironmentUnavailableState !== null,
+    threadPanelHasAttention:
+      activeEnvironmentUnavailableState !== null || serverUpdateNotice !== null,
     rightPanelAvailable: activeProject !== null,
     rightPanelOpen,
     rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
@@ -10554,7 +10535,7 @@ export default function ChatView(props: ChatViewProps) {
   const panelToggleControls = (
     <PanelLayoutControls
       {...panelToggleControlProps}
-      showThreadPanelControl={routeKind === "server" && !inlineRightPanelOwnsTitleBar}
+      showThreadPanelControl={showThreadDetailsPanel && !inlineRightPanelOwnsTitleBar}
     />
   );
   const threadPanelHeaderControl = (
@@ -11209,7 +11190,7 @@ export default function ChatView(props: ChatViewProps) {
               />
             ) : null}
 
-            {routeKind === "server" ? <ThreadDetailsPanel {...threadDetailsPanelProps} /> : null}
+            {showThreadDetailsPanel ? <ThreadDetailsPanel {...threadDetailsPanelProps} /> : null}
 
             {pullRequestDialogState ? (
               <PullRequestThreadDialog

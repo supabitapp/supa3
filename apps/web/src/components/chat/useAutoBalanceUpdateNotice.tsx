@@ -23,13 +23,11 @@ import {
 } from "../ServerUpdateAction";
 import { InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import type { ComposerBannerStackItem } from "./ComposerBannerStack";
-import { ComposerServerUpdateIcon } from "./ComposerServerUpdateStatus";
+import type { ThreadDetailsUpdateNotice } from "./ThreadDetailsServerUpdate";
 
-/** Keep every machine's update visible while auto balance has no single update target. */
-export function useAutoBalanceUpdateBanner(
+export function useAutoBalanceUpdateNotice(
   environments: readonly EnvironmentPresentation[],
-): ComposerBannerStackItem | null {
+): ThreadDetailsUpdateNotice | null {
   const statesAtom = useMemo(
     () =>
       Atom.make((get) =>
@@ -90,10 +88,7 @@ export function useAutoBalanceUpdateBanner(
   const prefix = running ? "Updating" : failed ? "Could not update" : "Update available for";
   const title = `${prefix} ${count} ${count === 1 ? "machine" : "machines"}`;
   return {
-    id: `auto-balance-server-updates-${dismissedNotices.size}`,
-    variant: failed ? "error" : "default",
-    priority: running ? "urgent" : "notice",
-    icon: <ComposerServerUpdateIcon status={status} />,
+    status,
     title: (
       <Popover>
         <PopoverTrigger
@@ -144,7 +139,6 @@ export function useAutoBalanceUpdateBanner(
           }
         />
       ) : undefined,
-    dismissLabel: "Dismiss update notice",
     ...(running
       ? {}
       : {

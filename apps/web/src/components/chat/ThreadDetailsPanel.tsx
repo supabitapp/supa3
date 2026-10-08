@@ -28,6 +28,10 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadDetailsUsage } from "./ThreadDetailsUsage";
 import { ThreadDetailsForkControl } from "./ThreadDetailsForkControl";
+import {
+  ThreadDetailsServerUpdate,
+  type ThreadDetailsUpdateNotice,
+} from "./ThreadDetailsServerUpdate";
 
 export interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
@@ -68,6 +72,7 @@ export interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   contextWindow?: ComponentProps<typeof ThreadDetailsUsage>["usage"];
+  serverUpdateNotice?: ThreadDetailsUpdateNotice | null;
   forkSource?: ComponentProps<typeof ThreadDetailsForkControl>["source"] | null;
   forkDisabled?: boolean;
   onForkFromRun?: ComponentProps<typeof ThreadDetailsForkControl>["onForkFromRun"];
@@ -204,6 +209,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
             </ThreadDetailsUsage>
+          ) : null}
+
+          {props.serverUpdateNotice ? (
+            <ThreadDetailsServerUpdate notice={props.serverUpdateNotice} />
           ) : null}
 
           {density === "full" && !props.draftId ? (
