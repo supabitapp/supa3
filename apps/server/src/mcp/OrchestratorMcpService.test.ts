@@ -4,6 +4,9 @@ import {
   CommandId,
   EnvironmentId,
   NodeId,
+  type OrchestratorMcpTarget,
+  type ProviderOptionDescriptor,
+  type ProviderOptionSelection,
   type OrchestrationV2ThreadShell,
   type ScheduledTask,
   ScheduledTaskId,
@@ -1549,6 +1552,196 @@ describe("OrchestratorMcpService provider resolution", () => {
           );
         }
       }),
+  );
+
+  it.effect("merges option overrides with compatible parent options", () =>
+    Effect.gen(function* () {
+      const parentModelSelection = {
+        instanceId: codexInstanceId,
+        model: "gpt-5.4",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "serviceTier", value: "priority" },
+          { id: "customFlag", value: true },
+        ],
+      } as const;
+      const descriptors = [
+        {
+          id: "reasoningEffort",
+          label: "Reasoning",
+          type: "select",
+          options: [
+            { id: "low", label: "Low" },
+            { id: "high", label: "High" },
+          ],
+        },
+        {
+          id: "serviceTier",
+          label: "Service Tier",
+          type: "select",
+          options: [
+            { id: "default", label: "Default" },
+            { id: "priority", label: "Priority" },
+          ],
+        },
+        { id: "customFlag", label: "Custom Flag", type: "boolean" },
+      ] as const satisfies ReadonlyArray<ProviderOptionDescriptor>;
+      const peerInstanceId = ProviderInstanceId.make("codex-peer");
+      const cases: ReadonlyArray<{
+        name: string;
+        target: OrchestratorMcpTarget;
+        descriptors: ReadonlyArray<ProviderOptionDescriptor> | undefined;
+        expectedOptions: ReadonlyArray<ProviderOptionSelection>;
+      }> = [
+        {
+          name: "effort override keeps fast mode",
+          target: { options: [{ id: "reasoningEffort", value: "low" }] },
+          descriptors,
+          expectedOptions: [
+            { id: "reasoningEffort", value: "low" },
+            { id: "serviceTier", value: "priority" },
+            { id: "customFlag", value: true },
+          ],
+        },
+        {
+          name: "explicit default and false override parent values",
+          target: {
+            options: [
+              { id: "serviceTier", value: "default" },
+              { id: "customFlag", value: false },
+            ],
+          },
+          descriptors,
+          expectedOptions: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "serviceTier", value: "default" },
+            { id: "customFlag", value: false },
+          ],
+        },
+        {
+          name: "empty overrides keep parent options",
+          target: { options: [] },
+          descriptors,
+          expectedOptions: parentModelSelection.options,
+        },
+        {
+          name: "same model inherits without descriptors",
+          target: { options: [{ id: "reasoningEffort", value: "low" }] },
+          descriptors: undefined,
+          expectedOptions: [
+            { id: "reasoningEffort", value: "low" },
+            { id: "serviceTier", value: "priority" },
+            { id: "customFlag", value: true },
+          ],
+        },
+        {
+          name: "changed model inherits supported options",
+          target: { model: "child-model", options: [{ id: "reasoningEffort", value: "low" }] },
+          descriptors,
+          expectedOptions: [
+            { id: "reasoningEffort", value: "low" },
+            { id: "serviceTier", value: "priority" },
+            { id: "customFlag", value: true },
+          ],
+        },
+        {
+          name: "changed model drops unsupported ids and values",
+          target: { model: "child-model" },
+          descriptors: [
+            { ...descriptors[0], options: [{ id: "low", label: "Low" }] },
+            descriptors[1],
+          ],
+          expectedOptions: [{ id: "serviceTier", value: "priority" }],
+        },
+        {
+          name: "changed model without descriptors inherits no options",
+          target: { model: "child-model" },
+          descriptors: undefined,
+          expectedOptions: [],
+        },
+        {
+          name: "changed instance inherits no options",
+          target: {
+            providerInstanceId: peerInstanceId,
+            model: parentModelSelection.model,
+            options: [{ id: "reasoningEffort", value: "low" }],
+          },
+          descriptors,
+          expectedOptions: [{ id: "reasoningEffort", value: "low" }],
+        },
+      ];
+      const task = {
+        id: taskId,
+        threadId: parentThreadId,
+        runId: parentRunId,
+        parentNodeId,
+        origin: "app_owned",
+        childThreadId,
+        status: "running",
+      };
+      for (const testCase of cases) {
+        const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+        const providers = [codexInstanceId, peerInstanceId].map((instanceId) => ({
+          ...providerSnapshot({ instanceId, driver: ProviderDriverKind.make("codex") }),
+          models: [parentModelSelection.model, "child-model"].map((slug) => ({
+            slug,
+            name: slug,
+            isCustom: true,
+            capabilities: { optionDescriptors: testCase.descriptors },
+          })),
+        }));
+        const dependencies = Layer.mergeAll(
+          NodeServices.layer,
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadRecords: (threadId) =>
+              Effect.succeed(
+                threadId === parentThreadId
+                  ? parentProjection([task], parentModelSelection)
+                  : childProjection,
+              ),
+            dispatch: (command) =>
+              Ref.update(dispatched, (commands) => [...commands, command]).pipe(
+                Effect.as({
+                  sequence: 1,
+                  storedEvents: [
+                    {
+                      sequence: 1,
+                      commandId: null,
+                      event: { type: "subagent.updated", payload: task },
+                    },
+                  ],
+                } as never),
+              ),
+          }),
+          providerRegistryLayer(providers),
+          adapterRegistryLayer([codexInstanceId, peerInstanceId]),
+          Layer.mock(ProjectService.ProjectService)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          yield* service.delegateTask(scope, {
+            task: "Summarize the diff.",
+            target: testCase.target,
+            mode: "async",
+            clientRequestId: testCase.name,
+          });
+          const commands = yield* Ref.get(dispatched);
+          assert.equal(commands.length, 1, testCase.name);
+          const command = commands[0] as { modelSelection: { options?: unknown } };
+          assert.deepEqual(
+            command.modelSelection.options ?? [],
+            testCase.expectedOptions,
+            testCase.name,
+          );
+          assert.deepEqual(parentModelSelection.options, [
+            { id: "reasoningEffort", value: "high" },
+            { id: "serviceTier", value: "priority" },
+            { id: "customFlag", value: true },
+          ]);
+        }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(dependencies))));
+      }
+    }),
   );
 
   describe("scheduled tasks at modes above the caller's", () => {

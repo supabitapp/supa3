@@ -590,6 +590,15 @@ describe("orchestrator MCP toolkit", () => {
                     { id: "high", label: "High" },
                   ],
                 },
+                {
+                  id: "serviceTier",
+                  label: "Service Tier",
+                  type: "select",
+                  options: [
+                    { id: "default", label: "Default" },
+                    { id: "priority", label: "Priority" },
+                  ],
+                },
               ],
             }),
             makeProviderSnapshot({
@@ -1447,7 +1456,10 @@ describe("orchestrator MCP toolkit", () => {
                   models: [
                     expect.objectContaining({
                       id: codexModel,
-                      options: [expect.objectContaining({ id: "reasoning", type: "select" })],
+                      options: [
+                        expect.objectContaining({ id: "reasoning", type: "select" }),
+                        expect.objectContaining({ id: "serviceTier", type: "select" }),
+                      ],
                     }),
                   ],
                 }),
@@ -1834,6 +1846,18 @@ describe("orchestrator MCP toolkit", () => {
               message: expect.stringContaining("more than once"),
             });
 
+            yield* orchestrator.dispatch({
+              type: "thread.model-selection.set",
+              commandId: CommandId.make("command:mcp-parent:fast-mode"),
+              threadId: parentThreadId,
+              modelSelection: {
+                ...codexSelection,
+                options: [
+                  { id: "reasoning", value: "high" },
+                  { id: "serviceTier", value: "priority" },
+                ],
+              },
+            });
             const cancellableCall = yield* invoke("delegate_task", {
               task: cancellationPrompt,
               target: {
@@ -1874,8 +1898,14 @@ describe("orchestrator MCP toolkit", () => {
             expect(optionedChild.thread.modelSelection).toEqual({
               instanceId: codexInstanceId,
               model: codexModel,
-              options: [{ id: "reasoning", value: "low" }],
+              options: [
+                { id: "reasoning", value: "low" },
+                { id: "serviceTier", value: "priority" },
+              ],
             });
+            expect(
+              optionedChild.runs.find((run) => run.id === cancellable.childRunId)?.modelSelection,
+            ).toEqual(optionedChild.thread.modelSelection);
             const cancelCall = yield* invoke("task_cancel", {
               taskId: cancellable.taskId,
               reason: "Parent no longer needs this work.",

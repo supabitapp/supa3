@@ -1127,9 +1127,9 @@ const make = Effect.gen(function* () {
       }
 
       const requestedOptions = input.target?.options;
+      const descriptors = provider.models.find((candidate) => candidate.slug === model)
+        ?.capabilities?.optionDescriptors;
       if (requestedOptions !== undefined) {
-        const descriptors = provider.models.find((candidate) => candidate.slug === model)
-          ?.capabilities?.optionDescriptors;
         const invalid = invalidOptionSelections(requestedOptions, descriptors);
         if (invalid.length > 0) {
           return yield* failure(
@@ -1139,15 +1139,28 @@ const make = Effect.gen(function* () {
         }
       }
 
+      const options = new Map<string, ProviderOptionSelection>();
+      if (instanceId === inheritedSelection.instanceId) {
+        for (const selection of inheritedSelection.options ?? []) {
+          if (
+            model === inheritedSelection.model ||
+            (descriptors !== undefined &&
+              invalidOptionSelections([selection], descriptors).length === 0)
+          ) {
+            options.set(selection.id, selection);
+          }
+        }
+      }
+      for (const selection of requestedOptions ?? []) {
+        options.set(selection.id, selection);
+      }
+
       return {
-        modelSelection:
-          instanceId === inheritedSelection.instanceId &&
-          model === inheritedSelection.model &&
-          requestedOptions === undefined
-            ? inheritedSelection
-            : requestedOptions === undefined
-              ? { instanceId, model }
-              : { instanceId, model, options: requestedOptions },
+        modelSelection: {
+          instanceId,
+          model,
+          ...(options.size === 0 ? {} : { options: [...options.values()] }),
+        },
       };
     });
 

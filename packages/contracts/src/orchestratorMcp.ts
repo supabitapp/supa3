@@ -112,16 +112,10 @@ export const OrchestratorMcpTarget = Schema.Struct({
       description: "Model id advertised for the selected provider instance.",
     }),
   ),
-  /**
-   * Model option selections for the child (for example reasoning effort).
-   * Accepts the canonical `[{ id, value }]` array or the shorthand
-   * `{ id: value }` record; valid ids come from the option descriptors
-   * advertised by orchestrator_capabilities. When omitted, options inherit
-   * from the parent only when the child runs the parent's provider and model.
-   */
   options: Schema.optional(
     OrchestratorMcpTargetOptions.annotate({
-      description: "Model option selections advertised by orchestrator_capabilities.",
+      description:
+        "Model options as [{id, value}] or {id: value}, overriding individual inherited options. The same provider instance inherits all options for the same model and only supported options when changing models; another instance inherits none. An empty list keeps inherited options. Set a boolean to false or a select option to its default value to reset it. Valid options come from orchestrator_capabilities.",
     }),
   ),
 });
