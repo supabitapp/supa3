@@ -125,15 +125,39 @@ async function copyPageText(text: string) {
   }
 }
 
-/** The download happens on the environment; this hands the finished file to this device. */
-function offerDownload(
-  download: PreviewStreamDownload,
-  target: {
-    readonly environmentId: EnvironmentId;
-    readonly threadId: string;
-    readonly tabId: string;
-  },
+interface PreviewStreamDownloadTarget {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: string;
+  readonly tabId: string;
+}
+
+/** Hands a file a server tab downloaded to this device, with credentials fetched now. */
+export function savePreviewStreamDownload(
+  download: Pick<PreviewStreamDownload, "id" | "fileName">,
+  target: PreviewStreamDownloadTarget,
 ) {
+  void resolvePreviewStreamDownload(download, {
+    threadId: target.threadId,
+    tabId: target.tabId,
+    resolveAccess: () => readFreshPreviewStreamAccess(target.environmentId),
+  }).then(
+    (url) => {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = download.fileName;
+      anchor.click();
+    },
+    (cause: unknown) =>
+      toastManager.add({
+        type: "error",
+        title: "Could not save the download",
+        description: cause instanceof Error ? cause.message : undefined,
+      }),
+  );
+}
+
+/** The download happens on the environment; this hands the finished file to this device. */
+function offerDownload(download: PreviewStreamDownload, target: PreviewStreamDownloadTarget) {
   const id = toastManager.add({
     type: "info",
     title: `Downloaded ${download.fileName}`,
@@ -141,24 +165,7 @@ function offerDownload(
       children: "Save",
       onClick: () => {
         toastManager.close(id);
-        void resolvePreviewStreamDownload(download, {
-          threadId: target.threadId,
-          tabId: target.tabId,
-          resolveAccess: () => readFreshPreviewStreamAccess(target.environmentId),
-        }).then(
-          (url) => {
-            const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = download.fileName;
-            anchor.click();
-          },
-          (cause: unknown) =>
-            toastManager.add({
-              type: "error",
-              title: "Could not save the download",
-              description: cause instanceof Error ? cause.message : undefined,
-            }),
-        );
+        savePreviewStreamDownload(download, target);
       },
     },
   });
@@ -176,6 +183,8 @@ export function ServerBrowserSurface(props: {
   readonly onFirstFrame?: () => void;
   readonly onViewport?: (viewport: PreviewStreamViewport) => void;
   readonly onControl?: (control: PreviewStreamControl | null) => void;
+  /** The page opened a new tab from this viewer's click; the viewer should switch to it. */
+  readonly onPopup?: (tabId: string) => void;
   readonly className?: string;
   readonly ref?: Ref<ServerBrowserHandle>;
 }) {
@@ -189,6 +198,7 @@ export function ServerBrowserSurface(props: {
     onFirstFrame,
     onViewport,
     onControl,
+    onPopup,
     className,
     ref,
   } = props;
@@ -245,6 +255,7 @@ export function ServerBrowserSurface(props: {
     onViewport?.(viewport),
   );
   const controlChanged = useEffectEvent((next: PreviewStreamControl | null) => onControl?.(next));
+  const popupOpened = useEffectEvent((popupTabId: string) => onPopup?.(popupTabId));
   // Frame cap in device px, fixed per socket. It grows with the surface and
   // never shrinks, so only outgrowing it reconnects.
   const [cap, setCap] = useState<{ width: number; height: number } | null>(null);
@@ -424,6 +435,7 @@ export function ServerBrowserSurface(props: {
         },
         onClipboard: (text) => void copyPageText(text),
         onDownload: (download) => offerDownload(download, { environmentId, threadId, tabId }),
+        onPopup: popupOpened,
         onFileChooser: setFileChooser,
         onViewport: (viewport) => {
           viewportRef.current = viewport;
