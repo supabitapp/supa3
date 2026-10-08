@@ -1591,7 +1591,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         name: string;
         target: OrchestratorMcpTarget;
         descriptors: ReadonlyArray<ProviderOptionDescriptor> | undefined;
-        expectedOptions: ReadonlyArray<ProviderOptionSelection>;
+        expectedOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
       }> = [
         {
           name: "effort override keeps fast mode",
@@ -1619,10 +1619,10 @@ describe("OrchestratorMcpService provider resolution", () => {
           ],
         },
         {
-          name: "empty overrides keep parent options",
+          name: "empty overrides reset parent options",
           target: { options: [] },
           descriptors,
-          expectedOptions: parentModelSelection.options,
+          expectedOptions: [],
         },
         {
           name: "same model inherits without descriptors",
@@ -1657,7 +1657,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           name: "changed model without descriptors inherits no options",
           target: { model: "child-model" },
           descriptors: undefined,
-          expectedOptions: [],
+          expectedOptions: undefined,
         },
         {
           name: "changed instance inherits no options",
@@ -1729,11 +1729,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           const commands = yield* Ref.get(dispatched);
           assert.equal(commands.length, 1, testCase.name);
           const command = commands[0] as { modelSelection: { options?: unknown } };
-          assert.deepEqual(
-            command.modelSelection.options ?? [],
-            testCase.expectedOptions,
-            testCase.name,
-          );
+          assert.deepEqual(command.modelSelection.options, testCase.expectedOptions, testCase.name);
           assert.deepEqual(parentModelSelection.options, [
             { id: "reasoningEffort", value: "high" },
             { id: "serviceTier", value: "priority" },

@@ -115,7 +115,7 @@ export const OrchestratorMcpTarget = Schema.Struct({
   options: Schema.optional(
     OrchestratorMcpTargetOptions.annotate({
       description:
-        "Model options as [{id, value}] or {id: value}, overriding individual inherited options. The same provider instance inherits all options for the same model and only supported options when changing models; another instance inherits none. An empty list keeps inherited options. Set a boolean to false or a select option to its default value to reset it. Valid options come from orchestrator_capabilities.",
+        "Model options as [{id, value}] or {id: value}, overriding individual inherited options. The same provider instance inherits all options for the same model and only supported options when changing models; another instance inherits none. An empty list or record clears inherited options. Set a boolean to false or a select option to its default value to reset it. Valid options come from orchestrator_capabilities.",
     }),
   ),
 });

@@ -1140,7 +1140,7 @@ const make = Effect.gen(function* () {
       }
 
       const options = new Map<string, ProviderOptionSelection>();
-      if (instanceId === inheritedSelection.instanceId) {
+      if (instanceId === inheritedSelection.instanceId && requestedOptions?.length !== 0) {
         for (const selection of inheritedSelection.options ?? []) {
           if (
             model === inheritedSelection.model ||
@@ -1159,7 +1159,9 @@ const make = Effect.gen(function* () {
         modelSelection: {
           instanceId,
           model,
-          ...(options.size === 0 ? {} : { options: [...options.values()] }),
+          ...(options.size === 0 && requestedOptions === undefined
+            ? {}
+            : { options: [...options.values()] }),
         },
       };
     });
