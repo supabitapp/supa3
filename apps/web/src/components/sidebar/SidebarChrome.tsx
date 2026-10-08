@@ -1,5 +1,5 @@
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
-import type { ComponentProps, ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { parseKeybindingShortcut } from "@supacode/shared/keybindings";
@@ -136,37 +136,6 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
 // The desktop app's Settings menu item owns Mod+, so it is not in the keybinding registry.
 const DESKTOP_SETTINGS_SHORTCUT = parseKeybindingShortcut("mod+,")!;
 
-/**
- * Footer icon button with a tooltip. Spreads unknown props through so it can
- * serve as a popup trigger's render target, which injects its own handlers,
- * ref and aria state.
- */
-export function SidebarUtilityButton({
-  label,
-  shortcut = null,
-  children,
-  ...rest
-}: {
-  label: string;
-  shortcut?: string | null;
-} & Omit<
-  ComponentProps<typeof SidebarMenuButton>,
-  "size" | "tooltip" | "shortcut" | "aria-label"
->) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<SidebarMenuButton aria-label={label} size="icon" type="button" {...rest} />}
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipPopup side="top" shortcut={shortcut}>
-        {label}
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
-
 function SidebarUtilityItem({
   icon,
   label,
@@ -180,22 +149,23 @@ function SidebarUtilityItem({
 }) {
   return (
     <SidebarMenuItem className="shrink-0">
-      <SidebarUtilityButton label={label} shortcut={shortcut} onClick={onClick}>
-        {icon}
-      </SidebarUtilityButton>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+              {icon}
+            </SidebarMenuButton>
+          }
+        />
+        <TooltipPopup side="top" shortcut={shortcut}>
+          {label}
+        </TooltipPopup>
+      </Tooltip>
     </SidebarMenuItem>
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu({
-  menuRef,
-  trailing = null,
-}: {
-  /** Lands on the row so a popup can anchor to its width. */
-  menuRef?: Ref<HTMLUListElement> | undefined;
-  /** Pinned to the row's right edge. */
-  trailing?: ReactNode;
-}) {
+export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -235,7 +205,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu({
   }, [closeMobileSidebar, navigateToMainApp]);
 
   return (
-    <SidebarMenu ref={menuRef} className="flex-row items-center">
+    <SidebarMenu className="flex-row items-center">
       {isOnUtilityPage ? (
         <SidebarMenuItem className="min-w-0 flex-1">
           <SidebarMenuButton onClick={handleBackClick}>
@@ -267,20 +237,17 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu({
         </>
       )}
       <SidebarUpdatePill />
-      {trailing ? <SidebarMenuItem className="ml-auto shrink-0">{trailing}</SidebarMenuItem> : null}
     </SidebarMenu>
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter(
-  props: ComponentProps<typeof SidebarUtilityMenu>,
-) {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarUtilityMenu {...props} />
+      <SidebarUtilityMenu />
     </SidebarFooter>
   );
 });

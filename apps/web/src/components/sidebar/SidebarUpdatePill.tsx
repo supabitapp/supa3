@@ -221,7 +221,7 @@ function SidebarUpdateButton({
   );
 
   return (
-    <SidebarMenuItem className="shrink-0">
+    <SidebarMenuItem className="ml-auto shrink-0">
       <Popover
         handle={releaseNotesPopoverHandle}
         onOpenChange={(open, details) => {
