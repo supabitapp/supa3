@@ -67,7 +67,7 @@ import {
   type ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@supacode/provider-core/server/ProviderAdapter";
-import type { ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
+import type { ProviderContinuationRequest } from "@supacode/provider-core/server/continuationRequests";
 import { makeProviderFailure } from "@supacode/provider-core/server/failure";
 import * as ClaudeAdapterV2 from "./ClaudeAdapterV2.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";

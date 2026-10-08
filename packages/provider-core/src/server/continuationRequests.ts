@@ -59,7 +59,7 @@ export interface ProviderContinuationRequest {
 export class ProviderContinuationRequests extends Context.Reference<{
   readonly offer: (request: ProviderContinuationRequest) => Effect.Effect<void>;
   readonly take: Effect.Effect<ProviderContinuationRequest>;
-}>("supacode/orchestration-v2/ProviderContinuationRequests", {
+}>("@supacode/provider-core/server/continuationRequests/ProviderContinuationRequests", {
   defaultValue: () => ({ offer: () => Effect.void, take: Effect.never }),
 }) {}
 

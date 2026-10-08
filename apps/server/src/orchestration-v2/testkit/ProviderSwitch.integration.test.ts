@@ -1,5 +1,5 @@
 import { vi } from "vite-plus/test";
-import { historyResponseItems } from "../ContextHandoffBudget.ts";
+import { historyResponseItems } from "@supacode/provider-core/server/handoffBudget";
 import { assert, describe, it } from "@effect/vitest";
 import {
   CommandId,

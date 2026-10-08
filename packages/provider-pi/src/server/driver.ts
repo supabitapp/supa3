@@ -7,8 +7,9 @@
  * `~/.pi/agent`, so continuation identity uses the default instance grouping.
  */
 import * as NodeOS from "node:os";
-import { expandHomePath } from "../../pathExpansion.ts";
-import { PiSettings, ProviderDriverKind, type ServerProvider } from "@supacode/contracts";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
+import { ProviderDriverKind, type ServerProvider } from "@supacode/contracts";
+import { PiSettings } from "../settings.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -17,19 +18,16 @@ import { HttpClient } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
 import { ProviderHost } from "@supacode/provider-core/server/ProviderHost";
-import { makePiTextGeneration } from "../../textGeneration/PiTextGeneration.ts";
-import {
-  PiAdapterV2Driver,
-  type PiAdapterV2DriverEnv,
-} from "../../orchestration-v2/Adapters/PiAdapterV2.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import { makePiTextGeneration } from "./textGeneration.ts";
+import { PiAdapterV2Driver, type PiAdapterV2DriverEnv } from "./adapter.ts";
+import { ProviderDriverError } from "@supacode/provider-core/server/errors";
 import {
   buildInitialPiProviderSnapshot,
   checkPiProviderStatus,
   discoverPiCommandsForCwd,
   enrichPiSnapshot,
-} from "../PiProvider.ts";
-import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
+} from "./status.ts";
+import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -46,7 +44,7 @@ import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
-} from "../providerUpdateSettings.ts";
+} from "@supacode/provider-core/server/snapshotSettings";
 
 const decodePiSettings = Schema.decodeSync(PiSettings);
 

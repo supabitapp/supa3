@@ -9,7 +9,7 @@ import {
   SUPACODE_MCP_BEARER_ENV,
   SUPACODE_MCP_URL_ENV,
   SUPACODE_PI_RUNTIME_MODE_ENV,
-} from "./piSupacodeMcpExtensionSource.ts";
+} from "./mcpExtensionSource.ts";
 
 const RESERVED_PI_LAUNCH_ARGUMENTS = new Set([
   "--continue",

@@ -88,7 +88,7 @@ import { causeErrorTag } from "@supacode/shared/observability";
 import { providerMessageTextWithAttachmentPaths } from "../AttachmentPrompt.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { backgroundWorkNotification, type BackgroundWorkReport } from "../Notification.ts";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import { makeProviderFailure } from "@supacode/provider-core/server/failure";
 import {
   makeSubagentChildThread,

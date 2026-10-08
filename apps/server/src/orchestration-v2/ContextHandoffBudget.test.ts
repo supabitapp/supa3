@@ -23,7 +23,7 @@ import {
   historyResponseItems,
   selectHistory,
   historicalMessage,
-} from "./ContextHandoffBudget.ts";
+} from "@supacode/provider-core/server/handoffBudget";
 import { projectContextHandoffForWire } from "./WireProjection.ts";
 import { deliverContextHandoffs } from "./ContextHandoffDelivery.ts";
 

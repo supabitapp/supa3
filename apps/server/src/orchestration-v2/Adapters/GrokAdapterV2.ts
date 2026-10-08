@@ -57,7 +57,7 @@ import { acpPermissionDisposition } from "../../provider/acp/AcpClientPolicy.ts"
 import * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
 import * as ProviderEventLoggers from "../../provider/ProviderEventLoggers.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 import {
   ProviderAdapterDriverCreateError,

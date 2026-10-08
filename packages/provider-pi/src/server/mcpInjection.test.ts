@@ -9,12 +9,12 @@ import {
   SUPACODE_MCP_BEARER_ENV,
   SUPACODE_MCP_URL_ENV,
   SUPACODE_PI_RUNTIME_MODE_ENV,
-} from "./piSupacodeMcpExtensionSource.ts";
+} from "./mcpExtensionSource.ts";
 import {
   buildPiRpcLaunch,
   materializePiSupacodeMcpExtension,
   resolvePiLaunchArgs,
-} from "./piSupacodeMcpInjection.ts";
+} from "./mcpInjection.ts";
 
 const threadId = ThreadId.make("thread-pi-supacode-mcp");
 

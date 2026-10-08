@@ -48,7 +48,7 @@ import {
   withCodexAppServerClient,
 } from "../CodexProvider.ts";
 import { resolveCodexLaunchArgs } from "../codexLaunchArgs.ts";
-import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
+import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import * as ModelManifest from "../ModelManifest.ts";
 import type { ProviderDriver, ProviderInstance } from "@supacode/provider-core/server/driver";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
@@ -64,7 +64,7 @@ import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
-} from "../providerUpdateSettings.ts";
+} from "@supacode/provider-core/server/snapshotSettings";
 import {
   codexContinuationIdentity,
   materializeCodexShadowHome,

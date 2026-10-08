@@ -6,7 +6,7 @@ import {
   parsePiDiscoveredCommands,
   PI_COMPACT_SLASH_COMMAND,
   withPiBuiltinSlashCommands,
-} from "./PiCommands.ts";
+} from "./commands.ts";
 
 it("maps current Pi skill metadata to Supacode's user and project skill scopes", () => {
   expect(

@@ -37,7 +37,7 @@ import {
 } from "../../provider/museSdk.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import {
   makeReplayServerConfig,
   type OrchestratorV2ProviderReplayHarness,

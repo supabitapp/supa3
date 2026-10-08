@@ -6,7 +6,11 @@ import type { ProviderAdapterV2HistoricalContext } from "@supacode/provider-core
 import { ContextHandoffBudgetError } from "@supacode/provider-core/server/failure";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { historyCost, renderHistory, selectHistory } from "./ContextHandoffBudget.ts";
+import {
+  historyCost,
+  renderHistory,
+  selectHistory,
+} from "@supacode/provider-core/server/handoffBudget";
 
 /**
  * Persist before/after injection: an ambiguous pending delivery requires a fresh native thread.

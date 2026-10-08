@@ -2,7 +2,7 @@ import * as NodeModule from "node:module";
 import * as NodeVM from "node:vm";
 import { assert, describe, it } from "@effect/vitest";
 
-import { PI_SUPACODE_MCP_EXTENSION_SOURCE } from "./piSupacodeMcpExtensionSource.ts";
+import { PI_SUPACODE_MCP_EXTENSION_SOURCE } from "./mcpExtensionSource.ts";
 
 type RequestHook = (
   event: { payload: unknown },

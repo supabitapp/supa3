@@ -47,7 +47,7 @@ import {
   removeAntigravitySessionFiles,
 } from "../acp/AntigravitySessionFiles.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
-import * as ProviderContinuationRequests from "../../orchestration-v2/ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import { makeAntigravityAdapterV2 } from "../../orchestration-v2/Adapters/AntigravityAdapterV2.ts";
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
 import { ProviderDriverError } from "../Errors.ts";

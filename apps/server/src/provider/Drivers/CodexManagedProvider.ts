@@ -15,7 +15,7 @@ import {
   makePendingCodexProvider,
   probeCodexSkillsForCwd,
 } from "../CodexProvider.ts";
-import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
+import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import {
   type ProviderDriverCreateInput,

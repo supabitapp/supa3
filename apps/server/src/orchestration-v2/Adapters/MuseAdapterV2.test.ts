@@ -41,7 +41,7 @@ import {
   type ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@supacode/provider-core/server/ProviderAdapter";
-import type { ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
+import type { ProviderContinuationRequest } from "@supacode/provider-core/server/continuationRequests";
 import { makeMuseAdapterV2, type MuseAdapterV2Options } from "./MuseAdapterV2.ts";
 
 const testLayer = Layer.mergeAll(

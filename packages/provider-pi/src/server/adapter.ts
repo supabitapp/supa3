@@ -26,7 +26,6 @@
 import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@supacode/shared/model";
 import {
-  PiSettings,
   ProviderDriverKind,
   type ChatAttachment,
   type ModelSelection,
@@ -45,6 +44,7 @@ import {
   type ProviderInstanceId,
   type OrchestrationV2ProviderTurnTokenUsage,
 } from "@supacode/contracts";
+import { PiSettings } from "../settings.ts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -66,11 +66,11 @@ import {
   parsePiCompactCommand,
   parsePiDiscoveredCommands,
   type PiCompactCommand,
-} from "../../provider/PiCommands.ts";
+} from "./commands.ts";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriver,
@@ -89,13 +89,13 @@ import {
   piRecordString as recordString,
   type PiRpcConnection,
   type PiRpcRecord,
-} from "./PiRpc.ts";
+} from "./rpc.ts";
 import {
   buildPiRpcLaunch,
   materializePiSupacodeMcpExtension,
   resolvePiLaunchArgs,
-} from "./piSupacodeMcpInjection.ts";
-import { PI_FILE_CHANGE_TOOLS } from "./piSupacodeMcpExtensionSource.ts";
+} from "./mcpInjection.ts";
+import { PI_FILE_CHANGE_TOOLS } from "./mcpExtensionSource.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
 const PI_DRIVER_KIND = PI_PROVIDER;

@@ -29,7 +29,7 @@ import {
 } from "../../orchestration-v2/Adapters/AcpRegistryAdapterV2.ts";
 import type { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
-import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
+import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import {
   defaultProviderContinuationIdentity,
@@ -42,7 +42,7 @@ import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
-} from "../providerUpdateSettings.ts";
+} from "@supacode/provider-core/server/snapshotSettings";
 import {
   type AcpRegistryAvailableCommands,
   type AcpRegistryConfigurationProbe,

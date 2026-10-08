@@ -14,10 +14,10 @@ import { makeMuseTextGeneration } from "../../textGeneration/MuseTextGeneration.
 import { ProviderDriverError } from "../Errors.ts";
 import { makeMuseAdapterV2 } from "../../orchestration-v2/Adapters/MuseAdapterV2.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
-import * as ProviderContinuationRequests from "../../orchestration-v2/ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import { checkMuseProviderStatus, makePendingMuseProvider } from "../MuseProvider.ts";
 import * as ProviderEventLoggers from "../ProviderEventLoggers.ts";
-import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
+import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import { enrichMuseSnapshot, latestMuseVersion, museMaintenance } from "../museMaintenance.ts";
 import { makeMuseEnvironment } from "../museSdk.ts";
 import {
@@ -34,7 +34,7 @@ import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
-} from "../providerUpdateSettings.ts";
+} from "@supacode/provider-core/server/snapshotSettings";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("muse");

@@ -29,7 +29,7 @@ import {
   PiOrchestratorReplayHarness,
 } from "../src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts";
 import * as PiAdapterV2Testkit from "../src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts";
-import { PI_PROVIDER } from "../src/orchestration-v2/Adapters/PiAdapterV2.ts";
+import { PI_PROVIDER } from "@supacode/provider-pi/server";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { provideDeterministicTestRuntime } from "../src/orchestration-v2/testkit/DeterministicRuntime.ts";
 import { ORCHESTRATOR_REPLAY_FIXTURES } from "../src/orchestration-v2/testkit/fixtures/index.ts";

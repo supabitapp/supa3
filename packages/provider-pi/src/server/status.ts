@@ -10,10 +10,10 @@
  */
 import {
   type CustomModelSetting,
-  type PiSettings,
   type ServerProvider,
   type ServerProviderModel,
 } from "@supacode/contracts";
+import type { PiSettings } from "../settings.ts";
 import { causeErrorTag } from "@supacode/shared/observability";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 import { compareSemverVersions } from "@supacode/shared/semver";
@@ -26,17 +26,14 @@ import * as Result from "effect/Result";
 import { HttpClient } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import {
-  buildPiRpcLaunch,
-  resolvePiLaunchArgs,
-} from "../orchestration-v2/Adapters/piSupacodeMcpInjection.ts";
+import { buildPiRpcLaunch, resolvePiLaunchArgs } from "./mcpInjection.ts";
 import {
   makePiRpcConnection,
   PiRpcError,
   PiRpcTimeoutError,
   piRecordField as recordField,
   piRecordString as recordString,
-} from "../orchestration-v2/Adapters/PiRpc.ts";
+} from "./rpc.ts";
 import {
   buildServerProvider,
   isCommandMissingCause,
@@ -52,12 +49,12 @@ import {
 import {
   EMPTY_PI_MODEL_CAPABILITIES,
   thinkingCapabilitiesForPiModel,
-} from "./piThinkingCapabilities.ts";
+} from "./thinkingCapabilities.ts";
 import {
   parsePiDiscoveredCommands,
   withPiBuiltinSlashCommands,
   type PiDiscoveredCommands,
-} from "./PiCommands.ts";
+} from "./commands.ts";
 
 const PI_PRESENTATION = {
   displayName: "Pi",

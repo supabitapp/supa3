@@ -132,7 +132,7 @@ import {
   type ProviderAdapterDriverCreateInput,
 } from "@supacode/provider-core/server/adapterDriver";
 import { type BackgroundWorkReport, backgroundWorkNotification } from "../Notification.ts";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,

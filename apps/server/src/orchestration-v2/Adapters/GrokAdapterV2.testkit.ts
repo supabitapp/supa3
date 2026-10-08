@@ -17,7 +17,7 @@ import {
 } from "../../provider/acp/GrokAcpSupport.ts";
 import { makeXAiPromptCompletionRuntime } from "../../provider/acp/XAiAcpExtension.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
 import type { ProviderReplayGate } from "@supacode/provider-testing/replayGate";
 import type { OrchestratorV2ProviderReplayHarness } from "../testkit/ProviderReplayHarness.ts";

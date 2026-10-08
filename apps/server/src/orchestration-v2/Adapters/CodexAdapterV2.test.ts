@@ -1,6 +1,6 @@
 import * as NodeOS from "node:os";
 
-import { historyResponseItems } from "../ContextHandoffBudget.ts";
+import { historyResponseItems } from "@supacode/provider-core/server/handoffBudget";
 import type { ProviderAdapterV2HistoricalContext } from "@supacode/provider-core/server/ProviderAdapter";
 import {
   makeProviderTextDeltaCoalescer,
@@ -70,7 +70,7 @@ import {
   type ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@supacode/provider-core/server/ProviderAdapter";
-import type { ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
+import type { ProviderContinuationRequest } from "@supacode/provider-core/server/continuationRequests";
 import * as CodexAdapterV2 from "./CodexAdapterV2.ts";
 import { makeReplayServerConfig, withCodexReplayChildMetadata } from "./CodexAdapterV2.testkit.ts";
 import * as CodexAdapterV2Testkit from "./CodexAdapterV2.testkit.ts";

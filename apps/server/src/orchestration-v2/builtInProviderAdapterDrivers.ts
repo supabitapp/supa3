@@ -18,7 +18,7 @@ import {
   OpenCodeAdapterV2Driver,
   type OpenCodeAdapterV2DriverEnv,
 } from "./Adapters/OpenCodeAdapterV2.ts";
-import { PiAdapterV2Driver, type PiAdapterV2DriverEnv } from "./Adapters/PiAdapterV2.ts";
+import { PiAdapterV2Driver, type PiAdapterV2DriverEnv } from "@supacode/provider-pi/server";
 import type { AnyProviderAdapterDriver } from "@supacode/provider-core/server/adapterDriver";
 
 export type BuiltInProviderAdapterDriversV2Env =

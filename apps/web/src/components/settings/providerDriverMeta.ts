@@ -6,11 +6,11 @@ import {
   CursorSettings,
   GrokSettings,
   OpenCodeSettings,
-  PiSettings,
   MuseSettings,
   ProviderDriverKind,
 } from "@supacode/contracts";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
+import { piClient } from "@supacode/provider-pi/client";
 
 /** The provider client definitions this web build ships, in presentation order. */
 export const providerClients = makeProviderClientRegistry([
@@ -59,11 +59,7 @@ export const providerClients = makeProviderClientRegistry([
     settingsSchema: MuseSettings,
     badgeLabel: "Beta",
   },
-  {
-    driverKind: ProviderDriverKind.make("pi"),
-    label: "Pi",
-    settingsSchema: PiSettings,
-  },
+  piClient,
   {
     driverKind: ProviderDriverKind.make("acpRegistry"),
     label: "ACP Registry",

@@ -44,8 +44,8 @@ import type {
 } from "@supacode/provider-core/server/ProviderAdapter";
 import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
-import type { ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
-import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
+import type { ProviderContinuationRequest } from "@supacode/provider-core/server/continuationRequests";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import { OPENCODE_PROVIDER } from "./OpenCodeAdapterV2.ts";
 import { OPENCODE_2_STILL_STOPPING, supacodeMcpServerName } from "./OpenCode2AdapterV2.ts";
 import { openCode2ReplayRuntime } from "./OpenCode2AdapterV2.testkit.ts";

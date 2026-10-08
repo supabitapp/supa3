@@ -68,6 +68,8 @@
     "@supacode/mobile-markdown-text": "file:./modules/supacode-markdown-text",
     "@supacode/mobile-review-diff-native": "file:./modules/supacode-review-diff",
     "@supacode/mobile-terminal-native": "file:./modules/supacode-terminal",
+    "@supacode/provider-core": "workspace:*",
+    "@supacode/provider-pi": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@tabler/icons-react-native": "^3.44.0",
     "clsx": "^2.1.1",
