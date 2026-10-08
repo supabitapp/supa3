@@ -13,7 +13,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
-import { makeWindow } from "@supacode/shared/usageFormat";
+import { formatDayShort, formatTokens, formatUsd, makeWindow } from "@supacode/shared/usageFormat";
 import { providersWithLimits } from "@supacode/shared/usageLimits";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowDownIcon, ArrowUpIcon, FileDiffIcon, PaperclipIcon, PlayIcon } from "lucide-react";
@@ -28,6 +28,7 @@ import { environmentTransportLabel } from "../../../components/settings/Environm
 import { Kbd } from "../../../components/ui/kbd";
 import { stackedThreadToast, toastManager } from "../../../components/ui/toast";
 import { LimitWindows } from "../../../components/usage/UsageLimits";
+import { PROVIDER_PRESENTATION } from "../../../components/usage/usageProviders";
 import { shortcutLabelForCommand } from "../../../keybindings";
 import { cn } from "../../../lib/utils";
 import { usePromptStashStore } from "../../../promptStashStore";
@@ -586,66 +587,114 @@ export function CheckoutBody() {
   );
 }
 
-function compactTokens(n: number) {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
-  return String(n);
+function localDay(ms: number) {
+  const date = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-export function SpendTodayBody() {
+function SpendBody({ days }: { days: 1 | 7 }) {
   const { size } = useWidgetFrame();
-  const window = useMemo(() => makeWindow(1), []);
+  const now = useNowMinuteMs();
+  const window = useMemo(() => makeWindow(days), [days]);
   const { merged, isPending, environments } = useUsage(window);
-  if (isPending && merged.totalTokens === 0) {
-    return <StatSkeleton label="Reading today's usage" />;
+  if (isPending && merged.records === 0) {
+    return <StatSkeleton label="Reading usage" />;
   }
   if (environments.length > 0 && environments.every((env) => !env.canReadDiagnostics)) {
     return (
       <WidgetEmpty
         scene="anchor"
-        title="Usage is private here"
+        title="Spending is private here"
         hint="This connection can't read usage. Pair with diagnostics access to see it."
       />
     );
   }
-  const providers = [...merged.providers].sort((a, b) => b.totalTokens - a.totalTokens);
+  const providers = [...merged.providers]
+    .filter((p) => p.costUsd > 0)
+    .sort((a, b) => b.costUsd - a.costUsd);
+  const costByDay = new Map(merged.daily.map((d) => [d.day, d.costUsd]));
+  const today = localDay(now);
+  const week = Array.from({ length: 7 }, (_, offset) => {
+    const day = localDay(now - (6 - offset) * 86_400_000);
+    return { day, costUsd: costByDay.get(day) ?? 0 };
+  });
+  const weekMax = Math.max(1, ...week.map((d) => d.costUsd));
+  const showChart = days === 7 && size !== "s";
+  const showProviders = size !== "s" && (days === 1 || size === "l" || size === "w");
   return (
     <div className="flex h-full flex-col justify-center gap-3 px-3">
-      <dl className="flex gap-6">
+      <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-0.5">
-          <dt className="text-xs text-secondary-label">Tokens today</dt>
-          <dd className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-            {compactTokens(merged.totalTokens)}
-          </dd>
+          <span className="text-xs text-secondary-label">
+            {days === 1 ? "Spent today" : "Last 7 days"}
+          </span>
+          <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+            {formatUsd(merged.costUsd)}
+          </span>
         </div>
-        {size === "s" ? null : (
-          <div className="flex flex-col gap-0.5">
-            <dt className="text-xs text-secondary-label">At API prices</dt>
-            <dd className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-              ${merged.costUsd.toFixed(merged.costUsd >= 100 ? 0 : 2)}
-            </dd>
-          </div>
-        )}
-      </dl>
-      {size === "s" ? null : (
-        <ul className="flex flex-col gap-1">
-          {providers.slice(0, 3).map((p) => (
-            <li key={p.provider} className="flex items-center gap-2 text-xs">
-              <span className="w-16 shrink-0 capitalize text-foreground">{p.provider}</span>
-              <span className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                <span
-                  className="block h-full rounded-full bg-foreground/50"
-                  style={{ width: `${Math.round(p.tokenShare * 100)}%` }}
-                />
+        <span className="pb-1 text-right text-xs tabular-nums text-secondary-label">
+          {formatTokens(merged.totalTokens)} tokens
+          <br />
+          at API prices
+        </span>
+      </div>
+      {showChart ? (
+        <figure
+          className="flex h-14 items-end gap-1"
+          aria-label={`Daily spend: ${week.map((d) => `${formatDayShort(d.day)} ${formatUsd(d.costUsd)}`).join(", ")}`}
+        >
+          {week.map((d) => (
+            <span
+              key={d.day}
+              className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+            >
+              <span
+                className={cn(
+                  "w-full rounded-t-xs",
+                  d.day === today ? "bg-foreground/70" : "bg-foreground/20",
+                )}
+                style={{ height: `${Math.max(4, (d.costUsd / weekMax) * 100)}%` }}
+              />
+              <span className="text-3xs text-secondary-label">
+                {new Date(`${d.day}T12:00:00`).toLocaleDateString(undefined, { weekday: "narrow" })}
               </span>
-              <span className="w-10 shrink-0 text-right tabular-nums text-secondary-label">
-                {Math.round(p.tokenShare * 100)}%
-              </span>
-            </li>
+            </span>
           ))}
+        </figure>
+      ) : null}
+      {showProviders ? (
+        <ul className="flex flex-col gap-1">
+          {providers.slice(0, 3).map((p) => {
+            const presentation = PROVIDER_PRESENTATION[p.provider];
+            return (
+              <li key={p.provider} className="flex items-center gap-2 text-xs">
+                <span className="w-20 shrink-0 truncate text-foreground">{presentation.label}</span>
+                <span className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${Math.round(p.costShare * 100)}%`,
+                      backgroundColor: presentation.color,
+                    }}
+                  />
+                </span>
+                <span className="w-16 shrink-0 text-right tabular-nums text-secondary-label">
+                  {formatUsd(p.costUsd)}
+                </span>
+              </li>
+            );
+          })}
         </ul>
-      )}
+      ) : null}
     </div>
   );
+}
+
+export function SpendTodayBody() {
+  return <SpendBody days={1} />;
+}
+
+export function SpendWeekBody() {
+  return <SpendBody days={7} />;
 }

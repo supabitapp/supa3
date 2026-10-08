@@ -7,6 +7,7 @@ import {
   KeyboardIcon,
   ArchiveIcon,
   CalendarClockIcon,
+  ChartColumnIcon,
   CoinsIcon,
   GaugeIcon,
   GitCommitHorizontalIcon,
@@ -48,6 +49,7 @@ import {
   ShortcutsBody,
   SkillsBody,
   SpendTodayBody,
+  SpendWeekBody,
   StashBody,
   UsageLimitsBody,
 } from "./appWidgets";
@@ -290,13 +292,24 @@ export const WIDGETS: ReadonlyArray<WidgetDef> = [
   {
     id: "spend-today",
     title: "Spend today",
-    description: "Tokens your agents used today, at API prices, split by provider.",
+    description: "What your agents cost today in USD at API prices, split by provider.",
     icon: CoinsIcon,
     category: "Insights",
     sizes: ["s", "m"],
     source:
       "Scans today's transcripts on each machine (a few seconds, cached for a minute). Needs diagnostics access.",
     Body: SpendTodayBody,
+  },
+  {
+    id: "spend-week",
+    title: "Spend this week",
+    description: "The last 7 days in USD at API prices, day by day and per provider.",
+    icon: ChartColumnIcon,
+    category: "Insights",
+    sizes: ["m", "l", "w"],
+    source:
+      "Scans the last 7 days of transcripts on each machine (cached for a minute). Needs diagnostics access.",
+    Body: SpendWeekBody,
   },
   {
     id: "machines",
