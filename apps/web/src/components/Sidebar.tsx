@@ -1071,7 +1071,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     : drafts.filter(({ draftId }) => draftId === props.routeDraftId);
   return (
     <SortableSidebarMarker marker="drafts-block">
-      <ul className="flex flex-col gap-px">
+      <ul role="presentation" className="flex flex-col gap-px">
         <li data-thread-selection-safe className="mx-0.5 h-8 list-none">
           <CollapsibleSectionHeader
             expanded={draftsShelfExpanded}
@@ -3534,7 +3534,7 @@ export default function Sidebar() {
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
     const pinnedRows = rowsOf(visiblePinnedThreads, "pinned");
     items.push(...pinnedRows);
-    if (visibleDraftSessionCount > 0) items.push({ kind: "marker", marker: "drafts-block" });
+    items.push({ kind: "marker", marker: "drafts-block" });
     items.push({ kind: "marker", marker: "pinned-divider" });
     const activeRows = rowsOf(activeThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
