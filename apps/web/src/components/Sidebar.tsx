@@ -2016,7 +2016,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       : ClockIcon;
   const showDragDestination = sortable?.isDragging || props.sweepAction !== null;
   const showHoverActions =
-    (props.pinningSupported && !isPendingCreation) || showSnoozeButton || settlementSupported;
+    (props.pinningSupported && !isPendingCreation) ||
+    showSnoozeButton ||
+    settlementSupported ||
+    isWokeStatus;
 
   return (
     <li
@@ -2075,6 +2078,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     jumpHintIndicatorsClassName,
                   )}
                 >
+                  {topStatus && !showDuration && topStatusKind !== "connecting" ? (
+                    <span role="status" className={cn("inline-flex shrink-0", topStatus.className)}>
+                      <StatusIcon aria-hidden className="size-3.5" />
+                      <span className="sr-only">{topStatus.label}</span>
+                    </span>
+                  ) : null}
                   {topStatus && (showDuration || topStatusKind === "connecting") ? (
                     <span className={cn("whitespace-nowrap", topStatus.className)}>
                       <span role="status">{topStatus.label}</span>
@@ -2097,6 +2106,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     snoozeMenuOpen && "pointer-events-auto opacity-100",
                   )}
                 >
+                  {isWokeStatus ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label="Dismiss Woke notification"
+                            onClick={handleAcknowledgeWokeClick}
+                            onPointerDown={handleActionPointerDown}
+                            className="inline-flex shrink-0 cursor-pointer items-center rounded-sm text-warning outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        }
+                      >
+                        <AlarmClockIcon aria-hidden className="size-3.5" />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
+                    </Tooltip>
+                  ) : null}
                   {props.pinningSupported && !isPendingCreation ? (
                     <SidebarPinButton
                       pinned={props.isPinned}
@@ -2158,30 +2185,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <span className={cn("contents", jumpHintIndicatorsClassName)}>
                 {terminalStatusIcon}
                 {prBadge}
-                {topStatus && !showDuration && topStatusKind !== "connecting" ? (
-                  isWokeStatus ? (
-                    <button
-                      type="button"
-                      aria-label="Dismiss Woke notification"
-                      onClick={handleAcknowledgeWokeClick}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      className={cn(
-                        "inline-flex shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        topStatus.className,
-                      )}
-                    >
-                      <AlarmClockIcon aria-hidden className="size-3.5" />
-                      <span role="status" className="sr-only">
-                        {topStatus.label}
-                      </span>
-                    </button>
-                  ) : (
-                    <span role="status" className={cn("inline-flex shrink-0", topStatus.className)}>
-                      <StatusIcon aria-hidden className="size-3.5" />
-                      <span className="sr-only">{topStatus.label}</span>
-                    </span>
-                  )
-                ) : null}
                 <span
                   aria-hidden
                   className="pointer-events-none inline-flex shrink-0 items-center gap-1"
