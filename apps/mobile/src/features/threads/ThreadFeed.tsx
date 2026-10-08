@@ -217,6 +217,7 @@ import {
 } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { usePreparedConnection } from "../../state/session";
+import { useLiveThreadLinkLabels } from "../../state/entities";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { composerDocumentAttachmentRecord } from "../../lib/composerContext";
 import * as Option from "effect/Option";
@@ -938,16 +939,15 @@ interface MarkdownLinkHandlers {
 const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   readonly isStreaming?: boolean;
   readonly markdown: string;
+  readonly environmentId: EnvironmentId;
   readonly markdownStyles: MarkdownStyleSet;
   readonly linkHandlers: MarkdownLinkHandlers;
   readonly onUseArtifactTemplate?: ((template: CodexArtifactTemplate) => void) | undefined;
   readonly renderImage: MarkdownImageRenderer;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill> | undefined;
 }) {
-  const segments = useMemo(
-    () => splitCodexArtifactTemplateMarkdown(props.markdown),
-    [props.markdown],
-  );
+  const liveMarkdown = useLiveThreadLinkLabels(props.markdown, props.environmentId);
+  const segments = useMemo(() => splitCodexArtifactTemplateMarkdown(liveMarkdown), [liveMarkdown]);
 
   return segments.map((segment) => {
     if (segment.kind === "artifact-template") {
@@ -1932,6 +1932,7 @@ function renderFeedEntry(
             <AssistantMarkdownContent
               markdown={renderedText}
               isStreaming={message.streaming}
+              environmentId={props.environmentId}
               markdownStyles={styles}
               linkHandlers={props.markdownLinkHandlers}
               onUseArtifactTemplate={props.onUseArtifactTemplate}
@@ -2030,7 +2031,8 @@ function UserMessageContent(props: UserMessageContentProps) {
   const [selected, setSelected] = useState<{ contextId: string; label: string } | null>(null);
   const navigation = useNavigation();
   const { selectedThread } = useThreadSelection();
-  const text = replaceComposerContextReferences(props.text, (ref) => {
+  const liveText = useLiveThreadLinkLabels(props.text, props.environmentId);
+  const text = replaceComposerContextReferences(liveText, (ref) => {
     const available = props.context?.records.some((record) => record.contextId === ref.contextId);
     return `[${ref.label}${available ? "" : " (unavailable)"}](supacode-context://v1/${ref.kind}/${ref.contextId})`;
   });
@@ -2339,11 +2341,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const userBubbleColor = theme["--color-user-bubble"];
   const onMarkdownLinkPress = useCallback(
     (href: string) => {
-      const threadLink = parseThreadLinkHref(href);
-      if (threadLink) {
+      // A thread link names a thread in this feed's environment.
+      const linkedThreadId = parseThreadLinkHref(href);
+      if (linkedThreadId) {
         navigation.navigate("Thread", {
-          environmentId: String(threadLink.environmentId),
-          threadId: String(threadLink.threadId),
+          environmentId: String(props.environmentId),
+          threadId: String(linkedThreadId),
         });
         return;
       }
@@ -2551,13 +2554,20 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     (text: string) => (
       <AssistantMarkdownContent
         markdown={text}
+        environmentId={props.environmentId}
         markdownStyles={markdownStyles.assistant}
         linkHandlers={markdownLinkHandlers}
         renderImage={renderMarkdownImage}
         skills={props.skills}
       />
     ),
-    [markdownStyles.assistant, markdownLinkHandlers, renderMarkdownImage, props.skills],
+    [
+      markdownStyles.assistant,
+      markdownLinkHandlers,
+      renderMarkdownImage,
+      props.skills,
+      props.environmentId,
+    ],
   );
   const reviewCommentColors = useReviewCommentColors();
   const unsettledTurnId = threadFeedRunIsUnsettled(props.latestRun) ? props.latestRun.runId : null;
