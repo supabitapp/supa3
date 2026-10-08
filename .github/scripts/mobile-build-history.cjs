@@ -1,5 +1,5 @@
 function environmentName(profile, platform) {
-  if (!["production", "v2-preview", "preview:dev"].includes(profile)) {
+  if (!["production", "preview:dev"].includes(profile)) {
     throw new Error(`Unsupported mobile profile: ${profile}`);
   }
   if (!["ios", "android"].includes(platform)) {
