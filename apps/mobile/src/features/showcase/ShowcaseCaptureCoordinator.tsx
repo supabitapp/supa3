@@ -86,7 +86,14 @@ function settledShowcaseScene(input: {
   return input.scene;
 }
 
+// Showcase capture only runs in showcase builds. Gate the mount so normal builds
+// never subscribe to workspace, project, or thread shell state.
 export function ShowcaseCaptureCoordinator(props: { readonly pathname: string }) {
+  if (!SHOWCASE_ENABLED) return null;
+  return <EnabledShowcaseCaptureCoordinator pathname={props.pathname} />;
+}
+
+function EnabledShowcaseCaptureCoordinator(props: { readonly pathname: string }) {
   const navigation = useNavigation();
   const { connectPairingUrl } = useConnectionController();
   const {
@@ -106,9 +113,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   const [requestedTheme, setRequestedTheme] = useState<MobileThemeId | null>(null);
   const [themeRequestSettled, setThemeRequestSettled] = useState(false);
   const [readyScene, setReadyScene] = useState<ShowcaseScene | null>(null);
-  const [captureOrientation] = useState(() =>
-    SHOWCASE_ENABLED ? getNativeShowcaseOrientation() : null,
-  );
+  const [captureOrientation] = useState(() => getNativeShowcaseOrientation());
   const [orientationSettled, setOrientationSettled] = useState(captureOrientation === null);
   const requestedSceneRef = useRef<ShowcaseScene | null>(null);
   const renderSignal = useSyncExternalStore(
@@ -118,7 +123,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   );
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || pairingUrls.length > 0) return;
+    if (pairingUrls.length > 0) return;
 
     const readLaunchRequest = () => {
       const values = getNativeShowcasePairingUrls();
@@ -136,7 +141,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   }, [pairingUrls.length]);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || orientationSettled || captureOrientation === null) return;
+    if (orientationSettled || captureOrientation === null) return;
 
     let cancelled = false;
     void retryShowcaseOperation(async () => applyNativeShowcaseOrientation(captureOrientation), {
@@ -150,8 +155,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   }, [captureOrientation, orientationSettled]);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED) return;
-
     const readRequestedScene = () => {
       const value = getNativeShowcaseScene();
       if (!value || requestedSceneRef.current === value) return;
@@ -175,7 +178,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
 
   useEffect(() => {
     if (
-      !SHOWCASE_ENABLED ||
       requestedTheme === null ||
       themeApplied ||
       // Writing before stored preferences load would be overwritten by them.
@@ -187,7 +189,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   }, [appearancePreferencesReady, requestedTheme, setThemeIdForBothAppearances, themeApplied]);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || pairingUrls.length === 0) return;
+    if (pairingUrls.length === 0) return;
     let cancelled = false;
     void (async () => {
       await Promise.all(
@@ -216,7 +218,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   const showcaseThread = threads.find((thread) => String(thread.id) === SHOWCASE_THREAD_ID);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || !hasServerFixture || pendingTasksReady) return;
+    if (!hasServerFixture || pendingTasksReady) return;
 
     const pendingTasks = buildShowcasePendingTasks(projects, Date.now());
     if (pendingTasks.length !== SHOWCASE_PENDING_TASK_DEFINITIONS.length) return;
@@ -247,7 +249,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   }, [hasServerFixture, pendingTasksReady, projects]);
 
   useEffect(() => {
-    if (!SHOWCASE_ENABLED || requestedScene === null || !hasFixture || !showcaseThread) return;
+    if (requestedScene === null || !hasFixture || !showcaseThread) return;
     if (scene === requestedScene) return;
 
     const params = {
@@ -335,7 +337,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     };
   }, [hasFixture, orientationSettled, renderSignal, requestedScene, scene, themeApplied, themeId]);
 
-  if (!SHOWCASE_ENABLED || readyScene === null) return null;
+  if (readyScene === null) return null;
 
   return (
     <View
