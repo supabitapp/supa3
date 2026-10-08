@@ -124,6 +124,7 @@ function ThreadListV2Section(props: {
       {props.disclosure ? (
         <DisclosureChevron
           expanded={props.disclosure.expanded}
+          collapsedDirection="right"
           duration={THREAD_LIST_MOTION_DURATION}
           size={10}
           tintColorClassName={
