@@ -255,6 +255,34 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
+  it("preserves draft space between pinned and active while a pin moves to active", () => {
+    const items = [
+      pinnedHeader,
+      thread("p", "pinned"),
+      marker("drafts-block"),
+      divider,
+      thread("a", "active"),
+      settledHeader,
+      thread("s", "settled"),
+    ];
+    const args = layout(items, "p", sidebarMarkerId("pinned-divider"));
+    args.rects[2]!.height += 100;
+    args.rects[2]!.bottom += 100;
+    for (const rect of args.rects.slice(3)) {
+      rect.top += 100;
+      rect.bottom += 100;
+    }
+    const strategy = createSidebarSortingStrategy({
+      items,
+      settledOrder: ["s"],
+      settledExpanded: true,
+    });
+    expect(strategy({ ...args, index: 2 })).toEqual({ ...stationary, y: -49 });
+    expect(strategy({ ...args, index: 3 })).toEqual({ ...stationary, y: -49 });
+    expect(strategy({ ...args, index: 4 })).toEqual(stationary);
+    expect(strategy({ ...args, index: 5 })).toEqual(stationary);
+  });
+
   it.each([
     ["a2", "a1"],
     ["p", "a1"],
