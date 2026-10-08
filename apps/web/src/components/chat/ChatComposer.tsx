@@ -62,6 +62,7 @@ import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { createModelSelection, normalizeModelSlug } from "@supacode/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@supacode/shared/usageLimits";
 import {
+  Fragment,
   memo,
   type ComponentProps,
   type ReactNode,
@@ -6776,7 +6777,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             key={`stack:${activeThreadId}`}
             className="relative z-0"
             items={bannerStackItems}
-            attachedAbove={props.queuedRunsControl}
           />
           {!activityStackItem && (shownSyncPhase || inlineTasksBadge) ? (
             <ComposerBanner.Attachment>
@@ -6924,6 +6924,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             />
           ) : null}
           {props.attachedContextStrip}
+          <Fragment key={`queue:${activeThreadId}`}>{props.queuedRunsControl}</Fragment>
         </ComposerBanner.Column>
         {!isComposerApprovalState ? (
           <ComposerStashBadge

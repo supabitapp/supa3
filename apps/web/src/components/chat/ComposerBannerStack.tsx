@@ -120,11 +120,9 @@ const presenceClassName =
 interface ComposerBannerStackProps {
   readonly className?: string;
   readonly items: ReadonlyArray<ComposerBannerStackEntry>;
-  /** Attachments between the stacked notices and the front item, such as the queue. */
-  readonly attachedAbove?: ReactNode;
 }
 
-export function ComposerBannerStack({ className, items, attachedAbove }: ComposerBannerStackProps) {
+export function ComposerBannerStack({ className, items }: ComposerBannerStackProps) {
   const [stackExpanded, setStackExpanded] = useState(false);
   const noticesRef = useRef<HTMLDivElement>(null);
   const peekRef = useRef<HTMLButtonElement>(null);
@@ -199,13 +197,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
   }, [stackExpanded]);
 
   if (!front) {
-    return (
-      <>
-        {null}
-        {attachedAbove}
-        {null}
-      </>
-    );
+    return null;
   }
   const firstStackedItem = (stackedNotices.find((slot) => !slot.exiting) ?? stackedNotices[0])
     ?.item;
@@ -329,7 +321,6 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
           ))}
         </div>
       ) : null}
-      {attachedAbove}
       <ComposerBanner.Attachment
         className={className}
         data-composer-banner-drawer="true"
