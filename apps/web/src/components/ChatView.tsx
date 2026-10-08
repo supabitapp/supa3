@@ -4513,17 +4513,7 @@ export default function ChatView(props: ChatViewProps) {
     setDraftThreadContext,
   ]);
   const onAutoEnvironment = useCallback(() => {
-    if (envLocked || !draftId) return;
-    if (composerHasAttachments) {
-      toastManager.add({
-        type: "warning",
-        id: "load-balancing-attachments",
-        title: "Keep attachments on this machine",
-        description:
-          "Remove attachments before choosing automatic routing, then attach them on the selected machine.",
-      });
-      return;
-    }
+    if (envLocked || !draftId || composerHasAttachments) return;
     refreshLoadBalancing(
       logicalProjectEnvironments.map((environment) => environment.environmentId),
     );
@@ -4549,6 +4539,9 @@ export default function ChatView(props: ChatViewProps) {
         : loadBalancing.failed
           ? "Auto balance unavailable"
           : "Auto balance"
+    : undefined;
+  const autoEnvironmentDisabledReason = composerHasAttachments
+    ? "Attachments stay on this machine. Remove them to use auto balance."
     : undefined;
 
   // The machine an in-flight switch is heading to; a newer switch replaces it.
@@ -10502,6 +10495,7 @@ export default function ChatView(props: ChatViewProps) {
     envLocked,
     availableEnvironments: logicalProjectEnvironments,
     autoEnvironmentLabel,
+    autoEnvironmentDisabledReason,
     onAutoEnvironment:
       draftId &&
       !envLocked &&
@@ -10635,6 +10629,7 @@ export default function ChatView(props: ChatViewProps) {
         : {})}
       {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
       autoEnvironmentLabel={autoEnvironmentLabel}
+      autoEnvironmentDisabledReason={autoEnvironmentDisabledReason}
       onAutoEnvironment={
         draftId &&
         !envLocked &&

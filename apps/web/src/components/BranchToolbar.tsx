@@ -60,6 +60,7 @@ interface BranchToolbarProps {
   startFromOrigin: boolean;
   onStartFromOriginChange: (startFromOrigin: boolean) => void;
   autoEnvironmentLabel?: string | undefined;
+  autoEnvironmentDisabledReason?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
   onCheckoutPullRequestRequest?: (reference: string) => void;
@@ -291,6 +292,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   startFromOrigin,
   onStartFromOriginChange,
   autoEnvironmentLabel,
+  autoEnvironmentDisabledReason,
   onAutoEnvironment,
   envLocked,
   onCheckoutPullRequestRequest,
@@ -475,6 +477,7 @@ export const BranchToolbar = memo(function BranchToolbar({
       {showEnvironmentIndicator && availableEnvironments ? (
         <BranchToolbarEnvironmentSelector
           autoEnvironmentLabel={autoEnvironmentLabel}
+          autoEnvironmentDisabledReason={autoEnvironmentDisabledReason}
           onAutoEnvironment={onAutoEnvironment}
           envLocked={envLocked}
           environmentId={environmentId}

@@ -56,9 +56,11 @@ const environments = [
 
 function HostPicker({
   locked = false,
+  hasAttachments = false,
   displayMode,
 }: {
   locked?: boolean;
+  hasAttachments?: boolean;
   displayMode: "toolbar" | "panel";
 }) {
   const [environmentId, setEnvironmentId] = useState(environments[0]!.environmentId);
@@ -72,6 +74,7 @@ function HostPicker({
         environmentId={environmentId}
         availableEnvironments={environments}
         autoEnvironmentLabel={auto ? "Auto balance" : undefined}
+        autoEnvironmentDisabledReason={hasAttachments ? attachmentDisabledReason : undefined}
         onAutoEnvironment={() => setAuto(true)}
         onEnvironmentChange={(id) => {
           setEnvironmentId(id);
@@ -120,6 +123,8 @@ function RefPicker() {
 
 let root: Root;
 let container: HTMLDivElement;
+const attachmentDisabledReason =
+  "Attachments stay on this machine. Remove them to use auto balance.";
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
@@ -168,6 +173,61 @@ async function pressNumber(key: string) {
 }
 
 describe.each(["toolbar", "panel"] as const)("host picker in %s", (displayMode) => {
+  it("updates inline context on hover and keyboard navigation", async () => {
+    await act(() => root.render(<HostPicker displayMode={displayMode} hasAttachments />));
+    await openPicker("Run on");
+    const options = document.querySelectorAll<HTMLElement>('[role="option"]');
+    const context = () => document.querySelector('[data-slot="combobox-status"]')!.textContent;
+    await act(() => options[1]!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true })));
+    expect(context()).toBe("Run this thread on this machine.");
+    await act(() => options[0]!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true })));
+    expect(context()).toBe(attachmentDisabledReason);
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Search hosts"]')!;
+    await act(() =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })),
+    );
+    expect(context()).toBe("Run this thread on this machine.");
+    await act(() =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })),
+    );
+    expect(context()).toBe(attachmentDisabledReason);
+    expect(container.querySelector("output")!.textContent).toBe("laptop");
+  });
+
+  it("keeps blocked auto selections inline and allows auto after removing attachments", async () => {
+    await act(() => root.render(<HostPicker displayMode={displayMode} hasAttachments />));
+    await openPicker("Run on");
+    await act(() => document.querySelector<HTMLElement>('[role="option"]')!.click());
+    expect(container.querySelector('[aria-label="Run on"]')!.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    await pressNumber("1");
+    expect(container.querySelector('[aria-label="Run on"]')!.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    await search("auto");
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Search hosts"]')!;
+    await act(() =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })),
+    );
+    await act(() =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    expect(container.querySelector("output")!.textContent).toBe("laptop");
+    expect(container.querySelector('[aria-label="Run on"]')!.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(document.querySelector('[data-slot="combobox-status"]')!.textContent).toBe(
+      attachmentDisabledReason,
+    );
+    await act(() => root.render(<HostPicker displayMode={displayMode} />));
+    await pressNumber("1");
+    expect(container.querySelector("output")!.textContent).toBe("auto");
+    expect(container.querySelector('[aria-label="Run on"]')!.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+  });
+
   it("selects the filtered host, resets search, and can return to auto balance", async () => {
     await act(() => root.render(<HostPicker displayMode={displayMode} />));
     await openPicker("Run on");
