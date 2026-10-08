@@ -1,16 +1,57 @@
 import Foundation
 
 struct HTTPHostGuard {
-  enum Phase { case headers, body(Int), chunkSize, chunk(Int), chunkCRLF, trailers, opaque }
+  enum Phase { case headers, body(Int), chunkSize, chunk(Int), chunkCRLF, trailers, awaitingUpgrade, opaque }
   let authority: String
   var phase: Phase = .headers
   var buffered = Data()
+  private var response = Data()
+  private var requests = 0
   private let delimiter = Data("\r\n\r\n".utf8)
+  var awaitingUpgrade: Bool {
+    if case .awaitingUpgrade = phase { return true }
+    return false
+  }
+  mutating func observeResponse(_ bytes: Data) throws -> Data {
+    guard awaitingUpgrade else { return Data() }
+    response.append(bytes)
+    while true {
+      guard let end = response.range(of: delimiter) else {
+        guard response.count <= 65536 else { throw RelayError.invalid("HTTP response headers too large") }
+        return Data()
+      }
+      let count = end.upperBound - response.startIndex
+      guard count <= 65536, let text = String(data: response.prefix(count), encoding: .isoLatin1),
+            let first = text.components(separatedBy: "\r\n").first else {
+        throw RelayError.invalid("Invalid HTTP response")
+      }
+      let fields = first.split(separator: " ", omittingEmptySubsequences: false)
+      guard fields.count >= 2, ["HTTP/1.0", "HTTP/1.1"].contains(String(fields[0])),
+            fields[1].count == 3, let status = Int(fields[1]), (100..<600).contains(status) else {
+        throw RelayError.invalid("Invalid HTTP response")
+      }
+      response.removeFirst(count)
+      if (100..<200).contains(status) && status != 101 { continue }
+      phase = status == 101 ? .opaque : .headers
+      response.removeAll()
+      return try feed(Data())
+    }
+  }
+  func finish() throws {
+    switch phase {
+    case .headers, .opaque:
+      guard buffered.isEmpty else { throw RelayError.invalid("Truncated HTTP request") }
+    default: throw RelayError.invalid("Truncated HTTP request")
+    }
+  }
   mutating func feed(_ bytes: Data) throws -> Data {
     buffered.append(bytes)
     var output = Data()
     while !buffered.isEmpty {
       switch phase {
+      case .awaitingUpgrade:
+        guard buffered.count <= 65536 else { throw RelayError.invalid("Too much data before HTTP upgrade") }
+        return output
       case .opaque:
         output.append(buffered); buffered.removeAll(keepingCapacity: true)
       case .headers:
@@ -23,14 +64,19 @@ struct HTTPHostGuard {
           throw RelayError.invalid("Invalid HTTP headers")
         }
         let lines = text.components(separatedBy: "\r\n")
-        guard let first = lines.first, first.split(separator: " ").count == 3,
-              !first.contains("://") else { throw RelayError.invalid("Invalid HTTP request target") }
+        guard let first = lines.first else { throw RelayError.invalid("Invalid HTTP request target") }
+        let request = first.split(separator: " ", omittingEmptySubsequences: false)
+        guard request.count == 3, request[2] == "HTTP/1.1", request[1].hasPrefix("/"),
+              !request[1].hasPrefix("//") else { throw RelayError.invalid("Invalid HTTP request target") }
         var headers: [String: [String]] = [:]
         for line in lines.dropFirst() where !line.isEmpty {
           guard !line.hasPrefix(" "), !line.hasPrefix("\t"), let colon = line.firstIndex(of: ":") else {
             throw RelayError.invalid("Invalid HTTP header")
           }
           let name = line[..<colon].lowercased()
+          guard name.range(of: "^[!#$%&'*+.^_`|~0-9a-z-]+$", options: .regularExpression) != nil else {
+            throw RelayError.invalid("Invalid HTTP header")
+          }
           headers[name, default: []].append(line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces))
         }
         guard headers["host"] == [authority] else { throw RelayError.invalid("Misdirected HTTP Host") }
@@ -39,15 +85,24 @@ struct HTTPHostGuard {
         guard lengths.count <= 1, transfer.count <= 1, lengths.isEmpty || transfer.isEmpty else {
           throw RelayError.invalid("Ambiguous HTTP body")
         }
-        if headers["upgrade"] != nil {
-          phase = .opaque
-        } else if !transfer.isEmpty {
+        var size = 0
+        if let length = lengths.first {
+          guard !length.isEmpty, length.allSatisfy({ $0.isASCII && $0.isNumber }),
+                let parsed = Int(length), parsed >= 0 else { throw RelayError.invalid("Invalid HTTP length") }
+          size = parsed
+        }
+        if !transfer.isEmpty {
           guard transfer[0].lowercased() == "chunked" else { throw RelayError.invalid("Unsupported HTTP body") }
+        }
+        if headers["upgrade"] != nil {
+          guard requests == 0, size == 0, transfer.isEmpty else { throw RelayError.invalid("Upgrade requires a fresh connection") }
+          phase = .awaitingUpgrade
+        } else if !transfer.isEmpty {
           phase = .chunkSize
-        } else if let length = lengths.first {
-          guard let size = Int(length), size >= 0 else { throw RelayError.invalid("Invalid HTTP length") }
+        } else {
           phase = size == 0 ? .headers : .body(size)
         }
+        requests += 1
         output.append(buffered.prefix(count)); buffered.removeFirst(count)
       case .body(let remaining), .chunk(let remaining):
         let count = min(remaining, buffered.count)
@@ -59,8 +114,10 @@ struct HTTPHostGuard {
           if buffered.count > 1024 { throw RelayError.invalid("Invalid HTTP chunk") }; return output
         }
         let count = end.upperBound - buffered.startIndex
+        guard count <= 1024 else { throw RelayError.invalid("Invalid HTTP chunk") }
         let line = String(decoding: buffered.prefix(count - 2), as: UTF8.self).components(separatedBy: ";")[0]
-        guard let size = Int(line, radix: 16), size >= 0 else { throw RelayError.invalid("Invalid HTTP chunk") }
+        guard !line.isEmpty, line.allSatisfy({ $0.isASCII && $0.isHexDigit }),
+              let size = Int(line, radix: 16), size >= 0 else { throw RelayError.invalid("Invalid HTTP chunk") }
         output.append(buffered.prefix(count)); buffered.removeFirst(count)
         phase = size == 0 ? .trailers : .chunk(size)
       case .chunkCRLF:

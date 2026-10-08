@@ -2,6 +2,7 @@
 import * as NodeNet from "node:net";
 import * as NodeStream from "node:stream";
 import { after } from "./timer.ts";
+import { HttpHostGuard } from "./httpHostGuard.ts";
 import type { TunnelStream } from "./tunnel.ts";
 import { createTunnelConnector, type TunnelClientOptions } from "./tunnel.ts";
 
@@ -90,7 +91,7 @@ export class TunnelSocket extends NodeStream.Duplex {
 async function listenLoopbackTunnel(open: () => Promise<TunnelStream>) {
   const sockets = new Set<NodeNet.Socket>();
   let port = 0;
-  const pipe = (socket: NodeNet.Socket, head: Buffer) => {
+  const pipe = (socket: NodeNet.Socket, guard: HttpHostGuard, head: Buffer) => {
     open().then(
       (stream) => {
         if (socket.destroyed) {
@@ -100,10 +101,15 @@ async function listenLoopbackTunnel(open: () => Promise<TunnelStream>) {
         const remote = new TunnelSocket(stream);
         socket.on("error", () => remote.destroy());
         remote.on("error", () => socket.destroy());
+        remote.on("data", (bytes: Buffer) => guard.observeResponse(bytes));
+        remote.once("end", () => {
+          if (guard.awaitingUpgrade) socket.destroy();
+        });
         socket.once("close", () => remote.destroy());
         remote.once("close", () => socket.destroy());
+        guard.startUpgradeTimeout();
         if (head.length > 0) remote.write(head);
-        socket.pipe(remote);
+        guard.pipe(remote);
         remote.pipe(socket);
         socket.resume();
       },
@@ -115,26 +121,20 @@ async function listenLoopbackTunnel(open: () => Promise<TunnelStream>) {
     socket.once("close", () => sockets.delete(socket));
     socket.on("error", () => socket.destroy());
     const expected = `127.0.0.1:${port}`;
-    let head = Buffer.alloc(0);
-    const onData = (chunk: Buffer) => {
-      head = Buffer.concat([head, chunk]);
-      const end = head.indexOf("\r\n\r\n");
-      if (end < 0) {
-        if (head.length > 16 * 1024) socket.destroy();
-        return;
-      }
-      socket.off("data", onData);
+    const guard = new HttpHostGuard(expected);
+    let started = false;
+    socket.once("end", () => {
+      if (!started) socket.destroy();
+    });
+    socket.once("close", () => guard.destroy());
+    guard.on("error", () => socket.destroy());
+    guard.once("data", (head: Buffer) => {
+      started = true;
+      guard.pause();
       socket.pause();
-      const host = /\r\nhost:[ \t]*([^\r\n]*)/i.exec(head.subarray(0, end).toString("latin1"))?.[1];
-      if (host?.trim().toLowerCase() !== expected) {
-        socket.end(
-          "HTTP/1.1 421 Misdirected Request\r\nconnection: close\r\ncontent-length: 0\r\n\r\n",
-        );
-        return;
-      }
-      pipe(socket, head);
-    };
-    socket.on("data", onData);
+      pipe(socket, guard, head);
+    });
+    socket.pipe(guard);
   };
   const server = NodeNet.createServer({ allowHalfOpen: true, noDelay: true }, accept);
   await new Promise<void>((resolve, reject) => {

@@ -50,6 +50,49 @@ private func cpuSeconds() -> Double {
   return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
 }
 
+private func rejectedUpgrade(origin: String) throws -> Data {
+  let url = try XCTUnwrap(URL(string: origin))
+  let port = try XCTUnwrap(url.port)
+  let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+  guard socket >= 0 else { throw POSIXError(.EIO) }
+  defer { Darwin.close(socket) }
+  var timeout = timeval(tv_sec: 5, tv_usec: 0)
+  setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+  var noSignal: Int32 = 1
+  setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+  var address = sockaddr_in()
+  address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+  address.sin_family = sa_family_t(AF_INET)
+  address.sin_port = UInt16(port).bigEndian
+  address.sin_addr.s_addr = inet_addr("127.0.0.1")
+  let connected = withUnsafePointer(to: &address) {
+    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+      Darwin.connect(socket, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+    }
+  }
+  guard connected == 0 else { throw POSIXError(.ECONNREFUSED) }
+  let request = Data((
+    "GET /.well-known/supacode/environment HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\nUpgrade: websocket\r\n\r\n" +
+    "GET /api/test/site/style.css HTTP/1.1\r\nHost: elsewhere.invalid\r\nConnection: close\r\n\r\n"
+  ).utf8)
+  try request.withUnsafeBytes { bytes in
+    var offset = 0
+    while offset < bytes.count {
+      let count = Darwin.write(socket, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
+      guard count > 0 else { throw POSIXError(.EIO) }
+      offset += count
+    }
+  }
+  var response = Data()
+  var bytes = [UInt8](repeating: 0, count: 16384)
+  while true {
+    let count = Darwin.read(socket, &bytes, bytes.count)
+    if count == 0 || (count < 0 && errno == ECONNRESET) { return response }
+    guard count > 0 else { throw POSIXError(.EIO) }
+    response.append(contentsOf: bytes.prefix(count))
+  }
+}
+
 final class InteropTests: XCTestCase {
   func testGoRelayAndNodeHost() async throws {
     guard ProcessInfo.processInfo.environment["SUPACODE_RELAY_E2E"] == "1" else {
@@ -105,6 +148,14 @@ final class InteropTests: XCTestCase {
       }
       FileHandle.standardError.write(Data("CHECKPOINT auth and inner /ws passed\n".utf8))
       actualWS.cancel(with: .normalClosure, reason: nil)
+
+      for base in [origin, config["nodeOrigin"]!] {
+        let rejected = try rejectedUpgrade(origin: base)
+        XCTAssertFalse(String(decoding: rejected, as: UTF8.self).contains("width:123px"))
+        let (_, healthy) = try await session.data(from: URL(string: base + "/.well-known/supacode/environment")!)
+        XCTAssertEqual((healthy as! HTTPURLResponse).statusCode, 200)
+      }
+      FileHandle.standardError.write(Data("CHECKPOINT rejected upgrade and sibling HTTP passed\n".utf8))
 
       let (image, imageResponse) = try await session.data(from: URL(string: origin + config["image"]!)!)
       XCTAssertEqual((imageResponse as! HTTPURLResponse).statusCode, 200)

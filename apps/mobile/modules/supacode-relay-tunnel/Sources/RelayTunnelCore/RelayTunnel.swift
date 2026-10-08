@@ -311,7 +311,7 @@ public final class RelayTunnel: @unchecked Sendable {
           if let data, !data.isEmpty {
             stream.pending.append(try stream.guardHTTP.feed(data))
           }
-          if complete { stream.localEnded = true }
+          if complete { stream.localEnded = true; try stream.guardHTTP.finish() }
           self.schedulePump()
           if stream.pending.isEmpty && !complete { self.read(stream) }
         } catch {
@@ -416,6 +416,14 @@ public final class RelayTunnel: @unchecked Sendable {
         guard !stream.remoteEnded, payload.count <= stream.receiveCredit else {
           throw RelayError.invalid("Stream receive window exceeded")
         }
+        do {
+          let released = try stream.guardHTTP.observeResponse(payload)
+          if !released.isEmpty {
+            stream.pending.append(released); schedulePump()
+          }
+        } catch {
+          consume(ticket, bytes: payload.count); reset(stream); continue
+        }
         stream.receiveCredit -= payload.count; stream.receiving += 1
         bytesReceived += UInt64(payload.count)
         stream.connection.send(content: payload, completion: .contentProcessed { [weak self, weak stream] error in
@@ -438,6 +446,7 @@ public final class RelayTunnel: @unchecked Sendable {
       case 4:
         guard payload.isEmpty, id != 0 else { throw RelayError.invalid("Invalid mux FIN") }
         if let stream = streams[id], !stream.remoteEnded {
+          if stream.guardHTTP.awaitingUpgrade { reset(stream); continue }
           stream.remoteEnded = true
           stream.receiving += 1
           stream.connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [weak self, weak stream] _ in
