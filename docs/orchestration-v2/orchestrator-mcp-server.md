@@ -145,8 +145,13 @@ provider-specific extensions; those remain in flavors such as Grok.
 
 ### Pi V2
 
-Pi core has no MCP client. When a provider session credential exists, the
-adapter writes a Supacode-owned extension into the server cache and spawns
+Supacode keeps a provider-session HTTP bridge even when Pi supports native MCP.
+`mcp.json` entries override native registrations, and native MCP's default
+60-second request timeout can interrupt long-running Supacode tools. The bridge owns
+the injected endpoint and credential and forwards Pi's cancellation signal.
+
+When a provider session credential exists, the adapter writes a Supacode-owned
+extension into the server cache and spawns
 `pi --mode rpc --extension <cache>/pi-supacode-mcp-extension.ts` with:
 
 ```text
@@ -154,9 +159,13 @@ SUPACODE_MCP_URL=http://127.0.0.1:<port>/mcp
 SUPACODE_MCP_BEARER_TOKEN=<provider-session-token>
 ```
 
-The extension connects to that HTTP endpoint, lists tools, and registers each
-one with `pi.registerTool` under a `mcp__supacode__` namespace
-(`mcp__supacode__delegate_task`, `mcp__supacode__supacode_thread_launch`, and the rest).
+The extension registers each tool under `mcp__supacode__`, which is both the
+public name saved loadouts and tool selectors use and the normalized namespace
+Pi would give a configured `supacode` MCP server, so one registration reserves
+it. On Pi 0.99+,
+`orchestrator_capabilities`, `delegate_task`, and `task_status` remain directly
+available; optional tools are discovered through Pi's builtin `tool_search`.
+On older Pi or without builtin search, all tools remain directly available.
 The bridge calls the original MCP tool name over HTTP. Follow-up requests send
 `mcp-protocol-version: 2025-06-18`; Effect's MCP transport returns 400
 without it. The first turn of a session also receives the shared Supacode

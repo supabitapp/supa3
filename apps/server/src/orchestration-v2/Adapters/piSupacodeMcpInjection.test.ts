@@ -162,6 +162,7 @@ describe("pi Supacode MCP injection", () => {
       assert.include(mcpSource, '"mcp-protocol-version"');
       assert.include(mcpSource, '"tools/call"');
       assert.include(mcpSource, "mcp__supacode__");
+      assert.include(mcpSource, "mcp__supacode__");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });
