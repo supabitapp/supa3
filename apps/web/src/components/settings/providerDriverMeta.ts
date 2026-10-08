@@ -6,10 +6,10 @@ import {
   CursorSettings,
   GrokSettings,
   OpenCodeSettings,
-  MuseSettings,
   ProviderDriverKind,
 } from "@supacode/contracts";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
+import { museClient } from "@supacode/provider-muse/client";
 import { piClient } from "@supacode/provider-pi/client";
 
 /** The provider client definitions this web build ships, in presentation order. */
@@ -53,12 +53,7 @@ export const providerClients = makeProviderClientRegistry([
     label: "Antigravity",
     settingsSchema: AntigravitySettings,
   },
-  {
-    driverKind: ProviderDriverKind.make("muse"),
-    label: "Muse Code",
-    settingsSchema: MuseSettings,
-    badgeLabel: "Beta",
-  },
+  museClient,
   piClient,
   {
     driverKind: ProviderDriverKind.make("acpRegistry"),

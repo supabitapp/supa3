@@ -28,6 +28,7 @@
     "@supacode/contracts": "workspace:*",
     "@supacode/mermaid-ascii": "workspace:*",
     "@supacode/provider-core": "workspace:*",
+    "@supacode/provider-muse": "workspace:*",
     "@supacode/provider-pi": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",

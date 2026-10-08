@@ -27,7 +27,7 @@ import { CodexDriver, type CodexDriverEnv } from "./Drivers/CodexDriver.ts";
 import { CursorDriver, type CursorDriverEnv } from "./Drivers/CursorDriver.ts";
 import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver.ts";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver.ts";
-import { MuseDriver, type MuseDriverEnv } from "./Drivers/MuseDriver.ts";
+import { MuseDriver, type MuseDriverEnv } from "@supacode/provider-muse/server";
 import { PiDriver, type PiDriverEnv } from "@supacode/provider-pi/server";
 import type { AnyProviderDriver } from "@supacode/provider-core/server/driver";
 

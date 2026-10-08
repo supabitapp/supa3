@@ -42,6 +42,7 @@
     "@opencode/protocol": "2.0.23",
     "@opencode/schema": "2.0.23",
     "@supacode/provider-core": "workspace:*",
+    "@supacode/provider-muse": "workspace:*",
     "@supacode/provider-pi": "workspace:*",
     "diff": "8.0.3",
     "effect": "catalog:",
