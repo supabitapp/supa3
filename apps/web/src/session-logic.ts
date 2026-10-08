@@ -34,7 +34,10 @@ import type {
 import type { ThreadRunSummary, ThreadRuntimeSummary } from "@supacode/client-runtime/state/shell";
 import { threadRuntimeHasInterruptibleRun } from "@supacode/client-runtime/state/thread-execution";
 import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/turn-item-presentation";
-import type { PendingBackgroundWorkTask } from "@supacode/shared/orchestrationV2PendingBackgroundWork";
+import {
+  backgroundWorkHoldsCompletion,
+  type PendingBackgroundWorkTask,
+} from "@supacode/shared/orchestrationV2PendingBackgroundWork";
 
 import {
   isImageAttachment,
@@ -272,9 +275,11 @@ export function deriveComposerTasksState(input: {
   runtime: ThreadRuntimeSummary | null;
   pendingBackgroundTasks: ReadonlyArray<Pick<PendingBackgroundWorkTask, "kind">>;
 }) {
-  const { plan, activityRun, runtime } = input;
+  const { plan, activityRun, runtime, pendingBackgroundTasks } = input;
+  const awaitingBackgroundWork =
+    activityRun?.status === "completed" && backgroundWorkHoldsCompletion(pendingBackgroundTasks);
   if (
-    isLatestRunSettled(activityRun, runtime) ||
+    (isLatestRunSettled(activityRun, runtime) && !awaitingBackgroundWork) ||
     !plan ||
     plan.runId !== (activityRun?.runId ?? null)
   ) {
