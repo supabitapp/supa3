@@ -71,6 +71,20 @@ export const NEEDS_YOU: ReadonlySet<SidebarThreadStatus> = new Set([
 ]);
 export const IN_FLIGHT: ReadonlySet<SidebarThreadStatus> = new Set(["working", "waiting"]);
 
+export const DAY_MS = 86_400_000;
+
+export function countPerDay(isos: Iterable<string | null>, today: number, days: number) {
+  const counts = Array<number>(days).fill(0);
+  for (const iso of isos) {
+    const day = new Date(iso ? Date.parse(iso) : Number.NaN);
+    if (Number.isNaN(day.getTime())) continue;
+    day.setHours(0, 0, 0, 0);
+    const index = days - 1 - Math.round((today - day.getTime()) / DAY_MS);
+    if (index >= 0 && index < days) counts[index]! += 1;
+  }
+  return counts;
+}
+
 function toProtoThread(shell: EnvironmentThreadShell, projectName: string): ProtoThread {
   const key = `${shell.environmentId}:${shell.id}`;
   return {

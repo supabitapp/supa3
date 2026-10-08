@@ -36,6 +36,7 @@ import {
   SproutIcon,
   TimerIcon,
   WavesIcon,
+  PaintbrushIcon,
   type LucideIcon,
 } from "lucide-react";
 import { PullRequestGlyph } from "../../../components/pullRequest/pullRequestIcons";
@@ -84,10 +85,20 @@ import {
   TideBody,
 } from "./artWidgets";
 import { CatchUpBody, PausedBody, PlansBody, QuietBody, ShippedBody } from "./listWidgets";
+import { AgentTileBody } from "../tiles/TileBody";
+import { forgetTile, tileTitles } from "../tiles/store";
 import type { WidgetSize } from "./layout";
 
-export type WidgetCategory = "Agents" | "Start" | "Code" | "Insights" | "Machine" | "Ambient";
+export type WidgetCategory =
+  | "Yours"
+  | "Agents"
+  | "Start"
+  | "Code"
+  | "Insights"
+  | "Machine"
+  | "Ambient";
 export const CATEGORIES: ReadonlyArray<WidgetCategory> = [
+  "Yours",
   "Agents",
   "Start",
   "Code",
@@ -95,6 +106,11 @@ export const CATEGORIES: ReadonlyArray<WidgetCategory> = [
   "Machine",
   "Ambient",
 ];
+
+export interface WidgetTitles {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly get: (id: string) => string | null;
+}
 
 export interface WidgetDef {
   readonly id: string;
@@ -107,11 +123,31 @@ export interface WidgetDef {
   readonly bare?: boolean;
   readonly count?: (data: ProtoData) => { n: number; urgent?: boolean } | null;
   readonly Body: ComponentType;
+  readonly multiple?: boolean;
+  readonly titles?: WidgetTitles;
+  readonly forget?: (id: string) => void;
 }
 
 const SHELLS = "Thread shells already on this client. No extra requests.";
 
+const AGENT_TILE: WidgetDef = {
+  id: "agent-tile",
+  title: "Agent tile",
+  description:
+    "Describe what you want to see and an agent designs the tile from live data. Add as many as you like.",
+  icon: PaintbrushIcon,
+  category: "Yours",
+  sizes: ["m", "s", "t", "l", "w"],
+  source:
+    "Your prompt, project names, model names and today's counts go to Claude once (10 to 30 seconds) to design the tile. Thread titles never leave the device. After that it reads data already on this client, so it stays current with no extra requests.",
+  Body: AgentTileBody,
+  multiple: true,
+  titles: tileTitles,
+  forget: forgetTile,
+};
+
 export const WIDGETS: ReadonlyArray<WidgetDef> = [
+  AGENT_TILE,
   {
     id: "needs-you",
     title: "Needs you",
@@ -527,4 +563,13 @@ export const WIDGETS: ReadonlyArray<WidgetDef> = [
   },
 ];
 
-export const WIDGETS_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
+const WIDGETS_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
+
+export function resolveWidget(id: string): WidgetDef | undefined {
+  const separator = id.indexOf(":");
+  if (separator < 0) return WIDGETS_BY_ID.get(id);
+  const def = WIDGETS_BY_ID.get(id.slice(0, separator));
+  return def?.multiple ? { ...def, id } : undefined;
+}
+
+export const titleOf = (def: WidgetDef) => def.titles?.get(def.id) ?? def.title;

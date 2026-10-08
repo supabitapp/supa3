@@ -1,20 +1,24 @@
 import { scopeProjectRef } from "@supacode/client-runtime/environment";
-import type { ServerProvider } from "@supacode/contracts";
-import { providersWithLimits } from "@supacode/shared/usageLimits";
 
 import { useNewThreadHandler } from "../../../hooks/useHandleNewThread";
 import { useNowMinuteMs } from "../../../hooks/useNowMinute";
 import { useProjects } from "../../../state/entities";
-import { useEnvironments } from "../../../state/environments";
-import { IN_FLIGHT, NEEDS_YOU, seededRandom, type ProtoData, type ProtoThread } from "../data";
+import {
+  DAY_MS,
+  IN_FLIGHT,
+  NEEDS_YOU,
+  countPerDay,
+  seededRandom,
+  type ProtoData,
+  type ProtoThread,
+} from "../data";
 import { startOfDay } from "../Pulse";
+import { useLimitRows } from "./appWidgets";
 import { AsciiArt, Canvas, truncate, type ArtHit, type Tone } from "./ascii";
 import { useWidgetEnv, useWidgetFrame } from "./context";
 import type { WidgetSize } from "./layout";
 import { WidgetEmpty } from "./scenes";
 
-const DAY_MS = 86_400_000;
-const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const weekdayDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric" });
 const resetDay = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 const resetTime = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
@@ -47,22 +51,12 @@ function hills(canvas: Canvas, rand: () => number, amplitude: number) {
   canvas.contour(canvas.rows - 1, heights, "soft", { char: ".", tone: "faint", density: 0.2 });
 }
 
-function dayIndex(iso: string | null, today: number, days: number) {
-  if (!iso) return -1;
-  const day = startOfDay(Date.parse(iso));
-  if (Number.isNaN(day)) return -1;
-  const index = days - 1 - Math.round((today - day) / DAY_MS);
-  return index >= 0 && index < days ? index : -1;
-}
-
-function startsPerDay(threads: ReadonlyArray<ProtoThread>, today: number, days: number) {
-  const counts = Array<number>(days).fill(0);
-  for (const thread of threads) {
-    const index = dayIndex(thread.createdAt, today, days);
-    if (index >= 0) counts[index]! += 1;
-  }
-  return counts;
-}
+const startsPerDay = (threads: ReadonlyArray<ProtoThread>, today: number, days: number) =>
+  countPerDay(
+    threads.map((t) => t.createdAt),
+    today,
+    days,
+  );
 
 const sum = (values: ReadonlyArray<number>) => values.reduce((a, b) => a + b, 0);
 
@@ -219,12 +213,13 @@ export function GardenBody() {
   const today = startOfDay(now);
   const days = GARDEN_DAYS[size];
   const starts = startsPerDay(data.projectThreads, today, days);
-  const blooms = Array<boolean>(days).fill(false);
-  for (const thread of data.projectThreads)
-    for (const pr of thread.prs) {
-      const index = pr.state === "merged" ? dayIndex(pr.updatedAt, today, days) : -1;
-      if (index >= 0) blooms[index] = true;
-    }
+  const blooms = countPerDay(
+    data.projectThreads.flatMap((t) =>
+      t.prs.filter((pr) => pr.state === "merged").map((pr) => pr.updatedAt),
+    ),
+    today,
+    days,
+  ).map((merged) => merged > 0);
   const bloomDays = blooms.filter(Boolean).length;
   const caption = [
     `${plural(sum(starts), "thread")} in ${days} days`,
@@ -515,12 +510,9 @@ function formatReset(iso: string | undefined, now: number) {
 }
 
 export function TideBody() {
-  const { environments } = useEnvironments();
   const now = useNowMinuteMs();
-  const windows = environments.flatMap((env) =>
-    providersWithLimits(env.serverConfig?.providers ?? EMPTY_PROVIDERS).flatMap((provider) =>
-      (provider.usageLimits?.windows ?? []).map((window) => ({ provider, window })),
-    ),
+  const windows = useLimitRows().flatMap(({ provider }) =>
+    (provider.usageLimits?.windows ?? []).map((window) => ({ provider, window })),
   );
   const tightest = windows.reduce<(typeof windows)[number] | null>(
     (worst, entry) =>

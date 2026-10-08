@@ -147,15 +147,20 @@ function ProviderMark({ provider }: { provider: ServerProvider }) {
   );
 }
 
-export function UsageLimitsBody() {
+export function useLimitRows() {
   const { environments } = useEnvironments();
-  const now = useNowMinuteMs();
-  const rows = environments.flatMap((env) =>
+  return environments.flatMap((env) =>
     providersWithLimits(env.serverConfig?.providers ?? EMPTY_PROVIDERS).map((provider) => ({
+      key: `${env.environmentId}:${provider.instanceId}`,
       env,
       provider,
     })),
   );
+}
+
+export function UsageLimitsBody() {
+  const now = useNowMinuteMs();
+  const rows = useLimitRows();
   if (rows.length === 0) {
     return (
       <WidgetEmpty
@@ -168,8 +173,8 @@ export function UsageLimitsBody() {
   const multipleMachines = new Set(rows.map((r) => r.env.environmentId)).size > 1;
   return (
     <div className="flex flex-col gap-3 overflow-y-auto px-2 pt-0.5 pb-1">
-      {rows.map(({ env, provider }) => (
-        <div key={`${env.environmentId}:${provider.instanceId}`} className="flex flex-col gap-1.5">
+      {rows.map(({ key, env, provider }) => (
+        <div key={key} className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 text-xs">
             <ProviderMark provider={provider} />
             <span className="font-medium text-foreground">

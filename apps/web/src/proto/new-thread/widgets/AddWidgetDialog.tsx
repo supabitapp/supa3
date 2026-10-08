@@ -18,7 +18,7 @@ export function AddWidgetDialog(props: {
   const [query, setQuery] = useState("");
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [pickedSize, setPickedSize] = useState<WidgetSize | null>(null);
-  const firstFree = WIDGETS.find((w) => !props.placed.includes(w.id)) ?? WIDGETS[0]!;
+  const firstFree = WIDGETS.find((w) => !w.multiple && !props.placed.includes(w.id)) ?? WIDGETS[0]!;
   const def = WIDGETS.find((w) => w.id === pickedId) ?? firstFree;
   const size = pickedSize && def.sizes.includes(pickedSize) ? pickedSize : def.sizes[0]!;
   const onScreen = props.placed.includes(def.id);
@@ -222,6 +222,7 @@ function Preview({ def, size }: { def: WidgetDef; size: WidgetSize }) {
   const scale = Math.max(0.2, Math.min(1, room.w / width, room.h / height));
   const Body = def.Body;
   const frame = {
+    id: def.id,
     size,
     columns: 4,
     bodyHeight: bodyHeightFor(size, def.bare === true),

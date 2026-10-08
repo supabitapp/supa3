@@ -4,12 +4,11 @@ import { PULL_REQUEST_STATE_PRESENTATION } from "../../../components/pullRequest
 import { Button } from "../../../components/ui/button";
 import { useNowMinuteMs } from "../../../hooks/useNowMinute";
 import { cn } from "../../../lib/utils";
-import { ago, shortRepo, until, useOpenThread, type ProtoPr, type ProtoThread } from "../data";
-import { More, Row, Time } from "./bodies";
+import { DAY_MS, ago, until, useOpenThread, type ProtoPr, type ProtoThread } from "../data";
+import { More, PrRow, Row, Time } from "./bodies";
 import { rowsThatFit, useWidgetEnv, useWidgetFrame } from "./context";
 import { WidgetEmpty } from "./scenes";
 
-const DAY_MS = 86_400_000;
 const QUIET_DAYS = 3;
 
 function ProjectTag({ thread }: { thread: ProtoThread }) {
@@ -205,10 +204,9 @@ function mergedThisWeek(threads: ReadonlyArray<ProtoThread>, now: number): Proto
 
 export function ShippedBody() {
   const { data } = useWidgetEnv();
-  const { bodyHeight, size } = useWidgetFrame();
+  const { bodyHeight } = useWidgetFrame();
   const now = useNowMinuteMs();
   const merged = mergedThisWeek(data.threads, now);
-  const MergedIcon = PULL_REQUEST_STATE_PRESENTATION.merged.Icon;
   if (merged.length === 0) {
     return (
       <WidgetEmpty
@@ -222,22 +220,7 @@ export function ShippedBody() {
   return (
     <div className="flex flex-col">
       {shown.map((pr) => (
-        <Row key={pr.key} href={pr.url}>
-          <MergedIcon
-            aria-hidden
-            className={cn(
-              "size-3.5 shrink-0",
-              PULL_REQUEST_STATE_PRESENTATION.merged.toneClassName,
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate text-foreground">{pr.title}</span>
-          {size === "s" ? null : (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {shortRepo(pr.repository)}#{pr.number}
-            </span>
-          )}
-          <Time>{ago(pr.updatedAt, now)}</Time>
-        </Row>
+        <PrRow key={pr.key} pr={pr} time={ago(pr.updatedAt, now)} />
       ))}
       <More n={merged.length - shown.length} label="merged" />
     </div>

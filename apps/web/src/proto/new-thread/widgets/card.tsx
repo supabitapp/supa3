@@ -1,9 +1,15 @@
-import { Component, type ReactNode } from "react";
+import { Component, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import { useWidgetEnv } from "./context";
-import type { WidgetDef } from "./registry";
+import { titleOf, type WidgetDef } from "./registry";
+
+const noSubscription = () => () => {};
+
+export function useWidgetTitle(def: WidgetDef) {
+  return useSyncExternalStore(def.titles?.subscribe ?? noSubscription, () => titleOf(def));
+}
 
 export function WidgetHeading(props: { def: WidgetDef; id?: string; actions?: ReactNode }) {
   const { data } = useWidgetEnv();

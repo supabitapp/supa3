@@ -4,10 +4,22 @@ import type { ReactNode } from "react";
 import { useNowMinuteMs } from "../../../hooks/useNowMinute";
 import { resolveDiscoveredServerUrl } from "../../../browser/browserTargetResolver";
 import type { ComposerHandleRef } from "../../../composerHandleContext";
-import { PullRequestGlyph } from "../../../components/pullRequest/pullRequestIcons";
+import {
+  PULL_REQUEST_STATE_PRESENTATION,
+  PullRequestGlyph,
+} from "../../../components/pullRequest/pullRequestIcons";
 import { cn } from "../../../lib/utils";
 import { useDiscoveredPortsState } from "../../../portDiscoveryState";
-import { IN_FLIGHT, NEEDS_YOU, ago, shortRepo, uniqueOpenPrs, useOpenThread } from "../data";
+import {
+  IN_FLIGHT,
+  NEEDS_YOU,
+  ago,
+  shortRepo,
+  uniqueOpenPrs,
+  useOpenThread,
+  type ProtoPr,
+  type ProtoThread,
+} from "../data";
 import { ChecksIcon, STATUS_TONE } from "../Desk";
 import { HarborScene, harborCaption } from "../Harbor";
 import { buildStarters } from "../Launchpad";
@@ -74,11 +86,40 @@ export function Time({ children }: { children: ReactNode }) {
   );
 }
 
+export function ThreadRow({ thread, time }: { thread: ProtoThread; time: ReactNode }) {
+  const openThread = useOpenThread();
+  const tone = STATUS_TONE[thread.status];
+  return (
+    <Row onClick={() => openThread(thread)}>
+      <span className={cn("shrink-0 text-xs font-medium", tone.className)}>{tone.label}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{thread.title}</span>
+      <span className="max-w-[8rem] shrink-0 truncate text-xs text-muted-foreground @max-sm:hidden">
+        {thread.projectName}
+      </span>
+      <Time>{time}</Time>
+    </Row>
+  );
+}
+
+export function PrRow({ pr, time }: { pr: ProtoPr; time: ReactNode }) {
+  const state =
+    PULL_REQUEST_STATE_PRESENTATION[pr.isDraft && pr.state === "open" ? "draft" : pr.state];
+  return (
+    <Row href={pr.url}>
+      <state.Icon aria-hidden className={cn("size-3.5 shrink-0", state.toneClassName)} />
+      <span className="min-w-0 flex-1 truncate text-foreground">{pr.title}</span>
+      <span className="shrink-0 text-xs text-muted-foreground @max-sm:hidden">
+        {shortRepo(pr.repository)}#{pr.number}
+      </span>
+      <Time>{time}</Time>
+    </Row>
+  );
+}
+
 export function NeedsYouBody() {
   const { data } = useWidgetEnv();
-  const { bodyHeight, size } = useWidgetFrame();
+  const { bodyHeight } = useWidgetFrame();
   const now = useNowMinuteMs();
-  const openThread = useOpenThread();
   const rows = data.threads.filter((t) => NEEDS_YOU.has(t.status));
   if (rows.length === 0) {
     return (
@@ -93,18 +134,7 @@ export function NeedsYouBody() {
   return (
     <div className="flex flex-col">
       {shown.map((t) => (
-        <Row key={t.key} onClick={() => openThread(t)}>
-          <span className={cn("shrink-0 text-xs font-medium", STATUS_TONE[t.status].className)}>
-            {STATUS_TONE[t.status].label}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-foreground">{t.title}</span>
-          {size === "s" ? null : (
-            <span className="max-w-[8rem] shrink-0 truncate text-xs text-muted-foreground">
-              {t.projectName}
-            </span>
-          )}
-          <Time>{ago(t.updatedAt, now)}</Time>
-        </Row>
+        <ThreadRow key={t.key} thread={t} time={ago(t.updatedAt, now)} />
       ))}
       <More n={rows.length - shown.length} label="waiting" />
     </div>

@@ -31,7 +31,7 @@ import {
 } from "../../../components/ui/menu";
 import { cn } from "../../../lib/utils";
 import { AddWidgetDialog } from "./AddWidgetDialog";
-import { WidgetBoundary, WidgetHeading } from "./card";
+import { WidgetBoundary, WidgetHeading, useWidgetTitle } from "./card";
 import { WidgetEnvContext, WidgetFrameContext, bodyHeightFor, type WidgetEnv } from "./context";
 import {
   DEFAULT_LAYOUT,
@@ -51,7 +51,7 @@ import {
   type Placed,
   type WidgetSize,
 } from "./layout";
-import { WIDGETS_BY_ID, type WidgetDef } from "./registry";
+import { resolveWidget, titleOf, type WidgetDef } from "./registry";
 
 function readPositions(grid: HTMLElement) {
   const positions = new Map<string, { x: number; y: number }>();
@@ -147,8 +147,15 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [editing, pickerOpen]);
 
-  const placed = items.filter((p) => WIDGETS_BY_ID.has(p.id));
-  const titleOf = (id: string) => WIDGETS_BY_ID.get(id)?.title ?? "Widget";
+  const placed = items.filter((p) => resolveWidget(p.id));
+  const titleFor = (id: string) => {
+    const def = resolveWidget(id);
+    return def ? titleOf(def) : "Widget";
+  };
+  const remove = (current: ReadonlyArray<Placed>, id: string) => {
+    resolveWidget(id)?.forget?.(id);
+    return removeWidget(current, id);
+  };
   const focusHandle = (id: string | undefined) =>
     requestAnimationFrame(() => {
       if (id) handles.current.get(id)?.focus();
@@ -158,25 +165,25 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
     const current = items;
     const index = current.findIndex((p) => p.id === id);
     const entry = current[index];
-    const def = WIDGETS_BY_ID.get(id);
+    const def = resolveWidget(id);
     if (!entry || !def) return;
     const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -columns, ArrowDown: columns }[event.key];
     if (step !== undefined) {
       event.preventDefault();
       const next = moveWidget(current, id, index + step);
       setItems(next);
-      announce(`${def.title}, ${next.findIndex((p) => p.id === id) + 1} of ${next.length}`);
+      announce(`${titleOf(def)}, ${next.findIndex((p) => p.id === id) + 1} of ${next.length}`);
       focusHandle(id);
     } else if (event.key === "[" || event.key === "]") {
       event.preventDefault();
       const size = stepSize(def.sizes, fitSize(def.sizes, entry.size), event.key === "[" ? -1 : 1);
       setItems(resizeWidget(current, id, size));
-      announce(`${def.title}, ${SIZES[size].label.toLowerCase()}`);
+      announce(`${titleOf(def)}, ${SIZES[size].label.toLowerCase()}`);
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      const next = removeWidget(current, id);
+      const next = remove(current, id);
       setItems(next);
-      announce(`${def.title} removed`);
+      announce(`${titleOf(def)} removed`);
       focusHandle(next[Math.min(index, next.length - 1)]?.id);
     }
   };
@@ -208,11 +215,12 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
     setDragging(null);
     if (state?.moved) {
       const index = items.findIndex((p) => p.id === state.id);
-      announce(`${titleOf(state.id)}, ${index + 1} of ${items.length}`);
+      announce(`${titleFor(state.id)}, ${index + 1} of ${items.length}`);
     }
   };
 
   const reset = () => {
+    for (const p of items) resolveWidget(p.id)?.forget?.(p.id);
     writeLayout(null);
     setItemsState([...DEFAULT_LAYOUT]);
     announce("Widgets reset to the default set");
@@ -266,7 +274,7 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
               style={{ gridAutoRows: ROW_HEIGHT, gap: GRID_GAP }}
             >
               {placed.map((p) => {
-                const def = WIDGETS_BY_ID.get(p.id);
+                const def = resolveWidget(p.id);
                 if (!def) return null;
                 return (
                   <WidgetCell
@@ -286,11 +294,11 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
                     onHandlePointerUp={onHandlePointerUp}
                     onSize={(size) => {
                       setItems(resizeWidget(items, p.id, size));
-                      announce(`${def.title}, ${SIZES[size].label.toLowerCase()}`);
+                      announce(`${titleOf(def)}, ${SIZES[size].label.toLowerCase()}`);
                     }}
                     onRemove={() => {
-                      setItems(removeWidget(items, p.id));
-                      announce(`${def.title} removed`);
+                      setItems(remove(items, p.id));
+                      announce(`${titleOf(def)} removed`);
                     }}
                     onCustomize={() => setEditing(true)}
                   />
@@ -319,10 +327,13 @@ export function WidgetGrid({ env }: { env: WidgetEnv }) {
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           placed={placed.map((p) => p.id)}
-          onAdd={(id, size) => {
+          onAdd={(picked, size) => {
+            const id = resolveWidget(picked)?.multiple
+              ? `${picked}:${Math.random().toString(36).slice(2, 8)}`
+              : picked;
             setItems(addWidget(items, id, size));
             setPickerOpen(false);
-            announce(`${titleOf(id)} added`);
+            announce(`${titleFor(id)} added`);
             requestAnimationFrame(() =>
               document
                 .querySelector(`[data-widget="${CSS.escape(id)}"]`)
@@ -352,7 +363,7 @@ interface CellProps {
 }
 
 function WidgetCell({
-  def,
+  def: widget,
   size,
   columns,
   editing,
@@ -366,10 +377,12 @@ function WidgetCell({
   onRemove,
   onCustomize,
 }: CellProps) {
+  const def = { ...widget, title: useWidgetTitle(widget) };
   const bare = def.bare === true && !editing;
   const headingId = `widget-${def.id}`;
   const Body = def.Body;
   const frame = {
+    id: def.id,
     size,
     columns,
     bodyHeight: bodyHeightFor(size, bare),

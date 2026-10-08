@@ -18,6 +18,7 @@ export function useWidgetEnv(): WidgetEnv {
 }
 
 export interface WidgetFrame {
+  readonly id: string;
   readonly size: WidgetSize;
   readonly columns: number;
   readonly bodyHeight: number;
@@ -25,6 +26,7 @@ export interface WidgetFrame {
 }
 
 export const WidgetFrameContext = createContext<WidgetFrame>({
+  id: "",
   size: "m",
   columns: 2,
   bodyHeight: ROW_HEIGHT - HEADING_HEIGHT,
@@ -38,7 +40,7 @@ export function bodyHeightFor(size: WidgetSize, bare: boolean) {
   return rows * ROW_HEIGHT + (rows - 1) * GRID_GAP - (bare ? 0 : HEADING_HEIGHT + 6);
 }
 
-const ROW_PX = 32;
+export const ROW_PX = 32;
 
 export const rowsThatFit = (bodyHeight: number) =>
   Math.max(1, Math.floor((bodyHeight - 18) / ROW_PX));
