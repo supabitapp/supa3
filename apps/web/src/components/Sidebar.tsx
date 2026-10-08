@@ -378,7 +378,7 @@ function SidebarRelativeTime({
   return (
     <time
       dateTime={timestamp}
-      className={cn("w-8 shrink-0 text-right text-xs text-secondary-label tabular-nums", className)}
+      className={cn("shrink-0 text-right text-xs text-secondary-label tabular-nums", className)}
     >
       {compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp, Date.parse(`${nowMinute}:00Z`)))}
     </time>
