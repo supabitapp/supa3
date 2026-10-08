@@ -30,24 +30,46 @@ export function ShortcutHint({
       const disabled =
         trigger.matches(":disabled, [aria-disabled='true']") ||
         trigger.querySelector(":disabled, [aria-disabled='true']");
-      setAnchor(disabled ? null : trigger);
+      const hidden =
+        trigger.closest("[hidden], [inert], [aria-hidden='true']") ||
+        getComputedStyle(trigger).visibility !== "visible" ||
+        trigger.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true }) === false;
+      setAnchor(disabled || hidden ? null : trigger);
     };
     updateAnchor();
     const observer = new MutationObserver(updateAnchor);
     observer.observe(trigger, {
       attributes: true,
-      attributeFilter: ["disabled", "aria-disabled"],
       childList: true,
       subtree: true,
     });
-    return () => observer.disconnect();
+    for (let parent = trigger.parentElement; parent; parent = parent.parentElement) {
+      observer.observe(parent, { attributes: true });
+    }
+    const visibilityEvents = ["pointerover", "pointerout", "focusin", "focusout", "transitionend"];
+    for (const event of visibilityEvents) {
+      trigger.ownerDocument.addEventListener(event, updateAnchor, true);
+    }
+    return () => {
+      observer.disconnect();
+      for (const event of visibilityEvents) {
+        trigger.ownerDocument.removeEventListener(event, updateAnchor, true);
+      }
+    };
   }, [anchorRef, visible]);
 
   if (!visible || !anchor) return null;
 
   return (
     <TooltipPrimitive.Provider>
-      <TooltipPrimitive.Root open disableHoverablePopup>
+      <TooltipPrimitive.Root
+        open
+        disableHoverablePopup
+        onOpenChange={(_open, details) => {
+          details.cancel();
+          details.allowPropagation();
+        }}
+      >
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Positioner
             anchor={anchor}

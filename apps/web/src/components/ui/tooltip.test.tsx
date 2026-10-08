@@ -78,6 +78,87 @@ describe("shortcut hints", () => {
     expect(hints()).toEqual(["⌘N", "⌘K", "⇧⌘M"]);
   });
 
+  it("leaves Escape available to the app while Command remains held", async () => {
+    await renderActions();
+    await keyboard("keydown", "Meta", { metaKey: true });
+    const onKeyDown = vi.fn();
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.addEventListener("keydown", onKeyDown);
+    try {
+      await act(() => container.querySelector("button")!.dispatchEvent(event));
+      expect(onKeyDown).toHaveBeenCalledExactlyOnceWith(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(hints()).toEqual(["⌘N", "⌘K"]);
+    } finally {
+      window.removeEventListener("keydown", onKeyDown);
+    }
+  });
+
+  it.each(["hidden", "inert", "aria-hidden", "visibility"])(
+    "omits controls in a %s ancestor and follows availability while held",
+    async (attribute) => {
+      const wrapperRef = createRef<HTMLDivElement>();
+      await act(() => {
+        root.render(
+          <div ref={wrapperRef}>
+            <Tooltip>
+              <TooltipTrigger>Search</TooltipTrigger>
+              <TooltipPopup shortcut="⌘K">Search</TooltipPopup>
+            </Tooltip>
+          </div>,
+        );
+      });
+      const wrapper = wrapperRef.current!;
+      const hide = () => {
+        if (attribute === "visibility") wrapper.style.visibility = "hidden";
+        else wrapper.setAttribute(attribute, attribute === "aria-hidden" ? "true" : "");
+      };
+      await act(async () => hide());
+      await keyboard("keydown", "Meta", { metaKey: true });
+      expect(hints()).toEqual([]);
+      await act(async () => {
+        wrapper.removeAttribute(attribute === "visibility" ? "style" : attribute);
+      });
+      expect(hints()).toEqual(["⌘K"]);
+      await act(async () => hide());
+      expect(hints()).toEqual([]);
+    },
+  );
+
+  it.each(["pointerover", "pointerout", "focusin", "focusout", "transitionend"])(
+    "follows CSS visibility on %s while Command stays held",
+    async (event) => {
+      await renderActions();
+      const trigger = container.querySelector("button")!;
+      const checkVisibility = vi.fn(() => false);
+      trigger.checkVisibility = checkVisibility;
+      await keyboard("keydown", "Meta", { metaKey: true });
+      expect(hints()).toEqual(["⌘K"]);
+      checkVisibility.mockReturnValue(true);
+      await act(() => trigger.dispatchEvent(new Event(event, { bubbles: true })));
+      expect(hints().toSorted()).toEqual(["⌘K", "⌘N"]);
+      checkVisibility.mockReturnValue(false);
+      await act(() => trigger.dispatchEvent(new Event(event, { bubbles: true })));
+      expect(hints()).toEqual(["⌘K"]);
+    },
+  );
+
+  it("follows popup transition attributes while Command stays held", async () => {
+    await renderActions();
+    const trigger = container.querySelector("button")!;
+    trigger.checkVisibility = () => !container.hasAttribute("data-starting-style");
+    container.setAttribute("data-starting-style", "");
+    await keyboard("keydown", "Meta", { metaKey: true });
+    expect(hints()).toEqual(["⌘K"]);
+    await act(async () => container.removeAttribute("data-starting-style"));
+    expect(hints().toSorted()).toEqual(["⌘K", "⌘N"]);
+  });
+
   it.each(["Win32", "Linux x86_64"])("uses Control on %s", async (platform) => {
     vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
     await renderActions();
