@@ -17,7 +17,7 @@ import { useProjects } from "../../../state/entities";
 
 import { Button } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
-import { IN_FLIGHT, NEEDS_YOU, ago, useOpenThread, type ProtoThread } from "../data";
+import { IN_FLIGHT, NEEDS_YOU, ago, until, useOpenThread, type ProtoThread } from "../data";
 import { STATUS_TONE } from "../Desk";
 import { startOfDay } from "../Pulse";
 import { More, Row, Time, writeToComposer } from "./bodies";
@@ -25,15 +25,6 @@ import { rowsThatFit, useWidgetEnv, useWidgetFrame } from "./context";
 import { WidgetEmpty } from "./scenes";
 
 const DAY_MS = 86_400_000;
-
-function until(iso: string | null, now: number): string {
-  if (!iso) return "";
-  const minutes = Math.round((Date.parse(iso) - now) / 60_000);
-  if (minutes <= 0) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-}
 
 function StatusDot({ thread }: { thread: ProtoThread }) {
   return (

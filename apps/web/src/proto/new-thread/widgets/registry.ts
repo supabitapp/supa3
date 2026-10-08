@@ -25,6 +25,17 @@ import {
   RadioIcon,
   SailboatIcon,
   SparklesIcon,
+  Building2Icon,
+  CloudSunIcon,
+  HourglassIcon,
+  InboxIcon,
+  ListChecksIcon,
+  MoonStarIcon,
+  MountainIcon,
+  ShipIcon,
+  SproutIcon,
+  TimerIcon,
+  WavesIcon,
   type LucideIcon,
 } from "lucide-react";
 import { PullRequestGlyph } from "../../../components/pullRequest/pullRequestIcons";
@@ -64,6 +75,15 @@ import {
   SnoozedBody,
   TodayBody,
 } from "./threadWidgets";
+import {
+  ForecastBody,
+  GardenBody,
+  NightSkyBody,
+  RidgelineBody,
+  SkylineBody,
+  TideBody,
+} from "./artWidgets";
+import { CatchUpBody, PausedBody, PlansBody, QuietBody, ShippedBody } from "./listWidgets";
 import type { WidgetSize } from "./layout";
 
 export type WidgetCategory = "Agents" | "Start" | "Code" | "Insights" | "Machine" | "Ambient";
@@ -382,6 +402,128 @@ export const WIDGETS: ReadonlyArray<WidgetDef> = [
     sizes: ["s", "m", "t", "w"],
     source: "Your keybindings, already on this client.",
     Body: ShortcutsBody,
+  },
+  {
+    id: "plans",
+    title: "Plans to review",
+    description: "Agents in plan mode waiting for you to approve or change their plan.",
+    icon: ListChecksIcon,
+    category: "Agents",
+    sizes: ["s", "m", "t", "l"],
+    source: SHELLS,
+    count: (data) => {
+      const n = data.threads.filter((t) => t.planReady).length;
+      return { n, urgent: n > 0 };
+    },
+    Body: PlansBody,
+  },
+  {
+    id: "catch-up",
+    title: "Catch up",
+    description: "How many finished threads you haven't opened, and a button for the oldest.",
+    icon: InboxIcon,
+    category: "Agents",
+    sizes: ["s", "m"],
+    source: SHELLS,
+    Body: CatchUpBody,
+  },
+  {
+    id: "paused",
+    title: "Paused on limits",
+    description: "Threads that hit a usage limit, and when each one resumes on its own.",
+    icon: TimerIcon,
+    category: "Agents",
+    sizes: ["s", "m", "t"],
+    source: SHELLS,
+    count: (data) => ({ n: data.threads.filter((t) => t.status === "limited").length }),
+    Body: PausedBody,
+  },
+  {
+    id: "quiet",
+    title: "Gone quiet",
+    description:
+      "Threads with an open pull request or worktree that nobody has touched for 3 days.",
+    icon: HourglassIcon,
+    category: "Code",
+    sizes: ["s", "m", "t", "l"],
+    source: SHELLS,
+    Body: QuietBody,
+  },
+  {
+    id: "shipped",
+    title: "Shipped",
+    description: "Pull requests your threads merged in the last 7 days.",
+    icon: ShipIcon,
+    category: "Code",
+    sizes: ["s", "m", "t", "l"],
+    source: "Pull request links on threads, from their last sync.",
+    Body: ShippedBody,
+  },
+  {
+    id: "forecast",
+    title: "Forecast",
+    description:
+      "The weather over your agents: clear when nothing needs you, rain as work piles up, a storm when runs fail.",
+    icon: CloudSunIcon,
+    category: "Ambient",
+    sizes: ["s", "m", "w"],
+    source: `${SHELLS} Click the sky to redraw it.`,
+    Body: ForecastBody,
+  },
+  {
+    id: "garden",
+    title: "Garden",
+    description:
+      "One plant per day. Height is threads started in this project; a flower means a pull request merged.",
+    icon: SproutIcon,
+    category: "Ambient",
+    sizes: ["s", "m", "l", "w"],
+    source: "Thread start times and merged pull requests in this project.",
+    Body: GardenBody,
+  },
+  {
+    id: "skyline",
+    title: "Skyline",
+    description:
+      "A building per project, taller with more threads. Lit windows are agents working; click one to start there.",
+    icon: Building2Icon,
+    category: "Ambient",
+    sizes: ["m", "l", "w"],
+    source: SHELLS,
+    Body: SkylineBody,
+  },
+  {
+    id: "ridgeline",
+    title: "Ridgeline",
+    description:
+      "30 days of thread starts in this project as a mountain range, with the 30 before as the ridge behind.",
+    icon: MountainIcon,
+    category: "Ambient",
+    sizes: ["m", "l", "w"],
+    source: "Thread start times in this project, computed on this client.",
+    Body: RidgelineBody,
+  },
+  {
+    id: "tide",
+    title: "Tide",
+    description:
+      "Your tightest plan limit as a tide: high water means plenty left, low tide means you're close.",
+    icon: WavesIcon,
+    category: "Ambient",
+    sizes: ["s", "m", "t"],
+    source: "Limits your providers already report in each machine's config. No extra requests.",
+    Body: TideBody,
+  },
+  {
+    id: "night-sky",
+    title: "Night sky",
+    description:
+      "A star for each turn finished today, grouped into a constellation per project, under tonight's real moon.",
+    icon: MoonStarIcon,
+    category: "Ambient",
+    sizes: ["m", "l", "w"],
+    source: SHELLS,
+    Body: NightSkyBody,
   },
 ];
 

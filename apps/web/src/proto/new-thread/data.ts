@@ -53,6 +53,8 @@ export interface ProtoThread {
   readonly worktreePath: string | null;
   readonly model: string | null;
   readonly providerInstanceId: string;
+  readonly planReady: boolean;
+  readonly resumesAt: string | null;
 }
 
 export interface ProtoData {
@@ -96,6 +98,8 @@ function toProtoThread(shell: EnvironmentThreadShell, projectName: string): Prot
     worktreePath: shell.worktreePath,
     model: shell.modelSelection?.model ?? null,
     providerInstanceId: shell.providerInstanceId,
+    planReady: shell.hasActionableProposedPlan,
+    resumesAt: shell.limitRecovery?.autoResume ? shell.limitRecovery.resetAt : null,
     prs: shell.pullRequests.flatMap((link) =>
       link.source === "stack-dismissed" || link.snapshot === null
         ? []
@@ -159,6 +163,16 @@ function simulateBusyDay(threads: ReadonlyArray<ProtoThread>, now: number): Prot
         status: "failed",
         lastError: "Process exited with code 1 while running `vp test run`",
         finishedAt: minutesAgo(now, 31),
+      };
+    }
+    if (index === 10) {
+      return { ...thread, status: "ready", planReady: true, finishedAt: minutesAgo(now, 40) };
+    }
+    if (index === 11) {
+      return {
+        ...thread,
+        status: "limited",
+        resumesAt: new Date(now + 2 * 3_600_000).toISOString(),
       };
     }
     if (index < 12) {
@@ -225,6 +239,15 @@ export function ago(iso: string | null, now: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+export function until(iso: string | null, now: number): string {
+  if (!iso) return "";
+  const minutes = Math.round((Date.parse(iso) - now) / 60_000);
+  if (minutes <= 0) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
 }
 
 export function agoPhrase(iso: string | null, now: number): string {
