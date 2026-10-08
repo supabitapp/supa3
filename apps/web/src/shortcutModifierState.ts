@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
+import { isMacPlatform } from "@supacode/shared/keybindings";
 import { isEditableFocused } from "./lib/editableFocus";
 
 export interface ShortcutModifierState {
@@ -27,52 +28,80 @@ export function areShortcutModifierStatesEqual(
   );
 }
 
-export function useShortcutModifierState(ignoreEditable = false): ShortcutModifierState {
-  const [state, setState] = useState(EMPTY_SHORTCUT_MODIFIER_STATE);
-  const stateRef = useRef(EMPTY_SHORTCUT_MODIFIER_STATE);
+let modifierState = EMPTY_SHORTCUT_MODIFIER_STATE;
+let nonEditableModifierState = EMPTY_SHORTCUT_MODIFIER_STATE;
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
-    const updateState = (next: ShortcutModifierState) => {
-      // Even a no-op state dispatch can cost work in the sidebar's large tree.
-      // Ordinary typing must return before dispatching a React update.
-      if (areShortcutModifierStatesEqual(stateRef.current, next)) return;
-      stateRef.current = next;
-      setState(next);
-    };
-    const onKeyboardEvent = (event: KeyboardEvent) => {
-      updateState(
-        ignoreEditable && isEditableFocused(event.target)
-          ? EMPTY_SHORTCUT_MODIFIER_STATE
-          : shortcutModifierStateAfterKeyboardEvent(stateRef.current, event),
-      );
-    };
-    // Dictation tools (Wispr Flow) paste with a synthetic ⌘V whose Meta keyup
-    // never reaches the page, so the tracked state stays "⌘ held" forever and
-    // the thread jump hints stick on screen. A paste is never jump intent, so
-    // treat it like a blur and reset. A physically held modifier re-registers
-    // on the next real key event.
-    const onResetEvent = () => {
-      updateState(EMPTY_SHORTCUT_MODIFIER_STATE);
-    };
+function updateModifierStates(next: ShortcutModifierState, nonEditable: ShortcutModifierState) {
+  if (
+    areShortcutModifierStatesEqual(modifierState, next) &&
+    areShortcutModifierStatesEqual(nonEditableModifierState, nonEditable)
+  ) {
+    return;
+  }
+  modifierState = next;
+  nonEditableModifierState = nonEditable;
+  for (const listener of listeners) listener();
+}
 
-    const onFocus = (event: FocusEvent) => {
-      if (ignoreEditable && isEditableFocused(event.target)) onResetEvent();
-    };
+function onKeyboardEvent(event: KeyboardEvent) {
+  updateModifierStates(
+    shortcutModifierStateAfterKeyboardEvent(modifierState, event),
+    isEditableFocused(event.target)
+      ? EMPTY_SHORTCUT_MODIFIER_STATE
+      : shortcutModifierStateAfterKeyboardEvent(nonEditableModifierState, event),
+  );
+}
+
+function onResetEvent() {
+  updateModifierStates(EMPTY_SHORTCUT_MODIFIER_STATE, EMPTY_SHORTCUT_MODIFIER_STATE);
+}
+
+function onFocus(event: FocusEvent) {
+  if (isEditableFocused(event.target)) {
+    updateModifierStates(modifierState, EMPTY_SHORTCUT_MODIFIER_STATE);
+  }
+}
+
+function subscribe(listener: () => void) {
+  if (listeners.size === 0) {
     window.addEventListener("focusin", onFocus);
     window.addEventListener("keydown", onKeyboardEvent, true);
     window.addEventListener("keyup", onKeyboardEvent, true);
     window.addEventListener("paste", onResetEvent, true);
     window.addEventListener("blur", onResetEvent);
-    return () => {
-      window.removeEventListener("focusin", onFocus);
-      window.removeEventListener("keydown", onKeyboardEvent, true);
-      window.removeEventListener("keyup", onKeyboardEvent, true);
-      window.removeEventListener("paste", onResetEvent, true);
-      window.removeEventListener("blur", onResetEvent);
-    };
-  }, [ignoreEditable]);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size > 0) return;
+    window.removeEventListener("focusin", onFocus);
+    window.removeEventListener("keydown", onKeyboardEvent, true);
+    window.removeEventListener("keyup", onKeyboardEvent, true);
+    window.removeEventListener("paste", onResetEvent, true);
+    window.removeEventListener("blur", onResetEvent);
+    onResetEvent();
+  };
+}
 
-  return state;
+const getModifierState = () => modifierState;
+const getNonEditableModifierState = () => nonEditableModifierState;
+const getEmptyModifierState = () => EMPTY_SHORTCUT_MODIFIER_STATE;
+
+export function useShortcutModifierState(ignoreEditable = false): ShortcutModifierState {
+  return useSyncExternalStore(
+    subscribe,
+    ignoreEditable ? getNonEditableModifierState : getModifierState,
+    getEmptyModifierState,
+  );
+}
+
+const getShortcutHintsVisible = () =>
+  isMacPlatform(navigator.platform) ? modifierState.metaKey : modifierState.ctrlKey;
+const getHiddenShortcutHints = () => false;
+
+export function useShortcutHintsVisible() {
+  return useSyncExternalStore(subscribe, getShortcutHintsVisible, getHiddenShortcutHints);
 }
 
 function normalizeModifierKey(key: string): keyof ShortcutModifierState | null {

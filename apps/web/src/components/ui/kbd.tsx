@@ -9,6 +9,7 @@ const kbdVariants = {
   default: `${chip} bg-muted`,
   /** A chip that stays legible on tooltips and hovered rows. */
   raised: `${chip} bg-foreground/8`,
+  hint: "inline-flex h-4 shrink-0 items-center justify-center whitespace-nowrap px-1 font-medium font-sans text-muted-foreground text-[10px] leading-none",
   /** Trailing key text in list rows, matching `MenuShortcut` and `CommandShortcut`. */
   plain: "font-medium font-sans text-secondary-label text-xs tracking-widest",
 };

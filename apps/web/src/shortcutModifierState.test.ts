@@ -35,6 +35,34 @@ describe("useShortcutModifierState", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps editable filtering independent for shared consumers", async () => {
+    const regular = vi.fn();
+    const nonEditable = vi.fn();
+    function Consumer() {
+      regular(useShortcutModifierState());
+      nonEditable(useShortcutModifierState(true));
+      return createElement("input");
+    }
+    await act(async () => root.render(createElement(Consumer)));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }));
+    });
+    expect(regular).toHaveBeenLastCalledWith({ ...emptyState(), shiftKey: true });
+    expect(nonEditable).toHaveBeenLastCalledWith({ ...emptyState(), shiftKey: true });
+    await act(async () => container.querySelector("input")!.focus());
+    expect(regular).toHaveBeenLastCalledWith({ ...emptyState(), shiftKey: true });
+    expect(nonEditable).toHaveBeenLastCalledWith(emptyState());
+    await act(async () => {
+      container
+        .querySelector("input")!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "Meta", metaKey: true, bubbles: true }));
+    });
+    expect(regular).toHaveBeenLastCalledWith({ ...emptyState(), metaKey: true, shiftKey: true });
+    expect(nonEditable).toHaveBeenLastCalledWith(emptyState());
+    await act(async () => window.dispatchEvent(new Event("blur")));
+    expect(regular).toHaveBeenLastCalledWith(emptyState());
+  });
+
   it.each(["keyup", "paste", "blur"] as const)(
     "does not render for unchanged modifiers after %s resets the state",
     async (reset) => {

@@ -21,6 +21,7 @@ import { useResizeDrag } from "~/hooks/useResizeDrag";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
+import { useShortcutHintsVisible } from "~/shortcutModifierState";
 import * as Schema from "effect/Schema";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
@@ -711,6 +712,7 @@ function SidebarMenuButton({
   shortcut?: string | null | undefined;
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar();
+  const shortcutHintsVisible = useShortcutHintsVisible();
 
   const defaultProps = {
     className: cn(sidebarMenuButtonVariants({ size, variant }), className),
@@ -728,7 +730,10 @@ function SidebarMenuButton({
           {children}
           <Kbd
             variant="raised"
-            className="ms-auto text-sidebar-muted-foreground opacity-0 transition-opacity group-hover/menu-item:opacity-100 in-focus-visible:opacity-100"
+            className={cn(
+              "ms-auto text-sidebar-muted-foreground transition-opacity group-hover/menu-item:opacity-100 in-focus-visible:opacity-100",
+              shortcutHintsVisible ? "opacity-100" : "opacity-0",
+            )}
             data-sidebar="menu-shortcut"
             aria-hidden
           >

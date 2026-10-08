@@ -187,13 +187,24 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     ? { onPointerDown: preventPointerFocus }
     : undefined;
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  const isMobileViewport = useMediaQuery("max-sm");
   const shortcutModifiers = useShortcutModifierState();
+  const alternateModifierHeld = shortcutModifiers.metaKey || shortcutModifiers.ctrlKey;
+  const sendShortcutLabels = composerSendShortcutLabels({
+    keybindings,
+    isRunning,
+    sendShortcut,
+    isDraftThread,
+    hasMultilinePrompt,
+    platform: navigator.platform,
+    isMobileViewport,
+  });
   const isQueuing =
     !isEditingQueuedMessage &&
     resolveComposerDispatchMode({
       running: isRunning,
       activeTurnDefault: followUpBehavior,
-      alternateModifier: shortcutModifiers.metaKey || shortcutModifiers.ctrlKey,
+      alternateModifier: alternateModifierHeld,
     }) === "queue";
   const isSendDisabled = !canOperateThread || sendDisabledReason !== null;
   const stageBackdropVariant = useSidebarStageBackdropVariant(
@@ -414,6 +425,8 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               ? "Updating queued message"
               : "Submitting message"
             : null));
+  const sendAction =
+    isRunning && !isEditingQueuedMessage && alternateModifierHeld ? "alternate" : "foreground";
 
   const sendButton = (
     <button
@@ -471,7 +484,10 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       {canInterrupt ? renderStopGenerationButton(false) : null}
       <Tooltip key="submit">
         <TooltipTrigger render={<span className="inline-flex" />}>{sendButton}</TooltipTrigger>
-        <TooltipPopup side="top">
+        <TooltipPopup
+          side="top"
+          shortcutHint={submitStatus || showResume ? null : sendShortcutLabels[sendAction]}
+        >
           {submitStatus || showResume || isEditingQueuedMessage ? (
             (submitStatus ?? submitLabel)
           ) : (
