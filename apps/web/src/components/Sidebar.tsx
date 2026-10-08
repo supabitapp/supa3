@@ -41,6 +41,7 @@ import {
   threadWokeAt,
 } from "@supacode/client-runtime/state/thread-settled";
 import { createInboxReturnTracker } from "@supacode/client-runtime/state/thread-inbox";
+import { isScratchProject } from "@supacode/client-runtime/state/projects";
 import {
   pageRecentThreads,
   resolveSettledThreadTimestamp,
@@ -1193,6 +1194,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   currentEnvironmentId: string | null;
   environmentLabel: string | null;
   environmentMachine: EnvironmentMachineKind;
+  // A projectless thread's machine stands in for its project name once the
+  // sidebar spans several machines.
+  scratchMachineLabel: string | null;
   project: EnvironmentProject | null;
   projectDisplayName: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
@@ -1434,6 +1438,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // that is every thread, which is the point: the glyph is what tells rows on
   // different machines apart.
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
+  const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
 
   const detailsTooltip = (
     <SidebarThreadTooltip
@@ -2174,6 +2179,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <span className="flex min-w-0 flex-1 text-muted-foreground/60">
                   <MiddleTruncate value={thread.branch} showTitle={false} />
                 </span>
+              ) : showsScratchMachine ? (
+                <>
+                  <EnvironmentMachineIcon
+                    aria-hidden
+                    kind={props.environmentMachine}
+                    className="size-3 shrink-0 text-muted-foreground/60"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground/60">
+                    {props.scratchMachineLabel}
+                  </span>
+                </>
               ) : (
                 <span className="min-w-0 flex-1 truncate text-muted-foreground/60">
                   {props.projectDisplayName}
@@ -2191,7 +2207,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   aria-hidden
                   className="pointer-events-none inline-flex shrink-0 items-center gap-1"
                 >
-                  {isRemote ? (
+                  {isRemote && !showsScratchMachine ? (
                     <EnvironmentMachineIcon
                       kind={props.environmentMachine}
                       className="size-3.5 text-sidebar-muted-foreground/70"
@@ -2442,6 +2458,20 @@ export default function Sidebar() {
   const showProjectEnvironments = useMemo(
     () => projectGroupsSpanEnvironments(projectGroups),
     [projectGroups],
+  );
+  const scratchMachineLabelFor = useCallback(
+    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
+      if (!showProjectEnvironments) return null;
+      const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
+      if (
+        !project ||
+        !isScratchProject(project, serverConfigs.get(thread.environmentId)?.scratchWorkspaceRoot)
+      ) {
+        return null;
+      }
+      return environmentLabelById.get(thread.environmentId) ?? null;
+    },
+    [environmentLabelById, projectByKey, serverConfigs, showProjectEnvironments],
   );
   const projectGroupByScopeKey = useMemo(
     () => new Map(projectGroups.map((project) => [project.projectKey, project] as const)),
@@ -4927,6 +4957,7 @@ export default function Sidebar() {
                           environmentMachine={
                             environmentMachineById.get(thread.environmentId) ?? "server"
                           }
+                          scratchMachineLabel={scratchMachineLabelFor(thread)}
                           project={
                             projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
                           }
