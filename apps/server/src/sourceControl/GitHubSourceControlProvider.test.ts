@@ -506,6 +506,8 @@ describe("GitHubSourceControlProvider writes", () => {
       });
       assert.strictEqual(requests[0]!.method, "POST");
       assert.strictEqual(requests[0]!.path, "repos/acme/web/pulls");
+      // A user's own write, so the background's reserve is not held against it.
+      assert.strictEqual(requests[0]!.allowReserve, true);
       assert.deepStrictEqual(requests[0]!.body, {
         base: "main",
         head: "me:feature",
