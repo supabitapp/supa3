@@ -4227,7 +4227,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           WHERE request.kind = 'user_input' AND request.status = 'pending'
             AND request.created_at <= ${DateTime.formatIso(createdBefore)}
             AND thread.deleted_at IS NULL AND thread.archived_at IS NULL
-            AND json_extract(request.payload_json, '$.nativeRequestRef.driver') IN ('codex', 'claude')
+            AND json_extract(request.payload_json, '$.nativeRequestRef.driver') IN ('codex', 'claudeAgent')
             AND json_extract(request.payload_json, '$.responseCapability.type') IN ('live', 'message')
           ORDER BY request.created_at, request.runtime_request_id
           LIMIT 100
@@ -6005,7 +6005,7 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                     request.status !== "pending" ||
                     DateTime.toEpochMillis(request.createdAt) >
                       DateTime.toEpochMillis(createdBefore) ||
-                    (driver !== "codex" && driver !== "claude") ||
+                    (driver !== "codex" && driver !== "claudeAgent") ||
                     (responseMode !== "live" && responseMode !== "message")
                   )
                     return [];

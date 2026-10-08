@@ -19,6 +19,7 @@ import * as Layer from "effect/Layer";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
+import { CLAUDE_PROVIDER } from "./Adapters/ClaudeAdapterV2.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
@@ -121,7 +122,7 @@ it.effect.each([false, true])("only dismisses expired questions when enabled: %s
     const codex = yield* seedRequest("codex");
     const claude = yield* seedRequest("claude", {
       nativeRequestRef: {
-        driver: ProviderDriverKind.make("claude"),
+        driver: CLAUDE_PROVIDER,
         nativeId: "claude",
         strength: "strong",
       },
