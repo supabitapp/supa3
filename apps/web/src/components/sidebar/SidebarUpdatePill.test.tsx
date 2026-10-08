@@ -27,21 +27,14 @@ const nightlyState: DesktopUpdateState = {
 };
 
 describe("sidebar update release notes popover", () => {
-  it("uses the popover only for visible nightly release notes", () => {
-    expect(shouldUseSidebarUpdateReleaseNotesPopover(true, nightlyState)).toBe(true);
-    expect(shouldUseSidebarUpdateReleaseNotesPopover(false, nightlyState)).toBe(false);
-    expect(
-      shouldUseSidebarUpdateReleaseNotesPopover(true, {
-        ...nightlyState,
-        channel: "latest",
-      }),
-    ).toBe(false);
-    expect(
-      shouldUseSidebarUpdateReleaseNotesPopover(true, {
-        ...nightlyState,
-        releaseNotes: [],
-      }),
-    ).toBe(false);
+  it("uses the popover only for nightly release notes", () => {
+    expect(shouldUseSidebarUpdateReleaseNotesPopover(nightlyState)).toBe(true);
+    expect(shouldUseSidebarUpdateReleaseNotesPopover({ ...nightlyState, channel: "latest" })).toBe(
+      false,
+    );
+    expect(shouldUseSidebarUpdateReleaseNotesPopover({ ...nightlyState, releaseNotes: [] })).toBe(
+      false,
+    );
   });
 
   it("cancels trigger presses without canceling other open reasons", () => {

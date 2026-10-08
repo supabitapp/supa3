@@ -2,6 +2,8 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@supacode/co
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
+export type DesktopUpdateIndicator = "available" | "downloading" | "downloaded";
+
 const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/supabitapp/supacode-next/releases";
 const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
 
@@ -45,6 +47,23 @@ export function resolveDesktopUpdateButtonAction(
     }
   }
   return "none";
+}
+
+/** The sidebar's update state, or null while there is no update to act on. */
+export function resolveDesktopUpdateIndicator(
+  state: DesktopUpdateState | null,
+): DesktopUpdateIndicator | null {
+  if (!state) return null;
+  if (state.status === "downloading") return "downloading";
+  // Background checks keep polling after an update is found; keep showing it meanwhile.
+  if (state.status === "checking") {
+    if (state.downloadedVersion) return "downloaded";
+    return state.availableVersion ? "available" : null;
+  }
+  const action = resolveDesktopUpdateButtonAction(state);
+  if (action === "install") return "downloaded";
+  if (action === "download") return "available";
+  return null;
 }
 
 export function shouldShowArm64IntelBuildWarning(state: DesktopUpdateState | null): boolean {
