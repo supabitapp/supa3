@@ -54,6 +54,15 @@ public final class SupacodeNativeControlsModule: Module {
       }
     }
 
+    View(SupacodeFrostedCutoutView.self) {
+      ViewName("FrostedCutout")
+      Prop("cutoutTop") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutTop = CGFloat(value) }
+      Prop("cutoutWidth") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutWidth = CGFloat(value) }
+      Prop("cutoutHeight") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutHeight = CGFloat(value) }
+      Prop("cutoutRadius") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutRadius = CGFloat(value) }
+      Prop("appearance") { (view: SupacodeFrostedCutoutView, value: String) in view.appearance = value }
+    }
+
     View(SupacodeContextSheetSizeView.self) {
       ViewName("ContextSheetSize")
       Prop("contentHeight") { (view: SupacodeContextSheetSizeView, height: Double) in
