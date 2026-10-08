@@ -41,7 +41,8 @@ export function useSelectedThreadGitActions() {
   const createRef = useAtomCommand(vcsEnvironment.createRef, { reportFailure: false });
   const createWorktree = useAtomCommand(vcsEnvironment.createWorktree, { reportFailure: false });
   const pull = useAtomCommand(vcsEnvironment.pull, { reportFailure: false });
-  const { selectedThread, selectedThreadProject } = useThreadSelection();
+  const { selectedThread, selectedThreadProject, selectedEnvironmentRuntime } =
+    useThreadSelection();
   const selectedThreadId = selectedThread?.id ?? null;
   const selectedEnvironmentId = selectedThread?.environmentId ?? null;
   const selectedProjectId = selectedThreadProject?.id ?? null;
@@ -145,7 +146,10 @@ export function useSelectedThreadGitActions() {
 
   // Shell updates replace the selected thread object many times per second while a
   // turn streams, so key the refresh on primitives. The server publishes status after
-  // each turn finishes; this only seeds status when the selection or cwd changes.
+  // each turn finishes; this only seeds status when the selection or cwd changes, and
+  // again on reconnect because the server's cached status can miss changes made while
+  // the app was away.
+  const isEnvironmentConnected = selectedEnvironmentRuntime?.connectionState === "connected";
   const refreshOnSelection = useEffectEvent(() => {
     void refreshSelectedThreadGitStatus({ quiet: true });
   });
@@ -154,12 +158,19 @@ export function useSelectedThreadGitActions() {
       selectedEnvironmentId === null ||
       selectedThreadId === null ||
       selectedProjectId === null ||
-      selectedThreadCwd === null
+      selectedThreadCwd === null ||
+      !isEnvironmentConnected
     ) {
       return;
     }
     refreshOnSelection();
-  }, [selectedEnvironmentId, selectedThreadId, selectedProjectId, selectedThreadCwd]);
+  }, [
+    selectedEnvironmentId,
+    selectedThreadId,
+    selectedProjectId,
+    selectedThreadCwd,
+    isEnvironmentConnected,
+  ]);
 
   const runSelectedThreadGitMutation = useCallback(
     async <T, E>(
