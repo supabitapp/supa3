@@ -1,5 +1,3 @@
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import type { OrchestrationSkillsEnvironment } from "@supacode/client-runtime/orchestrationSkills";
 import { useOrchestrationSkills } from "../../state/useOrchestrationSkills";
 import { serverEnvironment } from "../../state/server";
@@ -15,14 +13,20 @@ function SelectedEnvironmentSkills({
 }) {
   const skills = useOrchestrationSkills(environments, serverEnvironment);
   const busy = skills.pending !== null;
+  const stateLabel =
+    skills.pending === "Status"
+      ? "Checking…"
+      : skills.pending === null && skills.installed
+        ? "Installed"
+        : null;
+  const hasControl =
+    stateLabel !== null || skills.canUninstall || skills.canInstall || skills.error;
   return (
     <SettingsRow
       title="Orchestration skills"
       description={
         <>
-          Install supacode-commitee and supacode-advisor skills for the selected environments’
-          provider accounts. Applies to all projects and updates with Supacode.
-          <span className="block">Restart existing agent sessions to load skill changes.</span>
+          Install supacode-commitee and supacode-advisor skills.
           {skills.notices.map((notice) => (
             <span className="block" key={notice}>
               {notice}
@@ -31,82 +35,43 @@ function SelectedEnvironmentSkills({
         </>
       }
       control={
-        <div className="flex min-h-11 min-w-40 items-center justify-end gap-2">
-          {skills.installed ? (
-            <Menu>
-              <MenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="comfortable"
-                    disabled={busy || !skills.canUninstall}
-                  />
-                }
-              >
-                <CheckIcon aria-hidden="true" />
-                {skills.pending === "Uninstall" ? "Uninstalling…" : "Installed"}
-                <ChevronDownIcon aria-hidden="true" />
-              </MenuTrigger>
-              <MenuPopup align="end">
-                <MenuItem
-                  disabled={busy || !skills.canUninstall}
-                  onClick={() => void skills.request("Uninstall")}
-                >
-                  Uninstall Skills
-                </MenuItem>
-              </MenuPopup>
-            </Menu>
-          ) : (
-            <>
+        hasControl ? (
+          <>
+            {stateLabel ? (
+              <span className="text-xs text-muted-foreground">{stateLabel}</span>
+            ) : null}
+            {skills.canUninstall ? (
               <Button
                 variant="outline"
-                size="comfortable"
-                disabled={busy || !skills.canInstall}
+                size="sm"
+                disabled={busy}
+                onClick={() => void skills.request("Uninstall")}
+              >
+                {skills.pending === "Uninstall" ? "Uninstalling…" : "Uninstall"}
+              </Button>
+            ) : null}
+            {skills.canInstall ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
                 onClick={() => void skills.request("Install")}
               >
-                {skills.pending === "Status"
-                  ? "Checking…"
-                  : skills.pending === "Install"
-                    ? "Installing…"
-                    : "Install Skills"}
+                {skills.pending === "Install" ? "Installing…" : "Install"}
               </Button>
-              {skills.canUninstall ? (
-                <Menu>
-                  <MenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="comfortable"
-                        disabled={busy || !skills.canUninstall}
-                      />
-                    }
-                  >
-                    {skills.pending === "Uninstall" ? "Uninstalling…" : "Manage"}
-                    <ChevronDownIcon aria-hidden="true" />
-                  </MenuTrigger>
-                  <MenuPopup align="end">
-                    <MenuItem
-                      disabled={busy || !skills.canUninstall}
-                      onClick={() => void skills.request("Uninstall")}
-                    >
-                      Uninstall Skills
-                    </MenuItem>
-                  </MenuPopup>
-                </Menu>
-              ) : null}
-            </>
-          )}
-          {skills.error ? (
-            <Button
-              variant="outline"
-              size="comfortable"
-              disabled={busy}
-              onClick={() => void skills.request("Status")}
-            >
-              Retry
-            </Button>
-          ) : null}
-        </div>
+            ) : null}
+            {skills.error ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void skills.request("Status")}
+              >
+                Retry
+              </Button>
+            ) : null}
+          </>
+        ) : undefined
       }
     />
   );

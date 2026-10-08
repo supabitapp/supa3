@@ -39,4 +39,17 @@ describe("orchestration skill scope", () => {
     });
     expect(changed).toEqual(new Set([environments[0]!.environmentId]));
   });
+
+  it("offers install when another folder or link holds a skill name", () => {
+    const view = orchestrationSkillsView({
+      ...installed,
+      targets: [
+        {
+          ...installed.targets[0]!,
+          skills: [{ name: "supacode-advisor", state: "conflict", managed: false }],
+        },
+      ],
+    });
+    expect(view).toEqual({ canInstall: true, canUninstall: false, installed: false });
+  });
 });

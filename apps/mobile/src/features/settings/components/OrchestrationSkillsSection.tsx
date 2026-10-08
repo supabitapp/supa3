@@ -15,18 +15,12 @@ export function OrchestrationSkillsSection({
   return (
     <SettingsSection title="Orchestration skills">
       <Text className="p-4 text-sm text-foreground-muted">
-        Install supacode-commitee and supacode-advisor skills for the selected environments’
-        provider accounts. Applies to all projects and updates with Supacode. Restart existing agent
-        sessions to load skill changes.
+        Install supacode-commitee and supacode-advisor skills.
       </Text>
       <SettingsRow
         icon="arrow.down.circle"
         label={
-          skills.installed
-            ? "Installed"
-            : skills.pending === "Install"
-              ? "Installing…"
-              : "Install Skills"
+          skills.installed ? "Installed" : skills.pending === "Install" ? "Installing…" : "Install"
         }
         disabled={busy || !skills.canInstall}
         onPress={() => void skills.request("Install")}
@@ -34,7 +28,7 @@ export function OrchestrationSkillsSection({
       {skills.canUninstall ? (
         <SettingsRow
           icon="trash"
-          label={skills.pending === "Uninstall" ? "Uninstalling…" : "Uninstall Skills"}
+          label={skills.pending === "Uninstall" ? "Uninstalling…" : "Uninstall"}
           disabled={busy || !skills.canUninstall}
           onPress={() => void skills.request("Uninstall")}
         />

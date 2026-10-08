@@ -217,51 +217,47 @@ it.layer(NodeServices.layer)("native orchestration skill installation", (it) => 
     }),
   );
 
-  it.effect(
-    "leaves user-owned directories untouched, even when their content matches the bundle",
+  it.effect("replaces an existing folder that holds a skill name", () =>
+    Effect.gen(function* () {
+      const test = yield* fixture;
+      const skill = ORCHESTRATION_SKILLS[0];
+      const directory = test.path.join(test.claude, skill.name);
+      yield* test.fs.makeDirectory(directory, { recursive: true });
+      yield* test.fs.writeFileString(test.path.join(directory, "SKILL.md"), "stale copy");
+      const status = yield* test.service.install;
+      assert.deepEqual(status.targets[0]?.skills[0], {
+        name: skill.name,
+        state: "installed",
+        managed: true,
+      });
+      assert.equal(
+        yield* test.fs.readFileString(test.path.join(directory, "SKILL.md")),
+        skill.content,
+      );
+    }),
+  );
+
+  it.effect.skipIf(!symlinksSupported)(
+    "replaces a foreign skill link without touching its target",
     () =>
       Effect.gen(function* () {
         const test = yield* fixture;
-        const skill = ORCHESTRATION_SKILLS[0];
-        const directory = test.path.join(test.claude, skill.name);
-        yield* test.fs.makeDirectory(test.path.join(directory, "references"), { recursive: true });
-        yield* test.fs.writeFileString(test.path.join(directory, "SKILL.md"), skill.content);
-        yield* test.fs.writeFileString(
-          test.path.join(directory, "references", "orchestration.md"),
-          ORCHESTRATION_SKILL_REFERENCE,
-        );
+        const outside = test.path.join(test.home, "personal");
+        yield* test.fs.makeDirectory(outside);
+        yield* test.fs.writeFileString(test.path.join(outside, "SKILL.md"), "personal");
+        yield* test.fs.makeDirectory(test.claude, { recursive: true });
+        const link = test.path.join(test.claude, "supacode-advisor");
+        yield* test.fs.symlink(outside, link);
         const status = yield* test.service.install;
-        assert.deepEqual(status.targets[0]?.skills[0], {
-          name: skill.name,
-          state: "conflict",
-          managed: false,
-        });
-        yield* test.service.uninstall;
         assert.equal(
-          yield* test.fs.readFileString(test.path.join(directory, "SKILL.md")),
-          skill.content,
+          status.targets[0]?.skills.find((skill) => skill.name === "supacode-advisor")?.state,
+          "installed",
+        );
+        assert.notEqual(yield* test.fs.readLink(link), outside);
+        assert.equal(
+          yield* test.fs.readFileString(test.path.join(outside, "SKILL.md")),
+          "personal",
         );
       }),
-  );
-
-  it.effect.skipIf(!symlinksSupported)("does not write through a user-owned symlinked skill", () =>
-    Effect.gen(function* () {
-      const test = yield* fixture;
-      const outside = test.path.join(test.home, "personal");
-      yield* test.fs.makeDirectory(outside);
-      yield* test.fs.makeDirectory(test.claude, { recursive: true });
-      yield* test.fs.symlink(outside, test.path.join(test.claude, "supacode-advisor"));
-      const status = yield* test.service.install;
-      assert.equal(
-        status.targets[0]?.skills.find((skill) => skill.name === "supacode-advisor")?.state,
-        "conflict",
-      );
-      yield* test.service.uninstall;
-      assert.equal(
-        yield* test.fs.readLink(test.path.join(test.claude, "supacode-advisor")),
-        outside,
-      );
-      assert.deepEqual(yield* test.fs.readDirectory(outside), []);
-    }),
   );
 });

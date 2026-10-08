@@ -93,10 +93,6 @@ export function useOrchestrationSkills(
       ...(entry.status.unsupportedProviders.length > 0
         ? [`${prefix}Not supported: ${entry.status.unsupportedProviders.join(", ")}.`]
         : []),
-      ...entry.conflicts.map(
-        (target) =>
-          `${prefix}Existing skill folders or unrelated links in ${target.directory} are left unchanged.`,
-      ),
     ];
   });
   return {
