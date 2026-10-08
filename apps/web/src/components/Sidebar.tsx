@@ -3529,7 +3529,7 @@ export default function Sidebar() {
         settledThreads.length ===
       0
     ) {
-      return visibleDraftSessionCount > 0 ? [{ kind: "marker", marker: "drafts-block" }] : [];
+      return [{ kind: "marker", marker: "drafts-block" }];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
     const pinnedRows = rowsOf(visiblePinnedThreads, "pinned");
@@ -3556,7 +3556,6 @@ export default function Sidebar() {
     activeThreads,
     pinnedThreads.length,
     visiblePinnedThreads,
-    visibleDraftSessionCount,
     renderedSettledThreads,
     settledThreads.length,
     snoozedThreads.length,
@@ -3584,8 +3583,11 @@ export default function Sidebar() {
         .join("\0"),
     [sidebarListItems],
   );
+  const sidebarHasThreadSections = sidebarListItems.some(
+    (item) => item.kind === "marker" && item.marker === "pinned-header",
+  );
   const sidebarListHasRows =
-    sidebarListItems.length + visibleDraftSessionCount + pendingThreads.length > 0;
+    sidebarHasThreadSections || visibleDraftSessionCount > 0 || pendingThreads.length > 0;
   // The undo notice resizes the footer and shifts the bottom-pinned settled
   // shelf. It mounts and expires apart from any reorder, so it needs its own pass.
   const undoNoticeShown = useThreadUndoNotice((state) => state.notice !== null);
@@ -4863,7 +4865,7 @@ export default function Sidebar() {
                     // bottom inset once instead of adding a second gap above
                     // the footer's own vertical inset.
                     "relative -mb-2 flex flex-col gap-px",
-                    sidebarListItems.length > 0 && "flex-1",
+                    sidebarHasThreadSections && "flex-1",
                     // An action sweep owns the pointer: rows it passes over
                     // neither show hover actions nor open tooltips, even
                     // controls that opt back in, like the Woke pill.
