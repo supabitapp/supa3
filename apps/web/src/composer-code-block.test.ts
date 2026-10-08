@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Editor, Extension, Node } from "@tiptap/core";
 import { newlineInCode } from "@tiptap/pm/commands";
 import { TextSelection } from "@tiptap/pm/state";
@@ -95,7 +95,7 @@ describe("indentLines", () => {
 });
 
 function codeEditor(code: string, at?: { from: number; to?: number }) {
-  const editor = new Editor({
+  const editor = createEditor({
     extensions,
     content: {
       type: "doc",
@@ -110,6 +110,26 @@ function codeEditor(code: string, at?: { from: number; to?: number }) {
   );
   return editor;
 }
+
+const editors = new Set<Editor>();
+
+function createEditor(options: ConstructorParameters<typeof Editor>[0]) {
+  const editor = new Editor(options);
+  editors.add(editor);
+  return editor;
+}
+
+beforeEach(() => vi.useFakeTimers());
+
+afterEach(async () => {
+  for (const editor of editors) editor.destroy();
+  editors.clear();
+  try {
+    await vi.runOnlyPendingTimersAsync();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 const textOf = (editor: Editor) => editor.state.doc.textContent;
 
@@ -140,7 +160,7 @@ describe("indentedNewlineInCodeBlock", () => {
   });
 
   it("does nothing outside a code block", () => {
-    const editor = new Editor({
+    const editor = createEditor({
       extensions,
       content: {
         type: "doc",
@@ -171,7 +191,7 @@ describe("exitCodeBlockOnTrailingBlankLines", () => {
       },
     });
     const code = "  code()\n  \n  ";
-    const editor = new Editor({
+    const editor = createEditor({
       extensions: [...extensions, grouping],
       content: {
         type: "doc",
@@ -298,7 +318,7 @@ describe("indentCodeBlock", () => {
   });
 
   it("does nothing outside a code block", () => {
-    const editor = new Editor({
+    const editor = createEditor({
       extensions,
       content: {
         type: "doc",
@@ -312,7 +332,7 @@ describe("indentCodeBlock", () => {
 describe("selections across two identical fences", () => {
   function twoBlockEditor() {
     const block = { type: "codeBlock", content: [{ type: "text", text: "  a" }] };
-    const editor = new Editor({ extensions, content: { type: "doc", content: [block, block] } });
+    const editor = createEditor({ extensions, content: { type: "doc", content: [block, block] } });
 
     editor.view.dispatch(
       editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 2, 7)),
@@ -331,7 +351,7 @@ describe("selections across two identical fences", () => {
 
 describe("convertCodeFenceOnEnter", () => {
   function paragraphEditor(text: string) {
-    const editor = new Editor({
+    const editor = createEditor({
       extensions,
       content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] },
     });
@@ -366,7 +386,7 @@ describe("convertCodeFenceOnEnter", () => {
 
   it("refuses to open a fence inside a list item", () => {
     const text = "```ts";
-    const editor = new Editor({
+    const editor = createEditor({
       extensions,
       content: {
         type: "doc",
@@ -393,7 +413,7 @@ describe("convertCodeFenceOnEnter", () => {
   });
 
   it("keeps a chip's source in the info string", () => {
-    const editor = new Editor({
+    const editor = createEditor({
       extensions,
       content: {
         type: "doc",
