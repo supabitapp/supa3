@@ -11,6 +11,7 @@ import {
   getDesktopUpdateReleaseUrl,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
+  resolveDesktopUpdateIndicator,
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
@@ -336,6 +337,81 @@ describe("canCheckForUpdate", () => {
         message: "network",
       }),
     ).toBe(true);
+  });
+});
+
+describe("resolveDesktopUpdateIndicator", () => {
+  it("hides the indicator when there is no update to act on", () => {
+    expect(resolveDesktopUpdateIndicator(null)).toBeNull();
+    expect(resolveDesktopUpdateIndicator({ ...baseState, status: "idle" })).toBeNull();
+    expect(resolveDesktopUpdateIndicator({ ...baseState, status: "up-to-date" })).toBeNull();
+    expect(resolveDesktopUpdateIndicator({ ...baseState, status: "checking" })).toBeNull();
+    expect(
+      resolveDesktopUpdateIndicator({ ...baseState, status: "error", errorContext: "check" }),
+    ).toBeNull();
+  });
+
+  it("follows an update from available to downloaded", () => {
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "available",
+        availableVersion: "1.1.0",
+      }),
+    ).toBe("available");
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "downloading",
+        availableVersion: "1.1.0",
+        downloadPercent: 40,
+      }),
+    ).toBe("downloading");
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "downloaded",
+        availableVersion: "1.1.0",
+        downloadedVersion: "1.1.0",
+      }),
+    ).toBe("downloaded");
+  });
+
+  it("keeps a found update visible while a background check runs", () => {
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "checking",
+        availableVersion: "1.1.0",
+        downloadedVersion: "1.1.0",
+      }),
+    ).toBe("downloaded");
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "checking",
+        availableVersion: "1.1.0",
+      }),
+    ).toBe("available");
+  });
+
+  it("offers a retry after a failed download or install", () => {
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "error",
+        errorContext: "download",
+        availableVersion: "1.1.0",
+      }),
+    ).toBe("available");
+    expect(
+      resolveDesktopUpdateIndicator({
+        ...baseState,
+        status: "error",
+        errorContext: "install",
+        downloadedVersion: "1.1.0",
+      }),
+    ).toBe("downloaded");
   });
 });
 
