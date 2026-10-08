@@ -18,6 +18,12 @@ and modes you choose in a draft keep their permissions.
 Approve or reject requests in the conversation to let the agent continue. Permission modes do
 not prevent the agent from asking questions about the task.
 
+Questions wait for your answer by default. To dismiss unanswered Codex and Claude questions
+after two minutes, enable **Auto-dismiss unanswered questions** in **Settings > General** on
+web and desktop, or **Settings > Thread behavior** on mobile. The setting applies to the
+selected environments across devices. Dismissal provides no answer and never selects an
+option. Permission approvals keep waiting.
+
 ## Provider differences
 
 Providers enforce permissions differently. Some read-only actions can proceed in **Supervised**.

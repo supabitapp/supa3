@@ -21,6 +21,18 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("question automatic dismissal", () => {
+  it("keeps existing installations waiting and accepts explicit opt-in and opt-out", () => {
+    expect(decodeServerSettings({}).autoDismissQuestions).toBe(false);
+    for (const autoDismissQuestions of [true, false]) {
+      expect(encodeServerSettings(decodeServerSettings({ autoDismissQuestions }))).toMatchObject({
+        autoDismissQuestions,
+      });
+      expect(decodeServerSettingsPatch({ autoDismissQuestions })).toEqual({ autoDismissQuestions });
+    }
+  });
+});
+
 describe("ServerSettings response streaming", () => {
   it("defaults to paragraph buffering", () => {
     expect(decodeServerSettings({}).responseStreamingMode).toBe("paragraph");

@@ -2110,6 +2110,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         yield* Queue.unbounded<Extract<ProviderAdapterV2Event, { type: "turn.terminal" }>>();
       const systemNoticeReceipts =
         yield* Queue.unbounded<Extract<ProviderAdapterV2Event, { type: "turn_item.updated" }>>();
+      const userInputReceipts =
+        yield* Queue.unbounded<
+          Extract<ProviderAdapterV2Event, { type: "runtime_request.updated" }>
+        >();
       let openedOptions: ClaudeAdapterV2.ClaudeAgentSdkQueryOptions | undefined;
       const adapter = ClaudeAdapterV2.makeClaudeAdapterV2({
         instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
@@ -2190,6 +2194,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             if (event.type === "turn_item.updated" && event.turnItem.type === "system_notice") {
               yield* Queue.offer(systemNoticeReceipts, event);
             }
+            if (
+              event.type === "runtime_request.updated" &&
+              event.runtimeRequest.kind === "user_input"
+            ) {
+              yield* Queue.offer(userInputReceipts, event);
+            }
           }),
         ),
         Effect.forkScoped,
@@ -2215,12 +2225,64 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         events,
         terminalReceipts,
         systemNoticeReceipts,
+        userInputReceipts,
         getOpenedOptions: () => openedOptions,
         terminalEvents,
         hasPendingBackgroundWork,
       };
     });
   const makeWakeHarness = makeWakeHarnessWithOptions();
+
+  it.effect("dismisses an unanswered question without approving or choosing an option", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeWakeHarness;
+      const now = yield* DateTime.now;
+      yield* harness.runtime.startTurn(
+        makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now,
+          attemptId: RunAttemptId.make("attempt-dismiss-question"),
+          text: "Ask a question.",
+          attachments: [],
+        }),
+      );
+      const response = yield* Effect.promise(() =>
+        harness.getOpenedOptions()!.canUseTool!(
+          "AskUserQuestion",
+          {
+            questions: [
+              {
+                header: "Target",
+                question: "Where should this run?",
+                options: [
+                  { label: "Staging (Recommended)", description: "Use staging." },
+                  { label: "Production", description: "Use production." },
+                ],
+                multiSelect: false,
+              },
+            ],
+          },
+          {
+            signal: new AbortController().signal,
+            toolUseID: "tool-dismiss-question",
+            requestId: "request-dismiss-question",
+          },
+        ),
+      ).pipe(Effect.forkScoped);
+      const requestEvent = yield* Queue.take(harness.userInputReceipts);
+      yield* harness.runtime.respondToRuntimeRequest({
+        requestId: requestEvent.runtimeRequest.id,
+        decision: "cancel",
+        answers: {},
+      });
+      assert.deepEqual(yield* Fiber.join(response), {
+        behavior: "deny",
+        message: "No answer was provided. The question was dismissed without selecting an option.",
+        toolUseID: "tool-dismiss-question",
+      });
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+  );
 
   it.effect.each([
     { isError: false, title: "Check weather" },

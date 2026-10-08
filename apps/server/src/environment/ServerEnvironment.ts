@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
       requiredWorktreeBootstrap: true,
       threadSettlement: true,
       threadAutoSettlement: true,
+      questionAutoDismiss: true,
       storageCleanup: true,
       projectWorktreeCleanup: true,
       worktreesDirectory: true,

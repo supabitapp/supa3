@@ -50,7 +50,7 @@ export function SettingsThreadsRouteScreen() {
           contentContainerClassName="gap-6 px-5 pt-4"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
         >
-          <AutoSettleSettingsRows />
+          <ThreadBehaviorSettingsRows />
           <ComposerSettingsSection />
           <LegacySettingsSection />
         </ScrollView>
@@ -61,10 +61,7 @@ export function SettingsThreadsRouteScreen() {
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_SERVER_SETTINGS.sidebarAutoSettleAfterDays ?? 3;
 
-/**
- * Mobile edits auto-settle defaults across selected capable targets.
- */
-function AutoSettleSettingsRows() {
+function ThreadBehaviorSettingsRows() {
   const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
   const selectedProject = projectGroups.find((group) => group.key === selectedProjectKey);
   const writableEnvironments = useEnvironmentsWithScope(selectedTargets, AuthSettingsWriteScope);
@@ -100,6 +97,7 @@ function AutoSettleSettingsRows() {
     patch: Partial<AutoSettleSettings> & {
       autoResumeLimitedThreads?: boolean;
       snoozeLimitedThreads?: boolean;
+      autoDismissQuestions?: boolean;
     },
   ) => {
     if (
@@ -208,6 +206,22 @@ function AutoSettleSettingsRows() {
             value={uniformMobileSetting(displayTargets, "snoozeLimitedThreads")}
             disabled={disabled}
             onValueChange={(value) => writeToAll({ snoozeLimitedThreads: value })}
+          />
+        </SettingsSection>
+      ) : null}
+      {!projectSelected &&
+      syncTargets.every(
+        (target) =>
+          target.environment.serverConfig.environment.capabilities.questionAutoDismiss === true,
+      ) ? (
+        <SettingsSection title="Questions">
+          <SettingsSwitchRow
+            icon="clock"
+            label="Auto-dismiss unanswered questions"
+            subtitle="Dismiss unanswered Codex and Claude questions after two minutes without selecting an answer. Permission approvals keep waiting."
+            value={uniformMobileSetting(displayTargets, "autoDismissQuestions")}
+            disabled={disabled}
+            onValueChange={(value) => writeToAll({ autoDismissQuestions: value })}
           />
         </SettingsSection>
       ) : null}
