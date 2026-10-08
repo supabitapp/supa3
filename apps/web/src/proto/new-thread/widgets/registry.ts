@@ -1,0 +1,375 @@
+import {
+  ActivityIcon,
+  BotIcon,
+  CalendarDaysIcon,
+  ChartPieIcon,
+  GitBranchIcon,
+  KeyboardIcon,
+  ArchiveIcon,
+  CalendarClockIcon,
+  CoinsIcon,
+  GaugeIcon,
+  GitCommitHorizontalIcon,
+  PlugZapIcon,
+  ServerIcon,
+  WandSparklesIcon,
+  MoonIcon,
+  NotebookPenIcon,
+  FolderGit2Icon,
+  PinIcon,
+  SunriseIcon,
+  TargetIcon,
+  CheckCheckIcon,
+  HandIcon,
+  RadioIcon,
+  SailboatIcon,
+  SparklesIcon,
+  type LucideIcon,
+} from "lucide-react";
+import { PullRequestGlyph } from "../../../components/pullRequest/pullRequestIcons";
+import type { ComponentType } from "react";
+
+import { IN_FLIGHT, NEEDS_YOU, uniqueOpenPrs, type ProtoData } from "../data";
+import {
+  ActivityBody,
+  FinishedBody,
+  HarborBody,
+  NeedsYouBody,
+  PullRequestsBody,
+  ServicesBody,
+  StartersBody,
+  WorkingBody,
+} from "./bodies";
+import {
+  AutomationsBody,
+  CheckoutBody,
+  MachinesBody,
+  ProvidersBody,
+  ShortcutsBody,
+  SkillsBody,
+  SpendTodayBody,
+  StashBody,
+  UsageLimitsBody,
+} from "./appWidgets";
+import {
+  BackgroundBody,
+  BranchesBody,
+  GoalsBody,
+  ModelMixBody,
+  PinnedBody,
+  ProjectsBody,
+  ScratchpadBody,
+  SnoozedBody,
+  TodayBody,
+} from "./threadWidgets";
+import type { WidgetSize } from "./layout";
+
+export type WidgetCategory = "Agents" | "Start" | "Code" | "Insights" | "Machine" | "Ambient";
+export const CATEGORIES: ReadonlyArray<WidgetCategory> = [
+  "Agents",
+  "Start",
+  "Code",
+  "Insights",
+  "Machine",
+  "Ambient",
+];
+
+export interface WidgetDef {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly icon: LucideIcon;
+  readonly category: WidgetCategory;
+  readonly sizes: ReadonlyArray<WidgetSize>;
+  readonly source: string;
+  readonly bare?: boolean;
+  readonly count?: (data: ProtoData) => { n: number; urgent?: boolean } | null;
+  readonly Body: ComponentType;
+}
+
+const SHELLS = "Thread shells already on this client. No extra requests.";
+
+export const WIDGETS: ReadonlyArray<WidgetDef> = [
+  {
+    id: "needs-you",
+    title: "Needs you",
+    description: "Threads waiting on an approval, an answer, or a failed run to look at.",
+    icon: HandIcon,
+    category: "Agents",
+    sizes: ["m", "l", "t", "w"],
+    source: SHELLS,
+    count: (data) => {
+      const n = data.threads.filter((t) => NEEDS_YOU.has(t.status)).length;
+      return { n, urgent: n > 0 };
+    },
+    Body: NeedsYouBody,
+  },
+  {
+    id: "working",
+    title: "Working now",
+    description: "Every agent mid-turn, and how long it has been at it.",
+    icon: ActivityIcon,
+    category: "Agents",
+    sizes: ["m", "l", "t", "w"],
+    source: SHELLS,
+    count: (data) => ({ n: data.threads.filter((t) => IN_FLIGHT.has(t.status)).length }),
+    Body: WorkingBody,
+  },
+  {
+    id: "finished",
+    title: "Recently finished",
+    description: "Turns that just ended, unread ones first.",
+    icon: CheckCheckIcon,
+    category: "Agents",
+    sizes: ["s", "m", "l", "t", "w"],
+    source: SHELLS,
+    count: (data) => ({ n: data.threads.filter((t) => t.status === "ready" && t.unread).length }),
+    Body: FinishedBody,
+  },
+  {
+    id: "starters",
+    title: "Pick up",
+    description:
+      "Prompts built from what's broken or unfinished in this project. Click one to start.",
+    icon: SparklesIcon,
+    category: "Start",
+    sizes: ["m", "l", "t", "w"],
+    source: "Linked pull requests and thread outcomes in this project.",
+    Body: StartersBody,
+  },
+  {
+    id: "pull-requests",
+    title: "Pull requests",
+    description: "Open pull requests your threads are linked to, with checks and conflicts.",
+    icon: PullRequestGlyph.pullRequest,
+    category: "Code",
+    sizes: ["m", "l", "t", "w"],
+    source: "Pull request links on threads, from their last sync.",
+    count: (data) => ({ n: uniqueOpenPrs(data.threads).length }),
+    Body: PullRequestsBody,
+  },
+  {
+    id: "activity",
+    title: "Activity",
+    description: "When this project's threads started over 16 weeks, and your streak.",
+    icon: CalendarDaysIcon,
+    category: "Insights",
+    sizes: ["m", "l", "w"],
+    source: "Thread start times in this project, computed on this client.",
+    Body: ActivityBody,
+  },
+  {
+    id: "services",
+    title: "Running services",
+    description: "Ports listening on this machine, with the thread that started them.",
+    icon: RadioIcon,
+    category: "Machine",
+    sizes: ["s", "m", "t"],
+    source: "Polls this machine's listening ports every few seconds while the widget is on screen.",
+    Body: ServicesBody,
+  },
+  {
+    id: "harbor",
+    title: "Harbor",
+    description:
+      "A boat for each working agent; flagged boats at the pier need you. Click one to open it.",
+    icon: SailboatIcon,
+    category: "Ambient",
+    sizes: ["m", "l", "w"],
+    source: "Thread shells. Drawn once, never animated.",
+    bare: true,
+    Body: HarborBody,
+  },
+  {
+    id: "pinned",
+    title: "Pinned",
+    description: "Threads you pinned, one click away.",
+    icon: PinIcon,
+    category: "Agents",
+    sizes: ["s", "m", "t"],
+    source: SHELLS,
+    count: (data) => ({ n: data.threads.filter((t) => t.pinnedAt !== null).length }),
+    Body: PinnedBody,
+  },
+  {
+    id: "snoozed",
+    title: "Snoozed",
+    description: "Threads you put off, and when each one comes back.",
+    icon: MoonIcon,
+    category: "Agents",
+    sizes: ["s", "m", "t"],
+    source: SHELLS,
+    Body: SnoozedBody,
+  },
+  {
+    id: "goals",
+    title: "Goals",
+    description: "Agents working toward a /goal, with tokens and time spent against the budget.",
+    icon: TargetIcon,
+    category: "Agents",
+    sizes: ["m", "l", "t", "w"],
+    source: SHELLS,
+    count: (data) => ({
+      n: data.threads.filter((t) => t.goal !== null && t.goal.status !== "complete").length,
+    }),
+    Body: GoalsBody,
+  },
+  {
+    id: "background",
+    title: "Background work",
+    description: "Subagents, monitors and commands agents left running.",
+    icon: BotIcon,
+    category: "Agents",
+    sizes: ["s", "m", "t", "l"],
+    source: SHELLS,
+    count: (data) => ({ n: data.threads.reduce((n, t) => n + t.background.length, 0) }),
+    Body: BackgroundBody,
+  },
+  {
+    id: "scratchpad",
+    title: "Scratchpad",
+    description: "A note that stays on this device. Send it to the prompt when it's ready.",
+    icon: NotebookPenIcon,
+    category: "Start",
+    sizes: ["s", "m", "t", "l"],
+    source: "Saved in this browser only. Nothing leaves the device.",
+    Body: ScratchpadBody,
+  },
+  {
+    id: "branches",
+    title: "Branches",
+    description:
+      "Branches and worktrees in this project, with their pull request and latest thread.",
+    icon: GitBranchIcon,
+    category: "Code",
+    sizes: ["m", "l", "t"],
+    source: "Thread branches and linked pull requests in this project.",
+    Body: BranchesBody,
+  },
+  {
+    id: "today",
+    title: "Today",
+    description: "Threads started and finished today, and pull requests touched.",
+    icon: SunriseIcon,
+    category: "Insights",
+    sizes: ["s", "m"],
+    source: SHELLS,
+    Body: TodayBody,
+  },
+  {
+    id: "model-mix",
+    title: "Agents this week",
+    description: "Which models your threads ran on over the last 7 days.",
+    icon: ChartPieIcon,
+    category: "Insights",
+    sizes: ["s", "m", "t"],
+    source: "Model selection on threads from the last 7 days.",
+    Body: ModelMixBody,
+  },
+  {
+    id: "projects",
+    title: "Projects",
+    description:
+      "Every project with what's working and waiting in it. Click one to start a thread there.",
+    icon: FolderGit2Icon,
+    category: "Start",
+    sizes: ["s", "m", "t", "l"],
+    source: SHELLS,
+    Body: ProjectsBody,
+  },
+  {
+    id: "usage-limits",
+    title: "Usage limits",
+    description: "How much of each plan's session and weekly limit is left, and when it resets.",
+    icon: GaugeIcon,
+    category: "Machine",
+    sizes: ["m", "l", "t", "w"],
+    source: "Limits your providers already report in each machine's config. No extra requests.",
+    Body: UsageLimitsBody,
+  },
+  {
+    id: "spend-today",
+    title: "Spend today",
+    description: "Tokens your agents used today, at API prices, split by provider.",
+    icon: CoinsIcon,
+    category: "Insights",
+    sizes: ["s", "m"],
+    source:
+      "Scans today's transcripts on each machine (a few seconds, cached for a minute). Needs diagnostics access.",
+    Body: SpendTodayBody,
+  },
+  {
+    id: "machines",
+    title: "Machines",
+    description: "Every machine you're connected to, how it's connected, and its server version.",
+    icon: ServerIcon,
+    category: "Machine",
+    sizes: ["s", "m", "t"],
+    source: "Connection state this client already tracks. No extra requests.",
+    Body: MachinesBody,
+  },
+  {
+    id: "providers",
+    title: "Providers",
+    description: "Which agents are ready, which need a sign-in, and which have an update.",
+    icon: PlugZapIcon,
+    category: "Machine",
+    sizes: ["s", "m", "t"],
+    source: "Provider status from this machine's config. No extra requests.",
+    Body: ProvidersBody,
+  },
+  {
+    id: "automations",
+    title: "Automations",
+    description: "Scheduled prompts, when each runs next, and a button to run one now.",
+    icon: CalendarClockIcon,
+    category: "Start",
+    sizes: ["m", "l", "t", "w"],
+    source:
+      "A live subscription to this machine's scheduled tasks, shared with the Automations page.",
+    Body: AutomationsBody,
+  },
+  {
+    id: "stash",
+    title: "Stashed prompts",
+    description: "Prompts you stashed. Click one to put it back in the composer.",
+    icon: ArchiveIcon,
+    category: "Start",
+    sizes: ["s", "m", "t", "l"],
+    source: "Your prompt stash, saved in this browser.",
+    Body: StashBody,
+  },
+  {
+    id: "skills",
+    title: "Skills",
+    description: "Skills your agent can use in this project. Click one to add it to the prompt.",
+    icon: WandSparklesIcon,
+    category: "Start",
+    sizes: ["s", "m", "t", "l"],
+    source: "The provider's last skill scan for this project. No extra requests.",
+    Body: SkillsBody,
+  },
+  {
+    id: "checkout",
+    title: "This checkout",
+    description: "The branch you'd start on, uncommitted changes, and how far it is from upstream.",
+    icon: GitCommitHorizontalIcon,
+    category: "Code",
+    sizes: ["s", "m", "t", "l"],
+    source:
+      "A live git status subscription for this checkout, shared with the composer's git controls.",
+    Body: CheckoutBody,
+  },
+  {
+    id: "shortcuts",
+    title: "Shortcuts",
+    description: "Keyboard shortcuts worth knowing, as you have them bound. Small shows one a day.",
+    icon: KeyboardIcon,
+    category: "Ambient",
+    sizes: ["s", "m", "t", "w"],
+    source: "Your keybindings, already on this client.",
+    Body: ShortcutsBody,
+  },
+];
+
+export const WIDGETS_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
