@@ -148,3 +148,4 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.
 - When implementing a new features of fixing a bugs, search upstream https://github.com/pingdotgg/t3code to see if there is any useful infromation there.
+- Don't link, open issues, PRs to upstream without explicit approval, we don't want to spam them
