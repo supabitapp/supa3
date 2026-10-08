@@ -22,11 +22,7 @@ export function OrchestrationSkillsSection({
       <SettingsRow
         icon="arrow.down.circle"
         label={
-          skills.installed
-            ? "Installed"
-            : skills.pending === "Install"
-              ? "Installing…"
-              : "Install Skills"
+          skills.installed ? "Installed" : skills.pending === "Install" ? "Installing…" : "Install"
         }
         disabled={busy || !skills.canInstall}
         onPress={() => void skills.request("Install")}
@@ -34,7 +30,7 @@ export function OrchestrationSkillsSection({
       {skills.canUninstall ? (
         <SettingsRow
           icon="trash"
-          label={skills.pending === "Uninstall" ? "Uninstalling…" : "Uninstall Skills"}
+          label={skills.pending === "Uninstall" ? "Uninstalling…" : "Uninstall"}
           disabled={busy || !skills.canUninstall}
           onPress={() => void skills.request("Uninstall")}
         />

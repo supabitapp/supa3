@@ -75,7 +75,7 @@ const make = Effect.gen(function* () {
     return changed;
   });
   // Refresh the bundle on every app start, without creating any provider links.
-  // A failed refresh remains repairable through Install Skills.
+  // A failed refresh remains repairable by installing from Settings.
   const bundleChanged = yield* materializeBundle.pipe(
     Effect.catch((cause) =>
       Effect.logWarning("Could not refresh bundled orchestration skills.", { cause }).pipe(
