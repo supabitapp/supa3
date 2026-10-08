@@ -96,7 +96,6 @@ const SIDEBAR_V2_ROW_RADIUS = 12;
 function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
-  readonly tone?: "default" | "snoozed";
   readonly disclosure?: {
     readonly expanded: boolean;
     readonly disabled?: boolean;
@@ -105,7 +104,6 @@ function ThreadListV2Section(props: {
     readonly accessibilityHint: string;
   };
 }) {
-  const snoozed = props.tone === "snoozed";
   const sidebarPane = props.pane === "sidebar";
   const className = cn(
     "flex-row items-center gap-2.5",
@@ -116,33 +114,20 @@ function ThreadListV2Section(props: {
     <>
       <Text
         className={cn(
-          "text-xs font-supacode-medium",
-          sidebarPane
-            ? "text-drawer-foreground-muted"
-            : snoozed
-              ? "text-foreground-secondary"
-              : "text-foreground-tertiary",
+          "text-xs",
+          sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-tertiary",
         )}
       >
         {props.label}
       </Text>
-      <View
-        className={cn(
-          "h-px flex-1",
-          snoozed ? "bg-primary/20" : sidebarPane ? "bg-drawer-border" : "bg-border",
-        )}
-      />
+      <View className={cn("h-px flex-1", sidebarPane ? "bg-drawer-border" : "bg-border")} />
       {props.disclosure ? (
         <DisclosureChevron
           expanded={props.disclosure.expanded}
           duration={THREAD_LIST_MOTION_DURATION}
           size={10}
           tintColorClassName={
-            sidebarPane
-              ? "accent-drawer-foreground-muted"
-              : snoozed
-                ? "accent-icon-muted"
-                : "accent-foreground-muted"
+            sidebarPane ? "accent-drawer-foreground-muted" : "accent-foreground-muted"
           }
         />
       ) : null}
@@ -201,7 +186,6 @@ function ThreadListV2ShelfHeader(
     <ThreadListV2Section
       label={props.expanded ? label : `${label} (${props.count})`}
       pane={props.pane}
-      tone={props.kind === "snoozed" ? "snoozed" : "default"}
       disclosure={{
         expanded: props.expanded,
         disabled: props.disabled,
@@ -1295,9 +1279,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               "text-sm tabular-nums",
               selected
                 ? selectedThreadRowColors.mutedForegroundClassName
-                : snoozedRow
-                  ? rowAppearance.mutedForegroundClassName
-                  : rowAppearance.tertiaryForegroundClassName,
+                : rowAppearance.tertiaryForegroundClassName,
             )}
             style={{ fontFamily: MONO_FONT }}
           >

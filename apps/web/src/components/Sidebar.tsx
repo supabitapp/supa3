@@ -812,7 +812,6 @@ function SidebarSectionHeader(props: {
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
   const shelf = props.marker.replace("-header", "");
-  const snoozed = shelf === "snoozed";
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -822,9 +821,8 @@ function SidebarSectionHeader(props: {
       <CollapsibleSectionHeader
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
-        tone={
-          props.isDropTarget ? "accent" : props.dragging ? "emphasized" : snoozed ? "info" : "muted"
-        }
+        weight="normal"
+        tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
       >
         {props.label}
@@ -1077,6 +1075,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
         <CollapsibleSectionHeader
           expanded={draftsShelfExpanded}
           onClick={toggleDraftsShelf}
+          weight="normal"
           data-testid="sidebar-drafts-shelf-toggle"
         >
           {draftsShelfExpanded ? "Drafts" : `Drafts (${drafts.length})`}
@@ -1924,9 +1923,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   ) : variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
                     // Snoozed rows show when they come BACK, not when they were
                     // last touched — the return ticket is the row's whole story.
-                    <span className="text-xs text-info-foreground tabular-nums">
-                      {props.snoozeWakeLabelText}
-                    </span>
+                    <span className="text-xs tabular-nums">{props.snoozeWakeLabelText}</span>
                   ) : isWoke ? (
                     // A wake can land straight in the settled tail (e.g. PR
                     // merged while snoozed); the signal must survive the trip.
