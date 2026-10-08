@@ -987,7 +987,6 @@ function readSidebarDraftRow(routeDraftId: string | null) {
     : null;
 }
 
-// Draft sessions with user content live just above the Settled section.
 // Own store subscriptions keep per-keystroke composer updates
 // inside this block. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
@@ -1071,38 +1070,40 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     ? drafts
     : drafts.filter(({ draftId }) => draftId === props.routeDraftId);
   return (
-    <>
-      <li data-thread-selection-safe className="mx-0.5 h-8 list-none">
-        <CollapsibleSectionHeader
-          expanded={draftsShelfExpanded}
-          onClick={toggleDraftsShelf}
-          weight="normal"
-          data-testid="sidebar-drafts-shelf-toggle"
-        >
-          {draftsShelfExpanded ? "Drafts" : `Drafts (${drafts.length})`}
-        </CollapsibleSectionHeader>
-      </li>
-      {renderedDrafts.map(({ composer, draftId, session }) => {
-        const projectKey = `${session.environmentId}:${session.projectId}`;
-        return (
-          <SidebarDraftRow
-            key={draftId}
-            branch={session.branch}
-            draftId={draftId}
-            composer={composer}
-            project={props.projectByKey.get(projectKey) ?? null}
-            projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
-            isActive={draftId === props.routeDraftId}
-            onNavigate={props.onNavigateToDraft}
-            // The /draft/$draftId route redirects home on its own when the
-            // draft it renders disappears, so discarding the open draft needs
-            // no special-casing here.
-            onDiscard={discardComposerDraft}
-            onContextMenu={props.onDraftContextMenu}
-          />
-        );
-      })}
-    </>
+    <SortableSidebarMarker marker="drafts-block">
+      <ul role="presentation" className="flex flex-col gap-px">
+        <li data-thread-selection-safe className="mx-0.5 h-8 list-none">
+          <CollapsibleSectionHeader
+            expanded={draftsShelfExpanded}
+            onClick={toggleDraftsShelf}
+            weight="normal"
+            data-testid="sidebar-drafts-shelf-toggle"
+          >
+            {draftsShelfExpanded ? "Drafts" : `Drafts (${drafts.length})`}
+          </CollapsibleSectionHeader>
+        </li>
+        {renderedDrafts.map(({ composer, draftId, session }) => {
+          const projectKey = `${session.environmentId}:${session.projectId}`;
+          return (
+            <SidebarDraftRow
+              key={draftId}
+              branch={session.branch}
+              draftId={draftId}
+              composer={composer}
+              project={props.projectByKey.get(projectKey) ?? null}
+              projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
+              isActive={draftId === props.routeDraftId}
+              onNavigate={props.onNavigateToDraft}
+              // The /draft/$draftId route redirects home on its own when the
+              // draft it renders disappears, so discarding the open draft needs
+              // no special-casing here.
+              onDiscard={discardComposerDraft}
+              onContextMenu={props.onDraftContextMenu}
+            />
+          );
+        })}
+      </ul>
+    </SortableSidebarMarker>
   );
 });
 
@@ -3528,11 +3529,12 @@ export default function Sidebar() {
         settledThreads.length ===
       0
     ) {
-      return [];
+      return [{ kind: "marker", marker: "drafts-block" }];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
     const pinnedRows = rowsOf(visiblePinnedThreads, "pinned");
     items.push(...pinnedRows);
+    items.push({ kind: "marker", marker: "drafts-block" });
     items.push({ kind: "marker", marker: "pinned-divider" });
     const activeRows = rowsOf(activeThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
@@ -3581,8 +3583,11 @@ export default function Sidebar() {
         .join("\0"),
     [sidebarListItems],
   );
+  const sidebarHasThreadSections = sidebarListItems.some(
+    (item) => item.kind === "marker" && item.marker === "pinned-header",
+  );
   const sidebarListHasRows =
-    sidebarListItems.length + visibleDraftSessionCount + pendingThreads.length > 0;
+    sidebarHasThreadSections || visibleDraftSessionCount > 0 || pendingThreads.length > 0;
   // The undo notice resizes the footer and shifts the bottom-pinned settled
   // shelf. It mounts and expires apart from any reorder, so it needs its own pass.
   const undoNoticeShown = useThreadUndoNotice((state) => state.notice !== null);
@@ -4860,7 +4865,7 @@ export default function Sidebar() {
                     // bottom inset once instead of adding a second gap above
                     // the footer's own vertical inset.
                     "relative -mb-2 flex flex-col gap-px",
-                    sidebarListItems.length > 0 && "flex-1",
+                    sidebarHasThreadSections && "flex-1",
                     // An action sweep owns the pointer: rows it passes over
                     // neither show hover actions nor open tooltips, even
                     // controls that opt back in, like the Woke pill.
@@ -5040,6 +5045,19 @@ export default function Sidebar() {
                             ),
                           );
                           break;
+                        case "drafts-block":
+                          items.push(
+                            <SidebarDraftBlock
+                              key="draft-sessions"
+                              projectByKey={projectByKey}
+                              projectDisplayNameByKey={projectDisplayNameByKey}
+                              scopedProjectKeys={scopedProjectKeys}
+                              routeDraftId={routeDraftIdForRows}
+                              onNavigateToDraft={navigateToDraft}
+                              onDraftContextMenu={handleDraftContextMenu}
+                            />,
+                          );
+                          break;
                         case "pinned-divider":
                           items.push(
                             <SidebarDragBoundary
@@ -5115,15 +5133,6 @@ export default function Sidebar() {
                                 className="mt-auto h-0 list-none"
                               />
                             ) : null,
-                            <SidebarDraftBlock
-                              key="draft-sessions"
-                              projectByKey={projectByKey}
-                              projectDisplayNameByKey={projectDisplayNameByKey}
-                              scopedProjectKeys={scopedProjectKeys}
-                              routeDraftId={routeDraftIdForRows}
-                              onNavigateToDraft={navigateToDraft}
-                              onDraftContextMenu={handleDraftContextMenu}
-                            />,
                             <SidebarSectionHeader
                               key="settled-shelf-header"
                               marker="settled-header"

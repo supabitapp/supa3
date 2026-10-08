@@ -155,6 +155,7 @@ const SIDEBAR_MARKER_PREFIX = "sidebar-marker-";
 export type SidebarListMarker =
   /** The top boundary is also a landing target when there are no pins. */
   | "pinned-header"
+  | "drafts-block"
   /** Stand-in rows so an empty section has somewhere for the gap to open. */
   | "active-placeholder"
   | "settled-placeholder"
