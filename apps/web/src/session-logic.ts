@@ -34,6 +34,7 @@ import type {
 import type { ThreadRunSummary, ThreadRuntimeSummary } from "@supacode/client-runtime/state/shell";
 import { threadRuntimeHasInterruptibleRun } from "@supacode/client-runtime/state/thread-execution";
 import { turnItemIsWorkspacePreparation } from "@supacode/client-runtime/state/turn-item-presentation";
+import type { PendingBackgroundWorkTask } from "@supacode/shared/orchestrationV2PendingBackgroundWork";
 
 import {
   isImageAttachment,
@@ -262,6 +263,33 @@ export function deriveActivePlanState(
       status: status === "running" ? "inProgress" : status,
       ...(durationMs === undefined ? {} : { durationMs }),
     })),
+  };
+}
+
+export function deriveComposerTasksState(input: {
+  plan: ActivePlanState | null;
+  activityRun: ThreadRunSummary | null;
+  runtime: ThreadRuntimeSummary | null;
+  pendingBackgroundTasks: ReadonlyArray<Pick<PendingBackgroundWorkTask, "kind">>;
+}) {
+  const { plan, activityRun, runtime } = input;
+  if (
+    isLatestRunSettled(activityRun, runtime) ||
+    !plan ||
+    plan.runId !== (activityRun?.runId ?? null)
+  ) {
+    return null;
+  }
+  const lastStep = plan.steps.at(-1);
+  if (lastStep === undefined) return null;
+  const completedSteps = plan.steps.filter((step) => step.status === "completed").length;
+  const step =
+    plan.steps.find((candidate) => candidate.status === "inProgress")?.step ??
+    plan.steps.find((candidate) => candidate.status === "pending")?.step ??
+    lastStep.step;
+  return {
+    progress: { step, completedSteps, totalSteps: plan.steps.length },
+    steps: plan.steps,
   };
 }
 

@@ -198,6 +198,7 @@ import {
   type TimelineEntriesInput,
   type TimelineEntriesProjection,
   deriveActivePlanState,
+  deriveComposerTasksState,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
   findLatestProposedPlan,
@@ -2556,27 +2557,6 @@ export default function ChatView(props: ChatViewProps) {
     () => deriveActivePlanState(serverProjection, activeActivityRun?.runId),
     [activeActivityRun?.runId, serverProjection],
   );
-  // Tasks progress for the running turn's own plan only — deriveActivePlanState
-  // falls back to older runs' plans, which must not label fresh work.
-  const activeComposerTasksProgress = useMemo(() => {
-    if (
-      isLatestRunSettled(activeActivityRun, activeRuntime) ||
-      !activePlan ||
-      activePlan.runId !== (activeActivityRun?.runId ?? null)
-    ) {
-      return null;
-    }
-    const totalSteps = activePlan.steps.length;
-    if (totalSteps === 0) return null;
-    const completedSteps = activePlan.steps.filter((step) => step.status === "completed").length;
-    const step =
-      activePlan.steps.find((candidate) => candidate.status === "inProgress")?.step ??
-      activePlan.steps.find((candidate) => candidate.status === "pending")?.step ??
-      activePlan.steps.at(-1)!.step;
-    return { step, completedSteps, totalSteps };
-  }, [activeActivityRun, activePlan, activeRuntime]);
-  const activeComposerTaskSteps =
-    activeComposerTasksProgress && activePlan ? activePlan.steps : null;
   const activeThreadEnvironmentId = activeThread?.environmentId ?? null;
   const activeThreadProjectId = activeThread?.projectId ?? null;
   const activeProjectRef = useMemo(
@@ -3755,6 +3735,16 @@ export default function ChatView(props: ChatViewProps) {
       }),
     ];
   }, [serverProjection]);
+  const activeComposerTasks = useMemo(
+    () =>
+      deriveComposerTasksState({
+        plan: activePlan,
+        activityRun: activeActivityRun,
+        runtime: activeRuntime,
+        pendingBackgroundTasks,
+      }),
+    [activePlan, activeActivityRun, activeRuntime, pendingBackgroundTasks],
+  );
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -11084,8 +11074,8 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeContextWindow={activeContextWindow}
-                              activeTasksProgress={activeComposerTasksProgress}
-                              activeTaskSteps={activeComposerTaskSteps}
+                              activeTasksProgress={activeComposerTasks?.progress ?? null}
+                              activeTaskSteps={activeComposerTasks?.steps ?? null}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}

@@ -17,13 +17,15 @@ import {
   type OrchestrationV2RunAttempt,
   type OrchestrationV2TurnItem,
 } from "@supacode/contracts";
-import type { ThreadRuntimeSummary } from "@supacode/client-runtime/state/shell";
+import type { ThreadRunSummary, ThreadRuntimeSummary } from "@supacode/client-runtime/state/shell";
+import type { PendingBackgroundWorkTask } from "@supacode/shared/orchestrationV2PendingBackgroundWork";
 import { deriveMessagesTimelineRows } from "./components/chat/MessagesTimeline.logic";
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   deriveActivePlanState,
+  deriveComposerTasksState,
   deriveCanInterruptRunningThread,
   deriveTimelineEntriesFromVisibleTurnItems,
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
@@ -35,6 +37,7 @@ import {
   selectMessageImageResources,
   createMessageAttachmentPreviewProjector,
   providerErrorPresentation,
+  type ActivePlanState,
   type TimelineEntry,
   workEntryIndicatesToolFailure,
   workEntryDisplayIndicatesToolFailure,
@@ -42,6 +45,145 @@ import {
 } from "./session-logic";
 import { makeStreamingTimelineFixture, makeThreadProjectionFixture } from "./test-fixtures";
 import type { ChatMessage } from "./types";
+
+describe("composer tasks", () => {
+  const runId = RunId.make("run-parent-tasks");
+  const plan: ActivePlanState = {
+    createdAt: "2026-10-08T00:00:00.000Z",
+    runId,
+    steps: [
+      { step: "Inspect", status: "completed", durationMs: 3_000 },
+      { step: "Review", status: "inProgress", durationMs: 1_000 },
+      { step: "Report", status: "pending" },
+    ],
+  };
+  const activityRun: ThreadRunSummary = {
+    runId,
+    status: "completed",
+    requestedAt: plan.createdAt,
+    startedAt: plan.createdAt,
+    completedAt: "2026-10-08T00:01:00.000Z",
+    assistantMessageId: null,
+  };
+  const runtime: ThreadRuntimeSummary = {
+    status: "idle",
+    activeRunId: null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: null,
+    lastError: null,
+    updatedAt: "2026-10-08T00:01:00.000Z",
+  };
+  const pendingBackgroundTasks: PendingBackgroundWorkTask[] = [
+    { taskId: "child", kind: "subagent", childThreadId: ThreadId.make("thread-child") },
+  ];
+  const input = { plan, activityRun, runtime, pendingBackgroundTasks };
+
+  it("keeps exact task progress and steps while a completed parent waits on a subagent", () => {
+    expect(deriveComposerTasksState(input)).toEqual({
+      progress: { step: "Review", completedSteps: 1, totalSteps: 3 },
+      steps: [
+        { step: "Inspect", status: "completed", durationMs: 3_000 },
+        { step: "Review", status: "inProgress", durationMs: 1_000 },
+        { step: "Report", status: "pending" },
+      ],
+    });
+    expect(deriveComposerTasksState({ ...input, pendingBackgroundTasks: [] })).toBeNull();
+    expect(
+      deriveComposerTasksState({ ...input, pendingBackgroundTasks: [{ kind: "command" }] }),
+    ).toBeNull();
+  });
+
+  it.each([
+    "failed",
+    "interrupted",
+    "cancelled",
+    "rolled_back",
+  ] satisfies ThreadRunSummary["status"][])(
+    "hides tasks for a settled %s run even while a subagent is active",
+    (status) => {
+      expect(
+        deriveComposerTasksState({ ...input, activityRun: { ...activityRun, status } }),
+      ).toBeNull();
+    },
+  );
+
+  it("hides an older fallback plan when an unrelated run becomes the activity run", () => {
+    const newerRun = { ...activityRun, runId: RunId.make("run-newer-tasks") };
+    expect(deriveComposerTasksState({ ...input, activityRun: newerRun })).toBeNull();
+    expect(
+      deriveComposerTasksState({
+        ...input,
+        activityRun: { ...newerRun, status: "running" },
+        runtime: { ...runtime, status: "running", activeRunId: newerRun.runId },
+      }),
+    ).toBeNull();
+  });
+
+  it("preserves foreground progress when a newer run is queued", () => {
+    const foreground = {
+      ...input,
+      activityRun: {
+        ...activityRun,
+        status: "running",
+        completedAt: null,
+      } satisfies ThreadRunSummary,
+      runtime: { ...runtime, status: "queued", activeRunId: runId } satisfies ThreadRuntimeSummary,
+      pendingBackgroundTasks: [],
+    };
+    expect(deriveComposerTasksState(foreground)?.progress).toEqual({
+      step: "Review",
+      completedSteps: 1,
+      totalSteps: 3,
+    });
+    expect(
+      deriveComposerTasksState({
+        ...foreground,
+        activityRun,
+        runtime: { ...runtime, activeRunId: runId },
+      })?.progress,
+    ).toEqual({ step: "Review", completedSteps: 1, totalSteps: 3 });
+  });
+
+  it("preserves runless ownership and hides missing, empty, or differently owned plans", () => {
+    const runless = { ...input, activityRun: null, runtime: null };
+    expect(
+      deriveComposerTasksState({ ...runless, plan: { ...plan, runId: null } })?.progress,
+    ).toEqual({
+      step: "Review",
+      completedSteps: 1,
+      totalSteps: 3,
+    });
+    expect(deriveComposerTasksState(runless)).toBeNull();
+    expect(deriveComposerTasksState({ ...input, plan: { ...plan, runId: null } })).toBeNull();
+    expect(deriveComposerTasksState({ ...input, plan: null })).toBeNull();
+    expect(deriveComposerTasksState({ ...input, plan: { ...plan, steps: [] } })).toBeNull();
+  });
+
+  it("preserves pending-step priority and the last-step fallback for a completed plan", () => {
+    const steps: ActivePlanState["steps"] = [
+      { step: "Inspect", status: "completed", durationMs: 3_000 },
+      { step: "Report", status: "pending" },
+    ];
+    const foreground = {
+      ...input,
+      activityRun: { ...activityRun, status: "running" } satisfies ThreadRunSummary,
+      pendingBackgroundTasks: [],
+    };
+    expect(deriveComposerTasksState({ ...foreground, plan: { ...plan, steps } })?.progress).toEqual(
+      {
+        step: "Report",
+        completedSteps: 1,
+        totalSteps: 2,
+      },
+    );
+    expect(
+      deriveComposerTasksState({
+        ...foreground,
+        plan: { ...plan, steps: steps.map((step) => ({ ...step, status: "completed" })) },
+      })?.progress,
+    ).toEqual({ step: "Report", completedSteps: 2, totalSteps: 2 });
+  });
+});
 
 describe("V2 session presentation", () => {
   it("uses run status as the settlement boundary", () => {
