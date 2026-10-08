@@ -207,7 +207,7 @@ environments and links the providers' native skill folders to Supacode's bundled
 With **All environments** selected, offline environments are skipped; reconnect
 and install again to include them.
 Installed skills update when the updated app starts. Use **Uninstall** to
-remove those links. Existing skill folders and unrelated links are preserved.
+remove those links. Installing replaces any existing folder or link with the same skill name.
 Create a separate skill if you want to customize the instructions; changes to
 the bundled skills are replaced at the next app start.
 

@@ -154,12 +154,15 @@ const make = Effect.gen(function* () {
     skill: (typeof ORCHESTRATION_SKILLS)[number],
   ) {
     const state = yield* inspect(root, skill);
-    if (state.managed || state.state === "conflict") return false;
+    if (state.managed) return false;
+    const directory = path.join(root, skill.name);
+    // Replaces whatever holds our skill name. A link is removed without touching its target.
+    if (state.state === "conflict") yield* fs.remove(directory, { recursive: true });
     yield* fs.makeDirectory(root, { recursive: true });
     yield* Effect.tryPromise(() =>
       NodeFSP.symlink(
         bundledDirectory(skill.name),
-        path.join(root, skill.name),
+        directory,
         platform === "win32" ? "junction" : "dir",
       ),
     );
