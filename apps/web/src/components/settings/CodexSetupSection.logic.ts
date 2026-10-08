@@ -4,7 +4,7 @@ import { isLoopbackHost } from "@supacode/shared/preview";
 export function isLocalProviderAuthConnection(connection: PreparedConnection | null): boolean {
   return (
     connection !== null &&
-    (connection.connectionMethod === undefined || connection.connectionMethod === "direct") &&
+    connection.connectionMethod !== "relay" &&
     isLoopbackHost(new URL(connection.httpBaseUrl).hostname)
   );
 }

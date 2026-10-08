@@ -22,16 +22,16 @@ const prepared: PreparedConnection = {
 };
 
 describe("provider callback locality", () => {
-  it("uses local callbacks only for direct loopback hosts", () => {
+  it("preserves existing direct and SSH loopback callbacks", () => {
     expect(isLocalProviderAuthConnection({ ...prepared, connectionMethod: "direct" })).toBe(true);
     expect(isLocalProviderAuthConnection(prepared)).toBe(true);
+    expect(isLocalProviderAuthConnection({ ...prepared, connectionMethod: "ssh" })).toBe(true);
     expect(
       isLocalProviderAuthConnection({ ...prepared, httpBaseUrl: "https://remote.example.test" }),
     ).toBe(false);
     expect(isLocalProviderAuthConnection(null)).toBe(false);
   });
-  it("uses client callbacks for tunneled hosts even with a loopback gateway", () => {
+  it("uses client callbacks for relay hosts even with a loopback gateway", () => {
     expect(isLocalProviderAuthConnection({ ...prepared, connectionMethod: "relay" })).toBe(false);
-    expect(isLocalProviderAuthConnection({ ...prepared, connectionMethod: "ssh" })).toBe(false);
   });
 });
