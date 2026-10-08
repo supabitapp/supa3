@@ -80,9 +80,6 @@ export function useThreadListMotion(input: {
   const alignmentStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: alignmentOffset.value }],
   }));
-  const alignmentGapCenterStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -(alignmentPadding.value + alignmentOffset.value) / 2 }],
-  }));
   const sharedValues = useMemo(
     () => ({ alignItemsAtEndPadding: alignmentPadding }),
     [alignmentPadding],
@@ -143,6 +140,6 @@ export function useThreadListMotion(input: {
         animations: { opacity: animateExit ? withTiming(0, { ...entryTiming, duration: 160 }) : 0 },
       };
     };
-    return { layout, entering, exiting, alignmentStyle, alignmentGapCenterStyle, sharedValues };
-  }, [alignmentGapCenterStyle, alignmentStyle, deadline, sharedValues, timing]);
+    return { layout, entering, exiting, alignmentStyle, sharedValues };
+  }, [alignmentStyle, deadline, sharedValues, timing]);
 }

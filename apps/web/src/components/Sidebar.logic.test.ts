@@ -2186,6 +2186,28 @@ describe("Working shelf", () => {
       expect(resolveSidebarDropTarget(reordered, "a", "w")).toBeNull();
       expect(resolveSidebarDropTarget(reordered, "a", "z")).toBeNull();
       expect(
+        resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("working-header")),
+      ).toBeNull();
+      expect(
+        resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("snoozed-header")),
+      ).toBeNull();
+      expect(resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("pinned-header"))).toEqual({
+        section: "pinned",
+        pinnedOrder: ["a", "p"],
+        activeOrder: [],
+      });
+      expect(
+        resolveSidebarDropTarget(
+          reordered.filter((item) => item.kind !== "thread" || item.key !== "p"),
+          "a",
+          sidebarMarkerId("pinned-header"),
+        ),
+      ).toEqual({
+        section: "pinned",
+        pinnedOrder: ["a"],
+        activeOrder: [],
+      });
+      expect(
         resolveSidebarDropTarget(reordered, "s", sidebarMarkerId("active-placeholder")),
       ).toEqual({
         section: "active",

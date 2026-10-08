@@ -215,9 +215,19 @@ export function resolveSidebarDropTarget(
   const activeIndex = items.findIndex((item) => sidebarListItemId(item) === activeKey);
   const overIndex = items.findIndex((item) => sidebarListItemId(item) === overId);
   if (activeIndex === -1 || overIndex === -1 || items[activeIndex]?.kind !== "thread") return null;
+  const over = items[overIndex];
+  if (
+    over?.kind === "marker" &&
+    (over.marker === "working-header" || over.marker === "snoozed-header")
+  )
+    return null;
   const moved = items.filter((_, index) => index !== activeIndex);
-  moved.splice(overIndex, 0, items[activeIndex]!);
-  const section = sectionAtSidebarSlot(moved, overIndex);
+  const destinationIndex =
+    over?.kind === "marker" && over.marker === "pinned-header"
+      ? moved.indexOf(over) + 1
+      : overIndex;
+  moved.splice(destinationIndex, 0, items[activeIndex]!);
+  const section = sectionAtSidebarSlot(moved, destinationIndex);
   if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
