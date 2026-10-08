@@ -1629,6 +1629,8 @@ function renderFeedEntry(
   if (entry.type === "work-toggle") {
     return (
       <ThreadWorkGroupToggle
+        latestImage={entry.latestImage}
+        onPressPreview={props.onPressPreview}
         environmentId={props.environmentId}
         rowSizing={props.workRowSizing}
         expanded={entry.expanded}
@@ -3013,6 +3015,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         case "run-fold":
           return resolveThreadFeedFixedItemSize(entry.type);
         case "work-toggle":
+          return !entry.expanded && entry.latestImage ? undefined : WORK_GROUP_TOGGLE_HEIGHT;
         case "thinking":
           return WORK_GROUP_TOGGLE_HEIGHT;
         case "activity-group":

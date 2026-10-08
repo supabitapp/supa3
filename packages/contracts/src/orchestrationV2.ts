@@ -1565,6 +1565,9 @@ export const OrchestrationV2TurnItem = Schema.Union([
     type: Schema.Literal("dynamic_tool"),
     toolName: Schema.NullOr(TrimmedNonEmptyString),
     viewedImagePath: Schema.optional(TrimmedNonEmptyString),
+    outputImageCount: Schema.optional(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 8 })),
+    ),
     input: Schema.Unknown,
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
@@ -2336,6 +2339,9 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     type: Schema.Literal("dynamic_tool"),
     toolName: Schema.NullOr(TrimmedNonEmptyString),
     viewedImagePath: Schema.optional(TrimmedNonEmptyString),
+    outputImageCount: Schema.optional(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 8 })),
+    ),
     input: Schema.Unknown,
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
