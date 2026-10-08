@@ -1,4 +1,15 @@
+import {
+  composerAttachmentDedupKey,
+  planComposerAttachments,
+  type ComposerAttachmentPlan,
+} from "./composerAttachmentAdmission";
+import { hydrateComposerDraftAttachments } from "./composerDraftAttachments";
 import { stripInlineContextReferences } from "./lib/composerContextReferences";
+import {
+  markDraftAttachmentForPersistence,
+  markAttachmentPlanForPersistence,
+  type DraftAttachmentByteState,
+} from "./composerAttachmentState";
 import { elementContextToPreviewAnnotation } from "./lib/elementContext";
 import {
   ElementContextDetails,
@@ -39,14 +50,12 @@ import * as Effect from "effect/Effect";
 import { DeepMutable } from "effect/Types";
 import { createModelSelection, normalizeModelSlug } from "@supacode/shared/model";
 import { useMemo } from "react";
-import { getLocalStorageItem } from "./hooks/useLocalStorage";
 import { resolveAppModelSelection, resolveAppModelSelectionForInstance } from "./modelSelection";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   type ChatFileAttachment,
   type ChatImageAttachment,
-  videoMimeType,
 } from "./types";
 import {
   type TerminalContextDraft,
@@ -59,6 +68,7 @@ import {
   ensureInlineContextReferences,
   formatInlineContextReference,
   removeInlineContextReference,
+  rewriteAttachmentContextReferences,
   toComposerContextId,
   toKindScopedComposerContextId,
 } from "./lib/composerContextReferences";
@@ -76,7 +86,6 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";
-import { replaceComposerContextReferences } from "@supacode/shared/composerContextReferences";
 import { UnifiedSettings } from "@supacode/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
 const isRuntimeMode = Schema.is(RuntimeMode);
@@ -88,7 +97,7 @@ const isPreviewAnnotationPayload = Schema.is(PreviewAnnotationPayloadSchema);
 const isElementContextDetails = Schema.is(ElementContextDetails);
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "supacode:composer-drafts:v1";
-const COMPOSER_DRAFT_STORAGE_VERSION = 9;
+const COMPOSER_DRAFT_STORAGE_VERSION = 10;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
 
@@ -147,48 +156,28 @@ export const PersistedComposerImageAttachment = Schema.Struct({
 });
 export type PersistedComposerImageAttachment = typeof PersistedComposerImageAttachment.Type;
 
+const PersistedComposerDraftImageAttachment = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  mimeType: Schema.String,
+  sizeBytes: Schema.Number,
+  source: Schema.optional(SnapShotSource),
+  dataUrl: Schema.optionalKey(Schema.String),
+});
+type PersistedComposerDraftImageAttachment = typeof PersistedComposerDraftImageAttachment.Type;
+
 export interface ComposerImageAttachment extends Omit<ChatImageAttachment, "previewUrl"> {
   previewUrl: string;
-  file: File;
+  file: File | null;
+  legacyDataUrl?: string;
+  byteState?: DraftAttachmentByteState;
 }
 
 export interface ComposerFileAttachment extends Omit<ChatFileAttachment, "previewUrl"> {
   file: File | null;
+  byteState?: DraftAttachmentByteState;
   uploadedAttachmentId?: string;
   uploadEnvironmentId?: EnvironmentId;
-}
-
-/**
- * A hydrated draft file whose upload never finished before the reload has
- * neither bytes (`file` is only ever null after hydration) nor a server-side
- * upload. The composer renders it as a needs-reattach row: the user must
- * attach the file again or remove it before sending.
- */
-export function composerFileNeedsReattach(file: ComposerFileAttachment): boolean {
-  return file.file === null && file.uploadedAttachmentId === undefined;
-}
-
-function clearStaleFileUploadMetadata(
-  draft: ComposerThreadDraftState,
-  environmentId: EnvironmentId,
-): ComposerThreadDraftState {
-  let changed = false;
-  const files = draft.files.map((file) => {
-    if (
-      (file.uploadedAttachmentId === undefined && file.uploadEnvironmentId === undefined) ||
-      file.uploadEnvironmentId === environmentId
-    ) {
-      return file;
-    }
-
-    changed = true;
-    const nextFile = { ...file };
-    delete nextFile.uploadedAttachmentId;
-    delete nextFile.uploadEnvironmentId;
-    return nextFile;
-  });
-
-  return changed ? { ...draft, files } : draft;
 }
 
 export const PersistedComposerFileAttachment = Schema.Struct({
@@ -202,12 +191,6 @@ export const PersistedComposerFileAttachment = Schema.Struct({
 });
 export type PersistedComposerFileAttachment = typeof PersistedComposerFileAttachment.Type;
 
-/**
- * Draft-persisted file. Unlike a stash entry (which requires a finished
- * upload), a draft may hold a file whose upload never completed. Its `File`
- * handle cannot serialize, so it persists as a metadata-only marker (no
- * `attachmentId`) and hydrates as a needs-reattach row instead of vanishing.
- */
 export const PersistedComposerDraftFileAttachment = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -234,7 +217,7 @@ type PersistedTerminalContextDraft = typeof PersistedTerminalContextDraft.Type;
 
 const PersistedComposerThreadDraftState = Schema.Struct({
   prompt: Schema.String,
-  attachments: Schema.Array(PersistedComposerImageAttachment),
+  attachments: Schema.Array(PersistedComposerDraftImageAttachment),
   files: Schema.optionalKey(Schema.Array(PersistedComposerDraftFileAttachment)),
   terminalContexts: Schema.optionalKey(Schema.Array(PersistedTerminalContextDraft)),
   previewAnnotations: Schema.optionalKey(Schema.Array(PreviewAnnotationPayloadSchema)),
@@ -389,8 +372,6 @@ export interface ComposerThreadDraftState {
   prompt: string;
   images: ComposerImageAttachment[];
   files: ComposerFileAttachment[];
-  nonPersistedImageIds: string[];
-  persistedAttachments: PersistedComposerImageAttachment[];
   terminalContexts: TerminalContextDraft[];
   previewAnnotations: PreviewAnnotationPayload[];
   reviewComments: ReviewCommentContext[];
@@ -434,7 +415,6 @@ export function composerDraftHasUserContent(
     draft.prompt.trim().length > 0 ||
     draft.images.length > 0 ||
     draft.files.length > 0 ||
-    draft.persistedAttachments.length > 0 ||
     draft.terminalContexts.length > 0 ||
     draft.previewAnnotations.length > 0 ||
     draft.reviewComments.length > 0 ||
@@ -634,19 +614,26 @@ interface ComposerDraftStoreState {
     interactionMode: ProviderInteractionMode | null | undefined,
   ) => void;
   addImage: (threadRef: ComposerThreadTarget, image: ComposerImageAttachment) => boolean;
-  /** Returns the ids the draft accepted; duplicates and over-cap attachments are left out. */
   addImages: (
     threadRef: ComposerThreadTarget,
     images: ComposerImageAttachment[],
-    options?: { allowDuplicates?: boolean },
-  ) => string[];
+    options?: {
+      allowDuplicates?: boolean;
+      sourceIds?: ReadonlyMap<string, string>;
+      reservedSlots?: number;
+    },
+  ) => ComposerAttachmentPlan<ComposerImageAttachment>;
   removeImage: (threadRef: ComposerThreadTarget, imageId: string) => void;
-  /** Returns the ids of files appended; a re-pick that replaces a marker is not listed. */
   addFiles: (
     threadRef: ComposerThreadTarget,
     files: ComposerFileAttachment[],
-    options?: { allowDuplicates?: boolean; appendReference?: boolean },
-  ) => string[];
+    options?: {
+      allowDuplicates?: boolean;
+      appendReference?: boolean;
+      sourceIds?: ReadonlyMap<string, string>;
+      reservedSlots?: number;
+    },
+  ) => ComposerAttachmentPlan<ComposerFileAttachment>;
   removeFile: (threadRef: ComposerThreadTarget, fileId: string) => void;
   setFileUpload: (
     threadRef: ComposerThreadTarget,
@@ -709,11 +696,6 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     records: ReadonlyArray<ThreadContextRecord>,
   ) => void;
-  clearPersistedAttachments: (threadRef: ComposerThreadTarget) => void;
-  syncPersistedAttachments: (
-    threadRef: ComposerThreadTarget,
-    attachments: PersistedComposerImageAttachment[],
-  ) => Promise<void>;
   clearComposerContent: (threadRef: ComposerThreadTarget) => void;
   /**
    * Clears the prompt text and attachments, preserving terminal /
@@ -832,16 +814,12 @@ const EMPTY_PERSISTED_DRAFT_STORE_STATE = Object.freeze<PersistedComposerDraftSt
 
 const EMPTY_IMAGES: ComposerImageAttachment[] = [];
 const EMPTY_FILES: ComposerFileAttachment[] = [];
-const EMPTY_IDS: string[] = [];
-const EMPTY_PERSISTED_ATTACHMENTS: PersistedComposerImageAttachment[] = [];
 const EMPTY_TERMINAL_CONTEXTS: TerminalContextDraft[] = [];
 const EMPTY_PREVIEW_ANNOTATIONS: PreviewAnnotationPayload[] = [];
 const EMPTY_REVIEW_COMMENTS: ReviewCommentContext[] = [];
 const EMPTY_THREAD_CONTEXTS: ThreadContextRecord[] = [];
 Object.freeze(EMPTY_IMAGES);
 Object.freeze(EMPTY_FILES);
-Object.freeze(EMPTY_IDS);
-Object.freeze(EMPTY_PERSISTED_ATTACHMENTS);
 Object.freeze(EMPTY_PREVIEW_ANNOTATIONS);
 Object.freeze(EMPTY_REVIEW_COMMENTS);
 Object.freeze(EMPTY_THREAD_CONTEXTS);
@@ -856,8 +834,6 @@ const EMPTY_THREAD_DRAFT = Object.freeze<ComposerThreadDraftState>({
   prompt: "",
   images: EMPTY_IMAGES,
   files: EMPTY_FILES,
-  nonPersistedImageIds: EMPTY_IDS,
-  persistedAttachments: EMPTY_PERSISTED_ATTACHMENTS,
   terminalContexts: EMPTY_TERMINAL_CONTEXTS,
   previewAnnotations: EMPTY_PREVIEW_ANNOTATIONS,
   reviewComments: EMPTY_REVIEW_COMMENTS,
@@ -879,8 +855,6 @@ function createEmptyThreadDraft(): ComposerThreadDraftState {
     prompt: "",
     images: [],
     files: [],
-    nonPersistedImageIds: [],
-    persistedAttachments: [],
     terminalContexts: [],
     previewAnnotations: [],
     reviewComments: [],
@@ -890,32 +864,6 @@ function createEmptyThreadDraft(): ComposerThreadDraftState {
     runtimeMode: null,
     interactionMode: null,
   };
-}
-
-function composerImageDedupKey(image: ComposerImageAttachment): string {
-  // Keep this independent from File.lastModified so dedupe is stable for hydrated
-  // images reconstructed from localStorage (which get a fresh lastModified value).
-  return `${image.mimeType}\u0000${image.sizeBytes}\u0000${image.name}`;
-}
-
-export function composerFileDedupKey(
-  file: Pick<ComposerFileAttachment, "mimeType" | "sizeBytes" | "name">,
-): string {
-  return `${file.mimeType}\u0000${file.sizeBytes}\u0000${file.name}`;
-}
-
-export function composerFileMatchesReattachMarker(
-  marker: Pick<ComposerFileAttachment, "mimeType" | "sizeBytes" | "name">,
-  file: Pick<ComposerFileAttachment, "mimeType" | "sizeBytes" | "name">,
-): boolean {
-  if (marker.name !== file.name || marker.sizeBytes !== file.sizeBytes) return false;
-  if (marker.mimeType === file.mimeType) return true;
-  const markerMimeType = marker.mimeType.toLowerCase();
-  return (
-    (markerMimeType === "" || markerMimeType === "application/octet-stream") &&
-    videoMimeType(marker) !== null &&
-    videoMimeType(file) !== null
-  );
 }
 
 function terminalContextDedupKey(context: TerminalContextDraft): string {
@@ -975,7 +923,6 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     draft.prompt.length === 0 &&
     draft.images.length === 0 &&
     draft.files.length === 0 &&
-    draft.persistedAttachments.length === 0 &&
     draft.terminalContexts.length === 0 &&
     draft.previewAnnotations.length === 0 &&
     draft.reviewComments.length === 0 &&
@@ -1355,7 +1302,9 @@ function revokeDraftThreadPreviewUrls(draft: ComposerThreadDraftState | undefine
   }
 }
 
-function normalizePersistedAttachment(value: unknown): PersistedComposerImageAttachment | null {
+function normalizePersistedAttachment(
+  value: unknown,
+): PersistedComposerDraftImageAttachment | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -1371,9 +1320,8 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
     typeof mimeType !== "string" ||
     typeof sizeBytes !== "number" ||
     !Number.isFinite(sizeBytes) ||
-    typeof dataUrl !== "string" ||
-    id.length === 0 ||
-    dataUrl.length === 0
+    (dataUrl !== undefined && typeof dataUrl !== "string") ||
+    id.length === 0
   ) {
     return null;
   }
@@ -1382,7 +1330,7 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
     name,
     mimeType,
     sizeBytes,
-    dataUrl,
+    ...(typeof dataUrl === "string" ? { dataUrl } : {}),
     ...(isSnapShotSource(candidate.source) ? { source: candidate.source } : {}),
   };
 }
@@ -2208,7 +2156,7 @@ export function partializeComposerDraftStoreState(
       Object.keys(draft.modelSelectionByProvider).length > 0 || draft.activeProvider !== null;
     if (
       draft.prompt.length === 0 &&
-      draft.persistedAttachments.length === 0 &&
+      draft.images.length === 0 &&
       draft.files.length === 0 &&
       draft.terminalContexts.length === 0 &&
       draft.previewAnnotations.length === 0 &&
@@ -2222,12 +2170,18 @@ export function partializeComposerDraftStoreState(
     }
     const persistedDraft: DeepMutable<PersistedComposerThreadDraftState> = {
       prompt: draft.prompt,
-      attachments: draft.persistedAttachments,
+      attachments: draft.images.map((image) => ({
+        id: image.id,
+        name: image.name,
+        mimeType: image.mimeType,
+        sizeBytes: image.sizeBytes,
+        ...(image.source ? { source: image.source } : {}),
+        ...(image.byteState !== "cached" && image.legacyDataUrl
+          ? { dataUrl: image.legacyDataUrl }
+          : {}),
+      })),
       ...(draft.files.length > 0
         ? {
-            // A file whose upload has not finished has no serializable bytes.
-            // It persists as a metadata-only marker so it can surface as a
-            // needs-reattach row after reload instead of silently vanishing.
             files: draft.files.map((file) => ({
               id: file.id,
               name: file.name,
@@ -2384,76 +2338,6 @@ function normalizeCurrentPersistedComposerDraftStoreState(
   };
 }
 
-function readPersistedAttachmentIdsFromStorage(threadKey: string): string[] {
-  if (threadKey.length === 0) {
-    return [];
-  }
-  try {
-    const persisted = getLocalStorageItem(
-      COMPOSER_DRAFT_STORAGE_KEY,
-      PersistedComposerDraftStoreStorage,
-    );
-    if (!persisted || persisted.version !== COMPOSER_DRAFT_STORAGE_VERSION) {
-      return [];
-    }
-    return (persisted.state.draftsByThreadKey[threadKey]?.attachments ?? []).map(
-      (attachment) => attachment.id,
-    );
-  } catch {
-    return [];
-  }
-}
-
-function verifyPersistedAttachments(
-  threadKey: string,
-  attachments: PersistedComposerImageAttachment[],
-  set: (
-    partial:
-      | ComposerDraftStoreState
-      | Partial<ComposerDraftStoreState>
-      | ((
-          state: ComposerDraftStoreState,
-        ) => ComposerDraftStoreState | Partial<ComposerDraftStoreState>),
-    replace?: false,
-  ) => void,
-): void {
-  let persistedIdSet = new Set<string>();
-  try {
-    composerDebouncedStorage.flush();
-    persistedIdSet = new Set(readPersistedAttachmentIdsFromStorage(threadKey));
-  } catch {
-    persistedIdSet = new Set();
-  }
-  set((state) => {
-    const current = state.draftsByThreadKey[threadKey];
-    if (!current) {
-      return state;
-    }
-    const imageIdSet = new Set(current.images.map((image) => image.id));
-    const persistedAttachments = attachments.filter(
-      (attachment) => imageIdSet.has(attachment.id) && persistedIdSet.has(attachment.id),
-    );
-    const nonPersistedImageIds: string[] = [];
-    for (const image of current.images) {
-      if (!persistedIdSet.has(image.id)) {
-        nonPersistedImageIds.push(image.id);
-      }
-    }
-    const nextDraft: ComposerThreadDraftState = {
-      ...current,
-      persistedAttachments,
-      nonPersistedImageIds,
-    };
-    const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
-    if (shouldRemoveDraft(nextDraft)) {
-      delete nextDraftsByThreadKey[threadKey];
-    } else {
-      nextDraftsByThreadKey[threadKey] = nextDraft;
-    }
-    return { draftsByThreadKey: nextDraftsByThreadKey };
-  });
-}
-
 function hydratePersistedComposerImageAttachment(
   attachment: PersistedComposerImageAttachment,
 ): File | null {
@@ -2487,11 +2371,12 @@ function hydratePersistedComposerImageAttachment(
 }
 
 export function hydrateImagesFromPersisted(
-  attachments: ReadonlyArray<PersistedComposerImageAttachment>,
+  attachments: ReadonlyArray<PersistedComposerDraftImageAttachment>,
 ): ComposerImageAttachment[] {
   return attachments.flatMap((attachment) => {
-    const file = hydratePersistedComposerImageAttachment(attachment);
-    if (!file) return [];
+    const file = attachment.dataUrl
+      ? hydratePersistedComposerImageAttachment({ ...attachment, dataUrl: attachment.dataUrl })
+      : null;
 
     return [
       {
@@ -2500,8 +2385,10 @@ export function hydrateImagesFromPersisted(
         name: attachment.name,
         mimeType: attachment.mimeType,
         sizeBytes: attachment.sizeBytes,
-        previewUrl: attachment.dataUrl,
+        previewUrl: attachment.dataUrl ?? "",
+        ...(attachment.dataUrl ? { legacyDataUrl: attachment.dataUrl } : {}),
         file,
+        byteState: file ? "saving" : "hydrating",
         ...(attachment.source ? { source: attachment.source } : {}),
       } satisfies ComposerImageAttachment,
     ];
@@ -2523,10 +2410,8 @@ function toHydratedThreadDraft(
       mimeType: file.mimeType,
       sizeBytes: file.sizeBytes,
       file: null,
+      byteState: "hydrating",
       ...(file.source ? { source: file.source } : {}),
-      // A marker without an attachment id hydrates as needs-reattach: no
-      // bytes, no server-side upload, only the metadata to tell the user
-      // what to attach again.
       ...(file.attachmentId !== undefined && file.environmentId !== undefined
         ? { uploadedAttachmentId: file.attachmentId, uploadEnvironmentId: file.environmentId }
         : {}),
@@ -2542,8 +2427,6 @@ function toHydratedThreadDraft(
     ]),
     images: hydrateImagesFromPersisted(persistedDraft.attachments),
     files,
-    nonPersistedImageIds: [],
-    persistedAttachments: [...persistedDraft.attachments],
     terminalContexts:
       persistedDraft.terminalContexts?.map((context) => ({
         ...context,
@@ -2756,24 +2639,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ...state.draftThreadsByThreadKey,
               [draftId]: nextDraftThread,
             };
-            const existingDraft = state.draftsByThreadKey[draftId];
             let nextDraftsByThreadKey = state.draftsByThreadKey;
-            if (
-              existingThread &&
-              existingThread.environmentId !== projectRef.environmentId &&
-              existingDraft !== undefined
-            ) {
-              const nextDraft = clearStaleFileUploadMetadata(
-                existingDraft,
-                projectRef.environmentId,
-              );
-              if (nextDraft !== existingDraft) {
-                nextDraftsByThreadKey = {
-                  ...state.draftsByThreadKey,
-                  [draftId]: nextDraft,
-                };
-              }
-            }
             const previousDraftThread =
               previousThreadKeyForLogicalProject === undefined
                 ? undefined
@@ -3415,67 +3281,62 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           if (!threadKey || !threadId) {
             return false;
           }
-          const acceptedIds = get().addImages(
+          const plan = get().addImages(
             typeof threadRef === "string" ? DraftId.make(threadKey) : threadRef,
             [image],
           );
-          return acceptedIds.includes(image.id);
+          return plan.admitted.some((item) => item.id === image.id);
         },
         addImages: (threadRef, images, options) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
-          if (threadKey.length === 0 || images.length === 0) {
-            return [];
+          let plan: ComposerAttachmentPlan<ComposerImageAttachment> = {
+            attachments: [],
+            admitted: [],
+            rejected: images,
+            survivorIds: new Map(),
+          };
+          if (threadKey.length === 0) return plan;
+          if (images.length === 0) {
+            const draft = get().getComposerDraft(threadRef);
+            return planComposerAttachments(
+              draft?.images ?? [],
+              (draft?.images.length ?? 0) + (draft?.files.length ?? 0),
+              [],
+            );
           }
-          let acceptedIds: string[] = [];
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
-            const existingIds = new Set(existing.images.map((image) => image.id));
-            const existingDedupKeys = new Set(
-              existing.images.map((image) => composerImageDedupKey(image)),
+            plan = markAttachmentPlanForPersistence(
+              planComposerAttachments(
+                existing.images,
+                existing.images.length + existing.files.length + (options?.reservedSlots ?? 0),
+                images,
+                options,
+              ),
             );
-            const acceptedPreviewUrls = new Set(existing.images.map((image) => image.previewUrl));
-            const dedupedIncoming: ComposerImageAttachment[] = [];
-            for (const image of images) {
-              const dedupKey = composerImageDedupKey(image);
-              if (
-                existingIds.has(image.id) ||
-                (!options?.allowDuplicates && existingDedupKeys.has(dedupKey))
-              ) {
-                // Avoid revoking a blob URL that's still referenced by an accepted image.
-                if (!acceptedPreviewUrls.has(image.previewUrl)) {
-                  revokeObjectPreviewUrl(image.previewUrl);
-                }
-                continue;
-              }
-              if (
-                existing.images.length + existing.files.length + dedupedIncoming.length >=
-                PROVIDER_SEND_TURN_MAX_ATTACHMENTS
-              ) {
-                if (!acceptedPreviewUrls.has(image.previewUrl)) {
-                  revokeObjectPreviewUrl(image.previewUrl);
-                }
-                continue;
-              }
-              dedupedIncoming.push(image);
-              existingIds.add(image.id);
-              existingDedupKeys.add(dedupKey);
-              acceptedPreviewUrls.add(image.previewUrl);
+            const { attachments: nextImages, admitted, survivorIds } = plan;
+            const retainedUrls = new Set(nextImages.map((image) => image.previewUrl));
+            for (const image of [...existing.images, ...images]) {
+              if (!retainedUrls.has(image.previewUrl)) revokeObjectPreviewUrl(image.previewUrl);
             }
-            if (dedupedIncoming.length === 0) {
-              return state;
-            }
-            acceptedIds = dedupedIncoming.map((image) => image.id);
+            if (admitted.length === 0) return state;
             return {
               draftsByThreadKey: {
                 ...state.draftsByThreadKey,
                 [threadKey]: {
                   ...existing,
-                  images: [...existing.images, ...dedupedIncoming],
+                  prompt: rewriteAttachmentContextReferences(existing.prompt, "image", survivorIds),
+                  images: nextImages,
+                  previewAnnotations: existing.previewAnnotations.map((annotation) => {
+                    const id = survivorIds.get(annotation.id);
+                    return id && id !== annotation.id ? { ...annotation, id } : annotation;
+                  }),
                 },
               },
             };
           });
-          return acceptedIds;
+          void hydrateComposerDraftAttachments(threadRef);
+          return plan;
         },
         removeImage: (threadRef, imageId) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
@@ -3502,10 +3363,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 toKindScopedComposerContextId("image", imageId),
               ).prompt,
               images: current.images.filter((image) => image.id !== imageId),
-              nonPersistedImageIds: current.nonPersistedImageIds.filter((id) => id !== imageId),
-              persistedAttachments: current.persistedAttachments.filter(
-                (attachment) => attachment.id !== imageId,
-              ),
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) {
@@ -3518,89 +3375,49 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
         },
         addFiles: (threadRef, files, options) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
-          if (threadKey.length === 0 || files.length === 0) {
-            return [];
+          let plan: ComposerAttachmentPlan<ComposerFileAttachment> = {
+            attachments: [],
+            admitted: [],
+            rejected: files,
+            survivorIds: new Map(),
+          };
+          if (threadKey.length === 0) return plan;
+          if (files.length === 0) {
+            const draft = get().getComposerDraft(threadRef);
+            return planComposerAttachments(
+              draft?.files ?? [],
+              (draft?.images.length ?? 0) + (draft?.files.length ?? 0),
+              [],
+            );
           }
-          let acceptedIds: string[] = [];
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
-            const knownIds = new Set(existing.files.map((file) => file.id));
-            const knownFiles = new Map<string, ComposerFileAttachment>(
-              existing.files.map((file) => [composerFileDedupKey(file), file]),
+            plan = markAttachmentPlanForPersistence(
+              planComposerAttachments(
+                existing.files,
+                existing.images.length + existing.files.length + (options?.reservedSlots ?? 0),
+                files,
+                options,
+              ),
             );
-            const accepted: ComposerFileAttachment[] = [];
-            // Needs-reattach markers replaced in place by a re-pick, keyed by
-            // the marker's id.
-            const replacements = new Map<string, ComposerFileAttachment>();
-            for (const file of files) {
-              const key = composerFileDedupKey(file);
-              if (knownIds.has(file.id)) {
-                continue;
-              }
-              const duplicate = options?.allowDuplicates
-                ? undefined
-                : (knownFiles.get(key) ??
-                  existing.files.find(
-                    (candidate) =>
-                      composerFileNeedsReattach(candidate) &&
-                      !replacements.has(candidate.id) &&
-                      composerFileMatchesReattachMarker(candidate, file),
-                  ));
-              if (duplicate) {
-                // A needs-reattach marker is not a usable duplicate. Replace
-                // it so the upload restarts.
-                if (composerFileNeedsReattach(duplicate) && !replacements.has(duplicate.id)) {
-                  replacements.set(duplicate.id, file);
-                  knownIds.add(file.id);
-                  knownFiles.set(key, file);
-                }
-                continue;
-              }
-              if (
-                existing.images.length + existing.files.length + accepted.length >=
-                PROVIDER_SEND_TURN_MAX_ATTACHMENTS
-              ) {
-                break;
-              }
-              accepted.push(file);
-              knownIds.add(file.id);
-              knownFiles.set(key, file);
-            }
-            if (accepted.length === 0 && replacements.size === 0) {
-              return state;
-            }
-            acceptedIds = accepted.map((file) => file.id);
-            const retained = existing.files.map((file) => replacements.get(file.id) ?? file);
-            // A replaced marker's chip follows the file to its new id.
-            const prompt =
-              replacements.size === 0
-                ? existing.prompt
-                : replaceComposerContextReferences(existing.prompt, (occurrence) => {
-                    const original = existing.files.find(
-                      (file) => fileContextReference(file).contextId === occurrence.contextId,
-                    );
-                    const replacement = original ? replacements.get(original.id) : undefined;
-                    return replacement
-                      ? formatInlineContextReference(fileContextReference(replacement))
-                      : occurrence.source;
-                  });
+            const { attachments: nextFiles, admitted, survivorIds } = plan;
+            if (admitted.length === 0) return state;
+            const prompt = rewriteAttachmentContextReferences(existing.prompt, "file", survivorIds);
             return {
               draftsByThreadKey: {
                 ...state.draftsByThreadKey,
                 [threadKey]: {
                   ...existing,
                   prompt: options?.appendReference
-                    ? ensureInlineContextReferences(
-                        prompt,
-                        [...accepted, ...replacements.values()].map(fileContextReference),
-                      )
+                    ? ensureInlineContextReferences(prompt, admitted.map(fileContextReference))
                     : prompt,
-                  files: [...retained, ...accepted],
+                  files: nextFiles,
                 },
               },
             };
           });
-          return acceptedIds;
+          void hydrateComposerDraftAttachments(threadRef);
+          return plan;
         },
         removeFile: (threadRef, fileId) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
@@ -3940,12 +3757,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ).prompt,
               previewAnnotations,
               images: current.images.filter((image) => image.id !== annotationId),
-              persistedAttachments: current.persistedAttachments.filter(
-                (image) => image.id !== annotationId,
-              ),
-              nonPersistedImageIds: current.nonPersistedImageIds.filter(
-                (imageId) => imageId !== annotationId,
-              ),
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) delete nextDraftsByThreadKey[threadKey];
@@ -4117,60 +3928,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return { draftsByThreadKey: nextDraftsByThreadKey };
           });
         },
-        clearPersistedAttachments: (threadRef) => {
-          const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
-          if (threadKey.length === 0) {
-            return;
-          }
-          set((state) => {
-            const current = state.draftsByThreadKey[threadKey];
-            if (!current) {
-              return state;
-            }
-            const nextDraft: ComposerThreadDraftState = {
-              ...current,
-              persistedAttachments: [],
-              nonPersistedImageIds: [],
-            };
-            const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
-            if (shouldRemoveDraft(nextDraft)) {
-              delete nextDraftsByThreadKey[threadKey];
-            } else {
-              nextDraftsByThreadKey[threadKey] = nextDraft;
-            }
-            return { draftsByThreadKey: nextDraftsByThreadKey };
-          });
-        },
-        syncPersistedAttachments: async (threadRef, attachments) => {
-          const threadKey = resolveComposerDraftKey(get(), threadRef);
-          if (!threadKey) {
-            return;
-          }
-          const attachmentIdSet = new Set(attachments.map((attachment) => attachment.id));
-          set((state) => {
-            const current = state.draftsByThreadKey[threadKey];
-            if (!current) {
-              return state;
-            }
-            const nextDraft: ComposerThreadDraftState = {
-              ...current,
-              // Stage attempted attachments so persist middleware can try writing them.
-              persistedAttachments: attachments,
-              nonPersistedImageIds: current.nonPersistedImageIds.filter(
-                (id) => !attachmentIdSet.has(id),
-              ),
-            };
-            const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
-            if (shouldRemoveDraft(nextDraft)) {
-              delete nextDraftsByThreadKey[threadKey];
-            } else {
-              nextDraftsByThreadKey[threadKey] = nextDraft;
-            }
-            return { draftsByThreadKey: nextDraftsByThreadKey };
-          });
-          await Promise.resolve();
-          verifyPersistedAttachments(threadKey, attachments, set);
-        },
         clearComposerContent: (threadRef) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
           if (threadKey.length === 0) {
@@ -4186,8 +3943,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               prompt: "",
               images: [],
               files: [],
-              nonPersistedImageIds: [],
-              persistedAttachments: [],
               terminalContexts: [],
               previewAnnotations: [],
               reviewComments: [],
@@ -4225,8 +3980,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ]),
               images: [],
               files: [],
-              nonPersistedImageIds: [],
-              persistedAttachments: [],
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) {
@@ -4249,21 +4002,14 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               return state;
             }
             const destination = state.draftsByThreadKey[toKey] ?? createEmptyThreadDraft();
-            const destinationEnvironmentId =
-              typeof to === "string"
-                ? (state.draftThreadsByThreadKey[toKey]?.environmentId ??
-                  parseScopedThreadKey(toKey)?.environmentId ??
-                  null)
-                : to.environmentId;
             // A file the destination already holds (same id, or same
             // metadata key) stays behind instead of duplicating there.
             const destinationFileIds = new Set(destination.files.map((file) => file.id));
-            const destinationFileKeys = new Set(destination.files.map(composerFileDedupKey));
+            const destinationFileKeys = new Set(destination.files.map(composerAttachmentDedupKey));
             const transferableFiles = source.files.filter(
               (file) =>
-                (file.file !== null || file.uploadEnvironmentId === destinationEnvironmentId) &&
                 !destinationFileIds.has(file.id) &&
-                !destinationFileKeys.has(composerFileDedupKey(file)),
+                !destinationFileKeys.has(composerAttachmentDedupKey(file)),
             );
             const remainingAttachmentSlots = Math.max(
               0,
@@ -4274,26 +4020,10 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             const movedImages = source.images.slice(0, remainingAttachmentSlots);
             const movedImageIds = new Set(movedImages.map((image) => image.id));
             const retainedImages = source.images.filter((image) => !movedImageIds.has(image.id));
-            const movedFiles = transferableFiles
-              .slice(0, remainingAttachmentSlots - movedImages.length)
-              .map((file) => {
-                // A byte-backed file moving across environments re-uploads at
-                // the destination. Keeping the source-environment upload id
-                // would mark it uploaded after a reload with no local bytes
-                // and no valid upload anywhere the destination can reach. The
-                // upload queue keeps the source upload as fallback, then
-                // deletes it after the destination upload succeeds. Abandoned
-                // uploads still expire through the server sweep.
-                if (
-                  file.file === null ||
-                  file.uploadEnvironmentId === undefined ||
-                  file.uploadEnvironmentId === destinationEnvironmentId
-                ) {
-                  return file;
-                }
-                const { uploadedAttachmentId: _a, uploadEnvironmentId: _e, ...rest } = file;
-                return rest;
-              });
+            const movedFiles = transferableFiles.slice(
+              0,
+              remainingAttachmentSlots - movedImages.length,
+            );
             const movedFileIds = new Set(movedFiles.map((file) => file.id));
             const retainedFiles = source.files.filter((file) => !movedFileIds.has(file.id));
             // Inline placeholders reference the source's terminal contexts,
@@ -4306,18 +4036,11 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             const nextDestination: ComposerThreadDraftState = {
               ...destination,
               prompt: movedPrompt,
-              images: [...destination.images, ...movedImages],
-              files: [...destination.files, ...movedFiles],
-              nonPersistedImageIds: [
-                ...destination.nonPersistedImageIds,
-                ...source.nonPersistedImageIds.filter((imageId) => movedImageIds.has(imageId)),
+              images: [
+                ...destination.images,
+                ...movedImages.map(markDraftAttachmentForPersistence),
               ],
-              persistedAttachments: [
-                ...destination.persistedAttachments,
-                ...source.persistedAttachments.filter((attachment) =>
-                  movedImageIds.has(attachment.id),
-                ),
-              ],
+              files: [...destination.files, ...movedFiles.map(markDraftAttachmentForPersistence)],
             };
             // Same clearing shape as clearComposerPromptAndImages, but the
             // preview URLs are NOT revoked: the images moved and their blobs
@@ -4330,12 +4053,6 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               ),
               images: retainedImages,
               files: retainedFiles,
-              nonPersistedImageIds: source.nonPersistedImageIds.filter(
-                (imageId) => !movedImageIds.has(imageId),
-              ),
-              persistedAttachments: source.persistedAttachments.filter(
-                (attachment) => !movedImageIds.has(attachment.id),
-              ),
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextSource)) {
@@ -4350,6 +4067,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             return { draftsByThreadKey: nextDraftsByThreadKey };
           });
+          void hydrateComposerDraftAttachments(to);
         },
       };
     },
@@ -4390,6 +4108,34 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
 );
 
 export const useComposerDraftStore = composerDraftStore;
+
+const decodePersistedDraftStorage = Schema.decodeUnknownSync(PersistedComposerDraftStoreStorage);
+
+export function flushComposerDraftPersistence(): boolean {
+  try {
+    composerDebouncedStorage.flush();
+    return typeof localStorage !== "undefined";
+  } catch {
+    return false;
+  }
+}
+
+export function readPersistedDraftAttachmentIds(): ReadonlySet<string> | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const serialized = localStorage.getItem(COMPOSER_DRAFT_STORAGE_KEY);
+    if (serialized === null) return new Set<string>();
+    const stored = decodePersistedDraftStorage(JSON.parse(serialized));
+    if (stored.version !== COMPOSER_DRAFT_STORAGE_VERSION) return null;
+    return new Set(
+      Object.values(stored.state.draftsByThreadKey).flatMap((draft) =>
+        [...draft.attachments, ...(draft.files ?? [])].map((item) => item.id),
+      ),
+    );
+  } catch {
+    return null;
+  }
+}
 
 export function beginBackgroundDraftSubmissionByRef(threadRef: ScopedThreadRef): void {
   const threadKey = scopedThreadKey(threadRef);

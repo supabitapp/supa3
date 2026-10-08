@@ -3,7 +3,14 @@ import type { EnvironmentId } from "@supacode/contracts";
 import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
 import { readFilePreviewResponse } from "@supacode/client-runtime/file-preview";
 import { filePreviewKind, FILE_TEXT_PREVIEW_MAX_BYTES } from "@supacode/shared/filePreview";
-import { ChevronRightIcon, DownloadIcon, Trash2Icon, WrapTextIcon, XIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  DownloadIcon,
+  Trash2Icon,
+  RefreshCwIcon,
+  WrapTextIcon,
+  XIcon,
+} from "lucide-react";
 import { Check, Code2, Copy, Eye, Table2 } from "lucide";
 import {
   lazy,
@@ -95,6 +102,7 @@ export function AttachmentFilePreview(props: {
   htmlRender?: boolean;
   /** First crumb: where the file comes from. */
   origin?: string;
+  attachmentRetries?: ReadonlyArray<{ label: string; onRetry: () => void }> | undefined;
   onRemove?: () => void;
   onClose?: () => void;
 }) {
@@ -407,6 +415,11 @@ export function AttachmentFilePreview(props: {
             <DownloadIcon className="size-3.5" />
           </FileSurfaceAction>
         ) : null}
+        {props.attachmentRetries?.map((retry) => (
+          <FileSurfaceAction key={retry.label} label={retry.label} onPress={retry.onRetry}>
+            <RefreshCwIcon className="size-3.5" />
+          </FileSurfaceAction>
+        ))}
         {props.onRemove ? (
           <FileSurfaceAction label="Remove from draft" onPress={props.onRemove}>
             <Trash2Icon className="size-3.5" />

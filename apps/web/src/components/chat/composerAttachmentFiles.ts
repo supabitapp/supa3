@@ -2,6 +2,7 @@ import {
   type EnvironmentId,
   isProviderSendTurnSupportedImageMimeType,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
 } from "@supacode/contracts";
 import {
   clampFileAttachmentUploadBytes,
@@ -9,10 +10,26 @@ import {
 } from "@supacode/client-runtime/state/attachments";
 
 import type { ComposerFileAttachment, ComposerImageAttachment } from "../../composerDraftStore";
+
+import { draftAttachmentNeedsAttention } from "../../composerAttachmentState";
+import type { AttachmentUploadState } from "../../lib/attachmentUploadState";
 import { isHeicImageFile } from "../../lib/imageCompression";
-import { isVideoAttachment } from "../../types";
+import { isVideoAttachment, videoMimeType } from "../../types";
+import { randomUUID } from "../../lib/randomUUID";
 
 type ComposerAttachmentFileKind = "image" | "file" | "unsupported-image";
+
+export function composerImagesForAttachmentTray(
+  images: ReadonlyArray<ComposerImageAttachment>,
+  annotations: ReadonlyArray<{ readonly id: string }>,
+  uploads: Readonly<Record<string, AttachmentUploadState>>,
+): ComposerImageAttachment[] {
+  const annotationIds = new Set(annotations.map((annotation) => annotation.id));
+  return images.filter(
+    (image) =>
+      !annotationIds.has(image.id) || draftAttachmentNeedsAttention(image, uploads[image.id]),
+  );
+}
 
 interface FileAttachmentCapabilityState {
   readonly attachmentUploadsCapabilityKnown: boolean;
@@ -77,6 +94,79 @@ export function classifyComposerAttachmentFile(
   return isProviderSendTurnSupportedImageMimeType(file.type) ? "image" : "unsupported-image";
 }
 
+export function prepareComposerAttachmentFiles(input: {
+  readonly files: ReadonlyArray<File>;
+  readonly attachments: ReadonlyArray<ComposerFileAttachment | ComposerImageAttachment>;
+  readonly reservedCount: number;
+  readonly fileStagingLimit: number | null;
+  readonly pendingImageCount?: number;
+  readonly source?: ComposerFileAttachment["source"];
+}) {
+  let reservedCount = input.reservedCount;
+  let potentialImageSlots = Math.max(
+    0,
+    input.attachments.filter((item) => item.type === "image" && item.file === null).length -
+      (input.pendingImageCount ?? 0),
+  );
+  const images: File[] = [];
+  const files: ComposerFileAttachment[] = [];
+  let error: string | null = null;
+  for (const file of input.files) {
+    const kind = classifyComposerAttachmentFile(file);
+    if (kind === "unsupported-image") {
+      error = `'${file.name}' is not a supported image type. Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.`;
+      continue;
+    }
+    const normalized = kind === "image" ? normalizeComposerImageFileMimeType(file) : file;
+    const mimeType =
+      kind === "image"
+        ? normalized.type
+        : (videoMimeType({ name: file.name, mimeType: file.type }) ??
+          (file.type || "application/octet-stream"));
+    const descriptor = {
+      name: file.name || (kind === "image" ? "image" : "file"),
+      mimeType,
+      sizeBytes: file.size,
+    };
+    if (kind === "image") {
+      if (reservedCount >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
+        if (potentialImageSlots === 0) {
+          error = `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files per message.`;
+          continue;
+        }
+        potentialImageSlots -= 1;
+      } else reservedCount += 1;
+      images.push(normalized);
+    } else {
+      if (input.fileStagingLimit === null) {
+        error = "This server does not support file attachments.";
+        continue;
+      }
+      if (file.size <= 0) {
+        error = `'${file.name}' is empty or could not be read.`;
+        continue;
+      }
+      if (file.size > input.fileStagingLimit) {
+        error = fileAttachmentTooLargeMessage(file.name, input.fileStagingLimit);
+        continue;
+      }
+      const attachmentFile =
+        file.type === mimeType
+          ? file
+          : new File([file], file.name, { type: mimeType, lastModified: file.lastModified });
+      const attachment: ComposerFileAttachment = {
+        type: "file",
+        id: randomUUID(),
+        ...descriptor,
+        file: attachmentFile,
+        ...(input.source ? { source: input.source } : {}),
+      };
+      files.push(attachment);
+    }
+  }
+  return { images, files, error };
+}
+
 export function isPreviewableComposerVideo(
   file: ComposerFileAttachment,
   environmentId: EnvironmentId,
@@ -108,29 +198,6 @@ export function fileAttachmentStagingLimit(input: FileAttachmentCapabilityState)
     return null;
   }
   return clampFileAttachmentUploadBytes(input.maxFileAttachmentBytes);
-}
-
-/** Why retained generic files cannot send with the current server config. */
-export function fileAttachmentCapabilityBlockReason(
-  input: FileAttachmentCapabilityState & {
-    readonly files: ReadonlyArray<{ readonly name: string; readonly sizeBytes: number }>;
-  },
-): string | null {
-  if (input.files.length === 0) {
-    return null;
-  }
-  if (!input.attachmentUploadsCapabilityKnown) {
-    return "Waiting for the server before file attachments can send";
-  }
-  const maxFileAttachmentBytes = fileAttachmentStagingLimit(input);
-  if (maxFileAttachmentBytes === null) {
-    return "This server does not accept file attachments right now. Remove the files to send.";
-  }
-  const oversizedFile = input.files.find((file) => file.sizeBytes > maxFileAttachmentBytes);
-  if (oversizedFile) {
-    return fileAttachmentTooLargeMessage(oversizedFile.name, maxFileAttachmentBytes);
-  }
-  return null;
 }
 
 /**

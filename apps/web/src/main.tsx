@@ -1,3 +1,4 @@
+import { initializeComposerDraftAttachments } from "./composerDraftAttachments";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
@@ -15,6 +16,7 @@ import { AppRoot } from "./AppRoot";
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
 
 prepareProviderAuthDelivery();
+initializeComposerDraftAttachments();
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();

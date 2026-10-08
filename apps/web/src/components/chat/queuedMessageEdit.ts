@@ -1,3 +1,8 @@
+import { draftAttachmentRequirement, hasDraftAttachmentFile } from "../../composerAttachmentState";
+import {
+  firstAttachmentPlacementBlockReason,
+  type AttachmentDestination,
+} from "@supacode/client-runtime/state/attachments";
 import type { ChatAttachment } from "@supacode/contracts";
 import {
   composerDraftHasUserContent,
@@ -29,6 +34,7 @@ export function recoverQueuedMessageEdit(input: {
 /** Generic files need upload references; images also support the inline transport. */
 export async function prepareQueuedEditAttachments(input: {
   readonly existingAttachments: ReadonlyArray<ChatAttachment>;
+  readonly destination: AttachmentDestination;
   readonly images: ReadonlyArray<ComposerImageAttachment>;
   readonly files: ReadonlyArray<ComposerFileAttachment>;
   readonly uploadFiles: (
@@ -36,11 +42,18 @@ export async function prepareQueuedEditAttachments(input: {
   ) => Promise<ReadonlyArray<ChatAttachment>>;
   readonly readImage: (file: File) => Promise<string>;
 }) {
+  const reason = firstAttachmentPlacementBlockReason(
+    [...input.images, ...input.files].map((attachment) =>
+      draftAttachmentRequirement(attachment, () => false),
+    ),
+    input.destination,
+  );
+  if (reason !== null) throw new Error(reason);
   const files = input.files.length === 0 ? [] : await input.uploadFiles(input.files);
   if (files.length !== input.files.length)
     throw new Error("Retry or remove failed uploads before saving.");
   const images = await Promise.all(
-    input.images.map(async (image) => ({
+    input.images.filter(hasDraftAttachmentFile).map(async (image) => ({
       type: "image" as const,
       id: image.id,
       name: image.name,

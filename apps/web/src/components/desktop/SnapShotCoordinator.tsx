@@ -1,3 +1,4 @@
+import { adoptCapturedImage } from "../../composerDraftAttachments";
 import {
   type DesktopPendingSnapShot,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
@@ -5,11 +6,7 @@ import {
 } from "@supacode/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
-import {
-  type DraftId,
-  type PersistedComposerImageAttachment,
-  useComposerDraftStore,
-} from "../../composerDraftStore";
+import { type DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { useHandleNewThread } from "../../hooks/useHandleNewThread";
 import { useClientSettings } from "../../hooks/useSettings";
 import { readThreadShell } from "../../state/entities";
@@ -31,7 +28,6 @@ import {
   getDesktopSnapShotBridge,
   type DesktopSnapShotBridge,
 } from "../../lib/desktopSnapShot";
-import { readFileAsDataUrl } from "../ChatView.logic";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 
 type CaptureTarget = DraftId | ScopedThreadRef;
@@ -136,7 +132,6 @@ export async function deliverSnapShot(
   item: DesktopPendingSnapShot,
   target: CaptureTarget,
 ): Promise<void> {
-  const store = useComposerDraftStore.getState();
   updateSnapShotAnimationSource(item.id, item.source);
   const capture = await bridge.readSnapShot(item.id);
   const original = dataUrlToFile(capture.dataUrl, capture.name, capture.mimeType);
@@ -147,40 +142,18 @@ export async function deliverSnapShot(
   }
   const file = compressed.file;
   const source = resizeSnapShotSource(capture.source, compressed.imageSize);
-  const dataUrl = compressed.recompressed ? await readFileAsDataUrl(file) : capture.dataUrl;
-  const alreadyAttached =
-    store.getComposerDraft(target)?.images.some(({ id }) => id === capture.id) ?? false;
-  if (
-    !alreadyAttached &&
-    !store.addImage(target, {
-      type: "image",
-      id: capture.id,
-      name: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      previewUrl: dataUrl,
-      file,
-      source,
-    })
-  ) {
-    throw new Error("Remove an attachment, then try this capture again.");
-  }
-  const persisted: PersistedComposerImageAttachment = {
+  const image = {
+    type: "image" as const,
     id: capture.id,
     name: file.name,
     mimeType: file.type,
     sizeBytes: file.size,
-    dataUrl,
+    file,
     source,
   };
-  const persistedAttachments =
-    store
-      .getComposerDraft(target)
-      ?.persistedAttachments.filter((attachment) => attachment.id !== capture.id) ?? [];
-  await store.syncPersistedAttachments(target, [...persistedAttachments, persisted]);
-  if (!store.getComposerDraft(target)?.persistedAttachments.some(({ id }) => id === capture.id)) {
-    throw new Error("The captured window could not be saved to the draft.");
-  }
+  const result = await adoptCapturedImage(target, image);
+  if (result === "rejected") throw new Error("Remove an attachment, then try this capture again.");
+  if (result !== "cached") throw new Error("The captured window could not be saved to the draft.");
 
   // Reveal the attachment under the flying capture before the desktop tears the overlay down,
   // otherwise the tile is missing for the frames between the landing and its first paint.

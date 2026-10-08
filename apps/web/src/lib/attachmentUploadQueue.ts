@@ -1,4 +1,8 @@
 import {
+  draftAttachmentNeedsReattach,
+  isDraftAttachmentRestoring,
+} from "../composerAttachmentState";
+import {
   AuthOrchestrationOperateScope,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
   type ChatAttachment,
@@ -18,6 +22,7 @@ import { AsyncResult } from "effect/reactivity";
 
 import {
   DraftId,
+  flushComposerDraftPersistence,
   useComposerDraftStore,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
@@ -26,7 +31,10 @@ import {
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentCatalog } from "../connection/catalog";
 import { assetEnvironment } from "../state/assets";
-import { attachmentEnvironment } from "../state/attachments";
+import { attachmentEnvironment, recoverAttachmentSource } from "../state/attachments";
+import { AttachmentSourceMissingError } from "./downloadAttachmentBytes";
+import { draftAttachmentBytes } from "../state/draftAttachmentBytes";
+import { adoptRecoveredAttachment } from "../composerDraftAttachments";
 import { readEnvironmentScope, readPreparedConnection } from "../state/session";
 import type { AttachmentUploadState, ReadyAttachmentUpload } from "./attachmentUploadState";
 
@@ -42,7 +50,7 @@ export const useAttachmentUploadStore = create<AttachmentUploadStore>(() => ({
 }));
 
 interface UploadJob {
-  readonly image: ComposerImageAttachment | ComposerFileAttachment;
+  image: ComposerImageAttachment | ComposerFileAttachment;
   readonly environmentId: EnvironmentId;
   /**
    * The draft that owned this file when the job started. Completion resolves
@@ -63,6 +71,7 @@ interface UploadJob {
   cancelled: boolean;
   abort: (() => void) | null;
   stopWatchingConnection: () => void;
+  readonly releaseBytes: () => void;
 }
 
 // Failed jobs retain their source and connection subscription until retry or release.
@@ -91,14 +100,14 @@ export function readAttachmentUpload(imageId: string): AttachmentUploadState | u
   return useAttachmentUploadStore.getState().uploadsByImageId[imageId];
 }
 
-/** Finds the file's current same-environment draft after any in-flight move. */
-function resolveCurrentFileDraftTarget(job: UploadJob): ComposerThreadTarget | undefined {
-  if (job.draftTarget === undefined || job.image.type !== "file") {
+function resolveCurrentDraftTarget(job: UploadJob): ComposerThreadTarget | undefined {
+  if (job.draftTarget === undefined) {
     return undefined;
   }
   const store = useComposerDraftStore.getState();
   for (const [key, draft] of Object.entries(store.draftsByThreadKey)) {
-    if (!draft.files.some((file) => file.id === job.image.id)) {
+    const entries = job.image.type === "file" ? draft.files : draft.images;
+    if (!entries.some((entry) => entry.id === job.image.id)) {
       continue;
     }
     const draftSession = store.draftThreadsByThreadKey[key];
@@ -121,21 +130,21 @@ function resolveCurrentFileDraftTarget(job: UploadJob): ComposerThreadTarget | u
   return undefined;
 }
 
-/**
- * Persists a finished upload's ids onto the draft that owns the file. The
- * mounted composer effect performs the same write for live UI updates, but a
- * background completion (user navigated away, upload finished, reload) must
- * not depend on a mounted composer to survive. `setFileUpload` no-ops when
- * the draft row is gone or already carries these ids.
- */
-function stampDraftFileUpload(job: UploadJob, attachmentId: string): void {
-  const draftTarget = resolveCurrentFileDraftTarget(job);
+function commitDraftUpload(job: UploadJob, attachmentId: string): boolean {
+  if (job.image.type === "image") {
+    const cached = Object.values(useComposerDraftStore.getState().draftsByThreadKey).some((draft) =>
+      draft.images.some((image) => image.id === job.image.id && image.byteState === "cached"),
+    );
+    return cached && flushComposerDraftPersistence();
+  }
+  const draftTarget = resolveCurrentDraftTarget(job);
   if (draftTarget === undefined) {
-    return;
+    return false;
   }
   useComposerDraftStore
     .getState()
     .setFileUpload(draftTarget, job.image.id, job.environmentId, attachmentId);
+  return flushComposerDraftPersistence();
 }
 
 function deletePendingUpload(environmentId: EnvironmentId, attachmentId: string): void {
@@ -180,6 +189,68 @@ function uploadBytes(input: {
   return { done, abort: () => xhr.abort() };
 }
 
+async function recoverForeignSource(
+  job: UploadJob,
+): Promise<
+  { readonly status: "ready"; readonly file: File | null } | { readonly status: "stopped" }
+> {
+  const source = job.image;
+  if (
+    source.type !== "file" ||
+    !source.uploadedAttachmentId ||
+    !source.uploadEnvironmentId ||
+    source.uploadEnvironmentId === job.environmentId
+  )
+    return { status: "ready", file: null };
+  const controller = new AbortController();
+  job.abort = () => controller.abort();
+  try {
+    const file = await recoverAttachmentSource({
+      environmentId: source.uploadEnvironmentId,
+      attachmentId: source.uploadedAttachmentId,
+      type: "file",
+      name: source.name,
+      mimeType: source.mimeType,
+      sizeBytes: source.sizeBytes,
+      signal: controller.signal,
+    });
+    if (job.cancelled) return { status: "stopped" };
+    const { retention, adopted } = await adoptRecoveredAttachment(source, file, () =>
+      job.cancelled ? undefined : resolveCurrentDraftTarget(job),
+    );
+    if (job.cancelled) return { status: "stopped" };
+    if (job.draftTarget !== undefined && !adopted)
+      throw new Error(
+        "The attachment moved before recovery finished. Retry on its selected machine.",
+      );
+    job.image = { ...source, file, byteState: retention };
+    return { status: "ready", file };
+  } catch (error) {
+    if (job.cancelled) return { status: "stopped" };
+    if (error instanceof AttachmentSourceMissingError) {
+      const target = resolveCurrentDraftTarget(job);
+      if (target !== undefined)
+        useComposerDraftStore
+          .getState()
+          .markFileUploadMissing(
+            target,
+            source.id,
+            source.uploadEnvironmentId,
+            source.uploadedAttachmentId,
+          );
+    }
+    setUploadState(source.id, {
+      status: "failed",
+      environmentId: job.environmentId,
+      reason: error instanceof Error ? error.message : "Recovering the original attachment failed.",
+      ...(job.previous ? { previous: job.previous } : {}),
+    });
+    return { status: "stopped" };
+  } finally {
+    job.abort = null;
+  }
+}
+
 async function runUpload(job: UploadJob): Promise<void> {
   if (!readEnvironmentScope(job.environmentId, AuthOrchestrationOperateScope)) {
     setUploadState(job.image.id, {
@@ -190,6 +261,11 @@ async function runUpload(job: UploadJob): Promise<void> {
     });
     return;
   }
+  const recovered = job.image.file
+    ? { status: "ready" as const, file: job.image.file }
+    : await recoverForeignSource(job);
+  if (job.cancelled || recovered.status === "stopped") return;
+  const file = recovered.file;
   if (job.persistedAttachmentId) {
     const verification = await verifyPersistedAttachmentUpload({
       registry: appAtomRegistry,
@@ -206,11 +282,11 @@ async function runUpload(job: UploadJob): Promise<void> {
         environmentId: job.environmentId,
         attachmentId: job.persistedAttachmentId,
       });
-      stampDraftFileUpload(job, job.persistedAttachmentId);
+      commitDraftUpload(job, job.persistedAttachmentId);
       return;
     }
-    if (verification.status === "missing" && !job.image.file && job.image.type === "file") {
-      const draftTarget = resolveCurrentFileDraftTarget(job);
+    if (verification.status === "missing" && !file && job.image.type === "file") {
+      const draftTarget = resolveCurrentDraftTarget(job);
       if (
         draftTarget !== undefined &&
         useComposerDraftStore
@@ -226,7 +302,7 @@ async function runUpload(job: UploadJob): Promise<void> {
         return;
       }
     }
-    if (verification.status === "failed" || !job.image.file) {
+    if (verification.status === "failed" || !file) {
       // No `attachmentId` here: a failed state's id marks a pending upload
       // this queue minted, which retry and release then delete. The persisted
       // id is the only server copy of a hydrated file, so a transient
@@ -259,7 +335,6 @@ async function runUpload(job: UploadJob): Promise<void> {
     });
     return;
   }
-  const file = job.image.file;
   if (!file) {
     setUploadState(job.image.id, {
       status: "failed",
@@ -341,8 +416,8 @@ async function runUpload(job: UploadJob): Promise<void> {
       environmentId: job.environmentId,
       attachmentId: result.attachmentId,
     });
-    stampDraftFileUpload(job, result.attachmentId);
-    if (job.previous) {
+    const persisted = commitDraftUpload(job, result.attachmentId);
+    if (job.previous && persisted) {
       deletePendingUpload(job.previous.environmentId, job.previous.attachmentId);
     }
     return;
@@ -396,6 +471,7 @@ function pumpUploads(): void {
           readAttachmentUpload(job.image.id)?.status !== "failed"
         ) {
           job.stopWatchingConnection();
+          job.releaseBytes();
           jobsByImageId.delete(job.image.id);
         }
         const remaining = (activeUploadsByEnvironment.get(job.environmentId) ?? 1) - 1;
@@ -416,6 +492,11 @@ export function startAttachmentUpload(input: {
   /** Draft that owns the file; lets a background completion persist its ids. */
   readonly draftTarget?: ComposerThreadTarget;
 }): void {
+  if (draftAttachmentNeedsReattach(input.image)) {
+    releaseAttachmentUpload(input.image.id);
+    return;
+  }
+  if (isDraftAttachmentRestoring(input.image) || input.image.byteState === "restore-failed") return;
   if (!readEnvironmentScope(input.environmentId, AuthOrchestrationOperateScope)) return;
   const existingJob = jobsByImageId.get(input.image.id);
   if (existingJob?.environmentId === input.environmentId) {
@@ -466,33 +547,39 @@ export function startAttachmentUpload(input: {
     cancelled: false,
     abort: null,
     stopWatchingConnection: () => {},
+    releaseBytes: draftAttachmentBytes.hold([input.image.id]),
   };
 
   jobsByImageId.set(input.image.id, job);
-  const connectionAtom = environmentCatalog.stateAtom(job.environmentId);
-  const isConnected = () =>
-    Option.exists(
-      AsyncResult.value(appAtomRegistry.get(connectionAtom)),
-      (state) => state.phase === "connected",
-    );
-  let wasConnected = isConnected();
-  job.stopWatchingConnection = appAtomRegistry.subscribe(connectionAtom, () => {
-    const connected = isConnected();
-    const reconnected = connected && !wasConnected;
-    wasConnected = connected;
-    if (!reconnected) return;
-    // The HTTP failure can arrive after the socket has already reconnected.
-    // Wait for that attempt, then retry only if this job still owns the file.
-    void job.settled.then(() => {
-      if (
-        jobsByImageId.get(job.image.id) === job &&
-        readAttachmentUpload(job.image.id)?.status === "failed" &&
-        isConnected()
-      ) {
-        retryAttachmentUpload(input);
-      }
+  const watchedEnvironments = new Set([job.environmentId]);
+  if (job.image.type === "file" && !job.image.file && job.image.uploadEnvironmentId)
+    watchedEnvironments.add(job.image.uploadEnvironmentId);
+  const stopWatching = [...watchedEnvironments].map((watchedId) => {
+    const connectionAtom = environmentCatalog.stateAtom(watchedId);
+    const isConnected = () =>
+      Option.exists(
+        AsyncResult.value(appAtomRegistry.get(connectionAtom)),
+        (state) => state.phase === "connected",
+      );
+    let wasConnected = isConnected();
+    return appAtomRegistry.subscribe(connectionAtom, () => {
+      const connected = isConnected();
+      const reconnected = connected && !wasConnected;
+      wasConnected = connected;
+      if (!reconnected) return;
+      void job.settled.then(() => {
+        if (
+          jobsByImageId.get(job.image.id) === job &&
+          readAttachmentUpload(job.image.id)?.status === "failed" &&
+          isConnected()
+        )
+          retryAttachmentUpload(input);
+      });
     });
   });
+  job.stopWatchingConnection = () => {
+    for (const stop of stopWatching) stop();
+  };
   queue.push(job);
   setUploadState(input.image.id, {
     status: "uploading",
@@ -515,6 +602,7 @@ function cancelAttachmentUpload(imageId: string): void {
   }
   job.cancelled = true;
   job.stopWatchingConnection();
+  job.releaseBytes();
   jobsByImageId.delete(imageId);
   const queuedIndex = queue.indexOf(job);
   if (queuedIndex !== -1) {
@@ -575,6 +663,26 @@ export function retryAttachmentUpload(input: {
   readonly draftTarget?: ComposerThreadTarget;
 }): void {
   if (!readEnvironmentScope(input.environmentId, AuthOrchestrationOperateScope)) return;
+  const job = jobsByImageId.get(input.image.id);
+  const draftTarget =
+    job?.draftTarget !== undefined ? resolveCurrentDraftTarget(job) : input.draftTarget;
+  const draft =
+    draftTarget === undefined
+      ? null
+      : useComposerDraftStore.getState().getComposerDraft(draftTarget);
+  const image = [...(draft?.images ?? []), ...(draft?.files ?? [])].find(
+    (entry) => entry.id === input.image.id,
+  );
+  if (job?.draftTarget !== undefined && !image) {
+    cancelAttachmentUpload(input.image.id);
+    clearUploadState(input.image.id);
+    return;
+  }
+  const retry = {
+    ...input,
+    image: image ?? job?.image ?? input.image,
+    ...(draftTarget !== undefined ? { draftTarget } : {}),
+  };
   const previous = readAttachmentUpload(input.image.id);
   cancelAttachmentUpload(input.image.id);
   // A failed state's `attachmentId` is always one this queue minted, so this
@@ -588,7 +696,7 @@ export function retryAttachmentUpload(input: {
   } else {
     clearUploadState(input.image.id);
   }
-  startAttachmentUpload(input);
+  startAttachmentUpload(retry);
 }
 
 /**

@@ -9,13 +9,14 @@ export const ComposerImageThumbnail = memo(function ComposerImageThumbnail({
   className,
   fallback,
 }: {
-  file: File;
+  file: File | null;
   alt: string;
   className: string;
   fallback: ReactNode;
 }) {
   const [preview, setPreview] = useState<{ file: File; src: string | null } | null>(null);
   useEffect(() => {
+    if (!file) return;
     let active = true;
     void createComposerImageThumbnail(file).then((src) => {
       if (active) setPreview({ file, src });

@@ -1,4 +1,8 @@
-import { EnvironmentId, PROVIDER_SEND_TURN_MAX_FILE_BYTES } from "@supacode/contracts";
+import {
+  EnvironmentId,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+} from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ComposerFileAttachment, ComposerImageAttachment } from "../../composerDraftStore";
@@ -7,15 +11,155 @@ import {
   attachmentsToReleaseOnUploadCapabilityLoss,
   classifyComposerAttachmentFile,
   composerOtherFilesForPresentation,
-  fileAttachmentCapabilityBlockReason,
+  composerImagesForAttachmentTray,
   fileAttachmentStagingLimit,
   inferImageMimeTypeFromName,
   isPreviewableComposerVideo,
   normalizeComposerImageFileMimeType,
   shouldHandleComposerAttachmentPaste,
+  prepareComposerAttachmentFiles,
 } from "./composerAttachmentFiles";
 
 describe("composer attachment files", () => {
+  it.each(["session-only", "restore-failed", "missing"] as const)(
+    "exposes an annotation screenshot requiring %s attention",
+    (byteState) => {
+      const image: ComposerImageAttachment = {
+        type: "image",
+        id: "screenshot",
+        name: "shot.png",
+        mimeType: "image/png",
+        sizeBytes: 1,
+        file: null,
+        previewUrl: "",
+        byteState,
+      };
+      expect(composerImagesForAttachmentTray([image], [{ id: image.id }], {})).toEqual([image]);
+      expect(
+        composerImagesForAttachmentTray(
+          [{ ...image, byteState: "cached", file: new File(["x"], image.name) }],
+          [{ id: image.id }],
+          {},
+        ),
+      ).toEqual([]);
+    },
+  );
+  it("admits unavailable-image replacements at capacity before compression", () => {
+    const image = new File(["new bytes"], "missing.png", { type: "image/png" });
+    const unavailable: ComposerImageAttachment = {
+      type: "image",
+      id: "missing",
+      name: image.name,
+      mimeType: image.type,
+      sizeBytes: 999,
+      file: null,
+      previewUrl: "",
+      byteState: "missing",
+    };
+    const accepted = prepareComposerAttachmentFiles({
+      files: [image, new File(["x"], "new.png", { type: "image/png" }), image],
+      attachments: [unavailable],
+      reservedCount: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+      fileStagingLimit: 50 * 1024 * 1024,
+    });
+    expect(accepted.images).toEqual([image]);
+    expect(accepted.files).toEqual([]);
+    expect(accepted.error).toContain(`${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files`);
+  });
+
+  it.each([
+    {
+      name: "photo.HEIC",
+      type: "image/heic",
+      retainedName: "photo.jpg",
+      retainedType: "image/jpeg",
+    },
+    {
+      name: "large.png",
+      type: "image/png",
+      retainedName: "large.webp",
+      retainedType: "image/webp",
+    },
+  ])(
+    "allows $name to reach conversion before final replacement admission",
+    ({ name, type, retainedName, retainedType }) => {
+      const picked = new File(["source bytes"], name, { type });
+      const unavailable: ComposerImageAttachment = {
+        type: "image",
+        id: "missing",
+        name: retainedName,
+        mimeType: retainedType,
+        sizeBytes: 3,
+        file: null,
+        previewUrl: "",
+        byteState: "missing",
+      };
+      const accepted = prepareComposerAttachmentFiles({
+        files: [picked],
+        attachments: [unavailable],
+        reservedCount: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+        fileStagingLimit: null,
+      });
+      expect(accepted.images).toEqual([picked]);
+      expect(accepted.error).toBeNull();
+      expect(
+        prepareComposerAttachmentFiles({
+          files: [picked],
+          attachments: [unavailable],
+          reservedCount: PROVIDER_SEND_TURN_MAX_ATTACHMENTS + 1,
+          pendingImageCount: 1,
+          fileStagingLimit: null,
+        }).images,
+      ).toEqual([]);
+    },
+  );
+
+  it("reserves a replacement once while allowing another pick into the last free slot", () => {
+    const image = new File(["bytes"], "missing.png", { type: "image/png" });
+    const unavailable: ComposerImageAttachment = {
+      type: "image",
+      id: "missing",
+      name: image.name,
+      mimeType: image.type,
+      sizeBytes: image.size,
+      file: null,
+      previewUrl: "",
+      byteState: "restore-failed",
+    };
+    const unique = new File(["x"], "new.png", { type: "image/png" });
+    const accepted = prepareComposerAttachmentFiles({
+      files: [image, unique],
+      attachments: [unavailable],
+      reservedCount: PROVIDER_SEND_TURN_MAX_ATTACHMENTS - 1,
+      fileStagingLimit: null,
+    });
+    expect(accepted.images).toEqual([image, unique]);
+    expect(accepted.error).toBeNull();
+  });
+
+  it("admits a file with unreadable cached bytes under a fresh identity at capacity", () => {
+    const file = new File(["bytes"], "report.txt", { type: "text/plain" });
+    const unavailable: ComposerFileAttachment = {
+      type: "file",
+      id: "failed",
+      name: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      file: null,
+      byteState: "restore-failed",
+    };
+    const accepted = prepareComposerAttachmentFiles({
+      files: [file],
+      attachments: [unavailable],
+      reservedCount: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+      fileStagingLimit: 50 * 1024 * 1024,
+    });
+    expect(accepted.files).toHaveLength(1);
+    expect(accepted.files[0]?.id).not.toBe(unavailable.id);
+    expect(accepted.files[0]?.file).toBe(file);
+    expect(accepted.error).toBeNull();
+  });
+
   it("keeps inline non-media files out of the legacy attachment row", () => {
     const environmentId = EnvironmentId.make("env-1");
     const files = [
@@ -150,19 +294,9 @@ describe("composer attachment files", () => {
         maxFileAttachmentBytes: null,
       }),
     ).toBe(PROVIDER_SEND_TURN_MAX_FILE_BYTES);
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [{ name: "pending.zip", sizeBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES }],
-        attachmentUploadsCapabilityKnown: false,
-        supportsAttachmentUploads: false,
-        maxFileAttachmentBytes: null,
-      }),
-    ).toBe("Waiting for the server before file attachments can send");
   });
 
-  it("rejects local staging and send when known config has no file support", () => {
-    const unsupportedReason =
-      "This server does not accept file attachments right now. Remove the files to send.";
+  it("rejects local staging when known config has no file support", () => {
     expect(
       fileAttachmentStagingLimit({
         attachmentUploadsCapabilityKnown: true,
@@ -177,33 +311,6 @@ describe("composer attachment files", () => {
         maxFileAttachmentBytes: 50 * 1024 * 1024,
       }),
     ).toBeNull();
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [{ name: "report.pdf", sizeBytes: 1024 }],
-        attachmentUploadsCapabilityKnown: true,
-        supportsAttachmentUploads: true,
-        maxFileAttachmentBytes: null,
-      }),
-    ).toBe(unsupportedReason);
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [{ name: "report.pdf", sizeBytes: 1024 }],
-        attachmentUploadsCapabilityKnown: true,
-        supportsAttachmentUploads: false,
-        maxFileAttachmentBytes: 50 * 1024 * 1024,
-      }),
-    ).toBe(unsupportedReason);
-  });
-
-  it("blocks retained files that exceed a newly lower server limit", () => {
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [{ name: "large.zip", sizeBytes: 2 * 1024 * 1024 }],
-        attachmentUploadsCapabilityKnown: true,
-        supportsAttachmentUploads: true,
-        maxFileAttachmentBytes: 1024 * 1024,
-      }),
-    ).toBe("'large.zip' exceeds the 1 MB attachment limit.");
   });
 
   it("uses the confirmed server limit without exceeding the hard cap", () => {
@@ -221,33 +328,6 @@ describe("composer attachment files", () => {
         maxFileAttachmentBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES * 2,
       }),
     ).toBe(PROVIDER_SEND_TURN_MAX_FILE_BYTES);
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [{ name: "report.pdf", sizeBytes: 1024 }],
-        attachmentUploadsCapabilityKnown: true,
-        supportsAttachmentUploads: true,
-        maxFileAttachmentBytes: 50 * 1024 * 1024,
-      }),
-    ).toBeNull();
-  });
-
-  it("does not block empty or image-only composers on legacy servers", () => {
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [],
-        attachmentUploadsCapabilityKnown: true,
-        supportsAttachmentUploads: false,
-        maxFileAttachmentBytes: null,
-      }),
-    ).toBeNull();
-    expect(
-      fileAttachmentCapabilityBlockReason({
-        files: [],
-        attachmentUploadsCapabilityKnown: false,
-        supportsAttachmentUploads: false,
-        maxFileAttachmentBytes: null,
-      }),
-    ).toBeNull();
   });
 
   it("keeps draft-persisted file uploads when the upload capability flips off", () => {

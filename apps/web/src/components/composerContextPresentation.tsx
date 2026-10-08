@@ -1,3 +1,8 @@
+import {
+  draftAttachmentNeedsReattach,
+  draftAttachmentStatus,
+  draftAttachmentRetry,
+} from "../composerAttachmentState";
 import ChatMarkdown from "./ChatMarkdown";
 import { ReadOnlySourcePreview } from "./files/AttachmentFilePreview";
 import type { PreviewAnnotationPayload, ThreadContextRecord } from "@supacode/contracts";
@@ -8,12 +13,9 @@ import { createContext, type MouseEvent, type ReactElement, type ReactNode, use 
 import type { EnvironmentId } from "@supacode/contracts";
 
 import type { ComposerFileAttachment, ComposerImageAttachment } from "~/composerDraftStore";
-import { composerFileNeedsReattach } from "~/composerDraftStore";
+
 import { useTheme } from "~/hooks/useTheme";
-import {
-  formatAttachmentUploadProgress,
-  type AttachmentUploadState,
-} from "~/lib/attachmentUploadState";
+import { type AttachmentUploadState } from "~/lib/attachmentUploadState";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import {
   fileContextReference,
@@ -164,17 +166,13 @@ function ContextChip(props: {
   );
 }
 
-function uploadStatusSuffix(upload: AttachmentUploadState | undefined): string | null {
-  if (upload?.status === "uploading") return formatAttachmentUploadProgress(upload.progress);
-  if (upload?.status === "failed") return "upload failed";
-  return null;
-}
-
 function attachmentTooltip(
   attachment: ComposerImageAttachment | ComposerFileAttachment,
   upload: AttachmentUploadState | undefined,
 ): string {
   const lines = [attachment.name, formatAttachmentSize(attachment.sizeBytes)];
+  const retry = draftAttachmentRetry(attachment);
+  if (retry) lines.push("", retry.description);
   if (upload?.status === "failed") lines.push("", upload.reason);
   return lines.join("\n");
 }
@@ -192,7 +190,7 @@ function ImageContextChip(props: {
             name={props.record.name}
             previewUrl={props.record.previewUrl}
             size={formatAttachmentSize(props.record.sizeBytes)}
-            suffix={uploadStatusSuffix(props.upload)}
+            suffix={draftAttachmentStatus(props.record, props.upload)}
             onClick={() => actions.expandImage(props.record.id)}
           />
         }
@@ -210,8 +208,8 @@ function FileContextChip(props: {
 }) {
   const actions = use(ComposerContextActionsContext);
   const { resolvedTheme } = useTheme();
-  const needsReattach = composerFileNeedsReattach(props.record);
-  const suffix = needsReattach ? "attach again" : uploadStatusSuffix(props.upload);
+  const needsReattach = draftAttachmentNeedsReattach(props.record);
+  const suffix = draftAttachmentStatus(props.record, props.upload);
   const size = formatAttachmentSize(props.record.sizeBytes);
   const isVideo = videoMimeType(props.record) !== null;
   return (

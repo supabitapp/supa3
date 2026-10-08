@@ -25,6 +25,16 @@ import {
   scheduleSnapShotAnimationDestination,
 } from "../../lib/snapShotAnimation";
 
+const cache = vi.hoisted(() => ({ save: vi.fn(async () => "cached" as const) }));
+vi.mock("../../state/draftAttachmentBytes", () => ({
+  draftAttachmentBytes: {
+    save: cache.save,
+    load: vi.fn(async () => null),
+    start: vi.fn(),
+    hold: () => () => {},
+  },
+}));
+
 const storage = vi.hoisted(() => {
   const values = new Map<string, string>();
   const storage = {
@@ -250,6 +260,53 @@ describe("window capture delivery", () => {
   );
 });
 
+describe("window capture byte recovery", () => {
+  it.each(["missing", "restore-failed", "hydrating"] as const)(
+    "restores an unacknowledged capture after %s draft bytes",
+    async (byteState) => {
+      const target = scopeThreadRef(environmentId, ThreadId.make("capture-retry"));
+      const capture = {
+        id: "capture",
+        name: "window.png",
+        mimeType: "image/png" as const,
+        sizeBytes: 3,
+        dataUrl: "data:image/png;base64,AQID",
+        source: {
+          kind: "snap-shot" as const,
+          capturedAt: "2026-10-08T00:00:00.000Z",
+          appName: "Editor",
+          windowTitle: "main.ts",
+        },
+      };
+      const acknowledgeSnapShot = vi.fn(async () => undefined);
+      const bridge = {
+        readSnapShot: async () => capture,
+        acknowledgeSnapShot,
+      } as unknown as DesktopSnapShotBridge;
+      vi.stubGlobal("window", { localStorage: storage, dispatchEvent: vi.fn() });
+      useComposerDraftStore.getState().addImage(target, {
+        type: "image",
+        id: capture.id,
+        name: capture.name,
+        mimeType: capture.mimeType,
+        sizeBytes: capture.sizeBytes,
+        source: capture.source,
+        file: null,
+        previewUrl: "",
+        byteState,
+      });
+      await deliverSnapShot(bridge, capture, target);
+      const images = useComposerDraftStore.getState().getComposerDraft(target)?.images;
+      expect(images).toHaveLength(1);
+      expect(images?.[0]?.byteState).toBe("cached");
+      expect(new Uint8Array(await images![0]!.file!.arrayBuffer())).toEqual(
+        new Uint8Array([1, 2, 3]),
+      );
+      expect(acknowledgeSnapShot).toHaveBeenCalledExactlyOnceWith(capture.id);
+    },
+  );
+});
+
 describe("window capture target resolution", () => {
   it("shares bare-route draft creation between animation start and capture drain", async () => {
     const draftId = DraftId.make("snap-shot-draft");
@@ -328,22 +385,21 @@ describe("durable snapshot delivery", () => {
             previewUrl: capture.dataUrl,
             file: new File([new Uint8Array([1, 2, 3])], capture.name, { type: capture.mimeType }),
           });
-          void store.syncPersistedAttachments(target, [capture]);
         }
         await expect(deliverSnapShot(bridge, capture, target)).rejects.toThrow(
           "could not be saved",
         );
         expect(acknowledgeSnapShot).not.toHaveBeenCalled();
         expect(
-          useComposerDraftStore.getState().getComposerDraft(target)?.nonPersistedImageIds,
-        ).toContain(capture.id);
+          useComposerDraftStore.getState().getComposerDraft(target)?.images[0]?.byteState,
+        ).toBe("session-only");
         storage.setItem.mockImplementation(write);
         await deliverSnapShot(bridge, capture, target);
         expect(acknowledgeSnapShot).toHaveBeenCalledExactlyOnceWith(capture.id);
         expect(useComposerDraftStore.getState().getComposerDraft(target)?.images).toHaveLength(1);
         expect(
-          useComposerDraftStore.getState().getComposerDraft(target)?.persistedAttachments,
-        ).toHaveLength(1);
+          useComposerDraftStore.getState().getComposerDraft(target)?.images[0]?.byteState,
+        ).toBe("cached");
       } finally {
         storage.setItem.mockImplementation(write);
       }

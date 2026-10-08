@@ -1,10 +1,10 @@
+import { draftAttachmentNeedsReattach } from "./composerAttachmentState";
 import {
   scopedProjectKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
 } from "@supacode/client-runtime/environment";
-import * as Schema from "effect/Schema";
 import {
   defaultInstanceIdForDriver,
   EnvironmentId,
@@ -75,12 +75,10 @@ import {
   restoreFailedBackgroundDraftThread,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
-  composerFileNeedsReattach,
   partializeComposerDraftStoreState,
   useComposerDraftStore,
   DraftId,
 } from "./composerDraftStore";
-import { removeLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 import { insertInlineContextReference } from "./lib/composerContextReferences";
 import { terminalContextReference, threadContextRecord } from "./lib/composerContextRecords";
 import {
@@ -258,6 +256,149 @@ describe("composerDraftStore addImages", () => {
     URL.revokeObjectURL = originalRevokeObjectUrl;
   });
 
+  it("returns and references only the surviving file when a batch replaces its earlier addition", () => {
+    const store = useComposerDraftStore.getState();
+    const marker = {
+      type: "file" as const,
+      id: "expired-batch",
+      name: "report.txt",
+      mimeType: "text/plain",
+      sizeBytes: 6,
+      file: null,
+      byteState: "missing" as const,
+    };
+    const recovered = {
+      ...marker,
+      id: "recoverable-batch",
+      uploadedAttachmentId: "available-upload",
+      uploadEnvironmentId: TEST_ENVIRONMENT_ID,
+    };
+    const plan = store.addFiles(threadRef, [marker, recovered], { appendReference: true });
+    expect(plan.admitted.map((item) => item.id)).toEqual([recovered.id]);
+    const draft = store.getComposerDraft(threadRef);
+    expect(draft?.files.map((item) => item.id)).toEqual([recovered.id]);
+    expect(draft?.prompt).toContain("file_recoverable-batch");
+    expect(draft?.prompt).not.toContain("file_expired-batch");
+  });
+
+  it("reserves pending slots for files and images without blocking replacements", () => {
+    const store = useComposerDraftStore.getState();
+    const missing = makeImage({
+      id: "missing-reserved",
+      name: "missing-reserved.png",
+      previewUrl: "blob:missing-reserved",
+    });
+    store.addImages(threadRef, [{ ...missing, file: null, byteState: "missing" }]);
+    const file = new File(["report"], "report.txt", { type: "text/plain" });
+    const attachment = {
+      type: "file" as const,
+      id: "reserved-file",
+      name: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      file,
+    };
+    const reservedSlots = PROVIDER_SEND_TURN_MAX_ATTACHMENTS - 1;
+    expect(store.addFiles(threadRef, [attachment], { reservedSlots }).rejected).toEqual([
+      attachment,
+    ]);
+    expect(
+      store.addImages(
+        threadRef,
+        [makeImage({ id: "new-reserved", name: "new.png", previewUrl: "blob:new-reserved" })],
+        { reservedSlots },
+      ).rejected,
+    ).toHaveLength(1);
+    const replacement = { ...missing, id: "restored-reserved" };
+    expect(store.addImages(threadRef, [replacement], { reservedSlots }).admitted).toMatchObject([
+      { id: replacement.id },
+    ]);
+    expect(store.getComposerDraft(threadRef)?.images.map((image) => image.id)).toEqual([
+      replacement.id,
+    ]);
+    expect(store.getComposerDraft(threadRef)?.files).toEqual([]);
+  });
+
+  it("replaces a missing image at capacity and rewrites its image and annotation references", () => {
+    const store = useComposerDraftStore.getState();
+    const replacement = makeImage({
+      id: "replacement",
+      name: "missing.png",
+      previewUrl: "blob:replacement",
+    });
+    const missing = {
+      ...replacement,
+      id: "missing",
+      file: null,
+      previewUrl: "",
+      byteState: "missing" as const,
+    };
+    store.addImages(threadRef, [
+      missing,
+      ...Array.from({ length: PROVIDER_SEND_TURN_MAX_ATTACHMENTS - 1 }, (_, index) =>
+        makeImage({
+          id: `other-${index}`,
+          name: `other-${index}.png`,
+          previewUrl: `blob:other-${index}`,
+        }),
+      ),
+    ]);
+    store.addPreviewAnnotation(threadRef, {
+      id: "missing",
+      pageUrl: "https://example.test",
+      pageTitle: null,
+      createdAt: "2026-10-08T00:00:00.000Z",
+      comment: "change",
+      elements: [],
+      regions: [],
+      strokes: [],
+      styleChanges: [],
+      screenshot: null,
+    });
+    store.setPrompt(
+      threadRef,
+      "[image](supacode-context://v1/image/image_missing) [annotation](supacode-context://v1/preview-annotation/preview-annotation_missing)",
+    );
+    const plan = store.addImages(threadRef, [replacement]);
+    expect(plan.admitted).toMatchObject([{ id: replacement.id }]);
+    expect(plan.survivorIds.get("missing")).toBe(replacement.id);
+    const draft = store.getComposerDraft(threadRef);
+    expect(draft?.images).toHaveLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS);
+    expect(draft?.images[0]?.file).toBe(replacement.file);
+    expect(draft?.images[0]?.id).toBe(replacement.id);
+    expect(draft?.prompt).toContain("image_replacement");
+    expect(draft?.prompt).toContain("preview-annotation_replacement");
+    expect(draft?.prompt).not.toContain("_missing");
+    expect(draft?.previewAnnotations[0]?.id).toBe(replacement.id);
+  });
+
+  it("reuses a missing image slot when compression changes its byte length", () => {
+    const store = useComposerDraftStore.getState();
+    const replacement = makeImage({
+      id: "fresh",
+      name: "missing.png",
+      sizeBytes: 3,
+      previewUrl: "blob:fresh",
+    });
+    store.addImages(threadRef, [
+      { ...replacement, id: "missing", file: null, sizeBytes: 99, byteState: "missing" },
+      ...Array.from({ length: PROVIDER_SEND_TURN_MAX_ATTACHMENTS - 1 }, (_, index) =>
+        makeImage({
+          id: `other-${index}`,
+          name: `other-${index}.png`,
+          previewUrl: `blob:${index}`,
+        }),
+      ),
+    ]);
+    const plan = store.addImages(threadRef, [replacement]);
+    expect(plan.admitted).toMatchObject([{ id: replacement.id }]);
+    expect(plan.survivorIds.get("missing")).toBe(replacement.id);
+    const draft = store.getComposerDraft(threadRef);
+    expect(draft?.images).toHaveLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS);
+    expect(draft?.images[0]?.file).toBe(replacement.file);
+    expect(draft?.images[0]?.sizeBytes).toBe(replacement.sizeBytes);
+  });
+
   it("deduplicates identical images in one batch by file signature", () => {
     const first = makeImage({
       id: "img-1",
@@ -292,7 +433,7 @@ describe("composerDraftStore addImages", () => {
       previewUrl: "blob:restored",
       file: new File([new Uint8Array(unsent.sizeBytes).fill(2)], unsent.name, {
         type: unsent.mimeType,
-        lastModified: unsent.file.lastModified,
+        lastModified: unsent.file?.lastModified ?? 0,
       }),
     };
     store.addImages(threadRef, [unsent]);
@@ -341,7 +482,9 @@ describe("composerDraftStore addImages", () => {
 
     expect(useComposerDraftStore.getState().addImage(threadRef, first)).toBe(true);
     expect(useComposerDraftStore.getState().addImage(threadRef, duplicate)).toBe(false);
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.images).toEqual([first]);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.images).toEqual([
+      { ...first, byteState: "saving" },
+    ]);
     expect(revokeSpy).toHaveBeenCalledWith("blob:duplicate");
   });
 
@@ -479,6 +622,7 @@ describe("composerDraftStore file attachments", () => {
         mimeType: "application/pdf",
         sizeBytes: 6,
         file: null,
+        byteState: "hydrating",
         uploadedAttachmentId: "pending-report-pdf",
         uploadEnvironmentId: TEST_ENVIRONMENT_ID,
         source: { _tag: "pasted-text" },
@@ -486,7 +630,7 @@ describe("composerDraftStore file attachments", () => {
     ]);
   });
 
-  it("persists a pending file as a needs-reattach marker instead of dropping it", () => {
+  it("restores pending file metadata while checking local bytes", () => {
     const store = useComposerDraftStore.getState();
     // No setFileUpload: the upload never finished, so there is no attachment
     // id and the File handle cannot serialize.
@@ -525,9 +669,10 @@ describe("composerDraftStore file attachments", () => {
         mimeType: "application/pdf",
         sizeBytes: 6,
         file: null,
+        byteState: "hydrating",
       },
     ]);
-    expect(hydratedFiles?.every(composerFileNeedsReattach)).toBe(true);
+    expect(hydratedFiles?.every(draftAttachmentNeedsReattach)).toBe(false);
   });
 
   it("marks only the matching byte-less upload as missing", () => {
@@ -535,6 +680,7 @@ describe("composerDraftStore file attachments", () => {
     const hydrated: ComposerFileAttachment = {
       ...makeFile("file-hydrated"),
       file: null,
+      byteState: "missing",
       uploadedAttachmentId: "pending-old",
       uploadEnvironmentId: TEST_ENVIRONMENT_ID,
     };
@@ -575,7 +721,7 @@ describe("composerDraftStore file attachments", () => {
       store.markFileUploadMissing(threadRef, hydrated.id, TEST_ENVIRONMENT_ID, "pending-new"),
     ).toBe(true);
     const marker = store.getComposerDraft(threadRef)?.files[0];
-    expect(marker && composerFileNeedsReattach(marker)).toBe(true);
+    expect(marker && draftAttachmentNeedsReattach(marker)).toBe(true);
     expect(marker?.uploadedAttachmentId).toBeUndefined();
     expect(marker?.uploadEnvironmentId).toBeUndefined();
   });
@@ -629,9 +775,13 @@ describe("composerDraftStore file attachments", () => {
     const store = useComposerDraftStore.getState();
     // A hydrated marker: same metadata as the original pick, no bytes and no
     // server-side upload.
-    const marker: ComposerFileAttachment = { ...makeFile("file-marker"), file: null };
+    const marker: ComposerFileAttachment = {
+      ...makeFile("file-marker"),
+      file: null,
+      byteState: "missing",
+    };
     store.addFiles(threadRef, [marker]);
-    expect(store.getComposerDraft(threadRef)?.files.every(composerFileNeedsReattach)).toBe(true);
+    expect(store.getComposerDraft(threadRef)?.files.every(draftAttachmentNeedsReattach)).toBe(true);
 
     // Following the "Attach again" instruction produces a fresh id with the
     // exact metadata the dedup key hashes.
@@ -641,7 +791,24 @@ describe("composerDraftStore file attachments", () => {
     const files = store.getComposerDraft(threadRef)?.files;
     expect(files?.map((file) => file.id)).toEqual(["file-repicked"]);
     expect(files?.[0]?.file).not.toBeNull();
-    expect(files?.some(composerFileNeedsReattach)).toBe(false);
+    expect(files?.some(draftAttachmentNeedsReattach)).toBe(false);
+  });
+
+  it("replaces files whose cache read failed and rewrites their existing reference", () => {
+    const store = useComposerDraftStore.getState();
+    const marker: ComposerFileAttachment = {
+      ...makeFile("failed"),
+      file: null,
+      byteState: "restore-failed",
+    };
+    store.addFiles(threadRef, [marker], { appendReference: true });
+    const replacement = makeFile("fresh");
+    store.addFiles(threadRef, [replacement], { appendReference: false });
+    const draft = store.getComposerDraft(threadRef);
+    expect(draft?.files.map((file) => file.id)).toEqual([replacement.id]);
+    expect(draft?.files[0]?.file).toBe(replacement.file);
+    expect(draft?.prompt).toContain("file_fresh");
+    expect(draft?.prompt).not.toContain("file_failed");
   });
 
   it("replaces a legacy video marker after its MIME type is normalized", () => {
@@ -653,6 +820,7 @@ describe("composerDraftStore file attachments", () => {
       mimeType: "application/octet-stream",
       sizeBytes: 6,
       file: null,
+      byteState: "missing",
     };
     store.addFiles(threadRef, [marker]);
 
@@ -669,14 +837,18 @@ describe("composerDraftStore file attachments", () => {
 
     const files = store.getComposerDraft(threadRef)?.files;
     expect(files?.map((entry) => entry.id)).toEqual(["file-repicked"]);
-    expect(files?.some(composerFileNeedsReattach)).toBe(false);
+    expect(files?.some(draftAttachmentNeedsReattach)).toBe(false);
   });
 
   it("replaces a needs-reattach marker with a stash-restored uploaded file", () => {
     const store = useComposerDraftStore.getState();
-    const marker: ComposerFileAttachment = { ...makeFile("file-marker"), file: null };
+    const marker: ComposerFileAttachment = {
+      ...makeFile("file-marker"),
+      file: null,
+      byteState: "missing",
+    };
     store.addFiles(threadRef, [marker]);
-    expect(store.getComposerDraft(threadRef)?.files.every(composerFileNeedsReattach)).toBe(true);
+    expect(store.getComposerDraft(threadRef)?.files.every(draftAttachmentNeedsReattach)).toBe(true);
 
     // A stash restore carries a finished server-side upload instead of bytes.
     // Matching metadata must replace the marker, not be dropped as a
@@ -694,7 +866,7 @@ describe("composerDraftStore file attachments", () => {
     expect(files?.map((file) => file.id)).toEqual(["file-restored"]);
     expect(files?.[0]?.uploadedAttachmentId).toBe("pending-stash-pdf");
     expect(files?.[0]?.uploadEnvironmentId).toBe(TEST_ENVIRONMENT_ID);
-    expect(files?.some(composerFileNeedsReattach)).toBe(false);
+    expect(files?.some(draftAttachmentNeedsReattach)).toBe(false);
   });
 
   it("still dedupes a re-pick against a file that does not need reattaching", () => {
@@ -777,62 +949,6 @@ describe("composerDraftStore file attachments", () => {
       "file-original",
       "file-unique",
     ]);
-  });
-});
-
-describe("composerDraftStore syncPersistedAttachments", () => {
-  const threadId = ThreadId.make("thread-sync-persisted");
-  const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
-
-  beforeEach(() => {
-    removeLocalStorageItem(COMPOSER_DRAFT_STORAGE_KEY);
-    useComposerDraftStore.setState({
-      draftsByThreadKey: {},
-      draftThreadsByThreadKey: {},
-      logicalProjectDraftThreadKeyByLogicalProjectKey: {},
-      stickyModelSelectionByProvider: {},
-      stickyActiveProvider: null,
-    });
-  });
-
-  afterEach(() => {
-    removeLocalStorageItem(COMPOSER_DRAFT_STORAGE_KEY);
-  });
-
-  it("treats malformed persisted draft storage as empty", async () => {
-    const image = makeImage({
-      id: "img-persisted",
-      previewUrl: "blob:persisted",
-    });
-    useComposerDraftStore.getState().addImage(threadRef, image);
-    setLocalStorageItem(
-      COMPOSER_DRAFT_STORAGE_KEY,
-      {
-        version: 2,
-        state: {
-          draftsByThreadId: {
-            [threadId]: {
-              attachments: "not-an-array",
-            },
-          },
-        },
-      },
-      Schema.Unknown,
-    );
-
-    useComposerDraftStore.getState().syncPersistedAttachments(threadRef, [
-      {
-        id: image.id,
-        name: image.name,
-        mimeType: image.mimeType,
-        sizeBytes: image.sizeBytes,
-        dataUrl: image.previewUrl,
-      },
-    ]);
-    await Promise.resolve();
-
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.persistedAttachments).toEqual([]);
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.nonPersistedImageIds).toEqual([image.id]);
   });
 });
 
@@ -1846,7 +1962,7 @@ describe("composerDraftStore project draft thread mapping", () => {
     });
   });
 
-  it("clears stale upload metadata when retargeting a draft to another environment", () => {
+  it("preserves source upload metadata when retargeting a draft to another environment", () => {
     const store = useComposerDraftStore.getState();
     const hydratedFile: ComposerFileAttachment = {
       ...makeFile("file-cross-environment"),
@@ -1865,9 +1981,9 @@ describe("composerDraftStore project draft thread mapping", () => {
       id: hydratedFile.id,
       file: null,
     });
-    expect(file?.uploadedAttachmentId).toBeUndefined();
-    expect(file?.uploadEnvironmentId).toBeUndefined();
-    expect(file && composerFileNeedsReattach(file)).toBe(true);
+    expect(file?.uploadedAttachmentId).toBe("local-environment-upload");
+    expect(file?.uploadEnvironmentId).toBe(TEST_ENVIRONMENT_ID);
+    expect(file && draftAttachmentNeedsReattach(file)).toBe(false);
   });
 
   it("rechecks balancing when an empty draft is remapped to another project member", () => {
@@ -2857,7 +2973,7 @@ describe("composerDraftStore model seed migration", () => {
         activeProvider: CODEX_INSTANCE,
         runtimeMode: "approval-required",
       });
-      expect(draftByKey(markerDraftId)?.files.every(composerFileNeedsReattach)).toBe(true);
+      expect(draftByKey(markerDraftId)?.files.every(draftAttachmentNeedsReattach)).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -2962,24 +3078,15 @@ describe("composer draft persistence", () => {
       const typingRef = scopeThreadRef(TEST_ENVIRONMENT_ID, typingThreadId);
       const heavyKey = scopedThreadKey(heavyRef);
       useComposerDraftStore.getState().setPrompt(heavyRef, "Keep this image");
-      const attachments = [
-        {
-          id: "heavy-image",
-          name: "image.png",
-          mimeType: "image/png",
-          sizeBytes: 49_152,
-          dataUrl: `data:image/png;base64,${"AQID".repeat(16_384)}`,
-        },
-      ];
       let attachmentReads = 0;
       useComposerDraftStore.setState((state) => ({
         draftsByThreadKey: {
           ...state.draftsByThreadKey,
           [heavyKey]: {
             ...state.draftsByThreadKey[heavyKey]!,
-            get persistedAttachments() {
+            get images() {
               attachmentReads += 1;
-              return attachments;
+              return [makeImage({ id: "heavy-image", previewUrl: "blob:heavy" })];
             },
           },
         },
@@ -3000,9 +3107,10 @@ describe("composer draft persistence", () => {
       resetComposerDraftStore();
       await useComposerDraftStore.persist.rehydrate();
       expect(draftFor(typingThreadId, TEST_ENVIRONMENT_ID)?.prompt).toBe("Draft 20");
-      expect(draftFor(heavyThreadId, TEST_ENVIRONMENT_ID)?.persistedAttachments).toEqual(
-        attachments,
-      );
+      expect(draftFor(heavyThreadId, TEST_ENVIRONMENT_ID)?.images[0]).toMatchObject({
+        id: "heavy-image",
+        byteState: "hydrating",
+      });
     } finally {
       stringify.mockRestore();
       await useComposerDraftStore.persist.clearStorage();
@@ -3365,15 +3473,17 @@ describe("composerDraftStore attachment references", () => {
       uploadedAttachmentId: "p",
       uploadEnvironmentId: TEST_ENVIRONMENT_ID,
     };
-    expect(store.addFiles(threadRef, [file])).toEqual(["file-1"]);
-    expect(store.addFiles(threadRef, [{ ...file, id: "file-2" }])).toEqual([]);
+    expect(store.addFiles(threadRef, [file]).admitted).toMatchObject([{ id: "file-1" }]);
+    const duplicateFile = store.addFiles(threadRef, [{ ...file, id: "file-2" }]);
+    expect(duplicateFile.admitted).toEqual([]);
+    expect(duplicateFile.survivorIds.get("file-2")).toBe("file-1");
     const image = makeImage({ id: "img-1", previewUrl: "blob:img-1", name: "shot.png" });
-    expect(store.addImages(threadRef, [image])).toEqual(["img-1"]);
-    expect(
-      store.addImages(threadRef, [
-        makeImage({ id: "img-2", previewUrl: "blob:img-2", name: "shot.png" }),
-      ]),
-    ).toEqual([]);
+    expect(store.addImages(threadRef, [image]).admitted).toMatchObject([{ id: "img-1" }]);
+    const duplicateImage = store.addImages(threadRef, [
+      makeImage({ id: "img-2", previewUrl: "blob:img-2", name: "shot.png" }),
+    ]);
+    expect(duplicateImage.admitted).toEqual([]);
+    expect(duplicateImage.survivorIds.get("img-2")).toBe("img-1");
   });
 
   it("strips references when an image or file is removed", () => {
@@ -3411,9 +3521,10 @@ describe("composerDraftStore attachment references", () => {
         mimeType: "text/plain",
         sizeBytes: 3,
         file: null,
+        byteState: "missing",
       },
     ]);
-    const acceptedIds = store.addFiles(threadRef, [
+    const plan = store.addFiles(threadRef, [
       {
         type: "file",
         id: "fresh-1",
@@ -3424,7 +3535,8 @@ describe("composerDraftStore attachment references", () => {
       },
     ]);
     const draft = draftFor(threadId, TEST_ENVIRONMENT_ID);
-    expect(acceptedIds).toEqual([]);
+    expect(plan.admitted).toMatchObject([{ id: "fresh-1" }]);
+    expect(plan.survivorIds.get("marker-1")).toBe("fresh-1");
     expect(draft?.files.map((file) => file.id)).toEqual(["fresh-1"]);
     expect(draft?.prompt).toBe("see [notes.txt](supacode-context://v1/file/file_fresh-1) ok");
   });

@@ -855,10 +855,8 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     replaceComposerContextReferences(composer.prompt, (occurrence) => occurrence.label)
       .trim()
       .split("\n", 1)[0] ?? "";
-  // images mirrors persistedAttachments once rehydration finishes; before
-  // that only the persisted list is populated, hence max not sum.
   const attachmentCount =
-    Math.max(composer.images.length, composer.persistedAttachments.length) +
+    composer.images.length +
     composer.files.length +
     composer.terminalContexts.length +
     composer.previewAnnotations.length +

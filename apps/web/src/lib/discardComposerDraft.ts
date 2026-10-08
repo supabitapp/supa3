@@ -1,3 +1,4 @@
+import { markDraftAttachmentForPersistence } from "../composerAttachmentState";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
@@ -7,9 +8,11 @@ import {
   resolveComposerDraftKey,
   useComposerDraftStore,
 } from "../composerDraftStore";
+import { hydrateComposerDraftAttachments } from "../composerDraftAttachments";
 import { showThreadUndoNotice } from "../hooks/showThreadUndoNotice";
 import * as ThreadUndo from "../hooks/threadUndo";
 import { releaseDraftAttachments } from "./attachmentUploadQueue";
+import { draftAttachmentBytes } from "../state/draftAttachmentBytes";
 
 /**
  * Discards a draft's unsent content behind the sidebar undo notice. A new-thread
@@ -28,6 +31,9 @@ export function discardComposerDraft(target: ComposerThreadTarget): void {
   const discardsSession = typeof target === "string";
 
   const claim = ThreadUndo.begin("discard", key);
+  const releaseBytes = draftAttachmentBytes.hold(
+    [...draft.images, ...draft.files].map((item) => item.id),
+  );
   if (discardsSession) {
     store.clearDraftThread(target);
   } else {
@@ -41,6 +47,7 @@ export function discardComposerDraft(target: ComposerThreadTarget): void {
     undo: async () => {
       const current = useComposerDraftStore.getState().draftsByThreadKey[key];
       if (current && composerDraftHasUserContent(current)) {
+        releaseBytes();
         releaseDraftAttachments([...draft.images, ...draft.files]);
         return AsyncResult.failure(Cause.fail(new Error("The draft has new content.")));
       }
@@ -54,17 +61,17 @@ export function discardComposerDraft(target: ComposerThreadTarget): void {
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
-            // Removing a draft session revokes its image previews.
-            [key]: discardsSession
-              ? {
-                  ...draft,
-                  images: draft.images.map((image) =>
-                    image.previewUrl.startsWith("blob:")
-                      ? { ...image, previewUrl: URL.createObjectURL(image.file) }
-                      : image,
-                  ),
-                }
-              : draft,
+            [key]: {
+              ...draft,
+              images: draft.images.map((image) =>
+                markDraftAttachmentForPersistence(
+                  discardsSession && image.file && image.previewUrl.startsWith("blob:")
+                    ? { ...image, previewUrl: URL.createObjectURL(image.file) }
+                    : image,
+                ),
+              ),
+              files: draft.files.map(markDraftAttachmentForPersistence),
+            },
           },
           draftThreadsByThreadKey: session
             ? { ...state.draftThreadsByThreadKey, [key]: session }
@@ -72,8 +79,13 @@ export function discardComposerDraft(target: ComposerThreadTarget): void {
           logicalProjectDraftThreadKeyByLogicalProjectKey,
         };
       });
+      await hydrateComposerDraftAttachments(target);
+      releaseBytes();
       return AsyncResult.success(undefined);
     },
-    commit: () => releaseDraftAttachments([...draft.images, ...draft.files]),
+    commit: () => {
+      releaseDraftAttachments([...draft.images, ...draft.files]);
+      releaseBytes();
+    },
   });
 }

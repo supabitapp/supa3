@@ -23,8 +23,11 @@ the agent a file path; it does not enable native video input.
 
 Uploads begin when you add an attachment. Sending saves a local copy of the
 message and its attachments while uploads finish. Pending messages keep their
-attachments across app restarts. On web and desktop, reloading an unfinished
-file upload before sending still requires you to attach that file again.
+attachments across app restarts. Web and desktop also save draft attachment
+bytes locally, so you can reload during an upload or choose another machine.
+A session-only attachment has not been saved and may need reattaching after
+a reload. Unused local copies can be cleaned up after 24 hours; saved drafts
+keep their attachments.
 
 You can drag or paste images into the web or desktop composer. HEIC and HEIF
 photos are converted to JPEG there and when selected from the mobile photo

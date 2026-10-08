@@ -1,12 +1,44 @@
+import { hydrateComposerDraftAttachments } from "../composerDraftAttachments";
 import { EnvironmentId, ProjectId, ThreadId } from "@supacode/contracts";
 import { scopeProjectRef, scopeThreadRef } from "@supacode/client-runtime/environment";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { toastManager } from "../components/ui/toast";
-import { DraftId, useComposerDraftStore } from "../composerDraftStore";
+import {
+  DraftId,
+  useComposerDraftStore,
+  flushComposerDraftPersistence,
+} from "../composerDraftStore";
 import { useThreadUndoNotice } from "../hooks/showThreadUndoNotice";
 import { releaseDraftAttachments } from "./attachmentUploadQueue";
 import { discardComposerDraft } from "./discardComposerDraft";
+
+const cache = vi.hoisted(() => {
+  const entries = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      entries.set(key, value);
+    },
+    removeItem: (key: string) => {
+      entries.delete(key);
+    },
+  };
+  vi.stubGlobal("localStorage", storage);
+  return {
+    storage,
+    load: vi.fn(async (): Promise<File | null> => null),
+    save: vi.fn(async () => "cached" as const),
+  };
+});
+vi.mock("../state/draftAttachmentBytes", () => ({
+  draftAttachmentBytes: {
+    load: cache.load,
+    save: cache.save,
+    start: vi.fn(),
+    hold: () => () => {},
+  },
+}));
 
 vi.mock("./attachmentUploadQueue", () => ({ releaseDraftAttachments: vi.fn() }));
 
@@ -56,6 +88,66 @@ describe("discardComposerDraft", () => {
     );
     vi.runAllTimers();
     expect(releaseDraftAttachments).not.toHaveBeenCalled();
+  });
+
+  it("restores bytes after Undo when the first hydration finished while the draft was discarded", async () => {
+    const file = new File(["clipboard"], "notes.txt", { type: "text/plain" });
+    let complete!: (file: File) => void;
+    const firstLookup = new Promise<File>((resolve) => {
+      complete = resolve;
+    });
+    cache.load.mockReturnValueOnce(firstLookup).mockResolvedValueOnce(file);
+    useComposerDraftStore.getState().addFiles(threadRef, [
+      {
+        type: "file",
+        id: "undo-file",
+        name: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        file: null,
+        byteState: "hydrating",
+      },
+    ]);
+    const hydration = hydrateComposerDraftAttachments(threadRef);
+    discardComposerDraft(threadRef);
+    complete(file);
+    await hydration;
+    expect(useComposerDraftStore.getState().getComposerDraft(threadRef)).toBeNull();
+    await undoNotice().undo();
+    const restored = useComposerDraftStore.getState().getComposerDraft(threadRef)?.files[0];
+    expect(restored?.byteState).toBe("cached");
+    expect(await restored?.file?.text()).toBe("clipboard");
+  });
+
+  it("retains restored bytes as session-only when Undo cannot persist the restored metadata", async () => {
+    const file = new File(["saved bytes"], "notes.txt", { type: "text/plain" });
+    useComposerDraftStore.getState().addFiles(threadRef, [
+      {
+        type: "file",
+        id: "cached-undo",
+        name: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        file,
+      },
+    ]);
+    await hydrateComposerDraftAttachments(threadRef);
+    expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.files[0]?.byteState).toBe(
+      "cached",
+    );
+    discardComposerDraft(threadRef);
+    expect(flushComposerDraftPersistence()).toBe(true);
+    const write = vi.spyOn(cache.storage, "setItem").mockImplementation(() => {
+      throw new Error("Quota exceeded");
+    });
+    try {
+      await undoNotice().undo();
+      const restored = useComposerDraftStore.getState().getComposerDraft(threadRef)?.files[0];
+      expect(restored?.byteState).toBe("session-only");
+      expect(await restored?.file?.text()).toBe("saved bytes");
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("clears a thread draft for good and releases its uploads once undo expires", async () => {

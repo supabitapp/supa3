@@ -1,5 +1,6 @@
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   WS_METHODS,
   type AttachmentCreateUploadUrlInput,
   type AttachmentCreateUploadUrlResult,
@@ -233,4 +234,80 @@ export function fileAttachmentTooLargeMessage(name: string, maxUploadBytes: numb
         ? `${maxUploadBytes / 1024} KB`
         : `${maxUploadBytes} ${maxUploadBytes === 1 ? "byte" : "bytes"}`;
   return `'${name}' exceeds the ${maxUploadSize} attachment limit.`;
+}
+
+export interface AttachmentRequirement {
+  readonly type: "image" | "file";
+  readonly name: string;
+  readonly sizeBytes: number;
+  readonly source:
+    | { readonly kind: "local" }
+    | { readonly kind: "remote"; readonly environmentId: EnvironmentId; readonly readable: boolean }
+    | { readonly kind: "restore-failed" }
+    | { readonly kind: "unresolved" }
+    | { readonly kind: "missing" };
+}
+
+export interface AttachmentDestination {
+  readonly environmentId: EnvironmentId;
+  readonly canUpload: boolean;
+  readonly uploads: boolean | null;
+  readonly maxFileBytes: number | null;
+}
+
+export function attachmentPlacementBlockReason(
+  attachment: AttachmentRequirement,
+  destination: AttachmentDestination,
+): string | null {
+  if (attachment.source.kind === "restore-failed")
+    return "Retry restoring the attachment or attach it again.";
+  if (attachment.source.kind === "unresolved") return "Restoring attachments…";
+  if (!destination.canUpload) return "This connection cannot send attachments.";
+  if (attachment.type === "file") {
+    if (destination.uploads === null)
+      return "Waiting for the server before file attachments can send";
+    if (!destination.uploads || destination.maxFileBytes === null)
+      return "This server does not accept file attachments right now. Remove the files to send.";
+    if (attachment.sizeBytes > clampFileAttachmentUploadBytes(destination.maxFileBytes))
+      return fileAttachmentTooLargeMessage(
+        attachment.name,
+        clampFileAttachmentUploadBytes(destination.maxFileBytes),
+      );
+  } else if (attachment.sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+    return "The image exceeds the attachment size limit.";
+  }
+  if (attachment.source.kind === "missing") return "Attach the missing file again or remove it.";
+  if (
+    attachment.source.kind === "remote" &&
+    attachment.source.environmentId !== destination.environmentId &&
+    !attachment.source.readable
+  )
+    return "Connect to the original machine to recover this attachment.";
+  return null;
+}
+
+export function firstAttachmentPlacementBlockReason(
+  attachments: ReadonlyArray<AttachmentRequirement>,
+  destination: AttachmentDestination,
+) {
+  for (const attachment of attachments) {
+    const reason = attachmentPlacementBlockReason(attachment, destination);
+    if (reason !== null) return reason;
+  }
+  return null;
+}
+
+export function automaticAttachmentPlacementBlockReason(
+  attachments: ReadonlyArray<AttachmentRequirement>,
+  candidates: ReadonlyArray<{
+    readonly destination: AttachmentDestination;
+    readonly connected: boolean;
+  }>,
+): string | null {
+  if (attachments.length === 0) return null;
+  const reasons = candidates.flatMap(({ destination, connected }) =>
+    connected ? [firstAttachmentPlacementBlockReason(attachments, destination)] : [],
+  );
+  if (reasons.some((reason) => reason === null)) return null;
+  return reasons[0] ?? "Connect to a machine with attachment support.";
 }

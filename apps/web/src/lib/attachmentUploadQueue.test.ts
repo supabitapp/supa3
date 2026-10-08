@@ -1,15 +1,39 @@
+import { draftAttachmentNeedsReattach } from "../composerAttachmentState";
+import { hydrateComposerDraftAttachments } from "../composerDraftAttachments";
 import { EnvironmentId } from "@supacode/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 
 import {
-  composerFileNeedsReattach,
   DraftId,
   useComposerDraftStore,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
 } from "../composerDraftStore";
+
+const cache = vi.hoisted(() => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
+  };
+  vi.stubGlobal("localStorage", storage);
+  return { storage, save: vi.fn(async () => "cached" as const), load: vi.fn(async () => null) };
+});
+vi.mock("../state/draftAttachmentBytes", () => ({
+  draftAttachmentBytes: {
+    save: cache.save,
+    load: cache.load,
+    start: vi.fn(),
+    hold: () => () => {},
+  },
+}));
 
 const mocks = vi.hoisted(() => ({
   connectionStateAtom: vi.fn(),
@@ -20,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   runAtomCommand: vi.fn(),
   readEnvironmentScope: vi.fn(),
   readPreparedConnection: vi.fn(),
+  recoverAttachmentSource: vi.fn(),
 }));
 
 vi.mock("@supacode/client-runtime/state/runtime", () => ({
@@ -42,6 +67,7 @@ vi.mock("../state/assets", () => ({
 }));
 
 vi.mock("../state/attachments", () => ({
+  recoverAttachmentSource: mocks.recoverAttachmentSource,
   attachmentEnvironment: {
     createUploadUrl: mocks.createUploadUrl,
     remove: mocks.removeUpload,
@@ -74,6 +100,8 @@ type ProgressListener = (event: {
 
 class TestXmlHttpRequest {
   static requests: TestXmlHttpRequest[] = [];
+  static onSend: ((request: TestXmlHttpRequest) => void) | null = null;
+  body: File | null = null;
 
   status = 0;
   timeout = 0;
@@ -106,7 +134,10 @@ class TestXmlHttpRequest {
     this.listeners.set(event, listener);
   }
 
-  send(): void {}
+  send(file: File): void {
+    this.body = file;
+    TestXmlHttpRequest.onSend?.(this);
+  }
 
   abort(): void {
     this.listeners.get("abort")?.();
@@ -164,11 +195,25 @@ function setConnected(environmentId: EnvironmentId, connected: boolean) {
 }
 
 describe("attachmentUploadQueue", () => {
+  it("leaves a missing image ready for reattachment without starting or retrying an upload", async () => {
+    const image = { ...makeImage("missing-image"), file: null, byteState: "missing" as const };
+    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    await awaitAttachmentUploads([image.id]);
+    setConnected(firstEnvironment, false);
+    setConnected(firstEnvironment, true);
+    expect(readAttachmentUpload(image.id)).toBeUndefined();
+    expect(mocks.runAtomCommand).not.toHaveBeenCalled();
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+  });
+
   beforeEach(() => {
+    vi.stubGlobal("localStorage", cache.storage);
     mocks.connectionStateAtom.mockImplementation(connectionStates);
     setConnected(firstEnvironment, true);
     setConnected(secondEnvironment, true);
     TestXmlHttpRequest.requests = [];
+    TestXmlHttpRequest.onSend = null;
+    mocks.recoverAttachmentSource.mockReset();
     mocks.createAssetUrl.mockReset();
     mocks.createAssetUrl.mockImplementation((target: unknown) => target);
     mocks.executeAtomQuery.mockReset();
@@ -591,6 +636,7 @@ describe("attachmentUploadQueue", () => {
     const file: ComposerFileAttachment = {
       ...makeFile("expired"),
       file: null,
+      byteState: "missing",
       uploadedAttachmentId: "pending-expired-pdf",
       uploadEnvironmentId: firstEnvironment,
     };
@@ -612,7 +658,7 @@ describe("attachmentUploadQueue", () => {
       expect(readAttachmentUpload(file.id)).toBeUndefined();
       expect(marker?.uploadedAttachmentId).toBeUndefined();
       expect(marker?.uploadEnvironmentId).toBeUndefined();
-      expect(marker && composerFileNeedsReattach(marker)).toBe(true);
+      expect(marker && draftAttachmentNeedsReattach(marker)).toBe(true);
 
       const replacementBytes = new File([new Uint8Array([1, 2, 3])], file.name, {
         type: file.mimeType,
@@ -982,6 +1028,214 @@ describe("attachmentUploadQueue", () => {
       {
         environmentId: firstEnvironment,
         input: { attachmentId: minted.value.attachmentId },
+      },
+      expect.anything(),
+    );
+  });
+
+  it("recovers a legacy foreign upload and sends its bytes to the destination", async () => {
+    const draftId = DraftId.make("draft-recovered-upload");
+    const file: ComposerFileAttachment = {
+      ...makeFile("recovered"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    const recovered = makeFile("recovered").file!;
+    mocks.recoverAttachmentSource.mockResolvedValue(recovered);
+    useComposerDraftStore.getState().addFiles(draftId, [file]);
+    const transfer = new Promise<TestXmlHttpRequest>((resolve) => {
+      TestXmlHttpRequest.onSend = resolve;
+    });
+    startAttachmentUpload({ environmentId: secondEnvironment, image: file, draftTarget: draftId });
+    const request = await transfer;
+    expect(mocks.recoverAttachmentSource).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: firstEnvironment, attachmentId: "source-pdf" }),
+    );
+    expect(request.body).toBe(recovered);
+    const settled = awaitAttachmentUploads([file.id]);
+    request.complete();
+    await settled;
+    expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.files[0]).toMatchObject({
+      file: recovered,
+      uploadEnvironmentId: secondEnvironment,
+      uploadedAttachmentId: "pending-environment-2-recovered.pdf",
+    });
+  });
+
+  it("retains the source reference when recovery cannot read the original machine", async () => {
+    const draftId = DraftId.make("draft-recovery-failure");
+    const file: ComposerFileAttachment = {
+      ...makeFile("recovery-failure"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    useComposerDraftStore.getState().addFiles(draftId, [file]);
+    mocks.recoverAttachmentSource.mockRejectedValue(new Error("Original machine disconnected"));
+    startAttachmentUpload({ environmentId: secondEnvironment, image: file, draftTarget: draftId });
+    await awaitAttachmentUploads([file.id]);
+    expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.files[0]).toMatchObject({
+      file: null,
+      uploadEnvironmentId: firstEnvironment,
+      uploadedAttachmentId: "source-pdf",
+    });
+    expect(readAttachmentUpload(file.id)).toMatchObject({
+      status: "failed",
+      reason: "Original machine disconnected",
+    });
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+  });
+
+  it("retries foreign recovery when the original machine reconnects", async () => {
+    const draftId = DraftId.make("source-reconnect");
+    const file: ComposerFileAttachment = {
+      ...makeFile("source-reconnect"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    useComposerDraftStore.getState().addFiles(draftId, [file]);
+    setConnected(firstEnvironment, false);
+    mocks.recoverAttachmentSource
+      .mockRejectedValueOnce(new Error("Original machine disconnected"))
+      .mockResolvedValueOnce(makeFile("source-reconnect").file!);
+    startAttachmentUpload({ environmentId: secondEnvironment, image: file, draftTarget: draftId });
+    await awaitAttachmentUploads([file.id]);
+    expect(readAttachmentUpload(file.id)?.status).toBe("failed");
+    const transfer = new Promise<TestXmlHttpRequest>((resolve) => {
+      TestXmlHttpRequest.onSend = resolve;
+    });
+    setConnected(firstEnvironment, true);
+    const request = await transfer;
+    expect(mocks.recoverAttachmentSource).toHaveBeenCalledTimes(2);
+    const settled = awaitAttachmentUploads([file.id]);
+    request.complete();
+    await settled;
+    expect(readAttachmentUpload(file.id)).toMatchObject({
+      status: "ready",
+      environmentId: secondEnvironment,
+    });
+  });
+
+  it("retries destination upload from adopted bytes after recovery succeeded", async () => {
+    const draftId = DraftId.make("adopted-retry");
+    const recovered = makeFile("adopted-retry").file!;
+    const image: ComposerFileAttachment = {
+      ...makeFile("adopted-retry"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    mocks.recoverAttachmentSource.mockResolvedValue(recovered);
+    useComposerDraftStore.getState().addFiles(draftId, [image]);
+    let transfer = new Promise<TestXmlHttpRequest>((resolve) => {
+      TestXmlHttpRequest.onSend = resolve;
+    });
+    startAttachmentUpload({ environmentId: secondEnvironment, image, draftTarget: draftId });
+    const first = await transfer;
+    let settled = awaitAttachmentUploads([image.id]);
+    first.complete(503);
+    await settled;
+    expect(readAttachmentUpload(image.id)?.status).toBe("failed");
+    transfer = new Promise<TestXmlHttpRequest>((resolve) => {
+      TestXmlHttpRequest.onSend = resolve;
+    });
+    setConnected(secondEnvironment, false);
+    setConnected(secondEnvironment, true);
+    const retry = await transfer;
+    expect(retry.body).toBe(recovered);
+    expect(mocks.recoverAttachmentSource).toHaveBeenCalledTimes(1);
+    settled = awaitAttachmentUploads([image.id]);
+    retry.complete();
+    await settled;
+    expect(readAttachmentUpload(image.id)?.status).toBe("ready");
+  });
+
+  it("settles a recovery that loses its draft owner as a retryable failure", async () => {
+    const draftId = DraftId.make("recovery-owner-change");
+    const file: ComposerFileAttachment = {
+      ...makeFile("owner-change"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    let complete!: (file: File) => void;
+    const recovery = new Promise<File>((resolve) => {
+      complete = resolve;
+    });
+    mocks.recoverAttachmentSource.mockReturnValue(recovery);
+    useComposerDraftStore.getState().addFiles(draftId, [file]);
+    startAttachmentUpload({ environmentId: secondEnvironment, image: file, draftTarget: draftId });
+    const settled = awaitAttachmentUploads([file.id]);
+    useComposerDraftStore.getState().clearComposerContent(draftId);
+    complete(makeFile("owner-change").file!);
+    await settled;
+    expect(readAttachmentUpload(file.id)).toMatchObject({
+      status: "failed",
+      reason: expect.stringContaining("moved"),
+    });
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+  });
+
+  it("does not adopt late recovered bytes after cancellation", async () => {
+    const draftId = DraftId.make("draft-recovery-cancelled");
+    const file: ComposerFileAttachment = {
+      ...makeFile("recovery-cancelled"),
+      file: null,
+      byteState: "missing",
+      uploadedAttachmentId: "source-pdf",
+      uploadEnvironmentId: firstEnvironment,
+    };
+    let resolveRecovery!: (file: File) => void;
+    const recovery = new Promise<File>((resolve) => {
+      resolveRecovery = resolve;
+    });
+    mocks.recoverAttachmentSource.mockReturnValue(recovery);
+    useComposerDraftStore.getState().addFiles(draftId, [file]);
+    startAttachmentUpload({ environmentId: secondEnvironment, image: file, draftTarget: draftId });
+    const settled = awaitAttachmentUploads([file.id]);
+    releaseAttachmentUpload(file.id);
+    resolveRecovery(makeFile("recovery-cancelled").file!);
+    await recovery;
+    await settled;
+    expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.files[0]).toMatchObject({
+      file: null,
+      uploadedAttachmentId: "source-pdf",
+    });
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+    expect(mocks.runAtomCommand).not.toHaveBeenCalled();
+  });
+
+  it("deletes an old image upload only after its local draft bytes are durable", async () => {
+    const image = makeImage("durable-image-move");
+    const draftId = DraftId.make("durable-image-move");
+    useComposerDraftStore.getState().addImages(draftId, [image]);
+    await hydrateComposerDraftAttachments(draftId);
+    expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.images[0]?.byteState).toBe(
+      "cached",
+    );
+    startAttachmentUpload({ environmentId: firstEnvironment, image, draftTarget: draftId });
+    await Promise.resolve();
+    let settled = awaitAttachmentUploads([image.id]);
+    TestXmlHttpRequest.requests[0]!.complete();
+    await settled;
+    startAttachmentUpload({ environmentId: secondEnvironment, image, draftTarget: draftId });
+    await Promise.resolve();
+    settled = awaitAttachmentUploads([image.id]);
+    TestXmlHttpRequest.requests[1]!.complete();
+    await settled;
+    expect(mocks.runAtomCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      mocks.removeUpload,
+      {
+        environmentId: firstEnvironment,
+        input: { attachmentId: "pending-environment-1-durable-image-move.png" },
       },
       expect.anything(),
     );

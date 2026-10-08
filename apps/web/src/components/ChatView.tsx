@@ -1,3 +1,4 @@
+import { useDraftAttachmentPlacement, attachmentDestination } from "~/lib/draftAttachmentPlacement";
 import {
   pendingThreadCreationMessage,
   resolvePendingThreadCreation,
@@ -401,6 +402,7 @@ import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/
 import { useEnvironmentQuery } from "../state/query";
 import { usePaginatedBranches } from "../state/queries";
 import { useEnvironmentScope } from "~/state/session";
+import { draftAttachmentBytes } from "../state/draftAttachmentBytes";
 import {
   environmentServerConfigsAtom,
   primaryServerAvailableEditorsAtom,
@@ -569,7 +571,6 @@ import {
 } from "../state/threadOutbox";
 import { buildEditedThreadOutboxTurn, useThreadOutboxEditor } from "../state/threadOutboxEditing";
 import { ThreadOutboxControl } from "./chat/ThreadOutboxControl";
-import { fileAttachmentCapabilityBlockReason } from "./chat/composerAttachmentFiles";
 import { assetEnvironment } from "../state/assets";
 import { readEnvironmentScope, readPreparedConnection } from "../state/session";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -1896,6 +1897,10 @@ export default function ChatView(props: ChatViewProps) {
     const draft = store.getComposerDraft(composerDraftTarget);
     return (draft?.images.length ?? 0) > 0 || (draft?.files.length ?? 0) > 0;
   });
+  const {
+    blockReason: attachmentEnvironmentBlockReason,
+    autoBlockReason: automaticAttachmentBlockReason,
+  } = useDraftAttachmentPlacement(composerDraftTarget);
   // Anything beyond the prompt text: attachments, terminal or element contexts, annotations.
   const composerHasNonPromptContent = useComposerDraftStore((store) => {
     const draft = store.getComposerDraft(composerDraftTarget);
@@ -1953,7 +1958,14 @@ export default function ChatView(props: ChatViewProps) {
     () => readTimelinePosition(routeThreadKey)?.atEnd === false,
   );
   const [isWorkspaceFileDragActive, setIsWorkspaceFileDragActive] = useState(false);
-  const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    preview: ExpandedImagePreview;
+    attachmentIds: ReadonlyArray<string>;
+  } | null>(null);
+  const expandedImage = imagePreview?.preview ?? null;
+  useEffect(() => {
+    if (imagePreview) return draftAttachmentBytes.hold(imagePreview.attachmentIds);
+  }, [imagePreview]);
   useEffect(() => {
     const item = expandedImage?.images[expandedImage.index];
     if (item?.type !== "video" || item.src === null || !item.src.startsWith("blob:")) return;
@@ -3148,7 +3160,6 @@ export default function ChatView(props: ChatViewProps) {
     canAutoBalanceEnvironments &&
     loadBalancingSettings.loadBalancingEnabled &&
     draftThread?.environmentSelection !== "manual" &&
-    (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)) &&
     (!draftThread?.branch || draftThread.environmentSelection === "auto") &&
     !draftThread?.worktreePath,
   );
@@ -4463,6 +4474,7 @@ export default function ChatView(props: ChatViewProps) {
               const environment = environmentById.get(candidate.environmentId);
               return (
                 environment?.connection.phase === "connected" &&
+                attachmentEnvironmentBlockReason(candidate.environmentId) === null &&
                 (loadBalancingSettings.loadBalancingWeights[candidate.environmentId] ?? 50) > 0 &&
                 environment.serverConfig?.providers.some(
                   (provider) =>
@@ -4486,6 +4498,7 @@ export default function ChatView(props: ChatViewProps) {
       loadBalancingSettings.loadBalancingWeights,
       activeProviderInstanceId,
       selectedProvider,
+      attachmentEnvironmentBlockReason,
     ],
   );
   const loadBalancing = useLoadBalancedEnvironment(
@@ -4514,13 +4527,15 @@ export default function ChatView(props: ChatViewProps) {
   ]);
   const onAutoEnvironment = useCallback(() => {
     if (envLocked || !draftId) return;
-    if (composerHasAttachments) {
+    const blockReason = automaticAttachmentBlockReason(
+      logicalProjectEnvironments.map((candidate) => candidate.environmentId),
+    );
+    if (blockReason !== null) {
       toastManager.add({
         type: "warning",
         id: "load-balancing-attachments",
-        title: "Keep attachments on this machine",
-        description:
-          "Remove attachments before choosing automatic routing, then attach them on the selected machine.",
+        title: "No machine can accept these attachments yet",
+        description: blockReason,
       });
       return;
     }
@@ -4539,7 +4554,7 @@ export default function ChatView(props: ChatViewProps) {
     setDraftThreadContext,
     refreshLoadBalancing,
     logicalProjectEnvironments,
-    composerHasAttachments,
+    automaticAttachmentBlockReason,
   ]);
   const autoEnvironmentLabel = automaticEnvironment
     ? draftThread?.loadBalancedEnvironmentId
@@ -7009,11 +7024,11 @@ export default function ChatView(props: ChatViewProps) {
       return [];
     });
     resetLocalDispatch();
-    setExpandedImage(null);
+    setImagePreview(null);
   }
 
   const closeExpandedImage = useCallback(() => {
-    setExpandedImage(null);
+    setImagePreview(null);
   }, []);
 
   const activeWorktreePath = activeThread?.worktreePath ?? null;
@@ -8960,24 +8975,18 @@ export default function ChatView(props: ChatViewProps) {
       try {
         const uploads = await prepareQueuedEditAttachments({
           existingAttachments: editingQueuedRun.existingAttachments,
+          destination: attachmentDestination(
+            {
+              environmentId,
+              serverConfig:
+                appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId) ?? null,
+            },
+            true,
+          ),
           images: newEditImages,
           files: newEditFiles,
           readImage: readFileAsDataUrl,
           uploadFiles: async (files) => {
-            const validateFiles = () => {
-              const config =
-                appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId) ?? null;
-              const reason = fileAttachmentCapabilityBlockReason({
-                files,
-                attachmentUploadsCapabilityKnown: config !== null,
-                supportsAttachmentUploads:
-                  config?.environment.capabilities.attachmentUploads === true,
-                maxFileAttachmentBytes:
-                  config?.environment.capabilities.fileAttachments?.maxUploadBytes ?? null,
-              });
-              if (reason !== null) throw new Error(reason);
-            };
-            validateFiles();
             for (const file of files)
               startAttachmentUpload({
                 environmentId,
@@ -8985,7 +8994,6 @@ export default function ChatView(props: ChatViewProps) {
                 draftTarget: composerDraftTarget,
               });
             await awaitAttachmentUploads(files.map((file) => file.id));
-            validateFiles();
             const uploaded = getUploadedAttachments({ environmentId, images: files });
             if (uploaded === null) throw new Error("Retry or remove failed uploads before saving.");
             return uploaded;
@@ -10263,8 +10271,14 @@ export default function ChatView(props: ChatViewProps) {
   };
 
   const onExpandTimelineImage = useCallback((preview: ExpandedImagePreview) => {
-    setExpandedImage(preview);
+    setImagePreview({ preview, attachmentIds: [] });
   }, []);
+  const onExpandComposerImage = useCallback(
+    (preview: ExpandedImagePreview, attachmentIds: ReadonlyArray<string>) => {
+      setImagePreview({ preview, attachmentIds });
+    },
+    [],
+  );
   const onOpenTurnDiff = useCallback(
     (runId: RunId, filePath?: string) => {
       if (!isServerThread || !activeThreadRef) return;
@@ -11146,7 +11160,7 @@ export default function ChatView(props: ChatViewProps) {
                               focusComposer={focusComposer}
                               scheduleComposerFocus={scheduleComposerFocus}
                               setThreadError={setThreadError}
-                              onExpandImage={onExpandTimelineImage}
+                              onExpandImage={onExpandComposerImage}
                               onFileOpen={openFileAttachment}
                               editingQueuedAttachments={
                                 outboxEditor.attachments ?? composerEditingQueuedAttachments

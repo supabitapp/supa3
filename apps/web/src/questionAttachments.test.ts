@@ -47,14 +47,15 @@ it("keeps question files separate from the normal draft and other questions", ()
     },
   ]);
   changeQuestionAttachmentPreparation(first, 1);
-  expect(store.getComposerDraft(first)?.images).toHaveLength(1);
+  const storedImages = store.getComposerDraft(first)?.images;
+  expect(storedImages).toHaveLength(1);
   expect(store.getComposerDraft(second)?.files).toHaveLength(1);
   clearQuestionAttachmentDraft(first);
   expect(store.getComposerDraft(first)).toBeNull();
   expect(store.getComposerDraft(second)?.files).toHaveLength(1);
   expect(store.getComposerDraft({ environmentId, threadId })?.prompt).toBe("Unsent prompt");
   expect(useQuestionAttachmentPreparation.getState().counts[first]).toBeUndefined();
-  expect(release).toHaveBeenCalledWith([image]);
+  expect(release).toHaveBeenCalledWith(storedImages);
   expect(revoke).toHaveBeenCalledWith(image.previewUrl);
   revoke.mockRestore();
 });

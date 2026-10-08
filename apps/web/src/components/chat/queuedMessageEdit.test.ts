@@ -10,6 +10,12 @@ import {
 import { prepareQueuedEditAttachments, recoverQueuedMessageEdit } from "./queuedMessageEdit";
 
 const environmentId = EnvironmentId.make("remote-environment");
+const destination = {
+  environmentId,
+  canUpload: true,
+  uploads: true,
+  maxFileBytes: 50 * 1024 * 1024,
+};
 const threadTarget = scopeThreadRef(environmentId, ThreadId.make("thread:edit"));
 const editTarget = DraftId.make("queued-edit:test");
 const file: ComposerFileAttachment = {
@@ -38,6 +44,19 @@ const uploadedFile = {
 };
 
 describe("queued message file edits", () => {
+  it("requires reattachment rather than waiting indefinitely for a missing image", async () => {
+    await expect(
+      prepareQueuedEditAttachments({
+        destination,
+        existingAttachments: [],
+        images: [{ ...image, file: null, byteState: "missing" }],
+        files: [],
+        uploadFiles: async () => [],
+        readImage: async () => "unused",
+      }),
+    ).rejects.toThrow("Attach the missing file again");
+  });
+
   beforeEach(() => {
     useComposerDraftStore.setState({ draftsByThreadKey: {}, draftThreadsByThreadKey: {} });
   });
@@ -47,6 +66,7 @@ describe("queued message file edits", () => {
     { images: [image], label: "mixed" },
   ])("preserves a generic file in a $label save", async ({ images }) => {
     const attachments = await prepareQueuedEditAttachments({
+      destination,
       existingAttachments: [],
       images,
       files: [file],
@@ -65,6 +85,7 @@ describe("queued message file edits", () => {
   it("retains saved attachments alongside newly uploaded files", async () => {
     const saved = { ...uploadedFile, id: "saved:earlier" };
     const attachments = await prepareQueuedEditAttachments({
+      destination,
       existingAttachments: [saved],
       images: [],
       files: [file],
@@ -77,6 +98,7 @@ describe("queued message file edits", () => {
   it("fails a save instead of dropping a file whose upload is missing", async () => {
     await expect(
       prepareQueuedEditAttachments({
+        destination,
         existingAttachments: [],
         images: [image],
         files: [file],
@@ -94,7 +116,7 @@ describe("queued message file edits", () => {
       recoverQueuedMessageEdit({ editTarget, threadTarget, originalText: "Original message" }),
     ).toBe("kept");
     expect(store.getComposerDraft(threadTarget)?.prompt).toBe("Original message");
-    expect(store.getComposerDraft(threadTarget)?.files).toEqual([file]);
+    expect(store.getComposerDraft(threadTarget)?.files).toEqual([{ ...file, byteState: "saving" }]);
     expect(store.getComposerDraft(editTarget)).toBeNull();
   });
 
@@ -108,7 +130,9 @@ describe("queued message file edits", () => {
     };
     store.addFiles(editTarget, [uploaded]);
     expect(recoverQueuedMessageEdit({ editTarget, threadTarget, originalText: "" })).toBe("kept");
-    expect(store.getComposerDraft(threadTarget)?.files).toEqual([uploaded]);
+    expect(store.getComposerDraft(threadTarget)?.files).toEqual([
+      { ...uploaded, byteState: "hydrating" },
+    ]);
   });
 
   it("does not overwrite a separate draft when the queued run leaves", () => {

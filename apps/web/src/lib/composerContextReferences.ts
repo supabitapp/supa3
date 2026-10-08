@@ -77,6 +77,39 @@ export function formatInlineContextReference(reference: ComposerContextReference
   });
 }
 
+export function attachmentContextIdReplacements(
+  kind: "image" | "file",
+  ids: ReadonlyMap<string, string>,
+) {
+  return new Map(
+    [...ids]
+      .filter(([oldId, newId]) => oldId !== newId)
+      .flatMap(([oldId, newId]) =>
+        (kind === "image" ? (["image", "preview-annotation"] as const) : (["file"] as const)).map(
+          (kind) =>
+            [
+              toKindScopedComposerContextId(kind, oldId),
+              toKindScopedComposerContextId(kind, newId),
+            ] as const,
+        ),
+      ),
+  );
+}
+
+export function rewriteAttachmentContextReferences(
+  prompt: string,
+  kind: "image" | "file",
+  ids: ReadonlyMap<string, string>,
+) {
+  if (ids.size === 0) return prompt;
+  const replacements = attachmentContextIdReplacements(kind, ids);
+  if (replacements.size === 0) return prompt;
+  return replaceComposerContextReferences(prompt, (reference) => {
+    const contextId = replacements.get(reference.contextId);
+    return contextId ? formatInlineContextReference({ ...reference, contextId }) : reference.source;
+  });
+}
+
 /** Payload ids referenced by the prompt, once each in first-occurrence order. */
 export function collectInlineContextIds(prompt: string): string[] {
   return Array.from(
