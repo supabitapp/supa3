@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo } from "react";
 
 import { EnvironmentProject, EnvironmentThreadShell } from "@supacode/client-runtime/state/shell";
 import type { AtomCommandResult } from "@supacode/client-runtime/state/runtime";
@@ -143,35 +143,23 @@ export function useSelectedThreadGitActions() {
     [refreshStatus, selectedEnvironmentId, selectedThreadCwd, selectedProjectId],
   );
 
-  // Text and timestamp updates keep this identity; git and run transitions refresh status.
-  const refreshContext = useMemo(
-    () => ({
-      threadId: selectedThreadId,
-      projectId: selectedProjectId,
-      branch: selectedThread?.branch,
-      worktreePath: selectedThread?.worktreePath,
-      status: selectedThread?.runtime?.status,
-      activeRunId: selectedThread?.runtime?.activeRunId,
-      latestRunId: selectedThread?.latestRun?.runId,
-      latestRunStatus: selectedThread?.latestRun?.status,
-    }),
-    [
-      selectedThreadId,
-      selectedProjectId,
-      selectedThread?.branch,
-      selectedThread?.worktreePath,
-      selectedThread?.runtime?.status,
-      selectedThread?.runtime?.activeRunId,
-      selectedThread?.latestRun?.runId,
-      selectedThread?.latestRun?.status,
-    ],
-  );
+  // Shell updates replace the selected thread object many times per second while a
+  // turn streams, so key the refresh on primitives. The server publishes status after
+  // each turn finishes; this only seeds status when the selection or cwd changes.
+  const refreshOnSelection = useEffectEvent(() => {
+    void refreshSelectedThreadGitStatus({ quiet: true });
+  });
   useEffect(() => {
-    if (!refreshContext.threadId || !refreshContext.projectId) {
+    if (
+      selectedEnvironmentId === null ||
+      selectedThreadId === null ||
+      selectedProjectId === null ||
+      selectedThreadCwd === null
+    ) {
       return;
     }
-    void refreshSelectedThreadGitStatus({ quiet: true });
-  }, [refreshSelectedThreadGitStatus, refreshContext]);
+    refreshOnSelection();
+  }, [selectedEnvironmentId, selectedThreadId, selectedProjectId, selectedThreadCwd]);
 
   const runSelectedThreadGitMutation = useCallback(
     async <T, E>(
