@@ -26,8 +26,7 @@ function SelectedEnvironmentSkills({
       title="Orchestration skills"
       description={
         <>
-          Install supacode-commitee and supacode-advisor skills for the selected environments’
-          provider accounts. Updates with Supacode.
+          Install supacode-commitee and supacode-advisor skills.
           {skills.notices.map((notice) => (
             <span className="block" key={notice}>
               {notice}

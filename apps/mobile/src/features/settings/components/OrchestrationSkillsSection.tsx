@@ -15,8 +15,7 @@ export function OrchestrationSkillsSection({
   return (
     <SettingsSection title="Orchestration skills">
       <Text className="p-4 text-sm text-foreground-muted">
-        Install supacode-commitee and supacode-advisor skills for the selected environments’
-        provider accounts. Updates with Supacode.
+        Install supacode-commitee and supacode-advisor skills.
       </Text>
       <SettingsRow
         icon="arrow.down.circle"
