@@ -2,7 +2,6 @@ import type { NativeStackNavigationOptions } from "@react-navigation/native-stac
 import { useEffect, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 
-import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import {
@@ -123,14 +122,8 @@ export function WorkspaceConnectionTitle(props: {
             hitSlop={8}
             onPress={props.onPress}
             className="flex-row items-center"
-            style={{ flexShrink: 1, gap: 4 * scale, marginLeft: props.statusOffset ?? 0 }}
+            style={{ flexShrink: 1, marginLeft: props.statusOffset ?? 0 }}
           >
-            <SymbolView
-              name={status.icon}
-              size={Math.round(12 * scale)}
-              tintColorClassName={"accent-icon-muted"}
-              type="monochrome"
-            />
             <Text
               className="text-foreground-muted"
               numberOfLines={1}
