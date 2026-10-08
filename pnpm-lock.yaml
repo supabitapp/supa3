@@ -641,6 +641,9 @@ importers:
       babel-preset-expo:
         specifier: ~58.0.8
         version: 58.0.8(@babel/core@7.29.7(supports-color@8.1.1))(@babel/runtime@7.29.7)(expo-widgets@58.0.11)(expo@58.0.2)(react-refresh@0.14.2)(supports-color@8.1.1)
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.1.0(@noble/hashes@1.8.0)
       react-test-renderer:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
@@ -17298,7 +17301,7 @@ snapshots:
       parse5: 8.0.1
       saxes: 6.0.0
       tough-cookie: 6.0.2
-      undici: 8.10.2
+      undici: 8.11.2
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0

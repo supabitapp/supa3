@@ -133,6 +133,7 @@
     "@types/react-test-renderer": "19.3.0",
     "babel-preset-expo": "~58.0.8",
     "react-test-renderer": "19.3.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "catalog:"
   },
