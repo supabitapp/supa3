@@ -1061,6 +1061,7 @@ export const OrchestrationV2RuntimeRequest = Schema.Struct({
   ]),
   createdAt: Schema.DateTimeUtc,
   resolvedAt: Schema.NullOr(Schema.DateTimeUtc),
+  autoDismissAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   decision: Schema.optional(ProviderApprovalDecision),
   answers: Schema.optional(ProviderUserInputAnswers),
 });
@@ -2110,6 +2111,7 @@ export const OrchestrationV2RuntimeRequestJson = OrchestrationV2RuntimeRequest.m
     ...fields,
     createdAt: Schema.DateTimeUtcFromString,
     resolvedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+    autoDismissAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   }),
 );
 export type OrchestrationV2RuntimeRequestJson = typeof OrchestrationV2RuntimeRequestJson.Type;
@@ -2964,6 +2966,13 @@ export const OrchestrationV2Command = Schema.Union([
     requestId: RuntimeRequestId,
   }),
   Schema.Struct({
+    type: Schema.Literal("thread.user-input.auto-dismiss.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    requestId: RuntimeRequestId,
+    enabled: Schema.Boolean,
+  }),
+  Schema.Struct({
     type: Schema.Literal("checkpoint.rollback"),
     restoreFiles: Schema.optional(Schema.Boolean),
     commandId: CommandId,
@@ -3051,6 +3060,13 @@ export type OrchestrationV2Command = typeof OrchestrationV2Command.Type;
  * send them.
  */
 const OrchestrationV2InternalCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("thread.user-input.auto-dismiss"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    requestId: RuntimeRequestId,
+    deadline: Schema.DateTimeUtc,
+  }),
   /**
    * Records what a pull request watch saw, and wakes the agent in the same transaction when
    * `wake` is set. Rejected once the watch started at `startedAt` has ended, and a wake is

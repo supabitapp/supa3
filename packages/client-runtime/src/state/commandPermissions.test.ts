@@ -13,6 +13,7 @@ import {
   EnvironmentId,
   ScheduledTaskId,
   WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
   type AuthSessionState,
 } from "@supacode/contracts";
 import * as Cause from "effect/Cause";
@@ -58,6 +59,25 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("requires the destination grant to control question timers", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const timer = { type: "thread.user-input.auto-dismiss.set" };
+        const timerPermissions = createCommandPermissions(
+          runtime,
+          ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(false)));
+        expect(registry.get(timerPermissions.permissionAtom(env, timer))).toBe(false);
+        const denied = yield* timerPermissions.authorize(registry, env, timer).pipe(Effect.flip);
+        expect(denied._tag).toBe("EnvironmentAuthorizationError");
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(timerPermissions.permissionAtom(env, timer))).toBe(true);
+        yield* timerPermissions.authorize(registry, env, timer);
+      }),
+    ),
+  );
   it.effect("uses the target grant for both availability and execution", () =>
     Effect.scoped(
       Effect.gen(function* () {

@@ -54,6 +54,8 @@ import {
   TurnItemId,
   NodeId,
   RuntimeRequestId,
+  USER_INPUT_AUTO_DISMISS_TIMEOUT_MS,
+  userInputAutoDismissAt,
 } from "@supacode/contracts";
 import {
   createOrchestrationV2TurnItemVisibility,
@@ -279,7 +281,7 @@ export interface ProjectionRuntimeResponseContext {
 interface ProjectionQuestionAutoDismissCandidate {
   readonly threadId: ThreadId;
   readonly requestId: RuntimeRequestId;
-  readonly responseMode: "live" | "message";
+  readonly deadline: DateTime.Utc;
 }
 
 export interface ProjectionRecordFilter {
@@ -4217,11 +4219,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       function* (createdBefore: DateTime.Utc) {
         const rows = yield* sql<{
           thread_id: string;
-          runtime_request_id: string;
-          response_mode: "live" | "message";
+          payload_json: string;
         }>`
-          SELECT request.thread_id, request.runtime_request_id,
-            json_extract(request.payload_json, '$.responseCapability.type') AS response_mode
+          SELECT request.thread_id, request.payload_json
           FROM orchestration_v2_projection_runtime_requests request
           JOIN orchestration_v2_projection_threads thread ON thread.thread_id = request.thread_id
           WHERE request.kind = 'user_input' AND request.status = 'pending'
@@ -4229,14 +4229,25 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             AND thread.deleted_at IS NULL AND thread.archived_at IS NULL
             AND json_extract(request.payload_json, '$.nativeRequestRef.driver') IN ('codex', 'claudeAgent')
             AND json_extract(request.payload_json, '$.responseCapability.type') IN ('live', 'message')
+            AND (
+              json_type(request.payload_json, '$.autoDismissAt') IS NULL
+              OR json_extract(request.payload_json, '$.autoDismissAt') <= ${DateTime.formatIso(DateTime.add(createdBefore, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS }))}
+            )
           ORDER BY request.created_at, request.runtime_request_id
           LIMIT 100
         `;
-        return rows.map((row) => ({
-          threadId: ThreadId.make(row.thread_id),
-          requestId: RuntimeRequestId.make(row.runtime_request_id),
-          responseMode: row.response_mode,
-        }));
+        const candidates: ProjectionQuestionAutoDismissCandidate[] = [];
+        for (const row of rows) {
+          const request = yield* decodeRuntimeRequestPayload(row.payload_json);
+          const deadline = userInputAutoDismissAt(request);
+          if (deadline === null) continue;
+          candidates.push({
+            threadId: ThreadId.make(row.thread_id),
+            requestId: request.id,
+            deadline,
+          });
+        }
+        return candidates;
       },
       Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
     );
@@ -5998,22 +6009,22 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                 if (projection.thread.deletedAt !== null || projection.thread.archivedAt !== null)
                   return [];
                 return projection.runtimeRequests.flatMap((request) => {
-                  const driver = request.nativeRequestRef?.driver;
-                  const responseMode = request.responseCapability.type;
+                  const deadline = userInputAutoDismissAt(request);
                   if (
                     request.kind !== "user_input" ||
                     request.status !== "pending" ||
                     DateTime.toEpochMillis(request.createdAt) >
                       DateTime.toEpochMillis(createdBefore) ||
-                    (driver !== "codex" && driver !== "claudeAgent") ||
-                    (responseMode !== "live" && responseMode !== "message")
+                    deadline === null ||
+                    DateTime.toEpochMillis(deadline) >
+                      DateTime.toEpochMillis(createdBefore) + USER_INPUT_AUTO_DISMISS_TIMEOUT_MS
                   )
                     return [];
                   return [
                     {
                       threadId: projection.thread.id,
                       requestId: request.id,
-                      responseMode,
+                      deadline,
                       createdAt: request.createdAt,
                     },
                   ];
@@ -6025,10 +6036,10 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                   a.requestId.localeCompare(b.requestId),
               )
               .slice(0, 100)
-              .map(({ threadId, requestId, responseMode }) => ({
+              .map(({ threadId, requestId, deadline }) => ({
                 threadId,
                 requestId,
-                responseMode,
+                deadline,
               })),
           ),
         ),

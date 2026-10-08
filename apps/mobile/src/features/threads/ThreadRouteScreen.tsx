@@ -1153,6 +1153,8 @@ function ThreadRouteContent(
           onChangeUserInputCustomAnswer={requests.onChangeUserInputCustomAnswer}
           onSubmitUserInput={requests.onSubmitUserInput}
           onDismissUserInput={requests.onDismissUserInput}
+          onSetUserInputAutoDismiss={requests.onSetUserInputAutoDismiss}
+          timerControlDisabled={!requests.canSetUserInputAutoDismiss}
         />
       </View>
     </>

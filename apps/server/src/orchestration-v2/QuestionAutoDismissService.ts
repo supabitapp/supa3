@@ -1,5 +1,10 @@
-import { CommandId, ServerSettingsError } from "@supacode/contracts";
+import {
+  CommandId,
+  ServerSettingsError,
+  USER_INPUT_AUTO_DISMISS_TIMEOUT_MS,
+} from "@supacode/contracts";
 import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,6 +26,7 @@ export class QuestionAutoDismissService extends Context.Service<
 
 const make = Effect.gen(function* () {
   const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const crypto = yield* Crypto.Crypto;
   const settings = yield* ServerSettings.ServerSettingsService;
   const threads = yield* ThreadManagement.ThreadManagementService;
 
@@ -28,19 +34,21 @@ const make = Effect.gen(function* () {
     if (!(yield* settings.getSettings).autoDismissQuestions) return;
     const now = yield* DateTime.now;
     const requests = yield* projections.getQuestionAutoDismissCandidates(
-      DateTime.subtract(now, { minutes: 2 }),
+      DateTime.subtract(now, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS }),
     );
 
     for (const request of requests) {
-      const { threadId, requestId, responseMode } = request;
+      const { threadId, requestId, deadline } = request;
+      const attemptId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
       yield* threads
         .dispatch({
-          type: "runtime-request.respond",
-          commandId: CommandId.make(`question-auto-dismiss:${requestId}`),
+          type: "thread.user-input.auto-dismiss",
+          commandId: CommandId.make(
+            `question-auto-dismiss:${requestId}:${DateTime.toEpochMillis(deadline)}:${attemptId}`,
+          ),
           threadId,
           requestId,
-          decision: "cancel",
-          ...(responseMode === "live" ? { answers: {} } : {}),
+          deadline,
         })
         .pipe(
           Effect.catch((cause) =>

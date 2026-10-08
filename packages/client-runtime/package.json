@@ -3,6 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./user-input-auto-dismiss-pause": {
+      "types": "./src/userInputAutoDismissPause.ts",
+      "default": "./src/userInputAutoDismissPause.ts"
+    },
+    "./user-input-countdown": {
+      "types": "./src/userInputCountdown.ts",
+      "default": "./src/userInputCountdown.ts"
+    },
     "./orchestrationSkills": {
       "types": "./src/orchestrationSkills.ts",
       "default": "./src/orchestrationSkills.ts"

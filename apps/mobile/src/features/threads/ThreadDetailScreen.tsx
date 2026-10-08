@@ -236,6 +236,11 @@ export interface ThreadDetailScreenProps {
   ) => void;
   readonly onSubmitUserInput: () => Promise<unknown>;
   readonly onDismissUserInput: () => Promise<unknown>;
+  readonly onSetUserInputAutoDismiss?: (
+    requestId: RuntimeRequestId,
+    enabled: boolean,
+  ) => Promise<unknown>;
+  readonly timerControlDisabled?: boolean;
   readonly showContent?: boolean;
 }
 
@@ -1355,6 +1360,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
                         onSubmit={props.onSubmitUserInput}
                         onDismiss={props.onDismissUserInput}
+                        autoDismissQuestions={
+                          props.serverConfig?.settings.autoDismissQuestions === true
+                        }
+                        timerControlDisabled={props.timerControlDisabled}
+                        onSetAutoDismiss={props.onSetUserInputAutoDismiss}
                       />
                     ) : null}
                   </Animated.View>

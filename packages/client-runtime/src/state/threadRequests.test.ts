@@ -2,6 +2,7 @@ import {
   NodeId,
   ProviderSessionId,
   RuntimeRequestId,
+  ProviderDriverKind,
   TurnItemId,
   type OrchestrationV2ThreadProjection,
 } from "@supacode/contracts";
@@ -60,6 +61,27 @@ const projection: OrchestrationV2ThreadProjection = {
 };
 
 describe("pending v2 questions", () => {
+  it("derives the shared deadline and preserves a kept-open question", () => {
+    const request = projection.runtimeRequests[0]!;
+    const supported = {
+      ...request,
+      nativeRequestRef: {
+        driver: ProviderDriverKind.make("claudeAgent"),
+        nativeId: "question",
+        strength: "strong" as const,
+      },
+    };
+    const active = { ...projection, runtimeRequests: [supported] };
+    expect(derivePendingThreadRequests(active).userInputs[0]?.autoDismissAt).toBe(
+      "2026-06-20T00:02:00.000Z",
+    );
+    expect(
+      derivePendingThreadRequests({
+        ...active,
+        runtimeRequests: [{ ...supported, autoDismissAt: null }],
+      }).userInputs[0]?.autoDismissAt,
+    ).toBeNull();
+  });
   it("keeps message responses available after the originating runtime exits", () => {
     expect(projection.providerSessions).toEqual([]);
     expect(derivePendingThreadRequests(projection).userInputs).toEqual([
