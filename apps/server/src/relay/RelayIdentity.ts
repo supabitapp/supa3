@@ -12,7 +12,7 @@ export class RelayIdentity extends Context.Service<
   }
 >()("supacode/relay/RelayIdentity") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const secret = yield* secrets.getOrCreateRandom("relay-identity", 32);
   return RelayIdentity.of({ secret, address: relayHttpBaseUrl(relayPublicKey(secret)) });

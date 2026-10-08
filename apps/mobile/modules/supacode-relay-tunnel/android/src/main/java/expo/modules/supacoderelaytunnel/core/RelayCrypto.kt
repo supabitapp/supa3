@@ -49,8 +49,9 @@ internal class CurveCrypto(val forceFallback: Boolean = false) {
   fun shared(secret: ByteArray, peer: ByteArray): ByteArray {
     require(secret.size == 32 && peer.size == 32)
     val result =
-      if (xFactory == null) X25519.computeSharedSecret(secret, peer)
-      else {
+      if (xFactory == null) {
+        X25519.computeSharedSecret(secret, peer)
+      } else {
         val privateKey =
           xFactory.generatePrivate(
             PKCS8EncodedKeySpec(unhex("302e020100300506032b656e04220420") + secret)
@@ -71,8 +72,9 @@ internal class CurveCrypto(val forceFallback: Boolean = false) {
 
   fun verify(identity: ByteArray, message: ByteArray, signature: ByteArray) {
     require(identity.size == 32 && signature.size == 64)
-    if (edFactory == null) Ed25519Verify(identity).verify(signature, message)
-    else {
+    if (edFactory == null) {
+      Ed25519Verify(identity).verify(signature, message)
+    } else {
       val key =
         edFactory.generatePublic(X509EncodedKeySpec(unhex("302a300506032b6570032100") + identity))
       require(
@@ -103,7 +105,7 @@ internal fun parseRelayIdentity(address: String): ByteArray {
 internal class ClientHandshake(
   private val identity: ByteArray,
   private val secret: ByteArray = ByteArray(32).also(SecureRandom()::nextBytes),
-  private val curves: CurveCrypto = CurveCrypto(),
+  private val curves: CurveCrypto = CurveCrypto()
 ) {
   private val publicKey = curves.publicKey(secret)
   private var finished = false
@@ -140,24 +142,52 @@ internal class ClientHandshake(
   }
 }
 
-internal class RelayCipher(private val sendKey: ByteArray, private val receiveKey: ByteArray, forceFallback: Boolean = false) {
+internal class RelayCipher(
+  private val sendKey: ByteArray,
+  private val receiveKey: ByteArray,
+  forceFallback: Boolean = false
+) {
   private var sent = 0L
   private var received = 0L
   private var sendExhausted = false
   private var receiveExhausted = false
   private var destroyed = false
-  private val encryptor = if (forceFallback) null else runCatching { Cipher.getInstance("ChaCha20-Poly1305") }.getOrNull()
-  private val decryptor = if (forceFallback) null else runCatching { Cipher.getInstance("ChaCha20-Poly1305") }.getOrNull()
+  private val encryptor = if (forceFallback) {
+    null
+  } else {
+    runCatching {
+      Cipher.getInstance("ChaCha20-Poly1305")
+    }.getOrNull()
+  }
+  private val decryptor = if (forceFallback) {
+    null
+  } else {
+    runCatching {
+      Cipher.getInstance("ChaCha20-Poly1305")
+    }.getOrNull()
+  }
   private val sendFallback = if (encryptor == null) InsecureNonceChaCha20Poly1305(sendKey) else null
-  private val receiveFallback = if (decryptor == null) InsecureNonceChaCha20Poly1305(receiveKey) else null
+  private val receiveFallback = if (decryptor ==
+    null
+  ) {
+    InsecureNonceChaCha20Poly1305(receiveKey)
+  } else {
+    null
+  }
 
   fun seal(plain: ByteArray): ByteArray {
     check(!destroyed && !sendExhausted)
     val nonce = ByteBuffer.allocate(12).putInt(0).putLong(sent).array()
     val encrypted = if (encryptor != null) {
-      encryptor.init(Cipher.ENCRYPT_MODE, SecretKeySpec(sendKey, "ChaCha20"), IvParameterSpec(nonce))
+      encryptor.init(
+        Cipher.ENCRYPT_MODE,
+        SecretKeySpec(sendKey, "ChaCha20"),
+        IvParameterSpec(nonce)
+      )
       encryptor.doFinal(plain)
-    } else sendFallback!!.encrypt(nonce, plain, ByteArray(0))
+    } else {
+      sendFallback!!.encrypt(nonce, plain, ByteArray(0))
+    }
     val result = nonce.copyOfRange(4, 12) + encrypted
     if (sent == -1L) sendExhausted = true else sent++
     return result
@@ -170,9 +200,15 @@ internal class RelayCipher(private val sendKey: ByteArray, private val receiveKe
     require(ByteBuffer.wrap(frame).long == received) { "Relay record out of order" }
     val nonce = ByteArray(12).also { frame.copyInto(it, 4, 0, 8) }
     val result = if (decryptor != null) {
-      decryptor.init(Cipher.DECRYPT_MODE, SecretKeySpec(receiveKey, "ChaCha20"), IvParameterSpec(nonce))
+      decryptor.init(
+        Cipher.DECRYPT_MODE,
+        SecretKeySpec(receiveKey, "ChaCha20"),
+        IvParameterSpec(nonce)
+      )
       decryptor.doFinal(frame, 8, frame.size - 8)
-    } else receiveFallback!!.decrypt(nonce, frame.copyOfRange(8, frame.size), ByteArray(0))
+    } else {
+      receiveFallback!!.decrypt(nonce, frame.copyOfRange(8, frame.size), ByteArray(0))
+    }
     if (received == -1L) receiveExhausted = true else received++
     return result
   }
@@ -184,7 +220,11 @@ internal class RelayCipher(private val sendKey: ByteArray, private val receiveKe
   }
 
   companion object {
-    fun derive(shared: ByteArray, transcript: ByteArray, forceFallback: Boolean = false): RelayCipher {
+    fun derive(
+      shared: ByteArray,
+      transcript: ByteArray,
+      forceFallback: Boolean = false
+    ): RelayCipher {
       fun hmac(key: ByteArray, bytes: ByteArray) =
         Mac.getInstance("HmacSHA256").run {
           init(SecretKeySpec(key, "HmacSHA256"))

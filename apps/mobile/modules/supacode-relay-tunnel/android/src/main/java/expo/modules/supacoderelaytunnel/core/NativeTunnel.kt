@@ -25,7 +25,7 @@ class NativeTunnel(
   hostAddress: String,
   port: Int = 0,
   private val onStatus: (Map<String, Any>) -> Unit = {},
-  private val log: (String) -> Unit = {},
+  private val log: (String) -> Unit = {}
 ) : AutoCloseable {
   private val identity = parseRelayIdentity(hostAddress)
   private val hostAddress =
@@ -114,7 +114,8 @@ class NativeTunnel(
     if (value == lastStatus) return
     lastStatus = value
     log(
-      "[relay-android] $state origin=$origin sessions=$sessions streams=${mux?.streamCount ?: 0} up=$sentBytes down=$receivedBytes"
+      "[relay-android] $state origin=$origin sessions=$sessions " +
+        "streams=${mux?.streamCount ?: 0} up=$sentBytes down=$receivedBytes"
     )
     onStatus(value)
   }
@@ -124,8 +125,9 @@ class NativeTunnel(
       return it
     }
     val future = CompletableFuture<TunnelMux>()
-    if (stopped.get() || suspended)
+    if (stopped.get() || suspended) {
       return future.also { it.completeExceptionally(IllegalStateException("Tunnel unavailable")) }
+    }
     attempt = future
     state = "connecting"
     emit()
@@ -155,8 +157,9 @@ class NativeTunnel(
         object : WebSocketListener() {
           override fun onOpen(socket: WebSocket, response: Response) {
             post {
-              if (attempt === future && !socket.send(handshake.hello))
+              if (attempt === future && !socket.send(handshake.hello)) {
                 fail(future, IllegalStateException("Relay send failed"))
+              }
             }
           }
 
@@ -213,10 +216,11 @@ class NativeTunnel(
   }
 
   private fun post(block: () -> Unit) {
-    if (!actor.isShutdown)
+    if (!actor.isShutdown) {
       try {
         actor.execute(block)
       } catch (_: java.util.concurrent.RejectedExecutionException) {}
+    }
   }
 
   private fun fail(future: CompletableFuture<TunnelMux>, error: Throwable) {

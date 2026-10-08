@@ -12,7 +12,9 @@ import expo.modules.supacoderelaytunnel.core.sha256
 
 class RelayTunnelOptions : Record {
   @Field var relayUrl: String = ""
+
   @Field var hostAddress: String = ""
+
   @Field var port: Int? = null
 }
 
@@ -39,8 +41,10 @@ class SupacodeRelayTunnelModule : Module() {
         } else {
           val port =
             options.port
-              ?: (40000 +
-                (((digest[0].toInt() and 255) shl 8 or (digest[1].toInt() and 255)) % 20000))
+              ?: (
+                40000 +
+                  (((digest[0].toInt() and 255) shl 8 or (digest[1].toInt() and 255)) % 20000)
+                )
           fun create(port: Int) =
             NativeTunnel(
               options.relayUrl,
@@ -61,8 +65,13 @@ class SupacodeRelayTunnelModule : Module() {
       }
     }
     AsyncFunction("stop") { hostAddress: String? ->
-      if (hostAddress == null) stopAll()
-      else synchronized(tunnels) { tunnels.remove(sha256(parseRelayIdentity(hostAddress)).hex())?.close() }
+      if (hostAddress == null) {
+        stopAll()
+      } else {
+        synchronized(tunnels) {
+          tunnels.remove(sha256(parseRelayIdentity(hostAddress)).hex())?.close()
+        }
+      }
     }
     OnActivityEntersBackground { synchronized(tunnels) { tunnels.values.forEach { it.suspend() } } }
     OnActivityEntersForeground { synchronized(tunnels) { tunnels.values.forEach { it.resume() } } }

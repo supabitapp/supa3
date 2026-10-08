@@ -16,7 +16,7 @@ export class RelayAccess extends Context.Service<
   }
 >()("supacode/relay/RelayAccess") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const identity = yield* RelayIdentity;
   const ingress = yield* RelayIngress;
   const settings = yield* ServerSettings.ServerSettingsService;

@@ -23,7 +23,7 @@ export class DesktopRelayGateway extends Context.Service<
   }
 >()("@supacode/desktop/relay/DesktopRelayGateway") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const endpoints = new Map<
     string,
     Promise<{ readonly origin: string; readonly close: () => Promise<void> }>

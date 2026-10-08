@@ -9,7 +9,7 @@ import { TunnelSocket, openLoopbackRelay } from "@supacode/shared/relay/tunnelNo
 import { startRelayTransport } from "../transport.ts";
 import { isRelayPath } from "../RelayIngress.ts";
 
-export async function startRelay(port = 0) {
+async function startRelay(port = 0) {
   const binary = process.env.RELAY_TEST_BINARY;
   if (!binary) throw new Error("Set RELAY_TEST_BINARY to a compiled supacode-relay binary.");
   const child = NodeChildProcess.spawn(binary, [], {
@@ -49,7 +49,7 @@ export async function startRelay(port = 0) {
   };
 }
 
-export async function startFixtureHost(relayUrl: string, secret = NodeCrypto.randomBytes(32)) {
+async function startFixtureHost(relayUrl: string, secret = NodeCrypto.randomBytes(32)) {
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfWQAAAAASUVORK5CYII=",
     "base64",

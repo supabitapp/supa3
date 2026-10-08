@@ -4,7 +4,10 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import kotlin.test.*
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFails
+import kotlin.test.assertTrue
 import org.json.JSONObject
 import org.junit.Test
 

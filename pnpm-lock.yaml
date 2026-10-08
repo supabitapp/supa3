@@ -451,7 +451,7 @@ importers:
         version: file:apps/mobile/modules/supacode-markdown-text(b0b41fc25e282624f13965cfb2ef4ea6)
       '@supacode/mobile-relay-tunnel':
         specifier: file:./modules/supacode-relay-tunnel
-        version: file:apps/mobile/modules/supacode-relay-tunnel
+        version: file:apps/mobile/modules/supacode-relay-tunnel(expo@58.0.2)
       '@supacode/mobile-review-diff-native':
         specifier: file:./modules/supacode-review-diff
         version: file:apps/mobile/modules/supacode-review-diff
@@ -4404,6 +4404,8 @@ packages:
 
   '@supacode/mobile-relay-tunnel@file:apps/mobile/modules/supacode-relay-tunnel':
     resolution: {directory: apps/mobile/modules/supacode-relay-tunnel, type: directory}
+    peerDependencies:
+      expo: '*'
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff':
     resolution: {directory: apps/mobile/modules/supacode-review-diff, type: directory}
@@ -13603,7 +13605,9 @@ snapshots:
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       react-native-nitro-markdown: 0.5.8(patch_hash=642b47830730acff3761fe29cf54271d18b493c0070c750097850b7ea032e00c)(231cd8dedc589ddd8e46fe9920b8afcd)
 
-  '@supacode/mobile-relay-tunnel@file:apps/mobile/modules/supacode-relay-tunnel': {}
+  '@supacode/mobile-relay-tunnel@file:apps/mobile/modules/supacode-relay-tunnel(expo@58.0.2)':
+    dependencies:
+      expo: 58.0.2(3d71f6499d3c841467c44ba1a6c879c9)
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff': {}
 

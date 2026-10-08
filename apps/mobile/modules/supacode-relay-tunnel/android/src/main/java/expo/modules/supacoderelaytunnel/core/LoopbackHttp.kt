@@ -12,7 +12,7 @@ internal object LoopbackHttp {
     authority: String,
     upgrade: CompletableFuture<Boolean>,
     send: (ByteArray) -> Unit,
-    request: (String) -> Unit = {},
+    request: (String) -> Unit = {}
   ) {
     var requests = 0
     while (true) {
@@ -47,7 +47,7 @@ internal object LoopbackHttp {
           it.toLong()
         } ?: 0
       val upgrading = fields["upgrade"] != null
-      require(!upgrading || requests == 0 && contentLength == 0L && transfer == null) {
+      require(!upgrading || (requests == 0 && contentLength == 0L && transfer == null)) {
         "Upgrade requires a fresh connection"
       }
       request(first[0] + " " + safePath(first[1]))
@@ -77,7 +77,9 @@ internal object LoopbackHttp {
           require(crlf.contentEquals(byteArrayOf(13, 10)))
           send(crlf)
         }
-      } else copy(input, contentLength, send)
+      } else {
+        copy(input, contentLength, send)
+      }
       requests++
       if (upgrading && upgrade.get(15, TimeUnit.SECONDS)) {
         val buffer = ByteArray(65500)

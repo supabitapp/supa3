@@ -9,7 +9,7 @@ internal class TunnelMux(
   private val cipher: RelayCipher,
   private val sendRecord: (ByteArray) -> Unit,
   private val schedulePump: () -> Unit,
-  private val onDataSent: (Int) -> Unit,
+  private val onDataSent: (Int) -> Unit
 ) {
   companion object {
     const val SESSION_WINDOW = 8 * 1024 * 1024
@@ -42,7 +42,7 @@ internal class TunnelMux(
     val id: Int,
     val data: (Delivery) -> Unit,
     val end: () -> Unit,
-    val close: (Throwable?) -> Unit,
+    val close: (Throwable?) -> Unit
   ) {
     val pending = ArrayDeque<Pending>()
     val deliveries = LinkedHashSet<Delivery>()
@@ -108,9 +108,11 @@ internal class TunnelMux(
     stream.closed = true
     streams.remove(stream.id)
     ready.remove(stream)
-    for (pending in stream.pending) pending.done.completeExceptionally(
-      error ?: IllegalStateException("Stream closed")
-    )
+    for (pending in stream.pending) {
+      pending.done.completeExceptionally(
+        error ?: IllegalStateException("Stream closed")
+      )
+    }
     stream.pending.clear()
     for (delivery in stream.deliveries.toList()) consumed(stream, delivery)
     stream.close(error)
@@ -153,9 +155,11 @@ internal class TunnelMux(
       val plain = ByteArrayOutputStream(MAX_PLAIN)
       val callbacks = ArrayList<CompletableFuture<Unit>>()
       var dataBytes = 0
-      while (control.isNotEmpty() && plain.size() + control.first.size <= MAX_PLAIN) plain.write(
-        control.removeFirst()
-      )
+      while (control.isNotEmpty() && plain.size() + control.first.size <= MAX_PLAIN) {
+        plain.write(
+          control.removeFirst()
+        )
+      }
       for (stream in ready.toList()) {
         if (MAX_PLAIN - plain.size() < 9) break
         ready.remove(stream)
@@ -181,16 +185,20 @@ internal class TunnelMux(
         }
         if (
           stream.pending.isEmpty() &&
-            stream.localEnded &&
-            !stream.finSent &&
-            MAX_PLAIN - plain.size() >= 9
+          stream.localEnded &&
+          !stream.finSent &&
+          MAX_PLAIN - plain.size() >= 9
         ) {
           plain.write(frame(4, stream.id))
           stream.finSent = true
           maybeFinish(stream)
         }
-        if (!stream.closed && (stream.pending.isNotEmpty() || stream.localEnded && !stream.finSent))
+        if (
+          !stream.closed &&
+          (stream.pending.isNotEmpty() || (stream.localEnded && !stream.finSent))
+        ) {
           ready.add(stream)
+        }
       }
       if (plain.size() == 0) return
       if (dataBytes > 0) sendCredit -= maxOf(dataBytes, MIN_COST)

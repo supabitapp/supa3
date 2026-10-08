@@ -420,7 +420,7 @@ export interface TunnelClientOptions {
   readonly signal?: AbortSignal;
 }
 
-export function connectTunnel(
+function connectTunnel(
   address: string,
   options: TunnelClientOptions,
   onClose?: (error?: Error) => void,

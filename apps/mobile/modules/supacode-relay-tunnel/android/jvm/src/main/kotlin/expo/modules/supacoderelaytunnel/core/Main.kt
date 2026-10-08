@@ -24,7 +24,11 @@ fun main(args: Array<String>) {
       System.out.flush()
     }
     if (line == "suspend") tunnel.suspend()
-    if (line == "resume") { tunnel.resume(); println("RESUMED"); System.out.flush() }
+    if (line == "resume") {
+      tunnel.resume()
+      println("RESUMED")
+      System.out.flush()
+    }
     if (line == "stop") break
   }
   tunnel.close()
