@@ -780,8 +780,7 @@ function OnboardingCodexSetup({
   const settings = serverConfig.settings;
   const instance = settings.providerInstances[instanceId] ?? {
     driver: ProviderDriverKind.make("codex"),
-    enabled: settings.providers.codex.enabled,
-    config: createdAccount ? { enabled: true, setupMode: "managed" } : settings.providers.codex,
+    config: createdAccount ? { enabled: true, setupMode: "managed" } : {},
   };
   const mode = readCodexSetupMode(instance.config);
   const existingChosen =
@@ -797,8 +796,6 @@ function OnboardingCodexSetup({
         patch: buildProviderInstanceUpdatePatch({
           settings,
           instanceId,
-          driver: ProviderDriverKind.make("codex"),
-          isDefault: instanceId === defaultInstanceIdForDriver(ProviderDriverKind.make("codex")),
           instance: {
             ...instance,
             enabled: true,
