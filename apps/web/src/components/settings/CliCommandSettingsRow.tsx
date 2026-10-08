@@ -52,11 +52,13 @@ export function CliCommandSettingsRow() {
 
   if (!bridge || !state?.supported) return null;
   const installed = state.installedPath !== null;
-  const description = !installed
-    ? "Run Supacode's CLI as `supacode` from any terminal."
-    : state.onPath
-      ? `Installed at ${state.installedPath}. Open a new terminal to use it.`
-      : `Installed at ${state.installedPath}, which is not on your PATH yet. Add its folder to your PATH to run \`supacode\`.`;
+  const description = state.shadowedBy
+    ? `Another supacode at ${state.shadowedBy} runs first in a new terminal. Remove it to use Supacode's.`
+    : !installed
+      ? "Run Supacode's CLI as `supacode` from any terminal."
+      : state.onPath
+        ? `Installed at ${state.installedPath}. Open a new terminal to use it.`
+        : `Installed at ${state.installedPath}, which is not on your PATH yet. Add its folder to your PATH to run \`supacode\`.`;
 
   return (
     <SettingsRow
