@@ -132,13 +132,7 @@ function TooltipPopup({
   return (
     <>
       {shortcutHint && triggerRef ? (
-        <ShortcutHint
-          anchorRef={triggerRef}
-          shortcut={shortcutHint}
-          side={side}
-          align={align}
-          sideOffset={sideOffset}
-        />
+        <ShortcutHint anchorRef={triggerRef} shortcut={shortcutHint} />
       ) : null}
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Positioner

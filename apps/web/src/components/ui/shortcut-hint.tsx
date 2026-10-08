@@ -7,15 +7,9 @@ import { useShortcutHintsVisible } from "~/shortcutModifierState";
 export function ShortcutHint({
   anchorRef,
   shortcut,
-  side,
-  align,
-  sideOffset,
 }: {
   anchorRef: RefObject<HTMLElement | null>;
   shortcut: string;
-  side?: TooltipPrimitive.Positioner.Props["side"];
-  align?: TooltipPrimitive.Positioner.Props["align"];
-  sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
 }) {
   const visible = useShortcutHintsVisible();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -73,9 +67,10 @@ export function ShortcutHint({
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Positioner
             anchor={anchor}
-            side={side}
-            align={align}
-            sideOffset={sideOffset}
+            side="top"
+            align="center"
+            sideOffset={({ anchor, positioner }) => -(anchor.height + positioner.height) / 2}
+            collisionAvoidance={{ side: "none", align: "shift" }}
             className="pointer-events-none z-[140] data-[anchor-hidden]:hidden"
           >
             <TooltipPrimitive.Popup
