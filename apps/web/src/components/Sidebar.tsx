@@ -301,7 +301,6 @@ const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 const PINNED_SHELF_EXPANDED_KEY = "supacode:sidebar:pinned-expanded";
-const ACTIVE_SHELF_EXPANDED_KEY = "supacode:sidebar:active-expanded";
 const SETTLED_SHELF_EXPANDED_KEY = "supacode:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "supacode:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "supacode:sidebar:working-expanded";
@@ -762,19 +761,25 @@ type SidebarSweepAction = "settle" | "unsettle" | "unsnooze";
 const SIDEBAR_DRAG_LABEL_HEIGHT = 24;
 
 function SidebarDragBoundary(props: {
-  marker: "pinned-header";
+  marker: "pinned-header" | "pinned-divider";
   label: string;
   visible: boolean;
+  persistent?: boolean;
   isDropTarget: boolean;
 }) {
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className="pointer-events-none relative mx-0.5 -mb-px h-0"
+      className={cn("pointer-events-none relative mx-0.5", props.persistent ? "h-8" : "-mb-px h-0")}
     >
-      {props.visible ? (
-        <div className="sidebar-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2">
+      {props.visible || props.persistent ? (
+        <div
+          className={cn(
+            "sidebar-drag-boundary-label absolute inset-x-2 flex h-4 items-center gap-2",
+            props.persistent ? "top-2" : "top-1",
+          )}
+        >
           <span
             className={cn(
               "shrink-0 text-xs",
@@ -798,25 +803,21 @@ function SidebarDragBoundary(props: {
 
 // Shelf headers stay visible and keep their measured height while dragging.
 function SidebarSectionHeader(props: {
-  marker:
-    | "pinned-header"
-    | "pinned-divider"
-    | "working-header"
-    | "snoozed-header"
-    | "settled-header";
+  marker: "pinned-header" | "working-header" | "snoozed-header" | "settled-header";
   label: string;
+  className?: string;
   // While dragging, the settled header reads at full strength and takes the
   // accent while the lifted row is over it.
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
-  const shelf = props.marker === "pinned-divider" ? "active" : props.marker.replace("-header", "");
+  const shelf = props.marker.replace("-header", "");
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className="mx-0.5 h-8"
+      className={cn("mx-0.5 h-8", props.className)}
     >
       <CollapsibleSectionHeader
         onClick={props.toggle.onToggle}
@@ -986,6 +987,7 @@ function readSidebarDraftRow(routeDraftId: string | null) {
     : null;
 }
 
+// Draft sessions with user content live just above the Settled section.
 // Own store subscriptions keep per-keystroke composer updates
 // inside this block. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
@@ -2856,25 +2858,6 @@ export default function Sidebar() {
   );
   // Dragging exposes the full saved pin order without changing the preference.
   const pinnedShelfVisible = pinnedShelfExpanded || dragState !== null;
-  const [activeShelfExpanded, setActiveShelfExpanded] = useLocalStorage(
-    ACTIVE_SHELF_EXPANDED_KEY,
-    true,
-    Schema.Boolean,
-  );
-  const toggleActiveShelf = useCallback(
-    () => setActiveShelfExpanded((value) => !value),
-    [setActiveShelfExpanded],
-  );
-  const activeShelfVisible = activeShelfExpanded || dragState !== null;
-  const visibleActiveThreads = useMemo(() => {
-    if (activeShelfVisible) return activeThreads;
-    if (routeThreadKey === null) return EMPTY_THREADS;
-    const routeThread = activeThreads.find(
-      (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-    );
-    return routeThread === undefined ? EMPTY_THREADS : [routeThread];
-  }, [activeShelfVisible, activeThreads, routeThreadKey]);
   const visiblePinnedThreads = useMemo(() => {
     if (pinnedShelfVisible) return pinnedThreads;
     if (routeThreadKey === null) return EMPTY_THREADS;
@@ -2887,18 +2870,18 @@ export default function Sidebar() {
 
   const orderedThreads = useMemo(
     () => [
-      ...renderedSettledThreads,
-      ...visibleSnoozedThreads,
-      ...visibleWorkingThreads,
       ...visiblePinnedThreads,
-      ...visibleActiveThreads,
+      ...activeThreads,
+      ...visibleWorkingThreads,
+      ...visibleSnoozedThreads,
+      ...renderedSettledThreads,
     ],
     [
-      renderedSettledThreads,
-      visibleSnoozedThreads,
-      visibleWorkingThreads,
       visiblePinnedThreads,
-      visibleActiveThreads,
+      activeThreads,
+      visibleWorkingThreads,
+      visibleSnoozedThreads,
+      renderedSettledThreads,
     ],
   );
   const orderedThreadKeys = useMemo(
@@ -3218,7 +3201,7 @@ export default function Sidebar() {
   );
   const threadListRef = useRef<HTMLUListElement | null>(null);
   const dragLabelOffsetRef = useRef(0);
-  const restrictBelowFirstSection = useCallback<Modifier>(
+  const restrictBelowPins = useCallback<Modifier>(
     (args) => restrictBelowSidebarLabel(args, dragLabelOffsetRef.current),
     [],
   );
@@ -3503,7 +3486,7 @@ export default function Sidebar() {
       // Stop normal section motion before dnd-kit measures the picked-up row.
       listMotionRef.current?.suspend();
       const list = threadListRef.current;
-      const header = list?.querySelector<HTMLElement>('[data-testid="sidebar-settled-header"]');
+      const header = list?.querySelector<HTMLElement>('[data-testid="sidebar-pinned-header"]');
       if (list && header) {
         const listRect = list.getBoundingClientRect();
         const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
@@ -3543,37 +3526,32 @@ export default function Sidebar() {
         workingThreads.length +
         snoozedThreads.length +
         settledThreads.length ===
-        0 &&
-      pendingThreads.length === 0
+      0
     ) {
       return [];
     }
-    const items: SidebarListItem[] = [{ kind: "marker", marker: "settled-header" }];
-    items.push({ kind: "marker", marker: "settled-placeholder" });
-    items.push(...rowsOf(renderedSettledThreads, "settled"));
-    if (settledShelfExpanded && hiddenSettledCount > 0) {
-      items.push({ kind: "marker", marker: "settled-more" });
+    const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
+    const pinnedRows = rowsOf(visiblePinnedThreads, "pinned");
+    items.push(...pinnedRows);
+    items.push({ kind: "marker", marker: "pinned-divider" });
+    const activeRows = rowsOf(activeThreads, "active");
+    items.push({ kind: "marker", marker: "active-placeholder" });
+    items.push(...activeRows);
+    if (workingThreads.length > 0) {
+      items.push({ kind: "marker", marker: "working-header" });
+      items.push(...rowsOf(visibleWorkingThreads, "working"));
     }
     if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
     }
-    if (workingThreads.length > 0) {
-      items.push({ kind: "marker", marker: "working-header" });
-      items.push(...rowsOf(visibleWorkingThreads, "working"));
-    }
-    items.push({ kind: "marker", marker: "pinned-header" });
-    items.push(...rowsOf(visiblePinnedThreads, "pinned"));
-    items.push({ kind: "marker", marker: "pinned-divider" });
-    items.push({ kind: "marker", marker: "active-placeholder" });
-    items.push(...rowsOf(visibleActiveThreads, "active"));
+    items.push({ kind: "marker", marker: "settled-header" });
+    const settledRows = rowsOf(renderedSettledThreads, "settled");
+    items.push({ kind: "marker", marker: "settled-placeholder" });
+    items.push(...settledRows);
     return items;
   }, [
     activeThreads,
-    pendingThreads.length,
-    visibleActiveThreads,
-    hiddenSettledCount,
-    settledShelfExpanded,
     pinnedThreads.length,
     visiblePinnedThreads,
     renderedSettledThreads,
@@ -4861,7 +4839,7 @@ export default function Sidebar() {
               collisionDetection={dndCollisionDetection}
               modifiers={[
                 restrictToVerticalAxis,
-                restrictBelowFirstSection,
+                restrictBelowPins,
                 restrictToFirstScrollableAncestor,
               ]}
               onDragStart={handleThreadDragStart}
@@ -4878,6 +4856,9 @@ export default function Sidebar() {
                   // presentational while preserving every descendant control.
                   role="presentation"
                   className={cn(
+                    // The last shelf is bottom-pinned; let it use the group's
+                    // bottom inset once instead of adding a second gap above
+                    // the footer's own vertical inset.
                     "relative -mb-2 flex flex-col gap-px",
                     sidebarListItems.length > 0 && "flex-1",
                     // An action sweep owns the pointer: rows it passes over
@@ -5011,24 +4992,21 @@ export default function Sidebar() {
                       );
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const pendingRows = pendingThreads
-                      .filter((entry) => activeShelfVisible || entry.scope === routeThreadKey)
-                      .map((entry) => (
-                        <SidebarPendingThreadRow
-                          key={`pending:${entry.scope}`}
-                          entry={entry}
-                          projectTitle={
-                            entry.payload.input.bootstrap?.createThread
-                              ? projectDisplayNameByKey.get(
-                                  `${entry.payload.environmentId}:${entry.payload.input.bootstrap.createThread.projectId}`,
-                                )
-                              : undefined
-                          }
-                          active={entry.scope === routeThreadKey}
-                          onNavigate={navigateToThread}
-                        />
-                      ));
-                    const items: ReactNode[] = [];
+                    const items: ReactNode[] = pendingThreads.map((entry) => (
+                      <SidebarPendingThreadRow
+                        key={`pending:${entry.scope}`}
+                        entry={entry}
+                        projectTitle={
+                          entry.payload.input.bootstrap?.createThread
+                            ? projectDisplayNameByKey.get(
+                                `${entry.payload.environmentId}:${entry.payload.input.bootstrap.createThread.projectId}`,
+                              )
+                            : undefined
+                        }
+                        active={entry.scope === routeThreadKey}
+                        onNavigate={navigateToThread}
+                      />
+                    ));
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
@@ -5064,17 +5042,13 @@ export default function Sidebar() {
                           break;
                         case "pinned-divider":
                           items.push(
-                            <SidebarSectionHeader
+                            <SidebarDragBoundary
                               key="pinned-divider"
                               marker="pinned-divider"
-                              label={
-                                activeShelfVisible
-                                  ? "Active"
-                                  : `Active (${activeThreads.length + pendingThreads.length})`
-                              }
-                              dragging={from !== null}
+                              label="Active"
+                              persistent={pinnedThreads.length > 0 && activeThreads.length > 0}
+                              visible={from !== null}
                               isDropTarget={dragTargetSection === "active"}
-                              toggle={{ expanded: activeShelfVisible, onToggle: toggleActiveShelf }}
                             />,
                           );
                           break;
@@ -5101,6 +5075,7 @@ export default function Sidebar() {
                             <SidebarSectionHeader
                               key="working-shelf-header"
                               marker="working-header"
+                              className="mt-auto"
                               label={
                                 workingShelfExpanded
                                   ? "Working"
@@ -5118,6 +5093,7 @@ export default function Sidebar() {
                             <SidebarSectionHeader
                               key="snoozed-shelf-header"
                               marker="snoozed-header"
+                              className={cn(workingThreads.length === 0 && "mt-auto")}
                               label={
                                 snoozedShelfExpanded
                                   ? "Snoozed"
@@ -5132,6 +5108,22 @@ export default function Sidebar() {
                           break;
                         case "settled-header":
                           items.push(
+                            workingThreads.length + snoozedThreads.length === 0 ? (
+                              <li
+                                key="settled-shelf-spacer"
+                                aria-hidden
+                                className="mt-auto h-0 list-none"
+                              />
+                            ) : null,
+                            <SidebarDraftBlock
+                              key="draft-sessions"
+                              projectByKey={projectByKey}
+                              projectDisplayNameByKey={projectDisplayNameByKey}
+                              scopedProjectKeys={scopedProjectKeys}
+                              routeDraftId={routeDraftIdForRows}
+                              onNavigateToDraft={navigateToDraft}
+                              onDraftContextMenu={handleDraftContextMenu}
+                            />,
                             <SidebarSectionHeader
                               key="settled-shelf-header"
                               marker="settled-header"
@@ -5147,20 +5139,6 @@ export default function Sidebar() {
                                 onToggle: toggleSettledShelf,
                               }}
                             />,
-                          );
-                          break;
-                        case "settled-more":
-                          items.push(
-                            <SortableSidebarMarker key="settled-more" marker="settled-more">
-                              <button
-                                type="button"
-                                onClick={showMoreSettled}
-                                className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                              >
-                                <PlusIcon aria-hidden className="size-4 shrink-0" />
-                                Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
-                              </button>
-                            </SortableSidebarMarker>,
                           );
                           break;
                         case "settled-placeholder":
@@ -5183,17 +5161,20 @@ export default function Sidebar() {
                           break;
                       }
                     }
-                    items.push(...pendingRows);
                     return items;
                   })()}
-                  <SidebarDraftBlock
-                    projectByKey={projectByKey}
-                    projectDisplayNameByKey={projectDisplayNameByKey}
-                    scopedProjectKeys={scopedProjectKeys}
-                    routeDraftId={routeDraftIdForRows}
-                    onNavigateToDraft={navigateToDraft}
-                    onDraftContextMenu={handleDraftContextMenu}
-                  />
+                  {settledShelfExpanded && hiddenSettledCount > 0 ? (
+                    <li className="list-none">
+                      <button
+                        type="button"
+                        onClick={showMoreSettled}
+                        className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                      >
+                        <PlusIcon aria-hidden className="size-4 shrink-0" />
+                        Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
+                      </button>
+                    </li>
+                  ) : null}
                 </ul>
               </SortableContext>
             </DndContext>

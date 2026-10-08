@@ -153,6 +153,7 @@ export function resolveSidebarThreadSection(input: {
 const SIDEBAR_MARKER_PREFIX = "sidebar-marker-";
 
 export type SidebarListMarker =
+  /** The top boundary is also a landing target when there are no pins. */
   | "pinned-header"
   /** Stand-in rows so an empty section has somewhere for the gap to open. */
   | "active-placeholder"
@@ -161,8 +162,7 @@ export type SidebarListMarker =
   | "pinned-divider"
   | "working-header"
   | "snoozed-header"
-  | "settled-header"
-  | "settled-more";
+  | "settled-header";
 
 export function sidebarMarkerId(marker: SidebarListMarker): string {
   return `${SIDEBAR_MARKER_PREFIX}${marker}`;
@@ -176,24 +176,19 @@ export function sidebarListItemId(item: SidebarListItem): string {
   return item.kind === "thread" ? item.key : sidebarMarkerId(item.marker);
 }
 
-const sidebarHeaderSections: Partial<Record<SidebarListMarker, SidebarSection>> = {
-  "pinned-header": "pinned",
-  "pinned-divider": "active",
-  "working-header": "working",
-  "snoozed-header": "snoozed",
-  "settled-header": "settled",
-};
-
+/** The section a slot belongs to, read off the markers around it: from
+    the top down, everything before the pinned divider is pinned, then the
+    inbox until the first shelf header, each shelf until the next header,
+    then settled. */
 function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number): SidebarSection {
-  const first = items.find(
-    (item) => item.kind === "marker" && sidebarHeaderSections[item.marker] !== undefined,
-  );
-  let section =
-    first?.kind === "marker" ? (sidebarHeaderSections[first.marker] ?? "pinned") : "pinned";
+  let section: SidebarSection = "pinned";
   for (let i = 0; i < index && i < items.length; i += 1) {
     const item = items[i]!;
     if (item.kind !== "marker") continue;
-    section = sidebarHeaderSections[item.marker] ?? section;
+    if (item.marker === "pinned-divider") section = "active";
+    else if (item.marker === "working-header") section = "working";
+    else if (item.marker === "snoozed-header") section = "snoozed";
+    else if (item.marker === "settled-header") section = "settled";
   }
   return section;
 }
@@ -215,28 +210,24 @@ export function resolveSidebarDropTarget(
   const activeIndex = items.findIndex((item) => sidebarListItemId(item) === activeKey);
   const overIndex = items.findIndex((item) => sidebarListItemId(item) === overId);
   if (activeIndex === -1 || overIndex === -1 || items[activeIndex]?.kind !== "thread") return null;
-  const over = items[overIndex];
-  if (
-    over?.kind === "marker" &&
-    (over.marker === "working-header" || over.marker === "snoozed-header")
-  )
-    return null;
   const moved = items.filter((_, index) => index !== activeIndex);
-  const destinationIndex =
-    over?.kind === "marker" && over.marker === "pinned-header"
-      ? moved.indexOf(over) + 1
-      : overIndex;
-  moved.splice(destinationIndex, 0, items[activeIndex]!);
-  const section = sectionAtSidebarSlot(moved, destinationIndex);
+  moved.splice(overIndex, 0, items[activeIndex]!);
+  const section = sectionAtSidebarSlot(moved, overIndex);
   if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
-  let currentSection = sectionAtSidebarSlot(moved, 0);
+  let currentSection: SidebarSection = "pinned";
   for (const item of moved) {
     if (item.kind === "marker") {
-      currentSection = sidebarHeaderSections[item.marker] ?? currentSection;
+      if (item.marker === "pinned-divider") currentSection = "active";
+      else if (
+        item.marker === "working-header" ||
+        item.marker === "snoozed-header" ||
+        item.marker === "settled-header"
+      )
+        break;
     } else if (currentSection === "pinned") pinnedOrder.push(item.key);
-    else if (currentSection === "active") activeOrder.push(item.key);
+    else activeOrder.push(item.key);
   }
   return { section, pinnedOrder, activeOrder };
 }

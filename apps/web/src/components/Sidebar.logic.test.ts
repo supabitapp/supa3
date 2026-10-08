@@ -44,7 +44,6 @@ import {
   sortLogicalProjectsForSidebar,
   sortInboxThreadsByReturn,
   resolveSidebarDropTarget,
-  sidebarMarkerId,
   planSidebarThreadDrop,
   sortPinnedThreadsForSidebar,
   sortProjectsForSidebar,
@@ -2161,64 +2160,6 @@ describe("Working shelf", () => {
       kind: "thread",
       key,
       section,
-    });
-    it("resolves drops with Settled first and Active last", () => {
-      const reordered: SidebarListItem[] = [
-        marker("settled-header"),
-        row("s", "settled"),
-        marker("settled-more"),
-        marker("snoozed-header"),
-        row("z", "snoozed"),
-        marker("working-header"),
-        row("w", "working"),
-        marker("pinned-header"),
-        row("p", "pinned"),
-        marker("pinned-divider"),
-        marker("active-placeholder"),
-        row("a", "active"),
-      ];
-      expect(resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("settled-header"))).toEqual({
-        section: "settled",
-        pinnedOrder: ["p"],
-        activeOrder: [],
-      });
-      expect(resolveSidebarDropTarget(reordered, "a", "s")?.section).toBe("settled");
-      expect(resolveSidebarDropTarget(reordered, "a", "w")).toBeNull();
-      expect(resolveSidebarDropTarget(reordered, "a", "z")).toBeNull();
-      expect(
-        resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("working-header")),
-      ).toBeNull();
-      expect(
-        resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("snoozed-header")),
-      ).toBeNull();
-      expect(resolveSidebarDropTarget(reordered, "a", sidebarMarkerId("pinned-header"))).toEqual({
-        section: "pinned",
-        pinnedOrder: ["a", "p"],
-        activeOrder: [],
-      });
-      expect(
-        resolveSidebarDropTarget(
-          reordered.filter((item) => item.kind !== "thread" || item.key !== "p"),
-          "a",
-          sidebarMarkerId("pinned-header"),
-        ),
-      ).toEqual({
-        section: "pinned",
-        pinnedOrder: ["a"],
-        activeOrder: [],
-      });
-      expect(
-        resolveSidebarDropTarget(reordered, "s", sidebarMarkerId("active-placeholder")),
-      ).toEqual({
-        section: "active",
-        pinnedOrder: ["p"],
-        activeOrder: ["s", "a"],
-      });
-      expect(resolveSidebarDropTarget(reordered, "s", "p")).toEqual({
-        section: "pinned",
-        pinnedOrder: ["p", "s"],
-        activeOrder: ["a"],
-      });
     });
     // Pinned p1 | Active a1 a2 | Working w1 | Settled s1
     const items: readonly SidebarListItem[] = [
