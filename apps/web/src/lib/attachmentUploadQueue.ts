@@ -28,10 +28,10 @@ import { environmentCatalog } from "../connection/catalog";
 import { assetEnvironment } from "../state/assets";
 import { attachmentEnvironment } from "../state/attachments";
 import { readEnvironmentScope, readPreparedConnection } from "../state/session";
+import { uploadAttachmentBlob } from "./attachmentUploadTransport";
 import type { AttachmentUploadState, ReadyAttachmentUpload } from "./attachmentUploadState";
 
 const MAX_UPLOADS_PER_ENVIRONMENT = 3;
-const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 interface AttachmentUploadStore {
   readonly uploadsByImageId: Readonly<Record<string, AttachmentUploadState>>;
@@ -69,6 +69,52 @@ interface UploadJob {
 const jobsByImageId = new Map<string, UploadJob>();
 const queue: UploadJob[] = [];
 const activeUploadsByEnvironment = new Map<EnvironmentId, number>();
+
+const retainedUploads = new Map<
+  string,
+  {
+    count: number;
+    committed: boolean;
+    discarded: boolean;
+    environmentId: EnvironmentId;
+    attachmentId: string;
+  }
+>();
+
+export function isAttachmentUploadRetained(
+  environmentId: EnvironmentId,
+  attachmentId: string,
+): boolean {
+  return retainedUploads.has(JSON.stringify([environmentId, attachmentId]));
+}
+
+/** Defer deletion while a durable outbox write can still acquire this upload. */
+export function retainAttachmentUploads(
+  uploads: ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly attachmentId: string }>,
+): (committed: boolean) => void {
+  const keys = new Set<string>();
+  for (const upload of uploads) {
+    const key = JSON.stringify([upload.environmentId, upload.attachmentId]);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    const retained = retainedUploads.get(key);
+    if (retained) retained.count += 1;
+    else retainedUploads.set(key, { ...upload, count: 1, committed: false, discarded: false });
+  }
+  let settled = false;
+  return (committed) => {
+    if (settled) return;
+    settled = true;
+    for (const key of keys) {
+      const retained = retainedUploads.get(key)!;
+      retained.committed ||= committed;
+      if (--retained.count !== 0) continue;
+      retainedUploads.delete(key);
+      if (retained.discarded && !retained.committed)
+        deletePendingUpload(retained.environmentId, retained.attachmentId);
+    }
+  };
+}
 
 function setUploadState(imageId: string, upload: AttachmentUploadState): void {
   useAttachmentUploadStore.setState((state) => ({
@@ -139,6 +185,11 @@ function stampDraftFileUpload(job: UploadJob, attachmentId: string): void {
 }
 
 function deletePendingUpload(environmentId: EnvironmentId, attachmentId: string): void {
+  const retained = retainedUploads.get(JSON.stringify([environmentId, attachmentId]));
+  if (retained) {
+    retained.discarded = true;
+    return;
+  }
   if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
   deletePendingAttachmentUpload({
     registry: appAtomRegistry,
@@ -146,38 +197,6 @@ function deletePendingUpload(environmentId: EnvironmentId, attachmentId: string)
     environmentId,
     attachmentId,
   });
-}
-
-function uploadBytes(input: {
-  readonly url: string;
-  readonly file: File;
-  readonly mimeType: string;
-  readonly onProgress: (progress: number) => void;
-}): { readonly done: Promise<void>; readonly abort: () => void } {
-  const xhr = new XMLHttpRequest();
-  const done = new Promise<void>((resolve, reject) => {
-    xhr.open("POST", input.url, true);
-    xhr.timeout = UPLOAD_TIMEOUT_MS;
-    xhr.setRequestHeader("Content-Type", input.mimeType);
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        input.onProgress(event.loaded / event.total);
-      }
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Upload rejected (${xhr.status})`));
-      }
-    });
-    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-    xhr.addEventListener("timeout", () => reject(new Error("Upload timed out")));
-    xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
-    xhr.send(input.file);
-  });
-
-  return { done, abort: () => xhr.abort() };
 }
 
 async function runUpload(job: UploadJob): Promise<void> {
@@ -302,9 +321,9 @@ async function runUpload(job: UploadJob): Promise<void> {
       return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
     },
     transport: (url) =>
-      uploadBytes({
+      uploadAttachmentBlob({
         url,
-        file,
+        body: file,
         mimeType,
         onProgress: (progress) => {
           const step = Math.floor(progress * 20);
@@ -541,6 +560,13 @@ export function releaseAttachmentUpload(imageId: string): void {
     }
   }
   clearUploadState(imageId);
+}
+
+/** The committed outbox record owns this completed upload; retain its host file. */
+export function transferCompletedAttachmentUpload(imageId: string): void {
+  if (readAttachmentUpload(imageId)?.status === "ready" && !jobsByImageId.has(imageId)) {
+    clearUploadState(imageId);
+  }
 }
 
 export function releasePersistedAttachmentUpload(input: {

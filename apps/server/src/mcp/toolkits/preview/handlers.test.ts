@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ThreadId } from "@supacode/contracts";
+import { PREVIEW_RECORDING_MAX_BYTES, ThreadId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -43,6 +43,37 @@ describe("normalizePreviewOpenInput", () => {
 });
 
 describe("claimPreviewRecording", () => {
+  it.effect("rejects recordings above 50 MiB before reading the uploaded file", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const uploadedAttachmentId = createPendingAttachmentId(".webm");
+      const pendingPath = path.join(config.attachmentsDir, `${uploadedAttachmentId}.webm`);
+      yield* fileSystem.makeDirectory(config.attachmentsDir, { recursive: true });
+      yield* fileSystem.writeFileString(pendingPath, "video!");
+      yield* fileSystem.truncate(pendingPath, PREVIEW_RECORDING_MAX_BYTES + 1);
+      const result = yield* claimPreviewRecording(ThreadId.make("thread-large"), {
+        id: "large-recording",
+        tabId: "tab-1",
+        path: "/desktop/recording.webm",
+        mimeType: "video/webm",
+        sizeBytes: PREVIEW_RECORDING_MAX_BYTES + 1,
+        createdAt: "2026-09-07T00:00:00.000Z",
+        uploadedAttachmentId,
+      }).pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      expect(Number((yield* fileSystem.stat(pendingPath)).size)).toBe(
+        PREVIEW_RECORDING_MAX_BYTES + 1,
+      );
+    }).pipe(
+      Effect.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "supacode-preview-recording-limit-" }).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
+  );
   it.effect("overlapping and repeated claims return the same retained recording", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;

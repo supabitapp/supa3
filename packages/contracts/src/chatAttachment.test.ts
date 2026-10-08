@@ -5,11 +5,13 @@ import * as Schema from "effect/Schema";
 
 import {
   ChatAttachment,
+  ChatFileAttachment,
   isProviderSendTurnSupportedImageMimeType,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   SnapShotAccessibility,
 } from "./chatAttachment.ts";
 
+const isFileAttachment = Schema.is(ChatFileAttachment);
 const decodeAttachment = Schema.decodeUnknownEffect(ChatAttachment);
 const decodeSnapShotAccessibility = Schema.decodeUnknownEffect(SnapShotAccessibility);
 
@@ -79,4 +81,17 @@ it("isProviderSendTurnSupportedImageMimeType accepts raster formats and rejects 
   assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/png"), true);
   assert.strictEqual(isProviderSendTurnSupportedImageMimeType("IMAGE/JPEG"), true);
   assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/svg+xml"), false);
+});
+
+// This metadata crosses persisted events as a number, including values above 2^32.
+it("accepts an 8 GiB file reference and rejects one byte over", () => {
+  const file = {
+    type: "file",
+    id: "pending-large-zip",
+    name: "archive.zip",
+    mimeType: "application/zip",
+    sizeBytes: 8_589_934_592,
+  };
+  assert.strictEqual(isFileAttachment(file), true);
+  assert.strictEqual(isFileAttachment({ ...file, sizeBytes: 8_589_934_593 }), false);
 });

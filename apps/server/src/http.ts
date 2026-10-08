@@ -446,16 +446,25 @@ export const layerAttachmentUploadRoute = HttpRouter.add(
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = HttpServerRequest.toURL(request);
     if (Option.isNone(url)) {
-      return HttpServerResponse.text("Bad Request", { status: 400 });
+      return HttpServerResponse.text("Bad Request", {
+        status: 400,
+        headers: { connection: "close" },
+      });
     }
 
     const token = url.value.pathname.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length);
     if (!token) {
-      return HttpServerResponse.text("Not Found", { status: 404 });
+      return HttpServerResponse.text("Not Found", {
+        status: 404,
+        headers: { connection: "close" },
+      });
     }
     const claims = yield* validateAttachmentUploadToken(token);
     if (!claims) {
-      return HttpServerResponse.text("Not Found", { status: 404 });
+      return HttpServerResponse.text("Not Found", {
+        status: 404,
+        headers: { connection: "close" },
+      });
     }
 
     const contentLengthHeader = request.headers["content-length"];
@@ -466,6 +475,7 @@ export const layerAttachmentUploadRoute = HttpRouter.add(
     ) {
       return HttpServerResponse.text("Content-Length must match the upload size.", {
         status: 400,
+        headers: { connection: "close" },
       });
     }
 
@@ -474,7 +484,10 @@ export const layerAttachmentUploadRoute = HttpRouter.add(
     const stored = yield* storeAttachmentUpload(claims, Stream.fromPull(Effect.succeed(bodyPull)));
     return stored.ok
       ? HttpServerResponse.empty({ status: 204 })
-      : HttpServerResponse.text(stored.detail, { status: stored.status });
+      : HttpServerResponse.text(stored.detail, {
+          status: stored.status,
+          headers: { connection: "close" },
+        });
   }),
 );
 

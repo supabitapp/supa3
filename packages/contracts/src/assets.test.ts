@@ -43,6 +43,18 @@ describe("AttachmentCreateUploadUrlInput", () => {
     ).toBe(true);
   });
 
+  it("accepts the 8 GiB file limit without 32-bit truncation", () => {
+    expect(PROVIDER_SEND_TURN_MAX_FILE_BYTES).toBe(8_589_934_592);
+    expect(
+      isUploadInput({
+        type: "file",
+        name: "archive.zip",
+        mimeType: "application/zip",
+        sizeBytes: 8_589_934_592,
+      }),
+    ).toBe(true);
+  });
+
   it("rejects empty and oversized uploads", () => {
     expect(isUploadInput({ ...uploadInput, sizeBytes: 0 })).toBe(false);
     expect(

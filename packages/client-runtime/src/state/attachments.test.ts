@@ -174,6 +174,7 @@ describe("file attachment limits", () => {
   it("formats attachment row sizes", () => {
     expect(formatAttachmentSize(3 * 1024 * 1024)).toBe("3.0 MB");
     expect(formatAttachmentSize(1)).toBe("1 KB");
+    expect(formatAttachmentSize(8_589_934_592)).toBe("8.0 GB");
   });
 
   it("formats small upload limits without rounding them to zero MB", () => {
@@ -188,6 +189,12 @@ describe("file attachment limits", () => {
     );
     expect(fileAttachmentTooLargeMessage("medium.zip", 512 * 1024)).toBe(
       "'medium.zip' exceeds the 512 KB attachment limit.",
+    );
+  });
+
+  it("labels the 8 GB upload limit", () => {
+    expect(fileAttachmentTooLargeMessage("archive.zip", 8_589_934_592)).toBe(
+      "'archive.zip' exceeds the 8 GB attachment limit.",
     );
   });
 

@@ -176,6 +176,7 @@ import {
 } from "./composerAttachmentFiles";
 import {
   readAttachmentUpload,
+  isAttachmentUploadRetained,
   releaseAttachmentUpload,
   releaseDraftAttachment,
   releasePersistedAttachmentUpload,
@@ -4987,6 +4988,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         toastManager.add({
           type: "error",
           title: "Wait for file uploads before stashing this prompt",
+        });
+        return;
+      }
+      if (isAttachmentUploadRetained(environmentId, upload.attachmentId)) {
+        toastManager.add({
+          type: "info",
+          title: "This attachment is being sent",
+          description: "Wait for the message to finish saving before stashing.",
         });
         return;
       }

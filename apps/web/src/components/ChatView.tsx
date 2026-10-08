@@ -55,6 +55,11 @@ import {
 } from "../questionAttachments";
 import { useAttachmentUploadStore } from "../lib/attachmentUploadQueue";
 import {
+  captureThreadOutboxAttachments,
+  completeThreadOutboxDraft,
+  retainCapturedAttachmentUploads,
+} from "../lib/threadOutboxAttachments";
+import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
   AuthSourceControlWriteScope,
@@ -8710,24 +8715,7 @@ export default function ChatView(props: ChatViewProps) {
   function captureOutboxAttachments(
     attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
   ) {
-    return attachments.map((attachment) => {
-      const uploaded =
-        attachment.file === null
-          ? getUploadedAttachments({ environmentId, images: [attachment] })?.[0]
-          : undefined;
-      if (attachment.file === null && uploaded === undefined)
-        throw new Error(`Attach '${attachment.name}' again before sending.`);
-      return {
-        id: attachment.id,
-        type: attachment.type,
-        name: attachment.name,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes,
-        bytes: attachment.file,
-        ...(attachment.source ? { source: attachment.source } : {}),
-        ...(uploaded ? { uploaded } : {}),
-      };
-    });
+    return captureThreadOutboxAttachments({ environmentId, attachments });
   }
 
   const onSend = async (
@@ -8749,11 +8737,12 @@ export default function ChatView(props: ChatViewProps) {
       setIsSavingQueuedEdit(true);
       try {
         const addedAttachments = [...sendContext.images, ...sendContext.files];
+        const capturedAttachments = await captureOutboxAttachments(addedAttachments);
         const payload = buildEditedThreadOutboxTurn({
           entry,
           text: promptRef.current,
           keptAttachmentIds,
-          addedAttachments: captureOutboxAttachments(addedAttachments),
+          addedAttachments: capturedAttachments,
           context: buildMessageContext({
             terminalContexts: sendContext.terminalContexts,
             reviewComments: sendContext.reviewComments,
@@ -9369,6 +9358,8 @@ export default function ChatView(props: ChatViewProps) {
 
     sendInFlightRef.current = true;
     const savedDraft = useComposerDraftStore.getState().getComposerDraft(composerDraftTarget);
+    let releaseCapture: ((committed: boolean) => void) | undefined;
+    let captureCommitted = false;
     try {
       const titleSeed =
         assistantCitationsToPlainText(stripInlineContextReferences(trimmed)).trim() ||
@@ -9377,7 +9368,8 @@ export default function ChatView(props: ChatViewProps) {
           ? formatTerminalContextLabel(composerTerminalContextsSnapshot[0])
           : "New thread");
       const title = truncate(titleSeed);
-      const localAttachments = captureOutboxAttachments(composerAttachmentsSnapshot);
+      const localAttachments = await captureOutboxAttachments(composerAttachmentsSnapshot);
+      releaseCapture = retainCapturedAttachmentUploads(environmentId, localAttachments);
       const targets =
         multipleModelSelections === null
           ? [
@@ -9458,6 +9450,16 @@ export default function ChatView(props: ChatViewProps) {
           };
         }),
       );
+      captureCommitted = true;
+      const clearedDraft = completeThreadOutboxDraft({
+        target: composerDraftTarget,
+        submitted: savedDraft,
+        attachments: composerAttachmentsSnapshot,
+        captured: localAttachments,
+      });
+      promptRef.current =
+        useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.prompt ?? "";
+      if (clearedDraft) composerRef.current?.resetCursorState();
       if (
         multipleModelSelections === null &&
         !compactBeforeSend &&
@@ -9499,15 +9501,6 @@ export default function ChatView(props: ChatViewProps) {
             }
           : null,
       );
-      if (useComposerDraftStore.getState().getComposerDraft(composerDraftTarget) === savedDraft) {
-        promptRef.current = "";
-        clearComposerDraftContent(composerDraftTarget);
-        composerRef.current?.resetCursorState();
-      }
-      // The outbox owns its own bytes. References recovered without bytes stay owned until delivery.
-      releaseDraftAttachments(
-        composerAttachmentsSnapshot.filter((attachment) => attachment.file !== null),
-      );
       setThreadError(threadIdForSend, null);
       if (isLocalDraftThread && multipleModelSelections === null)
         markPromotedDraftThreadByRef(scopeThreadRef(environmentId, threadIdForSend));
@@ -9526,6 +9519,7 @@ export default function ChatView(props: ChatViewProps) {
         error instanceof Error ? error.message : "Could not save the pending message.",
       );
     } finally {
+      releaseCapture?.(captureCommitted);
       sendInFlightRef.current = false;
     }
   };

@@ -6,7 +6,7 @@ import {
   INCOGNITO_BROWSER_PROFILE_ID,
   PREVIEW_AUTOMATION_SERVER_OPERATIONS,
   PreviewViewportSetting as PreviewViewportSettingSchema,
-  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PREVIEW_RECORDING_MAX_BYTES,
   type PreviewAutomationActionEvent,
   type PreviewAutomationClickInput,
   type PreviewAutomationDialogInput,
@@ -1335,7 +1335,7 @@ const make = Effect.gen(function* () {
         );
         mimeType = stopped.mimeType;
         // Checked before the transfer so an oversized video never lands in this process.
-        if (stopped.bytes > PROVIDER_SEND_TURN_MAX_FILE_BYTES) {
+        if (stopped.bytes > PREVIEW_RECORDING_MAX_BYTES) {
           throw new ServerBrowserPage.ServerBrowserOperationError(
             "PreviewAutomationRecordingTooLargeError",
             "The recording is larger than the attachment limit.",

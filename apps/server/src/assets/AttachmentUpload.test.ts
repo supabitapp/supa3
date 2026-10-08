@@ -3,6 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ATTACHMENT_UPLOAD_IDLE_TIMEOUT_MS } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -199,6 +200,56 @@ describe("AttachmentUpload", () => {
         status: 400,
       });
       expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([]);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("times out idle body reads and removes the partial file", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const issued = yield* issueAttachmentUploadUrl(uploadInput);
+      const claims = yield* validateAttachmentUploadToken(
+        issued.relativeUrl.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length),
+      );
+      if (!claims) throw new Error("Expected valid upload claims");
+      const waiting = yield* Deferred.make<void>();
+      const body = Stream.make(new Uint8Array([1, 2, 3])).pipe(
+        Stream.concat(
+          Stream.fromEffect(
+            Deferred.succeed(waiting, undefined).pipe(Effect.andThen(Effect.never)),
+          ),
+        ),
+      );
+      const upload = yield* storeAttachmentUpload(claims, body).pipe(Effect.forkScoped);
+      yield* Deferred.await(waiting);
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toHaveLength(1);
+      yield* TestClock.adjust(ATTACHMENT_UPLOAD_IDLE_TIMEOUT_MS);
+      expect(yield* Fiber.join(upload)).toMatchObject({ ok: false, status: 408 });
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([]);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("persists steady body reads beyond the former five-minute deadline", () =>
+    Effect.gen(function* () {
+      const issued = yield* issueAttachmentUploadUrl(uploadInput);
+      const claims = yield* validateAttachmentUploadToken(
+        issued.relativeUrl.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length),
+      );
+      if (!claims) throw new Error("Expected valid upload claims");
+      const requested = yield* Effect.forEach([0, 1, 2, 3, 4, 5], () => Deferred.make<void>());
+      const body = Stream.unfold(0, (index) =>
+        Effect.gen(function* () {
+          if (index >= requested.length) return undefined;
+          yield* Deferred.succeed(requested[index]!, undefined);
+          yield* Effect.sleep(55_000);
+          return [new Uint8Array([index]), index + 1] as const;
+        }),
+      );
+      const upload = yield* storeAttachmentUpload(claims, body).pipe(Effect.forkScoped);
+      for (const next of requested) {
+        yield* Deferred.await(next);
+        yield* TestClock.adjust(55_000);
+      }
+      expect(yield* Fiber.join(upload)).toEqual({ ok: true });
     }).pipe(Effect.provide(layerTest)),
   );
 

@@ -38,6 +38,7 @@ import { directThreadEnvironment } from "./threadCommands";
 import { readPreparedConnection } from "./session";
 import { OutboxTurn, OutboxAttachment } from "./threadOutboxSchema";
 import { browserThreadOutboxStorage } from "./threadOutboxStorage";
+import { uploadAttachmentBlob, AttachmentUploadHttpError } from "../lib/attachmentUploadTransport";
 import { randomUUID, newThreadId } from "../lib/utils";
 import { assetEnvironment } from "./assets";
 
@@ -60,8 +61,8 @@ async function uploadAttachment(
   environmentId: EnvironmentId,
   attachment: typeof OutboxAttachment.Type,
 ) {
-  if (attachment.bytes === null)
-    throw new Error(`Attach '${attachment.name}' again before sending.`);
+  const bytes = attachment.bytes;
+  if (bytes === null) throw new Error(`Attach '${attachment.name}' again before sending.`);
   const result = await runAttachmentUploadCycle({
     registry: appAtomRegistry,
     createUploadUrl: attachmentEnvironment.createUploadUrl,
@@ -78,28 +79,24 @@ async function uploadAttachment(
       return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
     },
     transport: (url) => {
-      const controller = new AbortController();
+      const transfer = uploadAttachmentBlob({
+        url,
+        body: bytes,
+        mimeType: attachment.mimeType,
+      });
       return {
-        abort: () => controller.abort(),
-        done: (async () => {
-          let response: Response;
-          try {
-            response = await fetch(url, {
-              method: "POST",
-              body: attachment.bytes,
-              headers: { "Content-Type": attachment.mimeType },
-              signal: AbortSignal.any([controller.signal, AbortSignal.timeout(300_000)]),
-            });
-          } catch (error) {
-            throw new Error("Attachment upload disconnected.", { cause: error });
-          }
-          if (!response.ok)
+        abort: transfer.abort,
+        done: transfer.done.catch((error: unknown) => {
+          if (error instanceof AttachmentUploadHttpError) {
+            const status = error.status;
             throw new Error(
-              response.status >= 500 || response.status === 408 || response.status === 429
-                ? `Attachment upload (${response.status}) disconnected.`
-                : `Attachment upload failed (${response.status}).`,
+              status >= 500 || status === 408 || status === 429
+                ? `Attachment upload (${status}) disconnected.`
+                : `Attachment upload failed (${status}).`,
             );
-        })(),
+          }
+          throw new Error("Attachment upload disconnected.", { cause: error });
+        }),
       };
     },
   });

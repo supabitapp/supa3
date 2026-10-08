@@ -1,9 +1,11 @@
 import {
+  ATTACHMENT_UPLOAD_IDLE_TIMEOUT_MS,
   ATTACHMENT_UPLOAD_URL_TTL_MS,
   type AttachmentCreateUploadUrlInput,
   AttachmentUploadSigningKeyError,
 } from "@supacode/contracts";
 import * as Clock from "effect/Clock";
+import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -182,7 +184,24 @@ export const storeAttachmentUpload = Effect.fn("AttachmentUpload.store")(functio
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   let receivedBytes = 0;
-  const bodyStream = body instanceof Uint8Array ? Stream.make(body) : body;
+  let timedOut = false;
+  // Timeout each upstream read, excluding time spent writing a received chunk.
+  const bodyStream = Stream.transformPull(
+    body instanceof Uint8Array ? Stream.make(body) : body,
+    (pull) =>
+      Effect.succeed(
+        pull.pipe(
+          Effect.timeoutOrElse({
+            duration: ATTACHMENT_UPLOAD_IDLE_TIMEOUT_MS,
+            orElse: () =>
+              Effect.gen(function* () {
+                timedOut = true;
+                return yield* Cause.done();
+              }),
+          }),
+        ),
+      ),
+  );
   return yield* Effect.gen(function* () {
     yield* fileSystem.makeDirectory(path.dirname(finalPath), { recursive: true });
     yield* Stream.run(
@@ -194,6 +213,13 @@ export const storeAttachmentUpload = Effect.fn("AttachmentUpload.store")(functio
       ),
       fileSystem.sink(partPath),
     );
+    if (timedOut) {
+      return {
+        ok: false,
+        status: 408,
+        detail: "Upload body timed out.",
+      } satisfies StoreAttachmentUploadResult;
+    }
     if (receivedBytes !== claims.sizeBytes) {
       return {
         ok: false,

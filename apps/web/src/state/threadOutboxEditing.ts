@@ -10,6 +10,10 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { removeInlineContextReference } from "../lib/composerContextReferences";
 import { releaseDraftAttachments } from "../lib/attachmentUploadQueue";
+import {
+  releaseCapturedDraftAttachments,
+  retainCapturedAttachmentUploads,
+} from "../lib/threadOutboxAttachments";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "../components/chat/composerPromptHistory";
 import { replaceThreadOutboxTurn, webThreadOutbox, type PendingThreadTurn } from "./threadOutbox";
 import type { OutboxTurn } from "./threadOutboxSchema";
@@ -107,24 +111,23 @@ export function createThreadOutboxEditor(routeKey: string) {
   const publish = () => {
     for (const listener of listeners) listener();
   };
-  function finish(saved: boolean) {
+  function finish(saved?: OutboxTurn) {
     generation += 1;
     if (!editing) return;
     const { entry, draftTarget } = editing;
     const store = useComposerDraftStore.getState();
     const draft = store.getComposerDraft(draftTarget);
-    if (draft)
-      releaseDraftAttachments(
-        [...draft.images, ...draft.files].filter(
-          (attachment) => !saved || attachment.file !== null,
-        ),
-      );
+    if (draft) {
+      const attachments = [...draft.images, ...draft.files];
+      if (saved) releaseCapturedDraftAttachments(attachments, saved.localAttachments);
+      else releaseDraftAttachments(attachments);
+    }
     store.clearDraftThread(draftTarget);
     editing = null;
     publish();
     void webThreadOutbox.pause(entry.id, false).catch(console.error);
   }
-  const cancel = () => finish(false);
+  const cancel = () => finish();
   return {
     getSnapshot: () => editing,
     subscribe: (listener: () => void) => {
@@ -184,9 +187,22 @@ export function createThreadOutboxEditor(routeKey: string) {
     save: async (payload: OutboxTurn) => {
       const current = editing;
       if (!current) return null;
-      const threadRef = await replaceThreadOutboxTurn(current.entry, payload);
-      if (editing === current) finish(true);
-      return threadRef;
+      const draft = useComposerDraftStore.getState().getComposerDraft(current.draftTarget);
+      const attachments = draft ? [...draft.images, ...draft.files] : [];
+      const release = retainCapturedAttachmentUploads(
+        payload.environmentId,
+        payload.localAttachments,
+      );
+      let committed = false;
+      try {
+        const threadRef = await replaceThreadOutboxTurn(current.entry, payload);
+        committed = true;
+        if (editing === current) finish(payload);
+        else releaseCapturedDraftAttachments(attachments, payload.localAttachments);
+        return threadRef;
+      } finally {
+        release(committed);
+      }
     },
     cancel,
   };

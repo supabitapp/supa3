@@ -57,6 +57,7 @@ import {
   awaitAttachmentUploads,
   getUploadedAttachments,
   readAttachmentUpload,
+  isAttachmentUploadRetained,
   releaseAttachmentUpload,
   releaseDraftAttachment,
   releaseDraftAttachments,
@@ -65,6 +66,12 @@ import {
   startAttachmentUpload,
   useAttachmentUploadStore,
 } from "./attachmentUploadQueue";
+import {
+  captureThreadOutboxAttachments,
+  completeThreadOutboxDraft,
+  releaseCapturedDraftAttachments,
+  retainCapturedAttachmentUploads,
+} from "./threadOutboxAttachments";
 
 type ProgressListener = (event: {
   readonly lengthComputable: boolean;
@@ -79,13 +86,14 @@ class TestXmlHttpRequest {
   timeout = 0;
   method: string | null = null;
   url: string | null = null;
+  body: Blob | null = null;
   readonly headers = new Map<string, string>();
   readonly listeners = new Map<string, () => void>();
   progressListener: ProgressListener | null = null;
 
   readonly upload = {
-    addEventListener: (_event: string, listener: ProgressListener) => {
-      this.progressListener = listener;
+    addEventListener: (event: string, listener: ProgressListener) => {
+      if (event === "progress") this.progressListener = listener;
     },
   };
 
@@ -106,7 +114,9 @@ class TestXmlHttpRequest {
     this.listeners.set(event, listener);
   }
 
-  send(): void {}
+  send(body: Blob): void {
+    this.body = body;
+  }
 
   abort(): void {
     this.listeners.get("abort")?.();
@@ -431,6 +441,153 @@ describe("attachmentUploadQueue", () => {
     );
   });
 
+  it("waits for a large file's existing upload and hands its host copy to the outbox", async () => {
+    const file = { ...makeFile("large"), sizeBytes: 8_589_934_592 };
+    startAttachmentUpload({ environmentId: firstEnvironment, image: file });
+    let captured = false;
+    const pending = captureThreadOutboxAttachments({
+      environmentId: firstEnvironment,
+      attachments: [file],
+    }).then((attachments) => {
+      captured = true;
+      return attachments;
+    });
+    await Promise.resolve();
+    expect(captured).toBe(false);
+    expect(TestXmlHttpRequest.requests).toHaveLength(1);
+    TestXmlHttpRequest.requests[0]!.complete();
+    const attachments = await pending;
+    expect(attachments).toMatchObject([
+      {
+        bytes: null,
+        uploaded: { id: "pending-environment-1-large.pdf", sizeBytes: 8_589_934_592 },
+      },
+    ]);
+    releaseCapturedDraftAttachments([file], attachments);
+    expect(readAttachmentUpload(file.id)).toBeUndefined();
+    expect(
+      mocks.runAtomCommand.mock.calls.filter((call) => call[1] === mocks.removeUpload),
+    ).toEqual([]);
+    expect(TestXmlHttpRequest.requests).toHaveLength(1);
+  });
+
+  it("keeps an unuploaded large file in the draft instead of copying it to the outbox", async () => {
+    const file = { ...makeFile("offline-large"), sizeBytes: 8_589_934_592 };
+    await expect(
+      captureThreadOutboxAttachments({ environmentId: firstEnvironment, attachments: [file] }),
+    ).rejects.toThrow("Finish uploading 'offline-large.pdf' before sending.");
+    expect(file.file).toBeInstanceOf(File);
+    expect(mocks.runAtomCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    "transfers a submitted upload without discarding newer draft edits (edited=%s)",
+    async (edited) => {
+      const target = DraftId.make(`submit-upload-${edited}`);
+      const store = useComposerDraftStore.getState();
+      const file = { ...makeFile(`submitted-${edited}`), sizeBytes: 8_589_934_592 };
+      store.setPrompt(target, "Submitted message");
+      store.addFiles(target, [file]);
+      const submitted = store.getComposerDraft(target);
+      startAttachmentUpload({ environmentId: firstEnvironment, image: file, draftTarget: target });
+      const captured = captureThreadOutboxAttachments({
+        environmentId: firstEnvironment,
+        attachments: [file],
+      });
+      if (edited) {
+        store.setPrompt(target, "My next message");
+        store.addFiles(target, [makeFile("new-attachment")]);
+      }
+      await Promise.resolve();
+      TestXmlHttpRequest.requests[0]!.complete();
+      const attachments = await captured;
+      expect(store.getComposerDraft(target)?.files[0]?.uploadedAttachmentId).toBeDefined();
+      expect(
+        completeThreadOutboxDraft({
+          target,
+          submitted,
+          attachments: [file],
+          captured: attachments,
+        }),
+      ).toBe(!edited);
+      const remaining = store.getComposerDraft(target);
+      expect(remaining?.prompt ?? "").toBe(edited ? "My next message" : "");
+      expect(remaining?.files.map((entry) => entry.id) ?? []).toEqual(
+        edited ? ["new-attachment"] : [],
+      );
+      releaseDraftAttachments(remaining?.files ?? []);
+      store.clearComposerContent(target);
+      expect(
+        mocks.runAtomCommand.mock.calls.filter((call) => call[1] === mocks.removeUpload),
+      ).toEqual([]);
+      expect(TestXmlHttpRequest.requests).toHaveLength(1);
+    },
+  );
+
+  it("keeps ownership of the uploaded file when durable enqueue fails", async () => {
+    const target = DraftId.make("failed-enqueue");
+    const store = useComposerDraftStore.getState();
+    const file = { ...makeFile("retained"), sizeBytes: 8_589_934_592 };
+    store.addFiles(target, [file]);
+    startAttachmentUpload({ environmentId: firstEnvironment, image: file, draftTarget: target });
+    const captured = captureThreadOutboxAttachments({
+      environmentId: firstEnvironment,
+      attachments: [file],
+    });
+    await Promise.resolve();
+    TestXmlHttpRequest.requests[0]!.complete();
+    await captured;
+    // No ownership handoff occurs before the caller's durable enqueue succeeds.
+    expect(readAttachmentUpload(file.id)?.status).toBe("ready");
+    releaseDraftAttachments(store.getComposerDraft(target)?.files ?? []);
+    expect(mocks.runAtomCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      mocks.removeUpload,
+      {
+        environmentId: firstEnvironment,
+        input: { attachmentId: "pending-environment-1-retained.pdf" },
+      },
+      expect.anything(),
+    );
+    store.clearComposerContent(target);
+  });
+
+  it.each([true, false])(
+    "defers discard until the pending durable write settles (committed=%s)",
+    async (committed) => {
+      const file = { ...makeFile(`saving-${committed}`), sizeBytes: 8_589_934_592 };
+      startAttachmentUpload({ environmentId: firstEnvironment, image: file });
+      const captured = captureThreadOutboxAttachments({
+        environmentId: firstEnvironment,
+        attachments: [file],
+      });
+      await Promise.resolve();
+      TestXmlHttpRequest.requests[0]!.complete();
+      const attachments = await captured;
+      const settle = retainCapturedAttachmentUploads(firstEnvironment, attachments);
+      const uploadedId = attachments[0]!.uploaded!.id;
+      expect(isAttachmentUploadRetained(firstEnvironment, uploadedId)).toBe(true);
+      releaseDraftAttachment(file);
+      const removals = () =>
+        mocks.runAtomCommand.mock.calls.filter((call) => call[1] === mocks.removeUpload);
+      expect(removals()).toEqual([]);
+      settle(committed);
+      settle(committed);
+      expect(isAttachmentUploadRetained(firstEnvironment, uploadedId)).toBe(false);
+      expect(removals()).toHaveLength(committed ? 0 : 1);
+    },
+  );
+
+  it("retains small offline file bytes for the durable outbox", async () => {
+    const file = makeFile("offline-small");
+    const attachments = await captureThreadOutboxAttachments({
+      environmentId: firstEnvironment,
+      attachments: [file],
+    });
+    expect(attachments[0]?.bytes).toBe(file.file);
+    expect(attachments[0]?.uploaded).toBeUndefined();
+  });
+
   it("uploads generic files and sends file attachment references", async () => {
     const file = {
       ...makeFile("report"),
@@ -455,6 +612,9 @@ describe("attachmentUploadQueue", () => {
     );
 
     const settled = awaitAttachmentUploads([file.id]);
+    const body = TestXmlHttpRequest.requests[0]!.body;
+    if (!body) throw new Error("Expected file bytes in the upload request");
+    expect(new Uint8Array(await body.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
     TestXmlHttpRequest.requests[0]!.complete();
     await settled;
 

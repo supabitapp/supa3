@@ -17,12 +17,18 @@ const harness = vi.hoisted(() => ({
   records: new Map<string, ThreadOutboxEntry<OutboxTurn>>(),
   run: vi.fn(),
   verify: vi.fn(),
+  upload: vi.fn(),
   marked: vi.fn(),
   finalized: vi.fn(),
   supportsUploads: false,
   online: false,
   existingThread: false,
   archivedThread: false,
+}));
+
+vi.mock("../lib/attachmentUploadTransport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/attachmentUploadTransport")>()),
+  uploadAttachmentBlob: harness.upload,
 }));
 
 vi.mock("../rpc/atomRegistry", async () => {
@@ -159,6 +165,7 @@ beforeEach(() => {
   harness.archivedThread = false;
   harness.run.mockResolvedValue(AsyncResult.success({ sequence: 1 }));
   harness.verify.mockResolvedValue({ status: "verified" });
+  harness.upload.mockImplementation(() => ({ done: Promise.resolve(), abort: vi.fn() }));
 });
 
 describe("web thread outbox delivery", () => {
@@ -390,8 +397,6 @@ describe("web thread outbox delivery", () => {
   it("persists an uploaded file reference before dispatch and reuses it after a transport failure", async () => {
     harness.supportsUploads = true;
     harness.online = true;
-    const transfer = vi.fn(async () => new Response(null, { status: 200 }));
-    vi.stubGlobal("fetch", transfer);
     harness.run.mockImplementation(async (_registry: unknown, operation: { label: string }) =>
       operation.label === "upload"
         ? AsyncResult.success({ attachmentId: "uploaded-file", relativeUrl: "/signed-upload" })
@@ -414,17 +419,18 @@ describe("web thread outbox delivery", () => {
     await webThreadOutbox.drain();
     const saved = harness.records.get("message");
     expect(saved?.payload.localAttachments[0]?.uploaded?.id).toBe("uploaded-file");
-    expect(transfer).toHaveBeenCalledWith(
-      "https://environment.example/signed-upload",
-      expect.objectContaining({ method: "POST", body: expect.any(Blob) }),
-    );
+    expect(harness.upload).toHaveBeenCalledWith({
+      url: "https://environment.example/signed-upload",
+      mimeType: "text/plain",
+      body: expect.any(Blob),
+    });
     vi.resetModules();
     harness.run.mockResolvedValue(AsyncResult.success({ sequence: 1 }));
     // Reconnect after the retry backoff without using timers or polling.
     if (!saved) throw new Error("Expected the retained pending message");
     harness.records.set("message", { ...saved, retryAt: 0 });
     await (await import("./threadOutbox")).webThreadOutbox.drain();
-    expect(transfer).toHaveBeenCalledTimes(1);
+    expect(harness.upload).toHaveBeenCalledTimes(1);
     expect(harness.verify).toHaveBeenCalled();
     expect(harness.run).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -439,6 +445,43 @@ describe("web thread outbox delivery", () => {
       }),
       expect.anything(),
     );
+  });
+
+  it.each([
+    [400, "failed"],
+    [429, "pending"],
+    [500, "pending"],
+  ])("retains file bytes after upload status %s as %s", async (status, expectedStatus) => {
+    harness.supportsUploads = true;
+    harness.online = true;
+    const { AttachmentUploadHttpError } = await import("../lib/attachmentUploadTransport");
+    harness.upload.mockImplementation(() => ({
+      done: Promise.reject(new AttachmentUploadHttpError(status)),
+      abort: vi.fn(),
+    }));
+    harness.run.mockResolvedValue(
+      AsyncResult.success({ attachmentId: "uploaded-file", relativeUrl: "/signed-upload" }),
+    );
+    const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+    await enqueueThreadOutboxTurn({
+      ...target(),
+      localAttachments: [
+        {
+          id: "local-file",
+          type: "file",
+          name: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          bytes: new Blob(["notes"]),
+        },
+      ],
+    });
+    await webThreadOutbox.drain();
+    const saved = harness.records.get("message");
+    expect(saved?.status).toBe(expectedStatus);
+    expect(saved?.payload.localAttachments[0]?.bytes).toBeInstanceOf(Blob);
+    expect(saved?.payload.localAttachments[0]?.uploaded).toBeUndefined();
+    expect(harness.run).toHaveBeenCalledTimes(1);
   });
 
   it("retains an oversized attachment as a failed pending message", async () => {

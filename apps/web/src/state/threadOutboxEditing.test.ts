@@ -14,12 +14,25 @@ import { formatInlineContextReference } from "../lib/composerContextReferences";
 import type { PendingThreadTurn } from "./threadOutbox";
 import { buildEditedThreadOutboxTurn, createThreadOutboxEditor } from "./threadOutboxEditing";
 
-const transport = vi.hoisted(() => ({ pause: vi.fn(), replace: vi.fn(), release: vi.fn() }));
+const transport = vi.hoisted(() => ({
+  pause: vi.fn(),
+  replace: vi.fn(),
+  release: vi.fn(),
+  releaseOne: vi.fn(),
+  transfer: vi.fn(),
+  retain: vi.fn(),
+  settle: vi.fn(),
+}));
 vi.mock("./threadOutbox", () => ({
   webThreadOutbox: { pause: transport.pause },
   replaceThreadOutboxTurn: transport.replace,
 }));
-vi.mock("../lib/attachmentUploadQueue", () => ({ releaseDraftAttachments: transport.release }));
+vi.mock("../lib/attachmentUploadQueue", () => ({
+  releaseDraftAttachments: transport.release,
+  releaseDraftAttachment: transport.releaseOne,
+  transferCompletedAttachmentUpload: transport.transfer,
+  retainAttachmentUploads: transport.retain,
+}));
 
 const environmentId = EnvironmentId.make("environment");
 const threadId = ThreadId.make("thread");
@@ -87,10 +100,115 @@ beforeEach(() => {
   vi.clearAllMocks();
   transport.pause.mockResolvedValue(true);
   transport.replace.mockResolvedValue(null);
+  transport.retain.mockReturnValue(transport.settle);
   useComposerDraftStore.setState({ draftsByThreadKey: {}, draftThreadsByThreadKey: {} });
 });
 
 describe("outbox editing in the composer", () => {
+  it.each([true, false])(
+    "settles upload ownership after navigation during save (committed=%s)",
+    async (committed) => {
+      const editor = createThreadOutboxEditor("navigation-save");
+      await editor.begin(entry());
+      const editing = editor.getSnapshot()!;
+      let resolveWrite: (value: null) => void = () => {};
+      let rejectWrite: (error: Error) => void = () => {};
+      transport.replace.mockReturnValueOnce(
+        new Promise<null>((resolve, reject) => {
+          resolveWrite = resolve;
+          rejectWrite = reject;
+        }),
+      );
+      useComposerDraftStore.getState().addFiles(editing.draftTarget, [file]);
+      const payload = {
+        ...editing.entry.payload,
+        localAttachments: [
+          {
+            ...editing.entry.payload.localAttachments[0]!,
+            bytes: null,
+            uploaded: {
+              id: "pending-save",
+              type: "file" as const,
+              name: file.name,
+              mimeType: file.mimeType,
+              sizeBytes: file.sizeBytes,
+            },
+          },
+        ],
+      };
+      const saving = editor.save(payload);
+      const observed = saving.catch((error: unknown) => error);
+      editor.cancel();
+      expect(transport.settle).not.toHaveBeenCalled();
+      if (committed) resolveWrite(null);
+      else rejectWrite(new Error("quota"));
+      await observed;
+      expect(transport.settle).toHaveBeenCalledWith(committed);
+      expect(transport.retain).toHaveBeenCalledWith([
+        { environmentId, attachmentId: "pending-save" },
+      ]);
+      expect(transport.retain.mock.invocationCallOrder[0]).toBeLessThan(
+        transport.replace.mock.invocationCallOrder[0]!,
+      );
+      expect(editor.getSnapshot()).toBeNull();
+    },
+  );
+  it.each(["save", "cancel", "failure"] as const)(
+    "preserves or deletes a large upload according to the durable edit result (%s)",
+    async (outcome) => {
+      const editor = createThreadOutboxEditor("large-edit");
+      await editor.begin(entry());
+      const editing = editor.getSnapshot()!;
+      const store = useComposerDraftStore.getState();
+      const large = { ...file, id: "large", sizeBytes: 8_589_934_592 };
+      store.addFiles(editing.draftTarget, [large]);
+      store.setFileUpload(editing.draftTarget, large.id, environmentId, "pending-large");
+      const payload = buildEditedThreadOutboxTurn({
+        entry: editing.entry,
+        text: "edited",
+        keptAttachmentIds: [],
+        addedAttachments: [
+          {
+            id: large.id,
+            type: "file",
+            name: large.name,
+            mimeType: large.mimeType,
+            sizeBytes: large.sizeBytes,
+            bytes: null,
+            uploaded: {
+              id: "pending-large",
+              type: "file",
+              name: large.name,
+              mimeType: large.mimeType,
+              sizeBytes: large.sizeBytes,
+            },
+          },
+        ],
+      });
+      if (outcome === "cancel") editor.cancel();
+      else if (outcome === "failure") {
+        transport.replace.mockRejectedValueOnce(new Error("quota"));
+        await expect(editor.save(payload)).rejects.toThrow("quota");
+      } else await editor.save(payload);
+      if (outcome === "save") {
+        expect(transport.transfer).toHaveBeenCalledWith(large.id);
+        expect(transport.release).not.toHaveBeenCalled();
+        expect(transport.releaseOne).not.toHaveBeenCalled();
+        expect(transport.transfer.mock.invocationCallOrder[0]).toBeLessThan(
+          transport.pause.mock.invocationCallOrder.at(-1)!,
+        );
+      } else {
+        expect(transport.transfer).not.toHaveBeenCalled();
+        if (outcome === "cancel") expect(transport.release).toHaveBeenCalled();
+        else {
+          expect(transport.release).not.toHaveBeenCalled();
+          expect(store.getComposerDraft(editing.draftTarget)?.files[0]?.uploadedAttachmentId).toBe(
+            "pending-large",
+          );
+        }
+      }
+    },
+  );
   it("keeps the current draft intact when opening and cancelling an edit", async () => {
     const store = useComposerDraftStore.getState();
     store.setPrompt(threadTarget, "My newer draft");

@@ -13,6 +13,8 @@ import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./
 import { BrowserProfileId } from "./browserProfile.ts";
 
 export const PREVIEW_URL_MAX_LENGTH = 2_048;
+// Recordings are assembled in memory before becoming file attachments.
+export const PREVIEW_RECORDING_MAX_BYTES = 50 * 1024 * 1024;
 export const CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS = 32;
 
 const Url = TrimmedNonEmptyString.check(Schema.isMaxLength(PREVIEW_URL_MAX_LENGTH));

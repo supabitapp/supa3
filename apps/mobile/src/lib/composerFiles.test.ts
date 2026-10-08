@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { PROVIDER_SEND_TURN_MAX_IMAGE_BYTES } from "@supacode/contracts";
+import {
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+} from "@supacode/contracts";
 import type { ImagePickerAsset } from "expo-image-picker";
 
 const mocks = vi.hoisted(() => ({
@@ -446,10 +449,10 @@ describe("composer file attachments", () => {
       },
       {
         reason: "server advertises more than the contract limit",
-        reported: 51 * 1024 * 1024,
+        reported: PROVIDER_SEND_TURN_MAX_FILE_BYTES + 1,
         stored: 42,
-        limit: 80 * 1024 * 1024,
-        error: "'clip.mov' exceeds the 50 MB attachment limit.",
+        limit: PROVIDER_SEND_TURN_MAX_FILE_BYTES * 2,
+        error: "'clip.mov' exceeds the 8 GB attachment limit.",
       },
     ])(
       "rejects a video when $reason while retaining the selected photo",
@@ -677,7 +680,10 @@ describe("composer file attachments", () => {
     expect(mocks.copy).not.toHaveBeenCalled();
   });
 
-  it("never accepts files above the 50 MB contract limit", async () => {
+  it.each([
+    { size: PROVIDER_SEND_TURN_MAX_FILE_BYTES, accepted: true },
+    { size: PROVIDER_SEND_TURN_MAX_FILE_BYTES + 1, accepted: false },
+  ])("enforces the 8 GiB contract boundary for a $size byte file", async ({ size, accepted }) => {
     mocks.pickFile.mockResolvedValue({
       canceled: false,
       assets: [
@@ -685,17 +691,29 @@ describe("composer file attachments", () => {
           uri: "file:///downloads/archive.zip",
           name: "archive.zip",
           mimeType: "application/zip",
-          size: 51 * 1024 * 1024,
+          size,
         },
       ],
     });
 
-    await expect(
-      pickComposerFiles({ existingCount: 0, maxBytes: 80 * 1024 * 1024 }),
-    ).resolves.toEqual({
-      files: [],
-      error: "'archive.zip' exceeds the 50 MB attachment limit.",
+    mocks.size.mockReturnValue(size);
+    const result = await pickComposerFiles({
+      existingCount: 0,
+      maxBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES * 2,
     });
+    if (accepted) {
+      expect(result.error).toBeNull();
+      expect(result.files).toEqual([
+        expect.objectContaining({ name: "archive.zip", sizeBytes: size }),
+      ]);
+      expect(mocks.copy).toHaveBeenCalledOnce();
+    } else {
+      expect(result).toEqual({
+        files: [],
+        error: "'archive.zip' exceeds the 8 GB attachment limit.",
+      });
+      expect(mocks.copy).not.toHaveBeenCalled();
+    }
   });
 
   it("rejects a file that grew after the picker reported its size", async () => {

@@ -16,7 +16,9 @@ to keep a large paste editable in the composer instead.
 
 Attach up to 100 files per message. Each image can be up to 10 MiB, with at most
 80 MiB of images in one message. Other files, including videos, can be up to
-50 MiB each, subject to the environment's upload support and limit. The agent
+8 GiB (8,589,934,592 bytes) each, subject to the environment's upload support and limit. On web and
+desktop, files over 50 MiB finish uploading before the message is saved for delivery; keep the
+connection open until the upload completes. The agent
 receives them on the environment's machine. Provider and model limits still
 apply, including images already in the conversation. A video attachment gives
 the agent a file path; it does not enable native video input.

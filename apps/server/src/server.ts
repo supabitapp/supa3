@@ -101,6 +101,7 @@ import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
+import { guardHttpRequestBodyTimeout } from "./httpRequestBodyTimeout.ts";
 import * as AuthHttp from "./auth/http.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as McpOAuth from "./auth/McpOAuth.ts";
@@ -201,7 +202,14 @@ const layerResourceDiagnostics = Layer.mergeAll(
 const layerHttpServer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
-    return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
+    const server = guardHttpRequestBodyTimeout(
+      guardHttpResponseWriteErrors(
+        NodeHttp.createServer({ requestTimeout: 0, headersTimeout: 60_000 }),
+      ),
+    );
+    // Active file transfers can outlast the default five-minute body deadline.
+    // AttachmentUpload bounds idle body reads without timing out MCP responses.
+    return NodeHttpServer.layer(() => server, {
       host: config.host ?? "127.0.0.1",
       port: config.port,
       gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
