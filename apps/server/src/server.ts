@@ -205,7 +205,8 @@ const layerResourceDiagnostics = Layer.mergeAll(
 const layerHttpServer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
-    return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
+    const server = guardHttpResponseWriteErrors(NodeHttp.createServer());
+    return NodeHttpServer.layer(() => server, {
       host: config.host ?? "127.0.0.1",
       port: config.port,
       gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,

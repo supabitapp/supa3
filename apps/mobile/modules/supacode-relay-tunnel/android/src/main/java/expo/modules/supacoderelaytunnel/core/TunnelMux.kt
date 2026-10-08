@@ -53,6 +53,8 @@ internal class TunnelMux(
     var finSent = false
     var remoteEnded = false
     var closed = false
+    val needsFin get() = localEnded && !finSent && pending.isEmpty()
+    val wantsSend get() = !closed && (pending.isNotEmpty() || needsFin)
   }
 
   private val streams = LinkedHashMap<Int, Stream>()
@@ -156,69 +158,90 @@ internal class TunnelMux(
       val callbacks = ArrayList<CompletableFuture<Unit>>()
       var dataBytes = 0
       while (control.isNotEmpty() && plain.size() + control.first.size <= MAX_PLAIN) {
-        plain.write(
-          control.removeFirst()
-        )
+        plain.write(control.removeFirst())
       }
       for (stream in ready.toList()) {
         if (MAX_PLAIN - plain.size() < 9) break
         ready.remove(stream)
-        val pending = stream.pending.peekFirst()
-        val room =
-          minOf(
-            MAX_PLAIN - plain.size() - 9,
-            stream.sendCredit,
-            if (sendCredit >= MIN_COST) sendCredit - dataBytes else 0,
-          )
-        if (pending != null && room > 0) {
-          val count = minOf(room, pending.bytes.size - pending.offset)
-          plain.write(
-            frame(2, stream.id, pending.bytes.copyOfRange(pending.offset, pending.offset + count))
-          )
-          pending.offset += count
-          dataBytes += count
-          stream.sendCredit -= count
-          if (pending.offset == pending.bytes.size) {
-            stream.pending.removeFirst()
-            callbacks.add(pending.done)
-          }
-        }
-        if (
-          stream.pending.isEmpty() &&
-          stream.localEnded &&
-          !stream.finSent &&
-          MAX_PLAIN - plain.size() >= 9
-        ) {
-          plain.write(frame(4, stream.id))
-          stream.finSent = true
-          maybeFinish(stream)
-        }
-        if (
-          !stream.closed &&
-          (stream.pending.isNotEmpty() || (stream.localEnded && !stream.finSent))
-        ) {
-          ready.add(stream)
-        }
+        dataBytes += writeStream(stream, plain, callbacks, dataBytes)
+        if (stream.wantsSend) ready.add(stream)
       }
       if (plain.size() == 0) return
-      if (dataBytes > 0) sendCredit -= maxOf(dataBytes, MIN_COST)
-      try {
-        sendRecord(cipher.seal(plain.toByteArray()))
-      } catch (error: Exception) {
-        callbacks.forEach { it.completeExceptionally(error) }
-        throw error
-      }
-      onDataSent(dataBytes)
-      callbacks.forEach { it.complete(Unit) }
+      flush(plain, callbacks, dataBytes)
     }
   }
 
+  private fun writeStream(
+    stream: Stream,
+    plain: ByteArrayOutputStream,
+    callbacks: MutableList<CompletableFuture<Unit>>,
+    dataBytes: Int
+  ): Int {
+    val pending = stream.pending.peekFirst()
+    val room = minOf(
+      MAX_PLAIN - plain.size() - 9,
+      stream.sendCredit,
+      if (sendCredit >= MIN_COST) sendCredit - dataBytes else 0,
+    )
+    var count = 0
+    if (pending != null && room > 0) {
+      count = minOf(room, pending.bytes.size - pending.offset)
+      plain.write(
+        frame(
+          2,
+          stream.id,
+          pending.bytes.copyOfRange(
+            pending.offset,
+            pending.offset + count
+          )
+        )
+      )
+      pending.offset += count
+      stream.sendCredit -= count
+      if (pending.offset == pending.bytes.size) {
+        stream.pending.removeFirst()
+        callbacks.add(pending.done)
+      }
+    }
+    if (stream.needsFin && MAX_PLAIN - plain.size() >= 9) {
+      plain.write(frame(4, stream.id))
+      stream.finSent = true
+      maybeFinish(stream)
+    }
+    return count
+  }
+
+  @Suppress("TooGenericExceptionCaught")
+  private fun flush(
+    plain: ByteArrayOutputStream,
+    callbacks: List<CompletableFuture<Unit>>,
+    dataBytes: Int
+  ) {
+    if (dataBytes > 0) sendCredit -= maxOf(dataBytes, MIN_COST)
+    try {
+      sendRecord(cipher.seal(plain.toByteArray()))
+    } catch (error: Exception) {
+      callbacks.forEach { it.completeExceptionally(error) }
+      throw error
+    }
+    onDataSent(dataBytes)
+    callbacks.forEach { it.complete(Unit) }
+  }
+
+  private class Frame(val type: Int, val id: Int, val data: ByteArray)
+
   fun receive(record: ByteArray) {
     check(!closed)
-    val plain = ByteBuffer.wrap(cipher.open(record))
-    data class Frame(val type: Int, val id: Int, val data: ByteArray)
+    val frames = decode(ByteBuffer.wrap(cipher.open(record)))
+    val bytes = frames.sumOf { if (it.type == 2) it.data.size else 0 }
+    val receipt = Receipt(if (bytes > 0) maxOf(bytes, MIN_COST) else 0, bytes)
+    require(receipt.cost <= receiveCredit) { "Session receive window exceeded" }
+    receiveCredit -= receipt.cost
+    for (frame in frames) dispatch(frame, receipt)
+  }
+
+  private fun decode(plain: ByteBuffer): List<Frame> {
     val frames = ArrayList<Frame>()
-    var bytes = 0
     while (plain.hasRemaining()) {
       require(plain.remaining() >= 9) { "Truncated tunnel frame" }
       val type = plain.get().toInt() and 255
@@ -228,51 +251,50 @@ internal class TunnelMux(
       val payload = ByteArray(size).also { plain.get(it) }
       require(type in 2..5) { "Unexpected tunnel frame" }
       require(type == 2 || size == if (type == 3) 4 else 0) { "Invalid control frame" }
-      if (type == 2) {
-        require(size > 0 && id > 0)
-        bytes += size
-      }
+      if (type == 2) require(size > 0 && id > 0)
       frames.add(Frame(type, id, payload))
     }
-    val receipt = Receipt(if (bytes > 0) maxOf(bytes, MIN_COST) else 0, bytes)
-    require(receipt.cost <= receiveCredit) { "Session receive window exceeded" }
-    receiveCredit -= receipt.cost
-    for (frame in frames) {
-      val stream = streams[frame.id]
-      when (frame.type) {
-        3 -> {
-          val credit = ByteBuffer.wrap(frame.data).int
-          require(credit > 0)
-          if (frame.id == 0) {
-            require(credit <= SESSION_WINDOW - sendCredit)
-            sendCredit += credit
-          } else if (stream != null) {
-            require(credit <= STREAM_WINDOW - stream.sendCredit)
-            stream.sendCredit += credit
-          }
-          schedulePump()
-        }
-        2 -> {
-          val delivery = Delivery(frame.data, receipt)
-          if (stream == null) {
-            consumed(Stream(frame.id, {}, {}, {}).also { it.closed = true }, delivery)
-          } else {
-            require(!stream.remoteEnded && frame.data.size <= stream.receiveCredit) {
-              "Stream receive window exceeded"
-            }
-            stream.receiveCredit -= frame.data.size
-            stream.deliveries.add(delivery)
-            stream.data(delivery)
-          }
-        }
-        4 ->
-          if (stream != null && !stream.remoteEnded) {
-            stream.remoteEnded = true
-            stream.end()
-            maybeFinish(stream)
-          }
-        5 -> if (stream != null) finish(stream, IllegalStateException("Remote stream reset"))
+    return frames
+  }
+
+  private fun dispatch(frame: Frame, receipt: Receipt) {
+    val stream = streams[frame.id]
+    when (frame.type) {
+      3 -> grantSend(stream, frame)
+      2 -> deliver(stream, frame, receipt)
+      4 -> if (stream != null && !stream.remoteEnded) {
+        stream.remoteEnded = true
+        stream.end()
+        maybeFinish(stream)
       }
+      5 -> if (stream != null) finish(stream, IllegalStateException("Remote stream reset"))
+    }
+  }
+
+  private fun grantSend(stream: Stream?, frame: Frame) {
+    val credit = ByteBuffer.wrap(frame.data).int
+    require(credit > 0)
+    if (frame.id == 0) {
+      require(credit <= SESSION_WINDOW - sendCredit)
+      sendCredit += credit
+    } else if (stream != null) {
+      require(credit <= STREAM_WINDOW - stream.sendCredit)
+      stream.sendCredit += credit
+    }
+    schedulePump()
+  }
+
+  private fun deliver(stream: Stream?, frame: Frame, receipt: Receipt) {
+    val delivery = Delivery(frame.data, receipt)
+    if (stream == null) {
+      consumed(Stream(frame.id, {}, {}, {}).also { it.closed = true }, delivery)
+    } else {
+      require(!stream.remoteEnded && frame.data.size <= stream.receiveCredit) {
+        "Stream receive window exceeded"
+      }
+      stream.receiveCredit -= frame.data.size
+      stream.deliveries.add(delivery)
+      stream.data(delivery)
     }
   }
 

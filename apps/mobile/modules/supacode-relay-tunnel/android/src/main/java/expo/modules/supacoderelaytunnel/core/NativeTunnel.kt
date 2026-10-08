@@ -1,7 +1,7 @@
 package expo.modules.supacoderelaytunnel.core
 
 import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -9,6 +9,7 @@ import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -71,7 +72,7 @@ class NativeTunnel(
     listener.reuseAddress = true
     try {
       listener.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
-    } catch (error: Exception) {
+    } catch (error: IOException) {
       listener.close()
       actor.shutdown()
       io.shutdown()
@@ -92,7 +93,9 @@ class NativeTunnel(
           socket.soTimeout = 0
           sockets.add(socket)
           io.execute { serve(socket) }
-        } catch (error: Exception) {
+        } catch (error: IOException) {
+          if (!stopped.get()) log("[relay-android] accept failed: ${error.javaClass.simpleName}")
+        } catch (error: RejectedExecutionException) {
           if (!stopped.get()) log("[relay-android] accept failed: ${error.javaClass.simpleName}")
         }
       }
@@ -121,98 +124,97 @@ class NativeTunnel(
   }
 
   private fun connect(): CompletableFuture<TunnelMux> {
-    attempt?.let {
-      return it
-    }
+    attempt?.let { return it }
     val future = CompletableFuture<TunnelMux>()
     if (stopped.get() || suspended) {
-      return future.also { it.completeExceptionally(IllegalStateException("Tunnel unavailable")) }
+      future.completeExceptionally(IllegalStateException("Tunnel unavailable"))
+    } else {
+      attempt = future
+      state = "connecting"
+      emit()
+      log("[relay-android] session connecting")
+      dial(future)
     }
-    attempt = future
-    state = "connecting"
-    emit()
-    log("[relay-android] session connecting")
-    val handshake =
-      try {
-        ClientHandshake(identity)
-      } catch (error: Exception) {
-        fail(future, error)
-        return future
-      }
-    val timeout =
-      actor.schedule(
-        { fail(future, IllegalStateException("Relay handshake timed out")) },
-        15,
-        TimeUnit.SECONDS,
-      )
+    return future
+  }
+
+  @Suppress("TooGenericExceptionCaught")
+  private fun failOnError(future: CompletableFuture<TunnelMux>, block: () -> Unit) {
+    try {
+      block()
+    } catch (error: Exception) {
+      fail(future, error)
+    }
+  }
+
+  private fun dial(future: CompletableFuture<TunnelMux>) = failOnError(future) {
+    val handshake = ClientHandshake(identity)
+    future.whenComplete { _, _ -> handshake.destroy() }
+    val timeout = actor.schedule(
+      { fail(future, IllegalStateException("Relay handshake timed out")) },
+      15,
+      TimeUnit.SECONDS,
+    )
     future.whenComplete { _, _ ->
       timeout.cancel(false)
-      handshake.destroy()
     }
-    webSocket =
-      http.newWebSocket(
-        Request.Builder()
-          .url(relayUrl.trimEnd('/') + "/v1/connect?endpointId=" + sha256(identity).hex())
-          .build(),
-        object : WebSocketListener() {
-          override fun onOpen(socket: WebSocket, response: Response) {
-            post {
-              if (attempt === future && !socket.send(handshake.hello)) {
-                fail(future, IllegalStateException("Relay send failed"))
-              }
+    webSocket = http.newWebSocket(
+      Request.Builder()
+        .url(relayUrl.trimEnd('/') + "/v1/connect?endpointId=" + sha256(identity).hex())
+        .build(),
+      object : WebSocketListener() {
+        override fun onOpen(socket: WebSocket, response: Response) {
+          post {
+            if (attempt === future && !socket.send(handshake.hello)) {
+              fail(future, IllegalStateException("Relay send failed"))
             }
           }
+        }
 
-          override fun onMessage(socket: WebSocket, text: String) {
-            post {
-              if (attempt !== future) return@post
-              try {
-                check(mux == null) { "Unencrypted relay message" }
-                val session =
-                  TunnelMux(
-                    handshake.finish(text),
-                    { record -> check(socket.send(record.toByteString())) { "Relay queue full" } },
-                    ::schedulePump,
-                    { sentBytes += it },
-                  )
-                mux = session
-                sessions++
-                state = "up"
-                emit()
-                log("[relay-android] session $sessions up")
-                future.complete(session)
-              } catch (error: Exception) {
-                fail(future, error)
-              }
+        override fun onMessage(socket: WebSocket, text: String) {
+          post {
+            if (attempt !== future) return@post
+            failOnError(future) {
+              check(mux == null) { "Unencrypted relay message" }
+              val session = TunnelMux(
+                handshake.finish(text),
+                { record -> check(socket.send(record.toByteString())) { "Relay queue full" } },
+                ::schedulePump,
+                { sentBytes += it },
+              )
+              mux = session
+              sessions++
+              state = "up"
+              emit()
+              log("[relay-android] session $sessions up")
+              future.complete(session)
             }
           }
+        }
 
-          override fun onMessage(socket: WebSocket, bytes: ByteString) {
-            post {
-              if (attempt !== future) return@post
-              try {
-                (mux ?: error("Binary handshake")).receive(bytes.toByteArray())
-              } catch (error: Exception) {
-                fail(future, error)
-              }
+        override fun onMessage(socket: WebSocket, bytes: ByteString) {
+          post {
+            if (attempt !== future) return@post
+            failOnError(future) {
+              (mux ?: error("Binary handshake")).receive(bytes.toByteArray())
             }
           }
+        }
 
-          override fun onClosing(socket: WebSocket, code: Int, reason: String) {
-            socket.close(1000, null)
-            post { fail(future, IllegalStateException("Relay disconnected ($code)")) }
-          }
+        override fun onClosing(socket: WebSocket, code: Int, reason: String) {
+          socket.close(1000, null)
+          post { fail(future, IllegalStateException("Relay disconnected ($code)")) }
+        }
 
-          override fun onClosed(socket: WebSocket, code: Int, reason: String) {
-            post { fail(future, IllegalStateException("Relay disconnected ($code)")) }
-          }
+        override fun onClosed(socket: WebSocket, code: Int, reason: String) {
+          post { fail(future, IllegalStateException("Relay disconnected ($code)")) }
+        }
 
-          override fun onFailure(socket: WebSocket, error: Throwable, response: Response?) {
-            post { fail(future, error) }
-          }
-        },
-      )
-    return future
+        override fun onFailure(socket: WebSocket, error: Throwable, response: Response?) {
+          post { fail(future, error) }
+        }
+      },
+    )
   }
 
   private fun post(block: () -> Unit) {
@@ -241,16 +243,32 @@ class NativeTunnel(
     pumpScheduled = true
     actor.execute {
       pumpScheduled = false
+      attempt?.let { future -> failOnError(future) { mux?.pump() } }
+    }
+  }
+
+  @Suppress("TooGenericExceptionCaught")
+  private fun <T> onActor(block: () -> T): CompletableFuture<T> {
+    val future = CompletableFuture<T>()
+    post {
       try {
-        mux?.pump()
+        future.complete(block())
       } catch (error: Exception) {
-        attempt?.let { fail(it, error) }
+        future.completeExceptionally(error)
       }
     }
+    return future
+  }
+
+  private fun write(session: TunnelMux, stream: TunnelMux.Stream, bytes: ByteArray) {
+    onActor {
+      CompletableFuture<Unit>().also { session.write(stream, bytes, it) }
+    }.thenCompose { it }.get()
   }
 
   private class Incoming(val delivery: TunnelMux.Delivery? = null)
 
+  @Suppress("TooGenericExceptionCaught")
   private fun serve(socket: Socket) {
     var stream: TunnelMux.Stream? = null
     var session: TunnelMux? = null
@@ -260,72 +278,37 @@ class NativeTunnel(
     fun finishSocket() {
       if (closed.compareAndSet(false, true)) {
         queue.add(Incoming())
-        socket.close()
-        sockets.remove(socket)
-        slots.release()
+        upgrade.complete(false)
+        try {
+          socket.close()
+        } finally {
+          sockets.remove(socket)
+          slots.release()
+        }
       }
     }
     try {
-      val connected = CompletableFuture<TunnelMux>()
-      post {
-        connect().whenComplete { value, error ->
-          if (error != null) connected.completeExceptionally(error) else connected.complete(value)
-        }
-      }
-      session = connected.get(20, TimeUnit.SECONDS)
+      session = onActor { connect() }.thenCompose { it }.get(20, TimeUnit.SECONDS)
       val selected = session
-      val opened = CompletableFuture<TunnelMux.Stream>()
-      post {
-        try {
-          opened.complete(
-            selected.open(
-              { delivery ->
-                receivedBytes += delivery.bytes.size
-                queue.add(Incoming(delivery))
-              },
-              { queue.add(Incoming()) },
-              {
-                finishSocket()
-              },
-            )
-          )
-        } catch (error: Exception) {
-          opened.completeExceptionally(error)
-        }
-      }
-      stream = opened.get(20, TimeUnit.SECONDS)
+      stream = onActor {
+        selected.open(
+          { delivery ->
+            receivedBytes += delivery.bytes.size
+            queue.add(Incoming(delivery))
+          },
+          { queue.add(Incoming()) },
+          { finishSocket() },
+        )
+      }.get(20, TimeUnit.SECONDS)
       val active = stream
       io.execute {
-        val responseHeader = ByteArrayOutputStream()
-        var tail = 0
+        val response = HttpUpgradeWatcher(upgrade)
         try {
           val output = socket.getOutputStream()
           while (!closed.get()) {
             val incoming = queue.take().delivery ?: break
             output.write(incoming.bytes)
-            if (!upgrade.isDone) {
-              for (byte in incoming.bytes) {
-                responseHeader.write(byte.toInt())
-                tail = (tail shl 8) or (byte.toInt() and 255)
-                if (tail == 0x0d0a0d0a) {
-                  val status =
-                    responseHeader
-                      .toByteArray()
-                      .toString(Charsets.ISO_8859_1)
-                      .lineSequence()
-                      .first()
-                      .split(' ')
-                      .getOrNull(1)
-                  if (status?.toIntOrNull() in 100..199 && status != "101") {
-                    responseHeader.reset()
-                  } else {
-                    upgrade.complete(status == "101")
-                    break
-                  }
-                }
-                require(responseHeader.size() <= 65536)
-              }
-            }
+            response.observe(incoming.bytes)
             post { selected.consumed(active, incoming) }
           }
           if (!socket.isClosed) socket.shutdownOutput()
@@ -338,17 +321,7 @@ class NativeTunnel(
         BufferedInputStream(socket.getInputStream(), 65536),
         "127.0.0.1:${listener.localPort}",
         upgrade,
-        { bytes ->
-          val sent = CompletableFuture<Unit>()
-          post {
-            try {
-              selected.write(active, bytes, sent)
-            } catch (error: Exception) {
-              sent.completeExceptionally(error)
-            }
-          }
-          sent.get()
-        },
+        { bytes -> write(selected, active, bytes) },
       )
       post { selected.end(active) }
     } catch (error: Exception) {

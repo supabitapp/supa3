@@ -3,10 +3,12 @@ package expo.modules.supacoderelaytunnel.core
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.json.JSONObject
 import org.junit.Test
@@ -86,6 +88,101 @@ class ProtocolTest {
 
   private fun cipher() = RelayCipher(ByteArray(32) { 1 }, ByteArray(32) { 1 })
 
+  private fun frameHeaders(plain: ByteArray): List<Pair<Int, Int>> {
+    val buffer = ByteBuffer.wrap(plain)
+    val frames = ArrayList<Pair<Int, Int>>()
+    while (buffer.hasRemaining()) {
+      val type = buffer.get().toInt()
+      val id = buffer.int
+      val size = buffer.int
+      buffer.position(buffer.position() + size)
+      frames.add(type to id)
+    }
+    return frames
+  }
+
+  @Test
+  fun sendsOpenBeforeDataAndFin() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = cipher()
+    val stream = mux.open({}, {}, {})
+    val sent = CompletableFuture<Unit>()
+    mux.write(stream, ByteArray(100), sent)
+    mux.end(stream)
+    mux.pump()
+    assertEquals(
+      listOf(1 to stream.id, 2 to stream.id, 4 to stream.id),
+      frameHeaders(peer.open(emitted.single()))
+    )
+    assertTrue(sent.isDone)
+  }
+
+  @Test
+  fun givesEachSaturatedStreamATurnBeforeDrainingTheFirst() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = cipher()
+    val streams = List(3) { mux.open({}, {}, {}) }
+    val sent = streams.map { stream ->
+      CompletableFuture<Unit>().also { mux.write(stream, ByteArray(TunnelMux.MAX_PLAIN), it) }
+    }
+    mux.pump()
+    val dataStreams = emitted.flatMap { frameHeaders(peer.open(it)) }
+      .filter { it.first == 2 }.map { it.second }
+    assertEquals(streams.map { it.id }, dataStreams.take(3))
+    assertTrue(sent.all { it.isDone })
+  }
+
+  @Test
+  fun validatesTheWholeRecordBeforeDeliveryOrCreditReservation() {
+    val deliveries = ArrayList<TunnelMux.Delivery>()
+    val mux = TunnelMux(cipher(), {}, {}, {})
+    val peer = cipher()
+    val stream = mux.open(deliveries::add, {}, {})
+    val record = peer.seal(
+      TunnelMux.frame(2, stream.id, byteArrayOf(1, 2)) +
+        TunnelMux.frame(4, stream.id, byteArrayOf(3))
+    )
+    assertFails { mux.receive(record) }
+    assertTrue(deliveries.isEmpty())
+    assertEquals(0, mux.outstandingReceiveBytes)
+  }
+
+  @Test
+  fun recognizesFragmentedUpgradeAfterAnInterimResponse() {
+    val upgrade = CompletableFuture<Boolean>()
+    val watcher = HttpUpgradeWatcher(upgrade)
+    val response = (
+      "HTTP/1.1 100 Continue\r\n\r\n" +
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n\r\n"
+      ).toByteArray()
+    watcher.observe(response.copyOfRange(0, response.size - 2))
+    assertFalse(upgrade.isDone)
+    watcher.observe(response.copyOfRange(response.size - 2, response.size))
+    assertTrue(upgrade.join())
+  }
+
+  @Test
+  fun keepsTheFirstFinalResponseUpgradeDecision() {
+    val upgrade = CompletableFuture<Boolean>()
+    val watcher = HttpUpgradeWatcher(upgrade)
+    watcher.observe("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".toByteArray())
+    assertFalse(upgrade.join())
+    watcher.observe("HTTP/1.1 101 Switching Protocols\r\n\r\n".toByteArray())
+    assertFalse(upgrade.join())
+  }
+
+  @Test
+  fun rejectsOversizedResponseHeadersBeforeAcceptingAnUpgrade() {
+    val upgrade = CompletableFuture<Boolean>()
+    val watcher = HttpUpgradeWatcher(upgrade)
+    assertFails {
+      watcher.observe(("HTTP/1.1 101 Switching Protocols\r\nX: " + "a".repeat(65536)).toByteArray())
+    }
+    assertFalse(upgrade.isDone)
+  }
+
   @Test
   fun returnsCreditOnlyAfterConsumptionAndChecksCumulativeStreamBudget() {
     val emitted = ArrayList<ByteArray>()
@@ -129,7 +226,6 @@ class ProtocolTest {
       "127.0.0.1:1234",
       CompletableFuture(),
       bytes::add,
-      {},
     )
     assertEquals(valid, bytes.fold(ByteArray(0)) { a, b -> a + b }.toString(Charsets.UTF_8))
     val wrong = valid + "GET /secret HTTP/1.1\r\nHost: evil.example\r\n\r\n"
@@ -140,7 +236,6 @@ class ProtocolTest {
         "127.0.0.1:1234",
         CompletableFuture(),
         sent::add,
-        {},
       )
     }
     assertEquals(valid, sent.fold(ByteArray(0)) { a, b -> a + b }.toString(Charsets.UTF_8))
