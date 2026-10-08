@@ -20,7 +20,7 @@ import { parseChangeRequestUrl } from "@supacode/shared/changeRequestUrl";
 import { isWorkspaceImagePreviewPath } from "@supacode/shared/filePreview";
 import { formatTokens } from "@supacode/shared/usageFormat";
 import { classifyToolActivity } from "@supacode/shared/toolActivity";
-import { turnItemOutputImages } from "./itemDetail.js";
+import { turnItemOutputImages } from "./itemDetail.ts";
 import { toolOutputIndicatesFailure } from "@supacode/shared/toolOutput";
 
 import {
