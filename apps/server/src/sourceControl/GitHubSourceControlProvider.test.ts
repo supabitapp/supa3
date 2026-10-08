@@ -11,7 +11,7 @@ import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubApi from "./GitHubApi.ts";
-import * as GitHubCli from "./GitHubCli.ts";
+import * as GitHubRepositoryApi from "./GitHubRepositoryApi.ts";
 import { parseGitHubAuthStatus } from "./gitHubAuthStatus.ts";
 import * as GitHubSourceControlProvider from "./GitHubSourceControlProvider.ts";
 
@@ -30,12 +30,15 @@ const processResult = (
 });
 
 function makeProvider(
-  github: Partial<GitHubCli.GitHubCli["Service"]>,
+  github: Partial<GitHubRepositoryApi.GitHubRepositoryApi["Service"]>,
   api: Partial<GitHubApi.GitHubApi["Service"]> = {},
 ) {
   return GitHubSourceControlProvider.make.pipe(
     Effect.provide(
-      Layer.merge(Layer.mock(GitHubCli.GitHubCli)(github), Layer.mock(GitHubApi.GitHubApi)(api)),
+      Layer.merge(
+        Layer.mock(GitHubRepositoryApi.GitHubRepositoryApi)(github),
+        Layer.mock(GitHubApi.GitHubApi)(api),
+      ),
     ),
   );
 }
@@ -134,10 +137,9 @@ it.effect("maps GitHub PR summaries into provider-neutral change requests", () =
   }),
 );
 
-it.effect("adds safe request context while retaining GitHub CLI causes", () =>
+it.effect("adds safe request context while retaining GitHub API causes", () =>
   Effect.gen(function* () {
-    const cause = new GitHubCli.GitHubPullRequestNotFoundError({
-      command: "gh",
+    const cause = new GitHubRepositoryApi.GitHubPullRequestNotFoundError({
       cwd: "/repo",
       cause: new Error("raw upstream detail that should remain in the cause"),
     });
@@ -157,7 +159,6 @@ it.effect("adds safe request context while retaining GitHub CLI causes", () =>
       {
         provider: error.provider,
         operation: error.operation,
-        command: error.command,
         cwd: error.cwd,
         reference: error.reference,
         detail: error.detail,
@@ -165,7 +166,6 @@ it.effect("adds safe request context while retaining GitHub CLI causes", () =>
       {
         provider: "github",
         operation: "getChangeRequest",
-        command: "gh",
         cwd: "/repo",
         reference: "https://github.com/supabitapp/supacode-next/pull/42",
         detail: "Pull request not found. Check the PR number or URL and try again.",
@@ -178,8 +178,9 @@ it.effect("adds safe request context while retaining GitHub CLI causes", () =>
 
 it.effect("lists change request history through the batched head lookup", () =>
   Effect.gen(function* () {
-    let lookup: Parameters<GitHubCli.GitHubCli["Service"]["listPullRequestsByHead"]>[0] | null =
-      null;
+    let lookup:
+      | Parameters<GitHubRepositoryApi.GitHubRepositoryApi["Service"]["listPullRequestsByHead"]>[0]
+      | null = null;
     const provider = yield* makeProvider({
       listPullRequestsByHead: (input) => {
         lookup = input;
@@ -231,8 +232,9 @@ it.effect("lists change request history through the batched head lookup", () =>
 
 it.effect("creates GitHub PRs through provider-neutral input names", () =>
   Effect.gen(function* () {
-    let createInput: Parameters<GitHubCli.GitHubCli["Service"]["createPullRequest"]>[0] | null =
-      null;
+    let createInput:
+      | Parameters<GitHubRepositoryApi.GitHubRepositoryApi["Service"]["createPullRequest"]>[0]
+      | null = null;
     const provider = yield* makeProvider({
       createPullRequest: (input) => {
         createInput = input;
