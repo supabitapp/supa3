@@ -781,8 +781,8 @@ function SidebarDragBoundary(props: {
         >
           <span
             className={cn(
-              "shrink-0 text-xs font-medium",
-              props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
+              "shrink-0 text-xs",
+              props.isDropTarget ? "text-primary" : "text-sidebar-muted-foreground/60",
             )}
           >
             {props.label}
@@ -791,7 +791,7 @@ function SidebarDragBoundary(props: {
             aria-hidden
             className={cn(
               "h-px flex-1",
-              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
+              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-border/60",
             )}
           />
         </div>
