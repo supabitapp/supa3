@@ -235,7 +235,7 @@ overrides:
   vite-plus: 1.0.0
   yaml: ^2.9.0
 
-packageExtensionsChecksum: sha256-AzbYLakXpNBVExfbbhXO7sa9DS7FX3NAsXtxC2zBqIs=
+packageExtensionsChecksum: sha256-DoFe1tECfVH5TKYI7I1bniUFG+uuIb/LwTkFc6NpZAw=
 
 pnpmfileChecksum: sha256-nVOmFZ6JT8FxIhcN+S5sJXuP1DtIhTre5ZGvjJU+4tk=
 
@@ -16486,11 +16486,13 @@ snapshots:
   expo-widgets@58.0.11(patch_hash=7efd2cba020c3afeec34d13838792ccfbe37ea5bb6a9dc89f4d2652d7abb92b8)(bfa3fa63c129f5f792eea82c47481095):
     dependencies:
       '@expo/plist': 0.10.1
+      '@expo/spawn-async': 1.8.0
       '@expo/ui': 58.0.11(bfa3fa63c129f5f792eea82c47481095)
       '@types/react': 19.3.0
       expo: 58.0.2(3d71f6499d3c841467c44ba1a6c879c9)
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
+      resolve-workspace-root: 2.0.1
     transitivePeerDependencies:
       - '@babel/core'
       - react-dom
