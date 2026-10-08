@@ -119,7 +119,7 @@ The workflow uses the same checked-in device and scene matrix as local capture. 
 ARM64 by default for local Apple Silicon development; CI sets `SUPACODE_SHOWCASE_ANDROID_ABI=x86_64` so the
 debug APK matches its accelerated emulator.
 
-Production store releases call this workflow at the signed binary's source commit with dark
+Manual store review submissions call this workflow at the signed binary's source commit with dark
 appearance and the Supacode palette. [Mobile store review](release.md#mobile-store-review) owns
 the upload and submission procedure. Standalone screenshot captures only create downloadable artifacts.
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (production also uploads screenshots and submits for review) or update (OTA)"
+        description: "build (auto-upload to TestFlight / Play testing) or update (OTA)"
         required: true
         type: choice
         default: build
@@ -53,9 +53,6 @@ on:
       - .github/actions/build-mobile/**
       - .github/scripts/mobile-build-*.cjs
       - .github/scripts/mobile-store-*.mjs
-      - .github/scripts/export-play-credentials.mjs
-      - .github/workflows/mobile-store-review.yml
-      - .github/workflows/mobile-showcase-screenshots.yml
 
 concurrency:
   group: mobile-eas-production
@@ -279,7 +276,7 @@ jobs:
           path: ${{ steps.build.outputs.binary }}
           if-no-files-found: error
           retention-days: 14
-      - name: Submit signed binary to stores
+      - name: Upload signed binary to TestFlight or Play testing
         if: steps.build.outcome == 'success'
         working-directory: apps/mobile
         env:
@@ -309,6 +306,22 @@ jobs:
           path: ${{ runner.temp }}/mobile-store-build/manifest.json
           if-no-files-found: error
           retention-days: 14
+      - name: Show optional store review inputs
+        if: steps.build.outcome == 'success' && env.MOBILE_PROFILE == 'production' && github.ref == 'refs/heads/main'
+        env:
+          MOBILE_SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          {
+            echo "### Optional store review"
+            echo
+            echo "Dispatch [Mobile Store Review]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/mobile-store-review.yml) on \`main\` to submit this build:"
+            echo
+            echo "- \`platform\`: \`$MOBILE_PLATFORM\`"
+            echo "- \`build_run_id\`: \`$GITHUB_RUN_ID\`"
+            echo "- \`source_sha\`: \`$MOBILE_SOURCE_SHA\`"
+            echo
+            echo "Build artifacts are available for 14 days."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Record completed store build
         if: steps.build.outcome == 'success'
         uses: actions/github-script@v8
@@ -342,24 +355,3 @@ jobs:
           message="${UPDATE_MESSAGE:-$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))}"
           eas update --channel production --environment production --platform "$MOBILE_PLATFORM" \
             --message "$message" --non-interactive
-
-  store-review:
-    name: Submit production apps for review
-    needs: [prepare, production]
-    if: >-
-      !cancelled() && needs.prepare.outputs.enabled == 'true' &&
-      github.ref == 'refs/heads/main' &&
-      (inputs.profile == '' || inputs.profile == 'production') && inputs.mode != 'update'
-    uses: ./.github/workflows/mobile-store-review.yml
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ios, android]
-    permissions:
-      contents: read
-      actions: read
-    with:
-      platform: ${{ matrix.platform }}
-      source_sha: ${{ needs.prepare.outputs.sha }}
-      build_run_id: ${{ github.run_id }}
-    secrets: inherit
