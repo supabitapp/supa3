@@ -612,6 +612,52 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("updates a collapsed group's preview when a later tool gains an image", () => {
+    const fixture = makeStreamingTimelineFixture();
+    const source = fixture.visibleTurnItems.find((row) => row.item.type === "dynamic_tool")!;
+    if (source.item.type !== "dynamic_tool") throw new Error("Expected tool fixture");
+    const tool = source.item;
+    const rows = (latestImageCount: number) =>
+      deriveMessagesTimelineRows({
+        timelineEntries: deriveTimelineEntriesFromVisibleTurnItems({
+          visibleTurnItems: [2, latestImageCount].map((outputImageCount, position) => {
+            const id = TurnItemId.make(`image-tool-${position}`);
+            return {
+              ...source,
+              position,
+              sourceItemId: id,
+              item: {
+                ...tool,
+                id,
+                status: "completed",
+                output: undefined,
+                outputOmitted: true,
+                outputImageCount,
+              },
+            };
+          }),
+          optimisticMessages: [],
+        }),
+        isWorking: false,
+        runningRunId: fixture.runId,
+        activeTurnStartedAt: fixture.time(0),
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+      });
+    const first = rows(0);
+    expect(first.find((row) => row.kind === "work-toggle")).toMatchObject({
+      expanded: false,
+      latestImage: { resource: { itemId: "image-tool-0", index: 1 } },
+    });
+    const stable = computeStableMessagesTimelineRows(first, { byId: new Map(), result: [] });
+    const next = computeStableMessagesTimelineRows(rows(1), stable);
+    expect(next.result.find((row) => row.kind === "work-toggle")).toMatchObject({
+      expanded: false,
+      latestImage: { resource: { itemId: "image-tool-1", index: 0 } },
+    });
+    expect(next).not.toBe(stable);
+  });
+
   it("stops stranded thinking after a steer and follows the next thought or tool", () => {
     const runId = RunId.make("steered-run");
     const at = "2026-10-01T06:19:10Z";

@@ -15,6 +15,8 @@ import {
   commandProgramName,
 } from "@supacode/client-runtime/work-log/command-label";
 import {
+  latestToolGroupImage,
+  type ToolGroupImage,
   contextCompactionLabel,
   toolItemForDisplay,
   workEntryDisplayIndicatesToolFailure,
@@ -181,6 +183,7 @@ type ThreadFeedEntryContent =
     }
   | {
       readonly type: "work-toggle";
+      readonly latestImage?: ToolGroupImage | null;
       readonly id: string;
       readonly createdAt: string;
       readonly runId: RunId | null;
@@ -1503,6 +1506,7 @@ function appendToolGroupRows(
     createdAt: sourceGroup.createdAt,
     runId: sourceGroup.runId,
     groupId,
+    latestImage: latestToolGroupImage(activities.map((activity) => activity.projectedItem)),
     hiddenCount: activities.length,
     expanded,
     summary,
