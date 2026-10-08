@@ -173,6 +173,7 @@ function Column({ className, ...props }: ComponentProps<"div">) {
       className={cn(
         "flex min-w-0 flex-1 flex-col empty:hidden",
         "[&>[data-slot=composer-banner-attachment]]:w-full [&>[data-slot=composer-banner-attachment]:last-child]:mb-0",
+        "[&>[data-slot=composer-banner-attachment]+[data-slot=composer-banner-attachment]_[data-slot=composer-banner]]:border-t [&>[data-slot=composer-banner-attachment]+[data-slot=composer-banner-attachment]_[data-slot=composer-banner]]:border-composer-divider",
         className,
       )}
       {...props}

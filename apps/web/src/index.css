@@ -220,6 +220,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(supacode
   --color-ring: var(--ring);
   --color-input: var(--contrast-input);
   --color-border: var(--contrast-border);
+  --color-composer-divider: light-dark(
+    oklch(from var(--chat-composer-glass-surface, var(--card)) calc(l - 0.14) c h),
+    oklch(from var(--chat-composer-glass-surface, var(--card)) calc(l + 0.14) c h)
+  );
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--contrast-accent-foreground);
   --color-accent: var(--accent);
