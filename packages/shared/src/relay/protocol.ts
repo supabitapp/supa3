@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 
 export const PUBLIC_RELAY_URL = "wss://supacode-relay.exe.xyz";
 export const RELAY_COMPANION_META_NAME = "supacode-relay-companion";
+export const RELAY_COMPANION_REQUEST_LIMIT = 64;
 const suffix = ".relay.supacode.invalid";
 const encoder = new TextEncoder();
 export const encodeBase64 = (data: Uint8Array): string => {

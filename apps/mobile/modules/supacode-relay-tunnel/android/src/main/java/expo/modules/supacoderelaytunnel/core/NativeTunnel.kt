@@ -281,6 +281,7 @@ class NativeTunnel(
         upgrade.complete(false)
         try {
           socket.close()
+        } catch (_: IOException) {
         } finally {
           sockets.remove(socket)
           slots.release()

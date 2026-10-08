@@ -1,4 +1,7 @@
-import { RELAY_COMPANION_META_NAME } from "@supacode/shared/relay/protocol";
+import {
+  RELAY_COMPANION_META_NAME,
+  RELAY_COMPANION_REQUEST_LIMIT,
+} from "@supacode/shared/relay/protocol";
 import { RelayCompanionReply } from "@supacode/contracts";
 import { after } from "@supacode/shared/relay/timer";
 import * as Schema from "effect/Schema";
@@ -72,7 +75,8 @@ export function createRelayCompanionControl() {
       await connect();
       if (!socket || socket.readyState !== WebSocket.OPEN)
         throw new Error("Relay companion is not connected.");
-      if (pending.size >= 64) throw new Error("Too many companion requests.");
+      if (pending.size >= RELAY_COMPANION_REQUEST_LIMIT)
+        throw new Error("Too many companion requests.");
       const id = String(++sequence);
       return new Promise<string | undefined>((resolve, reject) => {
         const cancel = after(15_000, () => {

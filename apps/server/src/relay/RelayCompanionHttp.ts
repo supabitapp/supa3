@@ -1,9 +1,14 @@
-import { RELAY_COMPANION_META_NAME } from "@supacode/shared/relay/protocol";
+import {
+  canonicalRelayAddress,
+  RELAY_COMPANION_META_NAME,
+  RELAY_COMPANION_REQUEST_LIMIT,
+} from "@supacode/shared/relay/protocol";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { RelayCompanion } from "./RelayCompanion.ts";
@@ -31,44 +36,67 @@ export function layer(staticDir: string) {
           const owner = yield* crypto.randomUUIDv4;
           const owned = new Set<string>();
           yield* Effect.addFinalizer(() =>
-            Effect.forEach([...owned], (address) => companion.close(address, owner), {
-              discard: true,
-            }).pipe(Effect.ignore),
+            Effect.forEach(
+              [...owned],
+              (address) => companion.close(address, owner).pipe(Effect.ignore),
+              {
+                discard: true,
+              },
+            ),
           );
           const socket = yield* request.upgrade;
           const reader = yield* socket.reader;
           const writer = yield* socket.writer;
           const decoder = new TextDecoder("utf-8", { fatal: true });
-          yield* Effect.forever(
+          const commands = yield* Queue.dropping<string>(RELAY_COMPANION_REQUEST_LIMIT);
+          const read = Effect.forever(
             Effect.gen(function* () {
               for (const bytes of yield* reader.pull) {
                 const raw = typeof bytes === "string" ? bytes : decoder.decode(bytes);
                 if (raw.length > 4096)
                   return yield* Effect.die(new Error("Companion control message too large"));
-                const input = yield* decodeInput(raw);
-                const response = yield* Effect.gen(function* () {
-                  if (input.action === "close") {
-                    yield* companion.close(input.address, owner);
-                    owned.delete(input.address);
-                    return { id: input.id };
-                  }
-                  const origin = yield* companion.open(input.address, owner);
-                  owned.add(input.address);
-                  return { id: input.id, origin };
-                }).pipe(
-                  Effect.catch(() =>
-                    Effect.succeed({
-                      id: input.id,
-                      error: "The relay endpoint could not be prepared.",
+                if (!(yield* Queue.offer(commands, raw)))
+                  return yield* Effect.die(new Error("Too many pending companion commands"));
+              }
+            }),
+          );
+          const process = Effect.forever(
+            Effect.gen(function* () {
+              const input = yield* decodeInput(yield* Queue.take(commands));
+              const response = yield* Effect.gen(function* () {
+                const address = yield* Effect.try(() => {
+                  const canonical = canonicalRelayAddress(input.address);
+                  if (!canonical) throw new Error("Not a relay address");
+                  return canonical;
+                });
+                if (input.action === "close") {
+                  yield* companion.close(address, owner);
+                  owned.delete(address);
+                  return { id: input.id };
+                }
+                const alreadyOwned = owned.has(address);
+                owned.add(address);
+                const origin = yield* companion.open(address, owner).pipe(
+                  Effect.catch((error) =>
+                    Effect.gen(function* () {
+                      if (!alreadyOwned) owned.delete(address);
+                      return yield* error;
                     }),
                   ),
                 );
-                yield* writer.write(yield* encodeReply(response));
-              }
+                return { id: input.id, origin };
+              }).pipe(
+                Effect.orElseSucceed(() => ({
+                  id: input.id,
+                  error: "The relay endpoint could not be prepared.",
+                })),
+              );
+              yield* writer.write(yield* encodeReply(response));
             }),
-          ).pipe(Effect.ignore);
+          );
+          yield* Effect.raceFirst(read, process).pipe(Effect.ignore);
           return HttpServerResponse.empty();
-        }).pipe(Effect.catch(() => Effect.succeed(HttpServerResponse.empty({ status: 400 })))),
+        }).pipe(Effect.orElseSucceed(() => HttpServerResponse.empty({ status: 400 }))),
       );
     }),
   );
@@ -108,7 +136,7 @@ export function layer(staticDir: string) {
       return yield* HttpServerResponse.file(entry, {
         headers: { "x-content-type-options": "nosniff" },
       });
-    }).pipe(Effect.catch(() => Effect.succeed(HttpServerResponse.empty({ status: 404 })))),
+    }).pipe(Effect.orElseSucceed(() => HttpServerResponse.empty({ status: 404 }))),
   );
   return Layer.merge(controls, shell);
 }
