@@ -366,6 +366,22 @@
     "./codexAuthHandoff": {
       "types": "./src/codexAuthHandoff.ts",
       "import": "./src/codexAuthHandoff.ts"
+    },
+    "./relay/protocol": {
+      "types": "./src/relay/protocol.ts",
+      "import": "./src/relay/protocol.ts"
+    },
+    "./relay/tunnel": {
+      "types": "./src/relay/tunnel.ts",
+      "import": "./src/relay/tunnel.ts"
+    },
+    "./relay/tunnelNode": {
+      "types": "./src/relay/tunnelNode.ts",
+      "import": "./src/relay/tunnelNode.ts"
+    },
+    "./relay/timer": {
+      "types": "./src/relay/timer.ts",
+      "import": "./src/relay/timer.ts"
     }
   },
   "scripts": {
@@ -373,6 +389,8 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
+    "@noble/ciphers": "2.2.0",
+    "@noble/curves": "2.2.0",
     "@noble/hashes": "catalog:",
     "@supacode/contracts": "workspace:*",
     "effect": "catalog:",

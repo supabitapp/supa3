@@ -1,3 +1,4 @@
+import { isRelayCompanion } from "./lib/relayCompanion";
 import {
   DEFAULT_HOSTED_APP_URL,
   readHostedPairingRequest as readSharedHostedPairingRequest,
@@ -37,6 +38,7 @@ function originFromUrl(value: string): string | null {
 }
 
 export function isHostedStaticApp(url?: URL): boolean {
+  if (isRelayCompanion()) return true;
   if (configuredBackendUrl()) {
     return false;
   }

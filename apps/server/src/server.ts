@@ -100,6 +100,10 @@ import * as HeapSnapshot from "./observability/HeapSnapshot.ts";
 import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
+import * as RelayAccess from "./relay/RelayAccess.ts";
+import * as RelayIdentity from "./relay/RelayIdentity.ts";
+import * as RelayIngress from "./relay/RelayIngress.ts";
+import { TunnelSocket } from "@supacode/shared/relay/tunnelNode";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as AuthHttp from "./auth/http.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
@@ -212,7 +216,15 @@ const layerHttpServer = Layer.unwrap(
       // to compress, so no size threshold is set (ws only honors
       // `threshold` when context takeover is disabled).
       websocket: { perMessageDeflate: true },
-    });
+    }).pipe(
+      Layer.provideMerge(
+        Layer.succeed(RelayIngress.RelayIngress, {
+          accept: (stream) => {
+            server.emit("connection", new TunnelSocket(stream));
+          },
+        }),
+      ),
+    );
   }),
 );
 
@@ -375,7 +387,20 @@ const layerProjectFaviconResolver = ProjectFaviconResolver.layer.pipe(
   Layer.provide(SupacodeProjectFileLoader.layer),
 );
 
-const layerServerEnvironment = ServerEnvironment.layer;
+const layerRelayIdentity = RelayIdentity.layer.pipe(Layer.provide(ServerSecretStore.layer));
+const layerServerEnvironment = Layer.effect(
+  ServerEnvironment.ServerEnvironment,
+  Effect.gen(function* () {
+    const environment = yield* ServerEnvironment.ServerEnvironment;
+    const relay = yield* RelayIdentity.RelayIdentity;
+    return ServerEnvironment.ServerEnvironment.of({
+      ...environment,
+      getDescriptor: environment.getDescriptor.pipe(
+        Effect.map((descriptor) => ({ ...descriptor, relayEndpoint: relay.address })),
+      ),
+    });
+  }),
+).pipe(Layer.provideMerge(ServerEnvironment.layer), Layer.provide(layerRelayIdentity));
 
 const layerAuth = EnvironmentAuth.layer.pipe(
   Layer.provideMerge(layerPersistence),
@@ -603,6 +628,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(layerCommandReadiness),
   Layer.provide(ServerHttp.layerBrowserApiCors),
   Layer.provide(ServerHttp.layerHttpCompression),
+  Layer.provide(RelayIngress.layerPathGuard),
 );
 
 const layerMakeServer = Layer.unwrap(
@@ -742,6 +768,20 @@ const layerMakeServer = Layer.unwrap(
       layerRuntimeState.pipe(Layer.provide(layerLauncher)),
       layerTailscaleServe,
       HeapSnapshot.layer,
+      Layer.effectDiscard(
+        Effect.gen(function* () {
+          yield* awaitActivation;
+          const relay = yield* RelayAccess.RelayAccess;
+          yield* relay.start;
+        }),
+      ).pipe(
+        Layer.provide(
+          RelayAccess.layer.pipe(
+            Layer.provide(layerRelayIdentity),
+            Layer.provide(layerServerSettings),
+          ),
+        ),
+      ),
     );
 
     return layerServerApplication.pipe(

@@ -1,3 +1,4 @@
+import { releaseRelayOrigin } from "../relay/gateway.ts";
 import { EnvironmentId } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -201,6 +202,23 @@ export const make = Effect.gen(function* () {
   const driver = yield* ConnectionDriver.ConnectionDriver;
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
   const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
+  const releaseRouteTransports = Effect.fn("EnvironmentRegistry.releaseRouteTransports")(function* (
+    route: ConnectionRoute,
+    environmentId: EnvironmentId,
+  ) {
+    const profile = Option.getOrNull(route.profile);
+    if (profile?._tag === "BearerConnectionProfile") yield* releaseRelayOrigin(profile.httpBaseUrl);
+    if (profile !== null && isSshConnectionProfile(profile))
+      yield* ssh.disconnect(profile.target).pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning("Could not disconnect the managed SSH environment.", {
+            environmentId,
+            error,
+          }),
+        ),
+        Effect.ignore,
+      );
+  });
   const persistedTargets = yield* storage.list;
   const disabledEnvironmentIds = new Set(yield* storage.listDisabled);
   const loadRoute = Effect.fn("EnvironmentRegistry.loadRoute")(function* (
@@ -815,20 +833,8 @@ export const make = Effect.gen(function* () {
         { concurrency: "unbounded", discard: true },
       );
 
-      for (const route of connectionRoutes(entry)) {
-        const profile = Option.getOrNull(route.profile);
-        if (profile !== null && isSshConnectionProfile(profile)) {
-          yield* ssh.disconnect(profile.target).pipe(
-            Effect.tapError((error) =>
-              Effect.logWarning("Could not disconnect the managed SSH environment.", {
-                environmentId,
-                error,
-              }),
-            ),
-            Effect.ignore,
-          );
-        }
-      }
+      for (const route of connectionRoutes(entry))
+        yield* releaseRouteTransports(route, environmentId);
     });
   });
 
@@ -903,9 +909,7 @@ export const make = Effect.gen(function* () {
         const remaining = routesAfterRemoving(routes, routeId);
         if (remaining.length === 0) return yield* removeLocked(environmentId);
         yield* replaceRoutesLocked(entry, remaining);
-        const profile = Option.getOrNull(route.profile);
-        if (profile !== null && isSshConnectionProfile(profile))
-          yield* ssh.disconnect(profile.target).pipe(Effect.ignore);
+        yield* releaseRouteTransports(route, environmentId);
       }),
     );
   });
@@ -987,13 +991,9 @@ export const make = Effect.gen(function* () {
         }
         // The supervisor only owns the RPC session. A managed SSH backend and
         // its tunnel outlive it, so switching off tears those down as well.
-        if (!enabled) {
-          for (const route of connectionRoutes(entry)) {
-            const profile = Option.getOrNull(route.profile);
-            if (profile?._tag !== "SshConnectionProfile") continue;
-            yield* ssh.disconnect(profile.target).pipe(Effect.ignore);
-          }
-        }
+        if (!enabled)
+          for (const route of connectionRoutes(entry))
+            yield* releaseRouteTransports(route, environmentId);
       }),
     );
   });

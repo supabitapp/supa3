@@ -1,3 +1,4 @@
+import { isRelayedRequest } from "./relay/RelayIngress.ts";
 import * as OrchestrationSkills from "./provider/OrchestrationSkills.ts";
 import { OrchestrationDispatchCommandError } from "@supacode/contracts";
 import * as Crypto from "effect/Crypto";
@@ -668,7 +669,11 @@ function readClientAnalyticsProps(request: HttpServerRequest.HttpServerRequest) 
       : {}),
     ...(hasOsMajorVersion ? { osMajorVersion, clientOsMajorVersion: osMajorVersion } : {}),
     ...(hasDeviceModel ? { deviceModel, clientDeviceModel: deviceModel } : {}),
-    ...(isClientConnectionMethod(connectionMethod) ? { connectionMethod } : {}),
+    ...(isRelayedRequest(request)
+      ? { connectionMethod: "relay" as const }
+      : isClientConnectionMethod(connectionMethod)
+        ? { connectionMethod }
+        : {}),
   };
 }
 

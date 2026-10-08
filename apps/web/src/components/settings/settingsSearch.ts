@@ -813,6 +813,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "public-relay",
+    title: "Public relay",
+    to: "/settings/connections",
+    targetId: "connections-environment",
+    searchTerms: ["remote end-to-end encrypted tunnel pairing companion"],
+    localBackendManagementOnly: true,
+  },
+  {
     id: "network-access",
     title: "Network access",
     to: "/settings/connections",

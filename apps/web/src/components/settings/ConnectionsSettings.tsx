@@ -1,3 +1,4 @@
+import { createAdvertisedEndpoint } from "@supacode/shared/advertisedEndpoint";
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
@@ -61,6 +62,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
+import { useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { cn } from "../../lib/utils";
@@ -2024,6 +2026,8 @@ export function ConnectionsSettings() {
   const canWriteAccess = useEnvironmentScope(primaryEnvironmentId, AuthAccessWriteScope);
   const canMaintain = useEnvironmentScope(primaryEnvironmentId, AuthEnvironmentMaintainScope);
   const canManageLocalBackend = !isLocalEnvironmentDisabled() && canMaintain;
+  const updatePrimarySettings = useUpdatePrimarySettings();
+  const canWriteSettings = useEnvironmentScope(primaryEnvironmentId, AuthSettingsWriteScope);
   const authAccessChanges = useEnvironmentQuery(
     canReadAccess && primaryEnvironmentId !== null
       ? authEnvironment.accessChanges({
@@ -2609,12 +2613,32 @@ export function ConnectionsSettings() {
         : [],
     [desktopAdvertisedEndpoints, isLocalBackendNetworkAccessible],
   );
-  const visibleDesktopAdvertisedEndpoints = useMemo(
+  const relayEndpointUrl = primaryServerConfig?.settings.publicRelayEnabled
+    ? primaryServerConfig.environment.relayEndpoint
+    : undefined;
+  const relayEndpoint = useMemo(
     () =>
-      tailscaleHttpsEndpoint
-        ? [...visibleDesktopNetworkAdvertisedEndpoints, tailscaleHttpsEndpoint]
-        : visibleDesktopNetworkAdvertisedEndpoints,
-    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
+      relayEndpointUrl
+        ? createAdvertisedEndpoint({
+            id: "public-relay",
+            label: "Public relay",
+            provider: { id: "public-relay", label: "Public relay", kind: "tunnel", isAddon: false },
+            httpBaseUrl: relayEndpointUrl,
+            reachability: "public",
+            hostedHttpsCompatibility: "compatible",
+            source: "server",
+            description: "End-to-end encrypted access through the public relay.",
+          })
+        : null,
+    [relayEndpointUrl],
+  );
+  const visibleDesktopAdvertisedEndpoints = useMemo(
+    () => [
+      ...visibleDesktopNetworkAdvertisedEndpoints,
+      ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+      ...(relayEndpoint ? [relayEndpoint] : []),
+    ],
+    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints, relayEndpoint],
   );
   const pairingHints = useMemo(
     () => ({
@@ -2637,10 +2661,18 @@ export function ConnectionsSettings() {
     () =>
       defaultDesktopNetworkAdvertisedEndpoint ??
       selectPairingEndpoint(
-        tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : [],
+        [
+          ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+          ...(relayEndpoint ? [relayEndpoint] : []),
+        ],
         defaultAdvertisedEndpointKey,
       ),
-    [defaultAdvertisedEndpointKey, defaultDesktopNetworkAdvertisedEndpoint, tailscaleHttpsEndpoint],
+    [
+      defaultAdvertisedEndpointKey,
+      defaultDesktopNetworkAdvertisedEndpoint,
+      tailscaleHttpsEndpoint,
+      relayEndpoint,
+    ],
   );
   const defaultDesktopAdvertisedEndpointKey = defaultDesktopAdvertisedEndpoint
     ? endpointDefaultPreferenceKey(defaultDesktopAdvertisedEndpoint)
@@ -3384,6 +3416,22 @@ export function ConnectionsSettings() {
             }
           >
             <LocalEnvironmentSetting />
+            {canManageLocalBackend ? (
+              <SettingsRow
+                title={searchableSetting("public-relay").title}
+                description="Connect from anywhere with end-to-end encryption. Enable it, then create a pairing link below."
+                control={
+                  <Switch
+                    aria-label="Enable public relay"
+                    disabled={!canWriteSettings}
+                    checked={primaryServerConfig?.settings.publicRelayEnabled ?? false}
+                    onCheckedChange={(publicRelayEnabled) =>
+                      updatePrimarySettings({ publicRelayEnabled })
+                    }
+                  />
+                }
+              />
+            ) : null}
             {canManageLocalBackend ? (
               <SettingsRow
                 title="Version"

@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@supacode/contracts";
+import { type ClientConnectionMethod, EnvironmentId } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 
 const ConnectionTargetBase = {
@@ -101,6 +101,7 @@ export interface PreparedHttpAuthorization {
 }
 
 export interface PreparedConnection {
+  readonly connectionMethod?: ClientConnectionMethod;
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly httpBaseUrl: string;

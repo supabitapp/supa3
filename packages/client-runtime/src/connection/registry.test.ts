@@ -1,3 +1,4 @@
+import { RelayGateway } from "../relay/gateway.ts";
 import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
@@ -718,6 +719,47 @@ describe("EnvironmentRegistry", () => {
         ).toBe(error.message);
         expect(yield* Ref.get(harness.sessions)).toHaveLength(0);
       }).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
+  it.effect("removes and disables environments while companion teardown is pending", () =>
+    Effect.gen(function* () {
+      for (const action of ["disable", "remove"] as const) {
+        const harness = yield* makeHarness([BEARER_TARGET], [BEARER_PROFILE]);
+        let finishClose!: () => void;
+        const closed = new Promise<void>((resolve) => {
+          finishClose = resolve;
+        });
+        const released: string[] = [];
+        yield* Effect.gen(function* () {
+          const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+          yield* action === "disable"
+            ? registry.setEnabled(BEARER_TARGET.environmentId, false)
+            : registry.remove(BEARER_TARGET.environmentId);
+          expect(released).toEqual([BEARER_PROFILE.httpBaseUrl]);
+          const entry = (yield* SubscriptionRef.get(registry.entries)).get(
+            BEARER_TARGET.environmentId,
+          );
+          expect(action === "disable" ? entry?.enabled : entry).toBe(
+            action === "disable" ? false : undefined,
+          );
+          finishClose();
+        }).pipe(
+          Effect.provide(harness.layer),
+          Effect.provideService(
+            RelayGateway,
+            RelayGateway.of({
+              resolve: async (address) => address,
+              fetch,
+              release: async (address) => {
+                released.push(address);
+                await closed;
+              },
+            }),
+          ),
+          Effect.ensuring(Effect.sync(finishClose)),
+        );
+      }
     }),
   );
 

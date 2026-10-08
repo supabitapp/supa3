@@ -1,3 +1,4 @@
+import { runtimeOriginForConfig } from "../serverRuntimeState.ts";
 /**
  * In-memory PreviewManager implementation.
  *
@@ -40,6 +41,7 @@ import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as ServerConfig from "../config.ts";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import { PreviewControlRequiredError } from "@supacode/contracts";
 
@@ -146,6 +148,7 @@ const currentIsoTimestamp = DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* PreviewManagerMake() {
+  const config = yield* ServerConfig.ServerConfig;
   const crypto = yield* Crypto.Crypto;
   const serverEpoch = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
   const stateRef = yield* SynchronizedRef.make<ManagerState>(initialState);
@@ -214,14 +217,19 @@ export const make = Effect.gen(function* PreviewManagerMake() {
   const open: PreviewManager["Service"]["open"] = Effect.fn("PreviewManager.open")(
     function* (input) {
       const runtime = input.runtime;
+      const assetOrigin = runtimeOriginForConfig(config, config.port);
+      const url =
+        runtime === "server" && input.assetRelativeUrl !== undefined
+          ? new URL(input.assetRelativeUrl, assetOrigin).href
+          : input.url;
       // Persisted client surfaces must not bind to a different tab after a server restart.
       const tabId = `${newPreviewTabId()}${runtime === "server" ? `_${serverEpoch}` : ""}`;
       const updatedAt = yield* currentIsoTimestamp;
       const snapshot: PreviewSessionSnapshot = {
         threadId: input.threadId,
         tabId,
-        navStatus: input.url
-          ? { _tag: "Loading", url: yield* normalizeUrl(input.url), title: "" }
+        navStatus: url
+          ? { _tag: "Loading", url: yield* normalizeUrl(url), title: "" }
           : { _tag: "Idle" },
         canGoBack: false,
         canGoForward: false,

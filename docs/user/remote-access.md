@@ -3,6 +3,33 @@
 Connect a phone, browser, or another desktop app to Supacode running on a different
 machine. That machine must stay running and reachable while you work.
 
+## Pair through the public relay
+
+Connect across networks without opening a port on the host. On the machine
+running your agents, open **Settings → Connections**, enable **Public relay**,
+then create a pairing link using the public relay address. Paste that link into
+**Add environment** on another desktop or mobile client, or scan it with the
+mobile app. The host can keep **Network access** off.
+
+For browser access, install the [Supacode command line](./install.md) on the
+computer running the browser, then start its companion:
+
+```bash
+supacode relay-client
+```
+
+Open the local URL it prints and paste your relay pairing link. Keep the
+companion running while you work. It serves the browser client without starting
+agents or an environment on that computer. Browser previews, media, downloads,
+and WebSockets use the same encrypted tunnel. A relay address must be paired
+inside the app; opening it as a website does not load Supacode.
+
+The host and client encrypt the connection end to end. The relay forwards
+encrypted bytes, including HTTP requests. Pairing permissions and authorized
+client revocation work as they do for direct connections. Turning off **Public
+relay** closes relay connections; turning it back on lets already authorized
+clients reconnect. The host must stay running and have internet access.
+
 ## Pair over a LAN or private network
 
 Use direct pairing when the other device can reach the host's network address.
@@ -114,9 +141,11 @@ If that port is already in use, choose another with
 
 ### Hosted web app
 
-A web app served over HTTPS needs an HTTPS endpoint. It connects directly
+A web app served over HTTPS needs an HTTPS endpoint for direct connections. It connects directly
 to your server; a hosted pairing link does not make an unreachable backend
 reachable or convert HTTP to HTTPS.
+
+For a public relay connection in a browser, use the [local companion](#pair-through-the-public-relay).
 
 For a plain HTTP LAN endpoint, use the direct pairing URL in a browser that can
 open it, or pair from the desktop app. On mobile, an IP address entered without a

@@ -224,6 +224,8 @@ export const PreviewOpenInput = Schema.Struct({
   threadId: ThreadId,
   /** Omit to create an empty (Idle) tab the user can type into. */
   url: Schema.optional(Url),
+  /** Resolve a signed asset against the environment listener for a server tab. */
+  assetRelativeUrl: Schema.optional(Schema.String.check(Schema.isPattern(/^\/api\/assets\//))),
   /**
    * Initial viewport for the new tab. Omitting it keeps the historical
    * fill-panel behaviour; clients that have a configured default send it here

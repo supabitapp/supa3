@@ -2,11 +2,40 @@ import { EnvironmentId } from "@supacode/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const readPreparedConnection = vi.fn();
+const readEnvironmentSupportsServerBrowser = vi.fn();
 
 vi.mock("~/state/session", () => ({ readPreparedConnection }));
+vi.mock("~/state/entities", () => ({ readEnvironmentSupportsServerBrowser }));
 
 describe("browser target resolver", () => {
-  beforeEach(() => readPreparedConnection.mockReset());
+  beforeEach(() => {
+    readPreparedConnection.mockReset();
+    readEnvironmentSupportsServerBrowser.mockReset();
+  });
+
+  it("resolves relay ports on the host browser and refuses a host without browser support", async () => {
+    readPreparedConnection.mockReturnValue({
+      httpBaseUrl: "http://127.0.0.1:5774",
+      connectionMethod: "relay",
+    });
+    const { resolveBrowserNavigationTarget, resolveDiscoveredServerUrl } =
+      await import("./browserTargetResolver");
+    const environmentId = EnvironmentId.make("relay-host");
+    const target = { kind: "environment-port", port: 5173 } as const;
+    expect(() => resolveBrowserNavigationTarget(environmentId, target)).toThrow(
+      "browser support on the host",
+    );
+    expect(() =>
+      resolveDiscoveredServerUrl(environmentId, "localhost:5173/app", { requireReachable: true }),
+    ).toThrow("browser support on the host");
+    expect(resolveDiscoveredServerUrl(environmentId, "localhost:5173/app")).toBe(
+      "localhost:5173/app",
+    );
+    readEnvironmentSupportsServerBrowser.mockReturnValue(true);
+    expect(resolveBrowserNavigationTarget(environmentId, target).resolvedUrl).toBe(
+      "http://localhost:5173/",
+    );
+  });
 
   it("maps environment ports onto a private network host", async () => {
     readPreparedConnection.mockReturnValue({ httpBaseUrl: "http://192.168.1.25:3773" });
