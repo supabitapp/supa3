@@ -1,6 +1,7 @@
 import { CheckIcon, CopyIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
+import { MarkdownFindContext, useFindRevealRef } from "../components/chat/markdownFindContext";
 import { Button } from "../components/ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
@@ -19,6 +20,9 @@ export function MermaidBlock({
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
   const [rendered, setRendered] = useState<{ source: string; output: string | null } | null>(null);
   const [showSource, setShowSource] = useState(false);
+  const searching = use(MarkdownFindContext);
+  const revealSource = useCallback(() => setShowSource(true), []);
+  const sourceRevealRef = useFindRevealRef(revealSource);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard<string>({
     timeout: 1200,
@@ -103,6 +107,12 @@ export function MermaidBlock({
       <pre className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]">
         <code>{content}</code>
       </pre>
+      {/* Find counts the source; a selected match here switches to it. */}
+      {searching && showingDiagram ? (
+        <pre ref={sourceRevealRef} hidden>
+          {source}
+        </pre>
+      ) : null}
     </div>
   );
 }

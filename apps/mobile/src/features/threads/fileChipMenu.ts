@@ -1,4 +1,4 @@
-import { fileBasename } from "@supacode/client-runtime/markdown-links";
+import { fileBasename } from "@supacode/shared/path";
 import type { ThreadId } from "@supacode/contracts";
 import { resolveMarkdownLinkPresentation } from "@supacode/mobile-markdown-text/links";
 import type { MarkdownFileContextMenu } from "@supacode/mobile-markdown-text/types";

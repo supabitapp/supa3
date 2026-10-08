@@ -1,6 +1,5 @@
-import { workspaceRelativeFilePath } from "@supacode/client-runtime/markdown-links";
 import type { ProjectReadFileError } from "@supacode/contracts";
-import { isAbsolutePath } from "~/terminal-links";
+import { isAbsolutePath, workspaceRelativeFilePath } from "@supacode/shared/path";
 
 /** Resolve workspace links before choosing between the explorer and a file preview. */
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {

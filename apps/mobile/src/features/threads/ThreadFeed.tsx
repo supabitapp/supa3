@@ -36,9 +36,9 @@ import { writeComposerContextClipboard } from "../../lib/composerContextClipboar
 import {
   codexArtifactTemplatePresentationLabel,
   type CodexArtifactTemplate,
-} from "@supacode/client-runtime/codex-artifact-templates";
+} from "@supacode/shared/codexArtifactTemplates";
 import { resolveAssetUrl } from "@supacode/client-runtime/state/assets";
-import { isMarkdownFileLinkLabel } from "@supacode/client-runtime/markdown-links";
+import { isMarkdownFileLinkLabel } from "@supacode/shared/markdownLinks";
 import { getTextContent, type MarkdownNode } from "react-native-nitro-markdown/headless";
 import { formatAttachmentSize } from "@supacode/client-runtime/state/attachments";
 import { squashAtomCommandFailure } from "@supacode/client-runtime/state/runtime";
@@ -50,7 +50,7 @@ import { resolveViewedImageAsset } from "@supacode/client-runtime/work-log/prese
 import {
   renderCodexFileCitationsAsMarkdown,
   splitCodexArtifactTemplateMarkdown,
-} from "@supacode/client-runtime/codex-markdown-directives";
+} from "@supacode/shared/codexMarkdownDirectives";
 import {
   CHAT_LIST_ANCHOR_OFFSET,
   resolveChatListAnchoredEndSpace,

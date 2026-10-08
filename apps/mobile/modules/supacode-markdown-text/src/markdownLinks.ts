@@ -1,10 +1,10 @@
+import { fileBasename } from "@supacode/shared/path";
+import { formatFilePathPosition } from "@supacode/shared/fileLinks";
 import {
-  fileBasename,
-  formatFilePathPosition,
   inlineCodeFilePathCandidate,
   normalizeMarkdownLinkDestination,
   parseMarkdownFileLink,
-} from "@supacode/client-runtime/markdown-links";
+} from "@supacode/shared/markdownLinks";
 import { parseThreadLinkHref } from "@supacode/shared/threadLinks";
 import { videoMimeType } from "@supacode/shared/video";
 

@@ -30,7 +30,7 @@ import type {
 import {
   appendCodexArtifactTemplateUsePrompt,
   type CodexArtifactTemplate,
-} from "@supacode/client-runtime/codex-artifact-templates";
+} from "@supacode/shared/codexArtifactTemplates";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
 import {
   presentPendingBackgroundWork,

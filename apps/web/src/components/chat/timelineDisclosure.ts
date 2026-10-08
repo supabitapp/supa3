@@ -1,4 +1,4 @@
-import { createContext, use, useState } from "react";
+import { createContext, use, useCallback, useState } from "react";
 
 /**
  * Reports a disclosure toggle inside a messages-timeline row so the list holds
@@ -13,7 +13,10 @@ export function useTimelineDisclosureToggle() {
   return use(TimelineDisclosureContext);
 }
 
-/** Open state for a disclosure in a timeline row; `toggle` reports itself to the list first. */
+/**
+ * Open state for a disclosure in a timeline row; `toggle` reports itself to the list first.
+ * `reveal` opens it without a report, for find, which scrolls to its match itself.
+ */
 export function useTimelineDisclosure(initialOpen = false) {
   const report = useTimelineDisclosureToggle();
   const [open, setOpen] = useState(initialOpen);
@@ -21,7 +24,8 @@ export function useTimelineDisclosure(initialOpen = false) {
     report(event.target, open);
     setOpen(!open);
   };
-  return [open, toggle] as const;
+  const reveal = useCallback(() => setOpen(true), []);
+  return [open, toggle, reveal] as const;
 }
 
 // Base UI starts a panel's height transition a frame after the toggle commits.

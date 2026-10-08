@@ -5,7 +5,7 @@ import type {
   ServerProvider,
 } from "@supacode/contracts";
 import { formatModelSlugName, resolveSelectableModel } from "@supacode/shared/model";
-import { fileBasename } from "../markdownLinks.ts";
+import { fileBasename } from "@supacode/shared/path";
 import { isTerminalSubagentStatus } from "./subagentRuntime.ts";
 
 /** Summarizes one adjacent group, without changing its member identities or order. */

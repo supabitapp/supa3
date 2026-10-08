@@ -4,11 +4,11 @@ import {
   ProviderInstanceId,
   type ServerProvider,
 } from "@supacode/contracts";
+import { formatProviderSkillDisplayName } from "@supacode/shared/inlineSkills";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   dedupeProviderSkillsByName,
-  formatProviderSkillDisplayName,
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
   hasCompleteProviderWorkspaceSnapshot,

@@ -1,3 +1,8 @@
+import type {
+  OrchestrationV2SearchThreadInput,
+  OrchestrationV2SearchThreadResult,
+  OrchestrationV2ThreadHistoryPage,
+} from "@supacode/contracts";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
@@ -287,6 +292,18 @@ export interface OrchestratorV2Shape {
     threadId: ThreadId,
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
+  readonly searchThreadStream: (
+    input: OrchestrationV2SearchThreadInput,
+  ) => Stream.Stream<OrchestrationV2SearchThreadResult, OrchestratorV2Error>;
+  readonly searchThread: (
+    input: OrchestrationV2SearchThreadInput,
+  ) => Effect.Effect<OrchestrationV2SearchThreadResult, OrchestratorV2Error>;
+  readonly getThreadHistoryPage: (
+    threadId: ThreadId,
+    cursor: string,
+    throughEntryId?: string,
+    conversationOnly?: boolean,
+  ) => Effect.Effect<OrchestrationV2ThreadHistoryPage, OrchestratorV2Error>;
   readonly getTimelinePage: (
     threadId: ThreadId,
     options: ProjectionTimelinePageOptions,
@@ -10735,6 +10752,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     delegatedTaskResultPending,
     dispatch: dispatchWithReceipt,
     withThreadCommandLock: (threadId, effect) => threadDispatch.withLock(threadId, effect),
+    searchThreadStream: (input) =>
+      projectionStore
+        .searchThreadStream(input)
+        .pipe(
+          Stream.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: input.threadId, cause }),
+          ),
+        ),
+    searchThread: (input) =>
+      projectionStore
+        .searchThread(input)
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: input.threadId, cause }),
+          ),
+        ),
+    getThreadHistoryPage: (threadId, cursor, throughEntryId, conversationOnly) =>
+      projectionStore
+        .getThreadHistoryPage(threadId, cursor, throughEntryId, conversationOnly)
+        .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause }))),
     getTimelinePage: (threadId, options) =>
       projectionStore
         .getTimelinePage(threadId, options)
