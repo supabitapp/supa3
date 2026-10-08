@@ -1,4 +1,5 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { isMacPlatform } from "@supacode/shared/keybindings";
 import { useLayoutEffect, useState, type RefObject } from "react";
 
 import { Kbd } from "~/components/ui/kbd";
@@ -28,7 +29,8 @@ export function ShortcutHint({
         trigger.closest("[hidden], [inert], [aria-hidden='true']") ||
         getComputedStyle(trigger).visibility !== "visible" ||
         trigger.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true }) === false;
-      setAnchor(disabled || hidden ? null : trigger);
+      const popupOpen = trigger.hasAttribute("data-popup-open");
+      setAnchor(disabled || hidden || popupOpen ? null : trigger);
     };
     updateAnchor();
     const observer = new MutationObserver(updateAnchor);
@@ -54,6 +56,11 @@ export function ShortcutHint({
 
   if (!visible || !anchor) return null;
 
+  const remainingKeys = isMacPlatform(navigator.platform)
+    ? shortcut.replace("⌘", "")
+    : shortcut.replace(/^Ctrl\+/, "");
+  const label = (remainingKeys || shortcut).replace(/Enter$/, "↵");
+
   return (
     <TooltipPrimitive.Provider>
       <TooltipPrimitive.Root
@@ -69,16 +76,12 @@ export function ShortcutHint({
             anchor={anchor}
             side="top"
             align="center"
-            sideOffset={({ anchor, positioner }) => -(anchor.height + positioner.height) / 2}
-            collisionAvoidance={{ side: "none", align: "shift" }}
+            sideOffset={-4}
+            collisionAvoidance={{ side: "flip", align: "shift" }}
             className="pointer-events-none z-[140] data-[anchor-hidden]:hidden"
           >
-            <TooltipPrimitive.Popup
-              aria-hidden
-              data-slot="shortcut-hint"
-              className="flex rounded-md border bg-popover shadow-sm"
-            >
-              <Kbd variant="hint">{shortcut}</Kbd>
+            <TooltipPrimitive.Popup aria-hidden data-slot="shortcut-hint" className="flex">
+              <Kbd variant="hint">{label}</Kbd>
             </TooltipPrimitive.Popup>
           </TooltipPrimitive.Positioner>
         </TooltipPrimitive.Portal>

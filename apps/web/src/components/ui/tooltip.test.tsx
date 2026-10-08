@@ -4,6 +4,9 @@ import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@supacode/shared/keybindings";
+import { shortcutLabelForCommand } from "~/keybindings";
+
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 let root: Root;
@@ -42,16 +45,31 @@ async function renderActions(extra = false) {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>New thread</TooltipTrigger>
-          <TooltipPopup shortcut="⌘N">New thread</TooltipPopup>
+          <TooltipPopup
+            shortcut={shortcutLabelForCommand(DEFAULT_RESOLVED_KEYBINDINGS, "chat.newLocal")}
+          >
+            New thread
+          </TooltipPopup>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger>Search</TooltipTrigger>
-          <TooltipPopup shortcut="⌘K">Search</TooltipPopup>
+          <TooltipPopup
+            shortcut={shortcutLabelForCommand(
+              DEFAULT_RESOLVED_KEYBINDINGS,
+              "commandPalette.toggle",
+            )}
+          >
+            Search
+          </TooltipPopup>
         </Tooltip>
         {extra ? (
           <Tooltip>
             <TooltipTrigger>Model</TooltipTrigger>
-            <TooltipPopup shortcut="⇧⌘M">Model</TooltipPopup>
+            <TooltipPopup
+              shortcut={shortcutLabelForCommand(DEFAULT_RESOLVED_KEYBINDINGS, "modelPicker.toggle")}
+            >
+              Model
+            </TooltipPopup>
           </Tooltip>
         ) : null}
       </TooltipProvider>,
@@ -64,9 +82,9 @@ describe("shortcut hints", () => {
     await renderActions();
     expect(hints()).toEqual([]);
     await keyboard("keydown", "Meta", { metaKey: true });
-    expect(hints()).toEqual(["⌘N", "⌘K"]);
+    expect(hints()).toEqual(["N", "K"]);
     await keyboard("keydown", "Shift", { metaKey: true, shiftKey: true });
-    expect(hints()).toEqual(["⌘N", "⌘K"]);
+    expect(hints()).toEqual(["N", "K"]);
     await keyboard("keyup", "Meta", { shiftKey: true });
     expect(hints()).toEqual([]);
   });
@@ -75,7 +93,18 @@ describe("shortcut hints", () => {
     await renderActions();
     await keyboard("keydown", "Meta", { metaKey: true });
     await renderActions(true);
-    expect(hints()).toEqual(["⌘N", "⌘K", "⇧⌘M"]);
+    expect(hints()).toEqual(["N", "K", "⇧M"]);
+  });
+
+  it("keeps the full shortcut in a focused tooltip without overlapping its keycap", async () => {
+    await renderActions();
+    await keyboard("keydown", "Meta", { metaKey: true });
+    const trigger = container.querySelector("button")!;
+    await act(async () => trigger.focus());
+    expect(document.querySelector('[data-slot="tooltip-popup"]')?.textContent).toContain("⌘N");
+    expect(hints()).toEqual(["K"]);
+    await act(async () => container.querySelectorAll("button")[1]!.focus());
+    expect(hints()).toEqual(["N"]);
   });
 
   it("leaves Escape available to the app while Command remains held", async () => {
@@ -93,7 +122,7 @@ describe("shortcut hints", () => {
       await act(() => container.querySelector("button")!.dispatchEvent(event));
       expect(onKeyDown).toHaveBeenCalledExactlyOnceWith(event);
       expect(event.defaultPrevented).toBe(false);
-      expect(hints()).toEqual(["⌘N", "⌘K"]);
+      expect(hints()).toEqual(["N", "K"]);
     } finally {
       window.removeEventListener("keydown", onKeyDown);
     }
@@ -108,7 +137,14 @@ describe("shortcut hints", () => {
           <div ref={wrapperRef}>
             <Tooltip>
               <TooltipTrigger>Search</TooltipTrigger>
-              <TooltipPopup shortcut="⌘K">Search</TooltipPopup>
+              <TooltipPopup
+                shortcut={shortcutLabelForCommand(
+                  DEFAULT_RESOLVED_KEYBINDINGS,
+                  "commandPalette.toggle",
+                )}
+              >
+                Search
+              </TooltipPopup>
             </Tooltip>
           </div>,
         );
@@ -124,7 +160,7 @@ describe("shortcut hints", () => {
       await act(async () => {
         wrapper.removeAttribute(attribute === "visibility" ? "style" : attribute);
       });
-      expect(hints()).toEqual(["⌘K"]);
+      expect(hints()).toEqual(["K"]);
       await act(async () => hide());
       expect(hints()).toEqual([]);
     },
@@ -138,13 +174,17 @@ describe("shortcut hints", () => {
       const checkVisibility = vi.fn(() => false);
       trigger.checkVisibility = checkVisibility;
       await keyboard("keydown", "Meta", { metaKey: true });
-      expect(hints()).toEqual(["⌘K"]);
+      expect(hints()).toEqual(["K"]);
       checkVisibility.mockReturnValue(true);
-      await act(() => trigger.dispatchEvent(new Event(event, { bubbles: true })));
-      expect(hints().toSorted()).toEqual(["⌘K", "⌘N"]);
+      await act(async () => {
+        container.dispatchEvent(new Event(event, { bubbles: true }));
+      });
+      expect(hints().toSorted()).toEqual(["K", "N"]);
       checkVisibility.mockReturnValue(false);
-      await act(() => trigger.dispatchEvent(new Event(event, { bubbles: true })));
-      expect(hints()).toEqual(["⌘K"]);
+      await act(async () => {
+        container.dispatchEvent(new Event(event, { bubbles: true }));
+      });
+      expect(hints()).toEqual(["K"]);
     },
   );
 
@@ -154,9 +194,9 @@ describe("shortcut hints", () => {
     trigger.checkVisibility = () => !container.hasAttribute("data-starting-style");
     container.setAttribute("data-starting-style", "");
     await keyboard("keydown", "Meta", { metaKey: true });
-    expect(hints()).toEqual(["⌘K"]);
+    expect(hints()).toEqual(["K"]);
     await act(async () => container.removeAttribute("data-starting-style"));
-    expect(hints().toSorted()).toEqual(["⌘K", "⌘N"]);
+    expect(hints().toSorted()).toEqual(["K", "N"]);
   });
 
   it.each(["Win32", "Linux x86_64"])("uses Control on %s", async (platform) => {
@@ -166,7 +206,7 @@ describe("shortcut hints", () => {
     expect(hints()).toEqual([]);
     await keyboard("keyup", "Meta");
     await keyboard("keydown", "Control", { ctrlKey: true });
-    expect(hints()).toEqual(["⌘N", "⌘K"]);
+    expect(hints()).toEqual(["N", "K"]);
     await keyboard("keyup", "Control");
     expect(hints()).toEqual([]);
   });
@@ -189,7 +229,14 @@ describe("shortcut hints", () => {
         <>
           <Tooltip>
             <TooltipTrigger ref={triggerRef}>Search</TooltipTrigger>
-            <TooltipPopup shortcut="⌘K">Search</TooltipPopup>
+            <TooltipPopup
+              shortcut={shortcutLabelForCommand(
+                DEFAULT_RESOLVED_KEYBINDINGS,
+                "commandPalette.toggle",
+              )}
+            >
+              Search
+            </TooltipPopup>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={<span />}>
@@ -210,7 +257,7 @@ describe("shortcut hints", () => {
     });
     expect(triggerRef.current?.textContent).toBe("Search");
     await keyboard("keydown", "Meta", { metaKey: true });
-    expect(hints()).toEqual(["⌘K"]);
+    expect(hints()).toEqual(["K"]);
     await act(async () => {
       triggerRef.current!.disabled = true;
     });
@@ -218,6 +265,6 @@ describe("shortcut hints", () => {
     await act(async () => {
       triggerRef.current!.disabled = false;
     });
-    expect(hints()).toEqual(["⌘K"]);
+    expect(hints()).toEqual(["K"]);
   });
 });

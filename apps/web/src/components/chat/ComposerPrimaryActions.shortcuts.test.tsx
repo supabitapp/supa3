@@ -90,7 +90,7 @@ describe("running composer shortcut hints", () => {
       expect(hints()).toEqual([]);
       await command(true);
       expect(container.querySelector(`button[aria-label='${alternateLabel}']`)).not.toBeNull();
-      expect(hints()).toEqual(["⌘Enter"]);
+      expect(hints()).toEqual(["↵"]);
       await command(false);
       expect(container.querySelector(`button[aria-label='${initialLabel}']`)).not.toBeNull();
       expect(hints()).toEqual([]);
@@ -104,10 +104,10 @@ describe("running composer shortcut hints", () => {
     await renderActions({ keybindings, hasSendableContent: false, promptHasText: false });
     expect(container.querySelector("button[aria-label='Stop generation']")).not.toBeNull();
     await command(true);
-    expect(hints()).toEqual(["⌥⌘."]);
+    expect(hints()).toEqual(["⌥."]);
     await renderActions({ keybindings, isRunning: false, canInterrupt: false });
     expect(container.querySelector("button[aria-label='Stop generation']")).toBeNull();
-    expect(hints()).toEqual(["Enter"]);
+    expect(hints()).toEqual(["↵"]);
   });
 
   it("keeps an unbound stop action free of shortcut hints", async () => {
