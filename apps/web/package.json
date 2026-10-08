@@ -27,6 +27,7 @@
     "@supacode/client-runtime": "workspace:*",
     "@supacode/contracts": "workspace:*",
     "@supacode/mermaid-ascii": "workspace:*",
+    "@supacode/provider-core": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",
     "@tanstack/react-router": "^1.160.2",

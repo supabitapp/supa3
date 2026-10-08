@@ -23,9 +23,9 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../../config.ts";
-import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import * as IdAllocator from "../IdAllocator.ts";
-import { ProviderAdapterV2RuntimePolicy } from "../ProviderAdapter.ts";
+import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
+import { ProviderAdapterV2RuntimePolicy } from "@supacode/provider-core/server/ProviderAdapter";
 import {
   cursorMcpServers,
   cursorRuntimeAgentPolicy,

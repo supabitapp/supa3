@@ -5,7 +5,7 @@ import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import { ChildProcessSpawner } from "effect/process";
 import { makeCodexTextGeneration } from "../../textGeneration/CodexTextGeneration.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
+import { ProviderHost } from "@supacode/provider-core/server/ProviderHost";
 import { chatGptModels } from "../CodexChatGptModels.ts";
 import { makeCodexManagedRuntime } from "../CodexManagedRuntime.ts";
 import { ProviderDriverError } from "../Errors.ts";
@@ -16,8 +16,11 @@ import {
   probeCodexSkillsForCwd,
 } from "../CodexProvider.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
-import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
-import { type ProviderDriverCreateInput, type ProviderInstance } from "../ProviderDriver.ts";
+import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
+import {
+  type ProviderDriverCreateInput,
+  type ProviderInstance,
+} from "@supacode/provider-core/server/driver";
 import { codexContinuationIdentity } from "./CodexHomeLayout.ts";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
 import { HttpClient } from "effect/http";
@@ -30,7 +33,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   const path = yield* Path.Path;
   const http = yield* HttpClient.HttpClient;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const settings = yield* ServerSettingsService;
+  const host = yield* ProviderHost;
   const runtime = yield* makeCodexManagedRuntime({
     instanceId,
     enabled,
@@ -192,8 +195,8 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner));
   const snapshot = yield* makeManagedServerProvider({
     resolveMaintenance: () => Effect.succeed({ provider: DRIVER, packageName: null, update: null }),
-    getSettings: settings.getSettings,
-    streamSettings: settings.streamChanges,
+    getSettings: host.settings.get,
+    streamSettings: host.settings.changes,
     haveSettingsChanged: () => false,
     initialSnapshot: () => pending,
     checkProvider: check,

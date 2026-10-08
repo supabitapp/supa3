@@ -5,7 +5,7 @@ import { buildRuntimeInstructions } from "./RuntimeInstructions.ts";
 import {
   SUPACODE_BROWSER_TOOL_INSTRUCTIONS,
   SUPACODE_ORCHESTRATION_INSTRUCTIONS,
-} from "./SupacodeOrchestrationInstructions.ts";
+} from "@supacode/provider-core/server/orchestrationInstructions";
 
 const SUPACODE_DEVICE_TOOL_INSTRUCTIONS = `## Supacode devices
 

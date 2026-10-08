@@ -9,7 +9,7 @@ import type * as EffectAcpErrors from "effect-acp/errors";
 import { type GrokSettings, TextGenerationError } from "@supacode/contracts";
 import { getModelSelectionStringOptionValue } from "@supacode/shared/model";
 
-import * as TextGenerationOperations from "./TextGenerationOperations.ts";
+import * as TextGenerationOperations from "@supacode/provider-core/server/textGenerationOperations";
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,

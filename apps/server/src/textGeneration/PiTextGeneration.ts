@@ -17,7 +17,7 @@ import {
   buildPiRpcLaunch,
   resolvePiLaunchArgs,
 } from "../orchestration-v2/Adapters/piSupacodeMcpInjection.ts";
-import * as TextGenerationOperations from "./TextGenerationOperations.ts";
+import * as TextGenerationOperations from "@supacode/provider-core/server/textGenerationOperations";
 
 const PI_TIMEOUT_MS = 180_000;
 

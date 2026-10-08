@@ -1,7 +1,7 @@
 import type { ProviderDriverKind, ServerProvider } from "@supacode/contracts";
 
-import type { ProviderInstance } from "../ProviderDriver.ts";
-import type { ServerProviderDraft } from "../providerSnapshot.ts";
+import type { ProviderInstance } from "@supacode/provider-core/server/driver";
+import type { ServerProviderDraft } from "@supacode/provider-core/server/snapshotProbe";
 
 /**
  * Stamp instance identity onto a `ServerProvider` snapshot produced by the

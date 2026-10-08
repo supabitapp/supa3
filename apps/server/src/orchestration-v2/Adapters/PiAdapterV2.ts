@@ -58,27 +58,29 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/process";
 
-import { resolveAttachmentPath } from "../../attachmentStore.ts";
-import * as ServerConfig from "../../config.ts";
-import { mcpToolPresentation } from "../../provider/McpToolPresentation.ts";
-import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { ProviderHost, type ProviderHostShape } from "@supacode/provider-core/server/ProviderHost";
+import { mcpToolPresentation } from "@supacode/provider-core/server/mcpToolPresentation";
+import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import {
   expandPiSkillReference,
   parsePiCompactCommand,
   parsePiDiscoveredCommands,
   type PiCompactCommand,
 } from "../../provider/PiCommands.ts";
-import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
-import * as IdAllocator from "../IdAllocator.ts";
-import * as ProviderAdapter from "../ProviderAdapter.ts";
+import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
+import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriver,
   type ProviderAdapterDriverCreateInput,
-} from "../ProviderAdapterDriver.ts";
-import { makeProviderFailure, makeProviderRetryTurnItem } from "../ProviderFailure.ts";
-import { turnScopedSelectionTransition } from "../ProviderSelectionTransition.ts";
+} from "@supacode/provider-core/server/adapterDriver";
+import {
+  makeProviderFailure,
+  makeProviderRetryTurnItem,
+} from "@supacode/provider-core/server/failure";
+import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 import {
   makePiRpcConnection,
   parsePiModelSlug,
@@ -226,7 +228,7 @@ export interface PiAdapterV2Options {
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
   readonly fileSystem: FileSystem.FileSystem;
   readonly idAllocator: IdAllocator.IdAllocatorV2["Service"];
-  readonly serverConfig: ServerConfig.ServerConfig["Service"];
+  readonly host: ProviderHostShape;
   readonly continuationRequests?: {
     readonly offer: (
       request: ProviderContinuationRequests.ProviderContinuationRequest,
@@ -402,7 +404,7 @@ export function makePiAdapterV2(
       input: ProviderAdapter.ProviderAdapterV2OpenSessionInput,
     ) {
       const scope = yield* Effect.scope;
-      const cwd = input.runtimePolicy.cwd ?? options.serverConfig.cwd;
+      const cwd = input.runtimePolicy.cwd ?? options.host.paths.cwd;
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
       const provideCacheFs = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) =>
         effect.pipe(
@@ -420,7 +422,7 @@ export function makePiAdapterV2(
       // hook. Materialize it even when this session has no MCP credential so
       // Supervised never silently degrades to unrestricted tool execution.
       const extensionPath = yield* provideCacheFs(
-        materializePiSupacodeMcpExtension(options.serverConfig.providerStatusCacheDir),
+        materializePiSupacodeMcpExtension(options.host.paths.providerStatusCacheDir),
       );
       const resolvedLaunchArgs = resolvePiLaunchArgs(options.settings.launchArgs);
       if (!resolvedLaunchArgs.ok) {
@@ -2332,10 +2334,7 @@ export function makePiAdapterV2(
         const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
         const extraLines: Array<string> = [];
         for (const attachment of attachments) {
-          const path = resolveAttachmentPath({
-            attachmentsDir: options.serverConfig.attachmentsDir,
-            attachment,
-          });
+          const path = options.host.resolveAttachmentPath(attachment);
           if (path === null) continue;
           if (attachment.mimeType.startsWith("image/")) {
             const bytes = yield* options.fileSystem.readFile(path);
@@ -3199,7 +3198,7 @@ export type PiAdapterV2DriverEnv =
   | ChildProcessSpawner.ChildProcessSpawner
   | FileSystem.FileSystem
   | IdAllocator.IdAllocatorV2
-  | ServerConfig.ServerConfig;
+  | ProviderHost;
 
 export const PiAdapterV2Driver: ProviderAdapterDriver<PiSettings, PiAdapterV2DriverEnv> = {
   driverKind: PI_DRIVER_KIND,
@@ -3211,7 +3210,7 @@ export const PiAdapterV2Driver: ProviderAdapterDriver<PiSettings, PiAdapterV2Dri
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const fileSystem = yield* FileSystem.FileSystem;
       const idAllocator = yield* IdAllocator.IdAllocatorV2;
-      const serverConfig = yield* ServerConfig.ServerConfig;
+      const host = yield* ProviderHost;
       const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
       return makePiAdapterV2({
         instanceId: input.instanceId,
@@ -3220,7 +3219,7 @@ export const PiAdapterV2Driver: ProviderAdapterDriver<PiSettings, PiAdapterV2Dri
         spawner,
         fileSystem,
         idAllocator,
-        serverConfig,
+        host,
         continuationRequests,
       });
     },

@@ -15,7 +15,7 @@ import {
 import {
   ProviderVersionCache,
   makeManualOnlyProviderMaintenanceCapabilities,
-} from "./providerMaintenance.ts";
+} from "@supacode/provider-core/server/maintenanceResolver";
 
 const maintenanceCapabilities = {
   ...makeManualOnlyProviderMaintenanceCapabilities({

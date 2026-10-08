@@ -60,8 +60,8 @@ import {
   makeAcpMcpOverAcpBridge,
   type AcpMcpOverAcpBridge,
 } from "../../mcp/AcpMcpOverAcpBridge.ts";
-import { mcpToolPresentation } from "../../provider/McpToolPresentation.ts";
-import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { mcpToolPresentation } from "@supacode/provider-core/server/mcpToolPresentation";
+import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import {
   applyAcpAgentTerminalUpdate,
   acpContentBlockDisplayText,
@@ -94,17 +94,20 @@ import * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
 import {
   supacodeAcpPromptWithInstructions,
   type SupacodeAcpInstructionState,
-} from "../../provider/SupacodeOrchestrationInstructions.ts";
+} from "@supacode/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
-import * as IdAllocator from "../IdAllocator.ts";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { type ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
 import {
   type BackgroundWork,
   type BackgroundWorkReport,
   backgroundWorkNotification,
 } from "../Notification.ts";
-import { makeProviderFailure, makeProviderRetryTurnItem } from "../ProviderFailure.ts";
-import { acpSelectionTransition } from "../ProviderSelectionTransition.ts";
+import {
+  makeProviderFailure,
+  makeProviderRetryTurnItem,
+} from "@supacode/provider-core/server/failure";
+import { acpSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 import {
   isProviderNativeImageAttachment,
   providerMessageTextWithAttachmentPaths,
@@ -114,7 +117,7 @@ import {
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
-import * as ProviderAdapter from "../ProviderAdapter.ts";
+import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 
 export const ACP_PROTOCOL = "acp.ndjson-jsonrpc" as const;
 

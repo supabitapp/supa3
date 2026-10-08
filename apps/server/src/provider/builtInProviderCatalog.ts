@@ -1,6 +1,6 @@
 import type { ProviderDriverKind, ProviderInstanceId, ServerProvider } from "@supacode/contracts";
 import type * as Stream from "effect/Stream";
-import type { ServerProviderShape } from "./ServerProvider.ts";
+import type { ServerProviderShape } from "@supacode/provider-core/server/snapshot";
 
 export type ProviderSnapshotSource = {
   /**

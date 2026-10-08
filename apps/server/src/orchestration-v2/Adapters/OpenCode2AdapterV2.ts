@@ -77,26 +77,26 @@ import {
   parseOpenCodeModelSlug,
   type OpenCodeRuntimeError,
 } from "../../provider/opencodeRuntime.ts";
-import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
-import { supacodeOrchestrationSystemPrompt } from "../../provider/SupacodeOrchestrationInstructions.ts";
+import { supacodeOrchestrationSystemPrompt } from "@supacode/provider-core/server/orchestrationInstructions";
 import { SKILL_MENTION_PATTERN } from "@supacode/shared/composerInlineTokens";
 import * as KeyedLock from "@supacode/shared/KeyedLock";
 import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@supacode/shared/model";
 import { causeErrorTag } from "@supacode/shared/observability";
 
 import { providerMessageTextWithAttachmentPaths } from "../AttachmentPrompt.ts";
-import * as IdAllocator from "../IdAllocator.ts";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { backgroundWorkNotification, type BackgroundWorkReport } from "../Notification.ts";
 import * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
-import { makeProviderFailure } from "../ProviderFailure.ts";
+import { makeProviderFailure } from "@supacode/provider-core/server/failure";
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
-import * as ProviderAdapter from "../ProviderAdapter.ts";
-import { turnScopedSelectionTransition } from "../ProviderSelectionTransition.ts";
+import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
+import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "./OpenCodeAdapterV2.ts";
 import { openCodeToolTurnItem } from "./OpenCodeToolItems.ts";
 

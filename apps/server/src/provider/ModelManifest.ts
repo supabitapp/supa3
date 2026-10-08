@@ -36,7 +36,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import { hasValidClaudeManifestAdapters } from "./ClaudeModelManifest.ts";
 import bundledManifestJson from "./model-manifest.json" with { type: "json" };
 import { ProviderCompatibilityPolicy } from "./providerCompatibility.ts";
-import type { ServerProviderDraft } from "./providerSnapshot.ts";
+import type { ServerProviderDraft } from "@supacode/provider-core/server/snapshotProbe";
 
 const MODEL_MANIFEST_URL =
   "https://raw.githubusercontent.com/supabitapp/supacode-next/main/apps/server/src/provider/model-manifest.json";

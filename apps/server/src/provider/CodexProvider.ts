@@ -38,9 +38,9 @@ import {
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
   type ServerProviderDraft,
-} from "./providerSnapshot.ts";
-import { expandHomePath } from "../pathExpansion.ts";
-import { makeUnavailableUsageLimits } from "./providerUsageLimits.ts";
+} from "@supacode/provider-core/server/snapshotProbe";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
+import { makeUnavailableUsageLimits } from "@supacode/provider-core/server/usageLimits";
 import {
   codexRateLimitsFailureMessage,
   codexRateLimitsToLimits,

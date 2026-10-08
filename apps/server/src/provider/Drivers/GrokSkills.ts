@@ -22,7 +22,7 @@ import * as Schema from "effect/Schema";
 import { ChildProcess } from "effect/process";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 
-import { spawnAndCollect } from "../providerSnapshot.ts";
+import { spawnAndCollect } from "@supacode/provider-core/server/snapshotProbe";
 
 const GROK_SKILLS_PROBE_TIMEOUT_MS = 4_000;
 

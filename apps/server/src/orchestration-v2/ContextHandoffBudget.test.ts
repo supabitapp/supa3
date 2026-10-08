@@ -1,4 +1,4 @@
-import type { ProviderAdapterV2HistoricalContext } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2HistoricalContext } from "@supacode/provider-core/server/ProviderAdapter";
 import { assert, describe, it } from "@effect/vitest";
 import {
   ContextHandoffId,

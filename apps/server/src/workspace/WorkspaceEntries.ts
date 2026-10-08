@@ -23,7 +23,7 @@ import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { isExplicitRelativePath, isWindowsAbsolutePath } from "@supacode/shared/path";
 import { normalizeSearchQuery } from "@supacode/shared/searchRanking";
 
-import { expandHomePathWith } from "../pathExpansion.ts";
+import { expandHomePathWith } from "@supacode/provider-core/server/pathExpansion";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";

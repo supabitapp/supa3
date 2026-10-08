@@ -8,7 +8,7 @@
  * Do not import Supacode modules from the string body. The Pi process resolves
  * `@earendil-works/pi-coding-agent` and `typebox` from the user's pi install.
  */
-import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/SupacodeOrchestrationInstructions.ts";
+import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "@supacode/provider-core/server/orchestrationInstructions";
 
 export const PI_SUPACODE_MCP_EXTENSION_FILENAME = "pi-supacode-mcp-extension.ts";
 

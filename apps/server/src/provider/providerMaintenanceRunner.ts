@@ -34,9 +34,9 @@ import {
   resolveLatestProviderVersion,
   type ProviderMaintenanceCommandAction,
   ProviderVersionCache,
-} from "./providerMaintenance.ts";
-import type { ProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
-import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
+} from "@supacode/provider-core/server/maintenanceResolver";
+import type { ProviderMaintenanceCapabilities } from "@supacode/provider-core/server/maintenanceResolver";
+import { collectUint8StreamText } from "@supacode/provider-core/server/collectStreamText";
 const isServerProviderUpdateError = Schema.is(ServerProviderUpdateError);
 
 const UPDATE_TIMEOUT_MS = 5 * 60_000;

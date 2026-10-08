@@ -17,8 +17,8 @@ import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.
 import {
   ProviderAdapterDriverCreateError,
   type AnyProviderAdapterDriver,
-} from "./ProviderAdapterDriver.ts";
-import * as ProviderAdapter from "./ProviderAdapter.ts";
+} from "@supacode/provider-core/server/adapterDriver";
+import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 
 const isProviderSetupError = Schema.is(ProviderSetupError);
 

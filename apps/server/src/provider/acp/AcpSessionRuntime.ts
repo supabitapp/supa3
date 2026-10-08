@@ -29,7 +29,7 @@ import type * as EffectAcpProtocol from "effect-acp/protocol";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 
-import { signalProcessGroup } from "../../process/processGroup.ts";
+import { signalProcessGroup } from "@supacode/provider-core/server/processGroup";
 import { appendAcpStderrTail, sanitizeAcpStderrExcerpt } from "./AcpStderr.ts";
 import {
   collectSessionConfigOptionValues,

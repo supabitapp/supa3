@@ -36,7 +36,7 @@ import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import * as ServerConfig from "../../config.ts";
-import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import {
   museModelCapabilities,
@@ -71,7 +71,7 @@ import {
   providerMessageTextWithAttachmentPaths,
   isProviderNativeImageAttachment,
 } from "../AttachmentPrompt.ts";
-import * as IdAllocator from "../IdAllocator.ts";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import {
   ProviderAdapterEnsureThreadError,
   ProviderAdapterForkThreadError,
@@ -94,11 +94,11 @@ import {
   type ProviderAdapterV2ThreadSnapshot,
   type ProviderAdapterV2TurnInput,
   type ProviderAdapterV2TurnMessage,
-} from "../ProviderAdapter.ts";
+} from "@supacode/provider-core/server/ProviderAdapter";
 import { backgroundWorkNotification, type BackgroundWorkReport } from "../Notification.ts";
 import type * as ProviderContinuationRequests from "../ProviderContinuationRequests.ts";
-import { makeProviderFailure } from "../ProviderFailure.ts";
-import { turnScopedSelectionTransition } from "../ProviderSelectionTransition.ts";
+import { makeProviderFailure } from "@supacode/provider-core/server/failure";
+import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 import { museItemStatus, museToolPresentation } from "./MuseItemPresentation.ts";
 
 const MUSE_PROVIDER = ProviderDriverKind.make("muse");

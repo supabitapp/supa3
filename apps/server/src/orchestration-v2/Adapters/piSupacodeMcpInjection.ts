@@ -2,7 +2,7 @@ import { tokenizeCliArgs } from "@supacode/shared/cliArgs";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
-import type { McpProviderSessionConfig } from "../../mcp/McpProviderSession.ts";
+import type { McpProviderSessionConfig } from "@supacode/provider-core/server/mcpSession";
 import {
   PI_SUPACODE_MCP_EXTENSION_FILENAME,
   PI_SUPACODE_MCP_EXTENSION_SOURCE,
