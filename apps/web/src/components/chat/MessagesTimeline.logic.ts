@@ -17,6 +17,8 @@ import {
   commandProgramName,
 } from "@supacode/client-runtime/work-log/command-label";
 import {
+  latestToolGroupImage,
+  type ToolGroupImage,
   liveActivityToolStatus,
   normalizeCompactToolLabel,
   resolveWorkEntryToolPresentation,
@@ -74,6 +76,12 @@ import {
   formatSearchToolLabel,
 } from "@supacode/shared/toolActivity";
 import { isWindowsAbsolutePath } from "@supacode/shared/path";
+
+function latestWorkGroupImage(entries: ReadonlyArray<WorkLogEntry>) {
+  return latestToolGroupImage(
+    entries.flatMap((entry) => (entry.projectedItem ? [entry.projectedItem] : [])),
+  );
+}
 
 function timelineEntryRunId(entry: TimelineEntry): RunId | null {
   if (entry.kind === "message") {
@@ -536,6 +544,7 @@ type MessagesTimelineRowContent =
     }
   | {
       kind: "work-live";
+      latestImage?: ToolGroupImage | null;
       id: string;
       createdAt: string;
       entry: WorkLogEntry;
@@ -553,6 +562,7 @@ type MessagesTimelineRowContent =
     }
   | {
       kind: "thinking";
+      latestImage?: ToolGroupImage | null;
       id: string;
       createdAt: string | null;
       /** Tool calls this row stands in for after the latest one failed. */
@@ -561,6 +571,7 @@ type MessagesTimelineRowContent =
     }
   | {
       kind: "work-toggle";
+      latestImage?: ToolGroupImage | null;
       id: string;
       createdAt: string;
       runId?: RunId | null;
@@ -1444,6 +1455,7 @@ export function deriveMessagesTimelineRows(input: {
               : `work-live:${activeWorkAnchor.id}`,
             createdAt: activeWorkAnchor.createdAt,
             entry: (latestRunningToolEntry ?? latestVisibleToolEntry).entry,
+            latestImage: latestWorkGroupImage(visibleActiveToolEntries.map(({ entry }) => entry)),
             groupedEntries: visibleActiveToolEntries.map((entry) => entry.entry),
             groupId,
             expanded: input.expandedWorkGroupIds?.has(groupId) ?? false,
@@ -1612,6 +1624,7 @@ export function deriveMessagesTimelineRows(input: {
             id: `work-live:${timelineEntry.id}`,
             createdAt: timelineEntry.createdAt,
             entry: latestActiveToolEntry,
+            latestImage: latestWorkGroupImage(visibleGroupedEntries),
             groupedEntries: visibleGroupedEntries,
             groupId,
             expanded,
@@ -1675,6 +1688,7 @@ export function deriveMessagesTimelineRows(input: {
             createdAt: timelineEntry.createdAt,
             runId: timelineEntry.entry.runId ?? null,
             groupId,
+            latestImage: latestWorkGroupImage(visibleGroupedEntries),
             hiddenCount: visibleGroupedEntries.length,
             expanded,
             summary: usesSingleToolCallLabel
@@ -1880,6 +1894,7 @@ export function deriveMessagesTimelineRows(input: {
         createdAt: input.activeTurnStartedAt ?? null,
         groupId,
         expanded,
+        latestImage: latestWorkGroupImage(visibleActiveToolEntries.map(({ entry }) => entry)),
       });
       if (expanded) {
         nextRows.push(
@@ -2110,7 +2125,12 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return a.createdAt === (b as typeof a).createdAt;
     case "thinking": {
       const bt = b as typeof a;
-      return a.createdAt === bt.createdAt && a.groupId === bt.groupId && a.expanded === bt.expanded;
+      return (
+        a.createdAt === bt.createdAt &&
+        a.groupId === bt.groupId &&
+        a.expanded === bt.expanded &&
+        Equal.equals(a.latestImage, bt.latestImage)
+      );
     }
     case "worktree-setup":
       return a.snapshot === (b as typeof a).snapshot;
@@ -2182,6 +2202,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.groupId === bw.groupId &&
         a.expanded === bw.expanded &&
         a.active === bw.active &&
+        Equal.equals(a.latestImage, bw.latestImage) &&
         Equal.equals(a.entry, bw.entry) &&
         Equal.equals(a.groupedEntries, bw.groupedEntries)
       );
@@ -2199,6 +2220,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.summaryKind === bw.summaryKind &&
         a.toolSurface === bw.toolSurface &&
         Equal.equals(a.toolIcon, bw.toolIcon) &&
+        Equal.equals(a.latestImage, bw.latestImage) &&
         a.hasFailure === bw.hasFailure
       );
     }

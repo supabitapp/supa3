@@ -1,3 +1,5 @@
+import type { ToolGroupImage } from "@supacode/client-runtime/work-log/presentation";
+import { ThreadMarkdownImage } from "./ThreadMarkdownImage";
 import { SubagentStatusDot } from "./SubagentStatusDot";
 import { ThreadSubagentGroup } from "./thread-subagent-group";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
@@ -1031,6 +1033,8 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
 });
 
 export function ThreadWorkGroupToggle(props: {
+  readonly latestImage?: ToolGroupImage | null;
+  readonly onPressPreview: (source: FilePreviewSource) => void;
   readonly environmentId: EnvironmentId;
   readonly rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
   readonly expanded: boolean;
@@ -1120,6 +1124,17 @@ export function ThreadWorkGroupToggle(props: {
           tintColor={props.iconSubtleColor}
         />
       </WorkLogPressable>
+      {!props.expanded && props.latestImage ? (
+        <View className="ml-7 mt-1">
+          <ThreadMarkdownImage
+            environmentId={props.environmentId}
+            resource={props.latestImage.resource}
+            alt={props.latestImage.alt}
+            srcFragment={props.latestImage.srcFragment}
+            onPressPreview={props.onPressPreview}
+          />
+        </View>
+      ) : null}
     </WorkLogBlock>
   );
 }

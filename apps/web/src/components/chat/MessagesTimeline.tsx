@@ -43,6 +43,7 @@ import {
   liveThoughtLine,
   resolveWorkEntryToolPresentation,
   resolveViewedImageAsset,
+  type ToolGroupImage,
   workEntryViewedImagePath,
   type ViewedImageAsset,
 } from "@supacode/client-runtime/work-log/presentation";
@@ -1898,6 +1899,10 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
           {row.kind === "work-live" ? <LiveWorkEntryTimelineRow row={row} /> : null}
           {row.kind === "work-toggle" ? <WorkGroupToggleTimelineRow row={row} /> : null}
           {row.kind === "thinking" ? <ThinkingTimelineRow row={row} /> : null}
+          {(row.kind === "work-toggle" || row.kind === "work-live" || row.kind === "thinking") &&
+          !row.expanded ? (
+            <CollapsedToolGroupImage image={row.latestImage ?? null} />
+          ) : null}
         </WorkLogBlock>
       ) : null}
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
@@ -3947,6 +3952,24 @@ function toolGroupSummaryIconName(
     case "mixed":
       return "hammer";
   }
+}
+
+function CollapsedToolGroupImage({ image }: { image: ToolGroupImage | null }) {
+  const ctx = use(TimelineRowCtx);
+  if (!image) return null;
+  return (
+    <WorkLogDetails kind="media">
+      <ChatMarkdownAssetImage
+        environmentId={ctx.activeThreadEnvironmentId}
+        resource={image.resource}
+        alt={image.alt}
+        srcFragment={image.srcFragment ?? ""}
+        workspaceRoot={ctx.workspaceRoot}
+        maxHeightRem={16}
+        onImageExpand={ctx.onImageExpand}
+      />
+    </WorkLogDetails>
+  );
 }
 
 function WorkGroupToggleTimelineRow({

@@ -72,6 +72,41 @@ it("keeps bounded native questions pending until their answers satisfy the const
   ).toEqual({ areas: ["Server", "Web"] });
 });
 
+it("shows the newest tool image on collapsed mobile groups", () => {
+  const items: OrchestrationV2TurnItem[] = [2, 0].map((outputImageCount, position) => ({
+    ...base(`image-tool-${position}`, "2026-06-20T00:00:03.000Z", position + 1),
+    type: "dynamic_tool",
+    toolName: "mcp__supacode__device_screenshot",
+    input: {},
+    outputOmitted: true,
+    outputImageCount,
+  }));
+  const rows = (tools: OrchestrationV2TurnItem[], expanded = new Set<string>()) =>
+    deriveThreadFeedPresentation(
+      buildThreadFeed(tools.map((item, position) => projected(item, position))),
+      null,
+      new Set([runId]),
+      expanded,
+    );
+  const first = rows(items).find((row) => row.type === "work-toggle");
+  expect(first).toMatchObject({
+    expanded: false,
+    latestImage: { resource: { itemId: "image-tool-0", index: 1 } },
+  });
+  const updated = items.map((item, index) =>
+    item.type === "dynamic_tool" && index === 1 ? { ...item, outputImageCount: 1 } : item,
+  );
+  expect(rows(updated).find((row) => row.type === "work-toggle")).toMatchObject({
+    latestImage: { resource: { itemId: "image-tool-1", index: 0 } },
+  });
+  if (first?.type !== "work-toggle") throw new Error("Expected group toggle");
+  expect(rows(updated, new Set([first.groupId])).map((row) => row.type)).toEqual([
+    "run-fold",
+    "work-toggle",
+    "activity-group",
+  ]);
+});
+
 it("keeps historical plan detail accessible from its paged turn item", () => {
   const item = {
     ...base("historical-plan", "2026-08-29T00:00:00.000Z", 1),

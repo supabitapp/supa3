@@ -183,7 +183,7 @@ function SortableRouteRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "flex items-center gap-2 border-b border-border/70 px-1 py-1.5 last:border-b-0",
+        "group/route flex items-center gap-2 border-b border-border/70 px-1 py-1.5 last:border-b-0",
         isDragging && "relative z-10 rounded-md bg-background shadow-md",
       )}
     >
@@ -213,30 +213,38 @@ function SortableRouteRow({
           </p>
         ) : null}
       </div>
-      <span
-        aria-label={`${label} route latency: ${latency}`}
-        className="shrink-0 px-1 text-2xs tabular-nums text-muted-foreground"
-      >
-        {latency}
-      </span>
-      {removable ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost-muted"
-                size="icon-xs"
-                aria-label={`Remove ${label} route`}
-                onClick={onRemove}
-              />
-            }
-          >
-            <XIcon className="size-3" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">Remove route</TooltipPopup>
-        </Tooltip>
-      ) : null}
+      <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-end sm:h-6 sm:min-w-6 pointer-coarse:gap-2">
+        <span
+          aria-label={`${label} route latency: ${latency}`}
+          className={cn(
+            "px-1 text-2xs tabular-nums text-muted-foreground",
+            removable &&
+              "pointer-fine:group-focus-within/route:invisible pointer-fine:group-hover/route:invisible",
+          )}
+        >
+          {latency}
+        </span>
+        {removable ? (
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center opacity-0 group-focus-within/route:pointer-events-auto group-focus-within/route:opacity-100 group-hover/route:pointer-events-auto group-hover/route:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:opacity-100">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost-muted"
+                    size="icon-xs"
+                    aria-label={`Remove ${label} route`}
+                    onClick={onRemove}
+                  />
+                }
+              >
+                <XIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Remove route</TooltipPopup>
+            </Tooltip>
+          </div>
+        ) : null}
+      </div>
     </li>
   );
 }

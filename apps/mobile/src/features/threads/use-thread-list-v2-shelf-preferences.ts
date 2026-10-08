@@ -15,6 +15,8 @@ export function useThreadListV2ShelfPreferences() {
   const loaded = AsyncResult.isSuccess(preferencesResult);
   const pinnedShelfExpanded =
     !loaded || preferencesResult.value.threadListPinnedShelfExpanded !== false;
+  const activeShelfExpanded =
+    !loaded || preferencesResult.value.threadListActiveShelfExpanded !== false;
   const snoozedShelfExpanded =
     loaded && preferencesResult.value.threadListSnoozedShelfExpanded === true;
   const settledShelfExpanded =
@@ -22,11 +24,13 @@ export function useThreadListV2ShelfPreferences() {
   const workingShelfExpanded =
     loaded && preferencesResult.value.threadListWorkingShelfExpanded === true;
   const pinnedShelfExpandedRef = useRef(pinnedShelfExpanded);
+  const activeShelfExpandedRef = useRef(activeShelfExpanded);
   const snoozedShelfExpandedRef = useRef(snoozedShelfExpanded);
   const settledShelfExpandedRef = useRef(settledShelfExpanded);
   const workingShelfExpandedRef = useRef(workingShelfExpanded);
   useLayoutEffect(() => {
     pinnedShelfExpandedRef.current = pinnedShelfExpanded;
+    activeShelfExpandedRef.current = activeShelfExpanded;
     snoozedShelfExpandedRef.current = snoozedShelfExpanded;
     settledShelfExpandedRef.current = settledShelfExpanded;
     workingShelfExpandedRef.current = workingShelfExpanded;
@@ -37,6 +41,12 @@ export function useThreadListV2ShelfPreferences() {
     const expanded = !pinnedShelfExpandedRef.current;
     pinnedShelfExpandedRef.current = expanded;
     savePreferences({ threadListPinnedShelfExpanded: expanded });
+  }, [loaded, savePreferences]);
+  const toggleActiveShelf = useCallback(() => {
+    if (!loaded) return;
+    const expanded = !activeShelfExpandedRef.current;
+    activeShelfExpandedRef.current = expanded;
+    savePreferences({ threadListActiveShelfExpanded: expanded });
   }, [loaded, savePreferences]);
   const toggleSnoozedShelf = useCallback(() => {
     if (!loaded) return;
@@ -60,10 +70,12 @@ export function useThreadListV2ShelfPreferences() {
   return {
     loaded,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfExpanded,
     togglePinnedShelf,
+    toggleActiveShelf,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,

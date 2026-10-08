@@ -32,6 +32,7 @@ import {
 import { SKILL_MENTION_PATTERN } from "@supacode/shared/composerInlineTokens";
 import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import { dynamicToolTitle } from "@supacode/shared/toolActivity";
+import { toolOutputImages } from "@supacode/shared/toolOutput";
 import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@supacode/shared/model";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 import type {
@@ -468,12 +469,13 @@ export interface CodexDynamicToolProjection extends McpToolPresentation {
 function codexMcpToolOutput(
   item: Extract<CodexDynamicToolItem, { readonly type: "mcpToolCall" }>,
 ): unknown | undefined {
-  const resultOutput =
-    item.result === null || item.result === undefined
-      ? undefined
-      : item.result.structuredContent !== null && item.result.structuredContent !== undefined
-        ? item.result.structuredContent
-        : item.result.content;
+  const result = item.result;
+  const structuredContent = result?.structuredContent;
+  const content = result?.content;
+  let resultOutput = structuredContent ?? content;
+  if (structuredContent != null && content !== undefined && toolOutputImages(content).length > 0) {
+    resultOutput = { content, structuredContent };
+  }
 
   if (item.error === null || item.error === undefined) {
     return resultOutput;

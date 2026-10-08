@@ -187,6 +187,10 @@ export function createSidebarSortingStrategy(input: {
     };
     marker("pinned-header");
     projected.push(...groups.pinned);
+    const draftsIndex = indices.get(sidebarMarkerId("drafts-block"));
+    if (draftsIndex !== undefined && rects[draftsIndex]?.height) {
+      marker("drafts-block");
+    }
     marker("pinned-divider");
     section("active");
     if (items.some((item) => item.kind === "marker" && item.marker === "working-header")) {

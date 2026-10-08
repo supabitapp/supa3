@@ -94,6 +94,25 @@ describe("orchestration V2 wire projection", () => {
     expect(item.output.data).toBe("private-image-data");
   });
 
+  it("preserves the bounded output image count without sending image bytes", () => {
+    const image = { type: "image", mimeType: "image/png", data: "AAAA" };
+    const item = { ...base, output: { content: [image, image] } };
+    const projected = projectTurnItemForWire(item);
+    const decoded = decodeTurnItem(
+      decodeTurnItemJson(encodeTurnItemJson(decodeTurnItem(projected))),
+    );
+    expect(decoded).toMatchObject({ outputImageCount: 2, outputOmitted: true });
+    expect(decoded).not.toHaveProperty("output");
+    expect(JSON.stringify(decoded)).not.toContain("AAAA");
+    expect(
+      projectTurnItemForWire({ ...base, output: Array.from({ length: 20 }, () => image) }),
+    ).toMatchObject({ outputImageCount: MAX_TOOL_OUTPUT_IMAGES });
+    expect(projectTurnItemForWire({ ...base, output: "text only" })).not.toHaveProperty(
+      "outputImageCount",
+    );
+    expect(projectTurnItemForWire(projected)).toMatchObject({ outputImageCount: 2 });
+  });
+
   it("preserves provider notices in bounded items and live events", () => {
     const item = {
       ...base,

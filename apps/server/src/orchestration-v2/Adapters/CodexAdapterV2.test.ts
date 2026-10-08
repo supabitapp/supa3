@@ -1010,6 +1010,24 @@ describe("CodexAdapterV2 dynamic tool projection", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("retains MCP screenshot blocks alongside structured metadata", () =>
+    Effect.gen(function* () {
+      const image = { type: "image", mimeType: "image/png", data: "AAAA" };
+      const content = [{ type: "text", text: "Captured the current page." }, image];
+      const structuredContent = { screenshot: { width: 640, height: 480 } };
+      const projection = yield* CodexAdapterV2.projectCodexDynamicToolItem({
+        type: "mcpToolCall",
+        id: "call-screenshot",
+        server: "supacode",
+        tool: "preview_snapshot",
+        status: "completed",
+        arguments: {},
+        result: { content, structuredContent },
+      });
+      assert.deepEqual(projection.output, { content, structuredContent });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("preserves namespaced dynamic tool output", () =>
     Effect.gen(function* () {
       const projection = yield* CodexAdapterV2.projectCodexDynamicToolItem({

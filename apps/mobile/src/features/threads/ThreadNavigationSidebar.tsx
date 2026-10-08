@@ -65,13 +65,12 @@ import {
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
   ThreadListV2PinnedShelfHeader,
-  ThreadListV2SectionDivider,
+  ThreadListV2ActiveShelfHeader,
   ThreadListV2WorkingShelfHeader,
 } from "./thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "./thread-provider-instance";
 import {
   buildThreadListV2ListItems,
-  isThreadListV2ListItem,
   threadListV2ListItemsAreEqual,
   THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
@@ -80,9 +79,7 @@ import {
 
 /** The sidebar list: flat v2 rows with queued tasks spliced in, plus a
     settled "Show more" pager row. */
-type SidebarListItem =
-  | ThreadListV2ListItem
-  | { readonly type: "v2-show-more"; readonly key: string; readonly hiddenCount: number };
+type SidebarListItem = ThreadListV2ListItem;
 
 const SIDEBAR_STICKY_HEADER_HEIGHT = 106;
 
@@ -316,10 +313,12 @@ function ThreadNavigationSidebarPane(
     settledShelfExpanded,
     snoozedShelfExpanded,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
     togglePinnedShelf,
+    toggleActiveShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the pane stays open.
@@ -365,6 +364,7 @@ function ThreadNavigationSidebarPane(
     settledLimit: settledVisibleCount,
     now: listClock.now,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
@@ -406,6 +406,7 @@ function ThreadNavigationSidebarPane(
       ...threadListV2Layout,
       pendingTasks: v2PendingTasks,
       pinnedShelfExpanded,
+      activeShelfExpanded,
       workingShelfExpanded,
       snoozedShelfExpanded,
       settledShelfExpanded,
@@ -415,13 +416,6 @@ function ThreadNavigationSidebarPane(
       shelfPreferencesLoading: !shelfPreferencesLoaded,
       showActiveEmpty: v2SearchQuery.length === 0,
     });
-    if (settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0) {
-      items.push({
-        type: "v2-show-more",
-        key: "v2-show-more",
-        hiddenCount: threadListV2Layout.hiddenSettledCount,
-      });
-    }
     return items;
   }, [
     nowMinute,
@@ -436,6 +430,7 @@ function ThreadNavigationSidebarPane(
     snoozeEnvironmentIds,
     threadListV2Layout,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     workingShelfExpanded,
   ]);
   const listMenuActions = useMemo<MenuAction[]>(
@@ -579,18 +574,6 @@ function ThreadNavigationSidebarPane(
     ],
   );
   useThreadJumpShortcuts(listItems, handleSelectThread);
-  const sidebarItemsAreEqual = useCallback(
-    (previous: SidebarListItem, item: SidebarListItem): boolean => {
-      if (isThreadListV2ListItem(previous) && isThreadListV2ListItem(item)) {
-        return threadListV2ListItemsAreEqual(previous, item);
-      }
-      if (previous.type === "v2-show-more" && item.type === "v2-show-more") {
-        return previous.hiddenCount === item.hiddenCount;
-      }
-      return false;
-    },
-    [],
-  );
   const { nativeChrome, onRequestVisibility, visible } = props;
   const focusSearch = useCallback(() => {
     if (Platform.OS === "android") return false;
@@ -716,7 +699,15 @@ function ThreadNavigationSidebarPane(
           );
         }
         case "v2-active-header":
-          return <ThreadListV2SectionDivider label="Active" pane="sidebar" />;
+          return (
+            <ThreadListV2ActiveShelfHeader
+              count={item.count}
+              disabled={item.disabled}
+              expanded={item.expanded}
+              onToggle={toggleActiveShelf}
+              pane="sidebar"
+            />
+          );
         case "v2-active-empty":
           return <ThreadListV2ActiveEmpty pane="sidebar" />;
         case "v2-pinned-shelf":
@@ -806,6 +797,7 @@ function ThreadNavigationSidebarPane(
       toggleSettledShelf,
       toggleSnoozedShelf,
       togglePinnedShelf,
+      toggleActiveShelf,
       toggleWorkingShelf,
       unpinThread,
       unsettleThread,
@@ -921,7 +913,7 @@ function ThreadNavigationSidebarPane(
                 estimatedItemSize={64}
                 extraData={listExtraData}
                 getItemType={(item) => item.type}
-                itemsAreEqual={sidebarItemsAreEqual}
+                itemsAreEqual={threadListV2ListItemsAreEqual}
                 keyExtractor={(item) => item.key}
                 renderItem={renderListItem}
                 automaticallyAdjustsScrollIndicatorInsets={NATIVE_LIQUID_GLASS_SUPPORTED}
@@ -988,7 +980,7 @@ function ThreadNavigationSidebarPane(
                 estimatedItemSize={64}
                 extraData={listExtraData}
                 getItemType={(item) => item.type}
-                itemsAreEqual={sidebarItemsAreEqual}
+                itemsAreEqual={threadListV2ListItemsAreEqual}
                 keyExtractor={(item) => item.key}
                 renderItem={renderListItem}
                 contentContainerStyle={[

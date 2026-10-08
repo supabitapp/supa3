@@ -6,6 +6,7 @@ import {
   type ToolActivitySurface,
   type ToolActivityIcon,
   type OrchestrationV2TurnItem,
+  type OrchestrationV2ProjectedTurnItem,
   type ThreadId,
 } from "@supacode/contracts";
 import {
@@ -19,6 +20,7 @@ import { parseChangeRequestUrl } from "@supacode/shared/changeRequestUrl";
 import { isWorkspaceImagePreviewPath } from "@supacode/shared/filePreview";
 import { formatTokens } from "@supacode/shared/usageFormat";
 import { classifyToolActivity } from "@supacode/shared/toolActivity";
+import { turnItemOutputImages } from "./itemDetail.js";
 import { toolOutputIndicatesFailure } from "@supacode/shared/toolOutput";
 
 import {
@@ -498,6 +500,43 @@ export interface ViewedImageAsset {
   readonly resource: Extract<AssetResource, { readonly _tag: "media-file" }>;
   readonly alt: string;
   readonly srcFragment: string;
+}
+
+export interface ToolGroupImage {
+  readonly resource: Extract<AssetResource, { readonly _tag: "media-file" | "tool-output-image" }>;
+  readonly alt: string;
+  readonly srcFragment?: string;
+}
+
+export function latestToolGroupImage(
+  rows: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+  workspaceRoot?: string,
+): ToolGroupImage | null {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]!;
+    const item = row.item;
+    if (item.type !== "dynamic_tool") continue;
+    const imageCount = item.outputImageCount ?? turnItemOutputImages(item).length;
+    if (imageCount > 0) {
+      return {
+        resource: {
+          _tag: "tool-output-image",
+          threadId: row.sourceThreadId,
+          itemId: row.sourceItemId,
+          index: imageCount - 1,
+        },
+        alt: item.title || "Tool output image",
+      };
+    }
+    if (item.viewedImagePath) {
+      const image = resolveViewedImageAsset(item.viewedImagePath, {
+        threadId: row.sourceThreadId,
+        workspaceRoot,
+      });
+      if (image) return image;
+    }
+  }
+  return null;
 }
 
 export function resolveViewedImageAsset(

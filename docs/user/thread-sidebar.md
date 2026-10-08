@@ -113,9 +113,8 @@ open.
 
 ### Working threads
 
-Threads that are working or monitoring fold into a collapsed **Working** section below the active
-list. A thread returns to the top of the active list when it finishes, fails, or needs an approval
-or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
+Threads that are working or monitoring fold into a collapsed **Working** section. A thread
+returns to the top of the active list when it finishes, fails, or needs an approval or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
 in the pinned section.
 
 ## Settle finished work
