@@ -1132,7 +1132,9 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@supacode/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
+import * as Schema from "effect/Schema";
 import { useDelayedStatus } from "../../hooks/useDelayedStatus";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { usePanelAnimationSettings } from "../../panelAnimations";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -1141,6 +1143,7 @@ import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+const COMPOSER_TASKS_EXPANDED_KEY = "supacode:composer:tasks-expanded";
 
 const extendReplacementRangeForTrailingSpace = (
   text: string,
@@ -2484,7 +2487,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasWrappedPrompt = useComposerMultilinePrompt(composerMenuAnchor);
   const hasMultilinePrompt = prompt.includes("\n") || hasWrappedPrompt;
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
-  const [isTasksDrawerOpen, setIsTasksDrawerOpen] = useState(false);
+  const [tasksExpandedPreference, setTasksExpandedPreference] = useLocalStorage(
+    COMPOSER_TASKS_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
+  );
   const [stashPulse, setStashPulse] = useState<{ key: number; active: boolean }>({
     key: 0,
     active: false,
@@ -5194,26 +5201,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     setIsStashMenuOpen((open) => !open);
   }, [expandMobileComposer, isComposerCollapsedMobile]);
-  const toggleTasksDrawer = useCallback(() => {
-    setIsTasksDrawerOpen((open) => !open);
-  }, []);
   const hasBannerItems = props.bannerItems.length > 0;
   const hasBlockingComposerTopDrawer =
     activePendingApproval !== null || pendingUserInputs.length > 0;
-  const showInlineTasksBadge =
-    activeTasksProgress !== null &&
-    activeTaskSteps !== null &&
-    !isTasksDrawerOpen &&
-    !hasBlockingComposerTopDrawer &&
-    (hasBannerItems || showComposerTopDrawer || isComposerCollapsedMobile);
-  const inlineTasksBadge = showInlineTasksBadge ? (
-    <ComposerTasksBadge
-      expanded={false}
-      onToggle={toggleTasksDrawer}
-      progress={activeTasksProgress}
-      steps={activeTaskSteps}
-    />
-  ) : null;
+  const canShowTasks =
+    activeTasksProgress !== null && activeTaskSteps !== null && !hasBlockingComposerTopDrawer;
   const hasImageAttachmentAttention = standaloneComposerImages.some((image) => {
     const upload = uploadsByImageId[image.id];
     const failedInCurrentEnvironment =
@@ -5224,13 +5216,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     // its collapsed thumbnail is enough to signal that the draft has images.
     return nonPersistedComposerImageIdSet.has(image.id) && !failedInCurrentEnvironment;
   });
-  // Banners and the tasks badge dock above the surface rather than inside
+  // Banners and the tasks drawer dock above the surface rather than inside
   // it, so they do not hold the composer open; only surface-internal chrome
   // does.
   const composerHasExpandedChrome =
     isEditingQueuedMessage ||
     showComposerTopDrawer ||
-    isTasksDrawerOpen ||
     composerMenuOpen ||
     isStashMenuOpen ||
     isDragOverComposer ||
@@ -5249,6 +5240,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     hasMultilinePrompt,
     timelineOverflows,
   });
+  const isTasksDrawerOpen = canShowTasks && tasksExpandedPreference && !isComposerResting;
+  const toggleTasksDrawer = useCallback(() => {
+    setIsComposerScrollCollapsed(false);
+    setTasksExpandedPreference(!isTasksDrawerOpen);
+  }, [isTasksDrawerOpen, setIsComposerScrollCollapsed, setTasksExpandedPreference]);
+  const showInlineTasksBadge =
+    canShowTasks &&
+    !isTasksDrawerOpen &&
+    (hasBannerItems || showComposerTopDrawer || isComposerCollapsedMobile);
+  const inlineTasksBadge = showInlineTasksBadge ? (
+    <ComposerTasksBadge
+      expanded={false}
+      onToggle={toggleTasksDrawer}
+      progress={activeTasksProgress}
+      steps={activeTaskSteps}
+    />
+  ) : null;
   const expandedComposerImages = isComposerResting
     ? standaloneComposerImages.filter((image) => pendingSnapShotIdSet.has(image.id))
     : standaloneComposerImages;
@@ -5714,7 +5722,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const activityStackContent = hasBannerItems ? (
     shownSyncPhase ? (
       <ComposerActivityRow phase={shownSyncPhase} />
-    ) : !hasBlockingComposerTopDrawer && activeTasksProgress && activeTaskSteps ? (
+    ) : canShowTasks ? (
       <ComposerTasksContent
         expanded={isTasksDrawerOpen}
         onToggle={toggleTasksDrawer}
@@ -5734,17 +5742,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const bannerStackItems = activityStackItem
     ? [activityStackItem, ...props.bannerItems]
     : props.bannerItems;
-  const activeThreadChanged = useInputsChanged([activeThreadId]);
-  if (
-    isTasksDrawerOpen &&
-    (activeTasksProgress === null ||
-      activeTaskSteps === null ||
-      hasBlockingComposerTopDrawer ||
-      activeThreadChanged)
-  ) {
-    setIsTasksDrawerOpen(false);
-  }
-
   // Close the stash menu whenever the trigger-driven command menu opens so
   // the two popovers never stack in the same layer, and when the user
   // resumes typing (the menu is a transient picker, not a panel).
@@ -6790,7 +6787,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           ) : null}
           <ComposerBanner.Drawer
             key={`top-drawer:${activeThreadId}`}
-            open={showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer)}
+            open={showComposerTopDrawer && !isTasksDrawerOpen}
           >
             <ComposerBanner.Root
               data-chat-composer-top-drawer="true"
@@ -6917,8 +6914,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           </ComposerBanner.Drawer>
           {activeTasksProgress &&
           activeTaskSteps &&
-          (showTasksTab ||
-            (!activityStackItem && isTasksDrawerOpen && !hasBlockingComposerTopDrawer)) ? (
+          (showTasksTab || (!activityStackItem && isTasksDrawerOpen)) ? (
             <ComposerTasksDrawer
               key={`tasks:${activeThreadId}`}
               expanded={isTasksDrawerOpen}
