@@ -16,8 +16,7 @@ export function OrchestrationSkillsSection({
     <SettingsSection title="Orchestration skills">
       <Text className="p-4 text-sm text-foreground-muted">
         Install supacode-commitee and supacode-advisor skills for the selected environments’
-        provider accounts. Applies to all projects and updates with Supacode. Restart existing agent
-        sessions to load skill changes.
+        provider accounts. Updates with Supacode.
       </Text>
       <SettingsRow
         icon="arrow.down.circle"

@@ -27,8 +27,7 @@ function SelectedEnvironmentSkills({
       description={
         <>
           Install supacode-commitee and supacode-advisor skills for the selected environments’
-          provider accounts. Applies to all projects and updates with Supacode.
-          <span className="block">Restart existing agent sessions to load skill changes.</span>
+          provider accounts. Updates with Supacode.
           {skills.notices.map((notice) => (
             <span className="block" key={notice}>
               {notice}
