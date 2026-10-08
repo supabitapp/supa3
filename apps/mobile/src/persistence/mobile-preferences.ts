@@ -46,6 +46,7 @@ export interface Preferences {
     readonly model: string;
   }>;
   readonly threadListPinnedShelfExpanded?: boolean;
+  readonly threadListActiveShelfExpanded?: boolean;
   readonly threadListSettledShelfExpanded?: boolean;
   readonly threadListSnoozedShelfExpanded?: boolean;
   readonly threadListWorkingShelfExpanded?: boolean;
@@ -108,6 +109,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     planModeEnabled?: boolean;
     modelFavorites?: Preferences["modelFavorites"];
     threadListPinnedShelfExpanded?: boolean;
+    threadListActiveShelfExpanded?: boolean;
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
@@ -189,6 +191,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.threadListPinnedShelfExpanded === "boolean") {
     preferences.threadListPinnedShelfExpanded = parsed.threadListPinnedShelfExpanded;
+  }
+  if (typeof parsed.threadListActiveShelfExpanded === "boolean") {
+    preferences.threadListActiveShelfExpanded = parsed.threadListActiveShelfExpanded;
   }
   if (typeof parsed.threadListSettledShelfExpanded === "boolean") {
     preferences.threadListSettledShelfExpanded = parsed.threadListSettledShelfExpanded;

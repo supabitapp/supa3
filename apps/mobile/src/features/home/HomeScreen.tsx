@@ -50,7 +50,7 @@ import {
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
   ThreadListV2PinnedShelfHeader,
-  ThreadListV2SectionDivider,
+  ThreadListV2ActiveShelfHeader,
   ThreadListV2WorkingShelfHeader,
 } from "../threads/thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
@@ -475,10 +475,12 @@ export function HomeScreen(props: HomeScreenProps) {
     settledShelfExpanded,
     snoozedShelfExpanded,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
     togglePinnedShelf,
+    toggleActiveShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the list stays open.
@@ -531,6 +533,7 @@ export function HomeScreen(props: HomeScreenProps) {
     settledLimit: settledVisibleCount,
     now: listClock.now,
     pinnedShelfExpanded,
+    activeShelfExpanded,
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
@@ -576,6 +579,7 @@ export function HomeScreen(props: HomeScreenProps) {
         ...threadListV2Layout,
         pendingTasks: v2PendingTasks,
         pinnedShelfExpanded,
+        activeShelfExpanded,
         workingShelfExpanded,
         snoozedShelfExpanded,
         settledShelfExpanded,
@@ -596,6 +600,7 @@ export function HomeScreen(props: HomeScreenProps) {
       threadListV2Layout,
       v2PendingTasks,
       pinnedShelfExpanded,
+      activeShelfExpanded,
       workingShelfExpanded,
     ],
   );
@@ -642,7 +647,17 @@ export function HomeScreen(props: HomeScreenProps) {
         );
       }
       if (item.type === "v2-active-header") {
-        return <ThreadListV2SectionDivider label="Active" />;
+        return (
+          <ThreadListV2ActiveShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleActiveShelf}
+          />
+        );
+      }
+      if (item.type === "v2-show-more") {
+        return <ThreadListV2ShowMoreRow hiddenCount={item.hiddenCount} onPress={showMoreSettled} />;
       }
       if (item.type === "v2-active-empty") {
         return (
@@ -781,9 +796,11 @@ export function HomeScreen(props: HomeScreenProps) {
       snoozeEnvironmentIds,
       threadSearchMatchByKey,
       titleRegenerationEnvironmentIds,
+      showMoreSettled,
       toggleSettledShelf,
       toggleSnoozedShelf,
       togglePinnedShelf,
+      toggleActiveShelf,
       toggleWorkingShelf,
       v2ProjectTitleByProjectKey,
       props.searchQuery,
@@ -969,14 +986,6 @@ export function HomeScreen(props: HomeScreenProps) {
             itemLayoutAnimation={listMotion.layout}
             extraData={v2ExtraData}
             ListHeaderComponent={v2ListHeader}
-            ListFooterComponent={
-              settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
-                <ThreadListV2ShowMoreRow
-                  hiddenCount={threadListV2Layout.hiddenSettledCount}
-                  onPress={showMoreSettled}
-                />
-              ) : null
-            }
             ListEmptyComponent={v2ListEmpty}
             style={{ flex: 1 }}
             sharedValues={listMotion.sharedValues}

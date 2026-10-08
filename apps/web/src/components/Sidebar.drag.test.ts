@@ -71,6 +71,51 @@ function preview(
 }
 
 describe("sidebar collision detection", () => {
+  it("allows reaching Settled above Pinned and Active", () => {
+    const items = [
+      settledHeader,
+      thread("settled", "settled"),
+      marker("snoozed-header"),
+      thread("snoozed", "snoozed"),
+      marker("working-header"),
+      thread("working", "working"),
+      pinnedHeader,
+      thread("pinned", "pinned"),
+      divider,
+      thread("source", "active"),
+    ];
+    const { rects, activeIndex, overIndex } = layout(items, "source", "settled");
+    const targetRect = rects[overIndex]!;
+    const detector = createSidebarCollisionDetection(() => true, {
+      items,
+      activationY: rects[activeIndex]!.top,
+    });
+    const result = detector({
+      active: {
+        id: "source",
+        data: { current: {} },
+        rect: { current: { initial: rects[activeIndex]!, translated: targetRect } },
+      },
+      collisionRect: targetRect,
+      pointerCoordinates: { x: 130, y: targetRect.top + targetRect.height / 2 },
+      droppableRects: new Map(items.map((item, index) => [sidebarListItemId(item), rects[index]!])),
+      droppableContainers: items.map((item, index) => ({
+        id: sidebarListItemId(item),
+        key: sidebarListItemId(item),
+        disabled: false,
+        data: { current: {} },
+        node: {
+          current: {
+            getBoundingClientRect: () => rects[index]!,
+            querySelector: () => ({ getBoundingClientRect: () => rects[index]! }),
+          } as unknown as HTMLElement,
+        },
+        rect: { current: rects[index]! },
+      })),
+    });
+    expect(result[0]?.id).toBe("settled");
+  });
+
   function collisionArgs(blockedAboveSource = false) {
     const rows = [thread("source", "active"), thread("blocked", "active")];
     const items = [
@@ -255,6 +300,38 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
+  it("keeps the reordered shelves and paging together when settling an Active thread", () => {
+    const items = [
+      settledHeader,
+      thread("s", "settled"),
+      marker("settled-more"),
+      marker("snoozed-header"),
+      thread("z", "snoozed"),
+      marker("working-header"),
+      thread("w", "working"),
+      pinnedHeader,
+      thread("p", "pinned"),
+      divider,
+      marker("active-placeholder"),
+      thread("a", "active"),
+    ];
+    const transforms = preview(
+      { items, settledOrder: ["s", "a"], settledExpanded: true },
+      "a",
+      "s",
+    );
+    expect(transforms.get("s")).toEqual(stationary);
+    for (const name of [
+      "settled-more",
+      "snoozed-header",
+      "working-header",
+      "pinned-header",
+      "pinned-divider",
+    ] as const) {
+      expect(transforms.get(sidebarMarkerId(name))?.y).toBe(37);
+    }
+  });
+
   it.each([
     ["a2", "a1"],
     ["p", "a1"],

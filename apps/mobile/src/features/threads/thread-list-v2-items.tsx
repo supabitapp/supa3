@@ -172,6 +172,7 @@ type ThreadListV2ShelfHeaderProps = {
 };
 
 const SHELF_LABEL = {
+  active: "Active",
   pinned: "Pinned",
   working: "Working",
   snoozed: "Snoozed",
@@ -201,6 +202,12 @@ export const ThreadListV2PinnedShelfHeader = memo(function ThreadListV2PinnedShe
   props: ThreadListV2ShelfHeaderProps,
 ) {
   return <ThreadListV2ShelfHeader {...props} kind="pinned" />;
+});
+
+export const ThreadListV2ActiveShelfHeader = memo(function ThreadListV2ActiveShelfHeader(
+  props: ThreadListV2ShelfHeaderProps,
+) {
+  return <ThreadListV2ShelfHeader {...props} kind="active" />;
 });
 
 export const ThreadListV2WorkingShelfHeader = memo(function ThreadListV2WorkingShelfHeader(

@@ -66,19 +66,20 @@ scroll position instead of following the thread to its new place in the list.
 Pinned threads never settle automatically, even after their pull request merges. Unpinning a thread
 returns it to the usual settlement rules, and settling a pinned thread removes its pin.
 
-On web and desktop, drag a thread between sections to change its state. Drag a thread up into
+On web and desktop, drag a thread between sections to change its state. Drag a thread into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
 list to unpin it. Dragging a thread onto the **Settled** header settles it, and dragging a settled
 thread into the active list un-settles it. A snoozed thread can be dragged out of the snoozed
 shelf, which wakes it, but threads cannot be dragged into the shelf because snoozing needs a wake
 time. Dragging a pinned thread out of the pinned section does not ask for unpin confirmation.
-Pinned and active boundary labels appear only while dragging, without moving the rows. The
+Collapse **Active** to hide its other threads; the thread you are viewing stays visible.
+Dragging exposes the pinned and active rows so you can move threads between them. The
 other rows slide aside to show where the thread will land. When you cross into another section,
 the dragged thread shows the action the drop performs, with its icon: **Pin**, **Unpin**,
 **Settle**, **Un-settle**, or **Wake**. Its status and hover actions hide during the drag. A pinned
 thread keeps its pin only while it stays in the pinned section; once it leaves, the badge takes
-over. Reordering within the same section shows no badge. When there are no pins, drag to the top
-edge to pin a thread. Section labels stay readable for the whole drag, and the section the
+over. Reordering within the same section shows no badge. When there are no pins, drop onto the
+**Pinned** label to pin a thread. Section labels stay readable for the whole drag, and the section the
 thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
@@ -113,9 +114,8 @@ open.
 
 ### Working threads
 
-Threads that are working or monitoring fold into a collapsed **Working** section below the active
-list. A thread returns to the top of the active list when it finishes, fails, or needs an approval
-or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
+Threads that are working or monitoring fold into a collapsed **Working** section. A thread
+returns to the top of the active list when it finishes, fails, or needs an approval or answer. The Working section lists the thread you last sent work to first. Pinned threads stay
 in the pinned section.
 
 ## Settle finished work
