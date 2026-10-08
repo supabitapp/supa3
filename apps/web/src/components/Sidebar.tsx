@@ -2114,7 +2114,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             type="button"
                             aria-label="Dismiss Woke notification"
                             onClick={handleAcknowledgeWokeClick}
-                            onPointerDown={handleActionPointerDown}
+                            onPointerDown={(event) => event.stopPropagation()}
                             className="inline-flex shrink-0 cursor-pointer items-center rounded-sm text-warning outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           />
                         }
