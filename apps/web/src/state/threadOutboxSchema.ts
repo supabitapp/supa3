@@ -18,7 +18,7 @@ import {
 } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
 
-const CreateThread = Schema.Struct({
+export const OutboxCreateThread = Schema.Struct({
   projectId: ProjectId,
   title: Schema.String,
   modelSelection: ModelSelection,
@@ -27,6 +27,20 @@ const CreateThread = Schema.Struct({
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   createdAt: Schema.String,
+});
+
+export const OutboxBootstrap = Schema.Struct({
+  createThread: Schema.optionalKey(OutboxCreateThread),
+  prepareWorktree: Schema.optionalKey(
+    Schema.Struct({
+      requireWorktree: Schema.optionalKey(Schema.Boolean),
+      projectCwd: Schema.String,
+      baseBranch: Schema.String,
+      branch: Schema.optionalKey(Schema.String),
+      startFromOrigin: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
+  runSetupScript: Schema.optionalKey(Schema.Boolean),
 });
 
 export const OutboxTurnInput = Schema.Struct({
@@ -48,21 +62,7 @@ export const OutboxTurnInput = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   dispatchMode: Schema.optionalKey(Schema.Literals(["auto", "queue", "steer", "restart", "start"])),
   sourceProposedPlan: Schema.optionalKey(Schema.Struct({ threadId: ThreadId, planId: PlanId })),
-  bootstrap: Schema.optionalKey(
-    Schema.Struct({
-      createThread: Schema.optionalKey(CreateThread),
-      prepareWorktree: Schema.optionalKey(
-        Schema.Struct({
-          requireWorktree: Schema.optionalKey(Schema.Boolean),
-          projectCwd: Schema.String,
-          baseBranch: Schema.String,
-          branch: Schema.optionalKey(Schema.String),
-          startFromOrigin: Schema.optionalKey(Schema.Boolean),
-        }),
-      ),
-      runSetupScript: Schema.optionalKey(Schema.Boolean),
-    }),
-  ),
+  bootstrap: Schema.optionalKey(OutboxBootstrap),
 });
 
 export const OutboxAttachment = Schema.Struct({

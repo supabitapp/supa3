@@ -28,6 +28,23 @@ export interface ThreadOutboxEntry<Payload> {
   readonly pauseUntil: number;
 }
 
+export function createPendingThreadOutboxEntry<Payload>(
+  input: Pick<ThreadOutboxEntry<Payload>, "id" | "scope" | "createdAt" | "payload">,
+  position: number,
+): ThreadOutboxEntry<Payload> {
+  return {
+    ...input,
+    position,
+    status: "pending",
+    attempted: false,
+    attempts: 0,
+    retryAt: 0,
+    error: null,
+    paused: false,
+    pauseUntil: 0,
+  };
+}
+
 export interface BrowserThreadOutboxStorage<Payload> {
   readonly load: () => Promise<ReadonlyArray<ThreadOutboxEntry<Payload>>>;
   /** Updates an existing entry; false when another client has removed it. */
@@ -144,17 +161,7 @@ export function createBrowserThreadOutbox<Payload>(options: {
   ) {
     await load();
     // Publish only after the storage transaction commits. Callers may now clear their draft.
-    const added = inputs.map((input) => ({
-      ...input,
-      position: ++position,
-      status: "pending" as const,
-      attempted: false,
-      attempts: 0,
-      retryAt: 0,
-      error: null,
-      paused: false,
-      pauseUntil: 0,
-    }));
+    const added = inputs.map((input) => createPendingThreadOutboxEntry(input, ++position));
     await mutation(manager.enqueueMany(added));
   }
 

@@ -1,3 +1,5 @@
+import { SidebarThreadCreationRow } from "./SidebarThreadCreationRow";
+import { useThreadCreations } from "../state/threadCreationQueue";
 import { SidebarPendingThreadRow } from "./SidebarPendingThreadRow";
 import { useThreadOutbox } from "../state/threadOutbox";
 import { type EnvironmentId } from "@supacode/contracts";
@@ -1006,6 +1008,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     () => setDraftsShelfExpanded((value) => !value),
     [setDraftsShelfExpanded],
   );
+  const creationEntries = useThreadCreations();
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
   // The open draft's row is FROZEN at the moment the draft became the route:
@@ -1030,6 +1033,8 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     // new-thread surfaces mint fresh drafts and leave invested ones behind
     // unmapped, so the mapping only knows about the latest per project.
     for (const [draftKey, session] of Object.entries(draftThreadsByThreadKey)) {
+      if (creationEntries.some((entry) => entry.id === draftKey && entry.status === "waiting"))
+        continue;
       if (session.promotedTo != null) {
         continue;
       }
@@ -1058,6 +1063,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     return rows;
   }, [
     draftThreadsByThreadKey,
+    creationEntries,
     draftsByThreadKey,
     frozenActive,
     props.routeDraftId,
@@ -2534,6 +2540,13 @@ export default function Sidebar() {
     return count;
   });
   const outboxEntries = useThreadOutbox();
+  const creationEntries = useThreadCreations();
+  const waitingCreations = creationEntries.filter(
+    (entry) =>
+      entry.status === "waiting" &&
+      (scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${entry.sourceEnvironmentId}:${entry.sourceProjectId}`)),
+  );
   const pendingThreads = useMemo(
     () =>
       outboxEntries.filter((entry) => {
@@ -2547,6 +2560,7 @@ export default function Sidebar() {
       }),
     [outboxEntries, serverThreadKeys, scopedProjectKeys],
   );
+  const pendingThreadCount = pendingThreads.length + waitingCreations.length;
   // Scope flips drop the selection: rows selected under the old scope may be
   // hidden now, and bulk actions must never count or touch invisible rows.
   const selectionProjectScopeKeyRef = useRef<string | null | undefined>(undefined);
@@ -3587,7 +3601,7 @@ export default function Sidebar() {
     (item) => item.kind === "marker" && item.marker === "pinned-header",
   );
   const sidebarListHasRows =
-    sidebarHasThreadSections || visibleDraftSessionCount > 0 || pendingThreads.length > 0;
+    sidebarHasThreadSections || visibleDraftSessionCount > 0 || pendingThreadCount > 0;
   // The undo notice resizes the footer and shifts the bottom-pinned settled
   // shelf. It mounts and expires apart from any reorder, so it needs its own pass.
   const undoNoticeShown = useThreadUndoNotice((state) => state.notice !== null);
@@ -3597,7 +3611,7 @@ export default function Sidebar() {
       orderKey: sidebarListOrderKey,
       routeDraftId: routeDraftIdForRows,
       draftCount: visibleDraftSessionCount,
-      pendingCount: pendingThreads.length,
+      pendingCount: pendingThreadCount,
       undoNoticeShown,
       animate: !listMotionPaused && sidebarListHasRows,
     }),
@@ -3608,7 +3622,7 @@ export default function Sidebar() {
       sidebarListOrderKey,
       undoNoticeShown,
       visibleDraftSessionCount,
-      pendingThreads.length,
+      pendingThreadCount,
     ],
   );
   useLayoutEffect(() => {
@@ -4997,21 +5011,31 @@ export default function Sidebar() {
                       );
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const items: ReactNode[] = pendingThreads.map((entry) => (
-                      <SidebarPendingThreadRow
-                        key={`pending:${entry.scope}`}
+                    const items: ReactNode[] = waitingCreations.map((entry) => (
+                      <SidebarThreadCreationRow
+                        key={`waiting:${entry.id}`}
                         entry={entry}
-                        projectTitle={
-                          entry.payload.input.bootstrap?.createThread
-                            ? projectDisplayNameByKey.get(
-                                `${entry.payload.environmentId}:${entry.payload.input.bootstrap.createThread.projectId}`,
-                              )
-                            : undefined
-                        }
-                        active={entry.scope === routeThreadKey}
-                        onNavigate={navigateToThread}
+                        active={entry.id === routeDraftIdForRows}
+                        onNavigate={navigateToDraft}
                       />
                     ));
+                    items.push(
+                      ...pendingThreads.map((entry) => (
+                        <SidebarPendingThreadRow
+                          key={`pending:${entry.scope}`}
+                          entry={entry}
+                          projectTitle={
+                            entry.payload.input.bootstrap?.createThread
+                              ? projectDisplayNameByKey.get(
+                                  `${entry.payload.environmentId}:${entry.payload.input.bootstrap.createThread.projectId}`,
+                                )
+                              : undefined
+                          }
+                          active={entry.scope === routeThreadKey}
+                          onNavigate={navigateToThread}
+                        />
+                      )),
+                    );
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
@@ -5189,7 +5213,7 @@ export default function Sidebar() {
             </DndContext>
           </TooltipProvider>
           {visibleDraftSessionCount === 0 &&
-          pendingThreads.length === 0 &&
+          pendingThreadCount === 0 &&
           pinnedThreads.length +
             activeThreads.length +
             workingThreads.length +

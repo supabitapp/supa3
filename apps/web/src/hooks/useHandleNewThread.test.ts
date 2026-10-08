@@ -15,6 +15,7 @@ const testState = vi.hoisted(() => {
     readonly environmentId: string;
     readonly promotedTo: null;
     readonly threadId: string;
+    readonly queuedForMachine?: boolean;
   } | null = null;
   const router = {
     state: {
@@ -68,6 +69,9 @@ const testState = vi.hoisted(() => {
       });
     },
     router,
+    queueMappedDraft: () => {
+      if (storedDraft) storedDraft = { ...storedDraft, queuedForMachine: true };
+    },
   };
 });
 
@@ -181,6 +185,41 @@ vi.mock("../uiStateStore", () => ({
 vi.mock("./useSettings", () => ({ useClientSettings: () => ({}) }));
 
 import { useNewThreadHandler } from "./useHandleNewThread";
+
+it("does not reuse a draft that became queued during the default lookup", async () => {
+  testState.reset({
+    draftId: "draft-waiting",
+    environmentId: "environment-ssh",
+    promotedTo: null,
+    threadId: "thread-waiting",
+  });
+  const pending = useNewThreadHandler()({
+    environmentId: "environment-ssh",
+    projectId: "project-remote",
+  } as never);
+  testState.queueMappedDraft();
+  testState.completeProjectFileRead(null);
+  expect(await pending).toBeNull();
+  expect(testState.draftStore.setLogicalProjectDraftThreadId).not.toHaveBeenCalled();
+});
+
+it("opens a fresh draft when the empty mapped draft is waiting for a machine", async () => {
+  testState.reset({
+    draftId: "draft-waiting",
+    environmentId: "environment-ssh",
+    promotedTo: null,
+    threadId: "thread-waiting",
+    queuedForMachine: true,
+  });
+  const pending = useNewThreadHandler()({
+    environmentId: "environment-ssh",
+    projectId: "project-remote",
+  } as never);
+  testState.completeProjectFileRead(null);
+  const opened = await pending;
+  expect(opened?.draftId).not.toBe("draft-waiting");
+  expect(opened?.threadId).not.toBe("thread-waiting");
+});
 
 describe.each([
   ["new", null],

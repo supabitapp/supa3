@@ -323,6 +323,7 @@ const PersistedDraftThreadState = Schema.Struct({
   logicalProjectKey: Schema.optionalKey(Schema.String),
   environmentSelection: Schema.optionalKey(Schema.Literals(["auto", "manual"])),
   loadBalancedEnvironmentId: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  queuedForMachine: Schema.optionalKey(Schema.Boolean),
   createdAt: Schema.String,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
@@ -455,6 +456,7 @@ export interface DraftSessionState {
   logicalProjectKey: string;
   environmentSelection?: "auto" | "manual";
   loadBalancedEnvironmentId?: EnvironmentId | null;
+  queuedForMachine?: boolean;
   createdAt: string;
   runtimeMode: RuntimeMode;
   interactionMode: ProviderInteractionMode;
@@ -577,6 +579,7 @@ interface ComposerDraftStoreState {
       interactionMode?: ProviderInteractionMode;
       environmentSelection?: "auto" | "manual";
       loadBalancedEnvironmentId?: EnvironmentId | null;
+      queuedForMachine?: boolean;
     },
   ) => void;
   clearProjectDraftThreadId: (projectRef: ScopedProjectRef) => void;
@@ -1621,6 +1624,7 @@ function createDraftThreadState(
     projectId: projectRef.projectId,
     logicalProjectKey,
     ...(environmentSelection ? { environmentSelection } : {}),
+    ...(existingThread?.queuedForMachine ? { queuedForMachine: true } : {}),
     ...(options?.loadBalancedEnvironmentId !== undefined
       ? { loadBalancedEnvironmentId: options.loadBalancedEnvironmentId }
       : existingThread?.loadBalancedEnvironmentId !== undefined
@@ -1666,6 +1670,7 @@ function draftThreadsEqual(left: DraftThreadState | undefined, right: DraftThrea
     left.logicalProjectKey === right.logicalProjectKey &&
     left.environmentSelection === right.environmentSelection &&
     left.loadBalancedEnvironmentId === right.loadBalancedEnvironmentId &&
+    (left.queuedForMachine ?? false) === (right.queuedForMachine ?? false) &&
     left.createdAt === right.createdAt &&
     left.runtimeMode === right.runtimeMode &&
     left.interactionMode === right.interactionMode &&
@@ -1832,6 +1837,7 @@ function normalizePersistedDraftThreads(
             ? { loadBalancedEnvironmentId: null }
             : {}),
         promotedTo,
+        ...(candidateDraftThread.queuedForMachine === true ? { queuedForMachine: true } : {}),
       };
     }
   }
@@ -2188,6 +2194,7 @@ export function partializeComposerDraftStoreState(
         ([threadKey, draftThread]) =>
           mappedDraftKeys.has(threadKey) ||
           isDraftThreadPromoting(draftThread) ||
+          draftThread.queuedForMachine === true ||
           composerDraftHasUserContent(state.draftsByThreadKey[threadKey]),
       )
       .map(([threadKey]) => threadKey),
@@ -2598,6 +2605,7 @@ function toHydratedDraftThreadState(
           persistedDraftThread.promotedTo.threadId as ThreadId,
         )
       : null,
+    ...(persistedDraftThread.queuedForMachine ? { queuedForMachine: true } : {}),
   };
 }
 
@@ -2791,6 +2799,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 previousThreadKeyForLogicalProject,
               ) &&
               !isDraftThreadPromoting(previousDraftThread) &&
+              !previousDraftThread?.queuedForMachine &&
               !composerDraftHasUserContent(
                 state.draftsByThreadKey[previousThreadKeyForLogicalProject],
               )
@@ -2876,6 +2885,12 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                     ? null
                     : (existing.loadBalancedEnvironmentId ?? null)
                   : options.loadBalancedEnvironmentId,
+              ...(options.queuedForMachine !== undefined || existing.queuedForMachine !== undefined
+                ? {
+                    queuedForMachine:
+                      options.queuedForMachine ?? existing.queuedForMachine ?? false,
+                  }
+                : {}),
               createdAt:
                 options.createdAt === undefined
                   ? existing.createdAt
@@ -2895,6 +2910,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               nextDraftThread.logicalProjectKey === existing.logicalProjectKey &&
               nextDraftThread.environmentSelection === existing.environmentSelection &&
               nextDraftThread.loadBalancedEnvironmentId === existing.loadBalancedEnvironmentId &&
+              nextDraftThread.queuedForMachine === existing.queuedForMachine &&
               nextDraftThread.createdAt === existing.createdAt &&
               nextDraftThread.runtimeMode === existing.runtimeMode &&
               nextDraftThread.interactionMode === existing.interactionMode &&

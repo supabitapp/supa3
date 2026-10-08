@@ -1484,6 +1484,19 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(draftByKey(draftId)?.prompt).toBe("keep me around");
   });
 
+  it("keeps submitted waiting drafts alive and persisted when a fresh draft takes their mapping", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    store.setDraftThreadContext(draftId, { queuedForMachine: true });
+    store.setProjectDraftThreadId(projectRef, otherDraftId, { threadId: otherThreadId });
+    const state = useComposerDraftStore.getState();
+    expect(state.getDraftSession(draftId)?.queuedForMachine).toBe(true);
+    expect(state.getDraftThreadByProjectRef(projectRef)?.threadId).toBe(otherThreadId);
+    expect(partializeComposerDraftStoreState(state)).toMatchObject({
+      draftThreadsByThreadKey: { [draftId]: { queuedForMachine: true, threadId } },
+    });
+  });
+
   it("clears every session for a project, including unmapped invested drafts", () => {
     const store = useComposerDraftStore.getState();
     store.setProjectDraftThreadId(projectRef, draftId, { threadId });

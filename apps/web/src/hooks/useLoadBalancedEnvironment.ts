@@ -1,10 +1,18 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
-import { chooseLoadBalancedEnvironment } from "@supacode/client-runtime/load-balancing";
+import { inspectLoadBalancedEnvironments } from "@supacode/client-runtime/load-balancing";
 import type { EnvironmentId } from "@supacode/contracts";
 import { Atom } from "effect/reactivity";
-import { useCallback, useContext, useMemo } from "react";
+import { useCallback, useContext, useEffect, useMemo } from "react";
 
 import { serverEnvironment } from "../state/server";
+
+const STATUS_LABELS = {
+  checking: "Checking machines…",
+  selected: "Selecting a machine…",
+  "no-candidates": "No eligible machines",
+  unavailable: "Resource checks unavailable",
+  "at-capacity": "Waiting for capacity",
+};
 
 function hostResourcesSnapshotAtom(environmentIds: readonly EnvironmentId[]) {
   return Atom.make((get) => ({
@@ -39,17 +47,29 @@ export function useLoadBalancedEnvironment(
   const resourcesAtom = useMemo(() => hostResourcesSnapshotAtom(environmentIds), [environmentIds]);
   const { observedAt, resources } = useAtomValue(resourcesAtom);
   const pending = resources.some((resource) => resource.pending);
-  const environmentId = chooseLoadBalancedEnvironment(
+  const selection = inspectLoadBalancedEnvironments(
     resources.map((resource) => ({
       ...resource,
       weight: weights[resource.environmentId] ?? 50,
     })),
     observedAt,
-  ) as EnvironmentId | null;
+  );
+  const environmentId = selection.environmentId as EnvironmentId | null;
+  const status = pending ? "checking" : selection.status;
+  useEffect(() => {
+    if (environmentIds.length === 0 || pending || environmentId !== null) return;
+    const timer = setTimeout(
+      () => refresh(environmentIds),
+      Math.max(0, observedAt + 5_000 - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [environmentIds, observedAt, pending, environmentId, refresh]);
   return {
     refresh,
     pending,
     environmentId,
+    status,
+    label: STATUS_LABELS[status],
     failed: !pending && environmentId === null && resources.some((resource) => resource.failed),
   };
 }

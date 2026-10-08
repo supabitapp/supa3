@@ -1,3 +1,9 @@
+import { ThreadCreationControl } from "./chat/ThreadCreationControl";
+import {
+  chooseThreadCreationMachine,
+  enqueueAutomaticThreadCreation,
+  useThreadCreations,
+} from "../state/threadCreationQueue";
 import {
   pendingThreadCreationMessage,
   resolvePendingThreadCreation,
@@ -4454,16 +4460,21 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
 
+  const creationEntries = useThreadCreations();
+  const waitingCreation = draftId
+    ? creationEntries.find((entry) => entry.id === draftId && entry.status === "waiting")
+    : undefined;
   const needsLoadBalancing = automaticEnvironment && !draftThread?.loadBalancedEnvironmentId;
   const loadBalancingCandidates = useMemo(
     () =>
-      needsLoadBalancing
+      needsLoadBalancing && !waitingCreation
         ? logicalProjectEnvironments
             .filter((candidate) => {
               const environment = environmentById.get(candidate.environmentId);
               return (
                 environment?.connection.phase === "connected" &&
                 (loadBalancingSettings.loadBalancingWeights[candidate.environmentId] ?? 50) > 0 &&
+                readEnvironmentScope(candidate.environmentId, AuthOrchestrationOperateScope) &&
                 environment.serverConfig?.providers.some(
                   (provider) =>
                     (activeProviderInstanceId === null ||
@@ -4481,6 +4492,7 @@ export default function ChatView(props: ChatViewProps) {
         : [],
     [
       needsLoadBalancing,
+      waitingCreation,
       logicalProjectEnvironments,
       environmentById,
       loadBalancingSettings.loadBalancingWeights,
@@ -4494,7 +4506,14 @@ export default function ChatView(props: ChatViewProps) {
   );
   const refreshLoadBalancing = loadBalancing.refresh;
   useEffect(() => {
-    if (!needsLoadBalancing || loadBalancing.pending || !draftId || isSendInFlight()) return;
+    if (
+      waitingCreation ||
+      !needsLoadBalancing ||
+      loadBalancing.pending ||
+      !draftId ||
+      isSendInFlight()
+    )
+      return;
     const target = logicalProjectEnvironments.find(
       (environment) => environment.environmentId === loadBalancing.environmentId,
     );
@@ -4506,6 +4525,7 @@ export default function ChatView(props: ChatViewProps) {
     });
   }, [
     needsLoadBalancing,
+    waitingCreation,
     loadBalancing.pending,
     loadBalancing.environmentId,
     draftId,
@@ -4542,13 +4562,11 @@ export default function ChatView(props: ChatViewProps) {
     composerHasAttachments,
   ]);
   const autoEnvironmentLabel = automaticEnvironment
-    ? draftThread?.loadBalancedEnvironmentId
-      ? "Auto balance"
-      : loadBalancing.pending
-        ? "Checking machines…"
-        : loadBalancing.failed
-          ? "Auto balance unavailable"
-          : "Auto balance"
+    ? waitingCreation
+      ? "Waiting for a machine"
+      : draftThread?.loadBalancedEnvironmentId
+        ? "Auto balance"
+        : loadBalancing.label
     : undefined;
 
   // The machine an in-flight switch is heading to; a newer switch replaces it.
@@ -4571,6 +4589,18 @@ export default function ChatView(props: ChatViewProps) {
   const onEnvironmentChange = useCallback(
     (nextEnvironmentId: EnvironmentId) => {
       if (envLocked || !draftId || sendInFlightRef.current) return;
+      if (waitingCreation) {
+        void chooseThreadCreationMachine(waitingCreation, nextEnvironmentId).catch(
+          (cause: unknown) => {
+            toastManager.add({
+              type: "warning",
+              title: "Could not start on this machine",
+              description: cause instanceof Error ? cause.message : "Choose another machine.",
+            });
+          },
+        );
+        return;
+      }
       const originalDraft = getDraftSession(draftId);
       if (!originalDraft || originalDraft.promotedTo) return;
       const target = logicalProjectEnvironments.find(
@@ -4646,6 +4676,7 @@ export default function ChatView(props: ChatViewProps) {
       openScratchProject,
       projectGroupingSettings,
       sendInFlightRef,
+      waitingCreation,
       setDraftThreadContext,
       setLogicalProjectDraftThreadId,
     ],
@@ -8825,18 +8856,7 @@ export default function ChatView(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
-    if (needsLoadBalancing) {
-      toastManager.add({
-        type: "warning",
-        title: loadBalancing.pending
-          ? "Checking machine resources"
-          : "Choose a machine to continue",
-        description: loadBalancing.pending
-          ? "Resource checks are still running. You can choose a machine in the composer."
-          : "No eligible machine has available resources. Choose a machine in the composer to override.",
-      });
-      return;
-    }
+    if (waitingCreation) return;
     if (activePendingProgress) {
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
@@ -8851,6 +8871,22 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const multipleModelSelections = sendCtx.multipleModelSelections;
+    if (
+      needsLoadBalancing &&
+      (directAnnotation ||
+        multipleModelSelections !== null ||
+        composerHasNonPromptContent ||
+        draftThread?.branch ||
+        draftThread?.worktreePath)
+    ) {
+      toastManager.add({
+        type: "warning",
+        title: "Choose a machine for this task",
+        description:
+          "Attachments, machine context, and explicit worktrees need a selected machine.",
+      });
+      return;
+    }
     if (
       multipleModelSelections !== null &&
       serverConfig?.environment.capabilities.requiredWorktreeBootstrap !== true
@@ -9384,70 +9420,86 @@ export default function ChatView(props: ChatViewProps) {
               threadId: newThreadId(),
               messageId: newMessageId(),
             }));
-      await enqueueThreadOutboxTurns(
-        targets.map((target) => {
-          const prepareWorktree = multipleModelSelections !== null || baseBranchForWorktree;
-          const bootstrap =
-            isLocalDraftThread || prepareWorktree
-              ? {
-                  ...(isLocalDraftThread
-                    ? {
-                        createThread: {
-                          projectId: activeProject.id,
-                          title,
-                          modelSelection: target.selection,
-                          runtimeMode,
-                          interactionMode: target.interactionMode,
-                          branch: activeThreadBranch,
-                          worktreePath:
-                            multipleModelSelections === null ? activeThread.worktreePath : null,
-                          createdAt: activeThread.createdAt,
-                        },
-                      }
-                    : {}),
-                  ...(prepareWorktree
-                    ? {
-                        prepareWorktree: {
-                          projectCwd: activeProject.workspaceRoot,
-                          baseBranch: activeThreadBranch!,
-                          ...(multipleModelSelections !== null ? { requireWorktree: true } : {}),
-                          ...(startFromOrigin ? { startFromOrigin: true } : {}),
-                        },
-                        runSetupScript: true,
-                      }
-                    : {}),
-                }
-              : undefined;
-          return {
-            environmentId,
-            input: {
-              threadId: target.threadId,
-              message: {
-                messageId: target.messageId,
-                role: "user" as const,
-                text: target.text,
-                attachments: [],
-                ...(outgoingMessageContext ? { context: outgoingMessageContext } : {}),
-              },
-              modelSelection: target.selection,
-              titleSeed: title,
-              runtimeMode,
-              interactionMode: target.interactionMode,
-              // Like mobile, a delayed steer follows current server state at delivery.
-              dispatchMode: turnDispatchMode === "steer" ? ("auto" as const) : turnDispatchMode,
-              ...(bootstrap ? { bootstrap } : {}),
-              createdAt: messageCreatedAt,
+      const outboxTargets = targets.map((target) => {
+        const prepareWorktree = multipleModelSelections !== null || baseBranchForWorktree;
+        const bootstrap =
+          isLocalDraftThread || prepareWorktree
+            ? {
+                ...(isLocalDraftThread
+                  ? {
+                      createThread: {
+                        projectId: activeProject.id,
+                        title,
+                        modelSelection: target.selection,
+                        runtimeMode,
+                        interactionMode: target.interactionMode,
+                        branch: activeThreadBranch,
+                        worktreePath:
+                          multipleModelSelections === null ? activeThread.worktreePath : null,
+                        createdAt: activeThread.createdAt,
+                      },
+                    }
+                  : {}),
+                ...(prepareWorktree
+                  ? {
+                      prepareWorktree: {
+                        projectCwd: activeProject.workspaceRoot,
+                        baseBranch: activeThreadBranch!,
+                        ...(multipleModelSelections !== null ? { requireWorktree: true } : {}),
+                        ...(startFromOrigin ? { startFromOrigin: true } : {}),
+                      },
+                      runSetupScript: true,
+                    }
+                  : {}),
+              }
+            : undefined;
+        return {
+          environmentId,
+          input: {
+            threadId: target.threadId,
+            message: {
+              messageId: target.messageId,
+              role: "user" as const,
+              text: target.text,
+              attachments: [],
+              ...(outgoingMessageContext ? { context: outgoingMessageContext } : {}),
             },
-            compactBeforeSend,
-            localAttachments,
-            ...(localCheckoutBranchMismatch
-              ? { branch: localCheckoutBranchMismatch.currentBranch }
-              : {}),
-            ...(draftId && multipleModelSelections === null ? { draftId } : {}),
-            background: submissionIntent === "background",
-          };
-        }),
-      );
+            modelSelection: target.selection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode: target.interactionMode,
+            // Like mobile, a delayed steer follows current server state at delivery.
+            dispatchMode: turnDispatchMode === "steer" ? ("auto" as const) : turnDispatchMode,
+            ...(bootstrap ? { bootstrap } : {}),
+            createdAt: messageCreatedAt,
+          },
+          compactBeforeSend,
+          localAttachments,
+          ...(localCheckoutBranchMismatch
+            ? { branch: localCheckoutBranchMismatch.currentBranch }
+            : {}),
+          ...(draftId && multipleModelSelections === null ? { draftId } : {}),
+          background: submissionIntent === "background",
+        };
+      });
+      if (needsLoadBalancing && draftId && draftThread && outboxTargets[0]) {
+        await enqueueAutomaticThreadCreation({
+          target: outboxTargets[0],
+          project: activeProject,
+          logicalProjectKey: draftThread.logicalProjectKey,
+          driver: ctxSelectedProvider,
+          prompt: promptForSend,
+        });
+        if (useComposerDraftStore.getState().getComposerDraft(composerDraftTarget) === savedDraft) {
+          promptRef.current = "";
+          clearComposerDraftContent(composerDraftTarget);
+          composerRef.current?.resetCursorState();
+        }
+        setThreadError(threadIdForSend, null);
+        if (submissionIntent === "background") handleNewThreadInActiveProject();
+        return;
+      }
+      await enqueueThreadOutboxTurns(outboxTargets);
       if (
         multipleModelSelections === null &&
         !compactBeforeSend &&
@@ -10989,19 +11041,21 @@ export default function ChatView(props: ChatViewProps) {
                                   ? "This connection cannot change threads."
                                   : outboxEditor.editing
                                     ? null
-                                    : pendingThreadCreation && !serverThread
-                                      ? "Task waiting to start"
-                                      : isEnvironmentChanging
-                                        ? "Preparing machine"
-                                        : isRevertingCheckpoint
-                                          ? "Rewinding conversation"
-                                          : feedbackUploading
-                                            ? "Sending feedback"
-                                            : threadDetailLoading && !activeEnvironmentUnavailable
-                                              ? "Messages loading"
-                                              : worktreeSetupBlocksSend
-                                                ? "Preparing worktree"
-                                                : projectCloneSendBlockReason
+                                    : waitingCreation
+                                      ? "Task waiting for a machine"
+                                      : pendingThreadCreation && !serverThread
+                                        ? "Task waiting to start"
+                                        : isEnvironmentChanging
+                                          ? "Preparing machine"
+                                          : isRevertingCheckpoint
+                                            ? "Rewinding conversation"
+                                            : feedbackUploading
+                                              ? "Sending feedback"
+                                              : threadDetailLoading && !activeEnvironmentUnavailable
+                                                ? "Messages loading"
+                                                : worktreeSetupBlocksSend
+                                                  ? "Preparing worktree"
+                                                  : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree}
                               attachedContextStrip={
@@ -11011,6 +11065,12 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               queuedRunsControl={
                                 <>
+                                  {waitingCreation ? (
+                                    <ThreadCreationControl
+                                      entry={waitingCreation}
+                                      onEdit={scheduleComposerFocus}
+                                    />
+                                  ) : null}
                                   <ThreadOutboxControl
                                     environmentId={environmentId}
                                     threadId={threadId}

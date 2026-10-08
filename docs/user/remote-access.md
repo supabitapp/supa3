@@ -79,10 +79,20 @@ Preferences are saved separately in each client.
 
 The composer checks eligible machines when choosing a draft's environment, then keeps
 that choice stable. Choose **Auto balance** again to check current resources, or choose
-a specific machine to override it. Choosing a branch or worktree also keeps the draft
-on that machine. Existing threads stay where they started. If resource checks are
-unavailable or all eligible machines are full, choose a machine manually to continue.
-Mobile keeps its manual environment selection.
+a specific machine to override it. Choosing a branch or existing worktree keeps the
+draft on that machine. Existing threads stay where they started.
+
+Sending a new text task before Auto balance selects a machine saves it as a waiting
+task. It starts automatically when a permitted machine with the same project workspace
+and selected provider and model becomes eligible. Waiting tasks survive reloads and
+remain reachable from the sidebar. **Edit** or **Cancel** stops waiting and returns the
+saved prompt to the composer. Choose a machine in the composer to start there without
+waiting for its CPU and memory to become available. Attachments, machine context, and
+explicit branch or worktree choices require selecting a machine first.
+
+Keep the submitting browser or desktop app running for waiting tasks to start.
+Closing or suspending it pauses dispatch until it resumes; other devices do not own
+its waiting tasks. Mobile keeps its manual environment selection.
 
 ### Tailscale HTTPS
 

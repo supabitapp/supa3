@@ -311,7 +311,7 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
   },
 });
 
-function prepareThreadOutboxTurn(target: {
+export function prepareThreadOutboxTurn(target: {
   readonly environmentId: EnvironmentId;
   readonly input: StartThreadTurnInput;
   readonly localAttachments?: ReadonlyArray<typeof OutboxAttachment.Type>;

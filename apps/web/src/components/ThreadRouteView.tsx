@@ -18,7 +18,13 @@ import { useEnvironmentThreadRefs, useThreadRefs, useThreadShell } from "../stat
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
 import { usePendingThreadCreation, useThreadOutboxLoaded } from "../state/threadOutbox";
+import {
+  useThreadCreationBinding,
+  useThreadCreations,
+  useThreadCreationsLoaded,
+} from "../state/threadCreationQueue";
 import { scopeThreadRef } from "@supacode/client-runtime/environment";
+import { resolveThreadCreationBindingRef } from "../state/threadCreationRouting";
 import {
   buildThreadRouteParams,
   resolveThreadRouteRenderState,
@@ -41,9 +47,15 @@ import {
 export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   const navigate = useNavigate();
   const draftId = target.kind === "draft" ? target.draftId : null;
+  const creations = useThreadCreations();
+  const creationsLoaded = useThreadCreationsLoaded();
+  const binding = useThreadCreationBinding(draftId);
+  const queuedCreation =
+    draftId === null ? undefined : creations.find((entry) => entry.id === draftId);
   const draftSession = useComposerDraftStore((store) =>
     draftId === null ? null : store.getDraftSession(draftId),
   );
+  const boundThreadRef = resolveThreadCreationBindingRef(binding, draftSession);
   const threadRefs = useThreadRefs();
   // The server thread this view is about: the route's own ref, or the draft's
   // reserved ref once the server knows it.
@@ -55,7 +67,9 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
       ) ?? null)
     : null;
   const serverThreadRef: ScopedThreadRef | null =
-    target.kind === "server" ? target.threadRef : (draftSession?.promotedTo ?? inferredThreadRef);
+    target.kind === "server"
+      ? target.threadRef
+      : (draftSession?.promotedTo ?? inferredThreadRef ?? boundThreadRef);
   const serverThread = useThreadShell(serverThreadRef);
   const pendingCreation = usePendingThreadCreation(
     serverThreadRef ??
@@ -67,7 +81,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   );
   const canonicalThreadRef =
     target.kind === "draft"
-      ? resolveDraftPromotionNavigationTarget({
+      ? (resolveDraftPromotionNavigationTarget({
           serverThreadRef,
           serverThread,
           backgroundSubmissionPending,
@@ -78,7 +92,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
                   pendingCreation.payload.input.threadId,
                 )
               : null,
-        })
+        }) ?? boundThreadRef)
       : null;
 
   const shell = useEnvironmentQuery(
@@ -151,11 +165,26 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   }, [canonicalThreadRef, navigate]);
 
   useEffect(() => {
-    if (target.kind !== "draft" || draftSession || canonicalThreadRef) {
+    if (
+      target.kind !== "draft" ||
+      !creationsLoaded ||
+      binding === undefined ||
+      queuedCreation ||
+      draftSession ||
+      canonicalThreadRef
+    ) {
       return;
     }
     void navigate({ to: "/", replace: true });
-  }, [canonicalThreadRef, draftSession, navigate, target.kind]);
+  }, [
+    binding,
+    canonicalThreadRef,
+    creationsLoaded,
+    queuedCreation,
+    draftSession,
+    navigate,
+    target.kind,
+  ]);
 
   useEffect(() => {
     if (target.kind !== "server" || !bootstrapComplete) {

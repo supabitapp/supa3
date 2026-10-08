@@ -176,11 +176,16 @@ export function useNewThreadHandler() {
       const reusableStoredDraftThread =
         storedDraftThread !== null &&
         storedDraftThread.promotedTo == null &&
+        !storedDraftThread.queuedForMachine &&
         storedDraftThreadRef !== null &&
         readThreadShell(storedDraftThreadRef) === null
           ? storedDraftThread
           : null;
-      if (storedDraftThreadRef && reusableStoredDraftThread === null) {
+      if (
+        storedDraftThreadRef &&
+        reusableStoredDraftThread === null &&
+        !storedDraftThread?.queuedForMachine
+      ) {
         markPromotedDraftThreadByRef(storedDraftThreadRef);
       }
       // New-thread surfaces (button, hotkeys, "/" landing, palette) only
@@ -247,7 +252,15 @@ export function useNewThreadHandler() {
             const investedMeanwhile = composerDraftHasUserContent(
               getComposerDraft(emptyStoredDraftThread.draftId),
             );
-            if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
+            const queuedMeanwhile =
+              getDraftSessionByLogicalProjectKey(logicalProjectKey)?.queuedForMachine === true;
+            if (
+              openedMeanwhile ||
+              promotedMeanwhile ||
+              remappedMeanwhile ||
+              investedMeanwhile ||
+              queuedMeanwhile
+            ) {
               return null;
             }
             workspaceContext = {
@@ -332,6 +345,7 @@ export function useNewThreadHandler() {
         currentRouteTarget?.kind === "draft" &&
         latestActiveDraftThread.logicalProjectKey === logicalProjectKey &&
         latestActiveDraftThread.promotedTo == null &&
+        !latestActiveDraftThread.queuedForMachine &&
         // Same content rule as above: a new-thread request while viewing an
         // invested draft mints a fresh one instead of repurposing it.
         !composerDraftHasUserContent(getComposerDraft(currentRouteTarget.draftId))
@@ -372,6 +386,7 @@ export function useNewThreadHandler() {
         const racedDraft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
         if (
           racedDraft &&
+          !racedDraft.queuedForMachine &&
           // Only a draft REGISTERED during the await counts as a raced
           // winner. An invested draft this invocation deliberately declined
           // to reuse is still mapped at this point — reusing it here would

@@ -1,3 +1,6 @@
+import { SidebarThreadCreationRow } from "./SidebarThreadCreationRow";
+import { useThreadCreations } from "../state/threadCreationQueue";
+import type { ThreadCreation } from "../state/threadCreationStorage";
 import { SidebarPendingThreadRow } from "./SidebarPendingThreadRow";
 import { useThreadOutbox, type PendingThreadTurn } from "../state/threadOutbox";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
@@ -939,6 +942,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
 interface SidebarProjectThreadListProps {
   pendingThreads: readonly PendingThreadTurn[];
+  waitingCreations: readonly ThreadCreation[];
   projectKey: string;
   projectExpanded: boolean;
   hasOverflowingThreads: boolean;
@@ -993,6 +997,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 ) {
   const {
     pendingThreads,
+    waitingCreations,
     projectKey,
     projectExpanded,
     hasOverflowingThreads,
@@ -1034,6 +1039,9 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
       ref={attachThreadListAutoAnimateRef}
       className="mx-0.5 my-0 w-full translate-x-0 overflow-hidden sm:mx-1"
     >
+      {waitingCreations.map((entry) => (
+        <SidebarThreadCreationRow key={`waiting:${entry.id}`} entry={entry} />
+      ))}
       {pendingThreads.map((entry) => (
         <SidebarPendingThreadRow
           key={`pending:${entry.scope}`}
@@ -1262,6 +1270,16 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   });
   const projectThreads = sidebarThreads;
   const outboxEntries = useThreadOutbox();
+  const creationEntries = useThreadCreations();
+  const waitingCreations = creationEntries.filter(
+    (entry) =>
+      entry.status === "waiting" &&
+      project.memberProjectRefs.some(
+        (ref) =>
+          ref.environmentId === entry.sourceEnvironmentId &&
+          ref.projectId === entry.sourceProjectId,
+      ),
+  );
   const pendingThreads = useMemo(
     () =>
       outboxEntries.filter((entry) => {
@@ -2512,6 +2530,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       </div>
 
       <SidebarProjectThreadList
+        waitingCreations={waitingCreations}
         pendingThreads={
           projectExpanded
             ? pendingThreads
@@ -2523,7 +2542,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         hiddenThreadStatus={hiddenThreadStatus}
         orderedProjectThreadKeys={orderedProjectThreadKeys}
         renderedThreads={renderedThreads}
-        showEmptyThreadState={showEmptyThreadState && pendingThreads.length === 0}
+        showEmptyThreadState={
+          showEmptyThreadState && pendingThreads.length === 0 && waitingCreations.length === 0
+        }
         shouldShowThreadPanel={shouldShowThreadPanel}
         isThreadListExpanded={isThreadListExpanded}
         activeRouteThreadKey={activeRouteThreadKey}

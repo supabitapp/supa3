@@ -7,6 +7,7 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { environmentShell } from "../state/shell";
 import { useThreadOutbox, webThreadOutbox } from "../state/threadOutbox";
 import { subscribeThreadOutboxStorage } from "../state/threadOutboxStorage";
+import { ThreadCreationCoordinator } from "./ThreadCreationCoordinator";
 
 const outboxReadyAtom = Atom.make((get) => {
   const presentations = get(environmentPresentations.presentationsAtom);
@@ -48,5 +49,5 @@ export function ThreadOutboxCoordinator() {
       clearTimeout(timer);
     };
   }, [ready, entries]);
-  return null;
+  return <ThreadCreationCoordinator />;
 }
