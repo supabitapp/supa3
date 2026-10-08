@@ -60,7 +60,7 @@ import {
   type ProviderInstance,
 } from "@supacode/provider-core/server/driver";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
-import { withInstanceIdentity } from "./instanceIdentity.ts";
+import { withInstanceIdentity } from "@supacode/provider-core/server/instanceIdentity";
 import { discoverAntigravitySkills, resolveAntigravityUserHome } from "./AntigravitySkills.ts";
 
 const DRIVER = ProviderDriverKind.make("antigravity");

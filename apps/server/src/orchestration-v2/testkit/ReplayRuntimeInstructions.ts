@@ -1,6 +1,6 @@
 import type { ProviderDriverKind, ProviderReplayTranscript } from "@supacode/contracts";
 
-import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
+import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 
 /** Adds current runtime context to legacy prompt expectations, keeping outbound matching exact. */
 export function materializeReplayTranscriptRuntimeInstructions(

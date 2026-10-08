@@ -95,14 +95,14 @@ import {
   supacodeAcpPromptWithInstructions,
   type SupacodeAcpInstructionState,
 } from "@supacode/provider-core/server/orchestrationInstructions";
-import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
+import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { type ProviderContinuationRequest } from "@supacode/provider-core/server/continuationRequests";
 import {
   type BackgroundWork,
   type BackgroundWorkReport,
   backgroundWorkNotification,
-} from "../Notification.ts";
+} from "@supacode/provider-core/server/notification";
 import {
   makeProviderFailure,
   makeProviderRetryTurnItem,
@@ -111,7 +111,7 @@ import { acpSelectionTransition } from "@supacode/provider-core/server/selection
 import {
   isProviderNativeImageAttachment,
   providerMessageTextWithAttachmentPaths,
-} from "../AttachmentPrompt.ts";
+} from "@supacode/provider-core/server/attachmentPrompt";
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
@@ -6780,7 +6780,8 @@ export function makeAcpAdapterV2(
           const messageText = providerMessageTextWithAttachmentPaths({
             text: turnInput.message.text,
             attachments: turnInput.message.attachments,
-            attachmentsDir: serverConfig.attachmentsDir,
+            resolveAttachmentPath: (attachment) =>
+              resolveAttachmentPath({ attachmentsDir: serverConfig.attachmentsDir, attachment }),
           });
           const text = supacodeAcpPromptWithInstructions({
             prompt: messageText,

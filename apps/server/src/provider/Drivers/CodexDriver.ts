@@ -51,7 +51,7 @@ import { resolveCodexLaunchArgs } from "../codexLaunchArgs.ts";
 import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import * as ModelManifest from "../ModelManifest.ts";
 import type { ProviderDriver, ProviderInstance } from "@supacode/provider-core/server/driver";
-import { withInstanceIdentity } from "./instanceIdentity.ts";
+import { withInstanceIdentity } from "@supacode/provider-core/server/instanceIdentity";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import {
   enrichProviderSnapshotWithVersionAdvisory,

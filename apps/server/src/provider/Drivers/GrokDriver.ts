@@ -29,7 +29,7 @@ import {
   type ProviderDriver,
   type ProviderInstance,
 } from "@supacode/provider-core/server/driver";
-import { withInstanceIdentity } from "./instanceIdentity.ts";
+import { withInstanceIdentity } from "@supacode/provider-core/server/instanceIdentity";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import { discoverGrokSkills } from "./GrokSkills.ts";
 import {

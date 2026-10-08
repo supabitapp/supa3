@@ -54,14 +54,14 @@ import {
 } from "../../provider/Drivers/CursorSkills.ts";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import { supacodeOrchestrationPromptForFirstRun } from "@supacode/provider-core/server/orchestrationInstructions";
-import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
+import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@supacode/provider-core/server/failure";
 import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 import {
   isProviderNativeImageAttachment,
   providerMessageTextWithAttachmentPaths,
-} from "../AttachmentPrompt.ts";
+} from "@supacode/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 import {
   ProviderAdapterDriverCreateError,
@@ -2132,7 +2132,8 @@ export function makeCursorAdapterV2(
                   ? rawText
                   : rewriteCursorSkillMentions(rawText, cursorSkillNames),
               attachments: turnInput.message.attachments,
-              attachmentsDir: serverConfig.attachmentsDir,
+              resolveAttachmentPath: (attachment) =>
+                resolveAttachmentPath({ attachmentsDir: serverConfig.attachmentsDir, attachment }),
             }),
             runOrdinal: turnInput.runOrdinal,
             hasSupacodeMcp: cursorMcpServers(turnInput.threadId) !== undefined,

@@ -112,7 +112,7 @@ import {
 import type { ServerProviderShape } from "@supacode/provider-core/server/snapshot";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import { SUPACODE_ORCHESTRATION_INSTRUCTIONS } from "@supacode/provider-core/server/orchestrationInstructions";
-import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
+import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 import {
   mcpToolPresentation,
   normalizeMcpText,
@@ -124,14 +124,17 @@ import {
   makeProviderRetryTurnItem,
 } from "@supacode/provider-core/server/failure";
 import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
-import { providerMessageTextWithAttachmentPaths } from "../AttachmentPrompt.ts";
+import { providerMessageTextWithAttachmentPaths } from "@supacode/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriver,
   type ProviderAdapterDriverCreateInput,
 } from "@supacode/provider-core/server/adapterDriver";
-import { type BackgroundWorkReport, backgroundWorkNotification } from "../Notification.ts";
+import {
+  type BackgroundWorkReport,
+  backgroundWorkNotification,
+} from "@supacode/provider-core/server/notification";
 import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import {
   makeSubagentChildThread,
@@ -1344,7 +1347,8 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
   const textWithAttachmentPaths = providerMessageTextWithAttachmentPaths({
     text: input.text,
     attachments: input.attachments,
-    attachmentsDir: input.attachmentsDir,
+    resolveAttachmentPath: (attachment) =>
+      resolveAttachmentPath({ attachmentsDir: input.attachmentsDir, attachment }),
   });
 
   const dispatch =

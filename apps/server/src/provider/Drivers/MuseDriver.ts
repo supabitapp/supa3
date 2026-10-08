@@ -35,7 +35,7 @@ import {
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "@supacode/provider-core/server/snapshotSettings";
-import { withInstanceIdentity } from "./instanceIdentity.ts";
+import { withInstanceIdentity } from "@supacode/provider-core/server/instanceIdentity";
 
 const DRIVER_KIND = ProviderDriverKind.make("muse");
 const decodeMuseSettings = Schema.decodeSync(MuseSettings);

@@ -127,7 +127,7 @@ import {
   type ProviderContinuationRequest,
   ProviderContinuationRequests,
 } from "@supacode/provider-core/server/continuationRequests";
-import { backgroundWorkNotification } from "../Notification.ts";
+import { backgroundWorkNotification } from "@supacode/provider-core/server/notification";
 import {
   makeProviderFailure,
   makeProviderFailureTurnItem,
@@ -137,7 +137,7 @@ import { turnScopedSelectionTransition } from "@supacode/provider-core/server/se
 import {
   isProviderNativeImageAttachment,
   providerMessageTextWithAttachmentPaths,
-} from "../AttachmentPrompt.ts";
+} from "@supacode/provider-core/server/attachmentPrompt";
 import {
   ProviderAdapterEnsureThreadError,
   ProviderAdapterForkThreadError,
@@ -3081,7 +3081,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             const text = providerMessageTextWithAttachmentPaths({
               text: codexSkillMentionText(turnInput.message.text),
               attachments: turnInput.message.attachments,
-              attachmentsDir: serverConfig.attachmentsDir,
+              resolveAttachmentPath: (attachment) =>
+                resolveAttachmentPath({ attachmentsDir: serverConfig.attachmentsDir, attachment }),
             });
             if (text.length > 0) {
               inputItems.push({
