@@ -34,6 +34,12 @@ is insufficient; broad repo-wide checks are not required.
 
 For UI changes, include clear before/after screenshots. Include a short recording
 when motion, timing, transitions, or interaction details are needed to demonstrate
-the change. The before and after should be merged together to 1 single asset so they can be easily compared side by side Upload evidence to GitHub using `gh pr create --attach`. Never commit PR-only assets. -->
+the change. Preserve native screenshot dimensions: do not capture a wide side-by-side
+collage through a browser preview, since it may be downsampled. Merge before/after
+source images into one asset, preferably stacked vertically or cropped to the relevant
+area, and compose it directly from the source images. Before attaching, check the pixel
+dimensions with `file` or `sips` and confirm that text is legible at GitHub's rendered
+width. Upload evidence to GitHub using `gh pr create --attach`. Never commit PR-only
+assets. -->
 
 <!-- If you used an agent, end with the model and harness that did the work. -->
