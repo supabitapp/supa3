@@ -591,16 +591,6 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(workingShelfHeaderIndex, workingEnd));
   }
-  if (pinnedCount > 0) {
-    result.push({
-      type: "v2-pinned-shelf",
-      key: "v2-pinned-shelf", // gitleaks:allow -- static list item identity
-      count: pinnedCount,
-      expanded: input.pinnedShelfExpanded !== false,
-      disabled: shelfDisabled,
-    });
-    result.push(...threadItems.slice(0, pinnedEnd));
-  }
   if (activeCount > 0 || pendingItems.length > 0) {
     result.push({
       type: "v2-active-header",
@@ -611,6 +601,16 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(pinnedEnd, activeEnd));
     if (input.activeShelfExpanded !== false) result.push(...pendingItems);
+  }
+  if (pinnedCount > 0) {
+    result.push({
+      type: "v2-pinned-shelf",
+      key: "v2-pinned-shelf", // gitleaks:allow -- static list item identity
+      count: pinnedCount,
+      expanded: input.pinnedShelfExpanded !== false,
+      disabled: shelfDisabled,
+    });
+    result.push(...threadItems.slice(0, pinnedEnd));
   }
   result.push(...draftItems);
   const inboxEmpty = pinnedCount + activeCount + pendingItems.length + draftItems.length === 0;

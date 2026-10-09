@@ -531,11 +531,11 @@ describe("buildThreadListV2Items", () => {
       pinnedShelfExpanded: false,
     });
     expect(collapsedList.map((item) => item.type)).toEqual([
-      "v2-pinned-shelf",
       "v2-active-header",
       "v2-thread",
+      "v2-pinned-shelf",
     ]);
-    expect(collapsedList[0]).toMatchObject({ count: 2, expanded: false });
+    expect(collapsedList[2]).toMatchObject({ count: 2, expanded: false });
     const selected = buildThreadListV2Items({
       ...input,
       pinnedShelfExpanded: false,
@@ -569,7 +569,7 @@ describe("buildThreadListV2Items", () => {
         disabled: false,
       },
     ]);
-    const header = collapsedList[0]!;
+    const header = collapsedList[2]!;
     expect(threadListV2ListItemsAreEqual(header, { ...header })).toBe(true);
     if (header.type !== "v2-pinned-shelf") throw new Error("Expected Pinned header");
     expect(threadListV2ListItemsAreEqual(header, { ...header, expanded: true })).toBe(false);
@@ -1155,9 +1155,9 @@ describe("buildThreadListV2ListItems", () => {
       "v2-thread",
       "v2-working-shelf",
       "v2-thread",
-      "v2-pinned-shelf",
-      "v2-thread",
       "v2-active-header",
+      "v2-thread",
+      "v2-pinned-shelf",
       "v2-thread",
     ]);
     expect(items[2]).toEqual({ type: "v2-show-more", key: "v2-show-more", hiddenCount: 1 });
