@@ -15,6 +15,7 @@ import {
   AuthTerminalOperateScope,
   WS_METHODS,
   WsRpcGroup,
+  clientRpcRequiredScopes,
 } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -52,6 +53,19 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.providerUploadFeedback)).toBe(
       AuthOrchestrationOperateScope,
     );
+  });
+
+  it("lets read-only clients render MCP apps but not act through them", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.mcpAppsToolInfo)).toBe(AuthOrchestrationReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.mcpAppsReadResource)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    expect(clientRpcRequiredScopes(WS_METHODS.mcpAppsCallTool, {})).toEqual([
+      AuthOrchestrationOperateScope,
+    ]);
+    expect(clientRpcRequiredScopes(WS_METHODS.mcpAppsUpdateModelContext, {})).toEqual([
+      AuthOrchestrationOperateScope,
+    ]);
   });
 
   it("requires write access to import agent session history", () => {

@@ -565,6 +565,7 @@ import { previewEnvironment } from "../state/preview";
 import { clampFileAttachmentUploadBytes } from "@supacode/client-runtime/state/attachments";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
+  enqueueThreadOutboxTurn,
   enqueueThreadOutboxTurns,
   usePendingThreadCreation,
   type PendingThreadTurn,
@@ -4764,13 +4765,14 @@ export default function ChatView(props: ChatViewProps) {
     [composerRef, scheduleComposerFocus],
   );
   // An MCP App's approved `ui/message`: queued like a typed message, so it
-  // never steers or interrupts a running turn.
+  // never steers or interrupts a running turn, and goes through the outbox so
+  // it survives a reload or a dropped connection like one.
   const sendAppMessage = useCallback(
     async (text: string) => {
       if (!isServerThread || activeThreadId === null) {
         throw new Error("Messages from apps need a started thread.");
       }
-      const result = await startThreadTurn({
+      await enqueueThreadOutboxTurn({
         environmentId,
         input: {
           threadId: activeThreadId,
@@ -4778,14 +4780,11 @@ export default function ChatView(props: ChatViewProps) {
           runtimeMode,
           interactionMode,
           dispatchMode: "queue",
+          createdAt: new Date().toISOString(),
         },
       });
-      if (result._tag === "Failure") {
-        const error = squashAtomCommandFailure(result);
-        throw error instanceof Error ? error : new Error("Could not send the app's message.");
-      }
     },
-    [activeThreadId, environmentId, interactionMode, isServerThread, runtimeMode, startThreadTurn],
+    [activeThreadId, environmentId, interactionMode, isServerThread, runtimeMode],
   );
   const editQueuedRunCommand = useAtomCommand(threadEnvironment.editQueuedRun, {
     reportFailure: false,
