@@ -45,7 +45,7 @@ export interface ProviderCredentials {
   readonly remove: Effect.Effect<void, ProviderCredentialError>;
 }
 
-export interface ProviderHostShape {
+interface ProviderHostService {
   readonly paths: ProviderHostPaths;
   readonly settings: {
     readonly get: Effect.Effect<ServerSettings, ServerSettingsError>;
@@ -68,6 +68,6 @@ export interface ProviderHostShape {
   ) => Effect.Effect<ProviderCredentials>;
 }
 
-export class ProviderHost extends Context.Service<ProviderHost, ProviderHostShape>()(
+export class ProviderHost extends Context.Service<ProviderHost, ProviderHostService>()(
   "@supacode/provider-core/server/ProviderHost",
 ) {}

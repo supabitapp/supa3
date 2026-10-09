@@ -4,7 +4,6 @@ import { ProviderInstanceId } from "@supacode/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import * as Option from "effect/Option";
 
 import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
 import { layerTestProviderHost } from "@supacode/provider-testing/host";
