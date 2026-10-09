@@ -4,7 +4,7 @@ import { TurnId } from "@supacode/contracts";
 import {
   buildGrokBackgroundTaskEvents,
   type GrokBackgroundTaskRecord,
-} from "./XAiBackgroundTasks.ts";
+} from "./xaiBackgroundTasks.ts";
 
 const turnId = TurnId.make("turn-1");
 const monitor = { type: "Monitor", taskId: "monitor-1", timeoutMs: 60_000 };

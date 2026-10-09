@@ -41,6 +41,7 @@
     "@supacode/provider-acp": "workspace:*",
     "@supacode/provider-core": "workspace:*",
     "@supacode/provider-cursor": "workspace:*",
+    "@supacode/provider-grok": "workspace:*",
     "@supacode/provider-muse": "workspace:*",
     "@supacode/provider-opencode": "workspace:*",
     "@supacode/provider-pi": "workspace:*",

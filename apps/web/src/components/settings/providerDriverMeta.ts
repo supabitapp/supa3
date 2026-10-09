@@ -3,11 +3,11 @@ import {
   AntigravitySettings,
   ClaudeSettings,
   CodexSettings,
-  GrokSettings,
   ProviderDriverKind,
 } from "@supacode/contracts";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
 import { cursorClient } from "@supacode/provider-cursor/client";
+import { grokClient } from "@supacode/provider-grok/client";
 import { museClient } from "@supacode/provider-muse/client";
 import { openCodeClient } from "@supacode/provider-opencode/client";
 import { piClient } from "@supacode/provider-pi/client";
@@ -25,11 +25,7 @@ export const providerClients = makeProviderClientRegistry([
     settingsSchema: ClaudeSettings,
   },
   cursorClient,
-  {
-    driverKind: ProviderDriverKind.make("grok"),
-    label: "Grok",
-    settingsSchema: GrokSettings,
-  },
+  grokClient,
   openCodeClient,
   {
     driverKind: ProviderDriverKind.make("antigravity"),

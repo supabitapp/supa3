@@ -1,5 +1,6 @@
 import * as NodeOS from "node:os";
-import { GrokSettings, ProviderDriverKind } from "@supacode/contracts";
+import { ProviderDriverKind } from "@supacode/contracts";
+import { GrokSettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,21 +9,17 @@ import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
-import { ProviderHost } from "@supacode/provider-core/server/ProviderHost";
-import * as ServerConfig from "../../config.ts";
-import * as ProviderEventLoggers from "../ProviderEventLoggers.ts";
-import { makeGrokTextGeneration } from "../../textGeneration/GrokTextGeneration.ts";
-import {
-  GrokAdapterV2Driver,
-  type GrokAdapterV2DriverEnv,
-} from "../../orchestration-v2/Adapters/GrokAdapterV2.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
+import * as ProviderEventLoggers from "@supacode/provider-core/server/ProviderEventLoggers";
+import { makeGrokTextGeneration } from "./textGeneration.ts";
+import { GrokAdapterV2Driver, type GrokAdapterV2DriverEnv } from "./adapter.ts";
+import { ProviderDriverError } from "@supacode/provider-core/server/errors";
 import {
   buildInitialGrokProviderSnapshot,
   checkGrokProviderStatus,
   enrichGrokSnapshot,
-} from "../GrokProvider.ts";
-import { readGrokAccount } from "../grokUsageLimits.ts";
+} from "./status.ts";
+import { readGrokAccount } from "./usageLimits.ts";
 import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
 import {
   defaultProviderContinuationIdentity,
@@ -31,7 +28,7 @@ import {
 } from "@supacode/provider-core/server/driver";
 import { withInstanceIdentity } from "@supacode/provider-core/server/instanceIdentity";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
-import { discoverGrokSkills } from "./GrokSkills.ts";
+import { discoverGrokSkills } from "./skills.ts";
 import {
   makeCachedProviderMaintenanceResolution,
   makeManualOnlyProviderMaintenanceCapabilities,
@@ -76,14 +73,13 @@ const UPDATE: ProviderMaintenanceCapabilitiesResolver = {
 
 export type GrokDriverEnv =
   | GrokAdapterV2DriverEnv
-  | ProviderHost
+  | ProviderHost.ProviderHost
   | ChildProcessSpawner.ChildProcessSpawner
   | Crypto.Crypto
   | FileSystem.FileSystem
   | HttpClient.HttpClient
   | Path.Path
-  | ProviderEventLoggers.ProviderEventLoggers
-  | ServerConfig.ServerConfig;
+  | ProviderEventLoggers.ProviderEventLoggers;
 
 export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -100,8 +96,8 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
       const httpClient = yield* HttpClient.HttpClient;
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const host = yield* ProviderHost;
-      const { cwd } = yield* ServerConfig.ServerConfig;
+      const host = yield* ProviderHost.ProviderHost;
+      const { cwd } = host.paths;
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,

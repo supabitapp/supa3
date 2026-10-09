@@ -6,7 +6,8 @@ import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
 import type * as EffectAcpErrors from "effect-acp/errors";
 
-import { type GrokSettings, TextGenerationError } from "@supacode/contracts";
+import { TextGenerationError } from "@supacode/contracts";
+import type { GrokSettings } from "../settings.ts";
 import { getModelSelectionStringOptionValue } from "@supacode/shared/model";
 
 import * as TextGenerationOperations from "@supacode/provider-core/server/textGenerationOperations";
@@ -16,7 +17,7 @@ import {
   currentGrokReasoningEffortFromSessionSetup,
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
-} from "../provider/acp/GrokAcpSupport.ts";
+} from "./acpSupport.ts";
 
 const GROK_TIMEOUT_MS = 180_000;
 

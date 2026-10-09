@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { GrokSettings } from "@supacode/contracts";
+import { GrokSettings } from "@supacode/provider-grok/settings";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
 import * as FileSystem from "effect/FileSystem";
@@ -12,11 +12,8 @@ import { resolveSelfInvocation } from "@supacode/shared/nodeRuntime";
 
 import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
 import { layerTestProviderHost } from "@supacode/provider-testing/host";
-import {
-  GROK_ACP_CANCEL_META,
-  GROK_ACP_INITIALIZE_META,
-} from "../../provider/acp/GrokAcpSupport.ts";
-import { makeXAiPromptCompletionRuntime } from "../../provider/acp/XAiAcpExtension.ts";
+import { GROK_ACP_CANCEL_META, GROK_ACP_INITIALIZE_META } from "@supacode/provider-grok/testing";
+import { makeXAiPromptCompletionRuntime } from "@supacode/provider-grok/testing";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
@@ -29,7 +26,11 @@ import {
   makeAcpReplayCompletenessAssertion,
   makeAcpReplayRuntime,
 } from "./AcpAdapterV2.testkit.ts";
-import { GROK_DEFAULT_INSTANCE_ID, GROK_PROVIDER, makeGrokAdapterV2 } from "./GrokAdapterV2.ts";
+import {
+  GROK_DEFAULT_INSTANCE_ID,
+  GROK_PROVIDER,
+  makeGrokAdapterV2,
+} from "@supacode/provider-grok/testing";
 
 const DEFAULT_GROK_SETTINGS = Schema.decodeUnknownSync(GrokSettings)({});
 

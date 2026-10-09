@@ -3,16 +3,16 @@ import {
   XAiPromptFailureText,
   isXAiTaskCompletedWakeNotification,
   xAiRateLimitedErrorCode,
-} from "../../provider/acp/XAiAcpExtension.ts";
+} from "./xaiAcpExtension.ts";
 import { HostProcessEnvironment, HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { resolveSelfInvocation, type SelfInvocation } from "@supacode/shared/nodeRuntime";
 import {
   defaultInstanceIdForDriver,
-  GrokSettings,
   ProviderDriverKind,
   type OrchestrationV2ProviderCapabilities,
   type RuntimeMode,
 } from "@supacode/contracts";
+import { GrokSettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -30,7 +30,7 @@ import {
   grokApprovalOptions,
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
-} from "../../provider/acp/GrokAcpSupport.ts";
+} from "./acpSupport.ts";
 import {
   extractGrokPlanMarkdownFromToolCallData,
   extractXAiAcpBackgroundToolMutation,
@@ -51,11 +51,11 @@ import {
   registerXAiBackgroundTaskTracking,
   XAiAskUserQuestionRequest,
   XAiExitPlanModeRequest,
-} from "../../provider/acp/XAiAcpExtension.ts";
+} from "./xaiAcpExtension.ts";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import { acpPermissionDisposition } from "@supacode/provider-acp/server/clientPolicy";
 import * as AcpSessionRuntime from "@supacode/provider-acp/server/AcpSessionRuntime";
-import * as ProviderEventLoggers from "../../provider/ProviderEventLoggers.ts";
+import * as ProviderEventLoggers from "@supacode/provider-core/server/ProviderEventLoggers";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";

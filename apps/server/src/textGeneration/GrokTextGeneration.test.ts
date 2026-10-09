@@ -11,11 +11,12 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { createModelSelection } from "@supacode/shared/model";
 import { expect } from "vite-plus/test";
-import { GrokSettings, ProviderInstanceId } from "@supacode/contracts";
+import { ProviderInstanceId } from "@supacode/contracts";
+import { GrokSettings } from "@supacode/provider-grok/settings";
 
 import * as ServerConfig from "../config.ts";
 import * as TextGeneration from "./TextGeneration.ts";
-import { makeGrokTextGeneration } from "./GrokTextGeneration.ts";
+import { makeGrokTextGeneration } from "@supacode/provider-grok/testing";
 import { execScriptSource, writeFakeCli } from "@supacode/provider-testing/fakeCli";
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 

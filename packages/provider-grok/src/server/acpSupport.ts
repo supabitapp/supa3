@@ -1,11 +1,11 @@
 import type * as EffectAcpSchema from "effect-acp/compat";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
-  type GrokSettings,
   type ProviderApprovalOption,
   ProviderDriverKind,
   type RuntimeMode,
 } from "@supacode/contracts";
+import type { GrokSettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,7 +16,7 @@ import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { normalizeModelSlug } from "@supacode/shared/model";
 
 import * as AcpSessionRuntime from "@supacode/provider-acp/server/AcpSessionRuntime";
-import { makeXAiPromptCompletionRuntime } from "./XAiAcpExtension.ts";
+import { makeXAiPromptCompletionRuntime } from "./xaiAcpExtension.ts";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";
 const GROK_OAUTH2_REFERRER_ENV = "GROK_OAUTH2_REFERRER";

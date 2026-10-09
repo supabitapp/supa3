@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { GrokSettings } from "@supacode/contracts";
+import { GrokSettings } from "@supacode/provider-grok/settings";
 
 import {
   buildGrokModelCapabilities,
@@ -17,9 +17,9 @@ import {
   checkGrokProviderStatus,
   grokSlashCommandsFromInitialize,
   parseGrokModelsCliOutput,
-} from "./GrokProvider.ts";
+} from "@supacode/provider-grok/testing";
 import { execScriptSource, writeFakeCli } from "@supacode/provider-testing/fakeCli";
-import { grokUsageResponseToLimits, readGrokAccount } from "./grokUsageLimits.ts";
+import { grokUsageResponseToLimits, readGrokAccount } from "@supacode/provider-grok/testing";
 
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
