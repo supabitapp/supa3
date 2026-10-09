@@ -58,6 +58,7 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
 import { ThreadListWorkingStatus } from "./thread-list-working-status";
+import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { resolveThreadListV2RowStatusLabel } from "./thread-list-row-status";
 
 /**
@@ -531,6 +532,10 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   );
 });
 
+// Background work fades as a whole, status label included, so it takes less
+// attention than rows that need a human (input, approval, done).
+const RECEDED_ROW_STYLE = { opacity: 0.55 } as const;
+
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
@@ -673,6 +678,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? selectedThreadRowColors.mutedForegroundClassName
       : rowAppearance.mutedForegroundClassName,
   });
+  // Cached rows already read as offline; only live background work recedes.
+  const recede = environmentConnected && shouldRecedeThreadRow({ status, selected });
   const durationStartedAt =
     environmentConnected && (status === "working" || status === "waiting")
       ? resolveThreadListDurationStartedAt(thread)
@@ -1022,22 +1029,36 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             type="monochrome"
           />
         ) : null}
-        <ThreadListWorkingStatus
-          key={durationStartedAt}
-          label={statusLabel?.label ?? timeLabel}
-          startedAt={durationStartedAt}
-          className={cn(
-            "text-xs tabular-nums",
-            statusLabel?.className ??
-              (selected
-                ? selectedThreadRowColors.foregroundClassName
-                : rowAppearance.tertiaryForegroundClassName),
-          )}
-        />
+        <View className="flex-row items-center gap-1">
+          {statusLabel?.icon ? (
+            <SymbolView
+              name={statusLabel.icon}
+              size={13}
+              tintColorClassName={statusLabel.iconTintClassName}
+              type="monochrome"
+              weight="semibold"
+            />
+          ) : null}
+          <ThreadListWorkingStatus
+            key={durationStartedAt}
+            label={statusLabel?.label ?? timeLabel}
+            startedAt={durationStartedAt}
+            className={cn(
+              "text-xs tabular-nums",
+              statusLabel?.icon && "font-supacode-bold",
+              statusLabel?.className ??
+                (selected
+                  ? selectedThreadRowColors.foregroundClassName
+                  : rowAppearance.tertiaryForegroundClassName),
+            )}
+          />
+        </View>
       </View>
       <Text
         className={cn(
-          "mt-1 text-base font-supacode-medium",
+          "mt-1 text-base",
+          // Background work recedes to regular weight, matching web.
+          !recede && "font-supacode-medium",
           selected
             ? selectedThreadRowColors.foregroundClassName
             : rowAppearance.foregroundClassName,
@@ -1201,7 +1222,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         style={rowAppearance.cardStyle}
       >
         {sidebarPane ? (
-          <View className={cn(!environmentConnected && "opacity-50")}>{cardContent}</View>
+          <View
+            className={cn(!environmentConnected && "opacity-50")}
+            style={recede ? RECEDED_ROW_STYLE : undefined}
+          >
+            {cardContent}
+          </View>
         ) : (
           /* Flat native list rows: no tonal containers — colored status
              labels and text hierarchy carry state, an inset hairline
@@ -1213,6 +1239,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
                 !environmentConnected && "opacity-50",
               )}
+              style={recede ? RECEDED_ROW_STYLE : undefined}
             >
               {cardContent}
             </View>
