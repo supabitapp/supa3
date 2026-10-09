@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { userInputCountdown } from "./userInputCountdown.ts";
 
 const now = Date.parse("2026-10-08T12:00:00.000Z");
-const deadline = new Date(now + 120_000).toISOString();
+const deadline = "2026-10-08T12:02:00.000Z";
 
 describe("question countdown", () => {
   it("counts down in whole seconds and warns for the final twenty", () => {

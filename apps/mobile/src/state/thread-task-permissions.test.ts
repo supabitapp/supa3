@@ -90,6 +90,9 @@ vi.mock("./threads", async () => {
     threadEnvironment: {
       respondToApproval: state.approve,
       respondToUserInput: state.answer,
+      pauseUserInputAutoDismiss: {
+        permissionAtom: () => Atom.make(false),
+      },
       uploadFeedback: state.feedback,
     },
   };
