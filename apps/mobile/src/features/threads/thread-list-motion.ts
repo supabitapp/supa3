@@ -12,6 +12,8 @@ export function shouldAnimateThreadList(input: {
   readonly previousScope: string;
   readonly scope: string;
   readonly searching: boolean;
+  readonly previousSettledLimit: number;
+  readonly settledLimit: number;
 }) {
   if (
     input.searching ||
@@ -26,6 +28,9 @@ export function shouldAnimateThreadList(input: {
     input.items.every((item, index) => item.key === input.previousItems[index]?.key)
   ) {
     return false;
+  }
+  if (input.settledLimit > input.previousSettledLimit) {
+    return true;
   }
   const previous = new Map(input.previousItems.map((item) => [item.key, item.expanded]));
   for (const item of input.items) {

@@ -612,6 +612,7 @@ export function HomeScreen(props: HomeScreenProps) {
 
   const listMotion = useThreadListMotion({
     items: threadListV2Items,
+    settledLimit: settledVisibleCount,
     scope: settledResetKey,
     searching: hasSearchQuery || searchKeyboardVisible,
     scrolling: !swipeEnabled,

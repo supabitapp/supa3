@@ -2,7 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { shouldAnimateThreadList } from "./thread-list-motion";
 
-const base = { previousScope: "all", scope: "all", searching: false };
+const base = {
+  previousScope: "all",
+  scope: "all",
+  searching: false,
+  previousSettledLimit: 10,
+  settledLimit: 10,
+};
 
 const rows = (...keys: string[]) => keys.map((key) => ({ key }));
 
@@ -99,5 +105,37 @@ describe("thread list motion", () => {
         ],
       }),
     ).toBe(false);
+  });
+
+  it.each([false, true])(
+    "animates settled pagination when the show-more button disappears: %s",
+    (lastPage) => {
+      const previousItems = [
+        { key: "settled", expanded: true },
+        ...rows(...Array.from({ length: 10 }, (_, index) => `thread-${index}`)),
+        ...rows("show-more"),
+      ];
+      const items = [
+        { key: "settled", expanded: true },
+        ...rows(...Array.from({ length: 35 }, (_, index) => `thread-${index}`)),
+        ...rows(...(lastPage ? [] : ["show-more"])),
+      ];
+      expect(shouldAnimateThreadList({ ...base, previousItems, items, settledLimit: 35 })).toBe(
+        true,
+      );
+      expect(shouldAnimateThreadList({ ...base, previousItems, items })).toBe(false);
+    },
+  );
+
+  it("keeps pagination immediate during hydration, search, and scope changes", () => {
+    const pagination = {
+      ...base,
+      previousItems: rows("settled", "show-more"),
+      items: rows("settled", ...Array.from({ length: 25 }, (_, index) => `thread-${index}`)),
+      settledLimit: 35,
+    };
+    expect(shouldAnimateThreadList({ ...pagination, previousItems: [] })).toBe(false);
+    expect(shouldAnimateThreadList({ ...pagination, searching: true })).toBe(false);
+    expect(shouldAnimateThreadList({ ...pagination, scope: "project" })).toBe(false);
   });
 });

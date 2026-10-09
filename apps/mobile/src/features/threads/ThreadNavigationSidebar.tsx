@@ -595,6 +595,7 @@ function ThreadNavigationSidebarPane(
   useHardwareKeyboardCommand("focusSearch", focusSearch);
   const listMotion = useThreadListMotion({
     items: listItems,
+    settledLimit: settledVisibleCount,
     scope: settledResetKey,
     searching: props.searchQuery.trim().length > 0,
     scrolling: !swipeEnabled,

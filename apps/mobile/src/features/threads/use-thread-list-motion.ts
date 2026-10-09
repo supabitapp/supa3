@@ -27,12 +27,13 @@ export function useThreadListMotion(input: {
   readonly searching: boolean;
   readonly scrolling: boolean;
   readonly ready: boolean;
+  readonly settledLimit?: number;
 }) {
-  const { items, scope, searching, scrolling, ready } = input;
+  const { items, scope, searching, scrolling, ready, settledLimit = 0 } = input;
   const reducedMotion = useReducedMotionPreference();
   const frame = useMemo(
-    () => ({ items: items.map(({ key, expanded }) => ({ key, expanded })), scope }),
-    [items, scope],
+    () => ({ items: items.map(({ key, expanded }) => ({ key, expanded })), scope, settledLimit }),
+    [items, scope, settledLimit],
   );
   const previous = useRef<typeof frame | null>(null);
   const deadline = useSharedValue(0);
@@ -57,6 +58,8 @@ export function useThreadListMotion(input: {
         previousItems: previous.current.items,
         previousScope: previous.current.scope,
         searching,
+        previousSettledLimit: previous.current.settledLimit,
+        settledLimit: frame.settledLimit,
       });
     previous.current = ready ? frame : null;
     // Bound eligibility without scheduling an animation just to expire a flag.
