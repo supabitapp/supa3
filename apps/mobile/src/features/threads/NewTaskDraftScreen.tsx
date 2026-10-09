@@ -7,7 +7,7 @@ import {
   pastedTextDisposition,
   replaceTextSelection,
 } from "@supacode/client-runtime/text-paste";
-import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
+import { NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   CommonActions,
   StackActions,
@@ -17,7 +17,7 @@ import {
   type NavigationAction,
 } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
+import { Alert, Platform, Pressable, View } from "react-native";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -1452,8 +1452,6 @@ export function NewTaskDraftScreen(props: {
           );
         }}
         ref={promptInputRef}
-        // The context-first screen intentionally opens with the keyboard closed.
-        // Focusing is a user action, so presenting the form sheet has one motion.
         autoFocus={false}
         // Clipboard imports use the editor's read-only mode to retain keyboard focus.
         editable={!isIncomingShareTransferPending && !flow.submitting}
@@ -1510,6 +1508,16 @@ export function NewTaskDraftScreen(props: {
     void KeyboardController.dismiss({ animated: true });
     navigation.dispatch(StackActions.push(routeName));
   };
+  const keyboardDismissArea = (
+    <Pressable
+      accessible={false}
+      className="flex-1"
+      onPress={() => {
+        promptInputRef.current?.blur();
+        void KeyboardController.dismiss({ animated: true });
+      }}
+    />
+  );
 
   const environmentControl = (
     <ComposerInlineControl
@@ -1523,8 +1531,8 @@ export function NewTaskDraftScreen(props: {
           tintColorClassName="accent-icon-muted"
         />
       )}
-      label={`on ${selectedEnvironmentLabel}`}
-      maxWidth={flow.isScratchDraft ? 170 : 260}
+      label={selectedEnvironmentLabel}
+      maxWidth="100%"
       onPress={
         flow.environments.length > 1 ? () => openContextPicker("NewTaskEnvironment") : undefined
       }
@@ -1532,103 +1540,60 @@ export function NewTaskDraftScreen(props: {
       static={flow.environments.length <= 1}
     />
   );
-  // A thread without a project has no project to name, so it asks plainly,
-  // like web, and puts the project picker beside the machine as a control.
-  const hero = flow.isScratchDraft ? (
-    <View className="items-center gap-2 px-6" testID="new-task-hero">
-      <Text className="text-center text-2xl font-supacode-medium tracking-tight text-foreground">
-        What should we work on?
-      </Text>
-      {/* Wraps onto two lines only when a long machine name leaves no room. */}
-      <View className="flex-row flex-wrap items-center justify-center gap-x-1">
+  const projectControls = (
+    <View className="flex-row items-center gap-1">
+      <View className="min-w-0 flex-1">
         <ComposerInlineControl
           accessibilityHint="Opens the project picker"
-          accessibilityLabel="Choose a project"
+          accessibilityLabel={
+            flow.isScratchDraft ? "Choose a project" : `Project: ${selectedProject.title}`
+          }
           chevronDirection="right"
           disabled={isComposerInteractionLocked}
+          emphasized
           icon="folder"
-          label="Choose a project"
+          label={flow.isScratchDraft ? "Choose a project" : selectedProject.title}
+          maxWidth="100%"
           onPress={chooseProject}
         />
-        {environmentControl}
       </View>
-    </View>
-  ) : (
-    <View className="items-center gap-6 px-6" testID="new-task-hero">
-      <View className="w-full items-center gap-1.5">
-        <Text className="text-center text-2xl font-supacode-medium tracking-tight text-foreground">
-          What should we build
-        </Text>
-        <View className="max-w-full flex-row items-center justify-center">
-          <Text className="text-2xl font-supacode-medium tracking-tight text-foreground">in </Text>
-          <Pressable
-            accessibilityHint="Opens the project picker"
-            accessibilityLabel={selectedProject.title}
-            accessibilityRole="button"
-            disabled={isComposerInteractionLocked}
-            onPress={chooseProject}
-            className="min-w-0 max-w-[250px] border-b border-foreground-muted active:opacity-65"
-          >
-            <Text
-              className="text-2xl font-supacode-medium tracking-tight text-foreground"
-              numberOfLines={1}
-            >
-              {selectedProject.title}
-            </Text>
-          </Pressable>
-          <Text className="text-2xl font-supacode-medium tracking-tight text-foreground">?</Text>
-        </View>
-      </View>
-
-      {environmentControl}
-    </View>
-  );
-  const heroViewport = (
-    <View className="flex-1" collapsable={false}>
-      <ScrollView
-        alwaysBounceVertical={isKeyboardVisible}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="never"
-        contentContainerClassName="grow items-center pb-[236px] pt-12 ios:pt-[72px]"
-        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        testID="new-task-hero-scroll"
-      >
-        {hero}
-      </ScrollView>
+      <View className="min-w-0 flex-1">{environmentControl}</View>
     </View>
   );
 
   const workspaceControls = (
-    <View className="flex-row items-center gap-1 px-2">
-      <ComposerInlineControl
-        accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}
-        accessibilityLabel={workspaceLabel}
-        disabled={isComposerInteractionLocked || voiceInput.isBusy}
-        renderIcon={(size) => (
-          <NewTaskWorkspaceIcon
-            workspaceMode={flow.workspaceMode}
-            worktreePath={flow.selectedWorktreePath}
-            size={size}
-          />
-        )}
-        label={workspaceLabel}
-        maxWidth={flow.workspaceMode === "local" ? 220 : 148}
-        onPress={() => flow.setWorkspaceMode(flow.workspaceMode === "local" ? "worktree" : "local")}
-        showChevron={false}
-      />
-
-      <ComposerInlineControl
-        accessibilityLabel={`${flow.workspaceMode === "worktree" ? "Base branch" : "Branch"}: ${selectedBranchLabel}`}
-        chevronDirection="right"
-        disabled={isComposerInteractionLocked}
-        icon="arrow.triangle.branch"
-        label={showBranchLoading ? "Loading branches…" : selectedBranchLabel}
-        maxWidth={190}
-        onPress={() => openContextPicker("NewTaskBranch")}
-      />
+    <View className="flex-row items-center gap-1">
+      <View className="min-w-0 flex-1">
+        <ComposerInlineControl
+          accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}
+          accessibilityLabel={workspaceLabel}
+          disabled={isComposerInteractionLocked || voiceInput.isBusy}
+          renderIcon={(size) => (
+            <NewTaskWorkspaceIcon
+              workspaceMode={flow.workspaceMode}
+              worktreePath={flow.selectedWorktreePath}
+              size={size}
+            />
+          )}
+          label={workspaceLabel}
+          maxWidth="100%"
+          onPress={() =>
+            flow.setWorkspaceMode(flow.workspaceMode === "local" ? "worktree" : "local")
+          }
+          showChevron={false}
+        />
+      </View>
+      <View className="min-w-0 flex-1">
+        <ComposerInlineControl
+          accessibilityLabel={`${flow.workspaceMode === "worktree" ? "Base branch" : "Branch"}: ${selectedBranchLabel}`}
+          chevronDirection="right"
+          disabled={isComposerInteractionLocked}
+          icon="arrow.triangle.branch"
+          label={showBranchLoading ? "Loading branches…" : selectedBranchLabel}
+          maxWidth="100%"
+          onPress={() => openContextPicker("NewTaskBranch")}
+        />
+      </View>
     </View>
   );
 
@@ -1652,8 +1617,6 @@ export function NewTaskDraftScreen(props: {
           />
         </View>
       ) : null}
-      {/* Above the workspace controls so they keep their place relative to
-          the composer when the banner goes away once the clone lands. */}
       {projectClone && projectClone.phase !== "done" && selectedProject ? (
         <View className="px-1 pb-2">
           <ProjectCloneBanner
@@ -1678,8 +1641,6 @@ export function NewTaskDraftScreen(props: {
           />
         </View>
       ) : null}
-      {flow.canChooseWorkspace ? <View className="pb-1">{workspaceControls}</View> : null}
-
       {taskPermissionReason ? (
         <Text className="px-3 py-2 text-xs text-muted-foreground">{taskPermissionReason}</Text>
       ) : null}
@@ -1704,6 +1665,9 @@ export function NewTaskDraftScreen(props: {
           paddingTop: 14,
         }}
       >
+        <Text className="px-[14px] pb-2 text-sm font-supacode-medium text-foreground-muted">
+          {flow.editingPendingTask ? "Edit queued task" : "New task"}
+        </Text>
         {stripAttachments.length > 0 ? (
           <Animated.View className="px-[14px] pb-2.5" exiting={FadeOut.duration(120)}>
             <ComposerAttachmentStrip
@@ -1770,7 +1734,7 @@ export function NewTaskDraftScreen(props: {
                     onPickMedia={handlePickMedia}
                     onPickFiles={handlePickFiles}
                   />
-                  <View className="min-w-0 shrink">
+                  <View className="min-w-0 flex-1">
                     <ComposerModelControl
                       descriptors={providerOptionDescriptors}
                       selectedModel={flow.selectedModel}
@@ -1847,7 +1811,19 @@ export function NewTaskDraftScreen(props: {
             </ComposerToolbarRow>
           </ComposerDictationToolbar>
         </Animated.View>
+        <View className="mx-[6px] mt-1 border-t border-composer-border pt-1">
+          {projectControls}
+          {flow.canChooseWorkspace ? workspaceControls : null}
+        </View>
       </ComposerSurface>
+      <Pressable
+        accessibilityLabel="Cancel new task"
+        accessibilityRole="button"
+        className="mt-2 h-11 min-w-11 self-center items-center justify-center rounded-xl px-5 active:bg-subtle"
+        onPress={closeNewTask}
+      >
+        <Text className="text-sm font-supacode-medium text-foreground-muted">Cancel</Text>
+      </Pressable>
       <VideoPreviewModal source={previewVideo} onRequestClose={closeMediaPreview} />
       <FilePreviewModal source={previewFile} onRequestClose={closeMediaPreview} />
     </View>
@@ -1856,10 +1832,8 @@ export function NewTaskDraftScreen(props: {
   if (isAndroid) {
     return (
       <View className="flex-1 bg-sheet" collapsable={false}>
-        <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader title="New thread" hideBottomBorder onBack={closeNewTask} />
         <MaterialScreenContent>
-          {heroViewport}
+          {keyboardDismissArea}
 
           <KeyboardStickyView
             style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
@@ -1874,22 +1848,7 @@ export function NewTaskDraftScreen(props: {
 
   return (
     <View className="flex-1 bg-sheet" collapsable={false}>
-      <NativeStackScreenOptions
-        options={{
-          headerBackVisible: false,
-          headerShadowVisible: false,
-          title: "",
-        }}
-      />
-      <NativeHeaderToolbar placement="left">
-        <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel new task"
-          label="Cancel"
-          onPress={closeNewTask}
-        />
-      </NativeHeaderToolbar>
-
-      {heroViewport}
+      {keyboardDismissArea}
       <KeyboardStickyView
         pointerEvents="box-none"
         style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}
