@@ -143,7 +143,8 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
           .pipe(Effect.forkScoped({ startImmediately: true }));
         if (operation === "revoke") yield* sessions.revoke(client.sessionId);
         else if (operation === "revokeAllExcept") yield* sessions.revokeAllExcept(owner.sessionId);
-        else yield* sessions.issue({ ...shortLivedSessionInput, replaceSessionId: client.sessionId });
+        else
+          yield* sessions.issue({ ...shortLivedSessionInput, replaceSessionId: client.sessionId });
         yield* Fiber.join(first);
         yield* Fiber.join(second);
         expect(yield* Deferred.isDone(ownerInvalidated)).toBe(false);
