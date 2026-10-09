@@ -67,7 +67,7 @@ export function EnvironmentRow({
           <p className="min-w-0 truncate text-sm font-medium text-foreground">{label}</p>
           {status}
         </div>
-        <div className="min-w-0 text-xs text-muted-foreground">{subtitle}</div>
+        <div className="min-w-0 truncate text-xs text-muted-foreground">{subtitle}</div>
         {below}
       </div>
       <div className="flex shrink-0 items-center gap-1">{children}</div>

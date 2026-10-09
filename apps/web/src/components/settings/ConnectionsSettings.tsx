@@ -134,7 +134,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Alert, AlertDescription } from "../ui/alert";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
 import { InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
@@ -1660,26 +1660,22 @@ function SavedBackendListRow({
       label={environment.label}
       dimmed={!enabled}
       status={
-        <Tooltip>
-          <TooltipTrigger
-            payload={statusTooltip}
-            render={
-              <span
-                tabIndex={0}
-                className={cn(
-                  "text-xs text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  !resumingServerUpdate && status.tone === "error" && "text-destructive",
-                  !resumingServerUpdate && status.tone === "warning" && "text-warning-foreground",
-                )}
-              />
-            }
-          >
-            {resumingServerUpdate ? "Restarting" : status.text}
-          </TooltipTrigger>
-          <TooltipPopup side="top" className="whitespace-pre-wrap">
-            {statusTooltip}
-          </TooltipPopup>
-        </Tooltip>
+        <Popover>
+          <PopoverTrigger render={<InlineButton tone="muted" />}>
+            <span
+              className={cn(
+                "text-xs font-normal",
+                !resumingServerUpdate && status.tone === "error" && "text-destructive",
+                !resumingServerUpdate && status.tone === "warning" && "text-warning-foreground",
+              )}
+            >
+              {resumingServerUpdate ? "Restarting" : status.text}
+            </span>
+          </PopoverTrigger>
+          <PopoverPopup side="bottom" align="start">
+            <p className="max-w-80 text-xs wrap-anywhere whitespace-pre-wrap">{statusTooltip}</p>
+          </PopoverPopup>
+        </Popover>
       }
       subtitle={
         <span className="flex min-w-0 items-start justify-between gap-3">
