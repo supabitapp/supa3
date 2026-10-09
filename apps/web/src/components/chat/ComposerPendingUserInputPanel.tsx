@@ -21,10 +21,6 @@ interface PendingUserInputPanelProps {
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
   autoDismissQuestions?: boolean | undefined;
-  timerControlDisabled?: boolean | undefined;
-  onSetAutoDismiss?:
-    | ((requestId: RuntimeRequestId, enabled: boolean) => Promise<unknown>)
-    | undefined;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -37,8 +33,6 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   onAdvance,
   onDismiss,
   autoDismissQuestions = false,
-  timerControlDisabled = false,
-  onSetAutoDismiss,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
@@ -56,8 +50,6 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       onAdvance={onAdvance}
       onDismiss={onDismiss}
       timerDeadline={autoDismissQuestions ? activePrompt.autoDismissAt : undefined}
-      timerControlDisabled={timerControlDisabled}
-      onSetAutoDismiss={onSetAutoDismiss}
     />
   );
 });
@@ -72,8 +64,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onAdvance,
   onDismiss,
   timerDeadline,
-  timerControlDisabled,
-  onSetAutoDismiss,
 }: {
   prompt: PendingUserInput;
   disabled: boolean;
@@ -84,10 +74,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
   timerDeadline?: string | null | undefined;
-  timerControlDisabled: boolean;
-  onSetAutoDismiss?:
-    | ((requestId: RuntimeRequestId, enabled: boolean) => Promise<unknown>)
-    | undefined;
 }) {
   // Message-mode requests remain answerable after their provider turn ends.
   const canRespond = prompt.responseCapability !== "not_resumable";
@@ -256,13 +242,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           ) : null}
         </ComposerBanner.Actions>
       </CollapsibleTrigger>
-      {timerDeadline !== undefined && onSetAutoDismiss ? (
-        <QuestionAutoDismissTimer
-          deadline={timerDeadline}
-          disabled={responseDisabled || timerControlDisabled}
-          onChange={(enabled) => onSetAutoDismiss(prompt.requestId, enabled)}
-        />
-      ) : null}
+      {timerDeadline != null ? <QuestionAutoDismissTimer deadline={timerDeadline} /> : null}
       <CollapsiblePanel>
         <ComposerBanner.Scroll>
           <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">

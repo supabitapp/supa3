@@ -6,11 +6,10 @@ const input = {
   environmentId: EnvironmentId.make("env"),
   threadId: ThreadId.make("thread"),
   requestId: RuntimeRequestId.make("question"),
-  deadline: "2026-10-08T12:02:00.000Z",
 };
 
 describe("question interaction pause", () => {
-  it("coalesces activity while pending and after acceptance, then allows a restarted deadline", async () => {
+  it("coalesces activity while pending and after acceptance, then allows another question", async () => {
     const pause = createUserInputAutoDismissPause();
     let accept!: (result: boolean) => void;
     const send = vi.fn(
@@ -26,9 +25,9 @@ describe("question interaction pause", () => {
     await pending;
     await pause(input, send);
     expect(send).toHaveBeenCalledTimes(1);
-    const restarted = vi.fn(async () => true);
-    await pause({ ...input, deadline: "2026-10-08T12:04:00.000Z" }, restarted);
-    expect(restarted).toHaveBeenCalledTimes(1);
+    const nextQuestion = vi.fn(async () => true);
+    await pause({ ...input, requestId: RuntimeRequestId.make("next-question") }, nextQuestion);
+    expect(nextQuestion).toHaveBeenCalledTimes(1);
   });
   it("retries activity after a failed or interrupted dispatch", async () => {
     const pause = createUserInputAutoDismissPause();

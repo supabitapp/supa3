@@ -16,8 +16,6 @@ export function canAutoDismissUserInput(request: OrchestrationV2RuntimeRequest):
 export function userInputAutoDismissAt(
   request: OrchestrationV2RuntimeRequest,
 ): DateTime.Utc | null {
-  if (!canAutoDismissUserInput(request)) return null;
-  return request.autoDismissAt === undefined
-    ? DateTime.add(request.createdAt, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS })
-    : request.autoDismissAt;
+  if (!canAutoDismissUserInput(request) || request.autoDismissPaused === true) return null;
+  return DateTime.add(request.createdAt, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS });
 }

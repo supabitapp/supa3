@@ -186,22 +186,21 @@ it.effect.each([false, true])("only dismisses expired questions when enabled: %s
   }).pipe(Effect.provide(layerTest)),
 );
 
-it.effect("keeps a question open, ignores stale expiry, and restarts a fresh timer", () =>
+it.effect("pauses a question on interaction and ignores stale expiry", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
-    const target = yield* seedRequest("timer-controls");
+    const target = yield* seedRequest("timer-interaction");
     const now = yield* DateTime.now;
     const cutoff = DateTime.subtract(now, { minutes: 2 });
     const stale = (yield* projections.getQuestionAutoDismissCandidates(cutoff))[0]!;
     yield* orchestrator.dispatch({
-      type: "thread.user-input.auto-dismiss.set",
+      type: "thread.user-input.auto-dismiss.pause",
       commandId: CommandId.make("pause-timer"),
       ...target,
-      enabled: false,
     });
-    assert.isNull(
-      (yield* projections.getRuntimeRequest(target.threadId, target.requestId))?.autoDismissAt,
+    assert.isTrue(
+      (yield* projections.getRuntimeRequest(target.threadId, target.requestId))?.autoDismissPaused,
     );
     assert.lengthOf(yield* projections.getQuestionAutoDismissCandidates(cutoff), 0);
     yield* orchestrator.dispatch({
@@ -214,21 +213,10 @@ it.effect("keeps a question open, ignores stale expiry, and restarts a fresh tim
       (yield* projections.getRuntimeRequest(target.threadId, target.requestId))?.status,
       "pending",
     );
-    yield* orchestrator.dispatch({
-      type: "thread.user-input.auto-dismiss.set",
-      commandId: CommandId.make("restart-timer"),
-      ...target,
-      enabled: true,
-    });
-    const resumed = yield* projections.getRuntimeRequest(target.threadId, target.requestId);
-    assert.equal(
-      DateTime.toEpochMillis(resumed!.autoDismissAt!),
-      DateTime.toEpochMillis(now) + 120_000,
-    );
-    assert.lengthOf(yield* projections.getQuestionAutoDismissCandidates(cutoff), 0);
+    yield* TestClock.adjust(120_000);
     yield* orchestrator.dispatch({
       type: "thread.user-input.auto-dismiss",
-      commandId: CommandId.make("stale-expiry-after-restart"),
+      commandId: CommandId.make("later-expiry-after-pause"),
       ...target,
       deadline: stale.deadline,
     });
@@ -236,17 +224,6 @@ it.effect("keeps a question open, ignores stale expiry, and restarts a fresh tim
       (yield* projections.getRuntimeRequest(target.threadId, target.requestId))?.status,
       "pending",
     );
-    yield* TestClock.adjust(120_000);
-    yield* orchestrator.dispatch({
-      type: "thread.user-input.auto-dismiss",
-      commandId: CommandId.make("resumed-timer-expiry"),
-      ...target,
-      deadline: resumed!.autoDismissAt!,
-    });
-    const dismissed = yield* projections.getRuntimeRequest(target.threadId, target.requestId);
-    assert.equal(dismissed?.status, "resolved");
-    assert.equal(dismissed?.decision, "cancel");
-    assert.deepEqual(dismissed?.answers, {});
   }).pipe(Effect.provide(layerTest)),
 );
 

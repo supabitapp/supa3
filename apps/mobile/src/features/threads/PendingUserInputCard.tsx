@@ -91,10 +91,6 @@ export interface PendingUserInputCardProps {
   /** Closes an async question without a reply. Hidden for native callback questions. */
   readonly onDismiss: () => Promise<unknown>;
   readonly autoDismissQuestions?: boolean;
-  readonly timerControlDisabled?: boolean | undefined;
-  readonly onSetAutoDismiss?:
-    | ((requestId: RuntimeRequestId, enabled: boolean) => Promise<unknown>)
-    | undefined;
 }
 
 /**
@@ -334,14 +330,8 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // card's top edge wipes past and reveals it — no opacity handoff, so no
   // crossfade frames.
   const timer =
-    props.autoDismissQuestions &&
-    props.pendingUserInput.autoDismissAt !== undefined &&
-    props.onSetAutoDismiss ? (
-      <QuestionAutoDismissTimer
-        deadline={props.pendingUserInput.autoDismissAt}
-        disabled={!props.canOperateThread || props.timerControlDisabled === true || isResponding}
-        onChange={(enabled) => props.onSetAutoDismiss!(requestId, enabled)}
-      />
+    props.autoDismissQuestions && props.pendingUserInput.autoDismissAt != null ? (
+      <QuestionAutoDismissTimer deadline={props.pendingUserInput.autoDismissAt} />
     ) : null;
   const bar = showBar ? (
     <View

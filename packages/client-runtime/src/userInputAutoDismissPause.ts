@@ -7,16 +7,10 @@ export function createUserInputAutoDismissPause() {
       environmentId: EnvironmentId;
       threadId: ThreadId;
       requestId: RuntimeRequestId;
-      deadline: string;
     },
     pause: () => Promise<boolean>,
   ) => {
-    const key = JSON.stringify([
-      input.environmentId,
-      input.threadId,
-      input.requestId,
-      input.deadline,
-    ]);
+    const key = JSON.stringify([input.environmentId, input.threadId, input.requestId]);
     if (requestedKey === key) return;
     requestedKey = key;
     let accepted = false;

@@ -307,11 +307,11 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
-    setUserInputAutoDismiss: createEnvironmentRpcCommand<
+    pauseUserInputAutoDismiss: createEnvironmentRpcCommand<
       R | Crypto.Crypto,
       E,
       typeof ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
-      Extract<OrchestrationV2Command, { type: "thread.user-input.auto-dismiss.set" }>
+      Extract<OrchestrationV2Command, { type: "thread.user-input.auto-dismiss.pause" }>
     >(runtime, {
       label: "environment-data:commands:thread:set-user-input-auto-dismiss",
       tag: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,

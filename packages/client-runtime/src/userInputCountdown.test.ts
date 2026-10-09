@@ -12,10 +12,10 @@ describe("question countdown", () => {
     expect(userInputCountdown(deadline, now + 100_000)?.state).toBe("warning");
     expect(userInputCountdown(deadline, now + 119_999)?.text).toBe("Closes in 0:01");
   });
-  it("waits for the server at zero and distinguishes a kept-open question", () => {
+  it("waits for the server at zero and hides a paused question timer", () => {
     expect(userInputCountdown(deadline, now + 120_000)?.text).toBe("Closing…");
     expect(userInputCountdown(deadline, now + 130_000)?.state).toBe("closing");
-    expect(userInputCountdown(null, now)?.text).toBe("Kept open");
+    expect(userInputCountdown(null, now)).toBeNull();
     expect(userInputCountdown(undefined, now)).toBeNull();
     expect(userInputCountdown("invalid", now)).toBeNull();
   });

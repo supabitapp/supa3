@@ -225,7 +225,7 @@ export const make = Effect.gen(function* () {
       threadSettlement: true,
       threadAutoSettlement: true,
       questionAutoDismiss: true,
-      questionAutoDismissControl: true,
+      questionAutoDismissPause: true,
       storageCleanup: true,
       projectWorktreeCleanup: true,
       worktreesDirectory: true,

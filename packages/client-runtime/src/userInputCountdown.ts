@@ -1,7 +1,5 @@
 export function userInputCountdown(deadline: string | null | undefined, now: number) {
-  if (deadline === undefined) return null;
-  if (deadline === null)
-    return { state: "paused" as const, text: "Kept open", label: "Automatic dismissal is paused." };
+  if (deadline == null) return null;
   const expiresAt = Date.parse(deadline);
   if (!Number.isFinite(expiresAt)) return null;
   const remaining = Math.max(0, Math.ceil((expiresAt - now) / 1_000));

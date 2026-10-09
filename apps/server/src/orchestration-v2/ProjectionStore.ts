@@ -54,7 +54,6 @@ import {
   TurnItemId,
   NodeId,
   RuntimeRequestId,
-  USER_INPUT_AUTO_DISMISS_TIMEOUT_MS,
   userInputAutoDismissAt,
 } from "@supacode/contracts";
 import {
@@ -4229,10 +4228,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             AND thread.deleted_at IS NULL AND thread.archived_at IS NULL
             AND json_extract(request.payload_json, '$.nativeRequestRef.driver') IN ('codex', 'claudeAgent')
             AND json_extract(request.payload_json, '$.responseCapability.type') IN ('live', 'message')
-            AND (
-              json_type(request.payload_json, '$.autoDismissAt') IS NULL
-              OR json_extract(request.payload_json, '$.autoDismissAt') <= ${DateTime.formatIso(DateTime.add(createdBefore, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS }))}
-            )
+            AND COALESCE(json_extract(request.payload_json, '$.autoDismissPaused'), 0) = 0
           ORDER BY request.created_at, request.runtime_request_id
           LIMIT 100
         `;
@@ -6015,9 +6011,7 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                     request.status !== "pending" ||
                     DateTime.toEpochMillis(request.createdAt) >
                       DateTime.toEpochMillis(createdBefore) ||
-                    deadline === null ||
-                    DateTime.toEpochMillis(deadline) >
-                      DateTime.toEpochMillis(createdBefore) + USER_INPUT_AUTO_DISMISS_TIMEOUT_MS
+                    deadline === null
                   )
                     return [];
                   return [

@@ -78,7 +78,7 @@ describe("pending v2 questions", () => {
     expect(
       derivePendingThreadRequests({
         ...active,
-        runtimeRequests: [{ ...supported, autoDismissAt: null }],
+        runtimeRequests: [{ ...supported, autoDismissPaused: true }],
       }).userInputs[0]?.autoDismissAt,
     ).toBeNull();
   });

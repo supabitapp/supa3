@@ -63,7 +63,7 @@ describe("command permissions", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* setup;
-        const timer = { type: "thread.user-input.auto-dismiss.set" };
+        const timer = { type: "thread.user-input.auto-dismiss.pause" };
         const timerPermissions = createCommandPermissions(
           runtime,
           ORCHESTRATION_V2_WS_METHODS.dispatchCommand,

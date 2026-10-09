@@ -47,7 +47,7 @@ export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 
 const decodePrepareThread = Schema.decodeUnknownSync(GitPreparePullRequestThreadInput);
 const isQuestionTimerCommand = Schema.is(
-  Schema.Struct({ type: Schema.Literal("thread.user-input.auto-dismiss.set") }),
+  Schema.Struct({ type: Schema.Literal("thread.user-input.auto-dismiss.pause") }),
 );
 
 export function clientRpcRequiredScopes(

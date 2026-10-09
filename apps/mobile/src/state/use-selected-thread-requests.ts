@@ -96,15 +96,15 @@ export function useSelectedThreadRequests() {
     threadEnvironment.dismissUserInput,
     "thread user input dismissal",
   );
-  const setUserInputAutoDismiss = useAtomCommand(
-    threadEnvironment.setUserInputAutoDismiss,
-    "question timer update",
+  const pauseUserInputAutoDismiss = useAtomCommand(
+    threadEnvironment.pauseUserInputAutoDismiss,
+    "question timer pause",
   );
   const { selectedThread: selectedThreadShell } = useThreadSelection();
   const questionTimerPermission = useAtomValue(
-    threadEnvironment.setUserInputAutoDismiss.permissionAtom(
+    threadEnvironment.pauseUserInputAutoDismiss.permissionAtom(
       selectedThreadShell?.environmentId ?? null,
-      { type: "thread.user-input.auto-dismiss.set" },
+      { type: "thread.user-input.auto-dismiss.pause" },
     ),
   );
   const pendingRequests = useSelectedThreadPendingRequests();
@@ -118,11 +118,11 @@ export function useSelectedThreadRequests() {
   const activePendingUserInputs = pendingRequests?.userInputs ?? EMPTY_PENDING_REQUESTS.userInputs;
   const activePendingUserInput = activePendingUserInputs[0] ?? null;
   const questionServerConfigs = useServerConfigs();
-  const canSetUserInputAutoDismiss =
+  const canPauseUserInputAutoDismiss =
     questionTimerPermission &&
     selectedThreadShell != null &&
     questionServerConfigs.get(selectedThreadShell.environmentId)?.environment.capabilities
-      .questionAutoDismissControl === true;
+      .questionAutoDismissPause === true;
   const attachmentDrafts = useAtomValue(composerDraftsAtom);
   const preparationCounts = useAtomValue(questionAttachmentPreparationAtom);
   const uploadStates = useAtomValue(composerAttachmentUploadsAtom);
@@ -204,29 +204,13 @@ export function useSelectedThreadRequests() {
     ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingUserInputDrafts)
     : null;
 
-  const onSetUserInputAutoDismiss = useCallback(
-    async (requestId: RuntimeRequestId, enabled: boolean) => {
-      if (!selectedThreadShell || !canSetUserInputAutoDismiss) return;
-      return setUserInputAutoDismiss({
-        environmentId: selectedThreadShell.environmentId,
-        input: {
-          type: "thread.user-input.auto-dismiss.set",
-          commandId: CommandId.make(uuidv4()),
-          threadId: selectedThreadShell.id,
-          requestId,
-          enabled,
-        },
-      });
-    },
-    [canSetUserInputAutoDismiss, selectedThreadShell, setUserInputAutoDismiss],
-  );
   const pauseOnInteraction = useMemo(() => createUserInputAutoDismissPause(), []);
   const pauseQuestionTimer = useCallback(
     (requestId: RuntimeRequestId) => {
       const request = activePendingUserInputs.find((entry) => entry.requestId === requestId);
       if (
         !selectedThreadShell ||
-        !canSetUserInputAutoDismiss ||
+        !canPauseUserInputAutoDismiss ||
         request?.autoDismissAt == null ||
         questionServerConfigs.get(selectedThreadShell.environmentId)?.settings
           .autoDismissQuestions !== true
@@ -237,18 +221,25 @@ export function useSelectedThreadRequests() {
           environmentId: selectedThreadShell.environmentId,
           threadId: selectedThreadShell.id,
           requestId,
-          deadline: request.autoDismissAt,
         },
         async () => {
-          const result = await onSetUserInputAutoDismiss(requestId, false);
-          return result?._tag === "Success";
+          const result = await pauseUserInputAutoDismiss({
+            environmentId: selectedThreadShell.environmentId,
+            input: {
+              type: "thread.user-input.auto-dismiss.pause",
+              commandId: CommandId.make(uuidv4()),
+              threadId: selectedThreadShell.id,
+              requestId,
+            },
+          });
+          return result._tag === "Success";
         },
       );
     },
     [
       activePendingUserInputs,
-      canSetUserInputAutoDismiss,
-      onSetUserInputAutoDismiss,
+      canPauseUserInputAutoDismiss,
+      pauseUserInputAutoDismiss,
       pauseOnInteraction,
       questionServerConfigs,
       selectedThreadShell,
@@ -436,7 +427,5 @@ export function useSelectedThreadRequests() {
     onChangeUserInputCustomAnswer,
     onSubmitUserInput,
     onDismissUserInput,
-    onSetUserInputAutoDismiss,
-    canSetUserInputAutoDismiss,
   };
 }

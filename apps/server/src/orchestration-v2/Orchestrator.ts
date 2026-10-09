@@ -13,7 +13,6 @@ import {
 } from "@supacode/shared/threadPullRequests";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
-  USER_INPUT_AUTO_DISMISS_TIMEOUT_MS,
   canAutoDismissUserInput,
   userInputAutoDismissAt,
   type ChatAttachment,
@@ -454,7 +453,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "queued-run.edit":
     case "runtime-request.respond":
     case "thread.user-input.dismiss":
-    case "thread.user-input.auto-dismiss.set":
+    case "thread.user-input.auto-dismiss.pause":
     case "thread.user-input.auto-dismiss":
     case "checkpoint.rollback":
     case "checkpoint.rollback.fail":
@@ -7183,12 +7182,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ]);
     });
 
-  const dispatchThreadUserInputAutoDismissSet = Effect.fn(
-    "Orchestrator.dispatchThreadUserInputAutoDismissSet",
+  const dispatchThreadUserInputAutoDismissPause = Effect.fn(
+    "Orchestrator.dispatchThreadUserInputAutoDismissPause",
   )(function* (
     command: Extract<
       OrchestrationV2Command,
-      { readonly type: "thread.user-input.auto-dismiss.set" }
+      { readonly type: "thread.user-input.auto-dismiss.pause" }
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
   ) {
@@ -7213,9 +7212,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       occurredAt: now,
       payload: {
         ...request,
-        autoDismissAt: command.enabled
-          ? DateTime.add(now, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS })
-          : null,
+        autoDismissPaused: true,
       },
     });
   });
@@ -10270,8 +10267,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.user-input.dismiss":
         yield* dispatchThreadUserInputDismiss(command, events, effects);
         break;
-      case "thread.user-input.auto-dismiss.set":
-        yield* dispatchThreadUserInputAutoDismissSet(command, events);
+      case "thread.user-input.auto-dismiss.pause":
+        yield* dispatchThreadUserInputAutoDismissPause(command, events);
         break;
       case "thread.user-input.auto-dismiss":
         yield* dispatchThreadUserInputAutoDismiss(command, events, effects);

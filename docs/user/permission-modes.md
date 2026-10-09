@@ -22,8 +22,8 @@ Questions wait for your answer by default. To dismiss unanswered Codex and Claud
 after two minutes, enable **Auto-dismiss unanswered questions** in **Settings > General** on
 web and desktop, or **Settings > Thread behavior** on mobile. The setting applies to the
 selected environments across devices. The question shows its remaining time, with a warning
-in the final 20 seconds. Choose **Keep open**, start typing, or select an option to pause
-automatic dismissal for that question. **Restart timer** gives it another two minutes.
+in the final 20 seconds. Start typing or select an option to pause automatic dismissal
+for that question; its countdown disappears.
 Dismissal provides no answer and never selects an option. Permission approvals keep waiting.
 
 ## Provider differences

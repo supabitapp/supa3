@@ -1723,18 +1723,18 @@ export default function ChatView(props: ChatViewProps) {
   const dismissThreadUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
   });
-  const setUserInputAutoDismiss = useAtomCommand(threadEnvironment.setUserInputAutoDismiss, {
+  const pauseUserInputAutoDismiss = useAtomCommand(threadEnvironment.pauseUserInputAutoDismiss, {
     reportFailure: false,
   });
   const questionTimerPermission = useAtomValue(
-    threadEnvironment.setUserInputAutoDismiss.permissionAtom(environmentId, {
-      type: "thread.user-input.auto-dismiss.set",
+    threadEnvironment.pauseUserInputAutoDismiss.permissionAtom(environmentId, {
+      type: "thread.user-input.auto-dismiss.pause",
     }),
   );
   const questionTimerConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const canSetUserInputAutoDismiss =
+  const canPauseUserInputAutoDismiss =
     questionTimerPermission &&
-    questionTimerConfig?.environment.capabilities.questionAutoDismissControl === true;
+    questionTimerConfig?.environment.capabilities.questionAutoDismissPause === true;
   const revertThreadCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
@@ -9659,36 +9659,6 @@ export default function ChatView(props: ChatViewProps) {
     [activeThreadId, dismissThreadUserInput, environmentId, setThreadError],
   );
 
-  const onSetUserInputAutoDismiss = useCallback(
-    async (requestId: RuntimeRequestId, enabled: boolean) => {
-      if (!activeThreadId || !canSetUserInputAutoDismiss) return;
-      const result = await setUserInputAutoDismiss({
-        environmentId,
-        input: {
-          type: "thread.user-input.auto-dismiss.set",
-          commandId: CommandId.make(randomUUID()),
-          threadId: activeThreadId,
-          requestId,
-          enabled,
-        },
-      });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        setThreadError(
-          activeThreadId,
-          error instanceof Error ? error.message : "Could not update the question timer.",
-        );
-      }
-      return result;
-    },
-    [
-      activeThreadId,
-      canSetUserInputAutoDismiss,
-      environmentId,
-      setThreadError,
-      setUserInputAutoDismiss,
-    ],
-  );
   const pauseOnInteraction = useMemo(() => createUserInputAutoDismissPause(), []);
   const pauseActiveQuestionTimer = useCallback(() => {
     const deadline = activePendingUserInput?.autoDismissAt;
@@ -9697,7 +9667,7 @@ export default function ChatView(props: ChatViewProps) {
       !activePendingUserInput ||
       !activeThreadId ||
       deadline == null ||
-      !canSetUserInputAutoDismiss
+      !canPauseUserInputAutoDismiss
     )
       return;
     void pauseOnInteraction(
@@ -9705,19 +9675,34 @@ export default function ChatView(props: ChatViewProps) {
         environmentId,
         threadId: activeThreadId,
         requestId: activePendingUserInput.requestId,
-        deadline,
       },
       async () => {
-        const result = await onSetUserInputAutoDismiss(activePendingUserInput.requestId, false);
-        return result?._tag === "Success";
+        const result = await pauseUserInputAutoDismiss({
+          environmentId,
+          input: {
+            type: "thread.user-input.auto-dismiss.pause",
+            commandId: CommandId.make(randomUUID()),
+            threadId: activeThreadId,
+            requestId: activePendingUserInput.requestId,
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          setThreadError(
+            activeThreadId,
+            error instanceof Error ? error.message : "Could not pause automatic dismissal.",
+          );
+        }
+        return result._tag === "Success";
       },
     );
   }, [
     activePendingUserInput,
     activeThreadId,
-    canSetUserInputAutoDismiss,
+    canPauseUserInputAutoDismiss,
     environmentId,
-    onSetUserInputAutoDismiss,
+    pauseUserInputAutoDismiss,
+    setThreadError,
     pauseOnInteraction,
     settings.autoDismissQuestions,
   ]);
@@ -11150,8 +11135,6 @@ export default function ChatView(props: ChatViewProps) {
                               pendingApprovals={outboxEditor.editing ? [] : pendingApprovals}
                               pendingUserInputs={outboxEditor.editing ? [] : pendingUserInputs}
                               autoDismissQuestions={settings.autoDismissQuestions}
-                              timerControlDisabled={!canSetUserInputAutoDismiss}
-                              onSetUserInputAutoDismiss={onSetUserInputAutoDismiss}
                               activePendingProgress={
                                 outboxEditor.editing ? null : activePendingProgress
                               }
