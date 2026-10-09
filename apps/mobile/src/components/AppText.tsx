@@ -43,6 +43,7 @@ export function AppTextInput({ className, ref, ...props }: AppTextInputProps) {
         className,
       )}
       placeholderTextColorClassName="accent-placeholder"
+      lineBreakModeIOS={props.multiline ? undefined : "tail"}
       selectionColorClassName={"accent-focus/32"}
       cursorColorClassName={"accent-focus"}
       selectionHandleColorClassName={Platform.OS === "android" ? "accent-focus" : undefined}
