@@ -348,11 +348,6 @@ export interface ThreadListV2ShowMoreListItem {
   readonly hiddenCount: number;
 }
 
-export interface ThreadListV2ActiveEmptyListItem {
-  readonly type: "v2-active-empty";
-  readonly key: "v2-active-empty";
-}
-
 export interface ThreadListV2WorkingShelfListItem {
   readonly type: "v2-working-shelf";
   readonly key: "v2-working-shelf";
@@ -388,7 +383,6 @@ export type ThreadListV2ListItem =
   | ThreadListV2PendingListItem
   | ThreadListV2PinnedShelfListItem
   | ThreadListV2ActiveHeaderListItem
-  | ThreadListV2ActiveEmptyListItem
   | ThreadListV2WorkingShelfListItem
   | ThreadListV2SnoozedShelfListItem
   | ThreadListV2SettledShelfListItem
@@ -439,8 +433,6 @@ export function threadListV2ListItemsAreEqual(
         previous.expanded === item.expanded &&
         previous.disabled === item.disabled
       );
-    case "v2-active-empty":
-      return previous.type === item.type;
     case "v2-show-more":
       return previous.type === item.type && previous.hiddenCount === item.hiddenCount;
   }
@@ -496,10 +488,6 @@ export function buildThreadListV2ListItems(input: {
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
-  /** Heads the shelves with "All caught up" when the inbox has no threads,
-      queued tasks, or drafts; a collapsed Pinned shelf still counts.
-      Callers turn it off while searching: results are a lookup, not the inbox. */
-  readonly showActiveEmpty?: boolean;
 }): ThreadListV2ListItem[] {
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
   const threadItems = input.items.map((item): ThreadListV2ListItem => {
@@ -617,10 +605,6 @@ export function buildThreadListV2ListItems(input: {
     result.push(...threadItems.slice(0, pinnedEnd));
   }
   result.push(...draftItems);
-  const inboxEmpty = pinnedCount + activeCount + pendingItems.length + draftItems.length === 0;
-  if (input.showActiveEmpty === true && inboxEmpty && result.length > 0) {
-    result.push({ type: "v2-active-empty", key: "v2-active-empty" });
-  }
   // Hairlines depend on the final neighbour, so they are stamped after the
   // splice: a recycled cell only re-renders when its divider actually flips.
   return result.map((entry, index) => {

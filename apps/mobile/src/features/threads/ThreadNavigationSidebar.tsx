@@ -58,7 +58,6 @@ import { SidebarFilterButton } from "./sidebar-filter-button";
 import { createSidebarHeaderItems } from "./sidebar-native-header-items";
 import { SidebarNavigationShell } from "./sidebar-navigation-shell";
 import {
-  ThreadListV2ActiveEmpty,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -414,7 +413,6 @@ function ThreadNavigationSidebarPane(
       snoozeEnvironmentIds,
       queuedThreadKeys,
       shelfPreferencesLoading: !shelfPreferencesLoaded,
-      showActiveEmpty: v2SearchQuery.length === 0,
     });
     return items;
   }, [
@@ -595,6 +593,7 @@ function ThreadNavigationSidebarPane(
   useHardwareKeyboardCommand("focusSearch", focusSearch);
   const listMotion = useThreadListMotion({
     items: listItems,
+    settledLimit: settledVisibleCount,
     scope: settledResetKey,
     searching: props.searchQuery.trim().length > 0,
     scrolling: !swipeEnabled,
@@ -708,8 +707,6 @@ function ThreadNavigationSidebarPane(
               pane="sidebar"
             />
           );
-        case "v2-active-empty":
-          return <ThreadListV2ActiveEmpty pane="sidebar" />;
         case "v2-pinned-shelf":
           return (
             <ThreadListV2PinnedShelfHeader

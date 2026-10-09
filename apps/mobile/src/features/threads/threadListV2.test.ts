@@ -404,7 +404,6 @@ describe("buildThreadListV2Items", () => {
       ...collapsed,
       pendingTasks: [makePendingTask("queued")],
       activeShelfExpanded: false,
-      showActiveEmpty: true,
     });
     expect(collapsed.items).toEqual([]);
     expect(list).toEqual([
@@ -1510,21 +1509,19 @@ describe("buildThreadListV2ListItems empty Active block", () => {
       pendingTasks: input.pendingTasks ?? [],
       pinnedShelfExpanded: input.pinnedShelfExpanded,
       settledShelfExpanded: false,
-      showActiveEmpty: true,
     }).map((item) => item.type);
   };
 
-  it("places the empty Active state below the shelves", () => {
+  it("renders only the shelves when no threads need attention", () => {
     expect(listTypes([working, snoozed, settled])).toEqual([
       "v2-settled-shelf",
       "v2-snoozed-shelf",
       "v2-working-shelf",
-      "v2-active-empty",
     ]);
-    expect(listTypes([snoozed])).toEqual(["v2-snoozed-shelf", "v2-active-empty"]);
+    expect(listTypes([snoozed])).toEqual(["v2-snoozed-shelf"]);
   });
 
-  it("stays out while active rows, pins, queued tasks, or drafts need attention", () => {
+  it("keeps active rows, pins, queued tasks, and drafts alongside the shelves", () => {
     const active = makeThread({ id: ThreadId.make("active"), title: "active" });
 
     expect(listTypes([active, settled])).toEqual([
