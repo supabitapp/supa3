@@ -478,10 +478,13 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       type: "http",
       url: "http://127.0.0.1:43123/mcp",
       headers: {
-        Authorization: "Bearer secret-claude-token",
+        Authorization: "${SUPACODE_MCP_AUTHORIZATION}",
       },
       timeout: ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_TIMEOUT_MS,
     },
+  } as const;
+  const SUPACODE_MCP_ENVIRONMENT = {
+    SUPACODE_MCP_AUTHORIZATION: "Bearer secret-claude-token",
   } as const;
 
   const withMcpSession = (threadId: ThreadId, run: () => void) => {
@@ -531,6 +534,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       assert.deepEqual(overrides, {
         allowedTools: [ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_WILDCARD],
         mcpServers: SUPACODE_MCP_SERVERS,
+        mcpEnvironment: SUPACODE_MCP_ENVIRONMENT,
       });
     });
   });
@@ -547,6 +551,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       assert.deepEqual(overrides, {
         allowedTools: ["Read", "mcp__supacode__*"],
         mcpServers: SUPACODE_MCP_SERVERS,
+        mcpEnvironment: SUPACODE_MCP_ENVIRONMENT,
       });
     });
   });
@@ -566,6 +571,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
           ...ClaudeAdapterV2.CLAUDE_READ_ONLY_SUPACODE_MCP_ALLOWED_TOOLS,
         ],
         mcpServers: SUPACODE_MCP_SERVERS,
+        mcpEnvironment: SUPACODE_MCP_ENVIRONMENT,
       });
       assert.isFalse(
         overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_WILDCARD),
@@ -700,11 +706,12 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
             type: "http",
             url: "http://127.0.0.1:43123/mcp",
             headers: {
-              Authorization: "Bearer secret-claude-token",
+              Authorization: "${SUPACODE_MCP_AUTHORIZATION}",
             },
             timeout: ClaudeAdapterV2.CLAUDE_SUPACODE_MCP_TOOL_TIMEOUT_MS,
           },
         },
+        mcpEnvironment: { SUPACODE_MCP_AUTHORIZATION: "Bearer secret-claude-token" },
       });
 
       const options = ClaudeAdapterV2.makeClaudeQueryOptions({
@@ -715,8 +722,14 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
         nativeThreadId: "native-thread-claude-mcp",
         resume: false,
         cwd: "/workspace",
-        ...overrides,
+        allowedTools: overrides.allowedTools ?? [],
+        mcpServers: overrides.mcpServers ?? {},
+        environment: { ...overrides.mcpEnvironment },
       });
+      // mcpServers becomes a CLI argument, readable by every local user; the
+      // credential may only travel in the child's environment.
+      assert.notInclude(JSON.stringify(options.mcpServers), "secret-claude-token");
+      assert.equal(options.env?.SUPACODE_MCP_AUTHORIZATION, "Bearer secret-claude-token");
       assert.isObject(options.systemPrompt);
       const systemPrompt = options.systemPrompt as {
         readonly type: string;
