@@ -1616,6 +1616,7 @@ export interface ChatComposerProps {
   activePendingApproval: PendingApproval | null;
   pendingApprovals: PendingApproval[];
   pendingUserInputs: PendingUserInput[];
+  autoDismissQuestions?: boolean;
   activePendingProgress: {
     questionIndex: number;
     isLastQuestion: boolean;
@@ -6830,6 +6831,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   onToggleOption={onSelectActivePendingUserInputOption}
                   onAdvance={onAdvanceActivePendingUserInput}
                   onDismiss={onDismissActivePendingUserInput}
+                  autoDismissQuestions={props.autoDismissQuestions}
                 />
               ) : !isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan ? (
                 <ComposerPlanFollowUpBanner
@@ -6851,6 +6853,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onToggleOption={onSelectActivePendingUserInputOption}
                     onAdvance={onAdvanceActivePendingUserInput}
                     onDismiss={onDismissActivePendingUserInput}
+                    autoDismissQuestions={props.autoDismissQuestions}
                   />
                   {!isChoiceOnlyPendingQuestion ||
                   activePendingProgress?.activeQuestion?.multiSelect ? (
