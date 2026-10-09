@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import type { DesktopSshEnvironmentTarget, EnvironmentMachineKind } from "@supacode/contracts";
 import * as Option from "effect/Option";
 import type { ReactNode } from "react";
@@ -27,7 +28,9 @@ export function environmentTransportLabel(environment: EnvironmentPresentation):
   ) {
     return `SSH ${formatDesktopSshTarget(entry.profile.value.target)}`;
   }
-  return environment.displayUrl ?? "Remote link";
+  return environment.displayUrl === null
+    ? "Remote link"
+    : connectionAddressLabel(environment.displayUrl);
 }
 
 /**

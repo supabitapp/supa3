@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackHeaderItem } from "@react-navigation/native-stack";
 import { resolveEnvironmentMachineKind } from "@supacode/contracts";
@@ -83,7 +84,9 @@ export function SettingsEnvironmentFilterHeader(props: {
                           resolveEnvironmentMachineKind(entry.serverConfig)
                         ],
                       },
-                      description: entry.displayUrl ?? undefined,
+                      description: entry.displayUrl
+                        ? connectionAddressLabel(entry.displayUrl)
+                        : undefined,
                       state:
                         selectedIds === null || selectedIds.has(entry.environmentId)
                           ? ("on" as const)
@@ -166,7 +169,7 @@ export function AndroidSettingsEnvironmentFilter() {
           id: `environment:${entry.environmentId}`,
           title: `Environment · ${entry.label}`,
           image: ENVIRONMENT_MACHINE_SYMBOLS[resolveEnvironmentMachineKind(entry.serverConfig)],
-          subtitle: entry.displayUrl ?? undefined,
+          subtitle: entry.displayUrl ? connectionAddressLabel(entry.displayUrl) : undefined,
           state:
             selectedIds === null || selectedIds.has(entry.environmentId)
               ? ("on" as const)

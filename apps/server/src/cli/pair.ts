@@ -18,6 +18,7 @@ import {
 } from "@supacode/contracts";
 import { resolveWorktreeSupacodeHome } from "@supacode/shared/devHome";
 import { buildPairingUrl } from "@supacode/shared/remote";
+import { relayName } from "@supacode/shared/relay/name";
 import * as NodeOS from "node:os";
 import { DEFAULT_SIGNAL_EXPORT } from "@supacode/shared/observability";
 import * as OtelEnvironment from "@supacode/shared/otelEnvironment";
@@ -534,6 +535,7 @@ export const pairCommand = Command.make("pair", {
         if (relayEndpoint === undefined)
           return yield* new PublicRelayOffError({ settingsPath: config.settingsPath });
         pairingBaseUrl = relayEndpoint;
+        notes.push(`Paired clients show this host as Relay · ${relayName(relayEndpoint)}.`);
       } else if (flags.tailscale) {
         const resolved = yield* resolveTailscalePairingBase({
           target,

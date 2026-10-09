@@ -1,4 +1,5 @@
 import { createAdvertisedEndpoint } from "@supacode/shared/advertisedEndpoint";
+import { relayName } from "@supacode/shared/relay/name";
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
@@ -1416,6 +1417,7 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
   const canDisableTailscaleServe =
     isTailscaleHttpsEndpoint(endpoint) && endpoint.status === "available";
   const shouldShowEndpointUrl = !needsTailscaleSetup;
+  const endpointAddress = relayName(endpoint.httpBaseUrl) ?? endpoint.httpBaseUrl;
   const isEndpointRail = presentation === "endpoint-rail";
   return (
     <div className={endpointRowClassName(presentation, isAvailable)}>
@@ -1432,11 +1434,11 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
               <TooltipTrigger
                 render={
                   <p className="min-w-0 truncate text-xs leading-5 text-muted-foreground">
-                    {endpoint.httpBaseUrl}
+                    {endpointAddress}
                   </p>
                 }
               />
-              <TooltipPopup side="top">{endpoint.httpBaseUrl}</TooltipPopup>
+              <TooltipPopup side="top">{endpointAddress}</TooltipPopup>
             </Tooltip>
           ) : null}
           {!isAvailable ? (
@@ -1501,7 +1503,9 @@ function NetworkAccessDescription({
 
   const summary = (
     <>
-      <span className="min-w-0 truncate">{endpoint.httpBaseUrl}</span>
+      <span className="min-w-0 truncate">
+        {relayName(endpoint.httpBaseUrl) ?? endpoint.httpBaseUrl}
+      </span>
       {hiddenEndpointCount > 0 ? (
         <span className="shrink-0 text-xs font-medium">
           {expanded ? "Hide" : `+${hiddenEndpointCount}`}

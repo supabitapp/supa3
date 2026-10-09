@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import type { EnvironmentPresentation } from "../../state/environments";
 import type { ResolvedSettingsScope, SettingsScopeSearch } from "./settingsScope";
 
@@ -11,9 +12,12 @@ export function settingsScopeEnvironmentLabel(
     (other) =>
       other.environmentId !== environment.environmentId && other.label === environment.label,
   );
-  return duplicate
-    ? `${environment.label} · ${environment.displayUrl ?? environment.environmentId}`
-    : environment.label;
+  if (!duplicate) return environment.label;
+  const detail =
+    environment.displayUrl === null
+      ? environment.environmentId
+      : connectionAddressLabel(environment.displayUrl);
+  return `${environment.label} · ${detail}`;
 }
 
 export const ALL_ENVIRONMENTS_VALUE = "all";

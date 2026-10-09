@@ -386,6 +386,10 @@
     "./relay/loopbackPool": {
       "types": "./src/relay/loopbackPool.ts",
       "import": "./src/relay/loopbackPool.ts"
+    },
+    "./relay/name": {
+      "types": "./src/relay/name.ts",
+      "import": "./src/relay/name.ts"
     }
   },
   "scripts": {

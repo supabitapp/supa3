@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
@@ -160,7 +161,7 @@ function ProjectOverviewContent(props: {
               </Text>
               {environment?.displayUrl ? (
                 <Text className="text-sm leading-normal text-foreground-muted">
-                  {environment.displayUrl}
+                  {connectionAddressLabel(environment.displayUrl)}
                 </Text>
               ) : null}
               <Text className="text-sm leading-normal text-foreground-muted" selectable>

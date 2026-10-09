@@ -9,7 +9,9 @@ Connect across networks without opening a port on the host. On the machine
 running your agents, open **Settings → Connections**, enable **Public relay**,
 then create a pairing link using the public relay address. Paste that link into
 **Add environment** on another desktop or mobile client, or scan it with the
-mobile app. The host can keep **Network access** off.
+mobile app. The host can keep **Network access** off. Clients show a relay
+connection by a three-word name, such as `amber-falcon-river`, and the host's
+Connections settings show the same name once it connects.
 
 On a host you reach only over SSH, turn the relay on by setting
 `"publicRelayEnabled": true` in its `settings.json`, then print a relay pairing

@@ -6,6 +6,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
 } from "@supacode/contracts";
+import { relayName } from "@supacode/shared/relay/name";
 import { useState } from "react";
 
 import { useEnvironmentQuery } from "~/state/query";
@@ -15,14 +16,23 @@ import { Switch } from "../ui/switch";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
-const STATUS_DESCRIPTIONS: Record<RelayHostStatus["state"], string | null> = {
-  off: null,
-  connecting: "Connecting to the relay server.",
-  registered: "Connected. Paired clients can reach this host from anywhere.",
-  superseded:
-    "Another host is using this relay identity. Turn Public relay off and on to reconnect here.",
-  "invalid-url": "The relay server URL is invalid.",
-};
+function statusDescription(status: RelayHostStatus): string | null {
+  const name = status.relayEndpoint === undefined ? null : relayName(status.relayEndpoint);
+  switch (status.state) {
+    case "off":
+      return null;
+    case "connecting":
+      return "Connecting to the relay server.";
+    case "registered":
+      return name === null
+        ? "Connected. Paired clients can reach this host from anywhere."
+        : `Connected as ${name}. Paired clients can reach this host from anywhere.`;
+    case "superseded":
+      return "Another host is using this relay identity. Turn Public relay off and on to reconnect here.";
+    case "invalid-url":
+      return "The relay server URL is invalid.";
+  }
+}
 
 export function usePublicRelayStatus(environmentId: EnvironmentId | null): RelayHostStatus | null {
   return (
@@ -51,7 +61,7 @@ export function PublicRelaySettings({
       <SettingsRow
         title={searchableSetting("public-relay").title}
         description={
-          (enabled && status ? STATUS_DESCRIPTIONS[status.state] : null) ??
+          (enabled && status ? statusDescription(status) : null) ??
           "Connect from anywhere with end-to-end encryption. Enable it, then create a pairing link below."
         }
         control={
