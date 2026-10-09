@@ -35,6 +35,7 @@ function layout(
 ) {
   let top = 100;
   const rects = items.map((item) => {
+    const markerHeight = item.kind === "marker" && item.marker === "settled-more" ? 36 : 32;
     const height =
       item.kind === "thread"
         ? (item.section === "pinned" || item.section === "active" || item.section === "working"
@@ -42,7 +43,7 @@ function layout(
             : 36) * scale
         : item.marker === "pinned-header" || item.marker === "pinned-divider"
           ? 0
-          : (item.marker.endsWith("placeholder") ? 0 : 32) * scale;
+          : (item.marker.endsWith("placeholder") ? 0 : markerHeight) * scale;
     const rect = { top, height, bottom: top + height, left: 0, right: 260, width: 260 };
     top += height + 1;
     return rect;
@@ -255,6 +256,37 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
+  it.each([1, 1.25])(
+    "keeps the recent settled page and its paging control aligned at scale %s",
+    (scale) => {
+      const items = [
+        pinnedHeader,
+        thread("p1", "pinned"),
+        thread("p2", "pinned"),
+        divider,
+        thread("a", "active"),
+        settledHeader,
+        marker("settled-more"),
+        thread("recent", "settled"),
+        thread("newest", "settled"),
+      ];
+      const result = preview(
+        {
+          items,
+          settledOrder: ["older-hidden", "recent", "newest", "p1"],
+          settledExpanded: true,
+          settledVisibleCount: 2,
+        },
+        "p1",
+        "p2",
+        scale,
+      );
+      expect(result.get(sidebarMarkerId("settled-more"))).toEqual(stationary);
+      expect(result.get("recent")).toEqual(stationary);
+      expect(result.get("newest")).toEqual(stationary);
+    },
+  );
+
   it("reserves no draft space when the mounted draft block has no rows", () => {
     const items = [
       pinnedHeader,
@@ -853,13 +885,13 @@ describe("sidebar drag projection", () => {
     ];
     const input = {
       items,
-      settledOrder: ["a", "s", "hidden"],
+      settledOrder: ["hidden", "s", "a"],
       settledExpanded: true,
       settledVisibleCount: 1,
     };
     const withRoute = preview({ ...input, routeThreadKey: "s" }, "a", "s");
     const withoutRoute = preview(input, "a", "s");
-    expect(withRoute.get("s")).toEqual({ ...stationary, y: 25 });
+    expect(withRoute.get("s")).toEqual({ ...stationary, y: -12 });
     expect(withoutRoute.get("s")?.scaleY).toBe(0);
   });
 
@@ -870,13 +902,13 @@ describe("sidebar drag projection", () => {
       divider,
       thread("a", "active"),
       settledHeader,
-      thread("s1", "settled"),
       thread("route", "settled"),
+      thread("s1", "settled"),
     ];
     const result = preview(
       {
         items,
-        settledOrder: ["s1", "hidden", "route"],
+        settledOrder: ["route", "hidden", "s1"],
         settledExpanded: true,
         settledVisibleCount: 1,
         routeThreadKey: "route",

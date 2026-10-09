@@ -709,8 +709,8 @@ describe("buildThreadListV2Items", () => {
 
     expect(layout.items.map((item) => item.thread.id)).toEqual([
       "active",
-      "sooner",
       "later",
+      "sooner",
       "settled",
     ]);
     expect(layout.items.map((item) => item.snoozed)).toEqual([false, true, true, false]);
@@ -887,7 +887,7 @@ describe("buildThreadListV2Items", () => {
       now: NOW,
     });
 
-    expect(items.map((item) => item.thread.id)).toEqual(["newer-created", "older-created"]);
+    expect(items.map((item) => item.thread.id)).toEqual(["older-created", "newer-created"]);
   });
 
   it("sorts settled threads by their persisted settlement timestamp", () => {
@@ -913,7 +913,7 @@ describe("buildThreadListV2Items", () => {
       now: NOW,
     });
 
-    expect(items.map((item) => item.thread.id)).toEqual(["settled-newer", "settled-older"]);
+    expect(items.map((item) => item.thread.id)).toEqual(["settled-older", "settled-newer"]);
   });
 
   it("keeps settled threads in the tail and filters by search query", () => {
@@ -1042,11 +1042,10 @@ describe("buildThreadListV2Items settled paging", () => {
 
     expect(layout.hiddenSettledCount).toBe(2);
     expect(layout.items.filter((item) => item.variant === "slim")).toHaveLength(2);
-    // Most recent settled first — the hidden ones are the oldest.
     expect(layout.items.map((item) => item.thread.id)).toEqual([
       "active",
-      "settled-3",
       "settled-2",
+      "settled-3",
     ]);
   });
 });
@@ -1149,8 +1148,8 @@ describe("buildThreadListV2ListItems", () => {
     const items = buildThreadListV2ListItems(input);
     expect(items.map((item) => item.type)).toEqual([
       "v2-settled-shelf",
-      "v2-thread",
       "v2-show-more",
+      "v2-thread",
       "v2-snoozed-shelf",
       "v2-thread",
       "v2-working-shelf",
@@ -1160,7 +1159,7 @@ describe("buildThreadListV2ListItems", () => {
       "v2-active-header",
       "v2-thread",
     ]);
-    expect(items[2]).toEqual({ type: "v2-show-more", key: "v2-show-more", hiddenCount: 1 });
+    expect(items[1]).toEqual({ type: "v2-show-more", key: "v2-show-more", hiddenCount: 1 });
     expect(
       buildThreadListV2ListItems({ ...input, settledShelfExpanded: false }).some(
         (item) => item.type === "v2-show-more",
@@ -1506,7 +1505,7 @@ describe("pending mobile thread moves", () => {
       current = update(current, assignment);
       hold = reconcilePendingThreadOrder(hold!, current);
       expect(hold === null).toBe(index === assignments.length - 1);
-      expect(layout(current, hold)).toEqual(["a", "c", "b"]);
+      expect(layout(current, hold)).toEqual(pending.orderedIds.map((id) => id.split(":")[1]));
     }
   });
 
@@ -2474,9 +2473,9 @@ describe("Working section", () => {
     const layout = build();
     expect(ids(layout)).toEqual([
       "pinned-working",
-      "finished-late",
-      "asks-approval",
       "finished-early",
+      "asks-approval",
+      "finished-late",
     ]);
     expect(layout.workingCount).toBe(1);
     expect(layout.workingShelfHeaderIndex).toBe(4);
@@ -2495,7 +2494,7 @@ describe("Working section", () => {
       inboxReturnAt: (thread) =>
         thread.id === "finished-early" ? Date.parse("2026-06-01T04:00:00.000Z") : undefined,
     });
-    expect(ids(layout).slice(1)).toEqual(["finished-early", "finished-late", "asks-approval"]);
+    expect(ids(layout).slice(1)).toEqual(["asks-approval", "finished-late", "finished-early"]);
   });
 
   it("places Working below Snoozed and above Active", () => {

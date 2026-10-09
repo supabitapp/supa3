@@ -42,8 +42,10 @@ import {
 } from "@supacode/client-runtime/state/thread-settled";
 import { createInboxReturnTracker } from "@supacode/client-runtime/state/thread-inbox";
 import {
+  pageRecentThreads,
   resolveSettledThreadTimestamp,
   sortSettledThreads,
+  sortSnoozedThreadsByWake,
 } from "@supacode/client-runtime/state/thread-sort";
 import {
   resolveThreadProviderStack,
@@ -197,7 +199,6 @@ import {
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   formatWorkingDurationLabel,
-  firstValidTimestampMs,
   hasUnseenCompletion,
   isSidebarNestedLinkClick,
   isSidebarThreadWorking,
@@ -2701,14 +2702,8 @@ export default function Sidebar() {
             }),
       draggableThreadKeys: draggable,
       activeThreads: sortInboxThreadsByReturn(active, inboxReturns.returnedAt),
-      // Newest send first; finishing and waking again do not move a row.
       workingThreads: sortWorkingThreadsBySend(working),
-      // Soonest wake first: "what comes back next" is the shelf's question.
-      snoozedThreads: snoozed.toSorted(
-        (left, right) =>
-          firstValidTimestampMs(left.snoozedUntil ?? null) -
-          firstValidTimestampMs(right.snoozedUntil ?? null),
-      ),
+      snoozedThreads: sortSnoozedThreadsByWake(snoozed),
       settledThreads: sortSettledThreads(settled),
       snoozeNow: preciseNow,
     };
@@ -2722,14 +2717,9 @@ export default function Sidebar() {
     threads,
   ]);
 
-  // Arm a timeout for the earliest upcoming wake so the shelf empties the
-  // moment a snooze expires instead of on the next minute tick. Sorted
-  // soonest-first, so entry 0 is the boundary.
   useEffect(() => {
-    const nextWakeAtMs =
-      snoozedThreads.length > 0 && snoozedThreads[0]?.snoozedUntil != null
-        ? Date.parse(snoozedThreads[0].snoozedUntil)
-        : Number.NaN;
+    const nextWake = snoozedThreads.at(-1)?.snoozedUntil;
+    const nextWakeAtMs = nextWake == null ? Number.NaN : Date.parse(nextWake);
     if (Number.isNaN(nextWakeAtMs)) return;
     // setTimeout delays are signed 32-bit: anything larger overflows and
     // fires immediately, turning a far-future wake (event-condition snoozes
@@ -2751,23 +2741,16 @@ export default function Sidebar() {
     setLastSettledResetKey(settledResetKey);
     setSettledVisibleCount(SETTLED_TAIL_INITIAL_COUNT);
   }
-  const visibleSettledThreads = useMemo(() => {
-    if (settledThreads.length <= settledVisibleCount) return settledThreads;
-    const visible = settledThreads.slice(0, settledVisibleCount);
-    // The open thread must never hide under "Show more": navigating into a
-    // deep settled thread (search, deep link) pulls its row into the visible
-    // tail so the highlight and the un-settle affordance stay reachable.
-    if (routeThreadKey !== null) {
-      const routeThread = settledThreads
-        .slice(settledVisibleCount)
-        .find(
-          (thread) =>
-            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-        );
-      if (routeThread !== undefined) visible.push(routeThread);
-    }
-    return visible;
-  }, [routeThreadKey, settledThreads, settledVisibleCount]);
+  const visibleSettledThreads = useMemo(
+    () =>
+      pageRecentThreads(
+        settledThreads,
+        settledVisibleCount,
+        (thread) =>
+          scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+      ),
+    [routeThreadKey, settledThreads, settledVisibleCount],
+  );
   const hiddenSettledCount = settledThreads.length - visibleSettledThreads.length;
   const showMoreSettled = useCallback(
     () => setSettledVisibleCount((count) => count + SETTLED_TAIL_PAGE_COUNT),
@@ -3548,16 +3531,21 @@ export default function Sidebar() {
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
     }
     items.push({ kind: "marker", marker: "settled-header" });
+    if (settledShelfExpanded && hiddenSettledCount > 0) {
+      items.push({ kind: "marker", marker: "settled-more" });
+    }
     const settledRows = rowsOf(renderedSettledThreads, "settled");
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
     return items;
   }, [
     activeThreads,
+    hiddenSettledCount,
     pinnedThreads.length,
     visiblePinnedThreads,
     renderedSettledThreads,
     settledThreads.length,
+    settledShelfExpanded,
     snoozedThreads.length,
     visibleSnoozedThreads,
     visibleWorkingThreads,
@@ -5150,6 +5138,20 @@ export default function Sidebar() {
                             />,
                           );
                           break;
+                        case "settled-more":
+                          items.push(
+                            <SortableSidebarMarker key="settled-more" marker="settled-more">
+                              <button
+                                type="button"
+                                onClick={showMoreSettled}
+                                className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                              >
+                                <PlusIcon aria-hidden className="size-4 shrink-0" />
+                                Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
+                              </button>
+                            </SortableSidebarMarker>,
+                          );
+                          break;
                         case "settled-placeholder":
                           items.push(
                             <SidebarSectionPlaceholder
@@ -5172,18 +5174,6 @@ export default function Sidebar() {
                     }
                     return items;
                   })()}
-                  {settledShelfExpanded && hiddenSettledCount > 0 ? (
-                    <li className="list-none">
-                      <button
-                        type="button"
-                        onClick={showMoreSettled}
-                        className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                      >
-                        <PlusIcon aria-hidden className="size-4 shrink-0" />
-                        Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
-                      </button>
-                    </li>
-                  ) : null}
                 </ul>
               </SortableContext>
             </DndContext>
