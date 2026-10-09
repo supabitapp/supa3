@@ -12,8 +12,7 @@ Use when asked to sync or port code from upstream.
 Before editing:
 
 - Read repository instructions and identify the baseline and upstream ref or range.
-- Inspect the actual diff and relevant code, tests, contracts, migrations, and docs.
-- Check affected server, client, provider, persistence, and connection surfaces.
+- Read the PRs and its content of every PRs that are merged during the range to get a sense of what's been added.
 - Default to bringing compatible upstream work, including new capabilities and architectural changes. Size, implementation effort, new dependencies, and routine branding or integration work belong in the port plan.
 - Classify every change:
   - **Bring:** compatible with Supacode's goals, including changes that need adaptation, migrations, or additional tests.
