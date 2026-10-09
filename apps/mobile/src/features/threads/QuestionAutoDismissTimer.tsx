@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { AppState } from "react-native";
 import { userInputCountdown } from "@supacode/client-runtime/user-input-countdown";
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
 
-export function QuestionAutoDismissTimer({ deadline }: { deadline: string }) {
+type QuestionAutoDismissCountdown = NonNullable<ReturnType<typeof userInputCountdown>>;
+
+export function useQuestionAutoDismissCountdown(deadline: string | null) {
   const [now, setNow] = useState(Date.now);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (deadline === null) return;
     const tick = () => {
       const time = Date.now();
       setNow(time);
@@ -22,16 +25,19 @@ export function QuestionAutoDismissTimer({ deadline }: { deadline: string }) {
       subscription.remove();
     };
   }, [deadline]);
-  const countdown = userInputCountdown(deadline, now);
-  if (countdown === null) return null;
-  const urgent = countdown.state === "warning" || countdown.state === "closing";
+  return userInputCountdown(deadline, now);
+}
+
+export function QuestionAutoDismissTimer({
+  countdown,
+}: {
+  countdown: QuestionAutoDismissCountdown;
+}) {
   return (
     <Text
-      accessibilityRole="timer"
-      accessibilityLabel={countdown.label}
       className={cn(
-        "font-sans text-xs tabular-nums text-foreground-secondary",
-        urgent && "text-warning-foreground",
+        "shrink font-sans text-xs tabular-nums text-foreground-secondary",
+        countdown.state !== "counting" && "text-warning-foreground",
       )}
     >
       {countdown.text}

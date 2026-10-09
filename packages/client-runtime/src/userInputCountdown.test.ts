@@ -12,6 +12,10 @@ describe("question countdown", () => {
     expect(userInputCountdown(deadline, now + 100_000)?.state).toBe("warning");
     expect(userInputCountdown(deadline, now + 119_999)?.text).toBe("Closes in 0:01");
   });
+  it("offers just the time for narrow headers", () => {
+    expect(userInputCountdown(deadline, now + 60_001)?.shortText).toBe("1:00");
+    expect(userInputCountdown(deadline, now + 120_000)?.shortText).toBe("Closing…");
+  });
   it("waits for the server at zero and hides a paused question timer", () => {
     expect(userInputCountdown(deadline, now + 120_000)?.text).toBe("Closing…");
     expect(userInputCountdown(deadline, now + 130_000)?.state).toBe("closing");

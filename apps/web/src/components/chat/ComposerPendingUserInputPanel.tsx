@@ -9,7 +9,7 @@ import { CheckIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
-import { QuestionAutoDismissTimer } from "./QuestionAutoDismissTimer";
+import { QuestionAutoDismissCountdown, QuestionAutoDismissTimer } from "./QuestionAutoDismissTimer";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -198,7 +198,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       >
         <ComposerBanner.Icon />
         <ComposerBanner.Content>
-          <span className="shrink-0 font-medium text-muted-foreground">
+          <span className="min-w-0 truncate font-medium text-muted-foreground">
             {activeQuestion.header}
           </span>
           {isCollapsed ? (
@@ -212,10 +212,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           ) : null}
         </ComposerBanner.Content>
         <ComposerBanner.Actions>
+          {timerDeadline != null ? <QuestionAutoDismissCountdown deadline={timerDeadline} /> : null}
           {prompt.questions.length > 1 ? (
-            <span className="text-3xs font-medium text-muted-foreground tabular-nums">
-              {questionIndex + 1}/{prompt.questions.length}
-            </span>
+            <>
+              {timerDeadline != null ? <ComposerBanner.Separator /> : null}
+              <span className="shrink-0 font-medium text-muted-foreground tabular-nums">
+                {questionIndex + 1}/{prompt.questions.length}
+              </span>
+            </>
           ) : null}
           <ComposerBanner.ToggleIcon expanded={!isCollapsed} />
           {prompt.dismissible ? (
@@ -246,11 +250,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       <CollapsiblePanel>
         <ComposerBanner.Scroll>
           <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">
-            <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
+            <p className="text-sm font-medium text-foreground">{activeQuestion.question}</p>
             {activeQuestion.multiSelect ? (
               <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
             ) : null}
-            <div className="mt-2 space-y-0.5">
+            <div className="mt-2 -ms-2.5 space-y-0.5">
               {activeQuestion.options.map((option, index) => {
                 const optionValue = option.value ?? option.label;
                 const isOptimisticallySelected =
@@ -271,7 +275,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                 const content = (
                   <>
                     <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{option.label}</span>
+                      <span className="text-sm">{option.label}</span>
                       {option.description && option.description !== option.label ? (
                         <span className="text-secondary-label text-2xs">{option.description}</span>
                       ) : null}
