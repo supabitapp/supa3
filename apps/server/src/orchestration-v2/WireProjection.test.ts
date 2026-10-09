@@ -161,6 +161,7 @@ describe("orchestration V2 wire projection", () => {
         deletedAt: null,
       },
       runs: [],
+      attempts: [],
       runtimeRequests: [],
       messages: [
         {
