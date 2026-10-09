@@ -532,10 +532,6 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   );
 });
 
-// Background work fades as a whole, status label included, so it takes less
-// attention than rows that need a human (input, approval, done).
-const RECEDED_ROW_STYLE = { opacity: 0.55 } as const;
-
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
@@ -678,7 +674,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? selectedThreadRowColors.mutedForegroundClassName
       : rowAppearance.mutedForegroundClassName,
   });
-  // Cached rows already read as offline; only live background work recedes.
+  // Background work fades as a whole so rows that need a human stand out. Cached
+  // rows already read as offline, so only live work recedes.
   const recede = environmentConnected && shouldRecedeThreadRow({ status, selected });
   const durationStartedAt =
     environmentConnected && (status === "working" || status === "waiting")
@@ -1222,10 +1219,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         style={rowAppearance.cardStyle}
       >
         {sidebarPane ? (
-          <View
-            className={cn(!environmentConnected && "opacity-50")}
-            style={recede ? RECEDED_ROW_STYLE : undefined}
-          >
+          <View className={cn(!environmentConnected && "opacity-50", recede && "opacity-55")}>
             {cardContent}
           </View>
         ) : (
@@ -1238,8 +1232,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               className={cn(
                 THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
                 !environmentConnected && "opacity-50",
+                recede && "opacity-55",
               )}
-              style={recede ? RECEDED_ROW_STYLE : undefined}
             >
               {cardContent}
             </View>
