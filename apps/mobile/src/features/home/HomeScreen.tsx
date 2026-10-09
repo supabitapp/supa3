@@ -43,7 +43,6 @@ import { threadListEnvironmentsAtom } from "../../state/server";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
-  ThreadListV2ActiveEmpty,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -587,10 +586,8 @@ export function HomeScreen(props: HomeScreenProps) {
         snoozeEnvironmentIds,
         queuedThreadKeys,
         shelfPreferencesLoading: !shelfPreferencesLoaded,
-        showActiveEmpty: !hasSearchQuery,
       }),
     [
-      hasSearchQuery,
       nowMinute,
       queuedThreadKeys,
       settledShelfExpanded,
@@ -658,9 +655,6 @@ export function HomeScreen(props: HomeScreenProps) {
       }
       if (item.type === "v2-show-more") {
         return <ThreadListV2ShowMoreRow hiddenCount={item.hiddenCount} onPress={showMoreSettled} />;
-      }
-      if (item.type === "v2-active-empty") {
-        return <ThreadListV2ActiveEmpty />;
       }
       if (item.type === "v2-pinned-shelf") {
         return (
