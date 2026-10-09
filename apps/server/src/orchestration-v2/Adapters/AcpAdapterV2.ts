@@ -116,7 +116,7 @@ import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
-} from "../SubagentProjection.ts";
+} from "@supacode/provider-core/server/subagentProjection";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 
 export const ACP_PROTOCOL = "acp.ndjson-jsonrpc" as const;

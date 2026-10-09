@@ -72,7 +72,7 @@ import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
-} from "../SubagentProjection.ts";
+} from "@supacode/provider-core/server/subagentProjection";
 import * as CursorAgentSdk from "./CursorAgentSdk.ts";
 export { cursorSdkModelSelection } from "../../provider/cursorSdkModel.ts";
 

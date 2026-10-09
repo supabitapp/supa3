@@ -123,7 +123,7 @@ import {
   subagentResultForRun,
   delegatedTaskProgress,
   subagentThreadTitle,
-} from "./SubagentProjection.ts";
+} from "@supacode/provider-core/server/subagentProjection";
 import { forkableSourceRunStatusError, ThreadForkServiceV2 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 

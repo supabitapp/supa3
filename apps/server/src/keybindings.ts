@@ -41,7 +41,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "./config.ts";
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@supacode/shared/atomicWrite";
 import { fromJsonStringPretty, fromLenientJson } from "@supacode/shared/schemaJson";
 import {
   DEFAULT_KEYBINDINGS,

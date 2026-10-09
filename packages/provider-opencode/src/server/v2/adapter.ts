@@ -70,14 +70,10 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { resolveAttachmentPath } from "../../attachmentStore.ts";
-import * as ServerConfig from "../../config.ts";
-import { paginate, type OpenCode2StreamEvent } from "../../provider/opencode2/OpenCode2Client.ts";
-import * as OpenCode2Server from "../../provider/opencode2/OpenCode2Server.ts";
-import {
-  parseOpenCodeModelSlug,
-  type OpenCodeRuntimeError,
-} from "../../provider/opencodeRuntime.ts";
+import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
+import * as OpenCode2Client from "./OpenCode2Client.ts";
+import * as OpenCode2Server from "./OpenCode2Server.ts";
+import * as OpenCodeRuntime from "../OpenCodeRuntime.ts";
 import * as McpProviderSession from "@supacode/provider-core/server/mcpSession";
 import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 import { supacodeOrchestrationSystemPrompt } from "@supacode/provider-core/server/orchestrationInstructions";
@@ -98,11 +94,11 @@ import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
-} from "../SubagentProjection.ts";
+} from "@supacode/provider-core/server/subagentProjection";
 import * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
 import { turnScopedSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
-import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "./OpenCodeAdapterV2.ts";
-import { openCodeToolTurnItem } from "./OpenCodeToolItems.ts";
+import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "../adapter.ts";
+import { openCodeToolTurnItem } from "../toolItems.ts";
 
 const OpenCode2ProviderCapabilities = {
   sessions: {
@@ -307,7 +303,7 @@ interface SubagentCall {
  * the continuation turn Supacode opens for it takes them.
  */
 interface Wake {
-  readonly events: Array<OpenCode2StreamEvent>;
+  readonly events: Array<OpenCode2Client.OpenCode2StreamEvent>;
   running: boolean;
   /** The background subagents whose end it answers, as its turn's notification names them. */
   readonly reports: Array<BackgroundWorkReport>;
@@ -769,7 +765,7 @@ const isProviderAdapterError = Schema.is(ProviderAdapter.ProviderAdapterV2Error)
  * default while Supacode records the requested model.
  */
 const modelRef = (selection: ProviderAdapter.ProviderAdapterV2TurnInput["modelSelection"]) => {
-  const parsed = parseOpenCodeModelSlug(selection.model);
+  const parsed = OpenCodeRuntime.parseOpenCodeModelSlug(selection.model);
   if (parsed === null) return undefined;
   const variant = getModelSelectionStringOptionValue(selection, "variant");
   return Model.Ref.make({
@@ -836,7 +832,7 @@ const turnTokenUsage = (turn: ActiveTurn, status: OrchestrationV2ProviderTurn["s
 export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: ProviderInstanceId) {
   const server = yield* OpenCode2Server.OpenCode2Server;
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
-  const serverConfig = yield* ServerConfig.ServerConfig;
+  const host = yield* ProviderHost.ProviderHost;
   const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
   const crypto = yield* Crypto.Crypto;
   const driver = OPENCODE_PROVIDER;
@@ -848,7 +844,10 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
    * server that died is started again on the next borrow.
    */
   const borrow = Effect.gen(function* () {
-    const lent = yield* Deferred.make<OpenCode2Server.OpenCode2Connection, OpenCodeRuntimeError>();
+    const lent = yield* Deferred.make<
+      OpenCode2Server.OpenCode2Connection,
+      OpenCodeRuntime.OpenCodeRuntimeError
+    >();
     yield* server
       .withConnection((connection) =>
         Deferred.succeed(lent, connection).pipe(Effect.andThen(Effect.never)),
@@ -876,7 +875,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     // the instance's threads in every directory.
     const contextWindows = new Map<string, Map<string, number>>();
     /** A thread without a worktree runs where Supacode does, as its session is created. */
-    const directoryOf = (cwd: string | null | undefined) => cwd ?? serverConfig.cwd;
+    const directoryOf = (cwd: string | null | undefined) => cwd ?? host.paths.cwd;
     const windowOf = (cwd: string | null | undefined, model: string) =>
       contextWindows.get(directoryOf(cwd))?.get(model);
     const now = yield* DateTime.now;
@@ -885,7 +884,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       driver,
       providerInstanceId: instanceId,
       status: "ready",
-      cwd: input.runtimePolicy.cwd ?? serverConfig.cwd,
+      cwd: input.runtimePolicy.cwd ?? host.paths.cwd,
       model: input.modelSelection.model,
       capabilities: OpenCode2ProviderCapabilities,
       createdAt: now,
@@ -2147,7 +2146,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       }
     });
 
-    const sessionOfEvent = (event: OpenCode2StreamEvent) =>
+    const sessionOfEvent = (event: OpenCode2Client.OpenCode2StreamEvent) =>
       event.type === "unreadable.execution.ended" || event.type === "unreadable.execution.started"
         ? event.sessionID
         : "sessionID" in event.data && typeof event.data.sessionID === "string"
@@ -2195,7 +2194,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     const onTurnEvent = Effect.fnUntraced(function* (
       state: ThreadState,
       turn: ActiveTurn,
-      event: OpenCode2StreamEvent,
+      event: OpenCode2Client.OpenCode2StreamEvent,
     ) {
       switch (event.type) {
         case "session.text.started":
@@ -2446,7 +2445,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
         ? finishTurn(state, turn.heldEnd)
         : Effect.void;
 
-    const handleEvent = Effect.fnUntraced(function* (event: OpenCode2StreamEvent) {
+    const handleEvent = Effect.fnUntraced(function* (event: OpenCode2Client.OpenCode2StreamEvent) {
       const sessionId = sessionOfEvent(event);
       // `revert.clear` wakes the session into an empty execution of its own
       // (2.0.18's `Session.revert.clear` ends with a wake). It is no run of
@@ -2501,7 +2500,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
 
     /** Handles one event for its session, as the turn running there sees it. */
     const route = Effect.fnUntraced(function* (
-      event: OpenCode2StreamEvent,
+      event: OpenCode2Client.OpenCode2StreamEvent,
       sessionId: string | undefined,
     ) {
       // The end of the run a timed-out Stop left behind; no turn is its own.
@@ -2680,7 +2679,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       const { before } = turn;
       if (promptId === undefined && before === undefined) return undefined;
       const start = before !== undefined ? before : promptId;
-      const read = yield* paginate(
+      const read = yield* OpenCode2Client.paginate(
         { sessionID: Session.ID.make(sessionId), order: "desc" as const, limit: 50 },
         client.message.list,
       ).pipe(
@@ -2858,7 +2857,9 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     // The borrow in use when the session closes is returned with it, so a
     // spawned server can still reach its idle shutdown.
     yield* Effect.addFinalizer(() => Scope.close(currentScope, Exit.void));
-    const follow = (stream: Stream.Stream<OpenCode2StreamEvent, unknown>): Effect.Effect<void> =>
+    const follow = (
+      stream: Stream.Stream<OpenCode2Client.OpenCode2StreamEvent, unknown>,
+    ): Effect.Effect<void> =>
       stream.pipe(
         Stream.runForEach((event) => lock.withPermit(handleEvent(event))),
         Effect.exit,
@@ -3145,7 +3146,10 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
      * reports continuations answer. The list takes one type, so it reads all.
      */
     const userMessages = (sessionId: string) =>
-      paginate({ sessionID: Session.ID.make(sessionId), limit: 100 }, client.message.list).pipe(
+      OpenCode2Client.paginate(
+        { sessionID: Session.ID.make(sessionId), limit: 100 },
+        client.message.list,
+      ).pipe(
         Stream.runCollect,
         Effect.map(
           (messages) =>
@@ -3162,7 +3166,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       providerThread: OrchestrationV2ProviderThread,
       sessionId: string,
     ) {
-      const history = yield* paginate(
+      const history = yield* OpenCode2Client.paginate(
         { sessionID: Session.ID.make(sessionId), order: "asc" as const, limit: 100 },
         client.message.list,
       ).pipe(Stream.runCollect);
@@ -3218,8 +3222,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       providerMessageTextWithAttachmentPaths({
         text: turnInput.message.text,
         attachments: turnInput.message.attachments,
-        resolveAttachmentPath: (attachment) =>
-          resolveAttachmentPath({ attachmentsDir: serverConfig.attachmentsDir, attachment }),
+        resolveAttachmentPath: host.resolveAttachmentPath,
       }).trim();
 
     const removeMcp = (mcp: { readonly name: string; readonly directory: string }) =>
@@ -3251,7 +3254,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
     ) {
       const mcpSession = McpProviderSession.readMcpProviderSession(turnInput.threadId);
-      const directory = turnInput.runtimePolicy.cwd ?? serverConfig.cwd;
+      const directory = turnInput.runtimePolicy.cwd ?? host.paths.cwd;
       const name = yield* mcpServerNameFor(turnInput.threadId);
       // An external server may not reach Supacode's MCP endpoint, as with 1.x.
       const wanted =
@@ -3525,7 +3528,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
         if (!sending()) return;
         return yield* client.session.compact({ sessionID, id }).pipe(Effect.asVoid);
       }
-      const location = { directory: turnInput.runtimePolicy.cwd ?? serverConfig.cwd };
+      const location = { directory: turnInput.runtimePolicy.cwd ?? host.paths.cwd };
       const command = bare ? commandOf(text) : undefined;
       if (command !== undefined) {
         const commands = yield* client.command.list({ location }).pipe(
@@ -3605,7 +3608,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               detail: malformedModel(threadInput.modelSelection.model),
             });
           }
-          const directory = threadInput.runtimePolicy.cwd ?? serverConfig.cwd;
+          const directory = threadInput.runtimePolicy.cwd ?? host.paths.cwd;
           const policy = threadInput.runtimePolicy;
           // A new session runs OpenCode's default agent.
           const permissions = yield* rulesFor(
@@ -3900,11 +3903,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               text: providerMessageTextWithAttachmentPaths({
                 text: steerInput.message.text,
                 attachments: steerInput.message.attachments,
-                resolveAttachmentPath: (attachment) =>
-                  resolveAttachmentPath({
-                    attachmentsDir: serverConfig.attachmentsDir,
-                    attachment,
-                  }),
+                resolveAttachmentPath: host.resolveAttachmentPath,
               }).trim(),
               delivery: "steer",
             })

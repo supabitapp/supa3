@@ -5,11 +5,11 @@ import {
   CodexSettings,
   CursorSettings,
   GrokSettings,
-  OpenCodeSettings,
   ProviderDriverKind,
 } from "@supacode/contracts";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
 import { museClient } from "@supacode/provider-muse/client";
+import { openCodeClient } from "@supacode/provider-opencode/client";
 import { piClient } from "@supacode/provider-pi/client";
 
 /** The provider client definitions this web build ships, in presentation order. */
@@ -43,11 +43,7 @@ export const providerClients = makeProviderClientRegistry([
     label: "Grok",
     settingsSchema: GrokSettings,
   },
-  {
-    driverKind: ProviderDriverKind.make("opencode"),
-    label: "OpenCode",
-    settingsSchema: OpenCodeSettings,
-  },
+  openCodeClient,
   {
     driverKind: ProviderDriverKind.make("antigravity"),
     label: "Antigravity",

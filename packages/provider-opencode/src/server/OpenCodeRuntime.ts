@@ -31,7 +31,7 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { signalProcessGroup } from "@supacode/provider-core/server/processGroup";
-import { isWindowsCommandNotFound } from "../processRunner.ts";
+import { isWindowsCommandNotFound } from "@supacode/provider-core/server/snapshotProbe";
 import * as OpenCodeServerLedger from "./OpenCodeServerLedger.ts";
 import { collectStreamAsString } from "@supacode/provider-core/server/snapshotProbe";
 import * as NetService from "@supacode/shared/Net";
@@ -1103,7 +1103,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 });
 
 export class OpenCodeRuntime extends Context.Service<OpenCodeRuntime, OpenCodeRuntimeShape>()(
-  "supacode/provider/opencodeRuntime",
+  "@supacode/provider-opencode/server/OpenCodeRuntime",
 ) {}
 
 export const layer = Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime).pipe(

@@ -13,7 +13,8 @@
  * @module provider/Drivers/OpenCodeDriver
  */
 import * as NodeOS from "node:os";
-import { OpenCodeSettings, ProviderDriverKind } from "@supacode/contracts";
+import { ProviderDriverKind } from "@supacode/contracts";
+import { OpenCodeSettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -25,16 +26,15 @@ import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
-import * as OpenCode2TextGeneration from "../../textGeneration/OpenCode2TextGeneration.ts";
-import { makeOpenCodeTextGeneration } from "../../textGeneration/OpenCodeTextGeneration.ts";
-import { ProviderHost } from "@supacode/provider-core/server/ProviderHost";
-import * as ServerConfig from "../../config.ts";
-import * as OpenCodeAdapterV2 from "../../orchestration-v2/Adapters/OpenCodeAdapterV2.ts";
-import * as OpenCode2AdapterV2 from "../../orchestration-v2/Adapters/OpenCode2AdapterV2.ts";
-import type { ProviderAdapterV2Shape } from "@supacode/provider-core/server/ProviderAdapter";
-import type { TextGeneration } from "../../textGeneration/TextGeneration.ts";
-import { ProviderDriverError } from "../Errors.ts";
-import { readOpenCodeGoUsageLimits } from "../openCodeUsageLimits.ts";
+import * as OpenCode2TextGeneration from "./v2/textGeneration.ts";
+import { makeOpenCodeTextGeneration } from "./textGeneration.ts";
+import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
+import * as OpenCodeAdapterV2 from "./adapter.ts";
+import * as OpenCode2AdapterV2 from "./v2/adapter.ts";
+import type * as ProviderAdapter from "@supacode/provider-core/server/ProviderAdapter";
+import type { ProviderTextGeneration } from "@supacode/provider-core/server/textGeneration";
+import { ProviderDriverError } from "@supacode/provider-core/server/errors";
+import { readOpenCodeGoUsageLimits } from "./usageLimits.ts";
 import {
   checkOpenCodeProviderStatus,
   loadOpenCode2Workspace,
@@ -44,17 +44,17 @@ import {
   openCode2SkillsToServerProviderSkills,
   openCodeSkillsToServerProviderSkills,
   openCodeCommandsToServerProviderSlashCommands,
-} from "../OpenCodeProvider.ts";
+} from "./status.ts";
 import { makeManagedServerProvider } from "@supacode/provider-core/server/managedProvider";
-import * as OpenCodeRuntime from "../opencodeRuntime.ts";
+import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import {
   makeOpenCodeRuntimeProbe,
   probeOpenCodeRuntime,
   type ProbedOpenCode,
-} from "../opencodeVersionProbe.ts";
-import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
-import * as OpenCode2Client from "../opencode2/OpenCode2Client.ts";
-import * as OpenCode2Server from "../opencode2/OpenCode2Server.ts";
+} from "./versionProbe.ts";
+import * as OpenCodeServerOwner from "./OpenCodeServerOwner.ts";
+import * as OpenCode2Client from "./v2/OpenCode2Client.ts";
+import * as OpenCode2Server from "./v2/OpenCode2Server.ts";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -124,9 +124,9 @@ function byOpenCodeRuntime<A, E, R, PE>(
  */
 function selectOpenCodeRuntimeAdapter(input: {
   readonly probe: OpenCodeRuntimeProbe;
-  readonly v1: ProviderAdapterV2Shape;
-  readonly v2: ProviderAdapterV2Shape;
-}): ProviderAdapterV2Shape {
+  readonly v1: ProviderAdapter.ProviderAdapterV2Shape;
+  readonly v2: ProviderAdapter.ProviderAdapterV2Shape;
+}): ProviderAdapter.ProviderAdapterV2Shape {
   const pick = <PE>(probed: Effect.Effect<ProbedOpenCode | undefined, PE>) =>
     byOpenCodeRuntime(probed, { v1: Effect.succeed(input.v1), v2: Effect.succeed(input.v2) });
   const hot = pick(Effect.map(input.probe.lastSuccess, Option.getOrUndefined));
@@ -144,9 +144,9 @@ function selectOpenCodeRuntimeAdapter(input: {
 /** Text generation runs on the server the instance's probe detected, each in its own protocol. */
 function selectOpenCodeRuntimeTextGeneration(
   probe: OpenCodeRuntimeProbe,
-  v1: TextGeneration["Service"],
-  v2: TextGeneration["Service"],
-): TextGeneration["Service"] {
+  v1: ProviderTextGeneration,
+  v2: ProviderTextGeneration,
+): ProviderTextGeneration {
   return {
     generateCommitMessage: (input) =>
       byOpenCodeRuntime(probe.get, {
@@ -173,14 +173,13 @@ function selectOpenCodeRuntimeTextGeneration(
 
 export type OpenCodeDriverEnv =
   | OpenCodeAdapterV2.OpenCodeAdapterV2DriverEnv
-  | ProviderHost
+  | ProviderHost.ProviderHost
   | ChildProcessSpawner.ChildProcessSpawner
   | Crypto.Crypto
   | FileSystem.FileSystem
   | HttpClient.HttpClient
   | OpenCodeRuntime.OpenCodeRuntime
-  | Path.Path
-  | ServerConfig.ServerConfig;
+  | Path.Path;
 
 export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -196,10 +195,9 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       const fileSystem = yield* FileSystem.FileSystem;
       const pathService = yield* Path.Path;
       const openCodeRuntime = yield* OpenCodeRuntime.OpenCodeRuntime;
-      const serverConfig = yield* ServerConfig.ServerConfig;
       const httpClient = yield* HttpClient.HttpClient;
       const crypto = yield* Crypto.Crypto;
-      const host = yield* ProviderHost;
+      const host = yield* ProviderHost.ProviderHost;
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
@@ -280,7 +278,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         binaryPath: effectiveConfig.binaryPath,
         serverUrl: effectiveConfig.serverUrl,
         serverPassword: effectiveConfig.serverPassword,
-        directory: serverConfig.cwd,
+        directory: host.paths.cwd,
         environment: processEnv,
       }).pipe(
         Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, openCodeRuntime),
@@ -300,7 +298,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       });
       const loadOpenCode2Models = yield* makeOpenCode2ModelLoader(
         openCode2Server.withConnection((connection) =>
-          connection.client.model.list({ location: { directory: serverConfig.cwd } }).pipe(
+          connection.client.model.list({ location: { directory: host.paths.cwd } }).pipe(
             Effect.map((models) => models.data),
             Effect.mapError(
               (cause) =>
@@ -351,7 +349,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         );
       const serverOwner = yield* OpenCodeServerOwner.make({
         binaryPath: effectiveConfig.binaryPath,
-        directory: serverConfig.cwd,
+        directory: host.paths.cwd,
         ...(effectiveConfig.serverPassword
           ? { serverPassword: effectiveConfig.serverPassword }
           : {}),
@@ -371,7 +369,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         {
           provider: checkOpenCodeProviderStatus(
             effectiveConfig,
-            serverConfig.cwd,
+            host.paths.cwd,
             runtimeProbe.refresh,
             loadOpenCode2Models,
           ),

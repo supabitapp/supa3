@@ -21,7 +21,7 @@ import {
   delegatedTaskProgress,
   subagentResultForRun,
   makeSubagentConversationArtifacts,
-} from "./SubagentProjection.ts";
+} from "@supacode/provider-core/server/subagentProjection";
 
 import { emptyProjection } from "./ProjectionStore.ts";
 

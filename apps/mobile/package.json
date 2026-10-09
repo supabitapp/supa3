@@ -70,6 +70,7 @@
     "@supacode/mobile-terminal-native": "file:./modules/supacode-terminal",
     "@supacode/provider-core": "workspace:*",
     "@supacode/provider-muse": "workspace:*",
+    "@supacode/provider-opencode": "workspace:*",
     "@supacode/provider-pi": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@tabler/icons-react-native": "^3.44.0",
