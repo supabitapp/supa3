@@ -47,8 +47,13 @@ vi.mock("./entities", () => ({
       ],
     ]),
 }));
+vi.mock("../lib/uuid", () => ({ uuidv4: () => "uuid" }));
 vi.mock("./session", () => ({ readEnvironmentScope: () => true }));
-vi.mock("./threads", () => ({ threadEnvironment: {} }));
+vi.mock("./threads", () => ({
+  threadEnvironment: {
+    pauseUserInputAutoDismiss: { permissionAtom: () => "question-timer-permission" },
+  },
+}));
 vi.mock("./use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("./use-thread-selection", () => ({
   useThreadSelection: () => ({
