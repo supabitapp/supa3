@@ -12,7 +12,7 @@ import { CodexAdapterV2Driver, type CodexAdapterV2DriverEnv } from "./Adapters/C
 import {
   CursorAdapterV2Driver,
   type CursorAdapterV2DriverEnv,
-} from "./Adapters/CursorAdapterV2.ts";
+} from "@supacode/provider-cursor/server";
 import { GrokAdapterV2Driver, type GrokAdapterV2DriverEnv } from "./Adapters/GrokAdapterV2.ts";
 import {
   OpenCodeAdapterV2Driver,

@@ -2,8 +2,8 @@ import type { SDKModel } from "@cursor/sdk";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { CursorSettings } from "@supacode/contracts";
-import { CursorSettings as CursorSettingsSchema } from "@supacode/contracts";
+import type { CursorSettings } from "../settings.ts";
+import { CursorSettings as CursorSettingsSchema } from "../settings.ts";
 import { createModelCapabilities } from "@supacode/shared/model";
 
 import {
@@ -12,7 +12,7 @@ import {
   buildCursorProviderSnapshot,
   buildInitialCursorProviderSnapshot,
   checkCursorProviderStatus,
-} from "./CursorProvider.ts";
+} from "./status.ts";
 import * as CursorSdkCatalog from "./CursorSdkCatalog.ts";
 
 const decodeCursorSettings = Schema.decodeSync(CursorSettingsSchema);

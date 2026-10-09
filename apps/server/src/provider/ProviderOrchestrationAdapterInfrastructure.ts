@@ -2,7 +2,7 @@ import * as Layer from "effect/Layer";
 
 import * as ClaudeAdapterV2 from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import * as CodexAdapterV2 from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
-import * as CursorAgentSdk from "../orchestration-v2/Adapters/CursorAgentSdk.ts";
+import * as CursorAgentSdk from "@supacode/provider-cursor/server/CursorAgentSdk";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
 
