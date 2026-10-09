@@ -1,7 +1,7 @@
 import type { BrowserThreadOutboxStorage } from "./threadOutboxDelivery";
 import * as Schema from "effect/Schema";
 
-import { OutboxTurn, StoredOutboxEntry } from "./threadOutboxSchema";
+import { OutboxTurn, StoredOutboxEntry, encodeStoredOutboxEntry } from "./threadOutboxSchema";
 import { randomUUID } from "../lib/utils";
 
 const DATABASE_NAME = "supacode-thread-outbox";
@@ -93,7 +93,7 @@ export const browserThreadOutboxStorage: BrowserThreadOutboxStorage<OutboxTurn> 
           complete(false);
           return;
         }
-        store.put({ schemaVersion: 1, ...entry });
+        store.put(encodeStoredOutboxEntry(entry));
         complete(true);
       };
     });
@@ -102,7 +102,7 @@ export const browserThreadOutboxStorage: BrowserThreadOutboxStorage<OutboxTurn> 
   },
   writeMany: async (entries) => {
     await transaction<void>("messages", "readwrite", (store, complete) => {
-      for (const entry of entries) store.add({ schemaVersion: 1, ...entry });
+      for (const entry of entries) store.add(encodeStoredOutboxEntry(entry));
       complete(undefined);
     });
     storageChannel()?.postMessage("changed");

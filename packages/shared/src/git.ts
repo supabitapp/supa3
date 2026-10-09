@@ -12,6 +12,17 @@ import * as Result from "effect/Result";
 import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
 
 export const WORKTREE_BRANCH_PREFIX = "supacode";
+
+export function resolveDefaultWorktreeBaseBranch(
+  refs: ReadonlyArray<Pick<VcsRef, "name" | "isDefault" | "current" | "isRemote">>,
+): string | null {
+  return (
+    refs.find((ref) => ref.isDefault)?.name ??
+    refs.find((ref) => ref.current && !ref.isRemote)?.name ??
+    null
+  );
+}
+
 // Canonical form is `supacode/<8 hex>`. Older mobile builds generated `supacode/<uuid>`
 // via Crypto.randomUUID() (always RFC 4122 v4), so the matcher also accepts exactly
 // that shape — version nibble `4`, variant nibble `[89ab]` — to keep those threads

@@ -8890,7 +8890,7 @@ export default function ChatView(props: ChatViewProps) {
       multipleModelSelections !== null &&
       (!isLocalDraftThread ||
         !isGitRepo ||
-        !activeThreadBranch ||
+        (!activeThreadBranch && !activeEnvironmentUnavailable) ||
         multipleModelSelections.length === 0)
     ) {
       toastManager.add(
@@ -9277,11 +9277,9 @@ export default function ChatView(props: ChatViewProps) {
         ? activeThreadBranch
         : null;
 
-    // In worktree mode, require a resolved base branch so we don't silently
-    // fall back to local execution when branch selection is missing.
     const shouldCreateWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath;
-    if (shouldCreateWorktree && !activeThreadBranch) {
+    if (shouldCreateWorktree && !activeThreadBranch && !activeEnvironmentUnavailable) {
       setThreadError(threadIdForSend, "Select a base branch before sending in New worktree mode.");
       return;
     }
@@ -9414,7 +9412,15 @@ export default function ChatView(props: ChatViewProps) {
             }));
       await enqueueThreadOutboxTurns(
         targets.map((target) => {
-          const prepareWorktree = multipleModelSelections !== null || baseBranchForWorktree;
+          const prepareWorktree = multipleModelSelections !== null || shouldCreateWorktree;
+          const worktree = prepareWorktree
+            ? {
+                projectCwd: activeProject.workspaceRoot,
+                ...(multipleModelSelections !== null ? { requireWorktree: true } : {}),
+                ...(startFromOrigin ? { startFromOrigin: true } : {}),
+              }
+            : undefined;
+          const pendingWorktree = worktree && !activeThreadBranch ? worktree : undefined;
           const bootstrap =
             isLocalDraftThread || prepareWorktree
               ? {
@@ -9433,13 +9439,11 @@ export default function ChatView(props: ChatViewProps) {
                         },
                       }
                     : {}),
-                  ...(prepareWorktree
+                  ...(worktree && activeThreadBranch
                     ? {
                         prepareWorktree: {
-                          projectCwd: activeProject.workspaceRoot,
-                          baseBranch: activeThreadBranch!,
-                          ...(multipleModelSelections !== null ? { requireWorktree: true } : {}),
-                          ...(startFromOrigin ? { startFromOrigin: true } : {}),
+                          ...worktree,
+                          baseBranch: activeThreadBranch,
                         },
                         runSetupScript: true,
                       }
@@ -9468,6 +9472,7 @@ export default function ChatView(props: ChatViewProps) {
             },
             compactBeforeSend,
             localAttachments,
+            ...(pendingWorktree ? { pendingWorktree } : {}),
             ...(localCheckoutBranchMismatch
               ? { branch: localCheckoutBranchMismatch.currentBranch }
               : {}),

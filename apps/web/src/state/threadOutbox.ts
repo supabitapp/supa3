@@ -17,6 +17,7 @@ import {
 } from "@supacode/contracts";
 import { remapComposerContextAttachments } from "@supacode/shared/composerContextReferences";
 import { serializeLegacyContextMessage } from "@supacode/shared/composerContextLegacySend";
+import { resolveDefaultWorktreeBaseBranch } from "@supacode/shared/git";
 import { resolveAssetUrl } from "@supacode/client-runtime/state/assets";
 import * as Schema from "effect/Schema";
 import { useCallback, useSyncExternalStore } from "react";
@@ -40,6 +41,7 @@ import { OutboxTurn, OutboxAttachment } from "./threadOutboxSchema";
 import { browserThreadOutboxStorage } from "./threadOutboxStorage";
 import { randomUUID, newThreadId } from "../lib/utils";
 import { assetEnvironment } from "./assets";
+import { fetchVcsRefs } from "./vcs";
 
 const decodeUpload = Schema.decodeUnknownSync(AttachmentCreateUploadUrlInput);
 const decodeAttachment = Schema.decodeSync(ChatAttachment);
@@ -150,6 +152,36 @@ export const webThreadOutbox = createBrowserThreadOutbox<OutboxTurn>({
     const { environmentId } = payload;
     const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
     if (!config) throw new Error("Environment is not connected.");
+    if (payload.pendingWorktree) {
+      const refs = await command(fetchVcsRefs, {
+        environmentId,
+        input: { cwd: payload.pendingWorktree.projectCwd, limit: 100, refresh: true },
+      });
+      const baseBranch = resolveDefaultWorktreeBaseBranch(refs.refs);
+      if (!refs.isRepo || !baseBranch)
+        throw new Error(
+          refs.isRepo
+            ? "No default or current branch is available. Choose a base branch for this worktree."
+            : "This project is not a Git repository. Choose Current checkout to start the task.",
+        );
+      const { pendingWorktree, ...resolved } = payload;
+      const bootstrap = payload.input.bootstrap;
+      payload = {
+        ...resolved,
+        input: {
+          ...payload.input,
+          bootstrap: {
+            ...bootstrap,
+            ...(bootstrap?.createThread
+              ? { createThread: { ...bootstrap.createThread, branch: baseBranch } }
+              : {}),
+            prepareWorktree: { ...pendingWorktree, baseBranch },
+            runSetupScript: true,
+          },
+        },
+      };
+      await savePayload(payload);
+    }
     const supportsUploads = config.environment.capabilities.attachmentUploads === true;
     for (let index = 0; index < payload.localAttachments.length; index++) {
       let attachment = payload.localAttachments[index]!;
@@ -315,6 +347,7 @@ function prepareThreadOutboxTurn(target: {
   readonly environmentId: EnvironmentId;
   readonly input: StartThreadTurnInput;
   readonly localAttachments?: ReadonlyArray<typeof OutboxAttachment.Type>;
+  readonly pendingWorktree?: OutboxTurn["pendingWorktree"];
   readonly branch?: string;
   readonly draftId?: DraftId;
   readonly background?: boolean;
@@ -325,6 +358,7 @@ function prepareThreadOutboxTurn(target: {
     environmentId: target.environmentId,
     input: { ...target.input, commandId },
     localAttachments: target.localAttachments ?? [],
+    ...(target.pendingWorktree ? { pendingWorktree: target.pendingWorktree } : {}),
     ...(target.compactBeforeSend ? { compactBeforeSend: true } : {}),
     ...(target.branch === undefined ? {} : { branch: target.branch }),
     ...(target.draftId === undefined ? {} : { draftId: target.draftId }),
