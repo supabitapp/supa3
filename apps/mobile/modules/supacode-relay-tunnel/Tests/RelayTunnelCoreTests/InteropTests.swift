@@ -261,7 +261,7 @@ final class InteropTests: XCTestCase {
       XCTAssertEqual((afterHost as! HTTPURLResponse).statusCode, 200)
       print("METRIC host_restart_recovery_ms=\(Date().timeIntervalSince(hostRestart) * 1000)")
       tunnel.suspend()
-      let resumedOrigin = try await tunnel.start()
+      let resumedOrigin = try await tunnel.resume()
       XCTAssertEqual(resumedOrigin, origin)
       let (afterForeground, _) = try await session.data(from: URL(string: origin + config["image"]!)!)
       XCTAssertEqual(afterForeground, image)

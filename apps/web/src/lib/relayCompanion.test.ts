@@ -14,7 +14,7 @@ class ControlSocket extends EventTarget {
   static instances: ControlSocket[] = [];
   static created = deferred<ControlSocket>();
   readyState = 0;
-  readonly sent: Array<{ id: string; action: string; address: string }> = [];
+  readonly sent: Array<{ id: string; action: string; address: string; relayUrl?: string }> = [];
   readonly close = vi.fn(() => {
     this.readyState = 3;
     this.dispatchEvent(new Event("close"));
@@ -79,53 +79,44 @@ it("keeps prepared environments connected when an unrelated request times out", 
   await vi.advanceTimersByTimeAsync(15_000);
   await timedOut;
   expect(socket.close).not.toHaveBeenCalled();
-  const healthy = control.request("open", identity(1));
-  expect(await healthy).toBe("http://127.0.0.1:40000");
+  expect(await control.request("open", identity(1))).toBe("http://127.0.0.1:40000");
   expect(ControlSocket.instances).toHaveLength(1);
 });
 
-it("reconciles a late first acquisition before reopening the same address", async () => {
+it("keeps a late acquisition for the next open instead of reopening", async () => {
   const { control, socket } = await connectedControl();
   const sent = socket.nextRequest();
   const timedOut = expect(control.request("open", identity(2))).rejects.toThrow("did not respond");
   const original = await sent;
   await vi.advanceTimersByTimeAsync(15_000);
   await timedOut;
-  const cleanup = socket.nextRequest();
   socket.reply(original.id, "http://127.0.0.1:40001");
-  const closing = await cleanup;
-  expect(closing).toMatchObject({ action: "close", address: identity(2) });
-  const reopened = socket.nextRequest();
-  const retry = control.request("open", identity(2));
-  expect(socket.sent.filter((request) => request.address === identity(2))).toHaveLength(2);
-  socket.reply(closing.id);
-  const opening = await reopened;
-  expect(opening).toMatchObject({ action: "open", address: identity(2) });
-  socket.reply(opening.id, "http://127.0.0.1:40002");
-  expect(await retry).toBe("http://127.0.0.1:40002");
-  expect(await control.request("open", identity(1))).toBe("http://127.0.0.1:40000");
-  expect(socket.close).not.toHaveBeenCalled();
+  expect(await control.request("open", identity(2))).toBe("http://127.0.0.1:40001");
+  expect(socket.sent.filter((request) => request.address === identity(2))).toHaveLength(1);
 });
 
-it("waits for a timed-out close before preparing its replacement", async () => {
+it("sends close, reopen, and close in call order after the first close times out", async () => {
   const { control, socket } = await connectedControl();
-  const closing = socket.nextRequest();
+  const initial = socket.nextRequest();
   const timedOut = expect(control.request("close", identity(1))).rejects.toThrow("did not respond");
-  const original = await closing;
+  const firstClose = await initial;
   await vi.advanceTimersByTimeAsync(15_000);
   await timedOut;
-  const opening = socket.nextRequest();
-  const replacement = control.request("open", identity(1));
-  expect(socket.sent).toHaveLength(2);
-  socket.reply(original.id);
-  socket.reply((await opening).id, "http://127.0.0.1:40003");
-  expect(await replacement).toBe("http://127.0.0.1:40003");
-  expect(socket.close).not.toHaveBeenCalled();
+  const reopened = control.request("open", identity(1));
+  const removedAgain = control.request("close", identity(1));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(socket.sent.slice(1).map(({ action }) => action)).toEqual(["close", "open", "close"]);
+  socket.reply(firstClose.id);
+  socket.reply(socket.sent[2]!.id, "http://127.0.0.1:40100");
+  expect(await reopened).toBe("http://127.0.0.1:40100");
+  socket.reply(socket.sent[3]!.id);
+  await removedAgain;
+  expect(await control.request("close", identity(1))).toBeUndefined();
+  expect(socket.sent).toHaveLength(4);
 });
 
-it("counts timed-out wire operations toward the limit while cached environments still work", async () => {
+it("counts unanswered operations toward the limit but still admits closes", async () => {
   const { control, socket } = await connectedControl();
-  await vi.advanceTimersByTimeAsync(0);
   const requests = Array.from({ length: 64 }, (_, index) =>
     control.request("open", identity(index + 2)).catch((error: Error) => error),
   );
@@ -139,15 +130,17 @@ it("counts timed-out wire operations toward the limit while cached environments 
     "Too many companion requests",
   );
   expect(await control.request("open", identity(1))).toBe("http://127.0.0.1:40000");
-  expect(socket.close).not.toHaveBeenCalled();
-  const cleanup = socket.nextRequest();
-  socket.reply(socket.sent[1]!.id, "http://127.0.0.1:40001");
-  socket.reply((await cleanup).id);
+  const closing = socket.nextRequest();
+  const released = control.request("close", identity(1));
+  socket.reply((await closing).id);
+  expect(await released).toBeUndefined();
+  socket.reply(socket.sent[1]!.id, "http://127.0.0.1:40002");
   await vi.advanceTimersByTimeAsync(0);
   const opening = socket.nextRequest();
   const fresh = control.request("open", identity(100));
   socket.reply((await opening).id, "http://127.0.0.1:40100");
   expect(await fresh).toBe("http://127.0.0.1:40100");
+  expect(socket.close).not.toHaveBeenCalled();
 });
 
 it("never reconciles an old socket's reply through a replacement control connection", async () => {
@@ -169,101 +162,30 @@ it("never reconciles an old socket's reply through a replacement control connect
   expect(replacement.sent).toEqual([fresh]);
 });
 
-it("retains an owned close when timed-out jobs fill admission", async () => {
-  const { control, socket } = await connectedControl();
-  const openingSibling = socket.nextRequest();
-  const sibling = control.request("open", identity(2));
-  socket.reply((await openingSibling).id, "http://127.0.0.1:40002");
-  await sibling;
-  await vi.advanceTimersByTimeAsync(0);
-  const stalled = Array.from({ length: 64 }, (_, index) =>
-    control.request("open", identity(index + 10)).catch((error: Error) => error),
-  );
-  await vi.advanceTimersByTimeAsync(0);
-  const released = control.request("close", identity(1)).catch((error: Error) => error);
-  const duplicate = control.request("close", identity(1)).catch((error: Error) => error);
-  await vi.advanceTimersByTimeAsync(15_000);
-  await Promise.all(stalled);
-  expect(await released).toMatchObject({ message: expect.stringContaining("did not respond") });
-  expect(await duplicate).toMatchObject({ message: expect.stringContaining("did not respond") });
-  await expect(control.request("open", identity(1))).rejects.toThrow("Too many companion requests");
-  expect(await control.request("open", identity(2))).toBe("http://127.0.0.1:40002");
-  const cleanup = socket.nextRequest();
-  socket.reply(socket.sent[2]!.id, "http://127.0.0.1:40010");
-  const recovered = await cleanup;
-  const closing = socket.nextRequest();
-  socket.reply(recovered.id);
-  const ownedClose = await closing;
-  expect(ownedClose).toMatchObject({ action: "close", address: identity(1) });
-  expect(
-    socket.sent.filter((request) => request.action === "close" && request.address === identity(1)),
-  ).toHaveLength(1);
-  socket.reply(ownedClose.id);
-  await vi.advanceTimersByTimeAsync(0);
-  const reopened = socket.nextRequest();
-  const retry = control.request("open", identity(1));
-  socket.reply((await reopened).id, "http://127.0.0.1:40100");
-  expect(await retry).toBe("http://127.0.0.1:40100");
-  expect(await control.request("open", identity(2))).toBe("http://127.0.0.1:40002");
-  expect(socket.close).not.toHaveBeenCalled();
+it("settles pending closes when the companion disconnects and rejects them on dispose", async () => {
+  for (const ending of ["disconnect", "dispose"] as const) {
+    ControlSocket.created = deferred<ControlSocket>();
+    const { control, socket } = await connectedControl();
+    const opening = control.request("open", identity(2)).catch((error: Error) => error);
+    const released = control.request("close", identity(1)).catch((error: Error) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    if (ending === "dispose") control.close();
+    else socket.close();
+    expect(await opening).toBeInstanceOf(Error);
+    if (ending === "dispose")
+      expect(await released).toMatchObject({ message: expect.stringContaining("closed") });
+    else expect(await released).toBeUndefined();
+  }
 });
 
-it.each(["disconnect", "dispose"])("abandons a deferred close on %s", async (ending) => {
+it("forwards a host's relay server with its open request", async () => {
   const { control, socket } = await connectedControl();
-  await vi.advanceTimersByTimeAsync(0);
-  const stalled = Array.from({ length: 64 }, (_, index) =>
-    control.request("open", identity(index + 10)).catch((error: Error) => error),
-  );
-  const released = control.request("close", identity(1)).catch((error: Error) => error);
-  await vi.advanceTimersByTimeAsync(0);
-  if (ending === "dispose") control.close();
-  else socket.close();
-  await Promise.all(stalled);
-  if (ending === "dispose")
-    expect(await released).toMatchObject({ message: expect.stringContaining("closed") });
-  else expect(await released).toBeUndefined();
-  expect(ControlSocket.instances).toHaveLength(1);
-  expect(socket.sent.filter((request) => request.action === "close")).toEqual([]);
-});
-
-it("keeps a close after an intervening reopen separate from the previous close", async () => {
-  const { control, socket } = await connectedControl();
-  const initial = socket.nextRequest();
-  const released = control.request("close", identity(1));
-  socket.reply((await initial).id);
-  await released;
   const opening = socket.nextRequest();
-  const reopened = control.request("open", identity(1));
-  const removedAgain = control.request("close", identity(1));
+  const prepared = control.request("open", identity(2), "wss://relay.example");
   const request = await opening;
-  const closing = socket.nextRequest();
-  socket.reply(request.id, "http://127.0.0.1:40100");
-  await reopened;
-  const secondClose = await closing;
-  expect(secondClose).toMatchObject({ action: "close", address: identity(1) });
-  socket.reply(secondClose.id);
-  await removedAgain;
-});
-
-it("keeps close, reopen, and close ordered after the first close times out", async () => {
-  const { control, socket } = await connectedControl();
-  const initial = socket.nextRequest();
-  const timedOut = expect(control.request("close", identity(1))).rejects.toThrow("did not respond");
-  const firstClose = await initial;
-  await vi.advanceTimersByTimeAsync(15_000);
-  await timedOut;
-  const opening = socket.nextRequest();
-  const reopened = control.request("open", identity(1));
-  const removedAgain = control.request("close", identity(1));
-  socket.reply(firstClose.id);
-  const request = await opening;
-  const closing = socket.nextRequest();
-  socket.reply(request.id, "http://127.0.0.1:40100");
-  await reopened;
-  const finalClose = await closing;
-  socket.reply(finalClose.id);
-  await removedAgain;
-  expect(socket.sent.slice(1).map(({ action }) => action)).toEqual(["close", "open", "close"]);
+  expect(request).toMatchObject({ action: "open", relayUrl: "wss://relay.example" });
+  socket.reply(request.id, "http://127.0.0.1:40002");
+  expect(await prepared).toBe("http://127.0.0.1:40002");
 });
 
 it("orders open, close, and reopen while the control socket is connecting", async () => {
@@ -273,17 +195,13 @@ it("orders open, close, and reopen while the control socket is connecting", asyn
   const close = control.request("close", identity(1));
   const reopened = control.request("open", identity(1));
   const socket = await ControlSocket.created.promise;
-  const opening = socket.nextRequest();
   socket.open();
-  const initial = await opening;
-  const closing = socket.nextRequest();
-  socket.reply(initial.id, "http://127.0.0.1:40000");
-  expect(await first).toBe("http://127.0.0.1:40000");
-  const closed = await closing;
-  const retry = socket.nextRequest();
-  socket.reply(closed.id);
-  await close;
-  socket.reply((await retry).id, "http://127.0.0.1:40100");
-  expect(await reopened).toBe("http://127.0.0.1:40100");
+  await vi.advanceTimersByTimeAsync(0);
   expect(socket.sent.map(({ action }) => action)).toEqual(["open", "close", "open"]);
+  socket.reply(socket.sent[0]!.id, "http://127.0.0.1:40000");
+  expect(await first).toBe("http://127.0.0.1:40000");
+  socket.reply(socket.sent[1]!.id);
+  await close;
+  socket.reply(socket.sent[2]!.id, "http://127.0.0.1:40100");
+  expect(await reopened).toBe("http://127.0.0.1:40100");
 });

@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - real endpoint crypto verifies interoperable encrypted records.
 import * as NodeCrypto from "node:crypto";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   acceptClientHandshake,
   createClientHandshake,
@@ -10,6 +10,7 @@ import {
 import {
   createTunnelSession,
   createTunnelConnector,
+  TUNNEL_KEEPALIVE_MS,
   TUNNEL_MAX_PLAIN_BYTES,
   TUNNEL_STREAM_WINDOW,
   type TunnelStream,
@@ -193,6 +194,109 @@ describe("encrypted relay multiplexing", () => {
     p.host.close();
   });
 
+  it("keeps a consuming stream moving while stalled readers hold most of the session", async () => {
+    let delivered = 0;
+    const p = pair((stream) => {
+      stream.onData = (data) => {
+        if (stream.id !== 7) return;
+        delivered += data.length;
+        stream.consumed(data.length);
+      };
+    });
+    for (let i = 0; i < 3; i++) p.client.open().write(new Uint8Array(TUNNEL_STREAM_WINDOW));
+    await p.drain();
+    const active = p.client.open();
+    expect(active.id).toBe(7);
+    for (let i = 0; i < 16; i++) {
+      active.write(new Uint8Array(1024 * 1024));
+      await p.drain();
+    }
+    expect(delivered).toBe(16 * 1024 * 1024);
+    expect(p.host.closed).toBe(false);
+    p.client.close();
+    p.host.close();
+  });
+
+  it("flushes a pending grant once stalled streams leave the sender short", async () => {
+    let delivered = 0;
+    const p = pair((stream) => {
+      stream.onData = (data) => {
+        if (stream.id !== 1) return;
+        delivered += data.length;
+        stream.consumed(data.length);
+      };
+    });
+    const active = p.client.open();
+    active.write(new Uint8Array(2_060_000));
+    await p.drain();
+    for (let i = 0; i < 3; i++) p.client.open().write(new Uint8Array(TUNNEL_STREAM_WINDOW));
+    await p.drain();
+    active.write(new Uint8Array(1024 * 1024));
+    await p.drain();
+    expect(delivered).toBe(2_060_000 + 1024 * 1024);
+    p.client.close();
+    p.host.close();
+  });
+
+  it("returns a consumed stream's credit when it shares records with a stalled stream", async () => {
+    let delivered = 0;
+    const p = pair((stream) => {
+      stream.onData = (data) => {
+        if (stream.id !== 3) return;
+        delivered += data.length;
+        stream.consumed(data.length);
+      };
+    });
+    const stalled = p.client.open();
+    const active = p.client.open();
+    for (let i = 0; i < 256; i++) {
+      if (i < 160) stalled.write(new Uint8Array(256));
+      active.write(new Uint8Array(256));
+      await p.drain();
+    }
+    expect(delivered).toBe(256 * 256);
+    p.client.close();
+    p.host.close();
+  });
+
+  it("coalesces queued writes into one record", async () => {
+    const received: number[] = [];
+    const p = pair((stream) => {
+      stream.onData = (data) => {
+        received.push(...data);
+        stream.consumed(data.length);
+      };
+    });
+    const stream = p.client.open();
+    for (let i = 0; i < 10; i++) stream.write(Uint8Array.of(i));
+    await Promise.resolve();
+    expect(p.toHost).toHaveLength(1);
+    await p.drain();
+    expect(received).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    p.client.close();
+    p.host.close();
+  });
+
+  it("answers keepalive pings and closes a session whose peer goes silent", async () => {
+    vi.useFakeTimers();
+    try {
+      const p = pair();
+      await vi.advanceTimersByTimeAsync(TUNNEL_KEEPALIVE_MS);
+      expect(p.toHost.length).toBeGreaterThan(0);
+      for (let i = 0; i < 5; i++) {
+        await p.drain();
+        await vi.advanceTimersByTimeAsync(TUNNEL_KEEPALIVE_MS);
+      }
+      expect(p.client.closed).toBe(false);
+      expect(p.host.closed).toBe(false);
+      await vi.advanceTimersByTimeAsync(TUNNEL_KEEPALIVE_MS * 3);
+      expect(p.client.closed).toBe(true);
+      expect(p.host.closed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects a peer that bypasses cumulative stream credit", async () => {
     const p = pair();
     p.client.open();
@@ -213,6 +317,8 @@ describe("encrypted relay multiplexing", () => {
       [4, 1, 1],
       [5, 1, 1],
       [3, 0, 4],
+      [6, 1, 0],
+      [7, 0, 1],
     ]) {
       const p = pair();
       p.client.open();

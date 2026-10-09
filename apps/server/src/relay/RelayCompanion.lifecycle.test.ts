@@ -190,3 +190,30 @@ it.effect("disposal closes a pending listener and prevents later opens", () =>
     expect(close).toHaveBeenCalledTimes(1);
   }).pipe(Effect.scoped),
 );
+
+it.effect("a closed session releases every lease even when one listener fails to close", () =>
+  Effect.gen(function* () {
+    const other = `https://${"33".repeat(16)}.${"44".repeat(16)}.relay.supacode.invalid/`;
+    const close = vi.fn(async () => {});
+    const failedClose = vi.fn(async () => {
+      throw new Error("Listener close failed");
+    });
+    openLoopbackRelay
+      .mockResolvedValueOnce({ origin: "http://127.0.0.1:4321", close: failedClose })
+      .mockResolvedValueOnce({ origin: "http://127.0.0.1:4322", close });
+    const companion = yield* RelayCompanion.RelayCompanion;
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const session = yield* companion.session;
+        yield* session.open(address, "wss://relay.example");
+        yield* session.open(other);
+      }),
+    );
+    expect(failedClose).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(openLoopbackRelay.mock.calls.map(([, options]) => options.relayUrl)).toEqual([
+      "wss://relay.example",
+      "wss://supacode-relay.exe.xyz",
+    ]);
+  }).pipe(Effect.provide(RelayCompanion.layer()), Effect.scoped),
+);

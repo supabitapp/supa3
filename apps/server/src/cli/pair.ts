@@ -7,7 +7,8 @@
  * public environment descriptor. Inside a linked git worktree the worktree's
  * own `.supacode` is checked first (matching dev-runner precedence); otherwise the
  * shared Supacode home. `--tailscale` publishes the server over Tailscale Serve
- * HTTPS and pairs through the tailnet URL instead.
+ * HTTPS and pairs through the tailnet URL instead; `--relay` pairs through the
+ * server's public relay address, which works for hosts no client manages directly.
  */
 import {
   type AuthEnvironmentScope,
@@ -146,6 +147,24 @@ export class DevServerNotProxiableError extends Schema.TaggedError<DevServerNotP
 }
 
 const isDevServerNotProxiableError = Schema.is(DevServerNotProxiableError);
+
+export class PublicRelayOffError extends Schema.TaggedError<PublicRelayOffError>()(
+  "PublicRelayOffError",
+  { settingsPath: Schema.String },
+) {
+  override get message(): string {
+    return `Public relay is off for this server. Turn it on in Settings → Connections, or set "publicRelayEnabled": true in ${this.settingsPath}, then run this again.`;
+  }
+}
+
+export class PairRouteConflictError extends Schema.TaggedError<PairRouteConflictError>()(
+  "PairRouteConflictError",
+  {},
+) {
+  override get message(): string {
+    return "Choose either --relay or --tailscale.";
+  }
+}
 
 /**
  * The local endpoint Tailscale Serve should proxy to. Dev servers are
@@ -472,6 +491,13 @@ const tailscaleFlag = Flag.Boolean("tailscale").pipe(
   Flag.withDefault(false),
 );
 
+const relayFlag = Flag.Boolean("relay").pipe(
+  Flag.withDescription(
+    "Pair through the server's public relay address. Public relay must be on for the server.",
+  ),
+  Flag.withDefault(false),
+);
+
 const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
   Flag.withSchema(PortSchema),
   Flag.withDescription("HTTPS port for Tailscale Serve when --tailscale is enabled."),
@@ -485,6 +511,7 @@ export const pairCommand = Command.make("pair", {
   label: labelFlag,
   tailscale: tailscaleFlag,
   tailscaleServePort: tailscaleServePortFlag,
+  relay: relayFlag,
 }).pipe(
   Command.withDescription(
     "Mint a pairing token for a running Supacode server and print it as a QR code.",
@@ -496,11 +523,18 @@ export const pairCommand = Command.make("pair", {
       // an explicit --log-level still wins.
       const logLevel = Option.getOrElse(cliLogLevel, () => "Warn" as const);
 
+      if (flags.relay && flags.tailscale) return yield* new PairRouteConflictError();
       const target = yield* discoverPairTarget(Option.getOrUndefined(flags.baseDir));
+      const config = yield* makePairServerConfig({ target, logLevel });
 
       const notes: Array<string> = [];
       let pairingBaseUrl: string;
-      if (flags.tailscale) {
+      if (flags.relay) {
+        const { relayEndpoint } = target.descriptor;
+        if (relayEndpoint === undefined)
+          return yield* new PublicRelayOffError({ settingsPath: config.settingsPath });
+        pairingBaseUrl = relayEndpoint;
+      } else if (flags.tailscale) {
         const resolved = yield* resolveTailscalePairingBase({
           target,
           servePort: flags.tailscaleServePort,
@@ -521,7 +555,6 @@ export const pairCommand = Command.make("pair", {
         }
       }
 
-      const config = yield* makePairServerConfig({ target, logLevel });
       const issued = yield* mintPairingLink({
         config,
         scopes: flags.scopes,
@@ -530,6 +563,7 @@ export const pairCommand = Command.make("pair", {
       });
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential, {
         environmentId: target.descriptor.environmentId,
+        relayUrl: target.descriptor.relayUrl,
         routes: resolveBoundEndpoints({
           host: target.state.host,
           port: target.state.port,

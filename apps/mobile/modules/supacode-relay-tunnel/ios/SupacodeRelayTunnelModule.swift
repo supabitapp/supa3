@@ -11,6 +11,7 @@ struct RelayStartOptions: Record {
 public final class SupacodeRelayTunnelModule: Module {
   private var tunnels: [String: RelayTunnel] = [:]
   private let lock = NSLock()
+  private var backgrounded = false
   private var backgroundObserver: NSObjectProtocol?
   private var foregroundObserver: NSObjectProtocol?
   private let logger = Logger(subsystem: "sh.supacode.mobile", category: "relay-tunnel")
@@ -23,13 +24,14 @@ public final class SupacodeRelayTunnelModule: Module {
         forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
       ) { [weak self] _ in
         guard let self else { return }
-        for tunnel in self.snapshot() { tunnel.suspend() }
+        for tunnel in self.setBackgrounded(true) { tunnel.suspend() }
       }
       self.foregroundObserver = NotificationCenter.default.addObserver(
         forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
       ) { [weak self] _ in
         guard let self else { return }
-        Task { for tunnel in self.snapshot() { _ = try? await tunnel.start() } }
+        let tunnels = self.setBackgrounded(false)
+        Task { for tunnel in tunnels { _ = try? await tunnel.resume() } }
       }
     }
     AsyncFunction("start") { (options: RelayStartOptions) async throws -> [String: String] in
@@ -58,8 +60,9 @@ public final class SupacodeRelayTunnelModule: Module {
     }
   }
 
-  private func snapshot() -> [RelayTunnel] {
-    lock.lock(); defer { lock.unlock() }; return Array(tunnels.values)
+  private func setBackgrounded(_ value: Bool) -> [RelayTunnel] {
+    lock.lock(); defer { lock.unlock() }
+    backgrounded = value; return Array(tunnels.values)
   }
   private func removeAll() -> [RelayTunnel] {
     lock.lock(); defer { lock.unlock() }
@@ -83,6 +86,7 @@ public final class SupacodeRelayTunnelModule: Module {
       if let reason = status.reason { event["reason"] = reason }
       self.sendEvent("onStatus", event)
     }
+    if backgrounded { tunnel.suspend() }
     tunnels[identity.endpointID] = tunnel
     return tunnel
   }

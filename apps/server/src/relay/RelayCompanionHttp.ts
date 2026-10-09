@@ -1,9 +1,7 @@
 import {
-  canonicalRelayAddress,
   RELAY_COMPANION_META_NAME,
   RELAY_COMPANION_REQUEST_LIMIT,
 } from "@supacode/shared/relay/protocol";
-import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -17,6 +15,11 @@ import { RelayCompanionRequest, RelayCompanionReply } from "@supacode/contracts"
 const decodeInput = Schema.decodeUnknownEffect(Schema.fromJsonString(RelayCompanionRequest));
 const encodeReply = Schema.encodeEffect(Schema.fromJsonString(RelayCompanionReply));
 
+class CompanionControlError extends Schema.TaggedError<CompanionControlError>()(
+  "CompanionControlError",
+  { reason: Schema.String },
+) {}
+
 export function layer(staticDir: string) {
   const controls = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -25,7 +28,6 @@ export function layer(staticDir: string) {
       const server = yield* HttpServer.HttpServer;
       if (!("port" in server.address)) return;
       const origin = `http://127.0.0.1:${server.address.port}`;
-      const crypto = yield* Crypto.Crypto;
       yield* router.add(
         "GET",
         "/__relay/control",
@@ -33,59 +35,39 @@ export function layer(staticDir: string) {
           const request = yield* HttpServerRequest.HttpServerRequest;
           if (request.headers.host !== new URL(origin).host || request.headers.origin !== origin)
             return HttpServerResponse.empty({ status: 403 });
-          const owner = yield* crypto.randomUUIDv4;
-          const owned = new Set<string>();
-          yield* Effect.addFinalizer(() =>
-            Effect.forEach(
-              [...owned],
-              (address) => companion.close(address, owner).pipe(Effect.ignore),
-              {
-                discard: true,
-              },
-            ),
-          );
+          const session = yield* companion.session;
           const socket = yield* request.upgrade;
           const reader = yield* socket.reader;
           const writer = yield* socket.writer;
           const decoder = new TextDecoder("utf-8", { fatal: true });
-          const commands = yield* Queue.dropping<string>(RELAY_COMPANION_REQUEST_LIMIT);
+          const commands = yield* Queue.dropping<string>(RELAY_COMPANION_REQUEST_LIMIT * 2);
           const read = Effect.forever(
             Effect.gen(function* () {
               for (const bytes of yield* reader.pull) {
-                const raw = typeof bytes === "string" ? bytes : decoder.decode(bytes);
+                const raw =
+                  typeof bytes === "string"
+                    ? bytes
+                    : yield* Effect.try({
+                        try: () => decoder.decode(bytes),
+                        catch: () => new CompanionControlError({ reason: "invalid-utf8" }),
+                      });
                 if (raw.length > 4096)
-                  return yield* Effect.die(new Error("Companion control message too large"));
+                  return yield* new CompanionControlError({ reason: "message-too-large" });
                 if (!(yield* Queue.offer(commands, raw)))
-                  return yield* Effect.die(new Error("Too many pending companion commands"));
+                  return yield* new CompanionControlError({ reason: "too-many-commands" });
               }
             }),
           );
           const process = Effect.forever(
             Effect.gen(function* () {
               const input = yield* decodeInput(yield* Queue.take(commands));
-              const response = yield* Effect.gen(function* () {
-                const address = yield* Effect.try(() => {
-                  const canonical = canonicalRelayAddress(input.address);
-                  if (!canonical) throw new Error("Not a relay address");
-                  return canonical;
-                });
-                if (input.action === "close") {
-                  yield* companion.close(address, owner);
-                  owned.delete(address);
-                  return { id: input.id };
-                }
-                const alreadyOwned = owned.has(address);
-                owned.add(address);
-                const origin = yield* companion.open(address, owner).pipe(
-                  Effect.catch((error) =>
-                    Effect.gen(function* () {
-                      if (!alreadyOwned) owned.delete(address);
-                      return yield* error;
-                    }),
-                  ),
-                );
-                return { id: input.id, origin };
-              }).pipe(
+              const response = yield* (
+                input.action === "open"
+                  ? session
+                      .open(input.address, input.relayUrl)
+                      .pipe(Effect.map((origin) => ({ id: input.id, origin })))
+                  : session.close(input.address).pipe(Effect.as({ id: input.id }))
+              ).pipe(
                 Effect.orElseSucceed(() => ({
                   id: input.id,
                   error: "The relay endpoint could not be prepared.",

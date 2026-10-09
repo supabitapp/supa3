@@ -11,6 +11,14 @@ then create a pairing link using the public relay address. Paste that link into
 **Add environment** on another desktop or mobile client, or scan it with the
 mobile app. The host can keep **Network access** off.
 
+On a host you reach only over SSH, turn the relay on by setting
+`"publicRelayEnabled": true` in its `settings.json`, then print a relay pairing
+link there:
+
+```bash
+supacode pair --relay
+```
+
 For browser access, install the [Supacode command line](./install.md) on the
 computer running the browser, then start its companion:
 
@@ -29,6 +37,13 @@ encrypted bytes, including HTTP requests. Pairing permissions and authorized
 client revocation work as they do for direct connections. Turning off **Public
 relay** closes relay connections; turning it back on lets already authorized
 clients reconnect. The host must stay running and have internet access.
+
+To use your own relay server, set **Relay server** under **Public relay** before
+you create pairing links. New links carry that server to the clients that pair
+with them; clients paired earlier need a new link. If Connections reports that
+another host is using the relay identity, the same Supacode data is running on a
+second machine. Turn **Public relay** off and on to bring the relay back to this
+host.
 
 ## Pair over a LAN or private network
 

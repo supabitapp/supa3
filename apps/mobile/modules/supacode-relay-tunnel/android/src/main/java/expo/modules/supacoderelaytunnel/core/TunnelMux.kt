@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeoutException
 
 internal class TunnelMux(
   private val cipher: RelayCipher,
@@ -13,9 +14,10 @@ internal class TunnelMux(
 ) {
   companion object {
     const val SESSION_WINDOW = 8 * 1024 * 1024
-    const val STREAM_WINDOW = 4 * 1024 * 1024
+    const val STREAM_WINDOW = 2 * 1024 * 1024
     const val MIN_COST = 48 * 1024
     const val MAX_PLAIN = 64 * 1024
+    const val MAX_IDLE_TICKS = 3
 
     fun frame(type: Int, id: Int, data: ByteArray = ByteArray(0)): ByteArray =
       ByteBuffer.allocate(9 + data.size)
@@ -28,24 +30,18 @@ internal class TunnelMux(
     fun window(id: Int, bytes: Int) = frame(3, id, ByteBuffer.allocate(4).putInt(bytes).array())
   }
 
-  internal class Receipt(val cost: Int, var remaining: Int)
-
-  internal class Delivery(val bytes: ByteArray, val receipt: Receipt) {
-    var consumed = false
-  }
-
   internal class Pending(val bytes: ByteArray, val done: CompletableFuture<Unit>) {
     var offset = 0
   }
 
   internal class Stream(
     val id: Int,
-    val data: (Delivery) -> Unit,
+    val data: (ByteArray) -> Unit,
     val end: () -> Unit,
     val close: (Throwable?) -> Unit
   ) {
     val pending = ArrayDeque<Pending>()
-    val deliveries = LinkedHashSet<Delivery>()
+    var unconsumed = 0
     var sendCredit = STREAM_WINDOW
     var receiveCredit = STREAM_WINDOW
     var grant = 0
@@ -64,6 +60,8 @@ internal class TunnelMux(
   private var sendCredit = SESSION_WINDOW
   private var receiveCredit = SESSION_WINDOW
   private var grant = 0
+  private var heard = false
+  private var idleTicks = 0
   var closed = false
     private set
 
@@ -71,9 +69,9 @@ internal class TunnelMux(
     get() = streams.size
 
   val outstandingReceiveBytes
-    get() = SESSION_WINDOW - receiveCredit
+    get() = SESSION_WINDOW - receiveCredit - grant
 
-  fun open(data: (Delivery) -> Unit, end: () -> Unit, close: (Throwable?) -> Unit): Stream {
+  fun open(data: (ByteArray) -> Unit, end: () -> Unit, close: (Throwable?) -> Unit): Stream {
     check(!closed && streams.size < 256 && nextId > 0) { "Tunnel stream limit reached" }
     val stream = Stream(nextId, data, end, close)
     nextId += 2
@@ -116,39 +114,48 @@ internal class TunnelMux(
       )
     }
     stream.pending.clear()
-    for (delivery in stream.deliveries.toList()) consumed(stream, delivery)
+    release(stream.unconsumed)
+    stream.unconsumed = 0
     stream.close(error)
   }
 
   private fun maybeFinish(stream: Stream) {
-    if (stream.finSent && stream.remoteEnded && stream.deliveries.isEmpty()) finish(stream, null)
+    if (stream.finSent && stream.remoteEnded && stream.unconsumed == 0) finish(stream, null)
   }
 
-  fun consumed(stream: Stream, delivery: Delivery) {
-    if (delivery.consumed) return
-    delivery.consumed = true
-    stream.deliveries.remove(delivery)
+  private fun release(bytes: Int) {
     if (closed) return
-    val receipt = delivery.receipt
-    receipt.remaining -= delivery.bytes.size
-    if (receipt.remaining == 0) {
-      grant += receipt.cost
-      if (grant >= SESSION_WINDOW / 4) {
-        control.add(window(0, grant))
-        receiveCredit += grant
-        grant = 0
-        schedulePump()
-      }
+    grant += bytes
+    if (grant > 0 && (grant >= SESSION_WINDOW / 4 || receiveCredit < SESSION_WINDOW / 4)) {
+      control.add(window(0, grant))
+      receiveCredit += grant
+      grant = 0
+      schedulePump()
     }
-    if (!stream.closed) {
-      stream.grant += delivery.bytes.size
-      if (stream.grant >= STREAM_WINDOW / 4) {
-        control.add(window(stream.id, stream.grant))
-        stream.receiveCredit += stream.grant
-        stream.grant = 0
-        schedulePump()
-      }
-      maybeFinish(stream)
+  }
+
+  fun consumed(stream: Stream, bytes: Int) {
+    if (closed || stream.closed) return
+    require(bytes in 1..stream.unconsumed) { "Invalid tunnel consumption" }
+    stream.unconsumed -= bytes
+    release(bytes)
+    stream.grant += bytes
+    if (stream.grant >= STREAM_WINDOW / 4) {
+      control.add(window(stream.id, stream.grant))
+      stream.receiveCredit += stream.grant
+      stream.grant = 0
+      schedulePump()
+    }
+    maybeFinish(stream)
+  }
+
+  fun tick() {
+    if (heard) idleTicks = 0 else idleTicks++
+    heard = false
+    if (idleTicks >= MAX_IDLE_TICKS) throw TimeoutException("Relay session timed out")
+    if (idleTicks > 0) {
+      control.add(frame(6, 0))
+      schedulePump()
     }
   }
 
@@ -177,38 +184,34 @@ internal class TunnelMux(
     callbacks: MutableList<CompletableFuture<Unit>>,
     dataBytes: Int
   ): Int {
-    val pending = stream.pending.peekFirst()
     val room = minOf(
       MAX_PLAIN - plain.size() - 9,
       stream.sendCredit,
       if (sendCredit >= MIN_COST) sendCredit - dataBytes else 0,
     )
-    var count = 0
-    if (pending != null && room > 0) {
-      count = minOf(room, pending.bytes.size - pending.offset)
-      plain.write(
-        frame(
-          2,
-          stream.id,
-          pending.bytes.copyOfRange(
-            pending.offset,
-            pending.offset + count
-          )
-        )
-      )
+    val chunk = ByteArray(minOf(room, stream.pending.sumOf { it.bytes.size - it.offset }))
+    var filled = 0
+    while (filled < chunk.size) {
+      val pending = stream.pending.first
+      val count = minOf(chunk.size - filled, pending.bytes.size - pending.offset)
+      pending.bytes.copyInto(chunk, filled, pending.offset, pending.offset + count)
       pending.offset += count
-      stream.sendCredit -= count
+      filled += count
       if (pending.offset == pending.bytes.size) {
         stream.pending.removeFirst()
         callbacks.add(pending.done)
       }
+    }
+    if (chunk.isNotEmpty()) {
+      plain.write(frame(2, stream.id, chunk))
+      stream.sendCredit -= chunk.size
     }
     if (stream.needsFin && MAX_PLAIN - plain.size() >= 9) {
       plain.write(frame(4, stream.id))
       stream.finSent = true
       maybeFinish(stream)
     }
-    return count
+    return chunk.size
   }
 
   @Suppress("TooGenericExceptionCaught")
@@ -232,12 +235,17 @@ internal class TunnelMux(
 
   fun receive(record: ByteArray) {
     check(!closed)
-    val frames = decode(ByteBuffer.wrap(cipher.open(record)))
+    val plain = cipher.open(record)
+    heard = true
+    val frames = decode(ByteBuffer.wrap(plain))
     val bytes = frames.sumOf { if (it.type == 2) it.data.size else 0 }
-    val receipt = Receipt(if (bytes > 0) maxOf(bytes, MIN_COST) else 0, bytes)
-    require(receipt.cost <= receiveCredit) { "Session receive window exceeded" }
-    receiveCredit -= receipt.cost
-    for (frame in frames) dispatch(frame, receipt)
+    if (bytes > 0) {
+      val cost = maxOf(bytes, MIN_COST)
+      require(cost <= receiveCredit) { "Session receive window exceeded" }
+      receiveCredit -= cost
+      release(cost - bytes)
+    }
+    for (frame in frames) dispatch(frame)
   }
 
   private fun decode(plain: ByteBuffer): List<Frame> {
@@ -249,25 +257,30 @@ internal class TunnelMux(
       val size = plain.int
       require(size >= 0 && size <= plain.remaining()) { "Truncated tunnel frame" }
       val payload = ByteArray(size).also { plain.get(it) }
-      require(type in 2..5) { "Unexpected tunnel frame" }
+      require(type in 2..7) { "Unexpected tunnel frame" }
       require(type == 2 || size == if (type == 3) 4 else 0) { "Invalid control frame" }
       if (type == 2) require(size > 0 && id > 0)
+      if (type >= 6) require(id == 0) { "Invalid keepalive frame" }
       frames.add(Frame(type, id, payload))
     }
     return frames
   }
 
-  private fun dispatch(frame: Frame, receipt: Receipt) {
+  private fun dispatch(frame: Frame) {
     val stream = streams[frame.id]
     when (frame.type) {
       3 -> grantSend(stream, frame)
-      2 -> deliver(stream, frame, receipt)
+      2 -> deliver(stream, frame)
       4 -> if (stream != null && !stream.remoteEnded) {
         stream.remoteEnded = true
         stream.end()
         maybeFinish(stream)
       }
       5 -> if (stream != null) finish(stream, IllegalStateException("Remote stream reset"))
+      6 -> {
+        control.add(frame(7, 0))
+        schedulePump()
+      }
     }
   }
 
@@ -284,17 +297,16 @@ internal class TunnelMux(
     schedulePump()
   }
 
-  private fun deliver(stream: Stream?, frame: Frame, receipt: Receipt) {
-    val delivery = Delivery(frame.data, receipt)
+  private fun deliver(stream: Stream?, frame: Frame) {
     if (stream == null) {
-      consumed(Stream(frame.id, {}, {}, {}).also { it.closed = true }, delivery)
+      release(frame.data.size)
     } else {
       require(!stream.remoteEnded && frame.data.size <= stream.receiveCredit) {
         "Stream receive window exceeded"
       }
       stream.receiveCredit -= frame.data.size
-      stream.deliveries.add(delivery)
-      stream.data(delivery)
+      stream.unconsumed += frame.data.size
+      stream.data(frame.data)
     }
   }
 

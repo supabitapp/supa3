@@ -388,20 +388,28 @@ const layerProjectFaviconResolver = ProjectFaviconResolver.layer.pipe(
   Layer.provide(SupacodeProjectFileLoader.layer),
 );
 
-const layerRelayIdentity = RelayIdentity.layer.pipe(Layer.provide(ServerSecretStore.layer));
+const layerRelayAccess = RelayAccess.layer.pipe(
+  Layer.provide(RelayIdentity.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+  Layer.provide(layerServerSettings),
+);
 const layerServerEnvironment = Layer.effect(
   ServerEnvironment.ServerEnvironment,
   Effect.gen(function* () {
     const environment = yield* ServerEnvironment.ServerEnvironment;
-    const relay = yield* RelayIdentity.RelayIdentity;
+    const relay = yield* RelayAccess.RelayAccess;
     return ServerEnvironment.ServerEnvironment.of({
       ...environment,
-      getDescriptor: environment.getDescriptor.pipe(
-        Effect.map((descriptor) => ({ ...descriptor, relayEndpoint: relay.address })),
+      getDescriptor: Effect.zipWith(
+        environment.getDescriptor,
+        relay.advertisement,
+        (descriptor, advertised) => ({
+          ...descriptor,
+          ...advertised,
+        }),
       ),
     });
   }),
-).pipe(Layer.provideMerge(ServerEnvironment.layer), Layer.provide(layerRelayIdentity));
+).pipe(Layer.provideMerge(ServerEnvironment.layer), Layer.provideMerge(layerRelayAccess));
 
 const layerAuth = EnvironmentAuth.layer.pipe(
   Layer.provideMerge(layerPersistence),
@@ -775,13 +783,6 @@ const layerMakeServer = Layer.unwrap(
           const relay = yield* RelayAccess.RelayAccess;
           yield* relay.start;
         }),
-      ).pipe(
-        Layer.provide(
-          RelayAccess.layer.pipe(
-            Layer.provide(layerRelayIdentity),
-            Layer.provide(layerServerSettings),
-          ),
-        ),
       ),
     );
 

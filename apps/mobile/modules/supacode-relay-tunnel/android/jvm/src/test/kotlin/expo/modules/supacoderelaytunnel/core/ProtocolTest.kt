@@ -5,9 +5,11 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeoutException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.json.JSONObject
@@ -136,7 +138,7 @@ class ProtocolTest {
 
   @Test
   fun validatesTheWholeRecordBeforeDeliveryOrCreditReservation() {
-    val deliveries = ArrayList<TunnelMux.Delivery>()
+    val deliveries = ArrayList<ByteArray>()
     val mux = TunnelMux(cipher(), {}, {}, {})
     val peer = cipher()
     val stream = mux.open(deliveries::add, {}, {})
@@ -186,18 +188,18 @@ class ProtocolTest {
   @Test
   fun returnsCreditOnlyAfterConsumptionAndChecksCumulativeStreamBudget() {
     val emitted = ArrayList<ByteArray>()
-    val deliveries = ArrayList<TunnelMux.Delivery>()
+    val deliveries = ArrayList<ByteArray>()
     val mux = TunnelMux(cipher(), emitted::add, {}, {})
     val peer = cipher()
     val stream = mux.open(deliveries::add, {}, {})
     mux.pump()
     emitted.clear()
-    repeat(64) { mux.receive(peer.seal(TunnelMux.frame(2, stream.id, ByteArray(65527)))) }
+    repeat(32) { mux.receive(peer.seal(TunnelMux.frame(2, stream.id, ByteArray(65527)))) }
     mux.pump()
     assertTrue(emitted.isEmpty(), "No WINDOW may be sent before consumption")
-    assertEquals(64 * 65527, mux.outstandingReceiveBytes)
+    assertEquals(32 * 65527, mux.outstandingReceiveBytes)
     assertFails { mux.receive(peer.seal(TunnelMux.frame(2, stream.id, ByteArray(1024)))) }
-    deliveries.forEach { mux.consumed(stream, it) }
+    deliveries.forEach { mux.consumed(stream, it.size) }
     mux.pump()
     assertTrue(emitted.isNotEmpty())
     assertTrue(mux.outstandingReceiveBytes < TunnelMux.SESSION_WINDOW / 4)
@@ -208,11 +210,15 @@ class ProtocolTest {
   fun checksCumulativeSessionBudgetAcrossStreams() {
     val mux = TunnelMux(cipher(), {}, {}, {})
     val peer = cipher()
-    val streams = List(3) { mux.open({}, {}, {}) }
+    val streams = List(5) { mux.open({}, {}, {}) }
     repeat(128) { i ->
-      mux.receive(peer.seal(TunnelMux.frame(2, streams[i % 3].id, ByteArray(65527))))
+      mux.receive(peer.seal(TunnelMux.frame(2, streams[i % 4].id, ByteArray(65527))))
     }
-    assertFails { mux.receive(peer.seal(TunnelMux.frame(2, streams[0].id, ByteArray(2048)))) }
+    assertEquals(
+      "Session receive window exceeded",
+      assertFails { mux.receive(peer.seal(TunnelMux.frame(2, streams[4].id, ByteArray(2048)))) }
+        .message,
+    )
   }
 
   @Test
@@ -249,5 +255,149 @@ class ProtocolTest {
     mux.write(stream, ByteArray(100), sent)
     assertFails { mux.pump() }
     assertTrue(sent.isCompletedExceptionally)
+  }
+
+  @Test
+  fun answersPingWithPongAndRejectsMalformedKeepalives() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = cipher()
+    mux.receive(peer.seal(TunnelMux.frame(6, 0) + TunnelMux.frame(7, 0)))
+    mux.pump()
+    assertEquals(listOf(7 to 0), frameHeaders(peer.open(emitted.single())))
+    for (invalid in listOf(TunnelMux.frame(6, 1), TunnelMux.frame(7, 0, byteArrayOf(1)))) {
+      assertFails { TunnelMux(cipher(), {}, {}, {}).receive(cipher().seal(invalid)) }
+    }
+  }
+
+  @Test
+  fun pingsOnIdleTicksAndTimesOutAfterThreeMissedTicks() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = cipher()
+    fun tick(): List<Pair<Int, Int>> {
+      mux.tick()
+      mux.pump()
+      return emitted.flatMap { frameHeaders(peer.open(it)) }.also { emitted.clear() }
+    }
+    assertEquals(listOf(6 to 0), tick())
+    mux.receive(peer.seal(TunnelMux.frame(7, 0)))
+    assertTrue(tick().isEmpty())
+    assertEquals(listOf(6 to 0), tick())
+    assertEquals(listOf(6 to 0), tick())
+    assertFailsWith<TimeoutException> { mux.tick() }
+  }
+
+  @Test
+  fun coalescesQueuedWritesIntoOneRecord() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = cipher()
+    val stream = mux.open({}, {}, {})
+    val writes = List(8) { index ->
+      CompletableFuture<Unit>().also { mux.write(stream, ByteArray(1000) { index.toByte() }, it) }
+    }
+    mux.pump()
+    val plain = peer.open(emitted.single())
+    assertEquals(listOf(1 to stream.id, 2 to stream.id), frameHeaders(plain))
+    assertContentEquals(ByteArray(8000) { (it / 1000).toByte() }, plain.copyOfRange(18, plain.size))
+    assertTrue(writes.all { it.isDone })
+  }
+
+  private class Peer(private val mux: TunnelMux, private val emitted: MutableList<ByteArray>) {
+    private val cipher = RelayCipher(ByteArray(32) { 1 }, ByteArray(32) { 1 })
+    private val credits = HashMap<Int, Int>()
+    val sessionWindows = ArrayList<Int>()
+
+    private fun credit(id: Int) =
+      credits[id] ?: if (id == 0) TunnelMux.SESSION_WINDOW else TunnelMux.STREAM_WINDOW
+
+    fun send(vararg data: Pair<Int, Int>) {
+      val total = data.sumOf { it.second }
+      check(credit(0) >= TunnelMux.MIN_COST && total <= credit(0)) { "Sender stalled" }
+      credits[0] = credit(0) - maxOf(total, TunnelMux.MIN_COST)
+      for ((id, size) in data) {
+        check(size <= credit(id)) { "Stream $id stalled" }
+        credits[id] = credit(id) - size
+      }
+      val plain = data.fold(ByteArray(0)) { plain, (id, size) ->
+        plain + TunnelMux.frame(2, id, ByteArray(size))
+      }
+      mux.receive(cipher.seal(plain))
+    }
+
+    fun drain() {
+      mux.pump()
+      emitted.forEach { grant(ByteBuffer.wrap(cipher.open(it))) }
+      emitted.clear()
+    }
+
+    private fun grant(plain: ByteBuffer) {
+      while (plain.hasRemaining()) {
+        val type = plain.get().toInt()
+        val id = plain.int
+        val payload = ByteArray(plain.int).also { plain.get(it) }
+        if (type != 3) continue
+        val bytes = ByteBuffer.wrap(payload).int
+        credits[id] = credit(id) + bytes
+        if (id == 0) sessionWindows.add(bytes)
+      }
+    }
+  }
+
+  @Test
+  fun returnsConsumedCreditWhileStalledStreamsHoldMostOfTheSession() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = Peer(mux, emitted)
+    val full = TunnelMux.MAX_PLAIN - 9
+    var received = 0
+    val active = mux.open({ received += it.size }, {}, {})
+    val stalled = List(3) { mux.open({}, {}, {}) }
+    fun exchange() {
+      peer.send(active.id to full)
+      mux.consumed(active, full)
+      peer.drain()
+    }
+    repeat(32) { exchange() }
+    assertTrue(peer.sessionWindows.isEmpty())
+    for (stream in stalled) repeat(32) { peer.send(stream.id to full) }
+    peer.drain()
+    repeat(128) { exchange() }
+    assertEquals(160 * full, received)
+    assertEquals(3 * 32 * full, mux.outstandingReceiveBytes)
+  }
+
+  @Test
+  fun mixedRecordsReturnTheConsumedStreamsCreditWhileAnotherStalls() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = Peer(mux, emitted)
+    val active = mux.open({}, {}, {})
+    val stalled = mux.open({}, {}, {})
+    repeat(44) {
+      peer.send(stalled.id to 16_000, active.id to 48_000)
+      mux.consumed(active, 48_000)
+      peer.drain()
+    }
+    assertEquals(listOf(44 * 48_000), peer.sessionWindows)
+    assertEquals(44 * 16_000, mux.outstandingReceiveBytes)
+  }
+
+  @Test
+  fun smallMixedRecordsDoNotPinOverheadBehindAStalledStream() {
+    val emitted = ArrayList<ByteArray>()
+    val mux = TunnelMux(cipher(), emitted::add, {}, {})
+    val peer = Peer(mux, emitted)
+    var received = 0
+    val active = mux.open({ received += it.size }, {}, {})
+    val stalled = mux.open({}, {}, {})
+    repeat(256) {
+      peer.send(stalled.id to 100, active.id to 1_000)
+      mux.consumed(active, 1_000)
+      peer.drain()
+    }
+    assertEquals(256 * 1_000, received)
+    assertEquals(256 * 100, mux.outstandingReceiveBytes)
   }
 }

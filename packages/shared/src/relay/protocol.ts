@@ -5,7 +5,6 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes, concatBytes } from "@noble/hashes/utils.js";
 import * as Schema from "effect/Schema";
 
-export const PUBLIC_RELAY_URL = "wss://supacode-relay.exe.xyz";
 export const RELAY_COMPANION_META_NAME = "supacode-relay-companion";
 export const RELAY_COMPANION_REQUEST_LIMIT = 64;
 const suffix = ".relay.supacode.invalid";

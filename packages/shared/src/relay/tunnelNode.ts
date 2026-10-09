@@ -47,6 +47,24 @@ export class TunnelSocket extends NodeStream.Duplex {
     }
   }
 
+  override _writev(
+    chunks: Array<{ chunk: Buffer; encoding: BufferEncoding }>,
+    callback: (error?: Error | null) => void,
+  ) {
+    this.touch();
+    const last = chunks.length - 1;
+    try {
+      chunks.forEach(({ chunk }, index) =>
+        this.stream.write(
+          new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+          index === last ? callback : undefined,
+        ),
+      );
+    } catch (error) {
+      callback(error instanceof Error ? error : new Error("Tunnel write failed"));
+    }
+  }
+
   override _final(callback: (error?: Error) => void) {
     this.stream.end();
     callback();

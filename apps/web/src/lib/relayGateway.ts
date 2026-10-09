@@ -9,10 +9,10 @@ export const layer = Layer.unwrap(
     yield* Effect.addFinalizer(() => Effect.sync(() => companion.close()));
     return RelayGateway.layer({
       fetch: (input, init) => globalThis.fetch(input, init),
-      open: async (address) => {
+      open: async (address, relayUrl) => {
         const desktop = typeof window === "undefined" ? undefined : window.desktopBridge;
         if (desktop?.startRelay && desktop.stopRelay) {
-          const origin = await desktop.startRelay(address);
+          const origin = await desktop.startRelay(address, relayUrl);
           return {
             prepare: async () => origin,
             close: () => desktop.stopRelay!(address),
@@ -23,7 +23,7 @@ export const layer = Layer.unwrap(
             "Run supacode relay-client locally to connect this browser through the relay.",
           );
         const prepare = async () => {
-          const resolved = await companion.request("open", address);
+          const resolved = await companion.request("open", address, relayUrl);
           if (!resolved) throw new Error("The companion did not return a relay origin.");
           const origin = new URL(resolved);
           if (

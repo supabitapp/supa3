@@ -17,6 +17,7 @@ dependencies {
   implementation("com.google.crypto.tink:tink-android:1.20.0")
   implementation("org.json:json:20250517")
   testImplementation(kotlin("test-junit"))
+  testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 application { mainClass.set("expo.modules.supacoderelaytunnel.core.MainKt") }

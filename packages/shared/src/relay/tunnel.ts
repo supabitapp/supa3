@@ -1,7 +1,7 @@
 import type { WebSocketLike } from "effect/socket/Socket";
-import { after } from "./timer.ts";
+import { after, every } from "./timer.ts";
+import { DEFAULT_PUBLIC_RELAY_URL } from "@supacode/contracts";
 import {
-  PUBLIC_RELAY_URL,
   createClientHandshake,
   parseRelayAddress,
   relayEndpointId,
@@ -13,12 +13,17 @@ const DATA = 2;
 const WINDOW = 3;
 const FIN = 4;
 const RST = 5;
+const PING = 6;
+const PONG = 7;
 const HEADER_BYTES = 9;
 export const TUNNEL_MAX_PLAIN_BYTES = 64 * 1024;
 const SESSION_WINDOW = 8 * 1024 * 1024;
 const MIN_MESSAGE_COST = 48 * 1024;
-export const TUNNEL_STREAM_WINDOW = 4 * 1024 * 1024;
+export const TUNNEL_STREAM_WINDOW = 2 * 1024 * 1024;
+const STREAM_SEND_QUEUE_BYTES = 8 * 1024 * 1024;
 const MAX_STREAMS = 256;
+export const TUNNEL_KEEPALIVE_MS = 15_000;
+const KEEPALIVE_MISSES = 3;
 
 export interface TunnelStream {
   readonly id: number;
@@ -39,16 +44,11 @@ export interface TunnelSession {
   readonly streamCount: number;
 }
 
-interface Receipt {
-  remaining: number;
-  readonly cost: number;
-}
-
 interface StreamState {
-  readonly received: { bytes: number; readonly receipt: Receipt }[];
   readonly stream: TunnelStream;
   readonly pending: { data: Uint8Array; sent?: (error?: Error) => void }[];
   pendingBytes: number;
+  unconsumed: number;
   sendCredit: number;
   receiveCredit: number;
   receiveGrant: number;
@@ -75,6 +75,8 @@ export function createTunnelSession(input: {
   let lastRemoteId = 0;
   let scheduled = false;
   let closed = false;
+  let receivedSinceTick = false;
+  let idleTicks = 0;
 
   const frame = (type: number, id: number, payload?: Uint8Array) => {
     const bytes = new Uint8Array(HEADER_BYTES + (payload?.length ?? 0));
@@ -99,11 +101,13 @@ export function createTunnelSession(input: {
     if (!ready.includes(state)) ready.push(state);
     schedule();
   };
-  const consumeReceipt = (receipt: Receipt, bytes: number) => {
-    receipt.remaining -= bytes;
-    if (receipt.remaining !== 0 || closed) return;
-    sessionGrant += receipt.cost;
-    if (sessionGrant >= SESSION_WINDOW / 4) {
+  const grantSession = (bytes: number) => {
+    if (closed) return;
+    sessionGrant += bytes;
+    if (
+      sessionGrant > 0 &&
+      (sessionGrant >= SESSION_WINDOW / 4 || sessionReceiveCredit < SESSION_WINDOW / 4)
+    ) {
       control.push(windowFrame(0, sessionGrant));
       sessionReceiveCredit += sessionGrant;
       sessionGrant = 0;
@@ -119,8 +123,8 @@ export function createTunnelSession(input: {
     for (const item of state.pending.splice(0))
       item.sent?.(error ?? new Error("Tunnel stream closed"));
     state.pendingBytes = 0;
-    for (const delivery of state.received.splice(0))
-      consumeReceipt(delivery.receipt, delivery.bytes);
+    grantSession(state.unconsumed);
+    state.unconsumed = 0;
     state.stream.onClose(error);
   };
   const maybeFinish = (state: StreamState) => {
@@ -128,7 +132,7 @@ export function createTunnelSession(input: {
       state.finQueued &&
       state.remoteEnded &&
       state.pending.length === 0 &&
-      state.received.length === 0
+      state.unconsumed === 0
     )
       finish(state);
   };
@@ -148,13 +152,14 @@ export function createTunnelSession(input: {
       }
       for (let pass = ready.length; pass > 0 && size < TUNNEL_MAX_PLAIN_BYTES; pass--) {
         const state = ready.shift()!;
-        const head = state.pending[0];
-        const room = Math.min(
-          TUNNEL_MAX_PLAIN_BYTES - size - HEADER_BYTES,
-          state.sendCredit,
-          sessionCredit >= MIN_MESSAGE_COST ? sessionCredit - data : 0,
-        );
-        if (head && room > 0) {
+        while (state.pending.length > 0) {
+          const head = state.pending[0]!;
+          const room = Math.min(
+            TUNNEL_MAX_PLAIN_BYTES - size - HEADER_BYTES,
+            state.sendCredit,
+            sessionCredit >= MIN_MESSAGE_COST ? sessionCredit - data : 0,
+          );
+          if (room <= 0) break;
           const chunk = head.data.subarray(0, room);
           parts.push(frame(DATA, state.stream.id, chunk));
           size += HEADER_BYTES + chunk.length;
@@ -215,7 +220,7 @@ export function createTunnelSession(input: {
             sent?.();
             return;
           }
-          if (state.pendingBytes + bytes.length > TUNNEL_STREAM_WINDOW * 2)
+          if (state.pendingBytes + bytes.length > STREAM_SEND_QUEUE_BYTES)
             throw new Error("Tunnel stream send queue full");
           state.pendingBytes += bytes.length;
           state.pending.push({ data: bytes, ...(sent ? { sent } : {}) });
@@ -234,21 +239,10 @@ export function createTunnelSession(input: {
         },
         consumed(bytes) {
           if (state.closed) return;
-          if (
-            !Number.isSafeInteger(bytes) ||
-            bytes < 0 ||
-            bytes > TUNNEL_STREAM_WINDOW - state.receiveCredit - state.receiveGrant
-          )
+          if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > state.unconsumed)
             throw new Error("Invalid tunnel consumption");
-          let remaining = bytes;
-          while (remaining > 0) {
-            const delivery = state.received[0]!;
-            const taken = Math.min(delivery.bytes, remaining);
-            delivery.bytes -= taken;
-            remaining -= taken;
-            consumeReceipt(delivery.receipt, taken);
-            if (delivery.bytes === 0) state.received.shift();
-          }
+          state.unconsumed -= bytes;
+          grantSession(bytes);
           state.receiveGrant += bytes;
           if (state.receiveGrant >= TUNNEL_STREAM_WINDOW / 4) {
             control.push(windowFrame(id, state.receiveGrant));
@@ -263,8 +257,8 @@ export function createTunnelSession(input: {
         onClose: () => {},
       },
       pending: [],
-      received: [],
       pendingBytes: 0,
+      unconsumed: 0,
       sendCredit: TUNNEL_STREAM_WINDOW,
       receiveCredit: TUNNEL_STREAM_WINDOW,
       receiveGrant: 0,
@@ -276,6 +270,18 @@ export function createTunnelSession(input: {
     streams.set(id, state);
     return state;
   };
+
+  const stopKeepalive = every(TUNNEL_KEEPALIVE_MS, () => {
+    if (receivedSinceTick) {
+      receivedSinceTick = false;
+      idleTicks = 0;
+    } else if (++idleTicks >= KEEPALIVE_MISSES) {
+      session.close(new Error("Relay session timed out"));
+    } else {
+      control.push(frame(PING, 0));
+      schedule();
+    }
+  });
 
   const session: TunnelSession = {
     get closed() {
@@ -308,7 +314,6 @@ export function createTunnelSession(input: {
       const view = new DataView(plain.buffer, plain.byteOffset, plain.byteLength);
       let offset = 0;
       let data = 0;
-      let receipt: Receipt | undefined;
       try {
         for (let start = 0; start < plain.length;) {
           if (start + HEADER_BYTES > plain.length) throw new Error("Truncated tunnel frame");
@@ -318,11 +323,12 @@ export function createTunnelSession(input: {
           if (view.getUint8(start) === DATA) data += length;
           start += HEADER_BYTES + length;
         }
+        receivedSinceTick = true;
         if (data > 0) {
-          receipt = { remaining: data, cost: Math.max(data, MIN_MESSAGE_COST) };
-          if (receipt.cost > sessionReceiveCredit)
-            throw new Error("Tunnel session window exceeded");
-          sessionReceiveCredit -= receipt.cost;
+          const cost = Math.max(data, MIN_MESSAGE_COST);
+          if (cost > sessionReceiveCredit) throw new Error("Tunnel session window exceeded");
+          sessionReceiveCredit -= cost;
+          grantSession(cost - data);
         }
         while (offset < plain.length) {
           if (closed) break;
@@ -354,6 +360,14 @@ export function createTunnelSession(input: {
             }
             continue;
           }
+          if (type === PING || type === PONG) {
+            if (id !== 0 || length !== 0) throw new Error("Invalid tunnel keepalive");
+            if (type === PING) {
+              control.push(frame(PONG, 0));
+              schedule();
+            }
+            continue;
+          }
           if (type === OPEN) {
             if (length !== 0 || input.initiator || id <= lastRemoteId || !input.onStream)
               throw new Error("Invalid tunnel open");
@@ -372,12 +386,12 @@ export function createTunnelSession(input: {
           if (type === DATA) {
             if (length === 0) throw new Error("Empty tunnel data");
             if (!state || state.remoteEnded) {
-              consumeReceipt(receipt!, length);
+              grantSession(length);
               continue;
             }
             if (length > state.receiveCredit) throw new Error("Tunnel window exceeded");
             state.receiveCredit -= length;
-            state.received.push({ bytes: length, receipt: receipt! });
+            state.unconsumed += length;
             state.stream.onData(payload.slice());
           } else if (type === FIN) {
             if (length !== 0) throw new Error("Invalid tunnel FIN");
@@ -402,6 +416,7 @@ export function createTunnelSession(input: {
     close(error) {
       if (closed) return;
       closed = true;
+      stopKeepalive();
       control.length = 0;
       ready.length = 0;
       for (const state of streams.values()) finish(state, error ?? new Error("Tunnel closed"));
@@ -429,7 +444,7 @@ function connectTunnel(
   if (!identity) return Promise.reject(new Error("Not a relay address"));
   const handshake = createClientHandshake(identity, options.randomBytes, 2);
   const socket = options.createSocket(
-    `${options.relayUrl ?? PUBLIC_RELAY_URL}/v1/connect?endpointId=${relayEndpointId(identity)}`,
+    `${options.relayUrl ?? DEFAULT_PUBLIC_RELAY_URL}/v1/connect?endpointId=${relayEndpointId(identity)}`,
   );
   if ("binaryType" in socket) socket.binaryType = "arraybuffer";
   return new Promise((resolve, reject) => {

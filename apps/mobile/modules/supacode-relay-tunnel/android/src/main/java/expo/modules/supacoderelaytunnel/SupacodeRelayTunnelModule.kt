@@ -20,6 +20,7 @@ class RelayTunnelOptions : Record {
 
 class SupacodeRelayTunnelModule : Module() {
   private val tunnels = LinkedHashMap<String, NativeTunnel>()
+  private var backgrounded = false
 
   private fun stopAll() =
     synchronized(tunnels) {
@@ -32,6 +33,7 @@ class SupacodeRelayTunnelModule : Module() {
     Events("onStatus")
     AsyncFunction("start") { options: RelayTunnelOptions ->
       synchronized(tunnels) {
+        check(!backgrounded) { "Relay tunnel is suspended while the app is in the background" }
         val digest = sha256(parseRelayIdentity(options.hostAddress))
         val key = digest.hex()
         val existing = tunnels[key]
@@ -73,8 +75,18 @@ class SupacodeRelayTunnelModule : Module() {
         }
       }
     }
-    OnActivityEntersBackground { synchronized(tunnels) { tunnels.values.forEach { it.suspend() } } }
-    OnActivityEntersForeground { synchronized(tunnels) { tunnels.values.forEach { it.resume() } } }
+    OnActivityEntersBackground {
+      synchronized(tunnels) {
+        backgrounded = true
+        tunnels.values.forEach { it.suspend() }
+      }
+    }
+    OnActivityEntersForeground {
+      synchronized(tunnels) {
+        backgrounded = false
+        tunnels.values.forEach { it.resume() }
+      }
+    }
     OnDestroy { stopAll() }
   }
 }

@@ -43,6 +43,7 @@ import {
   type ProviderDriverKind,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
+import { DEFAULT_PUBLIC_RELAY_URL, RelayServerUrl } from "./relay.ts";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
@@ -1229,6 +1230,9 @@ export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
 export const ServerSettings = Schema.Struct({
   publicRelayEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  publicRelayUrl: Schema.String.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PUBLIC_RELAY_URL)),
+  ),
   worktreeCleanup: WorktreeCleanup.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   storageCleanup: StorageCleanupSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(StorageCleanupSettings)({}))),
@@ -1624,6 +1628,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
 
 export const ServerSettingsPatch = Schema.Struct({
   publicRelayEnabled: Schema.optionalKey(Schema.Boolean),
+  publicRelayUrl: Schema.optionalKey(RelayServerUrl),
   worktreeCleanup: Schema.optionalKey(
     Schema.NullOr(
       Schema.Union([

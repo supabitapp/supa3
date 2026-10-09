@@ -49,9 +49,36 @@ final class ProtocolTests: XCTestCase {
     let fallback = try await second.start(port: port)
     XCTAssertNotEqual(origin, fallback)
     first.suspend()
-    let rebound = try await first.start()
+    let rebound = try await first.resume()
     XCTAssertEqual(rebound, origin)
     await first.stop(); await second.stop()
+  }
+  func testStartWhileSuspendedRejectsUntilResume() async throws {
+    let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)
+    let origin = try await tunnel.start(port: 0)
+    tunnel.suspend()
+    do {
+      _ = try await tunnel.start()
+      XCTFail("Suspended tunnel restarted")
+    } catch {
+      XCTAssertEqual("\(error)", "Relay tunnel is suspended while the app is in the background")
+    }
+    XCTAssertNil(tunnel.listener)
+    let resumed = try await tunnel.resume()
+    XCTAssertEqual(resumed, origin)
+    let started = try await tunnel.start()
+    XCTAssertEqual(started, origin)
+    await tunnel.stop()
+  }
+  func testListenerFailureAfterReadyRebindsOnNextStart() async throws {
+    let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)
+    let origin = try await tunnel.start(port: 0)
+    let failed = try XCTUnwrap(tunnel.listener)
+    tunnel.queue.sync { failed.stateUpdateHandler?(.failed(.posix(.ENETDOWN))) }
+    let rebound = try await tunnel.start()
+    XCTAssertEqual(rebound, origin)
+    XCTAssertFalse(tunnel.listener === failed)
+    await tunnel.stop()
   }
   func testStableIdentityAndInvalidAddresses() throws {
     let vector = try vectors()

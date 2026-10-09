@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - validates native loopback HTTP streams without rewriting their bytes.
+// @effect-diagnostics nodeBuiltinImport:off - validates native loopback HTTP streams and keeps loopback cookies out of the tunnel.
 import * as NodeStream from "node:stream";
 import { after } from "./timer.ts";
 
@@ -144,7 +144,13 @@ export class HttpHostGuard extends NodeStream.Transform {
           } else if (transfer) this.phase = "chunk-size";
           else this.phase = this.remaining > 0 ? "body" : "headers";
           this.requests++;
-          this.forwardBytes(end + 4);
+          if (headers.has("cookie")) {
+            const kept = lines.filter(
+              (line) => line.slice(0, line.indexOf(":")).toLowerCase() !== "cookie",
+            );
+            this.push(Buffer.from(`${[request, ...kept].join("\r\n")}\r\n\r\n`, "latin1"));
+            this.buffered = this.buffered.subarray(end + 4);
+          } else this.forwardBytes(end + 4);
           break;
         }
         case "body":

@@ -14,6 +14,7 @@ const { openLoopbackRelay } = vi.hoisted(() => ({
 vi.mock("@supacode/shared/relay/tunnelNode", () => ({ openLoopbackRelay }));
 
 const address = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+const RELAY_URL = "wss://relay.example";
 beforeEach(() => openLoopbackRelay.mockReset());
 
 it.effect("rejects a pending start revoked by stop and closes its listener once", () =>
@@ -27,7 +28,7 @@ it.effect("rejects a pending start revoked by stop and closes its listener once"
     });
     const gateway = yield* DesktopRelayGateway.DesktopRelayGateway;
     const opening = yield* gateway
-      .start(address)
+      .start(address, RELAY_URL)
       .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
     yield* Effect.promise(() => entered.promise);
     const stopping = yield* gateway
@@ -50,13 +51,13 @@ it.effect("revokes a start waiting behind a close while allowing a later fresh s
     });
     openLoopbackRelay.mockResolvedValueOnce({ origin: "http://127.0.0.1:4321", close: oldClose });
     const gateway = yield* DesktopRelayGateway.DesktopRelayGateway;
-    yield* gateway.start(address);
+    yield* gateway.start(address, RELAY_URL);
     const firstStop = yield* gateway
       .stop(address)
       .pipe(Effect.forkChild({ startImmediately: true }));
     yield* Effect.promise(() => closing.promise);
     const opening = yield* gateway
-      .start(address)
+      .start(address, RELAY_URL)
       .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
     const secondStop = yield* gateway
       .stop(address)
@@ -68,7 +69,7 @@ it.effect("revokes a start waiting behind a close while allowing a later fresh s
     yield* Fiber.join(secondStop);
     expect((yield* Fiber.join(opening))._tag).toBe("Failure");
     expect(openLoopbackRelay).toHaveBeenCalledTimes(1);
-    expect(yield* gateway.start(address)).toBe("http://127.0.0.1:4322");
+    expect(yield* gateway.start(address, RELAY_URL)).toBe("http://127.0.0.1:4322");
     yield* gateway.stop(address);
     expect(oldClose).toHaveBeenCalledTimes(1);
     expect(newClose).toHaveBeenCalledTimes(1);
@@ -96,7 +97,7 @@ it.effect.each(["binding", "closing"] as const)(
         return prepared.promise;
       });
       const first = yield* gateway
-        .start(address)
+        .start(address, RELAY_URL)
         .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
       yield* Effect.promise(() => entered.promise);
       let pending = first;
@@ -106,13 +107,13 @@ it.effect.each(["binding", "closing"] as const)(
         yield* gateway.stop(address).pipe(Effect.forkChild({ startImmediately: true }));
         yield* Effect.promise(() => closing.promise);
         pending = yield* gateway
-          .start(address)
+          .start(address, RELAY_URL)
           .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
       }
       const disposed = yield* Scope.close(scope, Exit.void).pipe(
         Effect.forkChild({ startImmediately: true }),
       );
-      expect((yield* gateway.start(address).pipe(Effect.result))._tag).toBe("Failure");
+      expect((yield* gateway.start(address, RELAY_URL).pipe(Effect.result))._tag).toBe("Failure");
       prepared.resolve({ origin: "http://127.0.0.1:4321", close });
       closed.resolve();
       expect((yield* Fiber.join(pending))._tag).toBe("Failure");
@@ -135,11 +136,11 @@ it.effect("a failed close does not prevent reopening or disposal of other enviro
     yield* Effect.scoped(
       Effect.gen(function* () {
         const gateway = yield* DesktopRelayGateway.DesktopRelayGateway;
-        yield* gateway.start(address);
+        yield* gateway.start(address, RELAY_URL);
         expect((yield* gateway.stop(address).pipe(Effect.result))._tag).toBe("Failure");
-        expect(yield* gateway.start(address)).toBe("http://127.0.0.1:4322");
+        expect(yield* gateway.start(address, RELAY_URL)).toBe("http://127.0.0.1:4322");
         const other = `https://${"33".repeat(16)}.${"44".repeat(16)}.relay.supacode.invalid/`;
-        yield* gateway.start(other);
+        yield* gateway.start(other, RELAY_URL);
       }).pipe(Effect.provide(DesktopRelayGateway.layer)),
     );
     expect(failedClose).toHaveBeenCalledTimes(2);

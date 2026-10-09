@@ -116,3 +116,36 @@ it.effect("reopens after an endpoint fails to close", () => {
     ),
   );
 });
+
+it.effect("dials each host through its saved relay and moves when the relay changes", () =>
+  Effect.gen(function* () {
+    const opened: string[] = [];
+    const closed: string[] = [];
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const gateway = yield* RelayGateway;
+        yield* Effect.promise(() => gateway.fetch(address + "api/one"));
+        yield* Effect.promise(() => gateway.resolve(address, "wss://relay.example"));
+        yield* Effect.promise(() => gateway.fetch(address + "api/two"));
+        expect(opened).toEqual(["wss://supacode-relay.exe.xyz", "wss://relay.example"]);
+        expect(closed).toEqual(["wss://supacode-relay.exe.xyz"]);
+      }).pipe(
+        Effect.provide(
+          layer({
+            fetch: async () => new Response("okay"),
+            open: async (_address, relayUrl) => {
+              opened.push(relayUrl);
+              return {
+                prepare: async () => "http://127.0.0.1:3000",
+                close: async () => {
+                  closed.push(relayUrl);
+                },
+              };
+            },
+          }),
+        ),
+      ),
+    );
+    expect(closed).toEqual(["wss://supacode-relay.exe.xyz", "wss://relay.example"]);
+  }),
+);

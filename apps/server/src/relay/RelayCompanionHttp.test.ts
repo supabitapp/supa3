@@ -76,41 +76,48 @@ it.effect("serves the standalone shell while rejecting foreign Hosts and escapin
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
+const serveCompanion = (root: string, service: Layer.Layer<RelayCompanion>) =>
+  Effect.gen(function* () {
+    const services = yield* Layer.build(
+      HttpRouter.serve(layer(root), { disableListenLog: true, disableLogger: true }).pipe(
+        Layer.provide(platform),
+        Layer.provide(service),
+        Layer.provideMerge(NodeHttpServer.layerTest),
+      ),
+    );
+    const server = Context.get(services, HttpServer.HttpServer);
+    if (!("port" in server.address)) throw new Error("No companion listener");
+    const origin = `http://127.0.0.1:${server.address.port}`;
+    return { origin, url: origin.replace(/^http/, "ws") + "/__relay/control" };
+  });
+
 it.effect.each(["ready", "preparing-close", "preparing-terminate", "preparing-overflow"] as const)(
-  "requires the companion origin and releases a tab's leases on disconnect while %s",
+  "requires the companion origin and ends the tab's session on disconnect while %s",
   (state) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped();
-      const released = yield* Deferred.make<{ address: string; owner: string }>();
-      const started = yield* Deferred.make<void>();
+      const released = yield* Deferred.make<void>();
+      const started = yield* Deferred.make<string>();
       const interrupted = yield* Deferred.make<void>();
-      let owner: string | undefined;
       const service = Layer.mock(RelayCompanion, {
-        open: (_address, id) =>
-          Effect.gen(function* () {
-            owner = id;
-            yield* Deferred.succeed(started, undefined);
-            if (state !== "ready")
-              return yield* Effect.never.pipe(
-                Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
-              );
-            return "http://127.0.0.1:4321";
-          }),
-        close: (address, owner) =>
-          Deferred.succeed(released, { address, owner }).pipe(Effect.asVoid),
+        session: Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => Deferred.succeed(released, undefined));
+          return {
+            open: (address: string) =>
+              Effect.gen(function* () {
+                yield* Deferred.succeed(started, address);
+                if (state !== "ready")
+                  return yield* Effect.never.pipe(
+                    Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+                  );
+                return "http://127.0.0.1:4321";
+              }),
+            close: () => Effect.void,
+          };
+        }),
       });
-      const services = yield* Layer.build(
-        HttpRouter.serve(layer(root), { disableListenLog: true, disableLogger: true }).pipe(
-          Layer.provide(platform),
-          Layer.provide(service),
-          Layer.provideMerge(NodeHttpServer.layerTest),
-        ),
-      );
-      const server = Context.get(services, HttpServer.HttpServer);
-      if (!("port" in server.address)) throw new Error("No companion listener");
-      const origin = `http://127.0.0.1:${server.address.port}`;
-      const url = origin.replace(/^http/, "ws") + "/__relay/control";
+      const { origin, url } = yield* serveCompanion(root, service);
       expect(yield* Effect.promise(() => rejectedUpgrade(url))).toBe(403);
       expect(yield* Effect.promise(() => rejectedUpgrade(url, "https://evil.example"))).toBe(403);
       const socket = new WebSocket(url, { origin });
@@ -118,7 +125,7 @@ it.effect.each(["ready", "preparing-close", "preparing-terminate", "preparing-ov
       yield* Effect.promise(() => NodeEvents.EventEmitter.once(socket, "open"));
       const reply = NodeEvents.EventEmitter.once(socket, "message");
       socket.send(JSON.stringify({ id: "1", action: "open", address }));
-      yield* Deferred.await(started);
+      expect(yield* Deferred.await(started)).toBe(address);
       if (state === "ready") {
         expect(JSON.parse(String((yield* Effect.promise(() => reply))[0]))).toEqual({
           id: "1",
@@ -130,70 +137,51 @@ it.effect.each(["ready", "preparing-close", "preparing-terminate", "preparing-ov
       } else if (state === "preparing-terminate") {
         socket.terminate();
       } else {
-        for (let id = 2; id < RELAY_COMPANION_REQUEST_LIMIT + 3; id++)
+        for (let id = 2; id < RELAY_COMPANION_REQUEST_LIMIT * 2 + 3; id++)
           socket.send(JSON.stringify({ id: String(id), action: "open", address }));
       }
       if (state !== "ready") yield* Deferred.await(interrupted);
-      expect(yield* Deferred.await(released)).toEqual({ address: identity, owner });
+      yield* Deferred.await(released);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
-it.effect("does not retain failed opens and drains every lease even if a close fails", () =>
+it.effect("answers failed opens and drops a tab that sends malformed control messages", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const root = yield* fs.makeTempDirectoryScoped();
     const released = yield* Deferred.make<void>();
-    const secondIdentity = `https://${"33".repeat(16)}.${"44".repeat(16)}.relay.supacode.invalid`;
     const failedIdentity = `https://${"55".repeat(16)}.${"66".repeat(16)}.relay.supacode.invalid`;
-    const opened: string[] = [];
-    const closed: string[] = [];
     const service = Layer.mock(RelayCompanion, {
-      open: (address) =>
-        Effect.gen(function* () {
-          opened.push(address);
-          if (address === failedIdentity)
-            return yield* new RelayCompanionError({ operation: "open", cause: "Bind failed" });
-          return "http://127.0.0.1:4321";
-        }),
-      close: (address) =>
-        Effect.gen(function* () {
-          closed.push(address);
-          if (address === identity)
-            return yield* new RelayCompanionError({ operation: "close", cause: "Close failed" });
-          yield* Deferred.succeed(released, undefined);
-        }),
+      session: Effect.gen(function* () {
+        yield* Effect.addFinalizer(() => Deferred.succeed(released, undefined));
+        return {
+          open: (address: string, relayUrl?: string) =>
+            address === failedIdentity
+              ? Effect.fail(new RelayCompanionError({ operation: "open", cause: "Bind failed" }))
+              : Effect.succeed(`http://127.0.0.1:4321/${relayUrl ?? "default"}`),
+          close: () => Effect.void,
+        };
+      }),
     });
-    const services = yield* Layer.build(
-      HttpRouter.serve(layer(root), { disableListenLog: true, disableLogger: true }).pipe(
-        Layer.provide(platform),
-        Layer.provide(service),
-        Layer.provideMerge(NodeHttpServer.layerTest),
-      ),
-    );
-    const server = Context.get(services, HttpServer.HttpServer);
-    if (!("port" in server.address)) throw new Error("No companion listener");
-    const origin = `http://127.0.0.1:${server.address.port}`;
-    const socket = new WebSocket(origin.replace(/^http/, "ws") + "/__relay/control", { origin });
+    const { origin, url } = yield* serveCompanion(root, service);
+    const socket = new WebSocket(url, { origin });
     yield* Effect.addFinalizer(() => Effect.sync(() => socket.close()));
     yield* Effect.promise(() => NodeEvents.EventEmitter.once(socket, "open"));
-    for (const [id, address] of [
-      "https://example.invalid",
-      "https://broken.relay.supacode.invalid",
-      failedIdentity,
-      identity,
-      secondIdentity,
-    ].entries()) {
+    const exchange = (request: object) => {
       const reply = NodeEvents.EventEmitter.once(socket, "message");
-      socket.send(JSON.stringify({ id: String(id), action: "open", address }));
-      expect(JSON.parse(String((yield* Effect.promise(() => reply))[0]))).toEqual(
-        id < 3
-          ? { id: String(id), error: "The relay endpoint could not be prepared." }
-          : { id: String(id), origin: "http://127.0.0.1:4321" },
-      );
-    }
-    socket.close();
+      socket.send(JSON.stringify(request));
+      return Effect.promise(() => reply).pipe(Effect.map(([data]) => JSON.parse(String(data))));
+    };
+    expect(yield* exchange({ id: "1", action: "open", address: failedIdentity })).toEqual({
+      id: "1",
+      error: "The relay endpoint could not be prepared.",
+    });
+    expect(
+      yield* exchange({ id: "2", action: "open", address, relayUrl: "wss://relay.example" }),
+    ).toEqual({ id: "2", origin: "http://127.0.0.1:4321/wss://relay.example" });
+    const closed = NodeEvents.EventEmitter.once(socket, "close");
+    socket.send("x".repeat(5000));
+    yield* Effect.promise(() => closed);
     yield* Deferred.await(released);
-    expect(opened).toEqual([failedIdentity, identity, secondIdentity]);
-    expect(closed).toEqual([identity, secondIdentity]);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

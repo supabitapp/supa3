@@ -382,6 +382,10 @@
     "./relay/timer": {
       "types": "./src/relay/timer.ts",
       "import": "./src/relay/timer.ts"
+    },
+    "./relay/loopbackPool": {
+      "types": "./src/relay/loopbackPool.ts",
+      "import": "./src/relay/loopbackPool.ts"
     }
   },
   "scripts": {

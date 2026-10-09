@@ -1,3 +1,4 @@
+import { DEFAULT_PUBLIC_RELAY_URL } from "@supacode/contracts";
 import { canonicalRelayAddress } from "@supacode/shared/relay/protocol";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -13,37 +14,27 @@ export interface RelayClientEndpoint {
 export class RelayGateway extends Context.Service<
   RelayGateway,
   {
-    readonly resolve: (address: string) => Promise<string>;
+    readonly resolve: (address: string, relayUrl?: string) => Promise<string>;
     readonly release: (address: string) => Promise<void>;
     readonly fetch: typeof globalThis.fetch;
   }
 >()("@supacode/client-runtime/relay/gateway/RelayGateway") {}
 
 export function layer(input: {
-  readonly open: (address: string) => Promise<RelayClientEndpoint>;
+  readonly open: (address: string, relayUrl: string) => Promise<RelayClientEndpoint>;
   readonly fetch: typeof globalThis.fetch;
 }) {
   return Layer.effect(
     RelayGateway,
     Effect.gen(function* () {
-      const endpoints = new Map<string, Promise<RelayClientEndpoint>>();
+      const endpoints = new Map<
+        string,
+        { readonly relayUrl: string; readonly endpoint: Promise<RelayClientEndpoint> }
+      >();
+      const relayUrls = new Map<string, string>();
       const closing = new Map<string, Promise<void>>();
       let disposed = false;
       const key = canonicalRelayAddress;
-      const endpoint = async (address: string): Promise<RelayClientEndpoint> => {
-        const identity = key(address);
-        if (!identity) throw new Error("Not a relay address");
-        await closing.get(identity);
-        if (disposed) throw new Error("Relay gateway closed");
-        const existing = endpoints.get(identity);
-        if (existing) return existing;
-        const created = input.open(identity);
-        endpoints.set(identity, created);
-        void created.catch(() => {
-          if (endpoints.get(identity) === created) endpoints.delete(identity);
-        });
-        return created;
-      };
       const release = async (address: string) => {
         const identity = key(address);
         if (!identity) return;
@@ -52,7 +43,7 @@ export function layer(input: {
         const owned = endpoints.get(identity);
         if (!owned) return;
         endpoints.delete(identity);
-        const stopped = owned
+        const stopped = owned.endpoint
           .then(
             (value) => value.close(),
             () => {},
@@ -64,10 +55,22 @@ export function layer(input: {
         closing.set(identity, stopped);
         await stopped;
       };
-      const prepare = async (address: string) => {
-        const value = await endpoint(address);
-        return value.prepare();
+      const endpoint = async (identity: string): Promise<RelayClientEndpoint> => {
+        const relayUrl = relayUrls.get(identity) ?? DEFAULT_PUBLIC_RELAY_URL;
+        const existing = endpoints.get(identity);
+        if (existing && existing.relayUrl !== relayUrl) await release(identity);
+        await closing.get(identity);
+        if (disposed) throw new Error("Relay gateway closed");
+        const current = endpoints.get(identity);
+        if (current) return current.endpoint;
+        const created = input.open(identity, relayUrl);
+        endpoints.set(identity, { relayUrl, endpoint: created });
+        void created.catch(() => {
+          if (endpoints.get(identity)?.endpoint === created) endpoints.delete(identity);
+        });
+        return created;
       };
+      const prepare = async (identity: string) => (await endpoint(identity)).prepare();
       yield* Effect.addFinalizer(() =>
         Effect.promise(async () => {
           disposed = true;
@@ -75,17 +78,23 @@ export function layer(input: {
           endpoints.clear();
           await Promise.allSettled([
             ...closing.values(),
-            ...owned.map(async (value) => (await value).close()),
+            ...owned.map(async (value) => (await value.endpoint).close()),
           ]);
         }),
       );
       return RelayGateway.of({
-        resolve: async (address) => (key(address) ? prepare(address) : address),
+        resolve: async (address, relayUrl) => {
+          const identity = key(address);
+          if (!identity) return address;
+          if (relayUrl !== undefined) relayUrls.set(identity, relayUrl);
+          return prepare(identity);
+        },
         release,
         fetch: async (request, init) => {
           const address = request instanceof Request ? request.url : String(request);
-          if (!key(address)) return input.fetch(request, init);
-          const origin = await prepare(address);
+          const identity = key(address);
+          if (!identity) return input.fetch(request, init);
+          const origin = await prepare(identity);
           const url = new URL(address);
           const target = new URL(origin);
           target.pathname = url.pathname;
@@ -102,11 +111,12 @@ export function layer(input: {
 
 export const resolveRelayOrigin = Effect.fn("RelayGateway.resolveOrigin")(function* (
   address: string,
+  relayUrl?: string,
 ) {
   const gateway = yield* Effect.serviceOption(RelayGateway);
   if (Option.isNone(gateway)) return address;
   return yield* Effect.tryPromise({
-    try: () => gateway.value.resolve(address),
+    try: () => gateway.value.resolve(address, relayUrl),
     catch: (cause) =>
       new ConnectionTransientError({
         reason: "transport",

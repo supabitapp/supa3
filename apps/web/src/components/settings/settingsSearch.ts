@@ -821,6 +821,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     localBackendManagementOnly: true,
   },
   {
+    id: "public-relay-server",
+    title: "Relay server",
+    to: "/settings/connections",
+    targetId: "connections-environment",
+    searchTerms: ["self-hosted relay url websocket wss"],
+    localBackendManagementOnly: true,
+  },
+  {
     id: "network-access",
     title: "Network access",
     to: "/settings/connections",

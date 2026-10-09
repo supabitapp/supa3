@@ -12,42 +12,25 @@ public struct RelayTunnelStatus {
   public let reason: String?
 }
 
-private let streamWindow = 4 * 1024 * 1024
-private let sessionWindow = 8 * 1024 * 1024
-private let minimumCost = 48 * 1024
-private let maxPlain = 64 * 1024
-
 private final class LocalStream {
   let id: UInt32
   let connection: NWConnection
   var guardHTTP: HTTPHostGuard
-  var pending = Data()
   var reading = false
-  var sendCredit = streamWindow
-  var receiveCredit = streamWindow
-  var receiveGrant = 0
-  var receiving = 0
-  var localEnded = false
-  var finSent = false
-  var remoteEnded = false
+  var writing = 0
   init(id: UInt32, connection: NWConnection, authority: String) {
     self.id = id; self.connection = connection
     guardHTTP = HTTPHostGuard(authority: authority)
   }
 }
 
-private final class ReceivedRecord {
-  var remaining: Int
-  let cost: Int
-  init(bytes: Int) { remaining = bytes; cost = max(bytes, minimumCost) }
-}
-
 public final class RelayTunnel: @unchecked Sendable {
   public let identity: RelayIdentity
   private let relayURL: URL
-  private let queue = DispatchQueue(label: "sh.supacode.relay-tunnel", qos: .userInitiated)
+  private let keepaliveInterval: TimeInterval
+  let queue = DispatchQueue(label: "sh.supacode.relay-tunnel", qos: .userInitiated)
   private let onStatus: (RelayTunnelStatus) -> Void
-  private var listener: NWListener?
+  private(set) var listener: NWListener?
   private var startingListener: NWListener?
   private var startContinuations: [CheckedContinuation<String, Error>] = []
   private var closingListener: NWListener?
@@ -61,37 +44,45 @@ public final class RelayTunnel: @unchecked Sendable {
   private var urlSession: URLSession?
   private var handshake: RelayHandshake?
   private var cipher: RelayCipher?
+  private var mux: TunnelMux?
   private var generation: UInt64 = 0
   private var handshakeTimeout: DispatchWorkItem?
   private var retry: DispatchWorkItem?
   private var retryCount = 0
-  private var controls: [Data] = []
   private var sending = false
   private var pumpScheduled = false
-  private var sendCredit = sessionWindow
-  private var receiveCredit = sessionWindow
-  private var receiveGrant = 0
   private var bytesSent: UInt64 = 0
   private var bytesReceived: UInt64 = 0
   private var sessionCount = 0
   private var state = "down"
   private var lastStatus = Date.distantPast
-  private var roundRobin: UInt32 = 0
 
-  public init(relayURL: String, hostAddress: String,
+  public init(relayURL: String, hostAddress: String, keepaliveInterval: TimeInterval = 15,
               onStatus: @escaping (RelayTunnelStatus) -> Void = { _ in }) throws {
     identity = try RelayIdentity(address: hostAddress)
     guard let url = URL(string: relayURL), ["ws", "wss"].contains(url.scheme),
           url.host != nil, url.user == nil, url.password == nil,
           url.query == nil, url.fragment == nil else { throw RelayError.invalid("Invalid relay URL") }
-    self.relayURL = url; self.onStatus = onStatus
+    self.relayURL = url; self.keepaliveInterval = keepaliveInterval; self.onStatus = onStatus
   }
 
   public func start(port requested: UInt16? = nil) async throws -> String {
+    try await activate(port: requested, resuming: false)
+  }
+
+  public func resume() async throws -> String {
+    try await activate(port: nil, resuming: true)
+  }
+
+  private func activate(port requested: UInt16?, resuming: Bool) async throws -> String {
     try await withCheckedThrowingContinuation { continuation in
       queue.async {
         guard !self.stopped else { continuation.resume(throwing: RelayError.invalid("Tunnel stopped")); return }
-        self.suspended = false
+        if resuming { self.suspended = false }
+        guard !self.suspended else {
+          continuation.resume(throwing: RelayError.invalid("Relay tunnel is suspended while the app is in the background"))
+          return
+        }
         if self.listener != nil {
           continuation.resume(returning: self.origin); return
         }
@@ -134,7 +125,12 @@ public final class RelayTunnel: @unchecked Sendable {
   private func closeListener() {
     finishStart(.failure(RelayError.invalid("Tunnel inactive")))
     guard let old = listener ?? startingListener else { return }
-    listener = nil; startingListener = nil; closingListener = old
+    listener = nil; startingListener = nil
+    retire(old)
+  }
+
+  private func retire(_ old: NWListener) {
+    closingListener = old
     old.stateUpdateHandler = { [weak self, weak old] state in
       guard let self, let old, case .cancelled = state, self.closingListener === old else { return }
       self.closingListener = nil
@@ -168,7 +164,9 @@ public final class RelayTunnel: @unchecked Sendable {
       let candidate = try NWListener(using: parameters)
       startingListener = candidate
       candidate.stateUpdateHandler = { [weak self, weak candidate] result in
-        guard let self, let candidate, self.startingListener === candidate else { return }
+        guard let self, let candidate else { return }
+        if self.listener === candidate { self.listenerChanged(candidate, result); return }
+        guard self.startingListener === candidate else { return }
         switch result {
         case .ready:
           self.startingListener = nil
@@ -189,6 +187,14 @@ public final class RelayTunnel: @unchecked Sendable {
     } catch { finishStart(.failure(error)) }
   }
 
+  private func listenerChanged(_ active: NWListener, _ result: NWListener.State) {
+    switch result {
+    case .failed: listener = nil; retire(active)
+    case .cancelled: listener = nil
+    default: break
+    }
+  }
+
   private func accept(_ connection: NWConnection) {
     guard !stopped, !suspended, streams.count < 256, nextID < UInt32.max - 2 else {
       connection.cancel(); return
@@ -199,13 +205,13 @@ public final class RelayTunnel: @unchecked Sendable {
       guard let self, let stream, self.streams[stream.id] === stream else { return }
       switch result {
       case .ready:
-        if self.cipher != nil { self.read(stream) } else { self.connect() }
+        if self.mux != nil { self.read(stream) } else { self.connect() }
       case .failed, .cancelled: self.reset(stream)
       default: break
       }
     }
     connection.start(queue: queue)
-    if cipher != nil { controls.append(frame(1, stream.id)); schedulePump() }
+    if let mux { mux.open(stream.id); schedulePump() }
     else { connect() }
     emit()
   }
@@ -259,14 +265,19 @@ public final class RelayTunnel: @unchecked Sendable {
             self.cipher = try handshake.finish(text); self.handshake = nil
             self.handshakeTimeout?.cancel(); self.handshakeTimeout = nil
             self.retryCount = 0; self.sessionCount += 1
+            let mux = TunnelMux(); self.mux = mux
             for stream in self.streams.values.sorted(by: { $0.id < $1.id }) {
-              self.controls.append(self.frame(1, stream.id))
+              mux.open(stream.id)
               self.read(stream)
             }
+            self.keepalive(attempt: attempt)
             self.emit("up"); self.schedulePump()
           } else {
-            guard case .data(let record) = message else { throw RelayError.invalid("Unencrypted relay message") }
-            try self.receiveRecord(record)
+            guard case .data(let record) = message, let cipher = self.cipher, let mux = self.mux else {
+              throw RelayError.invalid("Unencrypted relay message")
+            }
+            self.deliver(try mux.receive(cipher.open(record)), attempt: attempt)
+            self.schedulePump()
           }
           self.receive(attempt: attempt, socket: socket)
         } catch {
@@ -277,13 +288,24 @@ public final class RelayTunnel: @unchecked Sendable {
     }
   }
 
+  private func keepalive(attempt: UInt64) {
+    queue.asyncAfter(deadline: .now() + keepaliveInterval) { [weak self] in
+      guard let self, self.generation == attempt, let mux = self.mux else { return }
+      do {
+        try mux.tick()
+        self.schedulePump(); self.keepalive(attempt: attempt)
+      } catch {
+        self.drop((error as? RelayError)?.description ?? "Relay session timed out", preserveWaiting: false)
+      }
+    }
+  }
+
   private func drop(_ reason: String, preserveWaiting: Bool) {
     generation += 1
     retry?.cancel(); retry = nil; handshakeTimeout?.cancel(); handshakeTimeout = nil
     websocket?.cancel(with: .goingAway, reason: nil); websocket = nil
     urlSession?.invalidateAndCancel(); urlSession = nil
-    cipher = nil; handshake = nil; sending = false; controls.removeAll()
-    sendCredit = sessionWindow; receiveCredit = sessionWindow; receiveGrant = 0
+    cipher = nil; mux = nil; handshake = nil; sending = false
     if !preserveWaiting {
       let old = streams; streams.removeAll()
       for stream in old.values { stream.connection.cancel() }
@@ -298,22 +320,22 @@ public final class RelayTunnel: @unchecked Sendable {
   }
 
   private func read(_ stream: LocalStream) {
-    guard streams[stream.id] === stream, !stream.reading, !stream.localEnded,
-          stream.pending.isEmpty, cipher != nil, stream.sendCredit > 0 else { return }
+    guard streams[stream.id] === stream, !stream.reading, let flow = mux?.streams[stream.id],
+          !flow.localEnded, flow.pending.isEmpty, flow.sendCredit > 0 else { return }
     stream.reading = true
     stream.connection.receive(minimumIncompleteLength: 1, maximumLength: maxPlain - 9) { [weak self, weak stream] data, _, complete, error in
       guard let self, let stream else { return }
       self.queue.async {
-        guard self.streams[stream.id] === stream else { return }
+        guard self.streams[stream.id] === stream, let mux = self.mux else { return }
         stream.reading = false
         if error != nil { self.reset(stream); return }
         do {
           if let data, !data.isEmpty {
-            stream.pending.append(try stream.guardHTTP.feed(data))
+            mux.write(stream.id, try stream.guardHTTP.feed(data))
           }
-          if complete { stream.localEnded = true; try stream.guardHTTP.finish() }
+          if complete { try stream.guardHTTP.finish(); mux.end(stream.id) }
           self.schedulePump()
-          if stream.pending.isEmpty && !complete { self.read(stream) }
+          if !complete { self.read(stream) }
         } catch {
           stream.connection.send(content: Data("HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".utf8),
                                  contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { _ in
@@ -324,51 +346,24 @@ public final class RelayTunnel: @unchecked Sendable {
     }
   }
 
-  private func frame(_ type: UInt8, _ id: UInt32, _ payload: Data = Data()) -> Data {
-    Data([type]) + Data(bigEndian: id) + Data(bigEndian: UInt32(payload.count)) + payload
-  }
-  private func window(_ id: UInt32, _ bytes: Int) -> Data { frame(3, id, Data(bigEndian: UInt32(bytes))) }
   private func schedulePump() {
     guard !pumpScheduled else { return }
     pumpScheduled = true
     queue.async { self.pumpScheduled = false; self.pump() }
   }
   private func pump() {
-    guard !sending, let cipher, let socket = websocket else { return }
-    var plain = Data(); var dataBytes = 0
-    var finishedWrites: [LocalStream] = []
-    while let control = controls.first, plain.count + control.count <= maxPlain {
-      plain.append(control); controls.removeFirst()
-    }
-    let ready = streams.values.sorted { $0.id < $1.id }
-    let ordered = ready.filter { $0.id > roundRobin } + ready.filter { $0.id <= roundRobin }
-    for stream in ordered {
-      let room = min(maxPlain - plain.count - 9, stream.sendCredit,
-                     sendCredit >= minimumCost ? sendCredit - dataBytes : 0)
-      if !stream.pending.isEmpty && room > 0 {
-        let count = min(room, stream.pending.count)
-        plain.append(frame(2, stream.id, Data(stream.pending.prefix(count))))
-        stream.pending.removeFirst(count); stream.sendCredit -= count; dataBytes += count
-        roundRobin = stream.id
-        if stream.pending.isEmpty { finishedWrites.append(stream) }
-      }
-      if stream.pending.isEmpty && stream.localEnded && !stream.finSent && plain.count + 9 <= maxPlain {
-        stream.finSent = true; plain.append(frame(4, stream.id))
-      }
-    }
-    guard !plain.isEmpty else { return }
-    if dataBytes > 0 { sendCredit -= max(dataBytes, minimumCost) }
+    guard !sending, let cipher, let mux, let socket = websocket, let record = mux.nextRecord() else { return }
     let attempt = generation
     do {
-      let record = try cipher.seal(plain)
-      sending = true; bytesSent += UInt64(dataBytes)
-      socket.send(.data(record)) { [weak self] error in
+      let sealed = try cipher.seal(record.plain)
+      sending = true; bytesSent += UInt64(record.dataBytes)
+      socket.send(.data(sealed)) { [weak self] error in
         guard let self else { return }
         self.queue.async {
           guard self.generation == attempt else { return }
           self.sending = false
           if error != nil { self.drop("Relay send failed", preserveWaiting: false); return }
-          for stream in finishedWrites { self.read(stream) }
+          for id in record.drained { if let stream = self.streams[id] { self.read(stream) } }
           for stream in self.streams.values { self.maybeFinish(stream) }
           self.emit(); self.schedulePump()
         }
@@ -376,113 +371,56 @@ public final class RelayTunnel: @unchecked Sendable {
     } catch { drop("Relay seal failed", preserveWaiting: false) }
   }
 
-  private func receiveRecord(_ record: Data) throws {
-    let plain = try cipher!.open(record)
-    var frames: [(UInt8, UInt32, Data)] = []
-    var offset = 0; var dataBytes = 0
-    while offset < plain.count {
-      guard offset + 9 <= plain.count else { throw RelayError.invalid("Truncated mux frame") }
-      let type = plain[offset]; let id = plain.uint32(at: offset + 1)
-      let length = Int(plain.uint32(at: offset + 5)); let start = offset + 9
-      guard start + length <= plain.count else { throw RelayError.invalid("Truncated mux payload") }
-      frames.append((type, id, Data(plain[start..<(start + length)])))
-      if type == 2 { dataBytes += length }
-      offset = start + length
-    }
-    let ticket = ReceivedRecord(bytes: dataBytes)
-    if dataBytes > 0 {
-      guard receiveCredit >= ticket.cost else { throw RelayError.invalid("Session receive window exceeded") }
-      receiveCredit -= ticket.cost
-    }
-    let attempt = generation
-    for (type, id, payload) in frames {
-      switch type {
-      case 3:
-        guard payload.count == 4 else { throw RelayError.invalid("Invalid mux window") }
-        let bytes = Int(payload.uint32(at: 0))
-        if id == 0 {
-          guard bytes > 0, sendCredit + bytes <= sessionWindow else { throw RelayError.invalid("Session window overflow") }
-          sendCredit += bytes
-        } else if let stream = streams[id] {
-          guard bytes > 0, stream.sendCredit + bytes <= streamWindow else { throw RelayError.invalid("Stream window overflow") }
-          stream.sendCredit += bytes; read(stream)
-        }
-        schedulePump()
-      case 2:
-        guard id != 0 else { throw RelayError.invalid("Invalid mux stream") }
-        guard let stream = streams[id] else {
-          consume(ticket, bytes: payload.count); continue
-        }
-        guard !stream.remoteEnded, payload.count <= stream.receiveCredit else {
-          throw RelayError.invalid("Stream receive window exceeded")
-        }
+  private func deliver(_ events: [MuxEvent], attempt: UInt64) {
+    for event in events {
+      switch event {
+      case .credit(let id):
+        if let stream = streams[id] { read(stream) }
+      case .reset(let id):
+        streams.removeValue(forKey: id)?.connection.cancel()
+      case .fin(let id):
+        guard let stream = streams[id] else { continue }
+        if stream.guardHTTP.awaitingUpgrade { reset(stream); continue }
+        stream.writing += 1
+        stream.connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [weak self, weak stream] _ in
+          guard let self, let stream else { return }
+          self.queue.async {
+            guard self.streams[id] === stream else { return }
+            stream.writing -= 1; self.maybeFinish(stream)
+          }
+        })
+      case .data(let id, let payload):
+        guard let stream = streams[id] else { continue }
         do {
           let released = try stream.guardHTTP.observeResponse(payload)
-          if !released.isEmpty {
-            stream.pending.append(released); schedulePump()
-          }
-        } catch {
-          consume(ticket, bytes: payload.count); reset(stream); continue
-        }
-        stream.receiveCredit -= payload.count; stream.receiving += 1
+          if !released.isEmpty { mux?.write(id, released) }
+        } catch { reset(stream); continue }
+        stream.writing += 1
         bytesReceived += UInt64(payload.count)
         stream.connection.send(content: payload, completion: .contentProcessed { [weak self, weak stream] error in
           guard let self else { return }
           self.queue.async {
-            guard self.generation == attempt else { return }
-            self.consume(ticket, bytes: payload.count)
-            guard let stream, self.streams[id] === stream else { return }
-            stream.receiving -= 1
+            guard self.generation == attempt, let stream, self.streams[id] === stream else { return }
+            stream.writing -= 1
             if error != nil { self.reset(stream); return }
-            stream.receiveGrant += payload.count
-            if stream.receiveGrant >= streamWindow / 4 {
-              self.controls.append(self.window(id, stream.receiveGrant))
-              stream.receiveCredit += stream.receiveGrant; stream.receiveGrant = 0
-              self.schedulePump()
-            }
+            self.mux?.consumed(id, bytes: payload.count)
+            self.schedulePump()
             self.maybeFinish(stream); self.emit()
           }
         })
-      case 4:
-        guard payload.isEmpty, id != 0 else { throw RelayError.invalid("Invalid mux FIN") }
-        if let stream = streams[id], !stream.remoteEnded {
-          if stream.guardHTTP.awaitingUpgrade { reset(stream); continue }
-          stream.remoteEnded = true
-          stream.receiving += 1
-          stream.connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [weak self, weak stream] _ in
-            guard let self, let stream else { return }
-            self.queue.async {
-              guard self.streams[id] === stream else { return }
-              stream.receiving -= 1; self.maybeFinish(stream)
-            }
-          })
-        }
-      case 5:
-        guard payload.isEmpty, id != 0 else { throw RelayError.invalid("Invalid mux RST") }
-        if let stream = streams.removeValue(forKey: id) { stream.connection.cancel() }
-      default: throw RelayError.invalid("Unknown mux frame")
       }
     }
   }
 
-  private func consume(_ ticket: ReceivedRecord, bytes: Int) {
-    guard bytes > 0 else { return }
-    ticket.remaining -= bytes
-    guard ticket.remaining == 0 else { return }
-    receiveGrant += ticket.cost
-    if receiveGrant >= sessionWindow / 4 {
-      controls.append(window(0, receiveGrant)); receiveCredit += receiveGrant; receiveGrant = 0
-      schedulePump()
-    }
-  }
   private func reset(_ stream: LocalStream) {
     guard streams.removeValue(forKey: stream.id) != nil else { return }
-    if cipher != nil { controls.append(frame(5, stream.id)); schedulePump() }
+    if let mux { mux.close(stream.id, reset: true); schedulePump() }
     stream.connection.cancel(); emit()
   }
   private func maybeFinish(_ stream: LocalStream) {
-    if stream.finSent && stream.remoteEnded && stream.receiving == 0 && stream.pending.isEmpty {
-      streams.removeValue(forKey: stream.id); stream.connection.cancel()
-    }
+    guard let mux, let flow = mux.streams[stream.id], flow.finSent, flow.remoteEnded,
+          flow.pending.isEmpty, stream.writing == 0 else { return }
+    mux.close(stream.id, reset: false)
+    streams.removeValue(forKey: stream.id); stream.connection.cancel()
   }
 }

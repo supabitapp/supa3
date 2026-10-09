@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,7 +27,8 @@ class NativeTunnel(
   hostAddress: String,
   port: Int = 0,
   private val onStatus: (Map<String, Any>) -> Unit = {},
-  private val log: (String) -> Unit = {}
+  private val log: (String) -> Unit = {},
+  private val keepaliveMillis: Long = 15_000
 ) : AutoCloseable {
   private val identity = parseRelayIdentity(hostAddress)
   private val hostAddress =
@@ -50,6 +52,7 @@ class NativeTunnel(
   private var attempt: CompletableFuture<TunnelMux>? = null
   private var mux: TunnelMux? = null
   private var webSocket: WebSocket? = null
+  private var keepalive: ScheduledFuture<*>? = null
   private var pumpScheduled = false
   private var state = "down"
   private var suspended = false
@@ -183,6 +186,12 @@ class NativeTunnel(
                 { sentBytes += it },
               )
               mux = session
+              keepalive = actor.scheduleWithFixedDelay(
+                { failOnError(future) { session.tick() } },
+                keepaliveMillis,
+                keepaliveMillis,
+                TimeUnit.MILLISECONDS,
+              )
               sessions++
               state = "up"
               emit()
@@ -228,6 +237,8 @@ class NativeTunnel(
   private fun fail(future: CompletableFuture<TunnelMux>, error: Throwable) {
     if (attempt !== future) return
     attempt = null
+    keepalive?.cancel(false)
+    keepalive = null
     mux?.close(error)
     mux = null
     webSocket?.cancel()
@@ -266,7 +277,7 @@ class NativeTunnel(
     }.thenCompose { it }.get()
   }
 
-  private class Incoming(val delivery: TunnelMux.Delivery? = null)
+  private class Incoming(val bytes: ByteArray? = null)
 
   @Suppress("TooGenericExceptionCaught")
   private fun serve(socket: Socket) {
@@ -293,9 +304,9 @@ class NativeTunnel(
       val selected = session
       stream = onActor {
         selected.open(
-          { delivery ->
-            receivedBytes += delivery.bytes.size
-            queue.add(Incoming(delivery))
+          { bytes ->
+            receivedBytes += bytes.size
+            queue.add(Incoming(bytes))
           },
           { queue.add(Incoming()) },
           { finishSocket() },
@@ -307,10 +318,10 @@ class NativeTunnel(
         try {
           val output = socket.getOutputStream()
           while (!closed.get()) {
-            val incoming = queue.take().delivery ?: break
-            output.write(incoming.bytes)
-            response.observe(incoming.bytes)
-            post { selected.consumed(active, incoming) }
+            val incoming = queue.take().bytes ?: break
+            output.write(incoming)
+            response.observe(incoming)
+            post { selected.consumed(active, incoming.size) }
           }
           if (!socket.isClosed) socket.shutdownOutput()
         } catch (error: Exception) {
