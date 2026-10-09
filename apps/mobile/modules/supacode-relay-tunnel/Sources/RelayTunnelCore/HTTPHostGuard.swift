@@ -103,7 +103,16 @@ struct HTTPHostGuard {
           phase = size == 0 ? .headers : .body(size)
         }
         requests += 1
-        output.append(buffered.prefix(count)); buffered.removeFirst(count)
+        if headers["cookie"] != nil || headers["cookie2"] != nil {
+          let kept = lines.filter { line in
+            let name = line.prefix { $0 != ":" }.lowercased()
+            return name != "cookie" && name != "cookie2"
+          }
+          output.append(kept.joined(separator: "\r\n").data(using: .isoLatin1)!)
+        } else {
+          output.append(buffered.prefix(count))
+        }
+        buffered.removeFirst(count)
       case .body(let remaining), .chunk(let remaining):
         let count = min(remaining, buffered.count)
         output.append(buffered.prefix(count)); buffered.removeFirst(count)

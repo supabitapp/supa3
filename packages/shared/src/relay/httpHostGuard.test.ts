@@ -7,6 +7,39 @@ import { HttpHostGuard } from "./httpHostGuard.ts";
 const authority = "127.0.0.1:40000";
 const upgrade = `GET /ws HTTP/1.1\r\nHost: ${authority}\r\nUpgrade: websocket\r\n\r\n`;
 
+it("strips cookie variants on every request without changing headers or bodies", async () => {
+  const first = `POST /upload HTTP/1.1\r\nHost: ${authority}\r\nAuthorization: Bearer synthetic\r\nX-Name: café\r\nContent-Length: 3\r\n`;
+  const second = `POST /next HTTP/1.1\r\nHost: ${authority}\r\nTransfer-Encoding: chunked\r\n`;
+  const input = Buffer.from(
+    first +
+      "cOoKiE: first=secret\r\nCookie: second=secret\r\nCOOKIE2: old=secret\r\n\r\nabc" +
+      second +
+      "Cookie: third=secret\r\n\r\n3\r\nxyz\r\n0\r\n\r\n",
+    "latin1",
+  );
+  const expected = Buffer.from(first + "\r\nabc" + second + "\r\n3\r\nxyz\r\n0\r\n\r\n", "latin1");
+  for (const size of [1, input.length]) {
+    const guard = new HttpHostGuard(authority);
+    const received: Buffer[] = [];
+    await NodeStreamPromises.pipeline(
+      NodeStream.Readable.from(
+        (function* () {
+          for (let offset = 0; offset < input.length; offset += size)
+            yield input.subarray(offset, offset + size);
+        })(),
+      ),
+      guard,
+      new NodeStream.Writable({
+        write(bytes: Buffer, _encoding, callback) {
+          received.push(bytes);
+          callback();
+        },
+      }),
+    );
+    expect(Buffer.concat(received)).toEqual(expected);
+  }
+});
+
 it("waits through fragmented interim responses before releasing opaque upgrade bytes", async () => {
   const guard = new HttpHostGuard(authority);
   const output: Buffer[] = [];

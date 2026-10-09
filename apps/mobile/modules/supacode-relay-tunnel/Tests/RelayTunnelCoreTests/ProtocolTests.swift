@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 import CryptoKit
 @testable import RelayTunnelCore
@@ -40,7 +41,7 @@ final class ProtocolTests: XCTestCase {
     var malformed = HTTPHostGuard(authority: "127.0.0.1:40000")
     XCTAssertThrowsError(try malformed.feed(Data("POST /upload HTTP/1.1\r\nHost: 127.0.0.1:40000\r\nTransfer-Encoding: chunked\r\n\r\n\r\n".utf8)))
   }
-  func testLoopbackPortCollisionAndRebind() async throws {
+  func testLoopbackPortCollisionAndResume() async throws {
     let address = try vectors().address
     let first = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: address)
     let second = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: address)
@@ -63,12 +64,44 @@ final class ProtocolTests: XCTestCase {
     } catch {
       XCTAssertEqual("\(error)", "Relay tunnel is suspended while the app is in the background")
     }
-    XCTAssertNil(tunnel.listener)
+    XCTAssertNotNil(tunnel.listener)
     let resumed = try await tunnel.resume()
     XCTAssertEqual(resumed, origin)
     let started = try await tunnel.start()
     XCTAssertEqual(started, origin)
     await tunnel.stop()
+  }
+  func testSuspensionKeepsExclusiveOwnershipOfThePublishedPort() async throws {
+    let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)
+    let origin = try await tunnel.start(port: 0)
+    let listener = try XCTUnwrap(tunnel.listener)
+    let port = UInt16(URL(string: origin)!.port!)
+    tunnel.suspend()
+    tunnel.queue.sync {}
+    XCTAssertTrue(tunnel.listener === listener)
+
+    let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+    XCTAssertGreaterThanOrEqual(socket, 0)
+    defer { Darwin.close(socket) }
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = port.bigEndian
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)
+    let bindPort = {
+      withUnsafePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+          Darwin.bind(socket, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+        }
+      }
+    }
+    XCTAssertEqual(bindPort(), -1)
+    XCTAssertEqual(errno, EADDRINUSE)
+    let resumed = try await tunnel.resume()
+    XCTAssertEqual(resumed, origin)
+    XCTAssertTrue(tunnel.listener === listener)
+    await tunnel.stop()
+    XCTAssertEqual(bindPort(), 0)
   }
   func testListenerFailureAfterReadyRebindsOnNextStart() async throws {
     let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)

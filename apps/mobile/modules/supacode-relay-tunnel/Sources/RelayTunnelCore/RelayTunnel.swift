@@ -117,7 +117,7 @@ public final class RelayTunnel: @unchecked Sendable {
   public func suspend() {
     queue.async {
       self.suspended = true
-      self.closeListener()
+      if self.listener == nil { self.closeListener() }
       self.drop("Backgrounded", preserveWaiting: false)
     }
   }
@@ -159,7 +159,6 @@ public final class RelayTunnel: @unchecked Sendable {
     do {
       let tcp = NWProtocolTCP.Options(); tcp.noDelay = true
       let parameters = NWParameters(tls: nil, tcp: tcp)
-      parameters.allowLocalEndpointReuse = true
       parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: requested)!)
       let candidate = try NWListener(using: parameters)
       startingListener = candidate

@@ -11,6 +11,7 @@ interface Lease {
 }
 
 interface Endpoint {
+  readonly address: string;
   readonly resource: Promise<LoopbackRelay>;
   readonly owners: Map<string, Lease>;
   closing?: Promise<void>;
@@ -28,7 +29,7 @@ export function createLoopbackRelayPool(input: {
     if (!identity) throw new Error("Not a relay address");
     return identity;
   };
-  const closeResource = (address: string, endpoint: Endpoint) => {
+  const closeResource = (key: string, endpoint: Endpoint) => {
     if (!endpoint.closing) {
       const closed = endpoint.resource
         .then(
@@ -36,7 +37,7 @@ export function createLoopbackRelayPool(input: {
           () => {},
         )
         .finally(() => {
-          if (endpoints.get(address) === endpoint) endpoints.delete(address);
+          if (endpoints.get(key) === endpoint) endpoints.delete(key);
           closing.delete(closed);
         });
       endpoint.closing = closed;
@@ -44,11 +45,14 @@ export function createLoopbackRelayPool(input: {
     }
     return endpoint.closing;
   };
-  const release = async (address: string, owner: string) => {
-    const identity = canonical(address);
-    const endpoint = endpoints.get(identity);
-    if (!endpoint?.owners.delete(owner)) return;
-    if (endpoint.owners.size === 0) await closeResource(identity, endpoint);
+  const releaseOwned = async (owner: string, address?: string) => {
+    await Promise.all(
+      [...endpoints].map(async ([key, endpoint]) => {
+        if (address !== undefined && endpoint.address !== address) return;
+        if (!endpoint.owners.delete(owner)) return;
+        if (endpoint.owners.size === 0) await closeResource(key, endpoint);
+      }),
+    );
   };
   const acquire = async (
     address: string,
@@ -59,25 +63,27 @@ export function createLoopbackRelayPool(input: {
     const identity = canonical(address);
     signal?.throwIfAborted();
     if (disposed) throw new Error("Relay gateway is closed");
-    const saved = endpoints.get(identity);
+    const key = JSON.stringify([identity, relayUrl]);
+    const saved = endpoints.get(key);
     let endpoint = saved;
     if (!endpoint || endpoint.closing) {
       if (!saved && endpoints.size >= input.limit) throw new Error("Too many relay environments");
       const created: Endpoint = {
+        address: identity,
         resource: (saved?.closing ?? Promise.resolve())
           .catch(() => {})
           .then(() => {
-            if (disposed || created.closing || endpoints.get(identity) !== created)
+            if (disposed || created.closing || endpoints.get(key) !== created)
               throw new Error("Relay endpoint was closed before preparation");
             return input.open(identity, relayUrl);
           })
           .catch((error) => {
-            if (endpoints.get(identity) === created) endpoints.delete(identity);
+            if (endpoints.get(key) === created) endpoints.delete(key);
             throw error;
           }),
         owners: new Map(),
       };
-      endpoints.set(identity, created);
+      endpoints.set(key, created);
       endpoint = created;
     }
     const selected = endpoint;
@@ -92,7 +98,7 @@ export function createLoopbackRelayPool(input: {
       if (retained) lease.retained = true;
       if (!lease.retained && lease.pending === 0 && selected.owners.get(owner) === lease) {
         selected.owners.delete(owner);
-        if (selected.owners.size === 0) void closeResource(identity, selected).catch(() => {});
+        if (selected.owners.size === 0) void closeResource(key, selected).catch(() => {});
       }
     };
     const cancel = () => finish();
@@ -103,7 +109,7 @@ export function createLoopbackRelayPool(input: {
       if (
         disposed ||
         selected.closing ||
-        endpoints.get(identity) !== selected ||
+        endpoints.get(key) !== selected ||
         selected.owners.get(owner) !== lease
       )
         throw new Error("Relay endpoint was closed during preparation");
@@ -116,14 +122,8 @@ export function createLoopbackRelayPool(input: {
   };
   return {
     acquire,
-    release,
-    releaseOwner: async (owner: string) => {
-      await Promise.all(
-        [...endpoints].flatMap(([address, endpoint]) =>
-          endpoint.owners.has(owner) ? [release(address, owner)] : [],
-        ),
-      );
-    },
+    release: (address: string, owner: string) => releaseOwned(owner, canonical(address)),
+    releaseOwner: (owner: string) => releaseOwned(owner),
     dispose: async () => {
       disposed = true;
       await Promise.allSettled([

@@ -74,6 +74,9 @@ public final class SupacodeRelayTunnelModule: Module {
   }
   private func getOrCreate(options: RelayStartOptions, identity: RelayIdentity) throws -> RelayTunnel {
     lock.lock(); defer { lock.unlock() }
+    guard !backgrounded else {
+      throw RelayError.invalid("Relay tunnel is suspended while the app is in the background")
+    }
     if let tunnel = tunnels[identity.endpointID] { return tunnel }
     let tunnel = try RelayTunnel(relayURL: options.relayUrl, hostAddress: options.hostAddress) { [weak self] status in
       guard let self else { return }
@@ -86,7 +89,6 @@ public final class SupacodeRelayTunnelModule: Module {
       if let reason = status.reason { event["reason"] = reason }
       self.sendEvent("onStatus", event)
     }
-    if backgrounded { tunnel.suspend() }
     tunnels[identity.endpointID] = tunnel
     return tunnel
   }

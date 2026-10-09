@@ -10,7 +10,12 @@ internal object LoopbackHttp {
   private val headerName = Regex("[a-z0-9!#$%&'*+.^_`|~-]+")
   private val decimal = Regex("[0-9]+")
   private val hexadecimal = Regex("[0-9a-fA-F]{1,15}")
-  private class Head(val length: Long, val chunked: Boolean, val upgrading: Boolean)
+  private class Head(
+    val bytes: ByteArray,
+    val length: Long,
+    val chunked: Boolean,
+    val upgrading: Boolean
+  )
 
   fun pipe(
     input: BufferedInputStream,
@@ -22,7 +27,7 @@ internal object LoopbackHttp {
     while (true) {
       val header = readHeader(input) ?: return
       val head = parseHead(header, authority, requests)
-      send(header)
+      send(head.bytes)
       if (head.chunked) copyChunked(input, send) else copy(input, head.length, send)
       requests++
       if (head.upgrading && upgrade.get(15, TimeUnit.SECONDS)) {
@@ -41,7 +46,31 @@ internal object LoopbackHttp {
     ) { "Invalid HTTP request" }
     val fields = parseFields(lines.drop(1))
     require(fields["host"] == listOf(authority)) { "Misdirected loopback Host" }
-    return framing(fields, requests)
+    val forwarded = if ("cookie" in fields || "cookie2" in fields) {
+      lines.filter {
+        val name = it.substringBefore(':').lowercase()
+        name != "cookie" && name != "cookie2"
+      }.joinToString("\r\n").toByteArray(Charsets.ISO_8859_1)
+    } else {
+      header
+    }
+    return framing(forwarded, fields, requests)
+  }
+
+  private fun framing(header: ByteArray, fields: Map<String, List<String>>, requests: Int): Head {
+    val length = fields["content-length"]
+    val transfer = fields["transfer-encoding"]
+    require(length == null || (length.size == 1 && transfer == null)) { "Ambiguous HTTP body" }
+    require(transfer == null || transfer == listOf("chunked")) { "Unsupported transfer encoding" }
+    val contentLength = length?.single()?.let {
+      require(decimal.matches(it))
+      it.toLong()
+    } ?: 0
+    val upgrading = fields["upgrade"] != null
+    require(!upgrading || (requests == 0 && contentLength == 0L && transfer == null)) {
+      "Upgrade requires a fresh connection"
+    }
+    return Head(header, contentLength, transfer != null, upgrading)
   }
 
   private fun parseFields(lines: List<String>): Map<String, List<String>> {
@@ -55,22 +84,6 @@ internal object LoopbackHttp {
       fields.getOrPut(key) { ArrayList() }.add(line.substringAfter(':').trim())
     }
     return fields
-  }
-
-  private fun framing(fields: Map<String, List<String>>, requests: Int): Head {
-    val length = fields["content-length"]
-    val transfer = fields["transfer-encoding"]
-    require(length == null || (length.size == 1 && transfer == null)) { "Ambiguous HTTP body" }
-    require(transfer == null || transfer == listOf("chunked")) { "Unsupported transfer encoding" }
-    val contentLength = length?.single()?.let {
-      require(decimal.matches(it))
-      it.toLong()
-    } ?: 0
-    val upgrading = fields["upgrade"] != null
-    require(!upgrading || (requests == 0 && contentLength == 0L && transfer == null)) {
-      "Upgrade requires a fresh connection"
-    }
-    return Head(contentLength, transfer != null, upgrading)
   }
 
   private fun copyChunked(input: BufferedInputStream, send: (ByteArray) -> Unit) {

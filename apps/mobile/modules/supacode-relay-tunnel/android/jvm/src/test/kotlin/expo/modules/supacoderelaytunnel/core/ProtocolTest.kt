@@ -2,6 +2,7 @@ package expo.modules.supacoderelaytunnel.core
 
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
@@ -17,6 +18,41 @@ import org.junit.Test
 
 class ProtocolTest {
   private fun vector() = JSONObject(File("fixtures/vectors.json").readText())
+
+  @Test
+  fun stripsCookiesOnEveryRequestWithoutChangingHeadersOrBodies() {
+    val first = "POST /upload HTTP/1.1\r\nHost: 127.0.0.1:1234\r\n" +
+      "Authorization: Bearer synthetic\r\nX-Name: café\r\nContent-Length: 3\r\n"
+    val second = "POST /next HTTP/1.1\r\nHost: 127.0.0.1:1234\r\nTransfer-Encoding: chunked\r\n"
+    val input =
+      first + "cOoKiE: first=secret\r\nCookie: second=secret\r\nCOOKIE2: old=secret\r\n\r\nabc" +
+        second + "Cookie: third=secret\r\n\r\n3\r\nxyz\r\n0\r\n\r\n"
+    val expected = first + "\r\nabc" + second + "\r\n3\r\nxyz\r\n0\r\n\r\n"
+    val output = ByteArrayOutputStream()
+    LoopbackHttp.pipe(
+      BufferedInputStream(ByteArrayInputStream(input.toByteArray(Charsets.ISO_8859_1)), 1),
+      "127.0.0.1:1234",
+      CompletableFuture(),
+      output::write,
+    )
+    assertContentEquals(expected.toByteArray(Charsets.ISO_8859_1), output.toByteArray())
+  }
+
+  @Test
+  fun stripsUpgradeCookiesBeforeForwardingOpaquePayload() {
+    val head = "GET /ws HTTP/1.1\r\nHost: 127.0.0.1:1234\r\nUpgrade: websocket\r\n"
+    val payload = byteArrayOf(0x82.toByte(), 3, 1, 2, 3)
+    val input =
+      (head + "Cookie: session=secret\r\nCookie2: old=secret\r\n\r\n").toByteArray() + payload
+    val output = ByteArrayOutputStream()
+    LoopbackHttp.pipe(
+      BufferedInputStream(ByteArrayInputStream(input)),
+      "127.0.0.1:1234",
+      CompletableFuture.completedFuture(true),
+      output::write,
+    )
+    assertContentEquals((head + "\r\n").toByteArray() + payload, output.toByteArray())
+  }
 
   @Test
   fun nodeKnownAnswersForPlatformAndFallback() {
