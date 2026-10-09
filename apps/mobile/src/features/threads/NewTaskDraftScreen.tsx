@@ -1678,6 +1678,10 @@ export function NewTaskDraftScreen(props: {
           paddingTop: 14,
         }}
       >
+        <View className="mx-[6px] mb-2 border-b border-composer-border pb-1">
+          {projectControls}
+          {flow.canChooseWorkspace ? workspaceControls : null}
+        </View>
         <Text className="px-[14px] pb-2 text-sm font-supacode-medium text-foreground-muted">
           {flow.editingPendingTask ? "Edit queued task" : "New task"}
         </Text>
@@ -1824,10 +1828,6 @@ export function NewTaskDraftScreen(props: {
             </ComposerToolbarRow>
           </ComposerDictationToolbar>
         </Animated.View>
-        <View className="mx-[6px] mt-1 border-t border-composer-border pt-1">
-          {projectControls}
-          {flow.canChooseWorkspace ? workspaceControls : null}
-        </View>
       </ComposerSurface>
       <Pressable
         accessibilityLabel="Cancel new task"
