@@ -5,6 +5,8 @@ import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
 import {
   WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
+  type OrchestrationV2Command,
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
 } from "@supacode/contracts";
@@ -303,6 +305,17 @@ export function createThreadEnvironmentAtoms<R, E>(
     dismissUserInput: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:dismiss-user-input",
       execute: (input: DismissThreadUserInputInput) => dismissThreadUserInput(input),
+      scheduler,
+      concurrency,
+    }),
+    pauseUserInputAutoDismiss: createEnvironmentRpcCommand<
+      R | Crypto.Crypto,
+      E,
+      typeof ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
+      Extract<OrchestrationV2Command, { type: "thread.user-input.auto-dismiss.pause" }>
+    >(runtime, {
+      label: "environment-data:commands:thread:set-user-input-auto-dismiss",
+      tag: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
       scheduler,
       concurrency,
     }),

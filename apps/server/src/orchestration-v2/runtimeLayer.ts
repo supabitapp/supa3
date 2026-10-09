@@ -1,4 +1,5 @@
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
+import * as QuestionAutoDismissService from "./QuestionAutoDismissService.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
 import * as OrchestrationCommandReceipts from "../persistence/OrchestrationCommandReceipts.ts";
@@ -340,6 +341,10 @@ export const layerProduction = Layer.mergeAll(
   layerScheduledTaskProvided,
   UsageLimitRecoveryWorker.layer.pipe(
     Layer.provide(Layer.mergeAll(ProjectionStore.layer, layerThreadManagementProvided)),
+  ),
+  QuestionAutoDismissService.layerWorker.pipe(
+    Layer.provide(QuestionAutoDismissService.layer),
+    Layer.provide(Layer.merge(ProjectionStore.layer, layerThreadManagementProvided)),
   ),
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,

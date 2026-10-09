@@ -31,6 +31,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { USER_INPUT_TOGGLE_DURATION_MS } from "./pendingUserInputLayout";
+import { QuestionAutoDismissTimer } from "./QuestionAutoDismissTimer";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -89,6 +90,7 @@ export interface PendingUserInputCardProps {
   readonly onSubmit: () => Promise<unknown>;
   /** Closes an async question without a reply. Hidden for native callback questions. */
   readonly onDismiss: () => Promise<unknown>;
+  readonly autoDismissQuestions?: boolean;
 }
 
 /**
@@ -327,46 +329,53 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // expanded the opaque card covers it, and during the collapse slide the
   // card's top edge wipes past and reveals it — no opacity handoff, so no
   // crossfade frames.
+  const timer =
+    props.autoDismissQuestions && props.pendingUserInput.autoDismissAt != null ? (
+      <QuestionAutoDismissTimer deadline={props.pendingUserInput.autoDismissAt} />
+    ) : null;
   const bar = showBar ? (
     <View
       onLayout={handleBarLayout}
       pointerEvents={props.collapsed ? "auto" : "none"}
       accessibilityElementsHidden={!props.collapsed}
       importantForAccessibility={props.collapsed ? "auto" : "no-hide-descendants"}
-      className="flex-row items-center gap-2 rounded-full border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
+      className="rounded-[24px] border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Expand user input, ${questionCount} question${
-          questionCount === 1 ? "" : "s"
-        }`}
-        onPress={props.onToggleCollapsed}
-        className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
-      >
-        <Text className="font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-          User input needed
-        </Text>
-        <Text className="font-sans text-xs text-foreground-muted">
-          {questionCount} question{questionCount === 1 ? "" : "s"}
-        </Text>
-        <View className="flex-1" />
-        <SymbolView
-          name="chevron.up"
-          size={12}
-          tintColorClassName={"accent-icon-subtle"}
-          type="monochrome"
-        />
-      </Pressable>
-      {props.onStopThread ? (
-        <ControlPill
-          accessibilityLabel="Stop"
-          icon="stop.fill"
-          variant="danger"
-          className="h-9 w-9"
-          disabled={!props.canOperateThread}
-          onPress={props.onStopThread}
-        />
-      ) : null}
+      <View className="flex-row items-center gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Expand user input, ${questionCount} question${
+            questionCount === 1 ? "" : "s"
+          }`}
+          onPress={props.onToggleCollapsed}
+          className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
+        >
+          <Text className="font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
+            User input needed
+          </Text>
+          <Text className="font-sans text-xs text-foreground-muted">
+            {questionCount} question{questionCount === 1 ? "" : "s"}
+          </Text>
+          <View className="flex-1" />
+          <SymbolView
+            name="chevron.up"
+            size={12}
+            tintColorClassName={"accent-icon-subtle"}
+            type="monochrome"
+          />
+        </Pressable>
+        {props.onStopThread ? (
+          <ControlPill
+            accessibilityLabel="Stop"
+            icon="stop.fill"
+            variant="danger"
+            className="h-9 w-9"
+            disabled={!props.canOperateThread}
+            onPress={props.onStopThread}
+          />
+        ) : null}
+      </View>
+      {props.collapsed ? timer : null}
     </View>
   ) : null;
   const card = renderCard ? (
@@ -430,6 +439,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
         </View>
       </Pressable>
       {/* Remounting per question also starts each page scrolled to its top. */}
+      {!props.collapsed ? timer : null}
       <QuestionPage
         questionId={question?.id}
         direction={pushDirection}

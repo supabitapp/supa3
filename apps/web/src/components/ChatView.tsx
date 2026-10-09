@@ -17,6 +17,7 @@ import {
   resolveWorktreeSetupProgress,
 } from "./ChatView.logic";
 import * as DateTime from "effect/DateTime";
+import { createUserInputAutoDismissPause } from "@supacode/client-runtime/user-input-auto-dismiss-pause";
 import { restorePlanFollowUpComposer } from "./ChatView.logic";
 import { assistantCitationsToPlainText } from "@supacode/shared/assistantCitations";
 import { prepareQueuedEditAttachments, recoverQueuedMessageEdit } from "./chat/queuedMessageEdit";
@@ -1725,6 +1726,18 @@ export default function ChatView(props: ChatViewProps) {
   const dismissThreadUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
   });
+  const pauseUserInputAutoDismiss = useAtomCommand(threadEnvironment.pauseUserInputAutoDismiss, {
+    reportFailure: false,
+  });
+  const questionTimerPermission = useAtomValue(
+    threadEnvironment.pauseUserInputAutoDismiss.permissionAtom(environmentId, {
+      type: "thread.user-input.auto-dismiss.pause",
+    }),
+  );
+  const questionTimerConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const canPauseUserInputAutoDismiss =
+    questionTimerPermission &&
+    questionTimerConfig?.environment.capabilities.questionAutoDismissPause === true;
   const revertThreadCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
@@ -9760,6 +9773,54 @@ export default function ChatView(props: ChatViewProps) {
     [activeThreadId, dismissThreadUserInput, environmentId, setThreadError],
   );
 
+  const pauseOnInteraction = useMemo(() => createUserInputAutoDismissPause(), []);
+  const pauseActiveQuestionTimer = useCallback(() => {
+    const deadline = activePendingUserInput?.autoDismissAt;
+    if (
+      !settings.autoDismissQuestions ||
+      !activePendingUserInput ||
+      !activeThreadId ||
+      deadline == null ||
+      !canPauseUserInputAutoDismiss
+    )
+      return;
+    void pauseOnInteraction(
+      {
+        environmentId,
+        threadId: activeThreadId,
+        requestId: activePendingUserInput.requestId,
+      },
+      async () => {
+        const result = await pauseUserInputAutoDismiss({
+          environmentId,
+          input: {
+            type: "thread.user-input.auto-dismiss.pause",
+            commandId: CommandId.make(randomUUID()),
+            threadId: activeThreadId,
+            requestId: activePendingUserInput.requestId,
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          setThreadError(
+            activeThreadId,
+            error instanceof Error ? error.message : "Could not pause automatic dismissal.",
+          );
+        }
+        return result._tag === "Success";
+      },
+    );
+  }, [
+    activePendingUserInput,
+    activeThreadId,
+    canPauseUserInputAutoDismiss,
+    environmentId,
+    pauseUserInputAutoDismiss,
+    setThreadError,
+    pauseOnInteraction,
+    settings.autoDismissQuestions,
+  ]);
+
   const setActivePendingUserInputQuestionIndex = useCallback(
     (nextQuestionIndex: number) => {
       if (!activePendingUserInput) {
@@ -9776,6 +9837,7 @@ export default function ChatView(props: ChatViewProps) {
   const activePendingQuestion = activePendingProgress?.activeQuestion;
   const onSelectActivePendingUserInputOption = useCallback(
     (questionId: string, optionValue: string) => {
+      pauseActiveQuestionTimer();
       if (!activePendingUserInput) {
         return;
       }
@@ -9819,6 +9881,7 @@ export default function ChatView(props: ChatViewProps) {
       composerDraftTarget,
       composerRef,
       pendingUserInputAnswersByRequestId,
+      pauseActiveQuestionTimer,
       setComposerDraftPrompt,
     ],
   );
@@ -9838,6 +9901,12 @@ export default function ChatView(props: ChatViewProps) {
       if (!question || question.allowCustomAnswer === false) {
         return;
       }
+      if (
+        value !==
+        (pendingUserInputAnswersByRequestId[activePendingRequestKey]?.[questionId]?.customAnswer ??
+          "")
+      )
+        pauseActiveQuestionTimer();
       promptRef.current = value;
       setPendingUserInputAnswersByRequestId((existing) => ({
         ...existing,
@@ -9859,7 +9928,13 @@ export default function ChatView(props: ChatViewProps) {
         composerRef.current?.focusAt(nextCursor);
       }
     },
-    [activePendingUserInput, activePendingRequestKey, composerRef],
+    [
+      activePendingUserInput,
+      activePendingRequestKey,
+      composerRef,
+      pendingUserInputAnswersByRequestId,
+      pauseActiveQuestionTimer,
+    ],
   );
 
   const onAdvanceActivePendingUserInput = useCallback(() => {
@@ -11190,6 +11265,11 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               pendingApprovals={outboxEditor.editing ? [] : pendingApprovals}
                               pendingUserInputs={outboxEditor.editing ? [] : pendingUserInputs}
+                              autoDismissQuestions={
+                                settings.autoDismissQuestions &&
+                                questionTimerConfig?.environment.capabilities
+                                  .questionAutoDismiss === true
+                              }
                               activePendingProgress={
                                 outboxEditor.editing ? null : activePendingProgress
                               }

@@ -1,4 +1,6 @@
 import { useServerConfigs } from "./entities";
+import { CommandId } from "@supacode/contracts";
+import { uuidv4 } from "../lib/uuid";
 import { Alert } from "react-native";
 import {
   questionAttachmentDraftKey,
@@ -12,7 +14,8 @@ import {
   composerAttachmentsStillUploading,
 } from "./composer-attachment-uploads";
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createUserInputAutoDismissPause } from "@supacode/client-runtime/user-input-auto-dismiss-pause";
 
 import { type ProviderApprovalDecision, type RuntimeRequestId } from "@supacode/contracts";
 import {
@@ -94,7 +97,17 @@ export function useSelectedThreadRequests() {
     threadEnvironment.dismissUserInput,
     "thread user input dismissal",
   );
+  const pauseUserInputAutoDismiss = useAtomCommand(
+    threadEnvironment.pauseUserInputAutoDismiss,
+    "question timer pause",
+  );
   const { selectedThread: selectedThreadShell } = useThreadSelection();
+  const questionTimerPermission = useAtomValue(
+    threadEnvironment.pauseUserInputAutoDismiss.permissionAtom(
+      selectedThreadShell?.environmentId ?? null,
+      { type: "thread.user-input.auto-dismiss.pause" },
+    ),
+  );
   const pendingRequests = useSelectedThreadPendingRequests();
   const userInputDraftsByRequestKey = useAtomValue(userInputDraftsByRequestKeyAtom);
   const userInputResponsesInFlight = useRef(new Set<string>());
@@ -119,6 +132,11 @@ export function useSelectedThreadRequests() {
     }
   }, [activePendingUserInput, selectedThreadShell]);
   const questionServerConfigs = useServerConfigs();
+  const canPauseUserInputAutoDismiss =
+    questionTimerPermission &&
+    selectedThreadShell != null &&
+    questionServerConfigs.get(selectedThreadShell.environmentId)?.environment.capabilities
+      .questionAutoDismissPause === true;
   const attachmentDrafts = useAtomValue(composerDraftsAtom);
   const preparationCounts = useAtomValue(questionAttachmentPreparationAtom);
   const uploadStates = useAtomValue(composerAttachmentUploadsAtom);
@@ -200,8 +218,51 @@ export function useSelectedThreadRequests() {
     ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingUserInputDrafts)
     : null;
 
+  const pauseOnInteraction = useMemo(() => createUserInputAutoDismissPause(), []);
+  const pauseQuestionTimer = useCallback(
+    (requestId: RuntimeRequestId) => {
+      const request = activePendingUserInputs.find((entry) => entry.requestId === requestId);
+      if (
+        !selectedThreadShell ||
+        !canPauseUserInputAutoDismiss ||
+        request?.autoDismissAt == null ||
+        questionServerConfigs.get(selectedThreadShell.environmentId)?.settings
+          .autoDismissQuestions !== true
+      )
+        return;
+      void pauseOnInteraction(
+        {
+          environmentId: selectedThreadShell.environmentId,
+          threadId: selectedThreadShell.id,
+          requestId,
+        },
+        async () => {
+          const result = await pauseUserInputAutoDismiss({
+            environmentId: selectedThreadShell.environmentId,
+            input: {
+              type: "thread.user-input.auto-dismiss.pause",
+              commandId: CommandId.make(uuidv4()),
+              threadId: selectedThreadShell.id,
+              requestId,
+            },
+          });
+          return result._tag === "Success";
+        },
+      );
+    },
+    [
+      activePendingUserInputs,
+      canPauseUserInputAutoDismiss,
+      pauseUserInputAutoDismiss,
+      pauseOnInteraction,
+      questionServerConfigs,
+      selectedThreadShell,
+    ],
+  );
+
   const onSelectUserInputOption = useCallback(
     (requestId: RuntimeRequestId, question: ThreadUserInputQuestion, value: string) => {
+      pauseQuestionTimer(requestId);
       if (!selectedThreadShell) {
         return;
       }
@@ -209,7 +270,7 @@ export function useSelectedThreadRequests() {
       const requestKey = scopedRequestKey(selectedThreadShell.environmentId, requestId);
       setUserInputDraftOption(requestKey, question, value);
     },
-    [selectedThreadShell],
+    [selectedThreadShell, pauseQuestionTimer],
   );
 
   const onChangeUserInputCustomAnswer = useCallback(
@@ -222,9 +283,15 @@ export function useSelectedThreadRequests() {
       }
 
       const requestKey = scopedRequestKey(selectedThreadShell.environmentId, requestId);
+      if (
+        customAnswer !==
+        (appAtomRegistry.get(userInputDraftsByRequestKeyAtom)[requestKey]?.[questionId]
+          ?.customAnswer ?? "")
+      )
+        pauseQuestionTimer(requestId);
       setUserInputDraftCustomAnswer(requestKey, question, customAnswer);
     },
-    [activePendingUserInputs, selectedThreadShell],
+    [activePendingUserInputs, selectedThreadShell, pauseQuestionTimer],
   );
 
   const onRespondToApproval = useCallback(

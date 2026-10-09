@@ -36,7 +36,6 @@ import type {
   ProviderThreadId,
   ProviderTurnId,
   RunAttemptId,
-  RuntimeRequestId,
 } from "@supacode/contracts";
 import {
   OrchestrationV2AppThreadJson as OrchestrationV2AppThreadJsonSchema,
@@ -62,6 +61,8 @@ import {
   ThreadId,
   TurnItemId,
   NodeId,
+  RuntimeRequestId,
+  userInputAutoDismissAt,
 } from "@supacode/contracts";
 import {
   createOrchestrationV2TurnItemVisibility,
@@ -289,6 +290,12 @@ export interface ProjectionRuntimeResponseContext {
   readonly session: OrchestrationV2ThreadProjection["providerSessions"][number] | undefined;
 }
 
+interface ProjectionQuestionAutoDismissCandidate {
+  readonly threadId: ThreadId;
+  readonly requestId: RuntimeRequestId;
+  readonly deadline: DateTime.Utc;
+}
+
 export interface ProjectionRecordFilter {
   readonly messageRoles?: ReadonlyArray<OrchestrationV2ConversationMessage["role"]>;
   readonly turnItemRunId?: RunId;
@@ -393,6 +400,9 @@ export interface ProjectionStoreV2Shape {
     readonly autoResume: boolean;
     readonly snooze: boolean;
   }) => Effect.Effect<ReadonlyArray<ProjectionLimitRecoveryCandidate>, ProjectionStoreV2Error>;
+  readonly getQuestionAutoDismissCandidates: (
+    createdBefore: DateTime.Utc,
+  ) => Effect.Effect<ReadonlyArray<ProjectionQuestionAutoDismissCandidate>, ProjectionStoreV2Error>;
   /** Every candidate, or only `threadId` when a sweep checks one thread. */
   readonly getSettlementCandidates: (
     threadId?: ThreadId,
@@ -4285,6 +4295,42 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           return rows[0]?.pending === 1;
         }).pipe(Effect.mapError(controlReadError(threadId)));
 
+    const getQuestionAutoDismissCandidates = Effect.fn(
+      "ProjectionStore.getQuestionAutoDismissCandidates",
+    )(
+      function* (createdBefore: DateTime.Utc) {
+        const rows = yield* sql<{
+          thread_id: string;
+          payload_json: string;
+        }>`
+          SELECT request.thread_id, request.payload_json
+          FROM orchestration_v2_projection_runtime_requests request
+          JOIN orchestration_v2_projection_threads thread ON thread.thread_id = request.thread_id
+          WHERE request.kind = 'user_input' AND request.status = 'pending'
+            AND request.created_at <= ${DateTime.formatIso(createdBefore)}
+            AND thread.deleted_at IS NULL AND thread.archived_at IS NULL
+            AND json_extract(request.payload_json, '$.nativeRequestRef.driver') IN ('codex', 'claudeAgent')
+            AND json_extract(request.payload_json, '$.responseCapability.type') IN ('live', 'message')
+            AND COALESCE(json_extract(request.payload_json, '$.autoDismissPaused'), 0) = 0
+          ORDER BY request.created_at, request.runtime_request_id
+          LIMIT 100
+        `;
+        const candidates: ProjectionQuestionAutoDismissCandidate[] = [];
+        for (const row of rows) {
+          const request = yield* decodeRuntimeRequestPayload(row.payload_json);
+          const deadline = userInputAutoDismissAt(request);
+          if (deadline === null) continue;
+          candidates.push({
+            threadId: ThreadId.make(row.thread_id),
+            requestId: request.id,
+            deadline,
+          });
+        }
+        return candidates;
+      },
+      Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
+    );
+
     const getRuntimeRequest: ProjectionStoreV2Shape["getRuntimeRequest"] = (threadId, requestId) =>
       sql
         .withTransaction(
@@ -5865,6 +5911,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getTurnItem,
       getThreadRecords,
       getRuntimeRequest,
+      getQuestionAutoDismissCandidates,
       getPlan,
       getProviderControlContext,
       getLimitRecoveryCandidates,
@@ -6183,6 +6230,46 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
             ...fields.map((field) => [field, selected[field]]),
           ]) as ProjectionRecords<(typeof fields)[number]>;
         }),
+      getQuestionAutoDismissCandidates: (createdBefore) =>
+        Ref.get(replayState).pipe(
+          Effect.map((state) =>
+            [...state.projections.values()]
+              .flatMap((projection) => {
+                if (projection.thread.deletedAt !== null || projection.thread.archivedAt !== null)
+                  return [];
+                return projection.runtimeRequests.flatMap((request) => {
+                  const deadline = userInputAutoDismissAt(request);
+                  if (
+                    request.kind !== "user_input" ||
+                    request.status !== "pending" ||
+                    DateTime.toEpochMillis(request.createdAt) >
+                      DateTime.toEpochMillis(createdBefore) ||
+                    deadline === null
+                  )
+                    return [];
+                  return [
+                    {
+                      threadId: projection.thread.id,
+                      requestId: request.id,
+                      deadline,
+                      createdAt: request.createdAt,
+                    },
+                  ];
+                });
+              })
+              .sort(
+                (a, b) =>
+                  DateTime.toEpochMillis(a.createdAt) - DateTime.toEpochMillis(b.createdAt) ||
+                  a.requestId.localeCompare(b.requestId),
+              )
+              .slice(0, 100)
+              .map(({ threadId, requestId, deadline }) => ({
+                threadId,
+                requestId,
+                deadline,
+              })),
+          ),
+        ),
       getRuntimeRequest: (threadId, requestId) =>
         Effect.gen(function* () {
           const projection = (yield* Ref.get(replayState)).projections.get(threadId);

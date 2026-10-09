@@ -7,6 +7,7 @@ import type {
   RuntimeRequestId,
 } from "@supacode/contracts";
 import * as DateTime from "effect/DateTime";
+import { canAutoDismissUserInput, userInputAutoDismissAt } from "@supacode/contracts";
 
 export interface ThreadPendingApproval {
   readonly requestId: RuntimeRequestId;
@@ -34,6 +35,7 @@ export interface ThreadPendingUserInput {
   readonly responseCapability: OrchestrationV2RuntimeRequest["responseCapability"]["type"];
   readonly responseMode?: "message";
   readonly dismissible: boolean;
+  readonly autoDismissAt?: string | null;
 }
 
 export interface PendingThreadRequests {
@@ -78,6 +80,7 @@ export function derivePendingThreadRequests(
           candidate.type === "user_input_request" && candidate.requestId === request.id,
       );
       if (item === undefined || item.type !== "user_input_request") continue;
+      const autoDismissAt = userInputAutoDismissAt(request);
       userInputs.push({
         requestId: request.id,
         createdAt: DateTime.formatIso(request.createdAt),
@@ -86,6 +89,9 @@ export function derivePendingThreadRequests(
           multiSelect: question.multiSelect ?? false,
         })),
         responseCapability,
+        ...(canAutoDismissUserInput(request)
+          ? { autoDismissAt: autoDismissAt === null ? null : DateTime.formatIso(autoDismissAt) }
+          : {}),
         dismissible: item.responseMode === "message" || responseCapability === "message",
         ...(item.responseMode === "message" || responseCapability === "message"
           ? { responseMode: "message" as const }

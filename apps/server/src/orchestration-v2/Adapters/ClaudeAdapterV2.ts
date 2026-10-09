@@ -7035,6 +7035,14 @@ export function makeClaudeAdapterV2(
                 }),
               ),
             );
+            if (!callbackOptions.signal.aborted && Object.keys(resolvedAnswers).length === 0) {
+              return {
+                behavior: "deny",
+                message:
+                  "No answer was provided. The question was dismissed without selecting an option.",
+                toolUseID: callbackOptions.toolUseID,
+              } satisfies PermissionResult;
+            }
             return callbackOptions.signal.aborted
               ? ({
                   behavior: "deny",

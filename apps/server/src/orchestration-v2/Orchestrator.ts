@@ -18,6 +18,8 @@ import {
 } from "@supacode/shared/threadPullRequests";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
+  canAutoDismissUserInput,
+  userInputAutoDismissAt,
   type ChatAttachment,
   CommandId,
   isForkableSourceRunStatus,
@@ -474,6 +476,8 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "queued-run.edit":
     case "runtime-request.respond":
     case "thread.user-input.dismiss":
+    case "thread.user-input.auto-dismiss.pause":
+    case "thread.user-input.auto-dismiss":
     case "checkpoint.rollback":
     case "checkpoint.rollback.fail":
     case "thread.background-work.settle":
@@ -7201,6 +7205,85 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ]);
     });
 
+  const dispatchThreadUserInputAutoDismissPause = Effect.fn(
+    "Orchestrator.dispatchThreadUserInputAutoDismissPause",
+  )(function* (
+    command: Extract<
+      OrchestrationV2Command,
+      { readonly type: "thread.user-input.auto-dismiss.pause" }
+    >,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+  ) {
+    const request = yield* projectionStore
+      .getRuntimeRequest(command.threadId, command.requestId)
+      .pipe(Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })));
+    if (request === undefined || !canAutoDismissUserInput(request)) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: "This question no longer has an automatic dismissal timer.",
+      });
+    }
+    const now = yield* DateTime.now;
+    yield* emit(
+      events,
+      command,
+    )({
+      type: "runtime-request.updated",
+      threadId: command.threadId,
+      nodeId: request.nodeId,
+      occurredAt: now,
+      payload: {
+        ...request,
+        autoDismissPaused: true,
+      },
+    });
+  });
+
+  const dispatchThreadUserInputAutoDismiss = Effect.fn(
+    "Orchestrator.dispatchThreadUserInputAutoDismiss",
+  )(function* (
+    command: Extract<
+      OrchestrationV2InternalCommand,
+      { readonly type: "thread.user-input.auto-dismiss" }
+    >,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+  ) {
+    const request = yield* projectionStore
+      .getRuntimeRequest(command.threadId, command.requestId)
+      .pipe(Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })));
+    if (request === undefined) return;
+    const deadline = userInputAutoDismissAt(request);
+    const now = yield* DateTime.now;
+    if (
+      deadline === null ||
+      DateTime.toEpochMillis(deadline) !== DateTime.toEpochMillis(command.deadline) ||
+      DateTime.toEpochMillis(deadline) > DateTime.toEpochMillis(now)
+    )
+      return;
+    const thread = yield* projectionStore
+      .getThread(command.threadId)
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    if (thread.archivedAt !== null || thread.deletedAt !== null) return;
+    yield* dispatchRuntimeRequestRespond(
+      {
+        type: "runtime-request.respond",
+        commandId: command.commandId,
+        threadId: command.threadId,
+        requestId: command.requestId,
+        decision: "cancel",
+        ...(request.responseCapability.type === "live" ? { answers: {} } : {}),
+      },
+      events,
+      effects,
+    );
+  });
+
   const dispatchThreadUserInputDismiss = (
     command: Extract<OrchestrationV2Command, { readonly type: "thread.user-input.dismiss" }>,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
@@ -10207,6 +10290,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.user-input.dismiss":
         yield* dispatchThreadUserInputDismiss(command, events, effects);
         break;
+      case "thread.user-input.auto-dismiss.pause":
+        yield* dispatchThreadUserInputAutoDismissPause(command, events);
+        break;
+      case "thread.user-input.auto-dismiss":
+        yield* dispatchThreadUserInputAutoDismiss(command, events, effects);
+        break;
       case "run.interrupt":
         cancelUnsettledEffects = yield* dispatchRunInterrupt(command, events, effects);
         // Stop also stops every delegated task under the thread once it commits.
@@ -10417,6 +10506,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // its expected outcome, not a failure.
         planned.events.length > 0 ||
         command.type === "thread.background-work.settle" ||
+        command.type === "thread.user-input.auto-dismiss" ||
         command.type === "thread.stop"
           ? Effect.succeed(planned)
           : Effect.fail(

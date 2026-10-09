@@ -9,11 +9,11 @@ import * as NodeSqliteClient from "@supacode/shared/nodeSqliteClient";
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("055_OrchestrationV2", (it) => {
-  it.effect("keeps released migrations contiguous", () =>
+  it.effect("keeps released migration IDs and reserved gaps stable", () =>
     Effect.sync(() => {
       assert.deepStrictEqual(
         migrationEntries.map(([id]) => id),
-        [...Array.from({ length: 56 }, (_, index) => index + 1), 59, 60],
+        [...Array.from({ length: 57 }, (_, index) => index + 1), 59, 60, 61],
       );
     }),
   );
@@ -28,8 +28,10 @@ layer("055_OrchestrationV2", (it) => {
         [54, "ProjectionThreadsAutoSettleDisabledAt"],
         [55, "OrchestrationV2"],
         [56, "RemoveRedundantProjectionIndexes"],
+        [57, "QuestionAutoDismissIndex"],
         [59, "McpAppModelContext"],
         [60, "ThreadSnapshotWindowIndexes"],
+        [61, "QuestionAutoDismissIndexBackfill"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
 
@@ -52,8 +54,10 @@ layer("055_OrchestrationV2", (it) => {
         { migration_id: 54, name: "ProjectionThreadsAutoSettleDisabledAt" },
         { migration_id: 55, name: "OrchestrationV2" },
         { migration_id: 56, name: "RemoveRedundantProjectionIndexes" },
+        { migration_id: 57, name: "QuestionAutoDismissIndex" },
         { migration_id: 59, name: "McpAppModelContext" },
         { migration_id: 60, name: "ThreadSnapshotWindowIndexes" },
+        { migration_id: 61, name: "QuestionAutoDismissIndexBackfill" },
       ]);
 
       const tables = yield* sql<{ readonly name: string }>`
