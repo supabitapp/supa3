@@ -1356,7 +1356,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         onSubmit={props.onSubmitUserInput}
                         onDismiss={props.onDismissUserInput}
                         autoDismissQuestions={
-                          props.serverConfig?.settings.autoDismissQuestions === true
+                          props.serverConfig?.settings.autoDismissQuestions === true &&
+                          props.serverConfig.environment.capabilities.questionAutoDismiss === true
                         }
                       />
                     ) : null}

@@ -116,8 +116,9 @@ const seedRequest = Effect.fnUntraced(function* (
   return { threadId, requestId };
 });
 
-it.effect.each([false, true])("only dismisses expired questions when enabled: %s", (enabled) =>
+it.effect.each([undefined, false, true])("expires questions unless disabled: %s", (enabled) =>
   Effect.gen(function* () {
+    const shouldDismiss = enabled !== false;
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const now = yield* DateTime.now;
@@ -129,7 +130,9 @@ it.effect.each([false, true])("only dismisses expired questions when enabled: %s
         strength: "strong",
       },
     });
-    const asyncQuestion = yield* seedRequest("async", { responseCapability: { type: "message" } });
+    const asyncQuestion = yield* seedRequest("async", {
+      responseCapability: { type: "message" },
+    });
     const waiting = [
       yield* seedRequest("new", { createdAt: DateTime.subtract(now, { seconds: 119 }) }),
       yield* seedRequest("approval", { kind: "command" }),
@@ -160,7 +163,7 @@ it.effect.each([false, true])("only dismisses expired questions when enabled: %s
               Layer.mock(ServerSettings.ServerSettingsService)({
                 getSettings: Effect.succeed({
                   ...DEFAULT_SERVER_SETTINGS,
-                  autoDismissQuestions: enabled,
+                  ...(enabled === undefined ? {} : { autoDismissQuestions: enabled }),
                 }),
               }),
               Layer.mock(ThreadManagement.ThreadManagementService)({
@@ -174,9 +177,12 @@ it.effect.each([false, true])("only dismisses expired questions when enabled: %s
 
     for (const target of [codex, claude, asyncQuestion]) {
       const request = yield* projections.getRuntimeRequest(target.threadId, target.requestId);
-      assert.equal(request?.status, enabled ? "resolved" : "pending");
-      assert.equal(request?.decision, enabled ? "cancel" : undefined);
-      assert.deepEqual(request?.answers, enabled && target !== asyncQuestion ? {} : undefined);
+      assert.equal(request?.status, shouldDismiss ? "resolved" : "pending");
+      assert.equal(request?.decision, shouldDismiss ? "cancel" : undefined);
+      assert.deepEqual(
+        request?.answers,
+        shouldDismiss && target !== asyncQuestion ? {} : undefined,
+      );
       assert.lengthOf((yield* orchestrator.getThreadProjection(target.threadId)).messages, 0);
     }
     for (const target of waiting) {

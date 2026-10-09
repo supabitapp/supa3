@@ -11134,7 +11134,11 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               pendingApprovals={outboxEditor.editing ? [] : pendingApprovals}
                               pendingUserInputs={outboxEditor.editing ? [] : pendingUserInputs}
-                              autoDismissQuestions={settings.autoDismissQuestions}
+                              autoDismissQuestions={
+                                settings.autoDismissQuestions &&
+                                questionTimerConfig?.environment.capabilities
+                                  .questionAutoDismiss === true
+                              }
                               activePendingProgress={
                                 outboxEditor.editing ? null : activePendingProgress
                               }

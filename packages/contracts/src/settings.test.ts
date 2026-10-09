@@ -22,8 +22,8 @@ const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
 describe("question automatic dismissal", () => {
-  it("keeps existing installations waiting and accepts explicit opt-in and opt-out", () => {
-    expect(decodeServerSettings({}).autoDismissQuestions).toBe(false);
+  it("defaults to automatic dismissal and preserves explicit preferences", () => {
+    expect(decodeServerSettings({}).autoDismissQuestions).toBe(true);
     for (const autoDismissQuestions of [true, false]) {
       expect(encodeServerSettings(decodeServerSettings({ autoDismissQuestions }))).toMatchObject({
         autoDismissQuestions,
