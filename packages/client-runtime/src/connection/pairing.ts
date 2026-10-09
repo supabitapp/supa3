@@ -3,9 +3,10 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
+import { resolveRelayOrigin } from "../relay/gateway.ts";
 import { ROUTE_CHECK_TIMEOUT_MS } from "./driver.ts";
 import { mapRemoteEnvironmentError } from "./errors.ts";
-import { ConnectionBlockedError } from "./model.ts";
+import { ConnectionBlockedError, ConnectionTransientError } from "./model.ts";
 import type { PairingFallback } from "./routes.ts";
 
 function differentMachineError(label: string) {
@@ -15,23 +16,39 @@ function differentMachineError(label: string) {
   });
 }
 
-const reachDescriptor = Effect.fnUntraced(function* (
-  httpBaseUrl: string,
-  source: "linked" | "saved" | "hint",
-  expectedEnvironmentId: EnvironmentId | undefined,
-) {
-  const descriptor = yield* fetchRemoteEnvironmentDescriptor({ httpBaseUrl }).pipe(
-    Effect.mapError(mapRemoteEnvironmentError),
-  );
-  if (expectedEnvironmentId !== undefined && descriptor.environmentId !== expectedEnvironmentId) {
-    return yield* differentMachineError(descriptor.label);
-  }
-  return { httpBaseUrl, descriptor, source };
-});
+const reachDescriptor = Effect.fnUntraced(
+  function* (
+    httpBaseUrl: string,
+    source: "linked" | "saved" | "hint",
+    expectedEnvironmentId: EnvironmentId | undefined,
+    relayUrl?: string,
+  ) {
+    const origin =
+      source === "linked" ? yield* resolveRelayOrigin(httpBaseUrl, relayUrl) : httpBaseUrl;
+    const descriptor = yield* fetchRemoteEnvironmentDescriptor({ httpBaseUrl: origin }).pipe(
+      Effect.mapError(mapRemoteEnvironmentError),
+    );
+    if (expectedEnvironmentId !== undefined && descriptor.environmentId !== expectedEnvironmentId) {
+      return yield* differentMachineError(descriptor.label);
+    }
+    return { httpBaseUrl, descriptor, source };
+  },
+  Effect.timeoutOrElse({
+    duration: 10_000,
+    orElse: () =>
+      Effect.fail(
+        new ConnectionTransientError({
+          reason: "timeout",
+          detail: "That address did not respond during pairing.",
+        }),
+      ),
+  }),
+);
 
 export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.reachPairingServer")(
   function* (input: {
     readonly httpBaseUrl: string;
+    readonly relayUrl?: string | undefined;
     readonly expectedEnvironmentId: EnvironmentId | undefined;
     readonly fallback: PairingFallback | null;
     readonly routes: ReadonlyArray<string>;
@@ -54,7 +71,12 @@ export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.re
         candidates.set(url.origin, { httpBaseUrl, source });
       }
     }
-    const linkedAddress = reachDescriptor(input.httpBaseUrl, "linked", input.expectedEnvironmentId);
+    const linkedAddress = reachDescriptor(
+      input.httpBaseUrl,
+      "linked",
+      input.expectedEnvironmentId,
+      input.relayUrl,
+    );
     if (candidates.size === 0) return yield* linkedAddress;
     const linked = yield* Effect.forkScoped(linkedAddress);
     const answered = yield* Fiber.join(linked).pipe(

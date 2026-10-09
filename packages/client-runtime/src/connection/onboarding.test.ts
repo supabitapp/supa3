@@ -15,6 +15,7 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
 import { buildPairingUrl } from "@supacode/shared/remote";
 
+import { RelayGateway } from "../relay/gateway.ts";
 import * as RpcHttp from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import { fetchRemoteSessionState } from "../authorization/remote.ts";
@@ -265,6 +266,81 @@ const registerPairing = Effect.fnUntraced(function* (options: {
 });
 
 describe("connection onboarding", () => {
+  it.effect.each(["failed", "stalled"] as const)(
+    "pairs through a direct hint when relay setup is %s",
+    (mode) =>
+      Effect.gen(function* () {
+        const calls: Array<Call> = [];
+        const entered = Promise.withResolvers<void>();
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const pairingUrl = buildPairingUrl(relayEndpoint, "pairing-token", {
+          environmentId: SAVED_ENVIRONMENT_ID,
+          routes: [TAILNET],
+        });
+        const pending = yield* preparePairingRegistration(
+          { pairingUrl },
+          NO_SAVED_ENVIRONMENTS,
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              layerClientPresentation,
+              layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+            ),
+          ),
+          Effect.provideService(RelayGateway, {
+            available: true,
+            resolve: async () => {
+              entered.resolve();
+              if (mode === "failed") throw new Error("Relay unavailable");
+              return new Promise<string>(() => {});
+            },
+            release: async () => {},
+            fetch: globalThis.fetch,
+          }),
+          Effect.forkChild,
+        );
+        yield* Effect.promise(() => entered.promise);
+        if (mode === "stalled") yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+        const { registration } = yield* Fiber.join(pending);
+        expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+        expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+          `${TAILNET}/oauth/token`,
+        ]);
+      }),
+  );
+
+  it.effect("times out relay preparation when there is no usable fallback", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const entered = Promise.withResolvers<void>();
+      const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+      const pending = yield* preparePairingRegistration(
+        { pairingUrl: buildPairingUrl(relayEndpoint, "pairing-token") },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(Layer.mergeAll(layerClientPresentation, layerRoutedHttp(calls, {}))),
+        Effect.provideService(RelayGateway, {
+          available: true,
+          resolve: () => {
+            entered.resolve();
+            return new Promise<string>(() => {});
+          },
+          release: async () => {},
+          fetch: globalThis.fetch,
+        }),
+        Effect.result,
+        Effect.forkChild,
+      );
+      yield* Effect.promise(() => entered.promise);
+      yield* TestClock.adjust(10_000);
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: "Failure",
+        failure: { reason: "timeout" },
+      });
+      expect(calls).toEqual([]);
+    }),
+  );
+
   it.effect("pairs a new device through a link route and saves the reachable address", () =>
     Effect.gen(function* () {
       const calls: Array<Call> = [];

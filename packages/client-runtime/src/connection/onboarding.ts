@@ -43,7 +43,6 @@ import {
   sshTargetKey,
 } from "./routes.ts";
 import { reachPairingServer } from "./pairing.ts";
-import { resolveRelayOrigin } from "../relay/gateway.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -139,10 +138,9 @@ export const preparePairingRegistration = Effect.fn(
       });
     }
     const expected = input.expectedEnvironmentId ?? target.environmentId;
-    if (target.relayUrl !== undefined)
-      yield* resolveRelayOrigin(target.httpBaseUrl, target.relayUrl);
     const reached = yield* reachPairingServer({
       httpBaseUrl: target.httpBaseUrl,
+      relayUrl: target.relayUrl,
       expectedEnvironmentId: expected,
       fallback: pairingFallbackRoutes(entries, target.httpBaseUrl, expected),
       routes: target.routes ?? [],

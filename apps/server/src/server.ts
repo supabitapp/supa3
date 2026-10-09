@@ -405,6 +405,7 @@ const layerServerEnvironment = Layer.effect(
         (descriptor, advertised) => ({
           ...descriptor,
           ...advertised,
+          capabilities: { ...descriptor.capabilities, relayAdvertisement: true },
         }),
       ),
     });

@@ -622,9 +622,9 @@ export const layer = Layer.effectContext(
         catalog
           .update((document) => registerConnectionInCatalog(document, registration, routes))
           .pipe(Effect.mapError((cause) => persistenceError("register-connection", cause))),
-      setRoutes: (environmentId, routes) =>
+      setRoutes: (environmentId, routes, profiles) =>
         catalog
-          .update((document) => setRoutesInCatalog(document, environmentId, routes))
+          .update((document) => setRoutesInCatalog(document, environmentId, routes, profiles))
           .pipe(Effect.mapError((cause) => persistenceError("set-connection-routes", cause))),
       remove: (target) =>
         catalog

@@ -14,6 +14,7 @@ export interface RelayClientEndpoint {
 export class RelayGateway extends Context.Service<
   RelayGateway,
   {
+    readonly available: boolean;
     readonly resolve: (address: string, relayUrl?: string) => Promise<string>;
     readonly release: (address: string) => Promise<void>;
     readonly fetch: typeof globalThis.fetch;
@@ -21,6 +22,7 @@ export class RelayGateway extends Context.Service<
 >()("@supacode/client-runtime/relay/gateway/RelayGateway") {}
 
 export function layer(input: {
+  readonly available?: boolean;
   readonly open: (address: string, relayUrl: string) => Promise<RelayClientEndpoint>;
   readonly fetch: typeof globalThis.fetch;
 }) {
@@ -83,6 +85,7 @@ export function layer(input: {
         }),
       );
       return RelayGateway.of({
+        available: input.available ?? true,
         resolve: async (address, relayUrl) => {
           const identity = key(address);
           if (!identity) return address;
@@ -111,7 +114,7 @@ export function layer(input: {
 
 export const resolveRelayOrigin = Effect.fn("RelayGateway.resolveOrigin")(function* (
   address: string,
-  relayUrl?: string,
+  relayUrl = DEFAULT_PUBLIC_RELAY_URL,
 ) {
   const gateway = yield* Effect.serviceOption(RelayGateway);
   if (Option.isNone(gateway)) return address;

@@ -26,6 +26,7 @@ import {
   EMPTY_CONNECTION_CATALOG_DOCUMENT,
   registerConnectionInCatalog,
   removeConnectionFromCatalog,
+  setRoutesInCatalog,
   setConnectionEnabledInCatalog,
 } from "./storageDocument.ts";
 
@@ -62,6 +63,39 @@ const SSH_PROFILE = new SshConnectionProfile({
 });
 
 describe("ConnectionCatalogDocument", () => {
+  it("persists learned relay metadata with its routes and keeps the paired credential", () => {
+    const initial = registerConnectionInCatalog(
+      EMPTY_CONNECTION_CATALOG_DOCUMENT,
+      new BearerConnectionRegistration({
+        target: BEARER_TARGET,
+        profile: BEARER_PROFILE,
+        credential: BEARER_CREDENTIAL,
+      }),
+    );
+    const target = new BearerConnectionTarget({
+      ...BEARER_TARGET,
+      connectionId: `learned:relay@${BEARER_TARGET.connectionId}`,
+    });
+    const profile = new BearerConnectionProfile({
+      ...BEARER_PROFILE,
+      connectionId: target.connectionId,
+      httpBaseUrl: `https://${"a".repeat(32)}.${"b".repeat(32)}.relay.supacode.invalid/`,
+      relayUrl: "wss://relay-a.example",
+      learned: true,
+    });
+    const added = setRoutesInCatalog(initial, ENVIRONMENT_ID, [BEARER_TARGET, target], [profile]);
+    const moved = new BearerConnectionProfile({ ...profile, relayUrl: "wss://relay-b.example" });
+    const updated = setRoutesInCatalog(added, ENVIRONMENT_ID, [BEARER_TARGET, target], [moved]);
+    const restored = decodeCatalogDocument(JSON.parse(JSON.stringify(updated)));
+    expect(restored.targets).toEqual([BEARER_TARGET, target]);
+    expect(restored.profiles).toEqual([BEARER_PROFILE, moved]);
+    expect(restored.credentials).toEqual(initial.credentials);
+    expect(added.profiles).toEqual([BEARER_PROFILE, profile]);
+    const withdrawn = setRoutesInCatalog(restored, ENVIRONMENT_ID, [BEARER_TARGET]);
+    expect(withdrawn.profiles).toEqual([BEARER_PROFILE]);
+    expect(withdrawn.credentials).toEqual(initial.credentials);
+  });
+
   it.effect("persists explicit GitHub trust and forgets it when a connection is removed", () =>
     Effect.gen(function* () {
       let document = EMPTY_CONNECTION_CATALOG_DOCUMENT;

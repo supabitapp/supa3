@@ -37,6 +37,28 @@ export const RelayHostStatus = Schema.Struct({
 });
 export type RelayHostStatus = typeof RelayHostStatus.Type;
 
+export const RelayAdvertisement = Schema.Struct({
+  relayEndpoint: Schema.String,
+  relayUrl: Schema.String,
+});
+export type RelayAdvertisement = typeof RelayAdvertisement.Type;
+
+export function relayAdvertisementFrom(value: {
+  readonly relayEndpoint?: string;
+  readonly relayUrl?: string;
+}): RelayAdvertisement | null {
+  return value.relayEndpoint === undefined || value.relayUrl === undefined
+    ? null
+    : { relayEndpoint: value.relayEndpoint, relayUrl: value.relayUrl };
+}
+
+export function withRelayAdvertisement<
+  T extends { readonly relayEndpoint?: string; readonly relayUrl?: string },
+>(value: T, advertisement: RelayAdvertisement | null) {
+  const { relayEndpoint: _endpoint, relayUrl: _url, ...rest } = value;
+  return { ...rest, ...advertisement };
+}
+
 export const RelayCompanionRequest = Schema.Struct({
   id: Schema.String.check(Schema.isMaxLength(64)),
   action: Schema.Literals(["open", "close"]),

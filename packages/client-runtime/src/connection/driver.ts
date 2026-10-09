@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as HttpClient from "effect/http/HttpClient";
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 
 import type { ConnectionCatalogEntry, ConnectionRoute } from "./catalog.ts";
 import type {
@@ -18,6 +19,7 @@ import * as ConnectionResolver from "./resolver.ts";
 import { connectionRoutes, routeEntry, routeHttpBaseUrl } from "./routes.ts";
 import * as RpcSession from "../rpc/session.ts";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
+import { resolveRelayOrigin } from "../relay/gateway.ts";
 
 export type ConnectionDriverProgress =
   | {
@@ -184,15 +186,27 @@ export const make = Effect.gen(function* () {
   const checkRoute = (entry: ConnectionCatalogEntry, route: ConnectionRoute, timeoutMs: number) => {
     const httpBaseUrl = routeHttpBaseUrl(route);
     if (httpBaseUrl === null) return Effect.succeed<RouteCheck>("unchecked");
+    const profile = Option.getOrNull(route.profile);
+    const origin =
+      parseRelayAddress(httpBaseUrl) === null
+        ? Effect.succeed(httpBaseUrl)
+        : resolveRelayOrigin(
+            httpBaseUrl,
+            profile?._tag === "BearerConnectionProfile" ? profile.relayUrl : undefined,
+          );
     // The descriptor is public, so this sends no credential to whatever
     // answers at a saved LAN address on a different network.
-    return fetchRemoteEnvironmentDescriptor({
-      httpBaseUrl,
-      timeoutMs,
-    }).pipe(
+    return origin.pipe(
+      Effect.flatMap((resolved) =>
+        fetchRemoteEnvironmentDescriptor({ httpBaseUrl: resolved, timeoutMs }),
+      ),
       Effect.map((descriptor): RouteCheck =>
         descriptor.environmentId === entry.target.environmentId ? "answered" : "silent",
       ),
+      Effect.timeoutOrElse({
+        duration: timeoutMs,
+        orElse: () => Effect.succeed<RouteCheck>("silent"),
+      }),
       Effect.orElseSucceed((): RouteCheck => "silent"),
       Effect.provideService(HttpClient.HttpClient, httpClient),
       Effect.withSpan("ConnectionDriver.checkRoute", {

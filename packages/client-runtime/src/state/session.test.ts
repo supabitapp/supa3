@@ -53,6 +53,7 @@ const makeHarness = Effect.fn("RouteLatencyTest.makeHarness")(function* (options
   const session: RpcSession = {
     client: {} as WsRpcProtocolClient,
     initialConfig: Effect.succeed({ environment: descriptor } as ServerConfig),
+    configChanges: Stream.empty,
     subscribeServerConfig: () => Stream.never,
     ready: Effect.void,
     probe: Effect.sync(() => {

@@ -598,6 +598,7 @@ function session(client: WsRpcProtocolClient): RpcSession {
         client[WS_METHODS.pullRequestsInvalidate] ?? (() => Effect.void),
     },
     initialConfig: client[WS_METHODS.serverGetConfig]?.({}).pipe(Effect.orDie) ?? Effect.never,
+    configChanges: Stream.empty,
     subscribeServerConfig: (input) => client.subscribeServerConfig(input),
     ready: Effect.void,
     probe: Effect.void,

@@ -80,6 +80,7 @@ function testSession(
         ? ({ threadResumeCompletionMarker: true } as never)
         : ({} as never),
     ),
+    configChanges: Stream.empty,
     subscribeServerConfig: (input) => client.subscribeServerConfig(input),
     ready: Effect.void,
     probe: Effect.void,

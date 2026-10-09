@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   ORCHESTRATION_PROTOCOL_VERSION,
+  EnvironmentId,
   type ServerConfig,
   type ServerConfigStreamEvent,
 } from "@supacode/contracts";
@@ -24,6 +25,7 @@ import {
   resolveAvailableEditorsForConfig,
   shouldUseBoundedThreadSnapshot,
   withLateEditorConfig,
+  relayAdvertisementUpdates,
 } from "./ws.ts";
 
 it("accepts only the current orchestration protocol before websocket RPC setup", () => {
@@ -233,4 +235,79 @@ it.effect("recovers a reveal kind whose real probe outlasts the config timeout",
       assert.equal(late.config.shellRevealInFileManagerKind, "file-explorer");
     }
   }).pipe(Effect.scoped),
+);
+
+const relayEnvironment: ServerConfig["environment"] = {
+  environmentId: EnvironmentId.make("relay-test"),
+  label: "Test",
+  platform: { os: "linux", arch: "x64" },
+  serverVersion: "test",
+  capabilities: { repositoryIdentity: true, relayAdvertisement: true },
+};
+
+const relayAdvertisement = {
+  relayEndpoint: `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+  relayUrl: "wss://relay.example.test",
+};
+
+it.effect("sends opted-in relay changes without a duplicate initial advertisement", () =>
+  Effect.gen(function* () {
+    const config = snapshotConfig({
+      environment: { ...relayEnvironment, ...relayAdvertisement },
+    });
+    const changed = { ...relayAdvertisement, relayUrl: "wss://next.example.test" };
+    const events = yield* relayAdvertisementUpdates(
+      config,
+      Stream.make(relayAdvertisement, changed, changed, null),
+      true,
+    ).pipe(Stream.runCollect);
+    assert.deepEqual(
+      Array.from(events).map((event) => event.payload),
+      [changed, null],
+    );
+    const caughtUp = yield* relayAdvertisementUpdates(config, Stream.make(null), true).pipe(
+      Stream.runCollect,
+    );
+    assert.deepEqual(
+      Array.from(caughtUp).map((event) => event.payload),
+      [null],
+    );
+    for (const enabled of [undefined, false]) {
+      const legacy = yield* relayAdvertisementUpdates(
+        config,
+        Stream.make(changed, null),
+        enabled,
+      ).pipe(Stream.runCollect);
+      assert.equal(legacy.length, 0);
+    }
+  }),
+);
+
+it.effect.each([relayAdvertisement, null])(
+  "keeps relay advertisement %j in late editor snapshots",
+  (payload) =>
+    Effect.gen(function* () {
+      const sent = yield* Deferred.make<void>();
+      const events = yield* withLateEditorConfig(
+        snapshotConfig({
+          environment: { ...relayEnvironment, ...relayAdvertisement },
+        }),
+        Stream.make({ version: 1, type: "relayAdvertisementUpdated", payload }),
+        {
+          resolveAvailableEditors: () => Deferred.await(sent).pipe(Effect.as(["file-manager"])),
+          resolveFileManagerRevealKind: () => Effect.succeed(undefined),
+        },
+      ).pipe(
+        Stream.tap((event) =>
+          event.type === "relayAdvertisementUpdated"
+            ? Deferred.succeed(sent, undefined)
+            : Effect.void,
+        ),
+        Stream.runCollect,
+      );
+      const late = events[1];
+      assert.equal(late?.type, "snapshot");
+      if (late?.type === "snapshot")
+        assert.deepEqual(late.config.environment, { ...relayEnvironment, ...payload });
+    }),
 );

@@ -9,6 +9,9 @@ import {
   SshConnectionTarget,
 } from "./index.ts";
 import {
+  advertisedConnectionRoutes,
+  credentialConnectionId,
+  connectionRouteId,
   connectionRouteKind,
   entryWithRoutes,
   insertRoute,
@@ -167,5 +170,127 @@ describe("connection routes", () => {
       environmentId,
       httpBaseUrls: ["https://minim5.tail.ts.net/"],
     });
+  });
+});
+
+const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+const relayAdvertisement = { relayEndpoint, relayUrl: "wss://relay.example.test" };
+const active = route("http://192.168.1.20:4389/");
+const baseEntry = { ...active, enabled: true };
+const learnRelay = (overrides: Partial<Parameters<typeof mergeLearnedRoutes>[0]> = {}) =>
+  mergeLearnedRoutes({
+    entry: baseEntry,
+    activeRoute: active,
+    allowInsecure: true,
+    allowRelay: true,
+    relayAdvertisement,
+    ...overrides,
+  });
+
+describe("relay route advertisements", () => {
+  it("learns relay after direct routes with the existing credential and custom server", () => {
+    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    expect(routes.map(connectionRouteKind)).toEqual(["lan", "tailnet", "public"]);
+    expect(credentialConnectionId(connectionRouteId(routes[2]!.target))).toBe(credential);
+    expect(Option.getOrThrow(routes[2]!.profile)).toMatchObject({
+      httpBaseUrl: relayEndpoint,
+      relayUrl: relayAdvertisement.relayUrl,
+      learned: true,
+    });
+    expect(
+      learnRelay({
+        entry: entryWithRoutes(baseEntry, routes),
+        reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }],
+      }),
+    ).toBeNull();
+  });
+
+  it("updates a learned relay URL in place without resetting route preference or credential", () => {
+    const learned = learnRelay()![1]!;
+    const entry = entryWithRoutes(baseEntry, [learned, active]);
+    const updated = learnRelay({
+      entry,
+      relayAdvertisement: { ...relayAdvertisement, relayUrl: "wss://next.example.test/relay/" },
+    })!;
+    expect(updated.map((route) => route.target)).toEqual([learned.target, active.target]);
+    expect(Option.getOrThrow(updated[0]!.profile)).toMatchObject({
+      relayUrl: "wss://next.example.test/relay",
+    });
+  });
+
+  it.each([
+    undefined,
+    { relayEndpoint: "https://ordinary.example.test", relayUrl: "wss://relay.example.test" },
+    { relayEndpoint: "https://bad.relay.supacode.invalid", relayUrl: "wss://relay.example.test" },
+    { relayEndpoint, relayUrl: "https://relay.example.test" },
+  ])("preserves learned relay for unknown or malformed advertisements: %j", (advertisement) => {
+    const routes = learnRelay()!;
+    expect(
+      learnRelay({ entry: entryWithRoutes(baseEntry, routes), relayAdvertisement: advertisement }),
+    ).toBeNull();
+  });
+
+  it("withdraws only learned relay while retaining direct routes and explicit relay routes", () => {
+    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    const explicit = route(relayEndpoint, "explicit-relay");
+    const next = learnRelay({
+      entry: entryWithRoutes(baseEntry, [...routes, explicit]),
+      relayAdvertisement: null,
+    })!;
+    expect(next).toEqual([routes[0], routes[1], explicit]);
+    expect(routesAfterRemoving(routes, credential)).toEqual([]);
+  });
+
+  it("preserves explicit relay metadata and avoids duplicating the same relay identity", () => {
+    const explicit = route(relayEndpoint, "explicit-relay");
+    expect(learnRelay({ entry: entryWithRoutes(baseEntry, [active, explicit]) })).toBeNull();
+  });
+
+  it("does not learn relay on unsupported clients and preserves previously saved relay", () => {
+    expect(learnRelay({ allowRelay: false })).toBeNull();
+    expect(
+      learnRelay({
+        entry: entryWithRoutes(baseEntry, learnRelay()!),
+        allowRelay: false,
+        relayAdvertisement: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps direct and relay advertisements independent", () => {
+    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    expect(
+      learnRelay({
+        entry: entryWithRoutes(baseEntry, routes),
+        reported: [],
+        relayAdvertisement: undefined,
+      }),
+    ).toEqual([routes[0], routes[2]]);
+    expect(
+      learnRelay({ reported: [{ httpBaseUrl: relayEndpoint }], relayAdvertisement: undefined }),
+    ).toBeNull();
+  });
+
+  it("distinguishes capable-server withdrawal from legacy missing or incomplete fields", () => {
+    const environment = {
+      environmentId,
+      label: "Test",
+      platform: { os: "linux", arch: "x64" } as const,
+      serverVersion: "test",
+      capabilities: { repositoryIdentity: true },
+    };
+    expect(advertisedConnectionRoutes({ environment }).relayAdvertisement).toBeUndefined();
+    expect(
+      advertisedConnectionRoutes({ environment: { ...environment, ...relayAdvertisement } })
+        .relayAdvertisement,
+    ).toEqual(relayAdvertisement);
+    const capable = {
+      ...environment,
+      capabilities: { ...environment.capabilities, relayAdvertisement: true },
+    };
+    expect(advertisedConnectionRoutes({ environment: capable }).relayAdvertisement).toBeNull();
+    expect(
+      advertisedConnectionRoutes({ environment: { ...capable, relayEndpoint } }).relayAdvertisement,
+    ).toBeUndefined();
   });
 });

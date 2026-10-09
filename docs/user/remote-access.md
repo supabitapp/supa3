@@ -42,7 +42,8 @@ clients reconnect. The host must stay running and have internet access.
 
 To use your own relay server, set **Relay server** under **Public relay** before
 you create pairing links. New links carry that server to the clients that pair
-with them; clients paired earlier need a new link. If Connections reports that
+with them. Automatically learned relay routes follow this change through a
+working connection; routes paired explicitly through relay need a new link. If Connections reports that
 another host is using the relay identity, the same Supacode data is running on a
 second machine. Turn **Public relay** off and on to bring the relay back to this
 host.
@@ -95,9 +96,15 @@ and SSH. Pair it again using another address, or choose **Add route** from its
 route list. Both addresses belong to the same machine in your client.
 
 Supacode also learns the LAN and Tailscale addresses reported by a paired
-machine. Enable **Network access** on the host to make its LAN address available.
-Learned addresses follow network changes and use the existing pairing. They go
-away when the host stops reporting them or you remove the pairing they came from.
+machine. Desktop, mobile, and browser clients using the local companion also
+learn its relay address when you enable **Public relay**, without rescanning.
+Enable **Network access** on the host to make its LAN address available.
+Learned routes use the existing pairing and disappear when the host withdraws
+them or you remove the pairing they came from.
+
+Your client needs a working connection to receive new addresses. If its only
+route is relay and the host moves to another relay server, pair again or connect
+through another saved route to learn the change.
 
 Routes are tried in preference order. An unavailable LAN address falls back to
 another saved route. Supacode checks for a preferred route when your network

@@ -90,6 +90,7 @@ export function setRoutesInCatalog(
   document: ConnectionCatalogDocument,
   environmentId: EnvironmentId,
   routes: ReadonlyArray<PersistedConnectionTarget>,
+  profiles: ReadonlyArray<ConnectionProfile> = [],
 ): ConnectionCatalogDocument {
   const kept = new Set(routes.map(routeKey));
   const dropped = catalogRoutes(document, environmentId).filter(
@@ -103,8 +104,13 @@ export function setRoutesInCatalog(
       : document.targets
           .slice(0, firstIndex)
           .filter((target) => target.environmentId !== environmentId).length;
+  const saved = removeRouteMetadata(document, dropped);
   return {
-    ...removeRouteMetadata(document, dropped),
+    ...saved,
+    profiles: profiles.reduce(
+      (current, profile) => replaceCatalogValue(current, (value) => value.connectionId, profile),
+      saved.profiles,
+    ),
     targets: [...others.slice(0, insertAt), ...routes, ...others.slice(insertAt)],
   };
 }

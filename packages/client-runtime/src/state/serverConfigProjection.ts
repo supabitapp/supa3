@@ -1,4 +1,5 @@
 import type { ServerConfig, ServerConfigStreamEvent } from "@supacode/contracts";
+import { withRelayAdvertisement } from "@supacode/contracts";
 import * as Option from "effect/Option";
 
 export interface ServerConfigProjection {
@@ -73,6 +74,15 @@ export function applyServerConfigProjection(
         config: {
           ...projection.config,
           settings: event.payload.settings,
+        },
+        latestEvent: event,
+        source: "live",
+      }));
+    case "relayAdvertisementUpdated":
+      return Option.map(current, (projection) => ({
+        config: {
+          ...projection.config,
+          environment: withRelayAdvertisement(projection.config.environment, event.payload),
         },
         latestEvent: event,
         source: "live",
