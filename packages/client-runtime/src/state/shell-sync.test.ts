@@ -426,14 +426,14 @@ describe("environment shell synchronization", () => {
       expect(yield* Ref.get(capturedAfterSequences)).toEqual([10, 40]);
       yield* Queue.offer(events, { kind: "synchronized" });
 
-      yield* Queue.offer(wakeups, "application-active-probe");
+      yield* Queue.offer(wakeups, "application-resumed");
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(capturedAfterSequences)).length >= 3) break;
         yield* Effect.yieldNow;
       }
       expect(yield* Ref.get(capturedAfterSequences)).toEqual([10, 40, 40]);
 
-      yield* Queue.offer(wakeups, "application-active-reconnect");
+      yield* Queue.offer(wakeups, "application-background");
       for (let attempt = 0; attempt < 10; attempt += 1) {
         yield* Effect.yieldNow;
       }

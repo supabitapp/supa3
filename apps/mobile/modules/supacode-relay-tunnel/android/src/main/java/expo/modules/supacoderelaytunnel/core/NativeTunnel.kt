@@ -28,8 +28,13 @@ class NativeTunnel(
   port: Int = 0,
   private val onStatus: (Map<String, Any>) -> Unit = {},
   private val log: (String) -> Unit = {},
-  private val keepaliveMillis: Long = 15_000
+  private val keepaliveMillis: Long = 15_000,
+  private val backgroundGraceMillis: Long = NativeTunnel.BACKGROUND_GRACE_MILLIS,
+  private val probeTimeoutMillis: Long = 2_000
 ) : AutoCloseable {
+  companion object {
+    const val BACKGROUND_GRACE_MILLIS = 15_000L
+  }
   private val identity = parseRelayIdentity(hostAddress)
   private val hostAddress =
     identity.hex().let { "https://${it.take(32)}.${it.drop(32)}.relay.supacode.invalid/" }
@@ -53,6 +58,8 @@ class NativeTunnel(
   private var mux: TunnelMux? = null
   private var webSocket: WebSocket? = null
   private var keepalive: ScheduledFuture<*>? = null
+  private var backgroundClose: ScheduledFuture<*>? = null
+  private var probeDeadline: ScheduledFuture<*>? = null
   private var pumpScheduled = false
   private var state = "down"
   private var suspended = false
@@ -184,6 +191,7 @@ class NativeTunnel(
                 { record -> check(socket.send(record.toByteString())) { "Relay queue full" } },
                 ::schedulePump,
                 { sentBytes += it },
+                { probeDeadline?.cancel(false); probeDeadline = null },
               )
               mux = session
               keepalive = actor.scheduleWithFixedDelay(
@@ -226,12 +234,14 @@ class NativeTunnel(
     )
   }
 
-  private fun post(block: () -> Unit) {
+  private fun post(block: () -> Unit): Boolean {
     if (!actor.isShutdown) {
       try {
         actor.execute(block)
+        return true
       } catch (_: java.util.concurrent.RejectedExecutionException) {}
     }
+    return false
   }
 
   private fun fail(future: CompletableFuture<TunnelMux>, error: Throwable) {
@@ -239,6 +249,8 @@ class NativeTunnel(
     attempt = null
     keepalive?.cancel(false)
     keepalive = null
+    probeDeadline?.cancel(false)
+    probeDeadline = null
     mux?.close(error)
     mux = null
     webSocket?.cancel()
@@ -261,13 +273,13 @@ class NativeTunnel(
   @Suppress("TooGenericExceptionCaught")
   private fun <T> onActor(block: () -> T): CompletableFuture<T> {
     val future = CompletableFuture<T>()
-    post {
+    if (!post {
       try {
         future.complete(block())
       } catch (error: Exception) {
         future.completeExceptionally(error)
       }
-    }
+    }) future.completeExceptionally(IllegalStateException("Tunnel unavailable"))
     return future
   }
 
@@ -345,17 +357,42 @@ class NativeTunnel(
   }
 
   fun suspend() = post {
+    backgroundClose?.cancel(false)
+    backgroundClose = null
+    suspendSession()
+  }
+
+  private fun suspendSession() {
     suspended = true
     attempt?.let { fail(it, IllegalStateException("Backgrounded")) }
-    state = "down"
-    emit("Backgrounded")
-    log("[relay-android] backgrounded origin=$origin")
+  }
+
+  fun background(graceMillis: Long = backgroundGraceMillis) = post {
+    backgroundClose?.cancel(false)
+    backgroundClose = actor.schedule({
+      backgroundClose = null
+      suspendSession()
+    }, graceMillis, TimeUnit.MILLISECONDS)
   }
 
   fun resume() = post {
+    backgroundClose?.cancel(false)
+    backgroundClose = null
     suspended = false
     log("[relay-android] foregrounded origin=$origin")
-    connect()
+    val current = attempt
+    val session = mux
+    if (current == null || session == null) {
+      current?.let { fail(it, IllegalStateException("Relay resumed during handshake")) }
+      connect()
+    } else {
+      probeDeadline?.cancel(false)
+      probeDeadline = actor.schedule({
+        fail(current, IllegalStateException("Relay resume probe timed out"))
+        connect()
+      }, probeTimeoutMillis, TimeUnit.MILLISECONDS)
+      session.ping()
+    }
   }
 
   override fun close() {
@@ -363,6 +400,7 @@ class NativeTunnel(
     listener.close()
     sockets.forEach { it.close() }
     actor.execute {
+      backgroundClose?.cancel(false)
       attempt?.let { fail(it, IllegalStateException("Tunnel unavailable")) }
       state = "down"
       emit()

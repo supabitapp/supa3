@@ -10,7 +10,8 @@ internal class TunnelMux(
   private val cipher: RelayCipher,
   private val sendRecord: (ByteArray) -> Unit,
   private val schedulePump: () -> Unit,
-  private val onDataSent: (Int) -> Unit
+  private val onDataSent: (Int) -> Unit,
+  private val onPong: () -> Unit = {}
 ) {
   companion object {
     const val SESSION_WINDOW = 8 * 1024 * 1024
@@ -70,6 +71,11 @@ internal class TunnelMux(
 
   val outstandingReceiveBytes
     get() = SESSION_WINDOW - receiveCredit - grant
+
+  fun ping() {
+    control.add(frame(6, 0))
+    schedulePump()
+  }
 
   fun open(data: (ByteArray) -> Unit, end: () -> Unit, close: (Throwable?) -> Unit): Stream {
     check(!closed && streams.size < 256 && nextId > 0) { "Tunnel stream limit reached" }
@@ -281,6 +287,7 @@ internal class TunnelMux(
         control.add(frame(7, 0))
         schedulePump()
       }
+      7 -> onPong()
     }
   }
 

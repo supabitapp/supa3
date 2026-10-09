@@ -19,7 +19,7 @@ import * as Runtime from "../lib/runtime";
 import { clearThreadOutboxEnvironment } from "../state/thread-outbox-removal";
 import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
 import { clearThreadComposerErrorsForEnvironment } from "../state/thread-composer-error";
-import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
+import { mobileApplicationStateWakeup } from "./app-state-wakeups";
 import * as ConnectionStorage from "./storage";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
@@ -114,24 +114,17 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
 );
 
 const layerWakeups = Wakeups.layer({
+  isBackgrounded: Effect.sync(() => AppState.currentState === "background"),
   changes: Stream.mergeAll(
     [
-      Stream.callback<"application-active-probe" | "application-active-reconnect">((queue) =>
+      Stream.callback<Wakeups.ConnectionWakeup>((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
+            let previous = AppState.currentState;
             return AppState.addEventListener("change", (state) => {
-              if (state === "background") {
-                backgroundedAtMs = Date.now();
-                return;
-              }
-              if (state === "active") {
-                Queue.offerUnsafe(
-                  queue,
-                  mobileApplicationActiveWakeup(backgroundedAtMs, Date.now()),
-                );
-                backgroundedAtMs = null;
-              }
+              const reason = mobileApplicationStateWakeup(previous, state);
+              previous = state;
+              if (reason !== null) Queue.offerUnsafe(queue, reason);
             });
           }),
           (subscription) => Effect.sync(() => subscription.remove()),

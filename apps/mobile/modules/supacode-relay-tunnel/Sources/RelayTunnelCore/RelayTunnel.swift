@@ -28,6 +28,7 @@ public final class RelayTunnel: @unchecked Sendable {
   public let identity: RelayIdentity
   private let relayURL: URL
   private let keepaliveInterval: TimeInterval
+  private let probeTimeout: TimeInterval
   let queue = DispatchQueue(label: "sh.supacode.relay-tunnel", qos: .userInitiated)
   private let onStatus: (RelayTunnelStatus) -> Void
   private(set) var listener: NWListener?
@@ -47,6 +48,7 @@ public final class RelayTunnel: @unchecked Sendable {
   private var mux: TunnelMux?
   private var generation: UInt64 = 0
   private var handshakeTimeout: DispatchWorkItem?
+  private var probeDeadline: DispatchWorkItem?
   private var retry: DispatchWorkItem?
   private var retryCount = 0
   private var sending = false
@@ -58,12 +60,14 @@ public final class RelayTunnel: @unchecked Sendable {
   private var lastStatus = Date.distantPast
 
   public init(relayURL: String, hostAddress: String, keepaliveInterval: TimeInterval = 15,
+              probeTimeout: TimeInterval = 2,
               onStatus: @escaping (RelayTunnelStatus) -> Void = { _ in }) throws {
     identity = try RelayIdentity(address: hostAddress)
     guard let url = URL(string: relayURL), ["ws", "wss"].contains(url.scheme),
           url.host != nil, url.user == nil, url.password == nil,
           url.query == nil, url.fragment == nil else { throw RelayError.invalid("Invalid relay URL") }
     self.relayURL = url; self.keepaliveInterval = keepaliveInterval; self.onStatus = onStatus
+    self.probeTimeout = probeTimeout
   }
 
   public func start(port requested: UInt16? = nil) async throws -> String {
@@ -78,7 +82,10 @@ public final class RelayTunnel: @unchecked Sendable {
     try await withCheckedThrowingContinuation { continuation in
       queue.async {
         guard !self.stopped else { continuation.resume(throwing: RelayError.invalid("Tunnel stopped")); return }
-        if resuming { self.suspended = false }
+        if resuming {
+          self.suspended = false
+          self.checkSession()
+        }
         guard !self.suspended else {
           continuation.resume(throwing: RelayError.invalid("Relay tunnel is suspended while the app is in the background"))
           return
@@ -115,11 +122,28 @@ public final class RelayTunnel: @unchecked Sendable {
   }
 
   public func suspend() {
-    queue.async {
+    queue.sync {
       self.suspended = true
       if self.listener == nil { self.closeListener() }
       self.drop("Backgrounded", preserveWaiting: false)
     }
+  }
+
+  private func checkSession() {
+    guard let mux else {
+      if websocket != nil { drop("Relay resumed during handshake", preserveWaiting: true) }
+      connect(); return
+    }
+    probeDeadline?.cancel()
+    let attempt = generation
+    let deadline = DispatchWorkItem { [weak self] in
+      guard let self, self.generation == attempt else { return }
+      self.drop("Relay resume probe timed out", preserveWaiting: false)
+      self.connect()
+    }
+    probeDeadline = deadline
+    queue.asyncAfter(deadline: .now() + probeTimeout, execute: deadline)
+    mux.ping(); schedulePump()
   }
 
   private func closeListener() {
@@ -216,7 +240,7 @@ public final class RelayTunnel: @unchecked Sendable {
   }
 
   private func connect() {
-    guard websocket == nil, !stopped, !suspended, !streams.isEmpty, retry == nil else { return }
+    guard websocket == nil, !stopped, !suspended, retry == nil else { return }
     do {
       generation += 1
       let attempt = generation
@@ -265,6 +289,9 @@ public final class RelayTunnel: @unchecked Sendable {
             self.handshakeTimeout?.cancel(); self.handshakeTimeout = nil
             self.retryCount = 0; self.sessionCount += 1
             let mux = TunnelMux(); self.mux = mux
+            mux.onPong = { [weak self] in
+              self?.probeDeadline?.cancel(); self?.probeDeadline = nil
+            }
             for stream in self.streams.values.sorted(by: { $0.id < $1.id }) {
               mux.open(stream.id)
               self.read(stream)
@@ -302,6 +329,7 @@ public final class RelayTunnel: @unchecked Sendable {
   private func drop(_ reason: String, preserveWaiting: Bool) {
     generation += 1
     retry?.cancel(); retry = nil; handshakeTimeout?.cancel(); handshakeTimeout = nil
+    probeDeadline?.cancel(); probeDeadline = nil
     websocket?.cancel(with: .goingAway, reason: nil); websocket = nil
     urlSession?.invalidateAndCancel(); urlSession = nil
     cipher = nil; mux = nil; handshake = nil; sending = false

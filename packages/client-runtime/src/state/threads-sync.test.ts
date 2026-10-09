@@ -1920,14 +1920,14 @@ describe("EnvironmentThreads", () => {
       );
       expect(Option.getOrThrow(live.data).thread.title).toBe("Latest title");
 
-      yield* Queue.offer(harness.wakeups, "application-active-probe");
+      yield* Queue.offer(harness.wakeups, "application-resumed");
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 3) break;
         yield* Effect.yieldNow;
       }
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(3);
 
-      yield* Queue.offer(harness.wakeups, "application-active-reconnect");
+      yield* Queue.offer(harness.wakeups, "application-background");
       for (let attempt = 0; attempt < 10; attempt += 1) {
         yield* Effect.yieldNow;
       }
