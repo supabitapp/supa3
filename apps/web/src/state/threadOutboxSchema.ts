@@ -80,6 +80,13 @@ export const OutboxTurn = Schema.Struct({
   environmentId: EnvironmentId,
   input: OutboxTurnInput,
   localAttachments: Schema.Array(OutboxAttachment),
+  pendingWorktree: Schema.optionalKey(
+    Schema.Struct({
+      projectCwd: Schema.String,
+      requireWorktree: Schema.optionalKey(Schema.Boolean),
+      startFromOrigin: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   compactBeforeSend: Schema.optionalKey(Schema.Boolean),
   compactAccepted: Schema.optionalKey(Schema.Boolean),
   branch: Schema.optionalKey(Schema.String),
