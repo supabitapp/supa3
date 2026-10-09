@@ -2,11 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { userInputCountdown } from "@supacode/client-runtime/user-input-countdown";
 import { cn } from "~/lib/utils";
 
-export const QuestionAutoDismissTimer = memo(function QuestionAutoDismissTimer({
-  deadline,
-}: {
-  deadline: string;
-}) {
+function useUserInputCountdown(deadline: string) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const tick = () => {
@@ -22,24 +18,44 @@ export const QuestionAutoDismissTimer = memo(function QuestionAutoDismissTimer({
       document.removeEventListener("visibilitychange", tick);
     };
   }, [deadline]);
-  const countdown = userInputCountdown(deadline, now);
+  return userInputCountdown(deadline, now);
+}
+
+export const QuestionAutoDismissCountdown = memo(function QuestionAutoDismissCountdown({
+  deadline,
+}: {
+  deadline: string;
+}) {
+  const countdown = useUserInputCountdown(deadline);
   if (countdown === null) return null;
-  const urgent = countdown.state === "warning" || countdown.state === "closing";
   return (
-    <div className="px-3.5 pb-1.5">
-      <span
-        role="timer"
-        aria-live="off"
-        aria-label={countdown.label}
-        className={cn(
-          "text-xs tabular-nums text-secondary-label",
-          urgent && "text-warning-foreground",
-        )}
-      >
+    <span
+      aria-hidden
+      className={cn(
+        "shrink-0 whitespace-nowrap text-muted-foreground tabular-nums",
+        countdown.state !== "counting" && "text-warning-foreground",
+      )}
+    >
+      <span className="@max-[400px]:hidden">{countdown.text}</span>
+      <span className="@min-[400px]:hidden">{countdown.shortText}</span>
+    </span>
+  );
+});
+
+export const QuestionAutoDismissAnnouncer = memo(function QuestionAutoDismissAnnouncer({
+  deadline,
+}: {
+  deadline: string;
+}) {
+  const countdown = useUserInputCountdown(deadline);
+  if (countdown === null) return null;
+  return (
+    <div className="sr-only">
+      <span role="timer" aria-live="off" aria-label={countdown.label}>
         {countdown.text}
       </span>
-      <span className="sr-only" role="status">
-        {urgent ? "This question will close without an answer soon." : ""}
+      <span role="status">
+        {countdown.state === "counting" ? "" : "This question will close without an answer soon."}
       </span>
     </div>
   );

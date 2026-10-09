@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
-import { AppState } from "react-native";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+import { AppState, Pressable, type PressableProps } from "react-native";
 import { userInputCountdown } from "@supacode/client-runtime/user-input-countdown";
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
 
-export function QuestionAutoDismissTimer({ deadline }: { deadline: string }) {
+function useUserInputCountdown(deadline: string | null) {
   const [now, setNow] = useState(Date.now);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (deadline === null) return;
     const tick = () => {
       const time = Date.now();
       setNow(time);
@@ -22,19 +23,40 @@ export function QuestionAutoDismissTimer({ deadline }: { deadline: string }) {
       subscription.remove();
     };
   }, [deadline]);
-  const countdown = userInputCountdown(deadline, now);
-  if (countdown === null) return null;
-  const urgent = countdown.state === "warning" || countdown.state === "closing";
+  return userInputCountdown(deadline, now);
+}
+
+export function QuestionAutoDismissToggle({
+  deadline,
+  accessibilityLabel,
+  children,
+  ...props
+}: Omit<PressableProps, "children" | "accessibilityLabel"> & {
+  readonly deadline: string | null;
+  readonly accessibilityLabel: string;
+  readonly children: (timer: ReactNode) => ReactNode;
+}) {
+  const countdown = useUserInputCountdown(deadline);
   return (
-    <Text
-      accessibilityRole="timer"
-      accessibilityLabel={countdown.label}
-      className={cn(
-        "font-sans text-xs tabular-nums text-foreground-secondary",
-        urgent && "text-warning-foreground",
-      )}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        countdown ? `${accessibilityLabel}, ${countdown.label}` : accessibilityLabel
+      }
+      {...props}
     >
-      {countdown.text}
-    </Text>
+      {children(
+        countdown ? (
+          <Text
+            className={cn(
+              "shrink font-sans text-xs tabular-nums text-foreground-secondary",
+              countdown.state !== "counting" && "text-warning-foreground",
+            )}
+          >
+            {countdown.text}
+          </Text>
+        ) : null,
+      )}
+    </Pressable>
   );
 }

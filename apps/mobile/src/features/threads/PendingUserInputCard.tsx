@@ -31,7 +31,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { USER_INPUT_TOGGLE_DURATION_MS } from "./pendingUserInputLayout";
-import { QuestionAutoDismissTimer } from "./QuestionAutoDismissTimer";
+import { QuestionAutoDismissToggle } from "./QuestionAutoDismissTimer";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -325,57 +325,61 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // mount + layout before anything moves.
   const renderCard = EXPANDED_CARD_IS_OVERLAY || !props.collapsed;
   const showBar = props.collapsed || EXPANDED_CARD_IS_OVERLAY;
+  const autoDismissAt = props.autoDismissQuestions
+    ? (props.pendingUserInput.autoDismissAt ?? null)
+    : null;
   // The bar renders UNDER the card (earlier in JSX), always opaque: while
   // expanded the opaque card covers it, and during the collapse slide the
   // card's top edge wipes past and reveals it — no opacity handoff, so no
   // crossfade frames.
-  const timer =
-    props.autoDismissQuestions && props.pendingUserInput.autoDismissAt != null ? (
-      <QuestionAutoDismissTimer deadline={props.pendingUserInput.autoDismissAt} />
-    ) : null;
   const bar = showBar ? (
     <View
       onLayout={handleBarLayout}
       pointerEvents={props.collapsed ? "auto" : "none"}
       accessibilityElementsHidden={!props.collapsed}
       importantForAccessibility={props.collapsed ? "auto" : "no-hide-descendants"}
-      className="rounded-[24px] border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
+      className="flex-row items-center gap-2 rounded-full border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
     >
-      <View className="flex-row items-center gap-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Expand user input, ${questionCount} question${
-            questionCount === 1 ? "" : "s"
-          }`}
-          onPress={props.onToggleCollapsed}
-          className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
-        >
-          <Text className="font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-            User input needed
-          </Text>
-          <Text className="font-sans text-xs text-foreground-muted">
-            {questionCount} question{questionCount === 1 ? "" : "s"}
-          </Text>
-          <View className="flex-1" />
-          <SymbolView
-            name="chevron.up"
-            size={12}
-            tintColorClassName={"accent-icon-subtle"}
-            type="monochrome"
-          />
-        </Pressable>
-        {props.onStopThread ? (
-          <ControlPill
-            accessibilityLabel="Stop"
-            icon="stop.fill"
-            variant="danger"
-            className="h-9 w-9"
-            disabled={!props.canOperateThread}
-            onPress={props.onStopThread}
-          />
-        ) : null}
-      </View>
-      {props.collapsed ? timer : null}
+      <QuestionAutoDismissToggle
+        deadline={autoDismissAt}
+        accessibilityLabel={`Expand user input, ${questionCount} question${
+          questionCount === 1 ? "" : "s"
+        }`}
+        onPress={props.onToggleCollapsed}
+        className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
+      >
+        {(timer) => (
+          <>
+            <View className="min-w-0 flex-1">
+              <View className="flex-row items-center gap-2">
+                <Text className="font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
+                  User input needed
+                </Text>
+                <Text className="font-sans text-xs text-foreground-muted">
+                  {questionCount} question{questionCount === 1 ? "" : "s"}
+                </Text>
+              </View>
+              {timer}
+            </View>
+            <SymbolView
+              name="chevron.up"
+              size={12}
+              tintColorClassName={"accent-icon-subtle"}
+              type="monochrome"
+            />
+          </>
+        )}
+      </QuestionAutoDismissToggle>
+      {props.onStopThread ? (
+        <ControlPill
+          accessibilityLabel="Stop"
+          icon="stop.fill"
+          variant="danger"
+          className="h-9 w-9"
+          disabled={!props.canOperateThread}
+          onPress={props.onStopThread}
+        />
+      ) : null}
     </View>
   ) : null;
   const card = renderCard ? (
@@ -405,41 +409,47 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           : { maxHeight: props.maxHeight }
       }
     >
-      <Pressable
-        accessibilityRole="button"
+      <QuestionAutoDismissToggle
+        deadline={autoDismissAt}
         accessibilityLabel={describeQuestion(questionIndex)}
         accessibilityHint="Collapses user input"
         onPress={props.onToggleCollapsed}
-        className="flex-row items-start gap-2"
+        className="flex-row items-center gap-2"
       >
-        <View className="flex-1 gap-2.5">
-          <View className="flex-row items-center gap-2">
-            <Text className="font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-              User input needed
-            </Text>
-            {questionCount > 1 ? (
-              <Text className="font-sans text-xs tabular-nums text-foreground-muted">
-                {questionIndex + 1} of {questionCount}
-              </Text>
-            ) : null}
-          </View>
-          <QuestionPage questionId={question?.id} direction={pushDirection}>
-            <Text className="font-supacode-bold text-lg text-foreground">
-              {question?.header ?? FALLBACK_TITLE}
-            </Text>
-          </QuestionPage>
-        </View>
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
-          <SymbolView
-            name="chevron.down"
-            size={13}
-            tintColorClassName={"accent-icon-subtle"}
-            type="monochrome"
-          />
-        </View>
-      </Pressable>
+        {(timer) => (
+          <>
+            <View className="min-w-[33%] flex-1 overflow-hidden">
+              <QuestionPage
+                questionId={question?.id}
+                direction={pushDirection}
+                className="flex-row items-center gap-2"
+              >
+                <Text
+                  numberOfLines={1}
+                  className="shrink font-supacode-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary"
+                >
+                  {question?.header ?? FALLBACK_TITLE}
+                </Text>
+                {questionCount > 1 ? (
+                  <Text className="font-sans text-xs tabular-nums text-foreground-muted">
+                    {questionIndex + 1} of {questionCount}
+                  </Text>
+                ) : null}
+              </QuestionPage>
+            </View>
+            {timer}
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
+              <SymbolView
+                name="chevron.down"
+                size={13}
+                tintColorClassName={"accent-icon-subtle"}
+                type="monochrome"
+              />
+            </View>
+          </>
+        )}
+      </QuestionAutoDismissToggle>
       {/* Remounting per question also starts each page scrolled to its top. */}
-      {!props.collapsed ? timer : null}
       <QuestionPage
         questionId={question?.id}
         direction={pushDirection}
@@ -463,7 +473,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           ) : null}
           {question ? (
             <>
-              <Text className="font-sans text-base leading-snug text-foreground">
+              <Text className="font-supacode-medium text-base leading-snug text-foreground">
                 {question.question}
               </Text>
               {question.multiSelect ? (
@@ -496,7 +506,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                       <View className="min-w-0 flex-1 gap-0.5">
                         <Text
                           className={cn(
-                            "font-supacode-bold text-sm",
+                            "font-supacode-medium text-sm",
                             selected ? "text-foreground" : "text-foreground-secondary",
                           )}
                         >
