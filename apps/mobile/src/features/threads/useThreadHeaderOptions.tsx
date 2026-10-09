@@ -95,8 +95,18 @@ export function useThreadHeaderOptions(props: {
     unstable_headerSubtitle: props.usesNativeHeaderGlass ? props.subtitle : undefined,
     contentStyle: undefined,
   };
+  const { environmentId, threadId, gitStatus } = props.gitControls;
   return {
     options,
+
+    optionsVersion: [
+      rightHeaderItems,
+      environmentId,
+      threadId,
+      gitStatus?.isDefaultRef,
+      gitStatus?.refName,
+      gitStatus?.pr?.url,
+    ],
     sidebar: false,
     fallback:
       !layout.usesSplitView && !props.usesNativeHeaderGlass ? (

@@ -17,8 +17,14 @@ import { AsyncResult } from "effect/reactivity";
 
 import { resolveAssetUrl } from "~/assets/assetUrls";
 import { isPreviewAvailableFor, previewRuntimeFor } from "~/browser/previewRuntime";
-import { applyPreviewServerSnapshot, rememberPreviewUrl } from "~/previewStateStore";
-import { useRightPanelStore } from "~/rightPanelStore";
+import {
+  applyPreviewServerSnapshot,
+  readThreadPreviewState,
+  rememberPreviewUrl,
+  setActivePreviewTab,
+  updatePreviewServerSnapshot,
+} from "~/previewStateStore";
+import { selectSelectedRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
 
 import {
   browserDefaultOpenProfileId,
@@ -52,6 +58,10 @@ export async function openUrlInPreview<E>(input: {
   readonly threadRef: ScopedThreadRef;
   readonly url: string;
   readonly openPreview: OpenPreviewMutation<E>;
+
+  readonly profileId?: PreviewOpenInput["profileId"];
+
+  readonly background?: boolean;
 }): Promise<AtomCommandResult<void, E | BrowserSettingsReadError>> {
   const defaults = await resolveBrowserDefaults().catch(
     (cause: unknown) => new BrowserSettingsReadError({ cause }),
@@ -60,6 +70,12 @@ export async function openUrlInPreview<E>(input: {
     return AsyncResult.failure(Cause.fail(defaults));
   }
   const runtime = previewRuntimeFor(input.threadRef.environmentId);
+  const previousActiveTabId = readThreadPreviewState(input.threadRef).activeTabId;
+
+  const selectedSurface = () =>
+    selectSelectedRightPanelSurface(useRightPanelStore.getState().byThreadKey, input.threadRef)
+      ?.id ?? null;
+  const surfaceBeforeOpen = selectedSurface();
   const result = await input.openPreview({
     environmentId: input.threadRef.environmentId,
     input: {
@@ -69,13 +85,25 @@ export async function openUrlInPreview<E>(input: {
       // maps the result differently, so the configured defaults have to be
       // applied explicitly or file/link opens would ignore them.
       viewport: browserDefaultOpenViewport(defaults),
-      profileId: browserDefaultOpenProfileId(defaults),
+      profileId: input.profileId ?? browserDefaultOpenProfileId(defaults),
       ...(runtime === undefined ? {} : { runtime }),
     },
   });
   return mapAtomCommandResult(result, (snapshot) => {
-    applyPreviewServerSnapshot(input.threadRef, snapshot);
     rememberPreviewUrl(input.threadRef, input.url);
+    if (input.background) {
+      updatePreviewServerSnapshot(input.threadRef, snapshot);
+
+      if (
+        previousActiveTabId &&
+        readThreadPreviewState(input.threadRef).activeTabId === snapshot.tabId &&
+        selectedSurface() === surfaceBeforeOpen
+      ) {
+        setActivePreviewTab(input.threadRef, previousActiveTabId);
+      }
+      return;
+    }
+    applyPreviewServerSnapshot(input.threadRef, snapshot);
     useRightPanelStore.getState().openBrowser(input.threadRef, snapshot.tabId);
   });
 }

@@ -74,6 +74,10 @@ export function PullRequestStackMenu({
       layer.headSha ? [{ number: layer.number, headSha: layer.headSha }] : [],
     );
     setPending(true);
+    const toastId = toastManager.add({
+      type: "loading",
+      title: action === "merge" ? "Merging stack..." : "Rebasing stack...",
+    });
     const result = await runAction({
       environmentId,
       input: {
@@ -88,13 +92,13 @@ export function PullRequestStackMenu({
     setPending(false);
     onActed();
     if (result._tag === "Failure") {
-      toastManager.add({
+      toastManager.update(toastId, {
         type: "error",
-        title: "Stack operation did not complete",
+        title: action === "merge" ? "Could not merge the stack" : "Could not rebase the stack",
         description: String(squashAtomCommandFailure(result)),
       });
     } else {
-      toastManager.add({
+      toastManager.update(toastId, {
         type: "success",
         title: action === "merge" ? "Stack merge request completed" : "Stack rebased",
         description:

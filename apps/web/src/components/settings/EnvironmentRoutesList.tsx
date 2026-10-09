@@ -104,7 +104,7 @@ export function EnvironmentRoutesList({
   };
 
   return (
-    <div className="mt-2 rounded-md border border-border/70">
+    <div className="mt-2 border-t border-border/50 py-2">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

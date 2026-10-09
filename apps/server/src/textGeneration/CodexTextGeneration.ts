@@ -17,10 +17,13 @@ import { resolveSpawnCommand } from "@supacode/shared/shell";
 
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
-import { expandHomePath } from "../pathExpansion.ts";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
 import { codexExecLaunchArgs, resolveCodexLaunchArgs } from "../provider/codexLaunchArgs.ts";
-import * as TextGenerationOperations from "./TextGenerationOperations.ts";
-import { normalizeCliError, toJsonSchemaObject } from "./TextGenerationUtils.ts";
+import * as TextGenerationOperations from "@supacode/provider-core/server/textGenerationOperations";
+import {
+  normalizeCliError,
+  toJsonSchemaObject,
+} from "@supacode/provider-core/server/textGenerationUtils";
 import { codexModelFamily, getModelSelectionStringOptionValue } from "@supacode/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 

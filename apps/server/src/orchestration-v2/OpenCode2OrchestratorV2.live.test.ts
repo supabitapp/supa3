@@ -54,10 +54,12 @@ import * as CodexInstallation from "../provider/CodexInstallation.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ModelManifest from "../provider/ModelManifest.ts";
 import * as ProviderInstanceRegistryHydration from "../provider/ProviderInstanceRegistryHydration.ts";
-import * as ProviderEventLoggers from "../provider/ProviderEventLoggers.ts";
-import * as OpenCode2Client from "../provider/opencode2/OpenCode2Client.ts";
-import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
-import * as OpenCodeServerLedger from "../provider/OpenCodeServerLedger.ts";
+import * as ProviderLatestVersions from "@supacode/provider-core/server/ProviderLatestVersions";
+import * as McpProviderSessions from "@supacode/provider-core/server/McpProviderSessions";
+import * as ProviderEventLoggers from "@supacode/provider-core/server/ProviderEventLoggers";
+import * as OpenCode2Client from "@supacode/provider-opencode/server/v2/OpenCode2Client";
+import * as OpenCodeRuntime from "@supacode/provider-opencode/server/OpenCodeRuntime";
+import * as OpenCodeServerLedger from "@supacode/provider-opencode/server/OpenCodeServerLedger";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -66,8 +68,8 @@ import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProviderTurnStartServiceTestkit from "./ProviderTurnStartService.testkit.ts";
 import * as RuntimeLayer from "./runtimeLayer.ts";
-import * as IdAllocator from "./IdAllocator.ts";
-import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/ProviderContinuationRequests";
 import * as ProviderContinuationService from "./ProviderContinuationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
@@ -187,6 +189,7 @@ const layerProviderInstanceRegistry = ProviderInstanceRegistryHydration.layer.pi
         ProviderEventLoggers.ProviderEventLoggers,
         ProviderEventLoggers.NoOpProviderEventLoggers,
       ),
+      ProviderLatestVersions.layer,
       ModelManifest.layerTest,
       AntigravityInstallation.AntigravityInstallation.layer.pipe(
         Layer.provide(layerServerConfig.pipe(Layer.provide(layerPlatformTest))),
@@ -217,6 +220,7 @@ const layerOrchestration = RuntimeLayer.layer.pipe(
   Layer.provide(ResetCreditCoordinator.layer),
   Layer.provide(layerBackgroundPolicy),
   Layer.provide(layerPlatformTest),
+  Layer.provide(McpProviderSessions.layer),
 );
 
 // Starts the continuation run a provider wake asks for, as the production layer does.

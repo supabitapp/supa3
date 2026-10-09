@@ -51,6 +51,7 @@ import { DeviceStreamView } from "../device/DeviceStreamView";
 import type { DeviceScreenSize } from "@supacode/client-runtime/device/stream";
 import type { PreviewStreamViewport } from "@supacode/client-runtime/preview/server-browser-stream";
 import { previewBridge } from "./previewBridge";
+import { showPreviewPopup } from "./showPreviewPopup";
 import {
   clampPreviewMiniPlayerPosition,
   NO_PREVIEW_MINI_PLAYER_OBSTACLES,
@@ -239,6 +240,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
               controlPosition="bottom"
               onFirstFrame={() => setStreamFrameTabId(runtimeTabId)}
               onViewport={setStreamViewport}
+              onPopup={(popupTabId) => showPreviewPopup(threadRef, popupTabId, "floating")}
               className="size-full"
             />
           </div>

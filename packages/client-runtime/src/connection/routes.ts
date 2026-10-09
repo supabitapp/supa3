@@ -1,6 +1,7 @@
 import {
   isLocalLoopbackHost,
   isPrivateNetworkHost,
+  isSharedAddressSpaceHost,
   isTailnetHost,
 } from "@supacode/shared/hostClassification";
 import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contracts";
@@ -13,8 +14,7 @@ import {
 } from "./catalog.ts";
 import { BearerConnectionTarget, type ConnectionTarget } from "./model.ts";
 
-/** Routes are ordered from the most direct address to the least specific fallback. */
-export type ConnectionRouteKind = "loopback" | "lan" | "tailnet" | "public" | "ssh";
+export type ConnectionRouteKind = "loopback" | "lan" | "tailnet" | "vpn" | "public" | "ssh";
 
 export function connectionRouteId(target: ConnectionTarget): string {
   switch (target._tag) {
@@ -135,7 +135,11 @@ export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind
       const hostname = routeHostname(route);
       if (hostname === null) return "public";
       if (isLocalLoopbackHost(hostname)) return "loopback";
-      if (isTailnetHost(hostname)) return "tailnet";
+      const profile = Option.getOrNull(route.profile);
+      const tailscale =
+        profile?._tag === "BearerConnectionProfile" && profile.network === "tailscale";
+      if (tailscale || isTailnetHost(hostname)) return "tailnet";
+      if (isSharedAddressSpaceHost(hostname)) return "vpn";
       return isPrivateNetworkHost(hostname) ? "lan" : "public";
     }
   }
@@ -145,6 +149,7 @@ const ROUTE_KIND_RANK: Record<ConnectionRouteKind, number> = {
   loopback: 0,
   lan: 1,
   tailnet: 2,
+  vpn: 2,
   public: 3,
   ssh: 4,
 };
@@ -200,6 +205,8 @@ export function connectionRouteLabel(route: ConnectionRoute): string {
       return "LAN";
     case "tailnet":
       return "Tailscale";
+    case "vpn":
+      return "VPN";
     case "ssh": {
       const profile = Option.getOrNull(route.profile);
       return profile?._tag === "SshConnectionProfile"
@@ -222,7 +229,8 @@ export function connectionRouteAddress(route: ConnectionRoute): string | null {
 export function mergeLearnedRoutes(input: {
   readonly entry: ConnectionCatalogEntry;
   readonly activeRoute: ConnectionRoute;
-  readonly reported: ReadonlyArray<{ readonly httpBaseUrl: string }>;
+  readonly reported: ReadonlyArray<ReportedEndpoint>;
+
   readonly allowInsecure: boolean;
 }): ReadonlyArray<ConnectionRoute> | null {
   const { entry } = input;
@@ -232,6 +240,7 @@ export function mergeLearnedRoutes(input: {
   const sharedCredential = credentialConnectionId(active.connectionId);
 
   const reported = new Map<string, URL>();
+  const tailscaleOrigins = new Set<string>();
   for (const endpoint of input.reported) {
     let url: URL;
     try {
@@ -243,6 +252,7 @@ export function mergeLearnedRoutes(input: {
     if (url.protocol === "http:" && !input.allowInsecure) continue;
     if (isLocalLoopbackHost(url.hostname)) continue;
     reported.set(url.origin, url);
+    if (endpoint.kind === "tailnet") tailscaleOrigins.add(url.origin);
   }
   const normalized = (url: string) => url.replace(/\/+$/, "");
   const known = new Set(
@@ -251,12 +261,18 @@ export function mergeLearnedRoutes(input: {
       return url === null || isLearned(route) ? [] : [normalized(url)];
     }),
   );
-  const kept = saved.filter((route) => {
-    if (!isLearned(route)) return true;
+  const kept = saved.flatMap((route): ReadonlyArray<ConnectionRoute> => {
     const url = routeHttpBaseUrl(route);
-    if (url === null || !reported.has(normalized(url)) || known.has(normalized(url))) return false;
+    if (!isLearned(route)) {
+      return [
+        url === null || !reported.has(normalized(url))
+          ? route
+          : withNetwork(route, tailscaleOrigins.has(normalized(url))),
+      ];
+    }
+    if (url === null || !reported.has(normalized(url)) || known.has(normalized(url))) return [];
     known.add(normalized(url));
-    return true;
+    return [withNetwork(route, tailscaleOrigins.has(normalized(url)))];
   });
   let next: ReadonlyArray<ConnectionRoute> = kept;
   for (const url of reported.values()) {
@@ -281,15 +297,44 @@ export function mergeLearnedRoutes(input: {
           httpBaseUrl,
           wsBaseUrl: `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/`,
           learned: true,
+          ...(tailscaleOrigins.has(url.origin) ? { network: "tailscale" as const } : {}),
         }),
       ),
     });
   }
   const signature = (routes: ReadonlyArray<ConnectionRoute>) =>
     routes
-      .map((route) => `${connectionRouteId(route.target)} ${routeHttpBaseUrl(route) ?? ""}`)
+      .map(
+        (route) =>
+          `${connectionRouteId(route.target)} ${routeHttpBaseUrl(route) ?? ""} ${connectionRouteKind(route)}`,
+      )
       .join("\n");
   return signature(saved) === signature(next) ? null : next;
+}
+
+export interface ReportedEndpoint {
+  readonly httpBaseUrl: string;
+  readonly kind?: string;
+}
+
+function withNetwork(route: ConnectionRoute, tailscale: boolean): ConnectionRoute {
+  const profile = Option.getOrNull(route.profile);
+  if (profile?._tag !== "BearerConnectionProfile") return route;
+  if ((profile.network === "tailscale") === tailscale) return route;
+  return {
+    target: route.target,
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: profile.connectionId,
+        environmentId: profile.environmentId,
+        label: profile.label,
+        httpBaseUrl: profile.httpBaseUrl,
+        wsBaseUrl: profile.wsBaseUrl,
+        ...(profile.learned === undefined ? {} : { learned: profile.learned }),
+        ...(tailscale ? { network: "tailscale" as const } : {}),
+      }),
+    ),
+  };
 }
 
 function learnedConnectionId(

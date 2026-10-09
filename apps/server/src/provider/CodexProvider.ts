@@ -38,9 +38,9 @@ import {
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
   type ServerProviderDraft,
-} from "./providerSnapshot.ts";
-import { expandHomePath } from "../pathExpansion.ts";
-import { makeUnavailableUsageLimits } from "./providerUsageLimits.ts";
+} from "@supacode/provider-core/server/snapshotProbe";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
+import { makeUnavailableUsageLimits } from "@supacode/provider-core/server/usageLimits";
 import {
   codexRateLimitsFailureMessage,
   codexRateLimitsToLimits,
@@ -716,7 +716,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
 // NOTE: the singleton `CodexProviderLive` Layer has been removed as part of
 // the per-instance-driver refactor. `CodexDriver.create()` builds a managed
 // snapshot per instance (each with its own `CodexSettings`) and hands the
-// resulting `ServerProviderShape` back as `ProviderInstance.snapshot`.
+
 //
 // The `makePendingCodexProvider` and `checkCodexProviderStatus` helpers are
 // re-exported for use by `CodexDriver`.

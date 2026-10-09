@@ -899,12 +899,38 @@ const collectOutput = Effect.fnUntraced(function* (
   };
 });
 
+export const windowsLongPathConfigEnv = (
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv => {
+  if (platform !== "win32") {
+    return {};
+  }
+  const countKey =
+    Object.keys(env).find((key) => key.toUpperCase() === "GIT_CONFIG_COUNT") ?? "GIT_CONFIG_COUNT";
+  const inherited = env[countKey];
+  if (
+    inherited !== undefined &&
+    inherited !== "" &&
+    /^[ \t\r\n\v\f]*(?:\+?\d+|-0+)/.exec(inherited)?.[0] !== inherited
+  ) {
+    return {};
+  }
+  const count = inherited === undefined || inherited === "" ? 0 : Number.parseInt(inherited, 10);
+  return {
+    [countKey]: String(count + 1),
+    [`GIT_CONFIG_KEY_${count}`]: "core.longpaths",
+    [`GIT_CONFIG_VALUE_${count}`]: "true",
+  };
+};
+
 export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const { worktreesDir } = yield* ServerConfig.ServerConfig;
   const crypto = yield* Crypto.Crypto;
+  const hostPlatform = yield* HostProcessPlatform;
 
   const executeRaw: GitVcsDriver.GitVcsDriver["Service"]["execute"] = Effect.fnUntraced(
     function* (input) {
@@ -929,18 +955,19 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               }),
           ),
         );
+        const env = {
+          ...process.env,
+          // Status polling runs beside the user's own git commands; without this,
+          // `git status` takes index.lock to save its refreshed index.
+          GIT_OPTIONAL_LOCKS: "0",
+          ...input.env,
+          ...trace2Monitor.env,
+        };
         const child = yield* commandSpawner
           .spawn(
             ChildProcess.make("git", commandInput.args, {
               cwd: commandInput.cwd,
-              env: {
-                ...process.env,
-                // Status polling runs beside the user's own git commands; without this,
-                // `git status` takes index.lock to save its refreshed index.
-                GIT_OPTIONAL_LOCKS: "0",
-                ...input.env,
-                ...trace2Monitor.env,
-              },
+              env: { ...env, ...windowsLongPathConfigEnv(hostPlatform, env) },
             }),
           )
           .pipe(
@@ -3748,7 +3775,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const removeWorktree: GitVcsDriver.GitVcsDriver["Service"]["removeWorktree"] = Effect.fn(
     "removeWorktree",
   )(function* (input) {
-    const args = ["worktree", "remove"];
+    const args = ["-c", "status.showUntrackedFiles=normal", "worktree", "remove"];
     if (input.force) {
       args.push("--force");
     }

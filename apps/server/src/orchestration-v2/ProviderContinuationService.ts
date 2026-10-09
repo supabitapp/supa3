@@ -3,8 +3,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
-import * as IdAllocator from "./IdAllocator.ts";
-import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
+import * as ProviderContinuationRequests from "@supacode/provider-core/server/ProviderContinuationRequests";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { isUndeliveredMailboxSteer } from "./NotificationMailbox.ts";
 

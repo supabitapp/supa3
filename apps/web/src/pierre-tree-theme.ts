@@ -11,6 +11,7 @@ export const PIERRE_TREE_UNSAFE_CSS = `
     --trees-font-size-override: 12px;
   }
   button[data-type='item'] { border-radius: 5px; }
+  svg[data-icon-name='supacode-tree-icon-loading'] { opacity: 0.6; }
 `;
 
 /** Host styles that keep a Pierre tree on the active color scheme and foreground. */

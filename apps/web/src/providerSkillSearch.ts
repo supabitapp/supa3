@@ -1,7 +1,7 @@
+import { formatProviderSkillDisplayName } from "@supacode/shared/inlineSkills";
 import type { ServerProviderSkill } from "@supacode/contracts";
 import {
   dedupeProviderSkillsByName,
-  formatProviderSkillDisplayName,
   isProviderSkillUserInvocable,
 } from "@supacode/client-runtime/providerSkills";
 import {

@@ -20,6 +20,11 @@ export type DuoControlState = {
   error: string | null;
 };
 
+export function duoScreenSettled(screen: Pick<DeviceScreenSize, "screenId" | "hingeAngle">) {
+  const angle = screen.hingeAngle ?? (screen.screenId === 1 ? 0 : 180);
+  return (screen.screenId === 1) === (angle === 0);
+}
+
 /**
  * The fold the device is in and the way it is held. Missing hinge fields fall back the same way
  * the 3D view does, so controls never disagree with what is drawn. The inner panel is mounted a
@@ -34,7 +39,16 @@ export function duoFoldState(
     fold: angle === 0 ? "closed" : angle === 180 ? "open" : "half",
     stand: screen.hingePose === "laptop" || screen.hingePose === "tent",
     phoneVertical: screen.screenId === 1 ? !landscape : landscape,
+    settled: duoScreenSettled(screen),
   } as const;
+}
+
+export function duoHoldOrientation(
+  vertical: boolean,
+  screenId: number | undefined,
+): DuoOrientation {
+  if (screenId === 1) return vertical ? "portrait" : "landscape_left";
+  return vertical ? "landscape_left" : "portrait_upside_down";
 }
 
 /** One in-flight native transaction. Hinge motion coalesces; presets replace queued motion. Nothing replays after reconnect. */

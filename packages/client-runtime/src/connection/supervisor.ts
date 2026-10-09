@@ -27,7 +27,12 @@ import {
 import * as RpcSession from "../rpc/session.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
-import { connectionRouteId, connectionRoutes, entryWithRoutes } from "./routes.ts";
+import {
+  connectionRouteId,
+  connectionRoutes,
+  entryWithRoutes,
+  type ReportedEndpoint,
+} from "./routes.ts";
 
 const RETRY_BASE_DELAY_MS = 1_000;
 const RETRY_MAX_DELAY_MS = 300_000;
@@ -89,7 +94,7 @@ export interface EnvironmentSupervisorOptions {
   readonly initiallyDesired?: boolean;
   readonly learnRoutes?: (input: {
     readonly activeRoute: ConnectionRoute;
-    readonly reported: ReadonlyArray<{ readonly httpBaseUrl: string }>;
+    readonly reported: ReadonlyArray<ReportedEndpoint>;
   }) => Effect.Effect<Option.Option<ConnectionCatalogEntry>>;
 }
 

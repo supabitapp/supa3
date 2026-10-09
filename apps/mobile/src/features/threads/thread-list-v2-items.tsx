@@ -29,7 +29,7 @@ import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSw
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
 import { environmentPresentations } from "../../state/presentation";
-import { SymbolView } from "../../components/AppSymbol";
+import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
@@ -45,6 +45,7 @@ import { useSwipeRowDormant } from "../home/swipe-row-activation";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
 import {
+  type ThreadListV2Status,
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
   resolveThreadListV2SnoozeGateExpiryMs,
   resolveThreadListV2SnoozeMenuSelection,
@@ -54,6 +55,7 @@ import {
   resolveThreadListV2SwipeActions,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
+import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
@@ -66,6 +68,57 @@ import { resolveThreadListV2RowStatusLabel } from "./thread-list-row-status";
  * long-press actions. State reads through colored status labels and text
  * hierarchy rather than card fills.
  */
+
+interface StatusLabel {
+  readonly label: string;
+  readonly icon: AppSymbolName;
+  readonly className: string;
+  readonly iconTintClassName: string;
+}
+const STATUS_LABEL_BY_STATUS: Partial<Record<ThreadListV2Status, StatusLabel>> = {
+  approval: {
+    label: "Approval",
+    icon: "exclamationmark.shield",
+    className: "text-warning-foreground",
+    iconTintClassName: "accent-warning-foreground",
+  },
+  input: {
+    label: "Input",
+    icon: "questionmark.bubble",
+    className: "text-adaptive-indigo-600-300",
+    iconTintClassName: "accent-adaptive-indigo-600-300",
+  },
+  working: {
+    label: "Working",
+    icon: "circle.dashed",
+    className: "text-adaptive-sky-600-400",
+    iconTintClassName: "accent-adaptive-sky-600-400",
+  },
+  waiting: {
+    label: "Waiting",
+    icon: "circle.dashed",
+    className: "text-adaptive-sky-600-400",
+    iconTintClassName: "accent-adaptive-sky-600-400",
+  },
+  failed: {
+    label: "Failed",
+    icon: "exclamationmark.circle",
+    className: "text-danger-foreground",
+    iconTintClassName: "accent-danger-foreground",
+  },
+  limited: {
+    label: "Limited",
+    icon: "exclamationmark.circle",
+    className: "text-warning-foreground",
+    iconTintClassName: "accent-warning-foreground",
+  },
+};
+const DONE_STATUS_LABEL: StatusLabel = {
+  label: "Done",
+  icon: "checkmark.circle",
+  className: "text-adaptive-emerald-700-300",
+  iconTintClassName: "accent-adaptive-emerald-700-300",
+};
 
 // Menus keep lifecycle and title regeneration together. Archive keeps its
 // own surface (thread screen / settings) rather than crowding v2 rows.
@@ -664,7 +717,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // label as the web sidebar, sourced from the server-side visited watermark
   // so checking a thread on any device clears it everywhere.
   const isUnread = status === "ready" && threadHasUnseenCompletion(thread);
-  const statusLabel = resolveThreadListV2RowStatusLabel({
+  const rowStatusLabel = resolveThreadListV2RowStatusLabel({
     environmentConnected,
     status,
     isUnread,
@@ -677,6 +730,22 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     environmentConnected && (status === "working" || status === "waiting")
       ? resolveThreadListDurationStartedAt(thread)
       : null;
+  const statusAppearance = environmentConnected
+    ? (STATUS_LABEL_BY_STATUS[status] ?? (isUnread ? DONE_STATUS_LABEL : undefined))
+    : undefined;
+  const statusLabel =
+    rowStatusLabel === undefined
+      ? undefined
+      : {
+          ...rowStatusLabel,
+          icon: statusAppearance?.icon ?? ("wifi.slash" as const),
+          iconTintClassName:
+            statusAppearance?.iconTintClassName ??
+            (selected
+              ? selectedThreadRowColors.iconTintClassName
+              : rowAppearance.mutedIconTintClassName),
+        };
+  const recede = environmentConnected && shouldRecedeThreadRow({ status, selected });
   // The timestamp is precomputed on the list item (same stamps the settled
   // tail sorts by) so a minute tick only re-renders rows that draw it.
   const timeLabel = props.timeLabel;
@@ -1022,22 +1091,44 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             type="monochrome"
           />
         ) : null}
-        <ThreadListWorkingStatus
-          key={durationStartedAt}
-          label={statusLabel?.label ?? timeLabel}
-          startedAt={durationStartedAt}
-          className={cn(
-            "text-xs tabular-nums",
-            statusLabel?.className ??
-              (selected
+        {statusLabel ? (
+          <View className="flex-row items-center gap-1">
+            <SymbolView
+              name={statusLabel.icon}
+              size={13}
+              tintColorClassName={
+                selected ? selectedThreadRowColors.iconTintClassName : statusLabel.iconTintClassName
+              }
+              type="monochrome"
+              weight="semibold"
+            />
+            <ThreadListWorkingStatus
+              className={cn(
+                "text-xs font-supacode-bold",
+                selected ? selectedThreadRowColors.foregroundClassName : statusLabel.className,
+              )}
+              label={statusLabel.label}
+              startedAt={durationStartedAt}
+            />
+          </View>
+        ) : (
+          <Text
+            className={cn(
+              "text-xs tabular-nums",
+              selected
                 ? selectedThreadRowColors.foregroundClassName
-                : rowAppearance.tertiaryForegroundClassName),
-          )}
-        />
+                : rowAppearance.tertiaryForegroundClassName,
+            )}
+          >
+            {timeLabel}
+          </Text>
+        )}
       </View>
       <Text
         className={cn(
-          "mt-1 text-base font-supacode-medium",
+          "mt-1 text-base",
+
+          !recede && "font-supacode-medium",
           selected
             ? selectedThreadRowColors.foregroundClassName
             : rowAppearance.foregroundClassName,
@@ -1181,6 +1272,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     </>
   );
 
+  const fadedCardContent = recede ? (
+    <View style={{ opacity: 0.55 }}>{cardContent}</View>
+  ) : (
+    cardContent
+  );
+
   const rowContent = (close: () => void) =>
     variant === "card" ? (
       <RowPressable
@@ -1201,7 +1298,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         style={rowAppearance.cardStyle}
       >
         {sidebarPane ? (
-          <View className={cn(!environmentConnected && "opacity-50")}>{cardContent}</View>
+          <View className={cn(!environmentConnected && "opacity-50")}>{fadedCardContent}</View>
         ) : (
           /* Flat native list rows: no tonal containers — colored status
              labels and text hierarchy carry state, an inset hairline
@@ -1214,7 +1311,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 !environmentConnected && "opacity-50",
               )}
             >
-              {cardContent}
+              {fadedCardContent}
             </View>
             {THREAD_LIST_V2_ROW_DIVIDERS && props.showTrailingDivider !== false ? (
               <View className="ml-5 h-px bg-border-subtle" />

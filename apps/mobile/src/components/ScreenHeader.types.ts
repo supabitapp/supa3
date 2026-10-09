@@ -8,6 +8,8 @@ export interface ScreenHeaderAction {
   readonly icon: AppSymbolName;
   readonly onPress: () => void;
   readonly disabled?: boolean;
+
+  readonly loading?: boolean;
   readonly selected?: boolean;
   readonly tintColor?: ColorValue;
 }

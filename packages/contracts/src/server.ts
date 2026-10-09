@@ -86,6 +86,14 @@ export const ServerProviderModel = Schema.Struct({
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 
+export const ServerProviderUpdateRequiredModel = Schema.Struct({
+  slug: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  badge: Schema.optional(Schema.Literal("new")),
+  minVersion: TrimmedNonEmptyString,
+});
+export type ServerProviderUpdateRequiredModel = typeof ServerProviderUpdateRequiredModel.Type;
+
 export const ServerProviderSlashCommandInput = Schema.Struct({
   hint: TrimmedNonEmptyString,
 });
@@ -285,6 +293,8 @@ export const ServerProvider = Schema.Struct({
   // Surfaces in the UI alongside the missing-driver affordance.
   unavailableReason: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
+
+  updateRequiredModels: Schema.optionalKey(Schema.Array(ServerProviderUpdateRequiredModel)),
   slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -669,6 +679,8 @@ export const ServerConfig = Schema.Struct({
   threadSnapshotPagination: Schema.optionalKey(Schema.Boolean),
   /** Whether thread reads accept the reasoningMessages opt-in. */
   reasoningMessages: Schema.optionalKey(Schema.Boolean),
+  threadFind: Schema.optionalKey(Schema.Boolean),
+  threadFindProgressive: Schema.optionalKey(Schema.Boolean),
   /**
    * Folder behind this environment's Scratch project, for threads that need
    * no repository. Present only on servers that answer projects.ensureScratch

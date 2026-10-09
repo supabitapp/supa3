@@ -1,11 +1,11 @@
 import type { ProviderInteractionMode } from "@supacode/contracts";
 import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app-server/schema";
-import { buildRuntimeInstructions } from "./RuntimeInstructions.ts";
+import { buildRuntimeInstructions } from "@supacode/provider-core/server/runtimeInstructions";
 
 import {
   SUPACODE_BROWSER_TOOL_INSTRUCTIONS,
   SUPACODE_ORCHESTRATION_INSTRUCTIONS,
-} from "./SupacodeOrchestrationInstructions.ts";
+} from "@supacode/provider-core/server/orchestrationInstructions";
 
 const SUPACODE_DEVICE_TOOL_INSTRUCTIONS = `## Supacode devices
 

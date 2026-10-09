@@ -29,6 +29,11 @@ const encodeEvent = Schema.encodeSync(Schema.fromJsonString(DesktopBrowserEvent)
 const decodeCommand = Schema.decodeUnknownOption(Schema.fromJsonString(DesktopBrowserCommand));
 const lineEncoder = new TextEncoder();
 
+const AGENT_INPUT_COMMAND =
+  /"method":"(?:Input\.|Page\.navigate"|Runtime\.(?:evaluate|callFunctionOn)")/;
+
+const AGENT_DOWNLOAD_WINDOW_MS = 5_000;
+
 export interface DesktopBrowserTabKey {
   readonly threadId: string;
   readonly tabId: string;
@@ -50,6 +55,8 @@ interface AttachedTab {
   downloadDirectory: string | null;
   /** The guid CDP gave the download that is about to start. */
   pendingDownloadGuid: string | null;
+
+  agentInputAt: number;
   readonly onMessage: (
     event: Electron.Event,
     method: string,
@@ -72,6 +79,8 @@ export class DesktopBrowserHost extends Context.Service<
     readonly attach: (key: DesktopBrowserTabKey, debuggee: DesktopBrowserTabDebugger) => void;
     /** Withdraws it: closed, swapped, crashed, or devtools needs the debugger. */
     readonly detach: (key: DesktopBrowserTabKey) => void;
+
+    readonly humanStartedDownload: (source: Electron.WebContents) => boolean;
     /** Points a server tab's download at the server; false for any other download. */
     readonly placeDownload: (source: Electron.WebContents, item: Electron.DownloadItem) => boolean;
     /** The agent's cursor positions for attached tabs, keyed by their server tab. */
@@ -161,6 +170,7 @@ export const make = Effect.gen(function* () {
       relay: null,
       downloadDirectory: null,
       pendingDownloadGuid: null,
+      agentInputAt: Number.NEGATIVE_INFINITY,
       onMessage: (_event, method, params, sessionId) => {
         if (method === "Browser.downloadWillBegin") {
           const guid = (params as { guid?: unknown } | undefined)?.guid;
@@ -190,8 +200,14 @@ export const make = Effect.gen(function* () {
         tab.relay = null;
         return;
       }
+      if (AGENT_INPUT_COMMAND.test(command.value.message)) tab.agentInputAt = performance.now();
       relayFor(tab).receive(command.value.message);
     });
+
+  const humanStartedDownload = (source: Electron.WebContents) => {
+    const tab = [...tabs.values()].find((candidate) => candidate.debuggee.webContents === source);
+    return tab !== undefined && performance.now() - tab.agentInputAt > AGENT_DOWNLOAD_WINDOW_MS;
+  };
 
   // Read when a backend starts, not when the host is built.
   const announceAll = Effect.suspend(() =>
@@ -219,6 +235,7 @@ export const make = Effect.gen(function* () {
     attach,
     detach,
     placeDownload,
+    humanStartedDownload,
   });
 });
 

@@ -19,7 +19,7 @@ export interface BrowserViewportLayout {
   readonly fillsPanel: boolean;
 }
 
-export const BROWSER_DEVICE_TOOLBAR_HEIGHT = 32;
+export const BROWSER_DEVICE_TOOLBAR_HEIGHT = 38;
 export const BROWSER_VIEWPORT_RESIZE_RAIL_SIZE = 10;
 
 export type BrowserViewportResizeDirection =

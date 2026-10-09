@@ -3,6 +3,7 @@ import type { EnvironmentId, PreviewRuntime, PreviewSessionSnapshot } from "@sup
 
 import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
+import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 import {
   readEnvironmentSupportsServerBrowser,
@@ -10,7 +11,25 @@ import {
 } from "~/state/entities";
 
 export function previewRuntimeFor(environmentId: EnvironmentId): PreviewRuntime | undefined {
-  return readEnvironmentSupportsServerBrowser(environmentId) ? "server" : undefined;
+  if (!readEnvironmentSupportsServerBrowser(environmentId)) return undefined;
+  if (
+    isPreviewSupportedInRuntime() &&
+    environmentId !== appAtomRegistry.get(primaryEnvironmentIdAtom)
+  ) {
+    return undefined;
+  }
+  return "server";
+}
+
+export function alternatePreviewRuntime(
+  environmentId: EnvironmentId,
+  primaryEnvironmentId: EnvironmentId | null,
+  serverBrowser: boolean,
+  snapshot: Pick<PreviewSessionSnapshot, "runtime"> | null | undefined,
+): PreviewRuntime | null {
+  if (!snapshot || !serverBrowser || !isPreviewSupportedInRuntime()) return null;
+  if (environmentId === primaryEnvironmentId) return null;
+  return snapshot.runtime === "server" ? "desktop" : "server";
 }
 
 /** Electron hosts its own browser tabs; other clients need the environment to host them. */

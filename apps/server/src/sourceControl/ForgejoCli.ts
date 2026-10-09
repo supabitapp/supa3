@@ -14,7 +14,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { decodeJsonResult } from "@supacode/shared/schemaJson";
 import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
-import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
+import { collectUint8StreamText } from "@supacode/provider-core/server/collectStreamText";
 import type { SourceControlProviderContext } from "./SourceControlProvider.ts";
 
 const encodeApiBody = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
