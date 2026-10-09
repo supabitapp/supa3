@@ -286,7 +286,7 @@ describe("pinned thread operation permissions", () => {
       }),
     ];
 
-    expect(await useThreadListActions().moveThread(moved, "up")).toBe(false);
+    expect(await useThreadListActions().moveThread(moved, "down")).toBe(false);
     expect(state.requests).toEqual([]);
   });
 
@@ -320,7 +320,7 @@ describe("pinned thread operation permissions", () => {
     ];
     state.afterRequest = () => state.scopes.get(primaryEnvironmentId)!.clear();
 
-    expect(await useThreadListActions().moveThread(moved, "up")).toBe(false);
+    expect(await useThreadListActions().moveThread(moved, "down")).toBe(false);
     expect(state.requests).toHaveLength(1);
   });
 });
