@@ -1,5 +1,6 @@
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
 import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
+import { pageRecentThreads } from "@supacode/client-runtime/state/thread-sort";
 import {
   resolveSidebarDropTarget,
   sidebarListItemId,
@@ -171,13 +172,12 @@ export function createSidebarSortingStrategy(input: {
     const settledOrder = (
       input.settledOrder.length > 0 ? input.settledOrder : groups.settled.map((item) => item.key)
     ).filter((key) => key !== active.key || target.section === "settled");
-    const visible = input.settledExpanded
-      ? settledOrder.slice(0, input.settledVisibleCount ?? settledOrder.length)
-      : [];
     const routeKey = input.routeThreadKey;
-    if (routeKey && settledOrder.includes(routeKey) && !visible.includes(routeKey)) {
-      visible.push(routeKey);
-    }
+    const visible = pageRecentThreads(
+      settledOrder,
+      input.settledExpanded ? (input.settledVisibleCount ?? settledOrder.length) : 0,
+      (key) => key === routeKey,
+    );
     groups.settled = visible.map((key) => ({ kind: "thread", key, section: "settled" }));
     const projected: SidebarListItem[] = [];
     const marker = (name: SidebarListMarker) => projected.push({ kind: "marker", marker: name });
@@ -206,6 +206,9 @@ export function createSidebarSortingStrategy(input: {
       projected.push(...groups.snoozed);
     }
     marker("settled-header");
+    if (items.some((item) => item.kind === "marker" && item.marker === "settled-more")) {
+      marker("settled-more");
+    }
     section("settled");
     const heights = projected.map((item) => {
       const index = indices.get(sidebarListItemId(item));

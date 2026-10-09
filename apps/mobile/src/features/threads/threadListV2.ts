@@ -19,9 +19,11 @@ import {
 } from "@supacode/client-runtime/state/thread-inbox";
 import {
   sortActiveThreadsByOrderKey,
+  pageRecentThreads,
   resolveSettledThreadTimestamp,
   sortPinnedThreadsByOrderKey,
   sortSettledThreads,
+  sortSnoozedThreadsByWake,
 } from "@supacode/client-runtime/state/thread-sort";
 import type { EnvironmentId, ProjectId } from "@supacode/contracts";
 
@@ -562,7 +564,6 @@ export function buildThreadListV2ListItems(input: {
       expanded: input.settledShelfExpanded !== false,
       disabled: shelfDisabled,
     });
-    result.push(...threadItems.slice(settledShelfHeaderIndex));
     if (input.settledShelfExpanded !== false && hiddenSettledCount > 0) {
       result.push({
         type: "v2-show-more",
@@ -570,6 +571,7 @@ export function buildThreadListV2ListItems(input: {
         hiddenCount: hiddenSettledCount,
       });
     }
+    result.push(...threadItems.slice(settledShelfHeaderIndex));
   }
   if (snoozedShelfHeaderIndex !== null && snoozedCount > 0) {
     result.push({
@@ -746,12 +748,8 @@ export function buildThreadListV2Items(input: {
   // The inbox orders by when each thread came back to the user, not the saved
   // arrangement.
   const orderedActive = sortInboxThreadsByReturn(active, input.inboxReturnAt);
-  // Newest send first; finishing and waking again do not move a row.
   const orderedWorking = sortWorkingThreadsBySend(working);
-  const orderedSnoozed = [...snoozed].sort(
-    (left, right) =>
-      parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
-  );
+  const orderedSnoozed = sortSnoozedThreadsByWake(snoozed);
   const selectedThreadKey = input.selectedThreadKey ?? null;
   const visibleActive =
     input.activeShelfExpanded !== false
@@ -773,12 +771,11 @@ export function buildThreadListV2Items(input: {
         );
   const orderedSettled = sortSettledThreads(settled);
   const settledLimit = input.settledLimit ?? Number.POSITIVE_INFINITY;
-  const pagedSettled =
-    orderedSettled.length > settledLimit ? orderedSettled.slice(0, settledLimit) : orderedSettled;
-  const selectedSettled = orderedSettled
-    .slice(pagedSettled.length)
-    .find((thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey);
-  if (selectedSettled !== undefined) pagedSettled.push(selectedSettled);
+  const pagedSettled = pageRecentThreads(
+    orderedSettled,
+    settledLimit,
+    (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
+  );
   const visibleSettled =
     input.settledShelfExpanded !== false
       ? pagedSettled

@@ -1947,8 +1947,8 @@ describe("sortPinnedThreadsForSidebar", () => {
     expect(sorted.map((thread) => thread.id)).toEqual([
       "first",
       "second",
-      "keyless-new",
       "keyless-old",
+      "keyless-new",
     ]);
   });
 
@@ -2118,7 +2118,7 @@ describe("Working shelf", () => {
           : { ...makeLatestRun({ completedAt: input.completedAt }), requestedAt: input.createdAt },
     });
 
-    it("puts the thread that finished last on top, whatever its age", () => {
+    it("puts the thread that finished last at the bottom, whatever its age", () => {
       const sorted = sortInboxThreadsByReturn([
         thread("new", { createdAt: "2026-03-09T11:00:00.000Z" }),
         thread("old-finished-now", {
@@ -2130,7 +2130,7 @@ describe("Working shelf", () => {
           unsettledAt: "2026-03-09T11:30:00.000Z",
         }),
       ]);
-      expect(sorted.map((entry) => entry.id)).toEqual(["old-finished-now", "reopened", "new"]);
+      expect(sorted.map((entry) => entry.id)).toEqual(["new", "reopened", "old-finished-now"]);
     });
 
     it("counts a return the server does not stamp, like an approval request", () => {
@@ -2143,14 +2143,14 @@ describe("Working shelf", () => {
         completedAt: "2026-03-09T11:00:00.000Z",
       });
       expect(sortInboxThreadsByReturn([finished, waiting]).map((entry) => entry.id)).toEqual([
-        "finished",
         "asks-approval",
+        "finished",
       ]);
       expect(
         sortInboxThreadsByReturn([finished, waiting], (entry) =>
           entry === waiting ? Date.parse("2026-03-09T11:05:00.000Z") : undefined,
         ).map((entry) => entry.id),
-      ).toEqual(["asks-approval", "finished"]);
+      ).toEqual(["finished", "asks-approval"]);
     });
   });
 

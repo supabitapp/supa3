@@ -1,10 +1,11 @@
-import { ProjectId, RunId } from "@supacode/contracts";
+import { EnvironmentId, ProjectId, RunId, ThreadId } from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   activeThreadAnchorTimestampMs,
   generateSpreadPinOrderKeys,
   getLatestThreadForProject,
+  pageRecentThreads,
   pinOrderKeyBetween,
   planPinnedMove,
   planPinnedReorder,
@@ -12,6 +13,7 @@ import {
   sortActiveThreadsByOrderKey,
   sortPinnedThreadsByOrderKey,
   sortSettledThreads,
+  sortSnoozedThreadsByWake,
   sortThreads,
   type SettledThreadTimestampInput,
   type ThreadSortInput,
@@ -88,7 +90,7 @@ describe("sortSettledThreads", () => {
     updatedAt: input.updatedAt ?? "2026-03-09T09:00:00.000Z",
   });
 
-  it("orders by settle time, most recently settled first", () => {
+  it("orders by settle time, most recently settled last", () => {
     const sorted = sortSettledThreads([
       settled({
         id: "settled-first",
@@ -103,7 +105,7 @@ describe("sortSettledThreads", () => {
       }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["settled-last", "settled-first"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["settled-first", "settled-last"]);
   });
 
   it("falls back to last activity for auto-settled threads without a settledAt stamp", () => {
@@ -113,7 +115,7 @@ describe("sortSettledThreads", () => {
       settled({ id: "auto-recent", latestUserMessageAt: "2026-03-09T11:00:00.000Z" }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["auto-recent", "explicit", "auto-old"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["auto-old", "explicit", "auto-recent"]);
   });
 
   it("counts a turn completion as activity for auto-settled threads", () => {
@@ -135,7 +137,7 @@ describe("sortSettledThreads", () => {
       }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["completed-later", "message-only"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["message-only", "completed-later"]);
   });
 
   it("breaks timestamp ties by id so the order is stable", () => {
@@ -167,7 +169,7 @@ describe("sortSettledThreads", () => {
       return timestamp === null ? 0 : Date.parse(timestamp);
     };
     const expected = threads.toSorted(
-      (left, right) => timestampMs(right) - timestampMs(left) || left.id.localeCompare(right.id),
+      (left, right) => timestampMs(left) - timestampMs(right) || left.id.localeCompare(right.id),
     );
 
     expect(sortSettledThreads(threads).map((thread) => thread.row)).toEqual(
@@ -359,6 +361,21 @@ describe("planPinnedMove", () => {
 });
 
 describe("sortPinnedThreadsByOrderKey", () => {
+  it("preserves arranged pins and puts the newest unarranged pin last", () => {
+    const threads = [
+      { id: "new", createdAt: "2026-03-09T12:00:00.000Z" },
+      { id: "second", createdAt: "2026-03-09T08:00:00.000Z", pinOrderKey: "t" },
+      { id: "old", createdAt: "2026-03-09T09:00:00.000Z" },
+      { id: "first", createdAt: "2026-03-09T11:00:00.000Z", pinOrderKey: "f" },
+    ];
+    expect(sortPinnedThreadsByOrderKey(threads).map((thread) => thread.id)).toEqual([
+      "first",
+      "second",
+      "old",
+      "new",
+    ]);
+  });
+
   it("breaks equal keys by id THEN environment so merged lists are stable everywhere", () => {
     const sorted = sortPinnedThreadsByOrderKey([
       {
@@ -375,6 +392,54 @@ describe("sortPinnedThreadsByOrderKey", () => {
       },
     ]);
     expect(sorted.map((thread) => thread.environmentId)).toEqual(["env-a", "env-b"]);
+  });
+});
+
+describe("pageRecentThreads", () => {
+  const threads = Object.freeze(["oldest", "older", "recent", "newest"]);
+
+  it("keeps recent rows at the bottom and prepends older rows as the page grows", () => {
+    expect(pageRecentThreads(threads, 2, () => false)).toEqual(["recent", "newest"]);
+    expect(pageRecentThreads(threads, 3, () => false)).toEqual(["older", "recent", "newest"]);
+    expect(pageRecentThreads(threads, Infinity, () => false)).toEqual(threads);
+    expect(pageRecentThreads(threads, 0, () => false)).toEqual([]);
+  });
+
+  it("keeps a selected older thread in chronological order without displacing recent rows", () => {
+    expect(pageRecentThreads(threads, 2, (thread) => thread === "oldest")).toEqual([
+      "oldest",
+      "recent",
+      "newest",
+    ]);
+    expect(pageRecentThreads(threads, 2, (thread) => thread === "newest")).toEqual([
+      "recent",
+      "newest",
+    ]);
+  });
+});
+
+describe("sortSnoozedThreadsByWake", () => {
+  it("puts the next wake at the bottom with stable ties across environments", () => {
+    const threads = [
+      {
+        id: ThreadId.make("same"),
+        environmentId: EnvironmentId.make("env-b"),
+        snoozedUntil: "2026-03-09T10:00:00.000Z",
+      },
+      {
+        id: ThreadId.make("later"),
+        environmentId: EnvironmentId.make("env-a"),
+        snoozedUntil: "2026-03-10T10:00:00.000Z",
+      },
+      {
+        id: ThreadId.make("same"),
+        environmentId: EnvironmentId.make("env-a"),
+        snoozedUntil: "2026-03-09T10:00:00.000Z",
+      },
+    ];
+    expect(
+      sortSnoozedThreadsByWake(threads).map((thread) => `${thread.id}:${thread.environmentId}`),
+    ).toEqual(["later:env-a", "same:env-a", "same:env-b"]);
   });
 });
 
