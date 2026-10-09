@@ -48,10 +48,10 @@ import {
   connectionRoutes,
   entryWithRoutes,
   findRouteToSameAddress,
-  isLearned,
   mergeLearnedRoutes,
   routesAfterRemoving,
   upsertRoute,
+  type ReportedEndpoint,
 } from "./routes.ts";
 
 const isSshConnectionProfile = Schema.is(SshConnectionProfile);
@@ -839,7 +839,7 @@ export const make = Effect.gen(function* () {
   const learnRoutes = Effect.fn("EnvironmentRegistry.learnRoutes")(function* (input: {
     readonly environmentId: EnvironmentId;
     readonly activeRoute: ConnectionRoute;
-    readonly reported: ReadonlyArray<{ readonly httpBaseUrl: string }>;
+    readonly reported: ReadonlyArray<ReportedEndpoint>;
   }) {
     return yield* withLeaseLock(
       input.environmentId,
@@ -856,13 +856,24 @@ export const make = Effect.gen(function* () {
         });
         if (routes === null) return Option.none();
         const next = entryWithRoutes(entry, routes);
-        const previousIds = new Set(
-          connectionRoutes(entry).map((route) => connectionRouteId(route.target)),
+        // Save new learned profiles and any whose Tailscale mark changed. A
+        // learned route owns its profile; the credential stays with the route
+        // it borrows from.
+        const previousProfiles = new Map(
+          connectionRoutes(entry).map((route) => [
+            connectionRouteId(route.target),
+            Option.getOrNull(route.profile),
+          ]),
         );
         for (const route of routes) {
-          if (!isLearned(route) || previousIds.has(connectionRouteId(route.target))) continue;
           const profile = Option.getOrNull(route.profile);
-          if (profile !== null) yield* profiles.put(profile);
+          if (
+            profile === null ||
+            previousProfiles.get(connectionRouteId(route.target)) === profile
+          ) {
+            continue;
+          }
+          yield* profiles.put(profile);
         }
         yield* registrations.setRoutes(input.environmentId, persistedRoutes(next));
         yield* SubscriptionRef.update(serviceScopes, (current) => {

@@ -23,6 +23,11 @@ export class BearerConnectionProfile extends Schema.TaggedClass<BearerConnection
     wsBaseUrl: Schema.String,
     /** Learned from the server's direct endpoint advertisement. */
     learned: Schema.optionalKey(Schema.Literal(true)),
+    /**
+     * "tailscale" on a learned route the server found on its Tailscale
+     * interface. A bare 100.64.0.0/10 address could belong to any VPN.
+     */
+    network: Schema.optionalKey(Schema.Literal("tailscale")),
   },
 ) {}
 

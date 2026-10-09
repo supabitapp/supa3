@@ -2,6 +2,7 @@ import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
   type OrchestrationV2ShellSnapshot,
+  type ServerConfig,
 } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -162,6 +163,8 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
       target: ConnectionTarget,
     ) => Effect.Effect<void, Persistence.ConnectionPersistenceError>;
     readonly initialDisabled?: ReadonlyArray<EnvironmentId>;
+    /** Direct addresses the connected server reports. */
+    readonly directEndpoints?: ServerConfig["directEndpoints"];
   },
 ) {
   const storedTargets = yield* Ref.make(

@@ -10,6 +10,7 @@ import {
 } from "./index.ts";
 import {
   connectionRouteKind,
+  connectionRouteLabel,
   entryWithRoutes,
   insertRoute,
   isLearned,
@@ -48,10 +49,13 @@ function route(
 describe("connection routes", () => {
   it("orders LAN ahead of Tailscale and public routes", () => {
     const publicRoute = route("https://remote.example.test", "public");
-    const tailnetRoute = route("http://100.100.10.2:4389", "tailnet");
+    const tailnetRoute = route("http://machine.tail1234.ts.net:4389", "tailnet");
     const lanRoute = route("http://192.168.1.20:4389", "lan");
     expect(connectionRouteKind(lanRoute)).toBe("lan");
     expect(connectionRouteKind(tailnetRoute)).toBe("tailnet");
+    // Tailscale, Cloudflare WARP and Mesh, and other VPNs share 100.64.0.0/10.
+    expect(connectionRouteKind(route("http://100.100.10.2:4389", "vpn"))).toBe("vpn");
+    expect(connectionRouteLabel(route("http://100.96.0.1:4389", "mesh"))).toBe("VPN");
     expect(
       insertRoute(insertRoute([publicRoute], tailnetRoute), lanRoute).map((item) =>
         connectionRouteKind(item),
@@ -86,6 +90,62 @@ describe("connection routes", () => {
       "learned:environment-routes:http://192.168.1.20:4389@bearer:environment-routes",
       "learned:environment-routes:http://100.100.10.2:4389@bearer:environment-routes",
     ]);
+  });
+
+  it("labels a learned address Tailscale only while the server reports it as tailnet", () => {
+    const active = route("https://remote.example.test");
+    const entry = entryWithRoutes(
+      { target: active.target, profile: active.profile, enabled: true },
+      [active],
+    );
+    const tailscale = { kind: "tailnet", httpBaseUrl: "http://100.101.102.103:3773/" };
+    const mesh = { kind: "lan", httpBaseUrl: "http://100.96.0.1:3773/" };
+    const first = mergeLearnedRoutes({
+      entry,
+      activeRoute: active,
+      reported: [tailscale, mesh],
+      allowInsecure: true,
+    })!;
+    expect(first.map(connectionRouteLabel)).toEqual(["Tailscale", "VPN", "remote.example.test"]);
+
+    // The server later finds the address is not on its Tailscale interface.
+    const corrected = mergeLearnedRoutes({
+      entry: entryWithRoutes(entry, first),
+      activeRoute: active,
+      reported: [{ ...tailscale, kind: "lan" }, mesh],
+      allowInsecure: true,
+    })!;
+    expect(corrected.map((item) => item.target.connectionId)).toEqual(
+      first.map((item) => item.target.connectionId),
+    );
+    expect(corrected.map(connectionRouteLabel)).toEqual(["VPN", "VPN", "remote.example.test"]);
+    expect(
+      mergeLearnedRoutes({
+        entry: entryWithRoutes(entry, corrected),
+        activeRoute: active,
+        reported: [{ ...tailscale, kind: "lan" }, mesh],
+        allowInsecure: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("labels a paired numeric Tailscale address Tailscale once the server confirms it", () => {
+    const paired = route("http://100.101.102.103:3773/", "paired");
+    const other = route("http://100.96.0.1:3773/", "other");
+    const entry = entryWithRoutes(
+      { target: paired.target, profile: paired.profile, enabled: true },
+      [paired, other],
+    );
+    expect(connectionRouteLabel(paired)).toBe("VPN");
+    const confirmed = mergeLearnedRoutes({
+      entry,
+      activeRoute: paired,
+      reported: [{ kind: "tailnet", httpBaseUrl: "http://100.101.102.103:3773/" }],
+      allowInsecure: true,
+    })!;
+    // Same routes in the same order; only the label of the confirmed one changes.
+    expect(confirmed.map((item) => item.target.connectionId)).toEqual(["paired", "other"]);
+    expect(confirmed.map(connectionRouteLabel)).toEqual(["Tailscale", "VPN"]);
   });
 
   it("drops learned routes when the paired route is removed", () => {

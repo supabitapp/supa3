@@ -1,6 +1,11 @@
 import * as Schema from "effect/Schema";
 import { EnvironmentId } from "@supacode/contracts";
-import { isLocalLoopbackHost, isPrivateNetworkHost, isTailnetHost } from "./hostClassification.ts";
+import {
+  isLocalLoopbackHost,
+  isPrivateNetworkHost,
+  isSharedAddressSpaceHost,
+  isTailnetHost,
+} from "./hostClassification.ts";
 
 export const DEFAULT_HOSTED_APP_URL = "https://app.next.supacode.sh";
 
@@ -197,7 +202,10 @@ const readPairingRouteHints = (url: URL): PairingRouteHints => {
 
 const pairingRoutePriority = (origin: string): number => {
   if (origin.startsWith("https:")) return 0;
-  return isTailnetHost(new URL(origin).hostname) ? 1 : 2;
+  // Tailscale's IPv4 addresses share 100.64.0.0/10 with other VPNs; either way
+  // they reach farther than a LAN address.
+  const hostname = new URL(origin).hostname;
+  return isTailnetHost(hostname) || isSharedAddressSpaceHost(hostname) ? 1 : 2;
 };
 
 export interface HostedPairingRequest {

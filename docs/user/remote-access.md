@@ -46,9 +46,12 @@ another link to share.
 
 ### Reach one machine several ways
 
-A saved machine can keep several routes, including LAN, Tailscale, a public URL,
-and SSH. Pair it again using another address, or choose **Add route** from its
-route list. Both addresses belong to the same machine in your client.
+A saved machine can keep several routes, including LAN, Tailscale, another VPN,
+a public URL, and SSH. Tailscale shares its `100.64.0.0/10` address range with
+other VPNs such as Cloudflare WARP, so an address in that range shows as VPN
+unless the machine confirms it is on Tailscale. Pair it again using another
+address, or choose **Add route** from its route list. Both addresses belong to
+the same machine in your client.
 
 Supacode also learns the LAN and Tailscale addresses reported by a paired
 machine. Enable **Network access** on the host to make its LAN address available.
