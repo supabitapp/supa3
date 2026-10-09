@@ -8,6 +8,9 @@ struct HTTPHostGuard {
   private var response = Data()
   private var requests = 0
   private let delimiter = Data("\r\n\r\n".utf8)
+  init(authority: String) {
+    self.authority = authority
+  }
   var awaitingUpgrade: Bool {
     if case .awaitingUpgrade = phase { return true }
     return false
