@@ -5,7 +5,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type * as AcpSchema from "effect-acp/compat";
 
-import { responsePayloads } from "./AcpMcpStdioBridge.ts";
+import { responsePayloads } from "@supacode/shared/mcpResponsePayloads";
 
 const MAX_CONNECTIONS = 16;
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
@@ -139,7 +139,9 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(
                 ),
               );
             }
-            const payloads = [...(yield* Stream.runCollect(responsePayloads(response)))];
+            const payloads = [
+              ...(yield* Stream.runCollect(responsePayloads(response, bridgeError))),
+            ];
             for (const payload of payloads) {
               connection.protocolVersion = protocolVersionOf(payload) ?? connection.protocolVersion;
             }

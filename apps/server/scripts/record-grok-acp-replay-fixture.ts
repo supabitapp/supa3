@@ -24,14 +24,15 @@ import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 
-import * as ServerConfig from "../src/config.ts";
+import * as ProviderHost from "@supacode/provider-core/server/ProviderHost";
+import { layerTestProviderHost } from "@supacode/provider-testing/host";
 import {
   GROK_DEFAULT_INSTANCE_ID,
   GROK_PROVIDER,
   grokLaunchRuntimeMode,
   makeGrokAdapterV2,
 } from "../src/orchestration-v2/Adapters/GrokAdapterV2.ts";
-import { ACP_PROTOCOL } from "../src/orchestration-v2/Adapters/AcpAdapterV2.ts";
+import { ACP_PROTOCOL } from "@supacode/provider-acp/server/adapter";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import type { ProviderAdapterV2SessionRuntime } from "@supacode/provider-core/server/ProviderAdapter";
 import * as ProviderContinuationRequests from "@supacode/provider-core/server/continuationRequests";
@@ -40,7 +41,6 @@ import { provideDeterministicTestRuntime } from "../src/orchestration-v2/testkit
 import { ORCHESTRATOR_REPLAY_FIXTURES } from "../src/orchestration-v2/testkit/fixtures/index.ts";
 import { materializeFixtureInput } from "../src/orchestration-v2/testkit/fixtures/shared.ts";
 import { runOrchestratorV2Scenario } from "../src/orchestration-v2/testkit/OrchestratorScenario.ts";
-import { makeReplayServerConfig } from "../src/orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ProviderReplayHarness from "../src/orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "@supacode/provider-testing/replayWorkspace";
 import { makeGrokAcpRuntime } from "../src/provider/acp/GrokAcpSupport.ts";
@@ -458,7 +458,7 @@ const recordScenario = Effect.fn("recordGrokScenario")(function* (fixtureName: s
         crypto: yield* Crypto.Crypto,
         fileSystem: yield* FileSystem.FileSystem,
         idAllocator: yield* IdAllocator.IdAllocatorV2,
-        serverConfig: yield* ServerConfig.ServerConfig,
+        host: yield* ProviderHost.ProviderHost,
         selfInvocation: yield* resolveSelfInvocation(),
         continuationRequests: yield* ProviderContinuationRequests.ProviderContinuationRequests,
         // Production's runtime factory, with the protocol logger teeing raw lines.
@@ -499,10 +499,7 @@ const recordScenario = Effect.fn("recordGrokScenario")(function* (fixtureName: s
   ).pipe(
     Layer.provide(
       Layer.mergeAll(
-        Layer.effect(
-          ServerConfig.ServerConfig,
-          makeReplayServerConfig(`grok-record-${fixtureName}`),
-        ).pipe(Layer.provide(NodeServices.layer)),
+        layerTestProviderHost().pipe(Layer.provide(NodeServices.layer)),
         NodeServices.layer,
         IdAllocator.layer,
       ),

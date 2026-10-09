@@ -6,7 +6,7 @@ import {
   ProviderInstanceId,
 } from "@supacode/contracts";
 
-import { AcpProviderCapabilitiesV2 } from "./Adapters/AcpAdapterV2.ts";
+import { AcpProviderCapabilitiesV2 } from "@supacode/provider-acp/server/adapter";
 import { acpSelectionTransition } from "@supacode/provider-core/server/selectionTransition";
 
 const selection = (model: string, effort = "medium"): ModelSelection => ({

@@ -42,7 +42,7 @@ import {
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "./acp/GrokAcpSupport.ts";
-import { sessionModelStateFromInitialize } from "./acp/AcpRuntimeModel.ts";
+import { sessionModelStateFromInitialize } from "@supacode/provider-acp/server/runtimeModel";
 import { discoverGrokSkills } from "./Drivers/GrokSkills.ts";
 
 const GROK_PRESENTATION = {

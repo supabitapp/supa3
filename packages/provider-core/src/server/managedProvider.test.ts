@@ -109,6 +109,7 @@ function layerProviderHost(input: {
         baseDir: "/supacode",
         stateDir: "/supacode/userdata",
         providerStatusCacheDir: "/supacode/caches",
+        attachmentsDir: "/supacode/userdata/attachments",
       },
       settings: input.settings ?? {
         get: Effect.succeed(DEFAULT_SERVER_SETTINGS),

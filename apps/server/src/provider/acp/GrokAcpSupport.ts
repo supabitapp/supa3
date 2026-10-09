@@ -15,7 +15,7 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { normalizeModelSlug } from "@supacode/shared/model";
 
-import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
+import * as AcpSessionRuntime from "@supacode/provider-acp/server/AcpSessionRuntime";
 import { makeXAiPromptCompletionRuntime } from "./XAiAcpExtension.ts";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";
