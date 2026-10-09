@@ -12,10 +12,14 @@ import {
 } from "./workspace-stack-projection";
 
 // Load the same router as native navigation without importing React Native into Node.
+// The router is core's dependency, so resolve it from core under an isolated store.
 const requireNavigation = NodeModule.createRequire(
   NodeModule.createRequire(import.meta.url).resolve("@react-navigation/native/package.json"),
 );
-const { StackRouter } = requireNavigation("@react-navigation/routers") as {
+const requireCore = NodeModule.createRequire(
+  requireNavigation.resolve("@react-navigation/core/package.json"),
+);
+const { StackRouter } = requireCore("@react-navigation/routers") as {
   StackRouter: typeof import("@react-navigation/native").StackRouter;
 };
 

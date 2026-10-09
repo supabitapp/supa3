@@ -33,7 +33,7 @@ async function loadHooks(commands: ReadonlyArray<SkillCommand> = []) {
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\nsupacodeMcpExtension(pi)`, {
     process: { env: {} },
     NodeFSP,
     NodePath,

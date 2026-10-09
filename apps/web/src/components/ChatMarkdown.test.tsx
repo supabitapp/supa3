@@ -20,10 +20,6 @@ import { setMarkdownTaskChecked } from "./files/filePreviewMode";
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
 vi.mock("../diagrams/mermaidRenderer", () => ({ renderMermaidDiagram: vi.fn() }));
-vi.mock("./chat/MermaidDiagram", () => ({
-  // Real Mermaid needs layout APIs jsdom lacks; a rendered diagram is an SVG.
-  MermaidDiagram: () => <svg aria-label="Diagram" />,
-}));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
 vi.mock("../hooks/useSettings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../hooks/useSettings")>();
@@ -1209,6 +1205,7 @@ it("opens a disclosure only when find selects a match inside it", async () => {
 });
 
 it("keeps Mermaid diagrams rendered until find selects a match in their source", async () => {
+  vi.mocked(renderMermaidDiagram).mockReset().mockResolvedValue("rendered diagram");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Highlight",
@@ -1244,7 +1241,10 @@ it("keeps Mermaid diagrams rendered until find selects a match in their source",
   }
   const frame = () =>
     act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-  const diagrams = () => container.querySelectorAll('svg[aria-label="Diagram"]').length;
+  const diagrams = () =>
+    [...container.querySelectorAll("pre:not([hidden])")].filter(
+      (pre) => pre.textContent === "rendered diagram",
+    ).length;
   try {
     await act(() => root.render(<Probe query="Needle" />));
     await frame();
@@ -1293,6 +1293,8 @@ it.each([
 ])(
   "highlights the indexed occurrences of $query in $text",
   async ({ text, query, count, lineBreaks, user, useTemplate }) => {
+    // Diagrams stay as source here; the test above covers find inside a rendered one.
+    vi.mocked(renderMermaidDiagram).mockReset().mockResolvedValue(null);
     const skills = [{ name: "test-supacode-app", displayName: "Supacode App Testing" }];
     const highlights = new Map<string, Set<Range>>();
     vi.stubGlobal(

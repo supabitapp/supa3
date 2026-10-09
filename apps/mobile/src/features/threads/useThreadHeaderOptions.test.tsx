@@ -32,6 +32,8 @@ vi.mock("@react-navigation/native", () => {
   };
 });
 vi.mock("../../state/session", () => ({ useEnvironmentScope: () => true }));
+// Drafts load through the app runtime, which needs the native bundle.
+vi.mock("./use-start-new-task", () => ({ useStartNewTask: () => () => {} }));
 vi.mock("react-native", () => ({ Alert: { alert: () => {} }, Linking: {}, Platform: {} }));
 vi.mock("../layout/AdaptiveWorkspaceLayout", () => ({
   useAdaptiveWorkspaceLayout: () => ({
@@ -117,11 +119,13 @@ function renderedGitMenuItems(): Array<{
   label?: unknown;
   onPress?: () => void;
 }> {
+  type MenuItem = { description?: unknown; label?: unknown; onPress?: () => void };
+  // The Git actions live in the More menu's Git submenu.
   const items = harness.renderedRightItems.at(-1) ?? [];
-  const git = items.find((item) => item.identifier === "thread-right-git") as
-    | { menu: { items: Array<{ description?: unknown; label?: unknown; onPress?: () => void }> } }
+  const more = items.find((item) => item.identifier === "thread-right-more") as
+    | { menu: { items: Array<MenuItem & { items?: MenuItem[] }> } }
     | undefined;
-  return git?.menu.items ?? [];
+  return more?.menu.items.find((item) => item.label === "Git")?.items ?? [];
 }
 
 function renderedGitStatusDescription(): unknown {
