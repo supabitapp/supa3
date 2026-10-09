@@ -17,7 +17,15 @@ import {
   usePreventRemove,
   type NavigationAction,
 } from "@react-navigation/native";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+} from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
@@ -332,8 +340,15 @@ export function NewTaskDraftScreen(props: {
     });
   const queuesInsteadOfStarting = !environmentConnected || attachmentsUploading;
   const promptInputRef = useRef<ComposerEditorHandle>(null);
+  const composerDockRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const keepFocusedComposerVisible = useCallback(() => {
+    if (isComposerFocused) {
+      composerDockRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [isComposerFocused]);
+  useEffect(keepFocusedComposerVisible, [keepFocusedComposerVisible]);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const wasFocusedBeforePreviewRef = useRef(false);
@@ -1642,6 +1657,7 @@ export function NewTaskDraftScreen(props: {
 
   const composerDock = (
     <ScrollView
+      ref={composerDockRef}
       bounces={false}
       className={Platform.OS === "android" ? "bg-sheet-solid" : "bg-sheet"}
       contentInsetAdjustmentBehavior="never"
@@ -1649,6 +1665,8 @@ export function NewTaskDraftScreen(props: {
       contentContainerStyle={{ paddingBottom: controlsBottomPadding }}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
+      onContentSizeChange={keepFocusedComposerVisible}
+      onLayout={keepFocusedComposerVisible}
       showsVerticalScrollIndicator={false}
       style={{ flexGrow: 0, maxHeight: availableDockHeight }}
     >
