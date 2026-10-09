@@ -96,7 +96,7 @@ export const OutboxTurn = Schema.Struct({
 export type OutboxTurn = typeof OutboxTurn.Type;
 
 export const StoredOutboxEntry = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literals([1, 2]),
   id: Schema.String,
   scope: Schema.String,
   createdAt: Schema.String,
@@ -110,3 +110,9 @@ export const StoredOutboxEntry = Schema.Struct({
   paused: Schema.Boolean,
   pauseUntil: Schema.Number,
 });
+
+export function encodeStoredOutboxEntry(
+  entry: Omit<typeof StoredOutboxEntry.Type, "schemaVersion">,
+) {
+  return { schemaVersion: 2 as const, ...entry };
+}
