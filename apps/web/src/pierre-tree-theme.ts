@@ -11,6 +11,11 @@ export const PIERRE_TREE_UNSAFE_CSS = `
     --trees-font-size-override: 12px;
   }
   button[data-type='item'] { border-radius: 5px; }
+  svg[data-icon-name='supacode-tree-icon-loading'] { opacity: 0.6; }
+  @media (prefers-reduced-motion: no-preference) {
+    svg[data-icon-name='supacode-tree-icon-loading'] { animation: supacode-tree-spin 1s linear infinite; }
+  }
+  @keyframes supacode-tree-spin { to { transform: rotate(360deg); } }
 `;
 
 /** Host styles that keep a Pierre tree on the active color scheme and foreground. */
