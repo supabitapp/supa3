@@ -51,11 +51,12 @@ function descendsFrom(
   ancestorId: ThreadId,
 ): boolean {
   const parents = new Map(
-    shells
-      .filter((shell) => shell.environmentId === environmentId)
-      // Only forks continue a conversation; a subagent is its own.
-      .filter((shell) => shell.lineage.relationshipToParent === "fork")
-      .map((shell) => [shell.id as string, shell.lineage.parentThreadId]),
+    // Only forks continue a conversation; a subagent is its own.
+    shells.flatMap((shell) =>
+      shell.environmentId === environmentId && shell.lineage.relationshipToParent === "fork"
+        ? [[shell.id as string, shell.lineage.parentThreadId] as const]
+        : [],
+    ),
   );
   let current: string | null | undefined = threadId;
   for (let depth = 0; depth < 64 && current != null; depth += 1) {

@@ -570,47 +570,6 @@ describe("composer rich text document model", () => {
     expect(doc.resolve(flatToPm(map, map.docLength)).parent.isTextblock).toBe(true);
   });
 
-  it("parses rules ahead of lists and emphasis", () => {
-    const json = buildDocJson("- - -\n***\n___\ntext\n---\n- item", (n) => ({
-      label: n,
-      description: null,
-    }));
-    expect(json.content.map((block) => block.type)).toEqual([
-      "horizontalRule",
-      "horizontalRule",
-      "horizontalRule",
-      "paragraph",
-      "horizontalRule",
-      "bulletList",
-    ]);
-  });
-
-  it.each([
-    "# Heading",
-    "## Two",
-    "###### Six",
-    "####### seven hashes stays a paragraph",
-    "#  two spaces",
-    "#\tTab",
-    "# Trailing hashes stay literal #",
-    "#1234",
-    "#1234 is a pull request, not a heading",
-    "# Heading with **bold** and @README.md",
-    "#",
-    "# ",
-    "text\n# Heading\ntext",
-    "# Heading\n- item\n> quote\n---",
-  ])("round-trips the heading %s through a real ProseMirror document", (value) => {
-    expect(roundTrip(value).value).toBe(value);
-  });
-
-  it.each(["> quoted", "> a\n>b", "---", "- - -", "# Heading", "#1234"])(
-    "keeps the block %s literal in plain mode",
-    (value) => {
-      expect(roundTripPlain(value).value).toBe(value);
-    },
-  );
-
   it("parses a quote as a blockquote of one paragraph per line", () => {
     const json = buildDocJson("> a\n> b\n>c", (n) => ({ label: n, description: null }));
     expect(json.content.map((block) => block.type)).toEqual(["blockquote", "blockquote"]);

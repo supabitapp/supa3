@@ -95,6 +95,7 @@ export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
 
   useEffect(() => {
     active.current = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- Loading the root starts the fetch it tracks.
     void load("");
     return () => {
       active.current = false;

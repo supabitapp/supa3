@@ -858,6 +858,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     : undefined;
   useEffect(() => {
     if (!activeFindRunId) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Keeps the fold find opened once it moves on.
     setExpandedRunIds((previous) =>
       previous.has(activeFindRunId) ? previous : new Set(previous).add(activeFindRunId),
     );
@@ -874,6 +875,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     : undefined;
   useEffect(() => {
     if (!activeFindAttemptId) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Keeps the attempt find opened once it moves on.
     setExpandedAttemptIds((previous) =>
       previous.has(activeFindAttemptId) ? previous : new Set(previous).add(activeFindAttemptId),
     );

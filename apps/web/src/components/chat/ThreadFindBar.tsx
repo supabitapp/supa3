@@ -34,6 +34,7 @@ export function ThreadFindBar(props: ThreadFindBarProps) {
     if (!props.open) return;
     inputRef.current?.focus();
     inputRef.current?.select();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Each request refocuses the open bar.
   }, [props.focusRequestId, props.open]);
 
   if (!props.open) return null;

@@ -222,7 +222,9 @@ export function museApprovalChoices(approval: Pick<MuseApproval, "availableChoic
 export function museApprovalOptions(approval: Pick<MuseApproval, "availableChoices">) {
   const choices = museApprovalChoices(approval);
   const declineChoiceId = choices.get("decline")?.choiceId;
-  return [...choices]
-    .filter(([decision, choice]) => decision !== "cancel" || choice.choiceId !== declineChoiceId)
-    .map(([decision, choice]) => ({ decision, label: choice.label }));
+  return [...choices].flatMap(([decision, choice]) =>
+    decision !== "cancel" || choice.choiceId !== declineChoiceId
+      ? [{ decision, label: choice.label }]
+      : [],
+  );
 }

@@ -8517,6 +8517,7 @@ export default function ChatView(props: ChatViewProps) {
     hasMultipleEnvironments,
     logicalProjectEnvironments,
     onEnvironmentChange,
+    focusComposer,
   ]);
 
   // A focused desktop browser page forwards these chords as menu actions.

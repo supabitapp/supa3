@@ -21,9 +21,9 @@ export function resolveOnboardingSetup(
 } {
   const selected = environments.filter((environment) => selectedIds.has(environment.environmentId));
   const idsInPhase = (keep: (phase: string) => boolean) =>
-    selected
-      .filter((environment) => keep(environment.connection.phase))
-      .map((environment) => environment.environmentId);
+    selected.flatMap((environment) =>
+      keep(environment.connection.phase) ? [environment.environmentId] : [],
+    );
   const environmentIds = idsInPhase((phase) => phase === "connected");
   const settling = selected.some((environment) => environment.connection.phase === "connecting");
   return {
