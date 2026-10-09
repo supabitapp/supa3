@@ -1,4 +1,5 @@
 import { isProviderDriverKind } from "@supacode/contracts";
+import { acpRegistryClient } from "@supacode/provider-acp-registry/client";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
 import { cursorClient } from "@supacode/provider-cursor/client";
 import { grokClient } from "@supacode/provider-grok/client";
@@ -13,6 +14,7 @@ const providerClients = makeProviderClientRegistry([
   museClient,
   openCodeClient,
   piClient,
+  acpRegistryClient,
 ]);
 
 /** The client definition for a driver kind, or `undefined` for drivers drawn by hand. */

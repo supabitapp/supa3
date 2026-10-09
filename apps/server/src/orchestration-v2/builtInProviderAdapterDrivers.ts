@@ -3,7 +3,7 @@ import type { ProviderDriverKind } from "@supacode/contracts";
 import {
   AcpRegistryAdapterV2Driver,
   type AcpRegistryAdapterV2DriverEnv,
-} from "./Adapters/AcpRegistryAdapterV2.ts";
+} from "@supacode/provider-acp-registry/server";
 import {
   ClaudeAdapterV2Driver,
   type ClaudeAdapterV2DriverEnv,

@@ -1,10 +1,10 @@
 import {
-  AcpRegistrySettings,
   AntigravitySettings,
   ClaudeSettings,
   CodexSettings,
   ProviderDriverKind,
 } from "@supacode/contracts";
+import { acpRegistryClient } from "@supacode/provider-acp-registry/client";
 import { makeProviderClientRegistry } from "@supacode/provider-core/client";
 import { cursorClient } from "@supacode/provider-cursor/client";
 import { grokClient } from "@supacode/provider-grok/client";
@@ -34,10 +34,5 @@ export const providerClients = makeProviderClientRegistry([
   },
   museClient,
   piClient,
-  {
-    driverKind: ProviderDriverKind.make("acpRegistry"),
-    label: "ACP Registry",
-    settingsSchema: AcpRegistrySettings,
-    hasDefaultInstance: false,
-  },
+  acpRegistryClient,
 ]);

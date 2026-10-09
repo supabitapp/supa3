@@ -2,12 +2,9 @@ import {
   normalizeDevinSessionUpdate,
   normalizeDevinToolCall,
   extractDevinSubagentUpdate,
-} from "./DevinAcp.ts";
-import {
-  AcpRegistrySettings,
-  defaultInstanceIdForDriver,
-  ProviderDriverKind,
-} from "@supacode/contracts";
+} from "./devinAcp.ts";
+import { defaultInstanceIdForDriver, ProviderDriverKind } from "@supacode/contracts";
+import { AcpRegistrySettings } from "../settings.ts";
 import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import { resolveSelfInvocation, type SelfInvocation } from "@supacode/shared/nodeRuntime";
 import * as Crypto from "effect/Crypto";
@@ -26,12 +23,12 @@ import {
   normalizeAcpRegistryCommands,
   normalizeAcpRegistryLiveConfiguration,
   normalizeAcpRegistryWebUrl,
-} from "../../provider/acp/AcpRegistryProbe.ts";
-import * as AcpRegistrySupport from "../../provider/acp/AcpRegistrySupport.ts";
-import * as AcpRegistryRuntimeCoordinator from "../../provider/acp/AcpRegistryRuntimeCoordinator.ts";
+} from "./probe.ts";
+import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
+import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpSessionRuntime from "@supacode/provider-acp/server/AcpSessionRuntime";
 import { makeAcpNativeLoggerFactory } from "@supacode/provider-acp/server/nativeLogging";
-import * as ProviderEventLoggers from "../../provider/ProviderEventLoggers.ts";
+import * as ProviderEventLoggers from "@supacode/provider-core/server/ProviderEventLoggers";
 import { mergeProviderInstanceEnvironment } from "@supacode/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@supacode/provider-core/server/failure";

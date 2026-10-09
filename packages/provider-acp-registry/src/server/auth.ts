@@ -1,9 +1,9 @@
 import {
   ProviderSetupError,
-  type AcpRegistrySettings,
   type ProviderAuthMethod,
   type ProviderInstanceId,
 } from "@supacode/contracts";
+import type { AcpRegistrySettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -15,9 +15,9 @@ import * as Scope from "effect/Scope";
 import { ChildProcessSpawner } from "effect/process";
 import type * as AcpSchema from "effect-acp/compat";
 
-import * as PtyAdapter from "../../terminal/PtyAdapter.ts";
-import * as ProviderAuthFlow from "../ProviderAuthFlow.ts";
-import { normalizeAcpRegistryAuthMethods, normalizeAcpRegistryWebUrl } from "./AcpRegistryProbe.ts";
+import * as PtyAdapter from "@supacode/shared/PtyAdapter";
+import * as ProviderAuthFlow from "@supacode/provider-core/server/ProviderAuthFlow";
+import { normalizeAcpRegistryAuthMethods, normalizeAcpRegistryWebUrl } from "./probe.ts";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpSessionRuntime from "@supacode/provider-acp/server/AcpSessionRuntime";

@@ -68,6 +68,7 @@
     "@supacode/mobile-markdown-text": "file:./modules/supacode-markdown-text",
     "@supacode/mobile-review-diff-native": "file:./modules/supacode-review-diff",
     "@supacode/mobile-terminal-native": "file:./modules/supacode-terminal",
+    "@supacode/provider-acp-registry": "workspace:*",
     "@supacode/provider-core": "workspace:*",
     "@supacode/provider-cursor": "workspace:*",
     "@supacode/provider-grok": "workspace:*",

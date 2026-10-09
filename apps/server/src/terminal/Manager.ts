@@ -45,7 +45,7 @@ import * as KeyedLock from "@supacode/shared/KeyedLock";
 import { HostProcessArchitecture, HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { mergePathEntries } from "@supacode/shared/shell";
 
-import { acpRegistryManagedBinaryDirectories } from "../provider/acp/AcpRegistrySupport.ts";
+import { acpRegistryManagedBinaryDirectories } from "@supacode/provider-acp-registry/server";
 import { getTerminalLabel } from "@supacode/shared/terminalLabels";
 import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
@@ -77,7 +77,7 @@ import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
 import * as ProcessRunner from "../processRunner.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
 import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
-import * as PtyAdapter from "./PtyAdapter.ts";
+import * as PtyAdapter from "@supacode/shared/PtyAdapter";
 
 export {
   TerminalCwdError,
