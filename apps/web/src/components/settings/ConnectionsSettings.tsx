@@ -1534,14 +1534,9 @@ type SavedBackendListRowProps = {
   onAddRoute: (environment: EnvironmentPresentation) => void;
 };
 
-/**
- * Status word for a row subtitle: "Reconnecting: <reason>" instead of the
- * long-form sentence, since the row has one line and the full text is one
- * hover away.
- */
 function savedBackendStatus(environment: EnvironmentPresentation): {
   readonly text: string;
-  readonly tone: "muted" | "error";
+  readonly tone: "muted" | "warning" | "error";
 } {
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
     return { text: "Off", tone: "muted" };
@@ -1550,20 +1545,14 @@ function savedBackendStatus(environment: EnvironmentPresentation): {
     case "connected":
       return { text: "Connected", tone: "muted" };
     case "connecting":
-      return { text: "Connecting", tone: "muted" };
+      return { text: "Connecting", tone: "warning" };
     case "reconnecting":
-      return {
-        text: connection.error ? `Reconnecting: ${connection.error}` : "Reconnecting",
-        tone: "error",
-      };
+      return { text: "Reconnecting", tone: "warning" };
     // Not a failure: the machine is fine, this build just cannot talk to it.
     case "unsupported":
       return { text: "Client not supported", tone: "muted" };
     case "error":
-      return {
-        text: connection.error ? `Connection failed: ${connection.error}` : "Connection failed",
-        tone: "error",
-      };
+      return { text: "Connection failed", tone: "error" };
     case "offline":
       return { text: "Offline", tone: "muted" };
     case "available":
@@ -1643,13 +1632,7 @@ function SavedBackendListRow({
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   const machineKind = resolveEnvironmentMachineKind(environment.serverConfig);
   const mcpUrl = environmentMcpUrl({ entry: environment.entry });
-  const subtitleText = [
-    environmentTransportLabel(environment),
-    resumingServerUpdate ? "Restarting" : status.text,
-    enabled && versionMismatch ? serverVersion : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(" · ");
+  const transportLabel = environmentTransportLabel(environment);
 
   // Only a connected, enabled machine can take a remote update; a switched-off
   // one keeps the version note so the icon is not a surprise later.
@@ -1676,37 +1659,46 @@ function SavedBackendListRow({
       kind={machineKind}
       label={environment.label}
       dimmed={!enabled}
+      status={
+        <Tooltip>
+          <TooltipTrigger
+            payload={statusTooltip}
+            render={
+              <span
+                tabIndex={0}
+                className={cn(
+                  "text-xs text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  !resumingServerUpdate && status.tone === "error" && "text-destructive",
+                  !resumingServerUpdate && status.tone === "warning" && "text-warning-foreground",
+                )}
+              />
+            }
+          >
+            {resumingServerUpdate ? "Restarting" : status.text}
+          </TooltipTrigger>
+          <TooltipPopup side="top" className="whitespace-pre-wrap">
+            {statusTooltip}
+          </TooltipPopup>
+        </Tooltip>
+      }
       subtitle={
-        <span className="flex min-w-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger
-              payload={statusTooltip}
-              render={
-                <span
-                  className={cn(
-                    "min-w-0 truncate",
-                    enabled &&
-                      status.tone === "error" &&
-                      !resumingServerUpdate &&
-                      "text-destructive",
-                  )}
-                />
-              }
-            >
-              {subtitleText}
-            </TooltipTrigger>
-            <TooltipPopup side="top" className="whitespace-pre-wrap">
-              {statusTooltip}
-            </TooltipPopup>
-          </Tooltip>
-          <span aria-hidden className="shrink-0">
-            ·
+        <span className="flex min-w-0 items-start justify-between gap-3">
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <Tooltip>
+              <TooltipTrigger render={<span className="truncate font-mono text-2xs" />}>
+                {transportLabel}
+              </TooltipTrigger>
+              <TooltipPopup side="top">{transportLabel}</TooltipPopup>
+            </Tooltip>
+            {enabled && versionMismatch ? (
+              <span className="max-w-full truncate font-mono text-2xs">{serverVersion}</span>
+            ) : null}
           </span>
           <button
             type="button"
             aria-expanded={routesOpen}
             onClick={() => setRoutesOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm text-2xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
           >
             {routeCount === 1 ? "Routes" : `${routeCount} routes`}
             <ChevronRightIcon
