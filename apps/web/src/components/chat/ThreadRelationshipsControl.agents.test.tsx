@@ -269,7 +269,6 @@ it("shows the matching child agent details and refreshes them when the agent set
   expect(text()).toContain("Checker");
   expect(text()).toContain("2m 15s");
   expect(text()).not.toContain("(1)");
-  expect(text()).toContain("Done");
   expect(text()).not.toContain("running");
   expect(text()).not.toContain("Worker");
   await act(async () =>

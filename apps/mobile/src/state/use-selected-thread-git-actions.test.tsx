@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 const harness = vi.hoisted(() => ({
   selection: {
     selectedThread: { environmentId: "environment-1", id: "thread-1" } as unknown,
-    selectedThreadProject: { workspaceRoot: "/repo" } as unknown,
+    selectedThreadProject: { id: "project-1", workspaceRoot: "/repo" } as unknown,
     selectedEnvironmentRuntime: { connectionState: "connected" } as unknown,
   },
   worktree: { selectedThreadCwd: "/repo" as string | null, selectedThreadWorktreePath: null },
@@ -81,7 +81,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   harness.selection = {
     selectedThread: { environmentId: "environment-1", id: "thread-1" },
-    selectedThreadProject: { workspaceRoot: "/repo" },
+    selectedThreadProject: { id: "project-1", workspaceRoot: "/repo" },
     selectedEnvironmentRuntime: { connectionState: "connected" },
   };
   harness.worktree = { selectedThreadCwd: "/repo", selectedThreadWorktreePath: null };
@@ -103,7 +103,7 @@ describe("useSelectedThreadGitActions", () => {
 
     harness.selection = {
       selectedThread: { environmentId: "environment-1", id: "thread-1" },
-      selectedThreadProject: { workspaceRoot: "/repo" },
+      selectedThreadProject: { id: "project-1", workspaceRoot: "/repo" },
       selectedEnvironmentRuntime: { connectionState: "connected" },
     };
     act(() => rerender());
@@ -121,7 +121,7 @@ describe("useSelectedThreadGitActions", () => {
 
     harness.selection = {
       selectedThread: { environmentId: "environment-1", id: "thread-2" },
-      selectedThreadProject: { workspaceRoot: "/repo" },
+      selectedThreadProject: { id: "project-1", workspaceRoot: "/repo" },
       selectedEnvironmentRuntime: { connectionState: "connected" },
     };
     act(() => rerender());

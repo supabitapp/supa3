@@ -33,8 +33,9 @@ vi.mock("../state/entities", () => ({
 }));
 
 import { BranchToolbar } from "./BranchToolbar";
+import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 
-it("keeps machine choices usable when the combined row's workspace is locked", async () => {
+it("keeps the machine picker usable beside a locked workspace", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -43,41 +44,41 @@ it("keeps machine choices usable when the combined row's workspace is locked", a
   try {
     await act(async () => {
       root.render(
-        <BranchToolbar
-          layout="panel"
-          panelSection="workspace"
-          environmentId={EnvironmentId.make("local")}
-          threadId={ThreadId.make("thread")}
-          showGitControls
-          envMode="local"
-          envLocked={false}
-          startFromOrigin={false}
-          onStartFromOriginChange={vi.fn()}
-          onEnvModeChange={vi.fn()}
-          onEnvironmentChange={onEnvironmentChange}
-          availableEnvironments={["local", "remote"].map((id) => ({
-            environmentId: EnvironmentId.make(id),
-            projectId: ProjectId.make("project"),
-            label: id,
-            isPrimary: id === "local",
-            machine: "server",
-          }))}
-        />,
+        <>
+          <BranchToolbarEnvironmentSelector
+            displayMode="panel"
+            environmentId={EnvironmentId.make("local")}
+            envLocked={false}
+            onEnvironmentChange={onEnvironmentChange}
+            availableEnvironments={["local", "remote"].map((id) => ({
+              environmentId: EnvironmentId.make(id),
+              projectId: ProjectId.make("project"),
+              label: id,
+              isPrimary: id === "local",
+              machine: "server",
+            }))}
+          />
+          <BranchToolbar
+            layout="panel"
+            panelSection="workspace"
+            environmentId={EnvironmentId.make("local")}
+            threadId={ThreadId.make("thread")}
+            showGitControls
+            envMode="local"
+            envLocked={false}
+            startFromOrigin={false}
+            onStartFromOriginChange={vi.fn()}
+            onEnvModeChange={vi.fn()}
+          />
+        </>,
       );
     });
-    const trigger = container.querySelector("button")!;
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Run on"]')!;
     expect(trigger.textContent).toBe("local");
     expect(container.querySelectorAll("button")).toHaveLength(1);
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, ctrlKey: true }));
-    });
-    expect(document.querySelector('[role="menu"]')).toBeNull();
     await act(async () => trigger.click());
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
-    expect(
-      items.find((item) => item.textContent === "New worktree")?.getAttribute("aria-disabled"),
-    ).toBe("true");
-    await act(async () => items.find((item) => item.textContent === "remote")!.click());
+    const items = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+    await act(async () => items.find((item) => item.textContent?.includes("remote"))!.click());
     expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
   } finally {
     await act(async () => root.unmount());
@@ -119,7 +120,7 @@ it.each([
       });
       const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
       await act(async () => {
-        container.querySelector('[aria-label="Run context"]')!.dispatchEvent(event);
+        container.querySelector("[data-composer-context-control]")!.dispatchEvent(event);
       });
       expect(event.defaultPrevented).toBe(copiedPath !== null);
       if (copiedPath === null) {

@@ -97,7 +97,7 @@ const layerService = (input: {
   readonly environment?: NodeJS.ProcessEnv;
   readonly platform?: NodeJS.Platform;
 }) =>
-  ServerConfig.layerTest(process.cwd(), { prefix: input.prefix }).pipe(
+  ServerConfig.layerTest(process.cwd(), NodePath.join(input.home, input.prefix)).pipe(
     Layer.provideMerge(NodeServices.layer),
     Layer.provideMerge(CursorUsageReader.layer),
     Layer.provideMerge(Layer.succeed(HostProcessPlatform, input.platform ?? "linux")),

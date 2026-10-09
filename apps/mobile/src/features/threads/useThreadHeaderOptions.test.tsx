@@ -4,9 +4,21 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+type NativeMenuItem = {
+  readonly description?: string;
+  readonly label?: string;
+  readonly onPress?: () => void;
+  readonly items?: ReadonlyArray<NativeMenuItem>;
+};
+
+type NativeHeaderItem = {
+  readonly identifier?: string;
+  readonly menu?: { readonly items: ReadonlyArray<NativeMenuItem> };
+};
+
 const harness = vi.hoisted(() => ({
   setOptionsCalls: 0,
-  renderedRightItems: [] as Array<ReadonlyArray<Record<string, unknown>>>,
+  renderedRightItems: [] as Array<ReadonlyArray<NativeHeaderItem>>,
   navigatedRoutes: [] as string[],
 }));
 
@@ -19,7 +31,9 @@ vi.mock("@react-navigation/native", () => {
       harness.navigatedRoutes.push(route);
     },
     addListener: () => () => {},
-    setOptions: (options: { unstable_headerRightItems?: () => Array<Record<string, unknown>> }) => {
+    setOptions: (options: {
+      unstable_headerRightItems?: () => ReadonlyArray<NativeHeaderItem>;
+    }) => {
       harness.setOptionsCalls += 1;
       harness.renderedRightItems.push(options.unstable_headerRightItems?.() ?? []);
     },
@@ -29,6 +43,7 @@ vi.mock("@react-navigation/native", () => {
     useNavigation: () => navigation,
   };
 });
+vi.mock("./use-start-new-task", () => ({ useStartNewTask: () => () => {} }));
 vi.mock("../../state/session", () => ({ useEnvironmentScope: () => true }));
 vi.mock("react-native", () => ({ Alert: { alert: () => {} }, Linking: {}, Platform: {} }));
 vi.mock("../layout/AdaptiveWorkspaceLayout", () => ({
@@ -109,19 +124,13 @@ function Header(props: { readonly gitStatus: VcsStatusResult | null; readonly ti
   );
 }
 
-function renderedGitMenuItems(): Array<{
-  description?: unknown;
-  label?: unknown;
-  onPress?: () => void;
-}> {
+function renderedGitMenuItems() {
   const items = harness.renderedRightItems.at(-1) ?? [];
-  const git = items.find((item) => item.identifier === "thread-right-git") as
-    | { menu: { items: Array<{ description?: unknown; label?: unknown; onPress?: () => void }> } }
-    | undefined;
-  return git?.menu.items ?? [];
+  const more = items.find((item) => item.identifier === "thread-right-more");
+  return more?.menu?.items.find((item) => item.label === "Git")?.items ?? [];
 }
 
-function renderedGitStatusDescription(): unknown {
+function renderedGitStatusDescription() {
   return renderedGitMenuItems()[0]?.description;
 }
 
