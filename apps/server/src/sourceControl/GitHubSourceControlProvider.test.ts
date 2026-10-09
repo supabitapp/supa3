@@ -9,7 +9,6 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
 import { VcsProcessSpawnError } from "@supacode/contracts";
-import { HostProcessEnvironment } from "@supacode/shared/hostProcess";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerSettings from "../serverSettings.ts";

@@ -3055,9 +3055,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         case "run-fold":
           return resolveThreadFeedFixedItemSize(entry.type);
         case "work-toggle":
-          return !entry.expanded && entry.latestImage ? undefined : WORK_GROUP_TOGGLE_HEIGHT;
-          // A live thought wraps up to four lines, so that row measures itself.
-          return entry.thought ? undefined : WORK_GROUP_TOGGLE_HEIGHT;
+          // A collapsed image preview or a live thought (up to four lines) makes
+          // the row measure itself.
+          return (!entry.expanded && entry.latestImage) || entry.thought
+            ? undefined
+            : WORK_GROUP_TOGGLE_HEIGHT;
         case "thinking":
           return WORK_GROUP_TOGGLE_HEIGHT;
         case "activity-group":

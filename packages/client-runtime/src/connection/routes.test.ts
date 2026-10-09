@@ -9,6 +9,7 @@ import {
   SshConnectionTarget,
 } from "./index.ts";
 import {
+  connectionRouteId,
   connectionRouteKind,
   connectionRouteLabel,
   entryWithRoutes,
@@ -115,8 +116,8 @@ describe("connection routes", () => {
       reported: [{ ...tailscale, kind: "lan" }, mesh],
       allowInsecure: true,
     })!;
-    expect(corrected.map((item) => item.target.connectionId)).toEqual(
-      first.map((item) => item.target.connectionId),
+    expect(corrected.map((item) => connectionRouteId(item.target))).toEqual(
+      first.map((item) => connectionRouteId(item.target)),
     );
     expect(corrected.map(connectionRouteLabel)).toEqual(["VPN", "VPN", "remote.example.test"]);
     expect(
@@ -144,7 +145,7 @@ describe("connection routes", () => {
       allowInsecure: true,
     })!;
     // Same routes in the same order; only the label of the confirmed one changes.
-    expect(confirmed.map((item) => item.target.connectionId)).toEqual(["paired", "other"]);
+    expect(confirmed.map((item) => connectionRouteId(item.target))).toEqual(["paired", "other"]);
     expect(confirmed.map(connectionRouteLabel)).toEqual(["Tailscale", "VPN"]);
   });
 
