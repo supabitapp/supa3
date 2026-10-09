@@ -1,3 +1,5 @@
+import { createAdvertisedEndpoint } from "@supacode/shared/advertisedEndpoint";
+import { relayName } from "@supacode/shared/relay/name";
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
@@ -61,6 +63,8 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
+import { useUpdatePrimarySettings } from "../../hooks/useSettings";
+import { PublicRelaySettings, usePublicRelayStatus } from "./PublicRelaySettings";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { cn } from "../../lib/utils";
@@ -1413,6 +1417,7 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
   const canDisableTailscaleServe =
     isTailscaleHttpsEndpoint(endpoint) && endpoint.status === "available";
   const shouldShowEndpointUrl = !needsTailscaleSetup;
+  const endpointAddress = relayName(endpoint.httpBaseUrl) ?? endpoint.httpBaseUrl;
   const isEndpointRail = presentation === "endpoint-rail";
   return (
     <div className={endpointRowClassName(presentation, isAvailable)}>
@@ -1429,11 +1434,11 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
               <TooltipTrigger
                 render={
                   <p className="min-w-0 truncate text-xs leading-5 text-muted-foreground">
-                    {endpoint.httpBaseUrl}
+                    {endpointAddress}
                   </p>
                 }
               />
-              <TooltipPopup side="top">{endpoint.httpBaseUrl}</TooltipPopup>
+              <TooltipPopup side="top">{endpointAddress}</TooltipPopup>
             </Tooltip>
           ) : null}
           {!isAvailable ? (
@@ -1498,7 +1503,9 @@ function NetworkAccessDescription({
 
   const summary = (
     <>
-      <span className="min-w-0 truncate">{endpoint.httpBaseUrl}</span>
+      <span className="min-w-0 truncate">
+        {relayName(endpoint.httpBaseUrl) ?? endpoint.httpBaseUrl}
+      </span>
       {hiddenEndpointCount > 0 ? (
         <span className="shrink-0 text-xs font-medium">
           {expanded ? "Hide" : `+${hiddenEndpointCount}`}
@@ -2024,6 +2031,8 @@ export function ConnectionsSettings() {
   const canWriteAccess = useEnvironmentScope(primaryEnvironmentId, AuthAccessWriteScope);
   const canMaintain = useEnvironmentScope(primaryEnvironmentId, AuthEnvironmentMaintainScope);
   const canManageLocalBackend = !isLocalEnvironmentDisabled() && canMaintain;
+  const updatePrimarySettings = useUpdatePrimarySettings();
+  const canWriteSettings = useEnvironmentScope(primaryEnvironmentId, AuthSettingsWriteScope);
   const authAccessChanges = useEnvironmentQuery(
     canReadAccess && primaryEnvironmentId !== null
       ? authEnvironment.accessChanges({
@@ -2609,16 +2618,39 @@ export function ConnectionsSettings() {
         : [],
     [desktopAdvertisedEndpoints, isLocalBackendNetworkAccessible],
   );
-  const visibleDesktopAdvertisedEndpoints = useMemo(
+  const relayStatus = usePublicRelayStatus(primaryEnvironmentId);
+  const relayEndpointUrl =
+    relayStatus?.state === "registered" || relayStatus?.state === "connecting"
+      ? relayStatus.relayEndpoint
+      : undefined;
+  const relayEndpoint = useMemo(
     () =>
-      tailscaleHttpsEndpoint
-        ? [...visibleDesktopNetworkAdvertisedEndpoints, tailscaleHttpsEndpoint]
-        : visibleDesktopNetworkAdvertisedEndpoints,
-    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
+      relayEndpointUrl
+        ? createAdvertisedEndpoint({
+            id: "public-relay",
+            label: "Public relay",
+            provider: { id: "public-relay", label: "Public relay", kind: "tunnel", isAddon: false },
+            httpBaseUrl: relayEndpointUrl,
+            reachability: "public",
+            hostedHttpsCompatibility: "compatible",
+            source: "server",
+            description: "End-to-end encrypted access through the public relay.",
+          })
+        : null,
+    [relayEndpointUrl],
+  );
+  const visibleDesktopAdvertisedEndpoints = useMemo(
+    () => [
+      ...visibleDesktopNetworkAdvertisedEndpoints,
+      ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+      ...(relayEndpoint ? [relayEndpoint] : []),
+    ],
+    [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints, relayEndpoint],
   );
   const pairingHints = useMemo(
     () => ({
       environmentId: primaryServerConfig?.environment.environmentId,
+      relayUrl: relayStatus?.relayUrl,
       routes: [
         ...visibleDesktopAdvertisedEndpoints
           .filter((endpoint) => endpoint.status !== "unavailable")
@@ -2626,7 +2658,7 @@ export function ConnectionsSettings() {
         ...(primaryServerConfig?.directEndpoints ?? []).map((endpoint) => endpoint.httpBaseUrl),
       ],
     }),
-    [primaryServerConfig, visibleDesktopAdvertisedEndpoints],
+    [primaryServerConfig, relayStatus?.relayUrl, visibleDesktopAdvertisedEndpoints],
   );
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
@@ -2637,10 +2669,18 @@ export function ConnectionsSettings() {
     () =>
       defaultDesktopNetworkAdvertisedEndpoint ??
       selectPairingEndpoint(
-        tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : [],
+        [
+          ...(tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : []),
+          ...(relayEndpoint ? [relayEndpoint] : []),
+        ],
         defaultAdvertisedEndpointKey,
       ),
-    [defaultAdvertisedEndpointKey, defaultDesktopNetworkAdvertisedEndpoint, tailscaleHttpsEndpoint],
+    [
+      defaultAdvertisedEndpointKey,
+      defaultDesktopNetworkAdvertisedEndpoint,
+      tailscaleHttpsEndpoint,
+      relayEndpoint,
+    ],
   );
   const defaultDesktopAdvertisedEndpointKey = defaultDesktopAdvertisedEndpoint
     ? endpointDefaultPreferenceKey(defaultDesktopAdvertisedEndpoint)
@@ -3384,6 +3424,14 @@ export function ConnectionsSettings() {
             }
           >
             <LocalEnvironmentSetting />
+            {canManageLocalBackend ? (
+              <PublicRelaySettings
+                status={relayStatus}
+                settings={primaryServerConfig?.settings}
+                disabled={!canWriteSettings}
+                update={updatePrimarySettings}
+              />
+            ) : null}
             {canManageLocalBackend ? (
               <SettingsRow
                 title="Version"

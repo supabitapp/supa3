@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
+  connectionAddressLabel,
   connectionCatalogDisplayUrl,
   gitHubRoutingConnectionKey,
   gitHubRoutingPermissionFor,
@@ -65,7 +66,7 @@ export function GitHubRoutingSettings() {
                   </Text>
                   {displayUrl ? (
                     <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-                      {displayUrl}
+                      {connectionAddressLabel(displayUrl)}
                     </Text>
                   ) : null}
                 </View>

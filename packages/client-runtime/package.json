@@ -410,6 +410,10 @@
     "./thread-outbox": {
       "types": "./src/threadOutbox.ts",
       "default": "./src/threadOutbox.ts"
+    },
+    "./relay": {
+      "types": "./src/relay/gateway.ts",
+      "default": "./src/relay/gateway.ts"
     }
   },
   "scripts": {

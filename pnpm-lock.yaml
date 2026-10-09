@@ -449,6 +449,9 @@ importers:
       '@supacode/mobile-markdown-text':
         specifier: file:./modules/supacode-markdown-text
         version: file:apps/mobile/modules/supacode-markdown-text(b0b41fc25e282624f13965cfb2ef4ea6)
+      '@supacode/mobile-relay-tunnel':
+        specifier: file:./modules/supacode-relay-tunnel
+        version: file:apps/mobile/modules/supacode-relay-tunnel(expo@58.0.2)
       '@supacode/mobile-review-diff-native':
         specifier: file:./modules/supacode-review-diff
         version: file:apps/mobile/modules/supacode-review-diff
@@ -690,6 +693,9 @@ importers:
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@types/yauzl':
         specifier: ^3.4.0
         version: 3.4.0
@@ -717,6 +723,9 @@ importers:
       stream-json:
         specifier: 3.6.0
         version: 3.6.0
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -1096,6 +1105,12 @@ importers:
 
   packages/shared:
     dependencies:
+      '@noble/ciphers':
+        specifier: 2.2.0
+        version: 2.2.0
+      '@noble/curves':
+        specifier: 2.2.0
+        version: 2.2.0
       '@noble/hashes':
         specifier: 'catalog:'
         version: 1.8.0
@@ -3047,6 +3062,14 @@ packages:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
 
+  '@noble/ciphers@2.2.0':
+    resolution: {integrity: sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/curves@2.2.0':
+    resolution: {integrity: sha512-T/BoHgFXirb0ENSPBquzX0rcjXeM6Lo892a2jlYJkqk83LqZx0l1Of7DzlKJ6jkpvMrkHSnAcgb5JegL8SeIkQ==}
+    engines: {node: '>= 20.19.0'}
+
   '@noble/hashes@1.4.0':
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
     engines: {node: '>= 16'}
@@ -4378,6 +4401,11 @@ packages:
       react: '*'
       react-native: '*'
       react-native-nitro-markdown: '*'
+
+  '@supacode/mobile-relay-tunnel@file:apps/mobile/modules/supacode-relay-tunnel':
+    resolution: {directory: apps/mobile/modules/supacode-relay-tunnel, type: directory}
+    peerDependencies:
+      expo: '*'
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff':
     resolution: {directory: apps/mobile/modules/supacode-review-diff, type: directory}
@@ -12630,6 +12658,12 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
+  '@noble/ciphers@2.2.0': {}
+
+  '@noble/curves@2.2.0':
+    dependencies:
+      '@noble/hashes': 2.2.0
+
   '@noble/hashes@1.4.0': {}
 
   '@noble/hashes@1.8.0': {}
@@ -13570,6 +13604,10 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       react-native-nitro-markdown: 0.5.8(patch_hash=642b47830730acff3761fe29cf54271d18b493c0070c750097850b7ea032e00c)(231cd8dedc589ddd8e46fe9920b8afcd)
+
+  '@supacode/mobile-relay-tunnel@file:apps/mobile/modules/supacode-relay-tunnel(expo@58.0.2)':
+    dependencies:
+      expo: 58.0.2(3d71f6499d3c841467c44ba1a6c879c9)
 
   '@supacode/mobile-review-diff-native@file:apps/mobile/modules/supacode-review-diff': {}
 

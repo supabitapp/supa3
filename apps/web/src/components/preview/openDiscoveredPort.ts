@@ -1,10 +1,15 @@
+import * as Cause from "effect/Cause";
+import { AsyncResult } from "effect/reactivity";
 import type { DiscoveredLocalServer, ScopedThreadRef } from "@supacode/contracts";
 import {
   mapAtomCommandResult,
   type AtomCommandResult,
 } from "@supacode/client-runtime/state/runtime";
 
-import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
+import {
+  RelayHostBrowserUnavailableError,
+  resolveDiscoveredServerUrl,
+} from "~/browser/browserTargetResolver";
 import type { BrowserSettingsReadError, OpenPreviewMutation } from "~/browser/openFileInPreview";
 import { recordVisitForThread } from "~/browserHistoryStore";
 import { useRightPanelStore } from "~/rightPanelStore";
@@ -15,12 +20,22 @@ export async function openDiscoveredPort<E>(input: {
   readonly threadRef: ScopedThreadRef;
   readonly port: DiscoveredLocalServer;
   readonly openPreview: OpenPreviewMutation<E>;
-}): Promise<AtomCommandResult<void, E | BrowserSettingsReadError>> {
-  // A server tab runs on the environment, where loopback is already right.
-  const resolvedUrl =
-    previewRuntimeFor(input.threadRef.environmentId) === "server"
-      ? input.port.url
-      : resolveDiscoveredServerUrl(input.threadRef.environmentId, input.port.url);
+}): Promise<
+  AtomCommandResult<void, E | BrowserSettingsReadError | RelayHostBrowserUnavailableError>
+> {
+  let resolvedUrl: string;
+  try {
+    resolvedUrl =
+      previewRuntimeFor(input.threadRef.environmentId) === "server"
+        ? input.port.url
+        : resolveDiscoveredServerUrl(input.threadRef.environmentId, input.port.url, {
+            requireReachable: true,
+          });
+  } catch (error) {
+    if (error instanceof RelayHostBrowserUnavailableError)
+      return AsyncResult.failure(Cause.fail(error));
+    throw error;
+  }
   const result = await openPreviewSession({
     openPreview: input.openPreview,
     threadRef: input.threadRef,

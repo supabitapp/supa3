@@ -1,20 +1,26 @@
 import * as ManagedRuntime from "effect/ManagedRuntime";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/socket/Socket";
 
+import { RelayGateway } from "@supacode/client-runtime/relay";
+import * as WebRelayGateway from "./relayGateway";
 import { layerRemoteHttpClient } from "@supacode/client-runtime/rpc";
 import * as PrimaryEnvironmentHttpClient from "../environments/primary/httpClient";
 import * as PrimaryEnvironmentHttpLayer from "../environments/primary/httpLayer";
 import * as ClientTracer from "../observability/clientTracer";
 import { browserCryptoLayer } from "./browserCrypto";
 
-const layerHttpClient = layerRemoteHttpClient((input, init) => globalThis.fetch(input, init));
+const layerHttpClient = Layer.unwrap(
+  Effect.map(RelayGateway, (gateway) => layerRemoteHttpClient(gateway.fetch)),
+);
+const layerSocket = Socket.layerWebSocketConstructorGlobal;
 
 type RuntimeLayerSource =
   | typeof layerHttpClient
   | typeof browserCryptoLayer
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof layerSocket
+  | typeof WebRelayGateway.layer
   | typeof ClientTracer.layer;
 
 const primaryHttpRuntime = ManagedRuntime.make(
@@ -41,9 +47,9 @@ export function __setPrimaryHttpRunnerForTests(runner?: PrimaryHttpEffectRunner)
 const layerRuntime = Layer.mergeAll(
   layerHttpClient,
   browserCryptoLayer,
-  Socket.layerWebSocketConstructorGlobal,
+  layerSocket,
   ClientTracer.layer,
-);
+).pipe(Layer.provideMerge(WebRelayGateway.layer));
 
 export const runtime: ManagedRuntime.ManagedRuntime<
   Layer.Success<RuntimeLayerSource>,

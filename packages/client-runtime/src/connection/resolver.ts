@@ -1,3 +1,4 @@
+import { parseRelayAddress } from "@supacode/shared/relay/protocol";
 import type {
   AuthClientPresentationMetadata,
   ExecutionEnvironmentDescriptor,
@@ -43,6 +44,8 @@ import {
   orchestrationProtocolCompatibilityError,
 } from "./compatibility.ts";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
+import { resolveRelayOrigin } from "../relay/gateway.ts";
+import { deriveWsBaseUrl } from "../environment/endpoint.ts";
 import { credentialConnectionId } from "./routes.ts";
 
 export class ConnectionResolver extends Context.Service<
@@ -97,6 +100,7 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
         httpBaseUrl: target.httpBaseUrl,
         socketUrl: primarySocketUrl(target, presentation.metadata),
         httpAuthorization: null,
+        connectionMethod: "direct",
         target,
       } satisfies PreparedConnection;
     }
@@ -110,6 +114,7 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
     });
     return {
       ...authorized,
+      connectionMethod: "direct",
       target,
     } satisfies PreparedConnection;
   });
@@ -149,12 +154,15 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
     if (!isBearerCredential(credential)) {
       return yield* credentialMissingError(target.connectionId);
     }
+    const connectionMethod = parseRelayAddress(profile.httpBaseUrl) ? "relay" : "direct";
+    const httpBaseUrl = yield* resolveRelayOrigin(profile.httpBaseUrl, profile.relayUrl);
     const authorized = yield* remote.authorizeBearer({
       expectedEnvironmentId: target.environmentId,
-      httpBaseUrl: profile.httpBaseUrl,
-      wsBaseUrl: profile.wsBaseUrl,
+      httpBaseUrl,
+      wsBaseUrl:
+        httpBaseUrl === profile.httpBaseUrl ? profile.wsBaseUrl : deriveWsBaseUrl(httpBaseUrl),
       bearerToken: credential.token,
-      connectionMethod: "direct",
+      connectionMethod,
     });
     return {
       environmentId: authorized.environmentId,
@@ -162,6 +170,7 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
       httpBaseUrl: authorized.httpBaseUrl,
       socketUrl: authorized.socketUrl,
       httpAuthorization: authorized.httpAuthorization,
+      connectionMethod,
       target,
     } satisfies PreparedConnection;
   });
@@ -223,6 +232,7 @@ const makeSshBroker = Effect.fn("clientRuntime.connection.broker.makeSsh")(funct
       httpBaseUrl: authorized.httpBaseUrl,
       socketUrl: authorized.socketUrl,
       httpAuthorization: authorized.httpAuthorization,
+      connectionMethod: "ssh",
       target,
     } satisfies PreparedConnection;
   });

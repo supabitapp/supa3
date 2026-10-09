@@ -5187,9 +5187,24 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
       if (script.autoOpenPreview && script.previewUrl && isPreviewSupportedInRuntime()) {
+        let previewUrl: string;
+        try {
+          previewUrl = resolveDiscoveredServerUrl(
+            activeThreadRef.environmentId,
+            script.previewUrl,
+            { requireReachable: true },
+          );
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Could not open preview",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          });
+          return;
+        }
         const previewResult = await openUrlInPreview({
           threadRef: activeThreadRef,
-          url: resolveDiscoveredServerUrl(activeThreadRef.environmentId, script.previewUrl),
+          url: previewUrl,
           openPreview,
         });
         if (previewResult._tag === "Failure" && !isAtomCommandInterrupted(previewResult)) {

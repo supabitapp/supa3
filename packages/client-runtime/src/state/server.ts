@@ -986,6 +986,10 @@ export function createServerEnvironmentAtoms<R, E>(
     updateStateAtom,
     settingsValueAtom,
     providersValueAtom,
+    relayStatus: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:relay-status",
+      tag: WS_METHODS.subscribeRelayStatus,
+    }),
     providerAuthState: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:provider:auth-state",
       tag: WS_METHODS.providerAuthSubscribe,

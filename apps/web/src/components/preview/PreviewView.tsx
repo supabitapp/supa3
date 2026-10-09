@@ -34,7 +34,10 @@ import {
   updatePreviewServerSnapshot,
   useThreadPreviewState,
 } from "~/previewStateStore";
-import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
+import {
+  RelayHostBrowserUnavailableError,
+  resolveDiscoveredServerUrl,
+} from "~/browser/browserTargetResolver";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -274,12 +277,17 @@ export function PreviewView({
         const resolved =
           isServerTab || !previewBridge
             ? normalizePreviewUrl(next)
-            : resolveDiscoveredServerUrl(threadRef.environmentId, next);
+            : resolveDiscoveredServerUrl(threadRef.environmentId, next, { requireReachable: true });
         if (await navigateToResolvedUrl(resolved)) {
           recordVisitForThread(threadRef, next);
         }
-      } catch {
-        // Server-side `failed` event renders the unreachable view.
+      } catch (error) {
+        if (error instanceof RelayHostBrowserUnavailableError)
+          toastManager.add({
+            type: "error",
+            title: "Unable to open preview",
+            description: error.message,
+          });
       }
     },
     [isServerTab, navigateToResolvedUrl, threadRef],

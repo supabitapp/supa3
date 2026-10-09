@@ -1,4 +1,5 @@
 import type { ServerConfig } from "@supacode/contracts";
+import { relayName } from "@supacode/shared/relay/name";
 import * as Option from "effect/Option";
 
 import type { ConnectionCatalogEntry } from "./catalog.ts";
@@ -139,4 +140,9 @@ export function connectionCatalogDisplayUrl(entry: ConnectionCatalogEntry): stri
         ? `${entry.profile.value.target.username}@${entry.profile.value.target.hostname}`
         : null;
   }
+}
+
+export function connectionAddressLabel(url: string): string {
+  const name = relayName(url);
+  return name === null ? url : `Relay · ${name}`;
 }

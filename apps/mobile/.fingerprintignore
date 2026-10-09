@@ -22,3 +22,10 @@ web-build/
 
 # TypeScript
 *.tsbuildinfo
+
+# Native relay protocol test outputs
+modules/supacode-relay-tunnel/.build/
+modules/supacode-relay-tunnel/.swiftpm/
+modules/supacode-relay-tunnel/android/jvm/build/
+modules/supacode-relay-tunnel/android/jvm/.gradle/
+modules/supacode-relay-tunnel/android/build/
