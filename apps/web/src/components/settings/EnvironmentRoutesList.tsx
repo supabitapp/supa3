@@ -104,7 +104,7 @@ export function EnvironmentRoutesList({
   };
 
   return (
-    <div className="mt-2 rounded-md border border-border/70">
+    <div className="mt-3 border-t border-border/60 pt-1">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -128,7 +128,7 @@ export function EnvironmentRoutesList({
           </ol>
         </SortableContext>
       </DndContext>
-      <div className="flex items-center justify-between border-t border-border/70 px-1 py-1">
+      <div className="flex items-center justify-between pt-1">
         <Button size="xs" variant="ghost-muted" onClick={onAddRoute}>
           <PlusIcon className="size-3" />
           Add route
@@ -183,7 +183,7 @@ function SortableRouteRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "group/route flex items-center gap-2 border-b border-border/70 px-1 py-1.5 last:border-b-0",
+        "group/route grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-1 py-2",
         isDragging && "relative z-10 rounded-md bg-background shadow-md",
       )}
     >
@@ -195,37 +195,39 @@ function SortableRouteRow({
         aria-label={`Reorder ${label}, position ${position}`}
         className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
       >
-        <GripVerticalIcon className="size-3.5" />
+        <GripVerticalIcon aria-hidden className="size-3.5" />
       </button>
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          {label}
+      <div className="grid min-w-0 gap-y-0.5 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:items-baseline sm:gap-x-3">
+        <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-foreground">
+          <Tooltip>
+            <TooltipTrigger render={<span className="min-w-0 truncate" />}>{label}</TooltipTrigger>
+            <TooltipPopup side="top">{label}</TooltipPopup>
+          </Tooltip>
           {inUse ? (
-            <span className="rounded-sm bg-success/12 px-1 text-2xs font-normal text-success-foreground">
-              In use
-            </span>
+            <span className="text-2xs font-normal text-success-foreground">In use</span>
           ) : null}
         </p>
         {address !== null ? (
-          <p className="truncate text-2xs text-muted-foreground">
-            {address}
-            {isLearned(route) ? " · found automatically" : ""}
+          <p className="flex min-w-0 items-baseline gap-2 text-2xs text-muted-foreground">
+            <Tooltip>
+              <TooltipTrigger render={<span className="truncate font-mono" />}>
+                {address}
+              </TooltipTrigger>
+              <TooltipPopup side="top">{address}</TooltipPopup>
+            </Tooltip>
+            {isLearned(route) ? <span className="shrink-0">Discovered</span> : null}
           </p>
         ) : null}
       </div>
-      <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-end sm:h-6 sm:min-w-6 pointer-coarse:gap-2">
-        <span
-          aria-label={`${label} route latency: ${latency}`}
-          className={cn(
-            "px-1 text-2xs tabular-nums text-muted-foreground",
-            removable &&
-              "pointer-fine:group-focus-within/route:invisible pointer-fine:group-hover/route:invisible",
-          )}
-        >
-          {latency}
-        </span>
+      <span
+        aria-label={`${label} route latency: ${latency}`}
+        className="w-20 text-right text-2xs tabular-nums text-muted-foreground"
+      >
+        {latency}
+      </span>
+      <div className="flex size-7 items-center justify-end sm:size-6">
         {removable ? (
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center opacity-0 group-focus-within/route:pointer-events-auto group-focus-within/route:opacity-100 group-hover/route:pointer-events-auto group-hover/route:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:opacity-100">
+          <div className="pointer-events-none opacity-0 group-focus-within/route:pointer-events-auto group-focus-within/route:opacity-100 group-hover/route:pointer-events-auto group-hover/route:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
             <Tooltip>
               <TooltipTrigger
                 render={

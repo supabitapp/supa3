@@ -138,7 +138,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Alert, AlertDescription } from "../ui/alert";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
 import { InlineConfirmLabel, InlineConfirmTooltip } from "../InlineConfirm";
@@ -1541,14 +1541,9 @@ type SavedBackendListRowProps = {
   onAddRoute: (environment: EnvironmentPresentation) => void;
 };
 
-/**
- * Status word for a row subtitle: "Reconnecting: <reason>" instead of the
- * long-form sentence, since the row has one line and the full text is one
- * hover away.
- */
 function savedBackendStatus(environment: EnvironmentPresentation): {
   readonly text: string;
-  readonly tone: "muted" | "error";
+  readonly tone: "muted" | "warning" | "error";
 } {
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
     return { text: "Off", tone: "muted" };
@@ -1557,20 +1552,14 @@ function savedBackendStatus(environment: EnvironmentPresentation): {
     case "connected":
       return { text: "Connected", tone: "muted" };
     case "connecting":
-      return { text: "Connecting", tone: "muted" };
+      return { text: "Connecting", tone: "warning" };
     case "reconnecting":
-      return {
-        text: connection.error ? `Reconnecting: ${connection.error}` : "Reconnecting",
-        tone: "error",
-      };
+      return { text: "Reconnecting", tone: "warning" };
     // Not a failure: the machine is fine, this build just cannot talk to it.
     case "unsupported":
       return { text: "Client not supported", tone: "muted" };
     case "error":
-      return {
-        text: connection.error ? `Connection failed: ${connection.error}` : "Connection failed",
-        tone: "error",
-      };
+      return { text: "Connection failed", tone: "error" };
     case "offline":
       return { text: "Offline", tone: "muted" };
     case "available":
@@ -1650,13 +1639,7 @@ function SavedBackendListRow({
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   const machineKind = resolveEnvironmentMachineKind(environment.serverConfig);
   const mcpUrl = environmentMcpUrl({ entry: environment.entry });
-  const subtitleText = [
-    environmentTransportLabel(environment),
-    resumingServerUpdate ? "Restarting" : status.text,
-    enabled && versionMismatch ? serverVersion : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(" · ");
+  const transportLabel = environmentTransportLabel(environment);
 
   // Only a connected, enabled machine can take a remote update; a switched-off
   // one keeps the version note so the icon is not a surprise later.
@@ -1683,44 +1666,35 @@ function SavedBackendListRow({
       kind={machineKind}
       label={environment.label}
       dimmed={!enabled}
-      subtitle={
-        <span className="flex min-w-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger
-              payload={statusTooltip}
-              render={
-                <span
-                  className={cn(
-                    "min-w-0 truncate",
-                    enabled &&
-                      status.tone === "error" &&
-                      !resumingServerUpdate &&
-                      "text-destructive",
-                  )}
-                />
-              }
+      status={
+        <Popover>
+          <PopoverTrigger render={<InlineButton tone="muted" />}>
+            <span
+              className={cn(
+                "text-xs font-normal",
+                !resumingServerUpdate && status.tone === "error" && "text-destructive",
+                !resumingServerUpdate && status.tone === "warning" && "text-warning-foreground",
+              )}
             >
-              {subtitleText}
+              {resumingServerUpdate ? "Restarting" : status.text}
+            </span>
+          </PopoverTrigger>
+          <PopoverPopup side="bottom" align="start">
+            <p className="max-w-80 text-xs wrap-anywhere whitespace-pre-wrap">{statusTooltip}</p>
+          </PopoverPopup>
+        </Popover>
+      }
+      subtitle={
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <Tooltip>
+            <TooltipTrigger render={<span className="truncate font-mono text-2xs" />}>
+              {transportLabel}
             </TooltipTrigger>
-            <TooltipPopup side="top" className="whitespace-pre-wrap">
-              {statusTooltip}
-            </TooltipPopup>
+            <TooltipPopup side="top">{transportLabel}</TooltipPopup>
           </Tooltip>
-          <span aria-hidden className="shrink-0">
-            ·
-          </span>
-          <button
-            type="button"
-            aria-expanded={routesOpen}
-            onClick={() => setRoutesOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            {routeCount === 1 ? "Routes" : `${routeCount} routes`}
-            <ChevronRightIcon
-              aria-hidden
-              className={cn("size-3 shrink-0", routesOpen && "rotate-90")}
-            />
-          </button>
+          {enabled && versionMismatch ? (
+            <span className="max-w-full truncate font-mono text-2xs">{serverVersion}</span>
+          ) : null}
         </span>
       }
       below={
@@ -1739,81 +1713,96 @@ function SavedBackendListRow({
         ) : null
       }
     >
-      {unsupported &&
-      environment.entry.serverUpdateRequired === true &&
-      serverUpdateState.status !== "running" ? (
-        <OutdatedServerUpdateAction
-          environmentId={environmentId}
-          serverLabel={`${environment.label} server`}
-          fromVersion={serverVersion ?? undefined}
-          targetVersion={APP_VERSION}
-          label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
-        />
-      ) : null}
-      {showUpdateAction ? (
-        <ServerUpdateAction
-          environmentId={environmentId}
-          serverLabel={`${environment.label} server`}
-          selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
-          installation={environment.serverConfig?.environment.capabilities.serverInstallation}
-          desktopAppUpdate={supportsDesktopAppUpdate(environment.serverConfig)}
-          threadContinuation={supportsServerUpdateThreadContinuation(environment.serverConfig)}
-          targetVersion={versionMismatch.clientVersion}
-          label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
-          appearance="icon"
-        />
-      ) : null}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Switch
-              size="sm"
-              checked={enabled}
-              disabled={isRemoving || unsupported}
-              aria-label={`${enabled ? "Switch off" : "Switch on"} ${environment.label}`}
-              onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
-            />
-          }
-        />
-        <TooltipPopup side="top">
-          {unsupported ? "Client not supported" : enabled ? "Switch off" : "Switch on"}
-        </TooltipPopup>
-      </Tooltip>
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost-muted"
-              size="icon-xs"
-              disabled={isRemoving}
-              aria-label={`More actions for ${environment.label}`}
-            />
-          }
-        >
-          <EllipsisIcon className="size-3.5" />
-        </MenuTrigger>
-        <MenuPopup align="end">
-          <EnvironmentIconMenu
+      <div className="flex flex-col items-end gap-4 sm:flex-row sm:items-center sm:gap-1">
+        {unsupported &&
+        environment.entry.serverUpdateRequired === true &&
+        serverUpdateState.status !== "running" ? (
+          <OutdatedServerUpdateAction
             environmentId={environmentId}
-            serverConfig={environment.serverConfig}
+            serverLabel={`${environment.label} server`}
+            fromVersion={serverVersion ?? undefined}
+            targetVersion={APP_VERSION}
+            label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
           />
-          <MenuItem onClick={() => setRoutesOpen((open) => !open)}>
-            <RouteIcon />
-            {routesOpen ? "Hide routes" : "Routes"}
-          </MenuItem>
-          {mcpUrl ? (
-            <MenuItem onClick={() => copyMcpUrl(mcpUrl, { url: mcpUrl })}>Copy MCP URL</MenuItem>
-          ) : null}
-          {errorTraceId ? (
-            <MenuItem onClick={() => copyTraceId(errorTraceId)}>Copy trace ID</MenuItem>
-          ) : null}
-          <MenuSeparator />
-          <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
-            {isRemoving ? "Removing…" : "Remove from this device…"}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
+        ) : null}
+        {showUpdateAction ? (
+          <ServerUpdateAction
+            environmentId={environmentId}
+            serverLabel={`${environment.label} server`}
+            selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
+            installation={environment.serverConfig?.environment.capabilities.serverInstallation}
+            desktopAppUpdate={supportsDesktopAppUpdate(environment.serverConfig)}
+            threadContinuation={supportsServerUpdateThreadContinuation(environment.serverConfig)}
+            targetVersion={versionMismatch.clientVersion}
+            label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
+            appearance="icon"
+          />
+        ) : null}
+        <div className="flex items-center gap-1">
+          <Button
+            size="micro"
+            variant="ghost-muted"
+            aria-expanded={routesOpen}
+            onClick={() => setRoutesOpen((open) => !open)}
+          >
+            {routeCount === 1 ? "Routes" : `${routeCount} routes`}
+            <ChevronRightIcon aria-hidden className={cn("size-3", routesOpen && "rotate-90")} />
+          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Switch
+                  size="sm"
+                  checked={enabled}
+                  disabled={isRemoving || unsupported}
+                  aria-label={`${enabled ? "Switch off" : "Switch on"} ${environment.label}`}
+                  onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
+                />
+              }
+            />
+            <TooltipPopup side="top">
+              {unsupported ? "Client not supported" : enabled ? "Switch off" : "Switch on"}
+            </TooltipPopup>
+          </Tooltip>
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost-muted"
+                  size="icon-xs"
+                  disabled={isRemoving}
+                  aria-label={`More actions for ${environment.label}`}
+                />
+              }
+            >
+              <EllipsisIcon className="size-3.5" />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              <EnvironmentIconMenu
+                environmentId={environmentId}
+                serverConfig={environment.serverConfig}
+              />
+              <MenuItem onClick={() => setRoutesOpen((open) => !open)}>
+                <RouteIcon />
+                {routesOpen ? "Hide routes" : "Routes"}
+              </MenuItem>
+              {mcpUrl ? (
+                <MenuItem onClick={() => copyMcpUrl(mcpUrl, { url: mcpUrl })}>
+                  Copy MCP URL
+                </MenuItem>
+              ) : null}
+              {errorTraceId ? (
+                <MenuItem onClick={() => copyTraceId(errorTraceId)}>Copy trace ID</MenuItem>
+              ) : null}
+              <MenuSeparator />
+              <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
+                {isRemoving ? "Removing…" : "Remove from this device…"}
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        </div>
+      </div>
     </EnvironmentRow>
   );
 }

@@ -33,14 +33,10 @@ export function environmentTransportLabel(environment: EnvironmentPresentation):
     : connectionAddressLabel(environment.displayUrl);
 }
 
-/**
- * One machine in a grouped settings list: icon, name, a single subtitle line,
- * and controls on the right. Every environment list on the Connections page
- * uses this so the lists share one rhythm.
- */
 export function EnvironmentRow({
   kind,
   label,
+  status,
   subtitle,
   below,
   detail,
@@ -50,6 +46,7 @@ export function EnvironmentRow({
 }: {
   readonly kind: EnvironmentMachineKind;
   readonly label: string;
+  readonly status?: ReactNode;
   readonly subtitle: ReactNode;
   /** Extra content under the subtitle, such as update progress. */
   readonly below?: ReactNode;
@@ -69,12 +66,15 @@ export function EnvironmentRow({
     >
       <EnvironmentMachineIcon aria-hidden kind={kind} className="size-4 text-muted-foreground" />
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-foreground">{label}</p>
-        <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <p className="min-w-0 truncate text-sm font-medium text-foreground">{label}</p>
+          {status}
+        </div>
+        <div className="min-w-0 truncate text-xs text-muted-foreground">{subtitle}</div>
         {below}
       </div>
       <div className="flex shrink-0 items-center gap-1">{children}</div>
-      {detail ? <div className="col-span-3 min-w-0 px-3 pb-2.5 sm:px-4">{detail}</div> : null}
+      {detail ? <div className="col-span-3 min-w-0">{detail}</div> : null}
     </div>
   );
 }
