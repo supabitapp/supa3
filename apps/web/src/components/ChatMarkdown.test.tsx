@@ -2,7 +2,7 @@
 
 import { EnvironmentId, type AuthEnvironmentScope } from "@supacode/contracts";
 import { createRoot } from "react-dom/client";
-import { useThreadFindHighlights } from "./chat/threadFindHighlights";
+import { collectThreadFindRanges, useThreadFindHighlights } from "./chat/threadFindHighlights";
 import { searchableMessageSegments } from "@supacode/shared/threadFindText";
 import { countThreadSearchOccurrences } from "@supacode/shared/threadSearch";
 
@@ -1205,7 +1205,7 @@ it("opens a disclosure only when find selects a match inside it", async () => {
 });
 
 it("keeps Mermaid diagrams rendered until find selects a match in their source", async () => {
-  vi.mocked(renderMermaidDiagram).mockReset().mockResolvedValue("rendered diagram");
+  vi.mocked(renderMermaidDiagram).mockReset().mockResolvedValue("rendered Alpha diagram");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Highlight",
@@ -1221,19 +1221,22 @@ it("keeps Mermaid diagrams rendered until find selects a match in their source",
   document.body.append(container);
   const root = createRoot(container);
   const diagram = "```mermaid\ngraph TD; Alpha-->Beta\n```";
-  function Probe({ query }: { query: string }) {
+  function Probe({ query, occurrence = 0 }: { query: string; occurrence?: number }) {
     useThreadFindHighlights({
       container,
       query,
       activeRowId: "row",
-      activeOccurrence: 0,
+      activeOccurrence: occurrence,
       onActiveRange: () => {},
     });
     return (
       <div data-timeline-row-id="row">
         <div data-thread-find-text>
           <MarkdownFindContext value={true}>
-            <ChatMarkdown cwd={undefined} text={`Needle first.\n\n${diagram}\n\n${diagram}`} />
+            <ChatMarkdown
+              cwd={undefined}
+              text={`Needle first.\n\n${diagram}\n\n${diagram}\n\nAlpha after the diagrams.`}
+            />
           </MarkdownFindContext>
         </div>
       </div>
@@ -1243,12 +1246,20 @@ it("keeps Mermaid diagrams rendered until find selects a match in their source",
     act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   const diagrams = () =>
     [...container.querySelectorAll("pre:not([hidden])")].filter(
-      (pre) => pre.textContent === "rendered diagram",
+      (pre) => pre.textContent === "rendered Alpha diagram",
     ).length;
   try {
     await act(() => root.render(<Probe query="Needle" />));
     await frame();
     expect(diagrams()).toBe(2);
+    expect(collectThreadFindRanges(container, "Alpha")).toHaveLength(3);
+    await act(() => root.render(<Probe query="Alpha" occurrence={2} />));
+    await frame();
+    expect(diagrams()).toBe(2);
+    const trailingMatch = [...(highlights.get("supacode-thread-find-active") ?? [])][0];
+    expect(trailingMatch?.startContainer.parentElement?.closest("p")?.textContent).toBe(
+      "Alpha after the diagrams.",
+    );
     await act(() => root.render(<Probe query="Alpha" />));
     await frame();
     await frame();

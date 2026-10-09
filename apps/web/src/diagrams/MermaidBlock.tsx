@@ -104,10 +104,12 @@ export function MermaidBlock({
           </Tooltip>
         </span>
       </div>
-      <pre className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]">
+      <pre
+        className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]"
+        data-thread-find-ignore={showingDiagram ? "" : undefined}
+      >
         <code>{content}</code>
       </pre>
-      {/* Find counts the source; a selected match here switches to it. */}
       {searching && showingDiagram ? (
         <pre ref={sourceRevealRef} hidden>
           {source}
