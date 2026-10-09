@@ -88,6 +88,7 @@ vi.mock("./attachments", () => ({
   attachmentEnvironment: { createUploadUrl: { label: "upload" }, remove: { label: "remove" } },
 }));
 vi.mock("./assets", () => ({ assetEnvironment: { createUrl: { label: "verify" } } }));
+vi.mock("./vcs", () => ({ fetchVcsRefs: { label: "refs" } }));
 vi.mock("./session", () => ({
   readPreparedConnection: () => ({ httpBaseUrl: "https://environment.example" }),
 }));
@@ -148,6 +149,29 @@ function target() {
   };
 }
 
+function worktreeTarget() {
+  const original = target();
+  return {
+    ...original,
+    pendingWorktree: { projectCwd: "/project", startFromOrigin: true },
+    input: {
+      ...original.input,
+      bootstrap: {
+        createThread: {
+          projectId: ProjectId.make("project"),
+          title: "Offline task",
+          modelSelection: original.input.modelSelection,
+          runtimeMode: original.input.runtimeMode,
+          interactionMode: original.input.interactionMode,
+          branch: null,
+          worktreePath: null,
+          createdAt: "2026-10-09T00:00:00Z",
+        },
+      },
+    },
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
@@ -162,6 +186,148 @@ beforeEach(() => {
 });
 
 describe("web thread outbox delivery", () => {
+  it.each(["default", "current"])(
+    "resolves the %s branch for a restored offline worktree with an attachment",
+    async (branchKind) => {
+      const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+      await enqueueThreadOutboxTurn({
+        ...worktreeTarget(),
+        localAttachments: [
+          {
+            id: "local-image",
+            type: "image",
+            name: "image.png",
+            mimeType: "image/png",
+            sizeBytes: 5,
+            bytes: new Blob(["image"], { type: "image/png" }),
+          },
+        ],
+      });
+      await webThreadOutbox.drain();
+      expect(harness.run).not.toHaveBeenCalled();
+      vi.resetModules();
+      harness.online = true;
+      const expectedBranch = branchKind === "default" ? "origin/main" : "feature/current";
+      harness.run.mockImplementation(async (_registry, operation) => {
+        if (operation.label === "refs")
+          return AsyncResult.success({
+            isRepo: true,
+            refs: [
+              { name: "remote/other", isDefault: false, current: true, isRemote: true },
+              { name: "feature/current", isDefault: false, current: true, isRemote: false },
+              ...(branchKind === "default"
+                ? [{ name: "origin/main", isDefault: true, current: false, isRemote: true }]
+                : []),
+            ],
+          });
+        expect(harness.records.get("message")?.payload.pendingWorktree).toBeUndefined();
+        expect(harness.records.get("message")?.payload.input.bootstrap).toMatchObject({
+          createThread: { branch: expectedBranch },
+          prepareWorktree: { baseBranch: expectedBranch },
+        });
+        return AsyncResult.success({ sequence: 1 });
+      });
+      await (await import("./threadOutbox")).webThreadOutbox.drain();
+      expect(harness.run.mock.calls.map((call) => call[1].label)).toEqual(["refs", "send"]);
+      expect(harness.run.mock.calls[0]![2]).toEqual({
+        environmentId: "environment",
+        input: { cwd: "/project", limit: 100, refresh: true },
+      });
+      expect(harness.run.mock.calls[1]![2].input).toMatchObject({
+        commandId: "stable-command",
+        message: {
+          messageId: "message",
+          text: "Saved prompt",
+          attachments: [{ id: "local-image", dataUrl: "data:image/png;base64,aW1hZ2U=" }],
+        },
+        bootstrap: {
+          createThread: { branch: expectedBranch },
+          prepareWorktree: {
+            projectCwd: "/project",
+            baseBranch: expectedBranch,
+            startFromOrigin: true,
+          },
+          runSetupScript: true,
+        },
+      });
+    },
+  );
+
+  it("keeps an explicit worktree base branch without querying refs", async () => {
+    const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+    const { pendingWorktree, ...original } = worktreeTarget();
+    await enqueueThreadOutboxTurn({
+      ...original,
+      input: {
+        ...original.input,
+        bootstrap: {
+          ...original.input.bootstrap,
+          prepareWorktree: { ...pendingWorktree, baseBranch: "release" },
+        },
+      },
+    });
+    harness.online = true;
+    await webThreadOutbox.drain();
+    expect(harness.run.mock.calls.map((call) => call[1].label)).toEqual(["send"]);
+    expect(harness.run.mock.calls[0]![2].input.bootstrap.prepareWorktree.baseBranch).toBe(
+      "release",
+    );
+  });
+
+  it("retries branch lookup after a disconnect and retains the resolved branch across reload", async () => {
+    const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+    await enqueueThreadOutboxTurn(worktreeTarget());
+    harness.online = true;
+    harness.run.mockResolvedValueOnce(AsyncResult.fail({ _tag: "RpcClientError" }));
+    await webThreadOutbox.drain();
+    let saved = harness.records.get("message")!;
+    expect(saved.status).toBe("pending");
+    expect(saved.payload.pendingWorktree?.projectCwd).toBe("/project");
+    harness.records.set("message", { ...saved, retryAt: 0 });
+    harness.run
+      .mockResolvedValueOnce(
+        AsyncResult.success({
+          isRepo: true,
+          refs: [{ name: "main", isDefault: true, current: false, isRemote: false }],
+        }),
+      )
+      .mockResolvedValueOnce(AsyncResult.fail({ _tag: "RpcClientError" }));
+    await webThreadOutbox.drain();
+    saved = harness.records.get("message")!;
+    expect(saved.status).toBe("pending");
+    expect(saved.payload.pendingWorktree).toBeUndefined();
+    expect(saved.payload.input.bootstrap?.prepareWorktree?.baseBranch).toBe("main");
+    harness.records.set("message", { ...saved, retryAt: 0 });
+    vi.resetModules();
+    await (await import("./threadOutbox")).webThreadOutbox.drain();
+    expect(harness.run.mock.calls.map((call) => call[1].label)).toEqual([
+      "refs",
+      "refs",
+      "send",
+      "send",
+    ]);
+    expect(harness.run.mock.calls[3]![2]).toEqual(harness.run.mock.calls[2]![2]);
+  });
+
+  it.each([true, false])(
+    "retains a failed worktree when no usable branch exists: isRepo=%s",
+    async (isRepo) => {
+      const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
+      await enqueueThreadOutboxTurn(worktreeTarget());
+      harness.online = true;
+      harness.run.mockResolvedValueOnce(AsyncResult.success({ isRepo, refs: [] }));
+      await webThreadOutbox.drain();
+      expect(harness.run.mock.calls.map((call) => call[1].label)).toEqual(["refs"]);
+      expect(harness.records.get("message")).toMatchObject({
+        status: "failed",
+        error: isRepo
+          ? "No default or current branch is available. Choose a base branch for this worktree."
+          : "This project is not a Git repository. Choose Current checkout to start the task.",
+        payload: { pendingWorktree: { projectCwd: "/project" } },
+      });
+    },
+  );
+
   it("retries compaction with the same IDs and queues the saved prompt only after acknowledgement", async () => {
     const { enqueueThreadOutboxTurn, webThreadOutbox } = await import("./threadOutbox");
     await enqueueThreadOutboxTurn({ ...target(), compactBeforeSend: true });

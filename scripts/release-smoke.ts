@@ -19,6 +19,7 @@ const workspaceFiles = [
   "apps/mobile/package.json",
   "apps/mobile/modules/supacode-markdown-text/package.json",
   "apps/mobile/modules/supacode-review-diff/package.json",
+  "apps/mobile/modules/supacode-relay-tunnel/package.json",
   "apps/mobile/modules/supacode-terminal/package.json",
   "apps/marketing/package.json",
   "oxlint-plugin-supacode/package.json",

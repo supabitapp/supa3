@@ -7,6 +7,7 @@ const { readPreparedConnection } = vi.hoisted(() => ({
 }));
 
 vi.mock("~/state/session", () => ({ readPreparedConnection }));
+vi.mock("~/state/entities", () => ({ readEnvironmentSupportsServerBrowser: () => false }));
 
 import {
   BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT,

@@ -5,6 +5,13 @@ const state = vi.hoisted(() => ({
   desktop: false,
   primary: null as string | null,
   serverBrowser: new Set<string>(),
+  relay: new Set<string>(),
+}));
+
+vi.mock("~/state/session", () => ({
+  readPreparedConnection: (id: string) => ({
+    connectionMethod: state.relay.has(id) ? "relay" : "direct",
+  }),
 }));
 
 vi.mock("~/env", () => ({
@@ -33,6 +40,7 @@ afterEach(() => {
   state.desktop = false;
   state.primary = null;
   state.serverBrowser = new Set();
+  state.relay = new Set();
 });
 
 describe("previewRuntimeFor", () => {
@@ -43,6 +51,16 @@ describe("previewRuntimeFor", () => {
 
     expect(previewRuntimeFor(remote)).toBeUndefined();
     expect(previewRuntimeFor(local)).toBe("server");
+  });
+
+  it("keeps relay-host previews on the host browser in the desktop app", () => {
+    state.desktop = true;
+    state.primary = local;
+    state.serverBrowser = new Set([remote]);
+    state.relay = new Set([remote]);
+    expect(previewRuntimeFor(remote)).toBe("server");
+    expect(alternatePreviewRuntime(remote, local, true, { runtime: "server" })).toBeNull();
+    expect(alternatePreviewRuntime(remote, local, true, {})).toBeNull();
   });
 
   it("uses the environment's browser where the client has none of its own", () => {

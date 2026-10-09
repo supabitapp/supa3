@@ -313,6 +313,7 @@ import {
 } from "./providerUsageLimits.ts";
 import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
+import { RelayHostStatus } from "./relay.ts";
 import {
   ScheduledTaskDeleteInput,
   ScheduledTaskDeleteResult,
@@ -547,6 +548,7 @@ export const WS_METHODS = {
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
+  subscribeRelayStatus: "subscribeRelayStatus",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
 } as const;
 
@@ -1747,6 +1749,13 @@ const WsSubscribeBackgroundPolicyRpc = Rpc.make(WS_METHODS.subscribeBackgroundPo
   stream: true,
 });
 
+const WsSubscribeRelayStatusRpc = Rpc.make(WS_METHODS.subscribeRelayStatus, {
+  payload: Schema.Struct({}),
+  success: RelayHostStatus,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTelemetry, {
   payload: Schema.Struct({}),
   success: ResourceTelemetrySnapshot,
@@ -1932,6 +1941,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,
   WsSubscribeBackgroundPolicyRpc,
+  WsSubscribeRelayStatusRpc,
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,

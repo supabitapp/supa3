@@ -85,9 +85,10 @@ describe("searchSettings", () => {
     ]);
     expect(
       searchSettings("remote pairing")
-        .slice(0, 2)
+        .slice(0, 3)
         .map((item) => item.id),
-    ).toEqual(["network-access", "connections-environment"]);
+    ).toEqual(["network-access", "public-relay", "connections-environment"]);
+    expect(searchSettings("encrypted tunnel")[0]?.id).toBe("public-relay");
   });
 
   it("finds settings that used to be reachable only through their section", () => {

@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import { Button } from "../ui/button";
 import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { SettingsPageContainer } from "./settingsLayout";
@@ -56,7 +57,7 @@ export function SettingsScopeNotice({
                   (other) =>
                     other.environmentId !== entry.environmentId && other.label === entry.label,
                 )
-                  ? `${entry.label} · ${entry.displayUrl || entry.environmentId}`
+                  ? `${entry.label} · ${entry.displayUrl ? connectionAddressLabel(entry.displayUrl) : entry.environmentId}`
                   : entry.label,
                 search: { machine: entry.environmentId },
               }))

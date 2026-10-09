@@ -44,7 +44,7 @@ const decodePersistedServerRuntimeState = Schema.decodeUnknownEffect(
   Schema.fromJsonString(PersistedServerRuntimeState),
 );
 
-const runtimeOriginForConfig = (
+export const runtimeOriginForConfig = (
   config: Pick<ServerConfig.ServerConfig["Service"], "host">,
   port: number,
 ): PersistedServerRuntimeState["origin"] => {

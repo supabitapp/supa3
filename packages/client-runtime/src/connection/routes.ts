@@ -321,16 +321,12 @@ function withNetwork(route: ConnectionRoute, tailscale: boolean): ConnectionRout
   const profile = Option.getOrNull(route.profile);
   if (profile?._tag !== "BearerConnectionProfile") return route;
   if ((profile.network === "tailscale") === tailscale) return route;
+  const { network: _network, ...fields } = profile;
   return {
     target: route.target,
     profile: Option.some(
       new BearerConnectionProfile({
-        connectionId: profile.connectionId,
-        environmentId: profile.environmentId,
-        label: profile.label,
-        httpBaseUrl: profile.httpBaseUrl,
-        wsBaseUrl: profile.wsBaseUrl,
-        ...(profile.learned === undefined ? {} : { learned: profile.learned }),
+        ...fields,
         ...(tailscale ? { network: "tailscale" as const } : {}),
       }),
     ),

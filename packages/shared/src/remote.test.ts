@@ -54,6 +54,25 @@ describe("remote", () => {
     },
   );
 
+  it("carries a non-default relay with relay pairing links only", () => {
+    const relayAddress = `https://${"ab".repeat(16)}.${"cd".repeat(16)}.relay.supacode.invalid/`;
+    const relayUrl = "wss://relay.example/tunnel";
+    const pairingUrl = buildPairingUrl(relayAddress, "code", { environmentId, relayUrl });
+    expect(resolveRemotePairingTarget({ pairingUrl })).toMatchObject({
+      httpBaseUrl: relayAddress,
+      environmentId,
+      relayUrl,
+    });
+    expect(stripPairingTokenFromUrl(new URL(pairingUrl)).hash).toBe("");
+    expect(
+      buildPairingUrl(relayAddress, "code", { relayUrl: "wss://supacode-relay.exe.xyz" }),
+    ).not.toContain("relay=");
+    expect(buildPairingUrl("https://host.test", "code", { relayUrl })).not.toContain("relay=");
+    expect(() =>
+      resolveRemotePairingTarget({ pairingUrl: `${relayAddress}pair#token=code&relay=https://x` }),
+    ).toThrow(RemotePairingUrlInvalidError);
+  });
+
   it("discards unsafe route hints", () => {
     const routes = [
       "http://localhost",

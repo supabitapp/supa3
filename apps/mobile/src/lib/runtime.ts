@@ -2,6 +2,9 @@ import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Socket from "effect/socket/Socket";
 
+import { RelayGateway } from "@supacode/client-runtime/relay";
+import * as MobileRelayGateway from "./relayGateway";
+import * as Effect from "effect/Effect";
 import { layerRemoteHttpClient } from "@supacode/client-runtime/rpc";
 
 import * as Persistence from "../persistence/layer";
@@ -10,18 +13,23 @@ import { disposeOnFoundationReplace, type FoundationHotModule } from "./foundati
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
-const layerHttpClient = layerRemoteHttpClient(fetch);
+const layerHttpClient = Layer.unwrap(
+  Effect.map(RelayGateway, (gateway) => layerRemoteHttpClient(gateway.fetch)),
+);
+const layerSocket = Socket.layerWebSocketConstructorGlobal;
 
 type RuntimeLayerSource =
-  | typeof Socket.layerWebSocketConstructorGlobal
+  | typeof layerSocket
+  | typeof MobileRelayGateway.layer
   | typeof cryptoLayer
   | typeof layerHttpClient
   | typeof Persistence.layer;
 
-const layerRuntime = Socket.layerWebSocketConstructorGlobal.pipe(
+const layerRuntime = layerSocket.pipe(
   Layer.provideMerge(cryptoLayer),
   Layer.provideMerge(layerHttpClient),
   Layer.provideMerge(Persistence.layer),
+  Layer.provideMerge(MobileRelayGateway.layer),
 );
 
 export const runtime: ManagedRuntime.ManagedRuntime<

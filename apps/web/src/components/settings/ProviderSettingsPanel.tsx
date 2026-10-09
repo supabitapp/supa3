@@ -7,7 +7,7 @@ import {
 } from "@supacode/contracts";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
-import { connectionStatusTitle } from "@supacode/client-runtime/connection";
+import { connectionAddressLabel, connectionStatusTitle } from "@supacode/client-runtime/connection";
 import { safeErrorLogAttributes } from "@supacode/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
@@ -184,7 +184,9 @@ function providerEnvironmentDetail(environment: EnvironmentPresentation): string
   if (environment.entry.target._tag === "PrimaryConnectionTarget") return "Primary device";
   if (environment.entry.target._tag === "SshConnectionTarget") return "SSH";
   if (isDesktopLocalConnectionTarget(environment.entry.target)) return "Local device";
-  return environment.displayUrl ?? "Remote device";
+  return environment.displayUrl === null
+    ? "Remote device"
+    : connectionAddressLabel(environment.displayUrl);
 }
 
 // Shared by the editor grid and the placeholder states so switching devices

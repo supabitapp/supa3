@@ -66,6 +66,7 @@
     "@supacode/contracts": "workspace:*",
     "@supacode/mermaid-ascii": "workspace:*",
     "@supacode/mobile-markdown-text": "file:./modules/supacode-markdown-text",
+    "@supacode/mobile-relay-tunnel": "file:./modules/supacode-relay-tunnel",
     "@supacode/mobile-review-diff-native": "file:./modules/supacode-review-diff",
     "@supacode/mobile-terminal-native": "file:./modules/supacode-terminal",
     "@supacode/provider-acp-registry": "workspace:*",

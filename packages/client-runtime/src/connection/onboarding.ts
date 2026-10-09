@@ -43,6 +43,7 @@ import {
   sshTargetKey,
 } from "./routes.ts";
 import { reachPairingServer } from "./pairing.ts";
+import { resolveRelayOrigin } from "../relay/gateway.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -138,6 +139,8 @@ export const preparePairingRegistration = Effect.fn(
       });
     }
     const expected = input.expectedEnvironmentId ?? target.environmentId;
+    if (target.relayUrl !== undefined)
+      yield* resolveRelayOrigin(target.httpBaseUrl, target.relayUrl);
     const reached = yield* reachPairingServer({
       httpBaseUrl: target.httpBaseUrl,
       expectedEnvironmentId: expected,
@@ -175,6 +178,9 @@ export const preparePairingRegistration = Effect.fn(
         label: descriptor.label,
         httpBaseUrl: registrationHttpBaseUrl,
         wsBaseUrl: deriveWsBaseUrl(registrationHttpBaseUrl),
+        ...(target.relayUrl !== undefined && registrationHttpBaseUrl === target.httpBaseUrl
+          ? { relayUrl: target.relayUrl }
+          : {}),
       }),
       credential: new BearerConnectionCredential({
         token: access.access_token,
@@ -313,6 +319,7 @@ export const prepareBearerConnectionUpdate = Effect.fn(
       }),
   });
   const connectionId = entry.target.connectionId;
+  const { relayUrl } = entry.profile.value;
   return new BearerConnectionRegistration({
     target: new BearerConnectionTarget({
       environmentId: options.input.environmentId,
@@ -325,6 +332,9 @@ export const prepareBearerConnectionUpdate = Effect.fn(
       label,
       httpBaseUrl,
       wsBaseUrl: deriveWsBaseUrl(httpBaseUrl),
+      ...(relayUrl !== undefined && httpBaseUrl === entry.profile.value.httpBaseUrl
+        ? { relayUrl }
+        : {}),
     }),
     credential: credential.value,
   });

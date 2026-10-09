@@ -1,5 +1,7 @@
+import * as Option from "effect/Option";
+import { isLocalProviderAuthConnection } from "./CodexSetupSection.logic";
 import { AuthProvidersManageScope } from "@supacode/contracts";
-import { useEnvironmentScope } from "../../state/session";
+import { useEnvironmentScope, usePreparedConnection } from "../../state/session";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -19,11 +21,7 @@ import { CheckIcon, ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
 import { Children, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { ensureLocalApi } from "../../localApi";
-import {
-  useEnvironmentHttpBaseUrl,
-  usePrimaryEnvironmentId,
-  useEnvironment,
-} from "../../state/environments";
+import { usePrimaryEnvironmentId, useEnvironment } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -233,8 +231,9 @@ function ManagedCodexSetup({
   const hasSavedAccount = auth?.methods?.some((method) => method.id.startsWith("chatgpt-profile:"));
   const url = auth?.interaction?.type === "browser" ? auth.interaction.url : auth?.authorizationUrl;
   const installation = installQuery.data;
-  const httpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
-  const local = httpBaseUrl !== null && isLoopbackHost(new URL(httpBaseUrl).hostname);
+  const local = isLocalProviderAuthConnection(
+    Option.getOrNull(usePreparedConnection(environmentId)),
+  );
   const options = { reportFailure: false, reportDefect: false };
   const startAuth = useAtomCommand(serverEnvironment.startProviderAuth, options);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, options);
@@ -250,13 +249,12 @@ function ManagedCodexSetup({
   const remoteWeb = clientCallback && !window.desktopBridge?.receiveProviderAuthCallback;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const primaryEnvironment = useEnvironment(primaryEnvironmentId);
-  const primaryHttpBaseUrl = useEnvironmentHttpBaseUrl(primaryEnvironmentId);
+  const primaryConnection = Option.getOrNull(usePreparedConnection(primaryEnvironmentId));
   const primaryAuthEnvironmentId =
     !local &&
     primaryEnvironmentId &&
     primaryEnvironment?.connection.phase === "connected" &&
-    primaryHttpBaseUrl &&
-    isLoopbackHost(new URL(primaryHttpBaseUrl).hostname) &&
+    isLocalProviderAuthConnection(primaryConnection) &&
     (window.desktopBridge !== undefined || isLoopbackHost(window.location.hostname))
       ? primaryEnvironmentId
       : null;

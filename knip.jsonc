@@ -35,6 +35,8 @@
         "scripts/update-test-shard-weights.ts",
         "scripts/verify-background-live.ts",
         "src/provider/testFixtures/*.mjs",
+        "src/relay/testing/androidInterop.ts",
+        "src/relay/testing/nativeFixture.ts",
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
@@ -82,9 +84,12 @@
         "scripts/generate-device-stream.mts",
         "src/features/devices/device-stream.browser.ts!",
         "src/features/browser/preview-stream.browser.ts!",
+        "modules/supacode-relay-tunnel/index.ts!",
+        "modules/supacode-relay-tunnel/android/jvm/fixtures/vectors.ts",
       ],
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
+        "@supacode/mobile-relay-tunnel",
         "@expo-google-fonts/dm-sans",
         "@supacode/mobile-review-diff-native",
         "@supacode/mobile-terminal-native",

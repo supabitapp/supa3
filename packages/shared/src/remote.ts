@@ -1,5 +1,10 @@
 import * as Schema from "effect/Schema";
-import { EnvironmentId } from "@supacode/contracts";
+import {
+  DEFAULT_PUBLIC_RELAY_URL,
+  EnvironmentId,
+  normalizeRelayServerUrl,
+} from "@supacode/contracts";
+import { parseRelayAddress } from "./relay/protocol.ts";
 import { isLocalLoopbackHost, isPrivateNetworkHost, isTailnetHost } from "./hostClassification.ts";
 
 export const DEFAULT_HOSTED_APP_URL = "https://app.next.supacode.sh";
@@ -7,6 +12,7 @@ export const DEFAULT_HOSTED_APP_URL = "https://app.next.supacode.sh";
 const PAIRING_TOKEN_PARAM = "token";
 const PAIRING_ENV_PARAM = "env";
 const PAIRING_ROUTES_PARAM = "routes";
+const PAIRING_RELAY_PARAM = "relay";
 const MAX_PAIRING_ROUTES = 6;
 const PAIRING_QR_BYTE_BUDGET = 287;
 const decodeEnvironmentId = Schema.decodeUnknownOption(EnvironmentId);
@@ -147,6 +153,7 @@ export interface ResolvedRemotePairingTarget extends PairingRouteHints {
 export interface PairingRouteHints {
   readonly environmentId?: EnvironmentId | undefined;
   readonly routes?: ReadonlyArray<string> | undefined;
+  readonly relayUrl?: string | undefined;
 }
 
 export const readPairingEnvironmentId = (url: URL): EnvironmentId | undefined => {
@@ -180,9 +187,18 @@ const pairingRouteOrigin = (value: string): string | null => {
   }
 };
 
+const readPairingRelayUrl = (url: URL): string | undefined => {
+  const values = readHashParams(url).getAll(PAIRING_RELAY_PARAM);
+  if (values.length === 0) return undefined;
+  const relayUrl = values.length === 1 ? normalizeRelayServerUrl(values[0]!) : null;
+  if (relayUrl === null) throw new RemotePairingUrlInvalidError({});
+  return relayUrl;
+};
+
 const readPairingRouteHints = (url: URL): PairingRouteHints => {
+  const relayUrl = readPairingRelayUrl(url);
   const environmentId = readPairingEnvironmentId(url);
-  if (environmentId === undefined) return {};
+  if (environmentId === undefined) return { relayUrl };
   const raw = readHashParams(url).get(PAIRING_ROUTES_PARAM) ?? "";
   const routes = [
     ...new Set(
@@ -192,7 +208,7 @@ const readPairingRouteHints = (url: URL): PairingRouteHints => {
       }),
     ),
   ];
-  return { environmentId, routes };
+  return { environmentId, routes, relayUrl };
 };
 
 const pairingRoutePriority = (origin: string): number => {
@@ -220,13 +236,14 @@ export const stripPairingTokenFromUrl = (url: URL): URL => {
   const next = new URL(url.toString());
   const hashParams = readHashParams(next);
   if (
-    [PAIRING_TOKEN_PARAM, PAIRING_ENV_PARAM, PAIRING_ROUTES_PARAM].some((key) =>
-      hashParams.has(key),
+    [PAIRING_TOKEN_PARAM, PAIRING_ENV_PARAM, PAIRING_ROUTES_PARAM, PAIRING_RELAY_PARAM].some(
+      (key) => hashParams.has(key),
     )
   ) {
     hashParams.delete(PAIRING_TOKEN_PARAM);
     hashParams.delete(PAIRING_ENV_PARAM);
     hashParams.delete(PAIRING_ROUTES_PARAM);
+    hashParams.delete(PAIRING_RELAY_PARAM);
     next.hash = hashParams.toString();
   }
   next.searchParams.delete(PAIRING_TOKEN_PARAM);
@@ -241,10 +258,15 @@ export const setPairingTokenOnUrl = (
   const next = new URL(url.toString());
   next.searchParams.delete(PAIRING_TOKEN_PARAM);
   next.hash = new URLSearchParams([[PAIRING_TOKEN_PARAM, credential]]).toString();
+  const mainOrigin = new URL(next.searchParams.get(HOSTED_PAIRING_HOST_PARAM) ?? next.href).origin;
+  if (
+    hints.relayUrl !== undefined &&
+    hints.relayUrl !== DEFAULT_PUBLIC_RELAY_URL &&
+    parseRelayAddress(mainOrigin)
+  )
+    next.hash += `&${PAIRING_RELAY_PARAM}=${encodeURIComponent(hints.relayUrl)}`;
   if (hints.environmentId !== undefined) {
     next.hash += `&env=${encodeURIComponent(hints.environmentId)}`;
-    const mainOrigin = new URL(next.searchParams.get(HOSTED_PAIRING_HOST_PARAM) ?? next.href)
-      .origin;
     const origins = [
       ...new Set(
         (hints.routes ?? []).flatMap((value) => {

@@ -1,3 +1,4 @@
+import { connectionAddressLabel } from "@supacode/client-runtime/connection";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   AgentSessionProjectCandidate,
@@ -344,7 +345,7 @@ function ConnectionStep({
                 </span>
                 {environment.displayUrl ? (
                   <span className="mt-0.5 block text-xs break-all text-muted-foreground">
-                    {environment.displayUrl}
+                    {connectionAddressLabel(environment.displayUrl)}
                   </span>
                 ) : null}
               </span>

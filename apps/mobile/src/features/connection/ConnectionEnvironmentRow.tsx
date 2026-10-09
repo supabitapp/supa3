@@ -1,6 +1,7 @@
 import { ConnectionTraceId } from "./ConnectionTraceId";
 import { SymbolView } from "../../components/AppSymbol";
-import { connectionStatusText } from "@supacode/client-runtime/connection";
+import { connectionAddressLabel, connectionStatusText } from "@supacode/client-runtime/connection";
+import { relayName } from "@supacode/shared/relay/name";
 import type { AtomCommandResult } from "@supacode/client-runtime/state/runtime";
 import { type EnvironmentId, resolveEnvironmentMachineKind } from "@supacode/contracts";
 import { useAtomValue } from "@effect/atom-react";
@@ -48,6 +49,7 @@ export function ConnectionEnvironmentRow(props: {
 }) {
   const [label, setLabel] = useState(props.environment.environmentLabel);
   const [url, setUrl] = useState(props.environment.displayUrl);
+  const isRelayAddress = relayName(props.environment.displayUrl) !== null;
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(props.environment.environmentId),
   );
@@ -108,7 +110,7 @@ export function ConnectionEnvironmentRow(props: {
           </View>
           {props.environment.displayUrl.trim() ? (
             <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-              {props.environment.displayUrl}
+              {connectionAddressLabel(props.environment.displayUrl)}
             </Text>
           ) : null}
           {statusLabel ? (
@@ -164,15 +166,17 @@ export function ConnectionEnvironmentRow(props: {
             onChangeText={setLabel}
           />
 
-          <ConnectionFormField
-            label="URL"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            placeholder="192.168.1.100:8080"
-            value={url}
-            onChangeText={setUrl}
-          />
+          {isRelayAddress ? null : (
+            <ConnectionFormField
+              label="URL"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="192.168.1.100:8080"
+              value={url}
+              onChangeText={setUrl}
+            />
+          )}
 
           {Platform.OS === "android" ? (
             <View className="flex-row items-center justify-end gap-2">

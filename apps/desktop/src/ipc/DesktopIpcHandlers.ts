@@ -1,3 +1,4 @@
+import { startRelay, stopRelay } from "./methods/relay.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -113,6 +114,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setConnectionCatalog);
   yield* ipc.handle(clearConnectionCatalog);
 
+  yield* ipc.handle(startRelay);
+  yield* ipc.handle(stopRelay);
   yield* ipc.handle(discoverSshHosts);
   yield* ipc.handle(resolveSshHost);
   yield* ipc.handle(ensureSshEnvironment);

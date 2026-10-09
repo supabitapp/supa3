@@ -5,6 +5,7 @@ import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
+import { readPreparedConnection } from "~/state/session";
 import {
   readEnvironmentSupportsServerBrowser,
   useEnvironmentSupportsServerBrowser,
@@ -12,6 +13,7 @@ import {
 
 export function previewRuntimeFor(environmentId: EnvironmentId): PreviewRuntime | undefined {
   if (!readEnvironmentSupportsServerBrowser(environmentId)) return undefined;
+  if (readPreparedConnection(environmentId)?.connectionMethod === "relay") return "server";
   if (
     isPreviewSupportedInRuntime() &&
     environmentId !== appAtomRegistry.get(primaryEnvironmentIdAtom)
@@ -29,6 +31,7 @@ export function alternatePreviewRuntime(
 ): PreviewRuntime | null {
   if (!snapshot || !serverBrowser || !isPreviewSupportedInRuntime()) return null;
   if (environmentId === primaryEnvironmentId) return null;
+  if (readPreparedConnection(environmentId)?.connectionMethod === "relay") return null;
   return snapshot.runtime === "server" ? "desktop" : "server";
 }
 

@@ -414,6 +414,10 @@
     "./state/mcp-apps": {
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
+    },
+    "./relay": {
+      "types": "./src/relay/gateway.ts",
+      "default": "./src/relay/gateway.ts"
     }
   },
   "scripts": {

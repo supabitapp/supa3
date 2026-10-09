@@ -10,6 +10,8 @@ import type { ConnectionTarget } from "@supacode/client-runtime/connection";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
+import { readEnvironmentSupportsServerBrowser } from "~/state/entities";
+
 import { readPreparedConnection } from "~/state/session";
 
 export {
@@ -19,9 +21,20 @@ export {
   isPublicFaviconHost,
 } from "@supacode/shared/hostClassification";
 
+export class RelayHostBrowserUnavailableError extends Error {
+  constructor() {
+    super("Relay port previews require browser support on the host.");
+  }
+}
+
 const readEnvironmentUrl = (environmentId: EnvironmentId): URL => {
   const connection = readPreparedConnection(environmentId);
   if (!connection) throw new Error(`Environment ${environmentId} is not connected.`);
+  if (connection.connectionMethod === "relay") {
+    if (!readEnvironmentSupportsServerBrowser(environmentId))
+      throw new RelayHostBrowserUnavailableError();
+    return new URL("http://127.0.0.1");
+  }
   return new URL(connection.httpBaseUrl);
 };
 
@@ -83,7 +96,11 @@ const reachesEnvironmentLoopback = (target: ConnectionTarget): boolean =>
   isElectron &&
   (target._tag === "PrimaryConnectionTarget" || isDesktopLocalConnectionTarget(target));
 
-export function resolveDiscoveredServerUrl(environmentId: EnvironmentId, rawUrl: string): string {
+export function resolveDiscoveredServerUrl(
+  environmentId: EnvironmentId,
+  rawUrl: string,
+  options?: { readonly requireReachable: boolean },
+): string {
   try {
     const normalizedUrl = normalizePreviewUrl(rawUrl);
     const parsed = new URL(normalizedUrl);
@@ -102,7 +119,8 @@ export function resolveDiscoveredServerUrl(environmentId: EnvironmentId, rawUrl:
       rawUrl,
       parsed,
     ).resolvedUrl;
-  } catch {
+  } catch (error) {
+    if (options?.requireReachable && error instanceof RelayHostBrowserUnavailableError) throw error;
     return rawUrl;
   }
 }

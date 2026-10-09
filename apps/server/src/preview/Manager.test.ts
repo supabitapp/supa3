@@ -41,8 +41,10 @@ const collectEvents = Effect.gen(function* () {
 }).pipe(Effect.withSpan("preview.test.collectEvents"));
 
 const layer = PreviewManager.layer.pipe(
-  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "supacode-preview-manager-" })),
-  Layer.provide(NodeCrypto.layer),
+  Layer.provideMerge(
+    ServerConfig.layerTest(process.cwd(), { prefix: "supacode-preview-manager-" }),
+  ),
+  Layer.provideMerge(NodeCrypto.layer),
   Layer.provide(NodeServices.layer),
 );
 
@@ -65,6 +67,53 @@ it.layer(layer)("PreviewManager", (it) => {
       expect(events[0]?.type).toBe("opened");
       if (events[0]?.type === "opened") {
         expect(events[0].tabId).toBe(snapshot.tabId);
+      }
+    }),
+  );
+
+  it.effect("opens signed assets on the host rather than a client loopback gateway", () =>
+    Effect.gen(function* () {
+      const manager = yield* PreviewManager.PreviewManager;
+      const config = yield* ServerConfig.ServerConfig;
+      const snapshot = yield* manager.open({
+        threadId: freshThreadId(),
+        runtime: "server",
+        url: "http://127.0.0.1:9999/api/assets/token/index.html",
+        assetRelativeUrl: "/api/assets/token/index.html",
+      });
+      expect(snapshot.navStatus._tag).toBe("Loading");
+      if (snapshot.navStatus._tag === "Loading") {
+        expect(snapshot.navStatus.url).toBe(
+          `http://127.0.0.1:${config.port}/api/assets/token/index.html`,
+        );
+      }
+    }),
+  );
+
+  it.effect("keeps explicit bind addresses when opening signed assets", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      for (const [host, hostname] of [
+        ["192.0.2.10", "192.0.2.10"],
+        ["2001:db8::10", "[2001:db8::10]"],
+        ["0.0.0.0", "127.0.0.1"],
+        ["::", "127.0.0.1"],
+        ["[::]", "127.0.0.1"],
+        ["[::1]", "[::1]"],
+        ["[2001:db8::10]", "[2001:db8::10]"],
+      ]) {
+        const manager = yield* PreviewManager.make.pipe(
+          Effect.provideService(ServerConfig.ServerConfig, { ...config, host, port: 5230 }),
+        );
+        const snapshot = yield* manager.open({
+          threadId: freshThreadId(),
+          runtime: "server",
+          assetRelativeUrl: "/api/assets/token/index.html",
+        });
+        expect(snapshot.navStatus).toMatchObject({
+          _tag: "Loading",
+          url: `http://${hostname}:5230/api/assets/token/index.html`,
+        });
       }
     }),
   );

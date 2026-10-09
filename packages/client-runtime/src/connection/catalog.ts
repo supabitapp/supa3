@@ -24,6 +24,7 @@ export class BearerConnectionProfile extends Schema.TaggedClass<BearerConnection
     /** Learned from the server's direct endpoint advertisement. */
     learned: Schema.optionalKey(Schema.Literal(true)),
     network: Schema.optionalKey(Schema.Literal("tailscale")),
+    relayUrl: Schema.optionalKey(Schema.String),
   },
 ) {}
 

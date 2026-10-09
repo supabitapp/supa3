@@ -85,7 +85,7 @@ sending, Supacode keeps that message until it can confirm delivery. Approvals an
 question answers require a live connection.
 
 Mobile also keeps local copies of draft attachments. When an offline worktree task's
-base branch is unavailable on mobile, it uses the repository's default branch after
+base branch is unavailable, Supacode uses the repository's default branch after
 reconnecting, or its current branch when no default is available. An explicit branch
 choice stays selected.
 
