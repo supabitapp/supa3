@@ -413,7 +413,9 @@ export function createThreadEnvironmentAtoms<R, E>(
     settle: optimistic.wrap(commands.settle, (thread, _input, now, accepted) =>
       !accepted &&
       (thread.pendingRuntimeRequest !== null ||
-        ["preparing", "queued", "starting", "running", "waiting"].includes(thread.status))
+        ["preparing", "queued", "starting", "running", "waiting"].includes(
+          thread.activityRunStatus ?? thread.status,
+        ))
         ? thread
         : {
             ...thread,

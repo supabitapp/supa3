@@ -290,6 +290,32 @@ describe("remote thread lifecycle commands", () => {
     }),
   );
 
+  it.effect("keeps an active activity visible while settle is pending", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness();
+      const active = {
+        ...SNAPSHOT,
+        threads: [
+          {
+            ...SNAPSHOT.threads[0]!,
+            status: "idle" as const,
+            activityRunStatus: "running" as const,
+          },
+        ],
+      };
+      h.registry.set(h.snapshotAtom(ENVIRONMENT_ID), active);
+      const result = h.commands.settle.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const request = yield* Queue.take(h.requests);
+      expect(h.registry.get(h.visibleAtom)?.threads[0]).toBe(active.threads[0]);
+      yield* Deferred.fail(request.reply, new Error("Active work"));
+      expect((yield* Effect.promise(() => result))._tag).toBe("Failure");
+      expect(h.registry.get(h.visibleAtom)?.threads[0]).toBe(active.threads[0]);
+    }),
+  );
+
   const undoableActions = ["settle", "snooze"] as const;
 
   it.effect.each(undoableActions)("restores a confirmed %s when a queued undo fails", (action) =>
