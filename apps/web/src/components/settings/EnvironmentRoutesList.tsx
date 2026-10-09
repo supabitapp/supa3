@@ -104,7 +104,7 @@ export function EnvironmentRoutesList({
   };
 
   return (
-    <div className="mt-2 rounded-md border border-border/70">
+    <div className="mt-2 border-t border-border/50 py-2">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -187,16 +187,6 @@ function SortableRouteRow({
         isDragging && "relative z-10 rounded-md bg-background shadow-md",
       )}
     >
-      <button
-        type="button"
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        aria-label={`Reorder ${label}, position ${position}`}
-        className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-      >
-        <GripVerticalIcon className="size-3.5" />
-      </button>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
           {label}
@@ -213,6 +203,16 @@ function SortableRouteRow({
           </p>
         ) : null}
       </div>
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${label}, position ${position}`}
+        className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      >
+        <GripVerticalIcon className="size-3.5" />
+      </button>
       <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-end sm:h-6 sm:min-w-6 pointer-coarse:gap-2">
         <span
           aria-label={`${label} route latency: ${latency}`}

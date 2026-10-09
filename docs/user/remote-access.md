@@ -66,6 +66,13 @@ reorder or remove them. On mobile, open the machine under
 **Settings → Environments** and choose **Edit**. Learned routes can be reordered,
 but removing their saved pairing also removes the addresses learned through it.
 
+Open **Permissions** next to **Routes** in web or desktop, or **Your permissions**
+in the mobile route details, to see what your current connection can do on that
+environment. For a remote environment, this is in its route details. Permissions
+shown there apply only to the route marked **In use**; other routes are not
+checked. Direct pairing and Supacode Connect have separate sessions and may grant
+different permissions.
+
 ### Balance new threads across machines
 
 Auto balance is off by default. On web and desktop, enable it in
