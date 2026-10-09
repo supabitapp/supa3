@@ -17,7 +17,7 @@ import {
   type NavigationAction,
 } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -210,8 +210,17 @@ export function NewTaskDraftScreen(props: {
   } = useIncomingShare();
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
+  const keyboardHeight = useKeyboardState((state) => state.height);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const controlsBottomPadding = Math.max(insets.bottom, 10);
   const keyboardOpenedOffset = Math.max(0, controlsBottomPadding - 8);
+  const availableDockHeight =
+    viewportHeight > 0
+      ? Math.max(
+          0,
+          viewportHeight - keyboardHeight + (isKeyboardVisible ? keyboardOpenedOffset : 0),
+        )
+      : undefined;
   const { projectScopes, selectedProject, selectedProjectKey, setProject } = flow;
   const { connectedEnvironments } = useRemoteConnectionStatus();
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
@@ -1598,11 +1607,15 @@ export function NewTaskDraftScreen(props: {
   );
 
   const composerDock = (
-    <View
-      className={
-        Platform.OS === "android" ? "bg-sheet-solid px-[12px] pt-1" : "bg-sheet px-[12px] pt-1"
-      }
-      style={{ paddingBottom: controlsBottomPadding }}
+    <ScrollView
+      bounces={false}
+      className={Platform.OS === "android" ? "bg-sheet-solid" : "bg-sheet"}
+      contentContainerClassName="px-[12px] pt-1"
+      contentContainerStyle={{ paddingBottom: controlsBottomPadding }}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+      style={{ flexGrow: 0, maxHeight: availableDockHeight }}
     >
       {!voiceInput.isBusy &&
       composerMenu.trigger &&
@@ -1826,12 +1839,16 @@ export function NewTaskDraftScreen(props: {
       </Pressable>
       <VideoPreviewModal source={previewVideo} onRequestClose={closeMediaPreview} />
       <FilePreviewModal source={previewFile} onRequestClose={closeMediaPreview} />
-    </View>
+    </ScrollView>
   );
 
   if (isAndroid) {
     return (
-      <View className="flex-1 bg-sheet" collapsable={false}>
+      <View
+        className="flex-1 bg-sheet"
+        collapsable={false}
+        onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+      >
         <MaterialScreenContent>
           {keyboardDismissArea}
 
@@ -1847,7 +1864,11 @@ export function NewTaskDraftScreen(props: {
   }
 
   return (
-    <View className="flex-1 bg-sheet" collapsable={false}>
+    <View
+      className="flex-1 bg-sheet"
+      collapsable={false}
+      onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+    >
       {keyboardDismissArea}
       <KeyboardStickyView
         pointerEvents="box-none"

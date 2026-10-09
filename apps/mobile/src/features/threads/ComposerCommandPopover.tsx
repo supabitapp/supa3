@@ -209,6 +209,7 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
         <ScrollView
           className="max-h-[180px]"
           keyboardShouldPersistTaps="always"
+          nestedScrollEnabled
           showsVerticalScrollIndicator={false}
         >
           {props.items.map((item, index) => (
