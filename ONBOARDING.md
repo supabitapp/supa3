@@ -5,23 +5,26 @@
 Based on khoi's usage over the last 30 days:
 
 Work Type Breakdown:
-  Build Feature  ████████████████████  100%
+Build Feature ████████████████████ 100%
 
 Top Skills & Commands:
-  _None recorded yet_
+_None recorded yet_
 
 Top MCP Servers:
-  _None recorded yet_
+_None recorded yet_
 
 ## Your Setup Checklist
 
 ### Codebases
+
 - [ ] supacode-next — https://github.com/supabitapp/supacode-next
 
 ### MCP Servers to Activate
+
 _None yet_
 
 ### Skills to Know About
+
 _None yet_
 
 ## Team Tips
