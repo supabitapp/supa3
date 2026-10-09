@@ -13,6 +13,8 @@
 import {
   type AuthEnvironmentScope,
   AuthStandardClientScopes,
+  AuthAccessWriteScope,
+  EnvironmentHttpApi,
   ExecutionEnvironmentDescriptor,
   PortSchema,
 } from "@supacode/contracts";
@@ -39,6 +41,7 @@ import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import { Command, Flag, GlobalFlag } from "effect/cli";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
@@ -472,6 +475,27 @@ const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
   );
 });
 
+const prepareRelay = Effect.fn("pair.prepareRelay")(function* (
+  target: DiscoveredPairTarget,
+  config: ServerConfig.ServerConfig["Service"],
+) {
+  return yield* Effect.gen(function* () {
+    const auth = yield* EnvironmentAuth.EnvironmentAuth;
+    const client = yield* HttpApiClient.make(EnvironmentHttpApi, { baseUrl: target.state.origin });
+    return yield* Effect.acquireUseRelease(
+      auth.issueSession({
+        scopes: [AuthAccessWriteScope],
+        ttl: Duration.seconds(30),
+        label: "supacode pair relay preparation",
+      }),
+      (session) => client.relay.prepare({ headers: { authorization: `Bearer ${session.token}` } }),
+      (session) => auth.revokeSession(session.sessionId).pipe(Effect.ignore),
+    );
+  }).pipe(
+    Effect.provide(EnvironmentAuth.layerRuntime.pipe(Layer.provide(ServerConfig.layer(config)))),
+  );
+});
+
 const ttlFlag = Flag.String("ttl").pipe(
   Flag.withSchema(DurationFromString),
   Flag.withDescription(
@@ -529,11 +553,19 @@ export const pairCommand = Command.make("pair", {
       const config = yield* makePairServerConfig({ target, logLevel });
 
       const notes: Array<string> = [];
+      let relayUrl = target.descriptor.relayUrl;
       let pairingBaseUrl: string;
       if (flags.relay) {
-        const { relayEndpoint } = target.descriptor;
-        if (relayEndpoint === undefined)
-          return yield* new PublicRelayOffError({ settingsPath: config.settingsPath });
+        const prepared = yield* prepareRelay(target, config).pipe(
+          Effect.catchTags({
+            RelayPreparationError: (error) =>
+              error.reason === "off"
+                ? Effect.fail(new PublicRelayOffError({ settingsPath: config.settingsPath }))
+                : Effect.fail(error),
+          }),
+        );
+        const { relayEndpoint } = prepared;
+        relayUrl = prepared.relayUrl;
         pairingBaseUrl = relayEndpoint;
         notes.push(`Paired clients show this host as Relay · ${relayName(relayEndpoint)}.`);
       } else if (flags.tailscale) {
@@ -565,7 +597,7 @@ export const pairCommand = Command.make("pair", {
       });
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential, {
         environmentId: target.descriptor.environmentId,
-        relayUrl: target.descriptor.relayUrl,
+        relayUrl,
         routes: resolveBoundEndpoints({
           host: target.state.host,
           port: target.state.port,

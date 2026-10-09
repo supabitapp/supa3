@@ -101,6 +101,7 @@ import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
 import * as RelayAccess from "./relay/RelayAccess.ts";
+import * as RelayHttp from "./relay/RelayHttp.ts";
 import * as RelayIdentity from "./relay/RelayIdentity.ts";
 import * as RelayIngress from "./relay/RelayIngress.ts";
 import { TunnelSocket } from "@supacode/shared/relay/tunnelNode";
@@ -600,6 +601,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
       Layer.provide(AuthHttp.layer),
+      Layer.provide(RelayHttp.layer),
       Layer.provide(McpOAuthHttp.layer.pipe(Layer.provide(McpOAuth.layer))),
       Layer.provide(OrchestrationHttp.layer),
       Layer.provide(PullRequestHttp.layer),

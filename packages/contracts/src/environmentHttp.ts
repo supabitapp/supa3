@@ -38,6 +38,7 @@ import {
   ServerAuthSessionMethod,
 } from "./auth.ts";
 import { AuthSessionId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { RelayConnectionInfo, RelayPreparationError } from "./relay.ts";
 import {
   ExecutionEnvironmentDescriptor,
   ORCHESTRATION_PROTOCOL_HEADER,
@@ -524,7 +525,16 @@ class EnvironmentPullRequestsHttpApi extends HttpApiGroup.make("pullRequests").a
   }).middleware(EnvironmentAuthenticatedAuth),
 ) {}
 
+class EnvironmentRelayHttpApi extends HttpApiGroup.make("relay").add(
+  HttpApiEndpoint.post("prepare", "/api/relay/prepare", {
+    headers: OptionalBearerHeaders,
+    success: RelayConnectionInfo,
+    error: [RelayPreparationError, EnvironmentScopeRequiredError, EnvironmentInternalError],
+  }).middleware(EnvironmentAuthenticatedAuth),
+) {}
+
 export class EnvironmentHttpApi extends HttpApi.make("environment")
+  .add(EnvironmentRelayHttpApi)
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentMcpOAuthHttpApi)

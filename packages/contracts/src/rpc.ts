@@ -297,7 +297,7 @@ import {
 } from "./providerUsageLimits.ts";
 import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
-import { RelayHostStatus } from "./relay.ts";
+import { RelayConnectionInfo, RelayHostStatus, RelayPreparationError } from "./relay.ts";
 import {
   ScheduledTaskDeleteInput,
   ScheduledTaskDeleteResult,
@@ -527,6 +527,7 @@ export const WS_METHODS = {
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeRelayStatus: "subscribeRelayStatus",
+  prepareRelay: "relay.prepare",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
 } as const;
 
@@ -1690,6 +1691,12 @@ const WsSubscribeRelayStatusRpc = Rpc.make(WS_METHODS.subscribeRelayStatus, {
   stream: true,
 });
 
+const WsPrepareRelayRpc = Rpc.make(WS_METHODS.prepareRelay, {
+  payload: Schema.Struct({}),
+  success: RelayConnectionInfo,
+  error: RelayPreparationError,
+});
+
 const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTelemetry, {
   payload: Schema.Struct({}),
   success: ResourceTelemetrySnapshot,
@@ -1871,6 +1878,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeAuthAccessRpc,
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeRelayStatusRpc,
+  WsPrepareRelayRpc,
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,

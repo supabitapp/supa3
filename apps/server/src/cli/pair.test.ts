@@ -120,10 +120,19 @@ const testDescriptor = {
   capabilities: { repositoryIdentity: true },
 };
 
-const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A, E, R>) =>
+const withDescriptorServer = <A, E, R>(
+  run: (origin: string) => Effect.Effect<A, E, R>,
+  relay?: { readonly relayEndpoint: string; readonly relayUrl: string },
+) =>
   Effect.acquireUseRelease(
     Effect.callback<NodeHttp.Server>((resume) => {
       const server = NodeHttp.createServer((request, response) => {
+        if (request.url === "/api/relay/prepare" && relay) {
+          expect(request.headers.authorization).toMatch(/^Bearer /);
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify(relay));
+          return;
+        }
         if (request.url === "/.well-known/supacode/environment") {
           response.writeHead(200, { "content-type": "application/json" });
           response.end(JSON.stringify(testDescriptor));
@@ -145,6 +154,35 @@ const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A,
   );
 
 describe("supacode pair", () => {
+  it.effect("activates an idle relay before printing its first pairing URL", () => {
+    const relay = {
+      relayEndpoint: `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+      relayUrl: "wss://custom-relay.invalid",
+    };
+    return withDescriptorServer(
+      (origin) =>
+        Effect.gen(function* () {
+          const baseDir = NodeFS.mkdtempSync(
+            NodePath.join(NodeOS.tmpdir(), "supacode-pair-relay-test-"),
+          );
+          yield* persistServerRuntimeState({
+            path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+            state: yield* makePersistedServerRuntimeState({
+              config: { host: "127.0.0.1", devUrl: undefined },
+              port: Number(new URL(origin).port),
+            }),
+          });
+          const output = yield* captureStdout(runCli(["pair", "--relay", "--base-dir", baseDir]));
+          assert.include(output, `Pairing URL: ${relay.relayEndpoint}pair#token=`);
+          assert.include(output, `relay=${encodeURIComponent(relay.relayUrl)}`);
+          const sessions = yield* captureStdout(
+            runCli(["auth", "session", "list", "--base-dir", baseDir, "--json"]),
+          );
+          expect(JSON.parse(sessions)).toEqual([]);
+        }),
+      relay,
+    ).pipe(Effect.provide(NodeServices.layer));
+  });
   it.effect("mints a token and prints a QR pairing URL for a live server", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {

@@ -1,4 +1,3 @@
-import { createAdvertisedEndpoint } from "@supacode/shared/advertisedEndpoint";
 import { relayName } from "@supacode/shared/relay/name";
 import {
   ChevronRightIcon,
@@ -49,6 +48,8 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
+  type RelayConnectionInfo,
+  type ServerSettings,
   resolveEnvironmentMachineKind,
 } from "@supacode/contracts";
 import {
@@ -78,6 +79,8 @@ import {
   isWslSettingsRowVisible,
   selectQrEndpointOption,
   togglePairingScopeSelection,
+  createRelayPairingEndpoint,
+  resolvePairingLinkRoutes,
 } from "./ConnectionsSettings.logic";
 import {
   SettingsPageContainer,
@@ -631,10 +634,17 @@ function RevokeButton({
   );
 }
 
+type CreatedPairingCredential = {
+  readonly credential: string;
+  readonly relay: RelayConnectionInfo | undefined;
+};
+
 type PairingLinkListRowProps = {
+  relaySettings: Pick<ServerSettings, "publicRelayEnabled" | "publicRelayUrl"> | undefined;
   pairingHints: PairingRouteHints;
   pairingLink: ServerPairingLinkRecord;
   credential: string | undefined;
+  preparedRelay: RelayConnectionInfo | undefined;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
   defaultEndpointKey: string | null;
@@ -645,17 +655,29 @@ type PairingLinkListRowProps = {
 };
 
 const PairingLinkListRow = memo(function PairingLinkListRow({
-  pairingHints,
+  relaySettings,
+  pairingHints: currentPairingHints,
   pairingLink,
   credential,
+  preparedRelay,
   endpointUrl,
-  endpoints,
+  endpoints: advertisedEndpoints,
   defaultEndpointKey,
   presentation = "current",
   revokingPairingLinkId,
   onRevoke,
   canRevoke,
 }: PairingLinkListRowProps) {
+  const { endpoints, pairingHints } = useMemo(
+    () =>
+      resolvePairingLinkRoutes(
+        advertisedEndpoints,
+        currentPairingHints,
+        preparedRelay,
+        relaySettings,
+      ),
+    [advertisedEndpoints, currentPairingHints, preparedRelay, relaySettings],
+  );
   const nowMs = useRelativeTimeTick(1_000);
   const expiresAtMs = useMemo(
     () => new Date(pairingLink.expiresAt).getTime(),
@@ -1104,7 +1126,8 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
 });
 
 type AuthorizedClientsHeaderActionProps = {
-  onPairingLinkCreated: (result: AuthPairingCredentialResult) => void;
+  relayEnabled: boolean;
+  onPairingLinkCreated: (result: AuthPairingCredentialResult, relay?: RelayConnectionInfo) => void;
   clientSessions: ReadonlyArray<ServerClientSessionRecord> | null;
   isRevokingOtherClients: boolean;
   onRevokeOtherClients: () => void;
@@ -1112,6 +1135,7 @@ type AuthorizedClientsHeaderActionProps = {
 };
 
 const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderAction({
+  relayEnabled,
   onPairingLinkCreated,
   clientSessions,
   isRevokingOtherClients,
@@ -1120,13 +1144,23 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
 }: AuthorizedClientsHeaderActionProps) {
   const hasOtherClients = clientSessions?.some((clientSession) => !clientSession.current) ?? false;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const prepareRelay = useAtomCommand(serverEnvironment.prepareRelay, { reportFailure: false });
+  const canPrepareRelay = useAtomValue(
+    serverEnvironment.prepareRelay.permissionAtom(primaryEnvironmentId),
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pairingLabel, setPairingLabel] = useState("");
   const [pairingScopes, setPairingScopes] = useState<ReadonlyArray<AuthGrantScope>>([
     ...AuthStandardClientScopes,
   ]);
   const selectedScopes = pairingScopes.filter((scope) => delegatableScopes.includes(scope));
-  const [isCreatingPairingLink, setIsCreatingPairingLink] = useState(false);
+  const [pairingStage, setPairingStage] = useState<"idle" | "relay" | "creating">("idle");
+  const isCreatingPairingLink = pairingStage !== "idle";
+  const pairingButtonLabel = {
+    idle: "Create link",
+    relay: "Preparing relay…",
+    creating: "Creating…",
+  }[pairingStage];
 
   const handleCreatePairingLink = useCallback(async () => {
     if (
@@ -1136,13 +1170,20 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
       !selectedScopes.every((scope) => readEnvironmentScope(primaryEnvironmentId, scope))
     )
       return;
-    setIsCreatingPairingLink(true);
+    setPairingStage(relayEnabled ? "relay" : "creating");
     try {
+      let relay: RelayConnectionInfo | undefined;
+      if (relayEnabled) {
+        const prepared = await prepareRelay({ environmentId: primaryEnvironmentId, input: {} });
+        if (prepared._tag === "Failure") throw squashAtomCommandFailure(prepared);
+        relay = prepared.value;
+      }
+      setPairingStage("creating");
       const created = await createServerPairingCredential({
         label: pairingLabel,
         scopes: selectedScopes,
       });
-      onPairingLinkCreated(created);
+      onPairingLinkCreated(created, relay);
       setPairingLabel("");
       setPairingScopes(
         AuthStandardClientScopes.filter((scope) => delegatableScopes.includes(scope)),
@@ -1158,9 +1199,17 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
         }),
       );
     } finally {
-      setIsCreatingPairingLink(false);
+      setPairingStage("idle");
     }
-  }, [delegatableScopes, onPairingLinkCreated, pairingLabel, primaryEnvironmentId, selectedScopes]);
+  }, [
+    delegatableScopes,
+    onPairingLinkCreated,
+    pairingLabel,
+    primaryEnvironmentId,
+    selectedScopes,
+    relayEnabled,
+    prepareRelay,
+  ]);
 
   const togglePairingScope = useCallback((scope: AuthGrantScope, checked: boolean) => {
     setPairingScopes((current) => togglePairingScopeSelection(current, scope, checked));
@@ -1310,10 +1359,14 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
               Cancel
             </Button>
             <Button
-              disabled={isCreatingPairingLink || selectedScopes.length === 0}
+              disabled={
+                isCreatingPairingLink ||
+                selectedScopes.length === 0 ||
+                (relayEnabled && !canPrepareRelay)
+              }
               onClick={() => void handleCreatePairingLink()}
             >
-              {isCreatingPairingLink ? "Creating…" : "Create link"}
+              {pairingButtonLabel}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -1323,6 +1376,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
 });
 
 type PairingClientsListProps = {
+  relaySettings: Pick<ServerSettings, "publicRelayEnabled" | "publicRelayUrl"> | undefined;
   pairingHints: PairingRouteHints;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
@@ -1330,7 +1384,7 @@ type PairingClientsListProps = {
   presentation?: AccessSectionPresentation;
   isLoading: boolean;
   pairingLinks: ReadonlyArray<ServerPairingLinkRecord>;
-  createdPairingCredentials: ReadonlyMap<string, string>;
+  createdPairingCredentials: ReadonlyMap<string, CreatedPairingCredential>;
   clientSessions: ReadonlyArray<ServerClientSessionRecord>;
   revokingPairingLinkId: string | null;
   revokingClientSessionId: string | null;
@@ -1340,6 +1394,7 @@ type PairingClientsListProps = {
 };
 
 const PairingClientsList = memo(function PairingClientsList({
+  relaySettings,
   pairingHints,
   endpointUrl,
   endpoints,
@@ -1359,10 +1414,12 @@ const PairingClientsList = memo(function PairingClientsList({
     <>
       {pairingLinks.map((pairingLink) => (
         <PairingLinkListRow
+          relaySettings={relaySettings}
           pairingHints={pairingHints}
           key={pairingLink.id}
           pairingLink={pairingLink}
-          credential={createdPairingCredentials.get(pairingLink.id)}
+          credential={createdPairingCredentials.get(pairingLink.id)?.credential}
+          preparedRelay={createdPairingCredentials.get(pairingLink.id)?.relay}
           endpointUrl={endpointUrl}
           endpoints={endpoints}
           defaultEndpointKey={defaultEndpointKey}
@@ -1942,11 +1999,16 @@ export function ConnectionsSettings() {
   >(null);
   // Only this client's creation response can supply a shareable credential.
   const [createdPairingCredentials, setCreatedPairingCredentials] = useState<
-    ReadonlyMap<string, string>
+    ReadonlyMap<string, CreatedPairingCredential>
   >(() => new Map());
-  const handlePairingLinkCreated = useCallback((created: AuthPairingCredentialResult) => {
-    setCreatedPairingCredentials((current) => new Map(current).set(created.id, created.credential));
-  }, []);
+  const handlePairingLinkCreated = useCallback(
+    (created: AuthPairingCredentialResult, relay?: RelayConnectionInfo) => {
+      setCreatedPairingCredentials((current) =>
+        new Map(current).set(created.id, { credential: created.credential, relay }),
+      );
+    },
+    [],
+  );
   const [revokingDesktopPairingLinkId, setRevokingDesktopPairingLinkId] = useState<string | null>(
     null,
   );
@@ -2609,23 +2671,9 @@ export function ConnectionsSettings() {
   );
   const relayStatus = usePublicRelayStatus(primaryEnvironmentId);
   const relayEndpointUrl =
-    relayStatus?.state === "registered" || relayStatus?.state === "connecting"
-      ? relayStatus.relayEndpoint
-      : undefined;
+    relayStatus?.state === "registered" ? relayStatus.relayEndpoint : undefined;
   const relayEndpoint = useMemo(
-    () =>
-      relayEndpointUrl
-        ? createAdvertisedEndpoint({
-            id: "public-relay",
-            label: "Public relay",
-            provider: { id: "public-relay", label: "Public relay", kind: "tunnel", isAddon: false },
-            httpBaseUrl: relayEndpointUrl,
-            reachability: "public",
-            hostedHttpsCompatibility: "compatible",
-            source: "server",
-            description: "End-to-end encrypted access through the public relay.",
-          })
-        : null,
+    () => (relayEndpointUrl ? createRelayPairingEndpoint(relayEndpointUrl) : null),
     [relayEndpointUrl],
   );
   const visibleDesktopAdvertisedEndpoints = useMemo(
@@ -3281,6 +3329,7 @@ export function ConnectionsSettings() {
         </div>
       ) : null}
       <PairingClientsList
+        relaySettings={primaryServerConfig?.settings}
         pairingHints={pairingHints}
         endpointUrl={desktopServerExposureState?.endpointUrl}
         endpoints={visibleDesktopAdvertisedEndpoints}
@@ -3490,6 +3539,7 @@ export function ConnectionsSettings() {
               control={
                 canWriteAccess ? (
                   <AuthorizedClientsHeaderAction
+                    relayEnabled={primaryServerConfig?.settings.publicRelayEnabled ?? false}
                     delegatableScopes={currentSessionScopes ?? []}
                     onPairingLinkCreated={handlePairingLinkCreated}
                     clientSessions={

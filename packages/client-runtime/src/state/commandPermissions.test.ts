@@ -8,6 +8,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
   AuthOrchestrationOperateScope,
+  AuthAccessWriteScope,
   AuthSourceControlWriteScope,
   ThreadId,
   EnvironmentId,
@@ -59,6 +60,31 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("requires the destination access grant to prepare a relay link", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const relay = createCommandPermissions(runtime, WS_METHODS.prepareRelay);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(relay.permissionAtom(env))).toBe(false);
+        expect((yield* relay.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthAccessWriteScope],
+            permissions: [AuthAccessWriteScope],
+          }),
+        );
+        expect(registry.get(relay.permissionAtom(env))).toBe(true);
+        yield* relay.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(relay.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
   it.effect("requires the destination grant to control question timers", () =>
     Effect.scoped(
       Effect.gen(function* () {

@@ -21,6 +21,8 @@ function statusDescription(status: RelayHostStatus): string | null {
   switch (status.state) {
     case "off":
       return null;
+    case "idle":
+      return "Enabled. Create a pairing link below to connect the relay.";
     case "connecting":
       return "Connecting to the relay server.";
     case "registered":
