@@ -9,7 +9,10 @@ import { CheckIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
-import { QuestionAutoDismissCountdown, QuestionAutoDismissTimer } from "./QuestionAutoDismissTimer";
+import {
+  QuestionAutoDismissAnnouncer,
+  QuestionAutoDismissCountdown,
+} from "./QuestionAutoDismissTimer";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -49,7 +52,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       onToggleOption={onToggleOption}
       onAdvance={onAdvance}
       onDismiss={onDismiss}
-      timerDeadline={autoDismissQuestions ? activePrompt.autoDismissAt : undefined}
+      timerDeadline={autoDismissQuestions ? (activePrompt.autoDismissAt ?? null) : null}
     />
   );
 });
@@ -73,7 +76,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
-  timerDeadline?: string | null | undefined;
+  timerDeadline: string | null;
 }) {
   // Message-mode requests remain answerable after their provider turn ends.
   const canRespond = prompt.responseCapability !== "not_resumable";
@@ -212,10 +215,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           ) : null}
         </ComposerBanner.Content>
         <ComposerBanner.Actions>
-          {timerDeadline != null ? <QuestionAutoDismissCountdown deadline={timerDeadline} /> : null}
+          {timerDeadline !== null ? (
+            <QuestionAutoDismissCountdown deadline={timerDeadline} />
+          ) : null}
           {prompt.questions.length > 1 ? (
             <>
-              {timerDeadline != null ? <ComposerBanner.Separator /> : null}
+              {timerDeadline !== null ? <ComposerBanner.Separator /> : null}
               <span className="shrink-0 font-medium text-muted-foreground tabular-nums">
                 {questionIndex + 1}/{prompt.questions.length}
               </span>
@@ -246,7 +251,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           ) : null}
         </ComposerBanner.Actions>
       </CollapsibleTrigger>
-      {timerDeadline != null ? <QuestionAutoDismissTimer deadline={timerDeadline} /> : null}
+      {timerDeadline !== null ? <QuestionAutoDismissAnnouncer deadline={timerDeadline} /> : null}
       <CollapsiblePanel>
         <ComposerBanner.Scroll>
           <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">

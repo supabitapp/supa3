@@ -11,7 +11,6 @@ import {
   ScrollView,
   View,
   type LayoutChangeEvent,
-  type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -32,10 +31,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { USER_INPUT_TOGGLE_DURATION_MS } from "./pendingUserInputLayout";
-import {
-  QuestionAutoDismissTimer,
-  useQuestionAutoDismissCountdown,
-} from "./QuestionAutoDismissTimer";
+import { QuestionAutoDismissToggle } from "./QuestionAutoDismissTimer";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -184,30 +180,6 @@ function QuestionPage(props: {
   );
 }
 
-function CountdownToggle({
-  deadline,
-  accessibilityLabel,
-  children,
-  ...props
-}: Omit<PressableProps, "children" | "accessibilityLabel"> & {
-  readonly deadline: string | null;
-  readonly accessibilityLabel: string;
-  readonly children: (timer: ReactNode) => ReactNode;
-}) {
-  const countdown = useQuestionAutoDismissCountdown(deadline);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        countdown ? `${accessibilityLabel}, ${countdown.label}` : accessibilityLabel
-      }
-      {...props}
-    >
-      {children(countdown ? <QuestionAutoDismissTimer countdown={countdown} /> : null)}
-    </Pressable>
-  );
-}
-
 export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const { requestId, questions } = props.pendingUserInput;
   const questionCount = questions.length;
@@ -353,13 +325,13 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // mount + layout before anything moves.
   const renderCard = EXPANDED_CARD_IS_OVERLAY || !props.collapsed;
   const showBar = props.collapsed || EXPANDED_CARD_IS_OVERLAY;
+  const autoDismissAt = props.autoDismissQuestions
+    ? (props.pendingUserInput.autoDismissAt ?? null)
+    : null;
   // The bar renders UNDER the card (earlier in JSX), always opaque: while
   // expanded the opaque card covers it, and during the collapse slide the
   // card's top edge wipes past and reveals it — no opacity handoff, so no
   // crossfade frames.
-  const autoDismissAt = props.autoDismissQuestions
-    ? (props.pendingUserInput.autoDismissAt ?? null)
-    : null;
   const bar = showBar ? (
     <View
       onLayout={handleBarLayout}
@@ -368,7 +340,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       importantForAccessibility={props.collapsed ? "auto" : "no-hide-descendants"}
       className="flex-row items-center gap-2 rounded-full border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
     >
-      <CountdownToggle
+      <QuestionAutoDismissToggle
         deadline={autoDismissAt}
         accessibilityLabel={`Expand user input, ${questionCount} question${
           questionCount === 1 ? "" : "s"
@@ -397,7 +369,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             />
           </>
         )}
-      </CountdownToggle>
+      </QuestionAutoDismissToggle>
       {props.onStopThread ? (
         <ControlPill
           accessibilityLabel="Stop"
@@ -437,8 +409,8 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           : { maxHeight: props.maxHeight }
       }
     >
-      <CountdownToggle
-        deadline={props.collapsed ? null : autoDismissAt}
+      <QuestionAutoDismissToggle
+        deadline={autoDismissAt}
         accessibilityLabel={describeQuestion(questionIndex)}
         accessibilityHint="Collapses user input"
         onPress={props.onToggleCollapsed}
@@ -476,7 +448,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             </View>
           </>
         )}
-      </CountdownToggle>
+      </QuestionAutoDismissToggle>
       {/* Remounting per question also starts each page scrolled to its top. */}
       <QuestionPage
         questionId={question?.id}

@@ -42,7 +42,7 @@ export const QuestionAutoDismissCountdown = memo(function QuestionAutoDismissCou
   );
 });
 
-export const QuestionAutoDismissTimer = memo(function QuestionAutoDismissTimer({
+export const QuestionAutoDismissAnnouncer = memo(function QuestionAutoDismissAnnouncer({
   deadline,
 }: {
   deadline: string;
