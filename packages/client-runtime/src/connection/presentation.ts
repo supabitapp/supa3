@@ -4,7 +4,13 @@ import * as Option from "effect/Option";
 
 import type { ConnectionCatalogEntry } from "./catalog.ts";
 import type { ConnectionTarget, SupervisorConnectionState } from "./model.ts";
-import { connectionRouteId, connectionRoutes, routeHttpBaseUrl } from "./routes.ts";
+import {
+  connectionRouteAddress,
+  connectionRouteId,
+  connectionRouteLabel,
+  connectionRoutes,
+  routeHttpBaseUrl,
+} from "./routes.ts";
 
 export type EnvironmentConnectionPhase =
   | "available"
@@ -146,4 +152,24 @@ export function connectionCatalogDisplayUrl(entry: ConnectionCatalogEntry): stri
 export function connectionAddressLabel(url: string): string {
   const name = relayName(url);
   return name === null ? url : `Relay · ${name}`;
+}
+
+export function environmentConnectionAddress(input: {
+  readonly entry: ConnectionCatalogEntry;
+  readonly connectionState: EnvironmentConnectionPhase;
+  readonly connectedTarget?: ConnectionTarget | null;
+}): string | null {
+  if (input.entry.enabled && input.connectionState === "connected" && input.connectedTarget) {
+    const activeId = connectionRouteId(input.connectedTarget);
+    const route = connectionRoutes(input.entry).find(
+      (candidate) => connectionRouteId(candidate.target) === activeId,
+    );
+    if (route !== undefined) {
+      const label = connectionRouteLabel(route);
+      const address = connectionRouteAddress(route);
+      return address === null ? label : `${label} · ${address}`;
+    }
+  }
+  const savedAddress = connectionCatalogDisplayUrl(input.entry);
+  return savedAddress === null ? null : connectionAddressLabel(savedAddress);
 }

@@ -1,17 +1,37 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentPresentation } from "@supacode/client-runtime/connection";
+import {
+  environmentConnectionAddress,
+  type EnvironmentPresentation,
+} from "@supacode/client-runtime/connection";
 import { createEnvironmentPresentationAtoms } from "@supacode/client-runtime/state/presentation";
 import type { EnvironmentId } from "@supacode/contracts";
 import { Atom } from "effect/reactivity";
+import * as Option from "effect/Option";
 
 import { environmentCatalog } from "../connection/catalog";
 import { serverEnvironment } from "./server";
+import { environmentSession } from "./session";
 
 export const environmentPresentations = createEnvironmentPresentationAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   stateAtom: environmentCatalog.stateAtom,
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
+
+export const environmentConnectionAddressAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => {
+    const presentation = get(environmentPresentations.presentationAtom(environmentId));
+    if (presentation === null) return null;
+    const prepared = Option.getOrNull(
+      get(environmentSession.preparedConnectionValueAtom(environmentId)),
+    );
+    return environmentConnectionAddress({
+      entry: presentation.entry,
+      connectionState: presentation.connection.phase,
+      connectedTarget: prepared?.target,
+    });
+  }).pipe(Atom.withLabel(`mobile:environment-connection-address:${environmentId}`)),
+);
 
 const EMPTY_ENVIRONMENT_PRESENTATION_ATOM = Atom.make<EnvironmentPresentation | null>(null).pipe(
   Atom.withLabel("mobile-environment-presentation:empty"),
