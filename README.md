@@ -1,46 +1,48 @@
 # Supacode
 
-The next version of supacode, a command center for ur coding agents
+A command center for your coding agents. Run it on the machine where your agents work, then control them from the desktop, web, or mobile app.
 
-## Desktop app
+## Install
 
-Download at https://next.supacode.sh
+Desktop app: download it at https://next.supacode.sh.
 
-## iOS app
+iOS app: join the [TestFlight beta](https://testflight.apple.com/join/ga2vGT3h).
 
-[Join the Supacode beta on TestFlight](https://testflight.apple.com/join/ga2vGT3h).
+Command line on macOS and Linux:
 
-## Command line
-
-```
+```sh
 curl -fsSL https://next.supacode.sh/install.sh | sh
 ```
 
-on Windows
+On Windows, in PowerShell:
 
-```
+```powershell
 irm https://next.supacode.sh/install.ps1 | iex
 ```
 
-Then run `supacode` to start the server and open the local web app. `supacode service install` keeps it running in the background, `supacode update` moves to a newer release
+To try it without installing, run `npx supacode@latest`.
 
-To try it once without installing, run npx supacode@latest instead.
+## Use
+
+Open the desktop app, or run `supacode` to start the server and open the web app. Then enable a provider in **Settings → Providers**; its CLI must be installed and signed in on the same machine.
+
+## Deploy on a host
+
+To keep Supacode available on a Linux or macOS machine, install the command line there and use:
+
+| Task                       | Command                    |
+| -------------------------- | -------------------------- |
+| Run in the background      | `supacode service install` |
+| Check status and logs      | `supacode service status`  |
+| Update to a newer release  | `supacode update`          |
+| Remove the service and CLI | `supacode uninstall`       |
+
+Then connect your phone or another computer with [remote access](./docs/user/remote-access.md).
 
 ## Documentation
 
-The [documentation index](./docs/README.md) for all pages.
-
-- [Install and first run](./docs/user/install.md)
-- [Permission modes](./docs/user/permission-modes.md)
-- [Keyboard shortcuts](./docs/user/keybindings.md)
-- [Project settings](./docs/user/project-settings.md)
-- [Appearance preferences](./docs/user/appearance.md)
-- [Remote access](./docs/user/remote-access.md)
-- [Connect Claude Code, Codex, ChatGPT and other agents over MCP](./docs/user/outside-agents.md)
-- [Keeping app and server in sync](./docs/user/updating.md)
-- [Source control integrations](./docs/user/source-control.md)
-- [Background service](./docs/user/background-service.md)
+Everything else is in the [docs](./docs/README.md).
 
 ## Attribution
 
-Supacode is a fork of https://github.com/pingdotgg/t3code
+Supacode is a fork of [t3code](https://github.com/pingdotgg/t3code).

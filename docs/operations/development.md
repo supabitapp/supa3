@@ -2,8 +2,19 @@
 
 ## First checkout
 
-Install Mise using the [root README](../../README.md#install-the-development-toolchain). From the
-repository root:
+Install Mise on macOS or Linux:
+
+```sh
+curl https://mise.run | sh
+```
+
+On Windows:
+
+```powershell
+winget install jdx.mise
+```
+
+Then, from the repository root:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -12,7 +23,7 @@ mise exec -- vp i
 mise exec -- vp run dev
 ```
 
-The commands below use bare `vp`; activate Mise as described in the README, or prefix each
+The commands below use bare `vp`; activate Mise in your shell, or prefix each
 command with `mise exec --`.
 
 Open the pairing URL printed by the dev runner. The bare origin does not authenticate

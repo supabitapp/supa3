@@ -12,7 +12,7 @@ launch Supacode and configure providers afterwards.
 
 Use Node.js 24 and the Mise-managed project tools. Get the source from
 [supabitapp/supacode-next](https://github.com/supabitapp/supacode-next), install Mise using the
-[development toolchain instructions](../../README.md#install-the-development-toolchain),
+[development runbook](../operations/development.md#first-checkout),
 and run these commands from the repository root:
 
 ```bash
