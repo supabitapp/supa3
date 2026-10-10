@@ -1,48 +1,28 @@
 # Supacode
 
-A command center for your coding agents. Run it on the machine where your agents work, then control them from the desktop, web, or mobile app.
+A command center for your coding agents.
 
-## Install
-
-Desktop app: download it at https://next.supacode.sh.
-
-iOS app: join the [TestFlight beta](https://testflight.apple.com/join/ga2vGT3h).
-
-Command line on macOS and Linux:
-
-```sh
-curl -fsSL https://next.supacode.sh/install.sh | sh
+```mermaid
+flowchart LR
+  subgraph host["Your computer or a server"]
+    server["Supacode server"] --> agents["Coding agents"]
+  end
+  desktop["Desktop app"] --> server
+  web["Browser"] --> server
+  phone["iOS app"] --> server
 ```
 
-On Windows, in PowerShell:
+## Get started
 
-```powershell
-irm https://next.supacode.sh/install.ps1 | iex
-```
+1. Install the [desktop app](https://next.supacode.sh) or the command line:
 
-To try it without installing, run `npx supacode@latest`.
+   ```sh
+   curl -fsSL https://next.supacode.sh/install.sh | sh
+   ```
 
-## Use
+   On Windows: `irm https://next.supacode.sh/install.ps1 | iex`
 
-Open the desktop app, or run `supacode` to start the server and open the web app. Then enable a provider in **Settings → Providers**; its CLI must be installed and signed in on the same machine.
+2. Open the app or run `supacode`, then enable a provider in **Settings → Providers**.
+3. To connect from the [iOS app](https://testflight.apple.com/join/ga2vGT3h) or another computer, follow [remote access](./docs/user/remote-access.md). On a Linux or macOS server, `supacode service install` keeps it running.
 
-## Deploy on a host
-
-To keep Supacode available on a Linux or macOS machine, install the command line there and use:
-
-| Task                       | Command                    |
-| -------------------------- | -------------------------- |
-| Run in the background      | `supacode service install` |
-| Check status and logs      | `supacode service status`  |
-| Update to a newer release  | `supacode update`          |
-| Remove the service and CLI | `supacode uninstall`       |
-
-Then connect your phone or another computer with [remote access](./docs/user/remote-access.md).
-
-## Documentation
-
-Everything else is in the [docs](./docs/README.md).
-
-## Attribution
-
-Supacode is a fork of [t3code](https://github.com/pingdotgg/t3code).
+[Documentation](./docs/README.md) · Fork of [t3code](https://github.com/pingdotgg/t3code)
