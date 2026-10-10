@@ -1130,6 +1130,7 @@ export function ThreadWorkGroupToggle(props: {
             environmentId={props.environmentId}
             resource={props.latestImage.resource}
             alt={props.latestImage.alt}
+            showCaption={false}
             srcFragment={props.latestImage.srcFragment}
             onPressPreview={props.onPressPreview}
           />

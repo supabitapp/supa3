@@ -74,7 +74,7 @@ function projectedScreenshot(
 }
 
 describe("latest tool group image", () => {
-  it("keeps the last screenshot through later text-only and running calls, then replaces it", () => {
+  it("clears the screenshot for later text-only and running calls, then shows a new image", () => {
     const first = projectedScreenshot({
       output: undefined,
       outputOmitted: true,
@@ -86,12 +86,14 @@ describe("latest tool group image", () => {
       outputOmitted: true,
     });
     const running = { ...text, item: { ...text.item, status: "running" as const } };
-    expect(latestToolGroupImage([first, text, running])?.resource).toEqual({
+    expect(latestToolGroupImage([first])?.resource).toEqual({
       _tag: "tool-output-image",
       threadId: first.sourceThreadId,
       itemId: first.sourceItemId,
       index: 1,
     });
+    expect(latestToolGroupImage([first, text])).toBeNull();
+    expect(latestToolGroupImage([first, text, running])).toBeNull();
     const newer = projectedScreenshot({
       id: TurnItemId.make("newer"),
       output: undefined,
@@ -120,5 +122,7 @@ describe("latest tool group image", () => {
       threadId: file.sourceThreadId,
       path: "/workspace/screens/latest.png",
     });
+    const text = projectedScreenshot({ output: undefined });
+    expect(latestToolGroupImage([screenshotRow, file, text], "/workspace")).toBeNull();
   });
 });

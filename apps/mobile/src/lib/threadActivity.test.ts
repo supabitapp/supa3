@@ -44,7 +44,7 @@ const threadId = ThreadId.make("thread-1");
 const sourceThreadId = ThreadId.make("thread-source");
 const runId = RunId.make("run-1");
 
-it("shows the newest tool image on collapsed mobile groups", () => {
+it("shows an image only from the latest tool on collapsed mobile groups", () => {
   const items: OrchestrationV2TurnItem[] = [2, 0].map((outputImageCount, position) => ({
     ...base(`image-tool-${position}`, "2026-06-20T00:00:03.000Z", position + 1),
     type: "dynamic_tool",
@@ -60,10 +60,14 @@ it("shows the newest tool image on collapsed mobile groups", () => {
       new Set([runId]),
       expanded,
     );
-  const first = rows(items).find((row) => row.type === "work-toggle");
+  const first = rows(items.slice(0, 1)).find((row) => row.type === "work-toggle");
   expect(first).toMatchObject({
     expanded: false,
     latestImage: { resource: { itemId: "image-tool-0", index: 1 } },
+  });
+  expect(rows(items).find((row) => row.type === "work-toggle")).toMatchObject({
+    expanded: false,
+    latestImage: null,
   });
   const updated = items.map((item, index) =>
     item.type === "dynamic_tool" && index === 1 ? { ...item, outputImageCount: 1 } : item,
@@ -77,6 +81,26 @@ it("shows the newest tool image on collapsed mobile groups", () => {
     "work-toggle",
     "activity-group",
   ]);
+});
+
+it("clears the collapsed mobile image when a command follows a screenshot", () => {
+  const screenshot: OrchestrationV2TurnItem = {
+    ...base("screenshot", "2026-06-20T00:00:02.000Z", 1),
+    type: "dynamic_tool",
+    toolName: "mcp__supacode__device_screenshot",
+    input: {},
+    outputImageCount: 1,
+  };
+  const rows = deriveThreadFeedPresentation(
+    buildThreadFeed([projected(screenshot, 0), projected(command(), 1)]),
+    null,
+    new Set([runId]),
+  );
+
+  expect(rows.find((row) => row.type === "work-toggle")).toMatchObject({
+    expanded: false,
+    latestImage: null,
+  });
 });
 
 it("keeps historical plan detail accessible from its paged turn item", () => {
