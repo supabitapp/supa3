@@ -1,0 +1,142 @@
+import { EnvironmentId } from "@supacode/contracts";
+import { describe, expect, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
+import { HttpClient, HttpClientResponse } from "effect/http";
+
+import {
+  BearerConnectionProfile,
+  type ConnectionCatalogEntry,
+  type ConnectionRoute,
+} from "./catalog.ts";
+import * as ConnectionDriver from "./driver.ts";
+import * as ConnectionResolver from "./resolver.ts";
+import { BearerConnectionTarget, type PreparedConnection } from "./model.ts";
+import * as RpcSession from "../rpc/session.ts";
+
+const target = new BearerConnectionTarget({
+  environmentId: EnvironmentId.make("preflight-test"),
+  connectionId: "lan",
+  label: "Test",
+});
+const profile = new BearerConnectionProfile({
+  environmentId: target.environmentId,
+  connectionId: target.connectionId,
+  label: target.label,
+  httpBaseUrl: "http://192.168.1.2:4389/",
+  wsBaseUrl: "ws://192.168.1.2:4389/",
+});
+const route: ConnectionRoute = { target, profile: Option.some(profile) };
+const entry: ConnectionCatalogEntry = { ...route, enabled: true };
+
+const makeHarness = Effect.fnUntraced(function* () {
+  const prepares = yield* Ref.make(0);
+  const checks = yield* Ref.make(0);
+  const connections = yield* Ref.make<ReadonlyArray<PreparedConnection>>([]);
+  const resolver = ConnectionResolver.ConnectionResolver.of({
+    prepare: (entry) =>
+      Ref.updateAndGet(prepares, (count) => count + 1).pipe(
+        Effect.map(
+          (count) =>
+            ({
+              environmentId: entry.target.environmentId,
+              label: entry.target.label,
+              target: entry.target,
+              httpBaseUrl: profile.httpBaseUrl,
+              socketUrl: `${profile.wsBaseUrl}ws?wsTicket=ticket-${count}`,
+              httpAuthorization: { _tag: "Bearer", token: "test-token" },
+            }) satisfies PreparedConnection,
+        ),
+      ),
+    prepareForUpdate: () => Effect.die("Update preparation is not used by these tests"),
+  });
+  const factory = RpcSession.RpcSessionFactory.of({
+    connect: (prepared) =>
+      Ref.update(connections, (current) => [...current, prepared]).pipe(
+        Effect.as({
+          client: {} as RpcSession.RpcSession["client"],
+          initialConfig: Effect.die("Config is not used by these tests"),
+          configChanges: Stream.never,
+          subscribeServerConfig: () => Stream.empty,
+          ready: Effect.void,
+          probe: Effect.void,
+          closed: Effect.never,
+        } satisfies RpcSession.RpcSession),
+      ),
+  });
+  const client = HttpClient.make((request) =>
+    Ref.update(checks, (count) => count + 1).pipe(
+      Effect.as(
+        HttpClientResponse.fromWeb(
+          request,
+          Response.json({
+            environmentId: target.environmentId,
+            label: target.label,
+            platform: { os: "linux", arch: "x64" },
+            serverVersion: "0.0.0-test",
+            capabilities: { repositoryIdentity: true },
+          }),
+        ),
+      ),
+    ),
+  );
+  const driver = yield* ConnectionDriver.make.pipe(
+    Effect.provideService(ConnectionResolver.ConnectionResolver, resolver),
+    Effect.provideService(RpcSession.RpcSessionFactory, factory),
+    Effect.provideService(HttpClient.HttpClient, client),
+  );
+  return { driver, prepares, checks, connections };
+});
+
+describe("route preflight preparation", () => {
+  it.effect(
+    "opens a socket using fresh preparation without repeating HTTP checks or authentication",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness();
+        const preflight = Option.getOrThrow(yield* harness.driver.preflight(entry, route));
+        expect(yield* Ref.get(harness.connections)).toEqual([]);
+        const lease = yield* harness.driver.connect(entry, () => Effect.void, preflight);
+        expect(lease.prepared).toBe(preflight.prepared);
+        expect(yield* Ref.get(harness.prepares)).toBe(1);
+        expect(yield* Ref.get(harness.checks)).toBe(1);
+        expect(yield* Ref.get(harness.connections)).toEqual([preflight.prepared]);
+      }),
+  );
+
+  it.effect("renews expired preparation before opening a socket", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const preflight = Option.getOrThrow(yield* harness.driver.preflight(entry, route));
+      yield* TestClock.adjust("10 seconds");
+      const lease = yield* harness.driver.connect(entry, () => Effect.void, preflight);
+      expect(lease.prepared.socketUrl).toContain("ticket-2");
+      expect(yield* Ref.get(harness.prepares)).toBe(2);
+      expect(yield* Ref.get(harness.connections)).toHaveLength(1);
+    }),
+  );
+
+  it.effect("prepares again when a route with the same ID changes address", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const preflight = Option.getOrThrow(yield* harness.driver.preflight(entry, route));
+      const changed: ConnectionCatalogEntry = {
+        ...entry,
+        profile: Option.some(
+          new BearerConnectionProfile({
+            ...profile,
+            httpBaseUrl: "http://192.168.2.2:4389/",
+            wsBaseUrl: "ws://192.168.2.2:4389/",
+          }),
+        ),
+      };
+      const lease = yield* harness.driver.connect(changed, () => Effect.void, preflight);
+      expect(lease.prepared.socketUrl).toContain("ticket-2");
+      expect(yield* Ref.get(harness.prepares)).toBe(2);
+      expect(yield* Ref.get(harness.connections)).toHaveLength(1);
+    }),
+  );
+});

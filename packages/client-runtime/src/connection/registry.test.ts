@@ -346,7 +346,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
   });
   const driver = ConnectionDriver.ConnectionDriver.of({
     checkRoute: () => Effect.succeed("unchecked"),
-    preflight: () => Effect.succeed(false),
+    preflight: () => Effect.succeedNone,
     connect: (entry, reportProgress) =>
       Effect.gen(function* () {
         const target = entry.target;
@@ -447,6 +447,214 @@ function awaitConnectionState(
 }
 
 describe("EnvironmentRegistry", () => {
+  it.effect(
+    "keeps the session and durable subscription when reordering or removing an unused route",
+    () =>
+      Effect.gen(function* () {
+        const alternateTarget = new BearerConnectionTarget({
+          ...BEARER_TARGET,
+          connectionId: "alternate",
+        });
+        const alternateProfile = new BearerConnectionProfile({
+          ...BEARER_PROFILE,
+          connectionId: alternateTarget.connectionId,
+          httpBaseUrl: "https://alternate.example.test/",
+          wsBaseUrl: "wss://alternate.example.test/",
+        });
+        const harness = yield* makeHarness(
+          [BEARER_TARGET],
+          [BEARER_PROFILE],
+          [[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]],
+        );
+        yield* Effect.gen(function* () {
+          const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+          yield* registry.start;
+          yield* awaitConnectionState(
+            registry,
+            BEARER_TARGET.environmentId,
+            (state) => state.phase === "connected",
+          );
+          yield* registry.register(
+            new BearerConnectionRegistration({
+              target: alternateTarget,
+              profile: alternateProfile,
+              credential: BEARER_CREDENTIAL,
+            }),
+          );
+          const originalState = yield* awaitConnectionState(
+            registry,
+            BEARER_TARGET.environmentId,
+            (state) => state.phase === "connected",
+          );
+          const originalSupervisor = yield* registry.run(
+            BEARER_TARGET.environmentId,
+            EnvironmentSupervisor.EnvironmentSupervisor,
+          );
+          const originalSession = yield* SubscriptionRef.get(originalSupervisor.session);
+          const starts = yield* Ref.make(0);
+          const subscribed = yield* Deferred.make<void>();
+          const subscription = yield* registry
+            .followStream(
+              BEARER_TARGET.environmentId,
+              Stream.fromEffect(
+                Ref.update(starts, (count) => count + 1).pipe(
+                  Effect.andThen(Deferred.succeed(subscribed, undefined)),
+                ),
+              ).pipe(Stream.concat(Stream.never)),
+            )
+            .pipe(Stream.runDrain, Effect.forkChild);
+          yield* Deferred.await(subscribed);
+
+          yield* registry.reorderRoutes(BEARER_TARGET.environmentId, [
+            alternateTarget.connectionId,
+            BEARER_TARGET.connectionId,
+          ]);
+          yield* Effect.yieldNow;
+          expect(yield* Ref.get(starts)).toBe(1);
+          expect(yield* registry.state(BEARER_TARGET.environmentId)).toEqual(originalState);
+          expect(yield* SubscriptionRef.get(originalSupervisor.session)).toEqual(originalSession);
+          expect(
+            yield* registry.run(
+              BEARER_TARGET.environmentId,
+              EnvironmentSupervisor.EnvironmentSupervisor,
+            ),
+          ).toBe(originalSupervisor);
+
+          yield* registry.removeRoute(BEARER_TARGET.environmentId, alternateTarget.connectionId);
+          yield* Effect.yieldNow;
+          expect(yield* Ref.get(starts)).toBe(1);
+          expect(yield* registry.state(BEARER_TARGET.environmentId)).toEqual(originalState);
+          expect(yield* SubscriptionRef.get(originalSupervisor.session)).toEqual(originalSession);
+          expect((yield* Ref.get(harness.sessions)).length).toBe(2);
+          expect(yield* Ref.get(harness.releasedSessions)).toBe(1);
+          yield* Fiber.interrupt(subscription);
+        }).pipe(Effect.provide(harness.layer), Effect.scoped);
+      }),
+  );
+
+  it.effect("reconnects through a remaining route after the active route is removed", () =>
+    Effect.gen(function* () {
+      const alternateTarget = new BearerConnectionTarget({
+        ...BEARER_TARGET,
+        connectionId: "alternate",
+      });
+      const harness = yield* makeHarness(
+        [BEARER_TARGET],
+        [BEARER_PROFILE],
+        [[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]],
+      );
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        yield* registry.register(
+          new BearerConnectionRegistration({
+            target: alternateTarget,
+            profile: new BearerConnectionProfile({
+              ...BEARER_PROFILE,
+              connectionId: alternateTarget.connectionId,
+              httpBaseUrl: "https://alternate.example.test/",
+              wsBaseUrl: "wss://alternate.example.test/",
+            }),
+            credential: BEARER_CREDENTIAL,
+          }),
+        );
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        yield* registry.removeRoute(BEARER_TARGET.environmentId, BEARER_TARGET.connectionId);
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        const prepared = yield* registry.run(
+          BEARER_TARGET.environmentId,
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.flatMap((supervisor) => SubscriptionRef.get(supervisor.prepared)),
+          ),
+        );
+        expect(Option.getOrThrow(prepared).target).toEqual(alternateTarget);
+        expect((yield* Ref.get(harness.sessions)).length).toBe(3);
+        expect(yield* Ref.get(harness.releasedSessions)).toBe(2);
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("restarts pending socket setup when an unused route is removed", () =>
+    Effect.gen(function* () {
+      const holdNext = yield* Ref.make(false);
+      const opening = yield* Deferred.make<void>();
+      const cancelled = yield* Deferred.make<void>();
+      const harness = yield* makeHarness(
+        [BEARER_TARGET],
+        [BEARER_PROFILE],
+        [[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]],
+        {
+          beforeSessionConnect: () =>
+            Ref.getAndSet(holdNext, false).pipe(
+              Effect.flatMap((hold) =>
+                hold
+                  ? Deferred.succeed(opening, undefined).pipe(
+                      Effect.andThen(Effect.never),
+                      Effect.onInterrupt(() => Deferred.succeed(cancelled, undefined)),
+                    )
+                  : Effect.void,
+              ),
+            ),
+        },
+      );
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        yield* Ref.set(holdNext, true);
+        const alternateTarget = new BearerConnectionTarget({
+          ...BEARER_TARGET,
+          connectionId: "alternate",
+        });
+        yield* registry.register(
+          new BearerConnectionRegistration({
+            target: alternateTarget,
+            profile: new BearerConnectionProfile({
+              ...BEARER_PROFILE,
+              connectionId: alternateTarget.connectionId,
+              httpBaseUrl: "https://alternate.example.test/",
+              wsBaseUrl: "wss://alternate.example.test/",
+            }),
+            credential: BEARER_CREDENTIAL,
+          }),
+        );
+        yield* Deferred.await(opening);
+        yield* registry.removeRoute(BEARER_TARGET.environmentId, alternateTarget.connectionId);
+        expect(yield* Deferred.isDone(cancelled)).toBe(true);
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        const prepared = yield* registry.run(
+          BEARER_TARGET.environmentId,
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.flatMap((supervisor) => SubscriptionRef.get(supervisor.prepared)),
+          ),
+        );
+        expect(Option.getOrThrow(prepared).target).toEqual(BEARER_TARGET);
+        expect((yield* Ref.get(harness.sessions)).length).toBe(2);
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
   it.effect("replays connected state when arming a desktop commit observer", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([TARGET]);

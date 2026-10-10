@@ -1,5 +1,7 @@
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -35,6 +37,12 @@ export interface EnvironmentConnectionLease {
   readonly session: RpcSession.RpcSession;
 }
 
+export interface PreparedRoute {
+  readonly route: ConnectionRoute;
+  readonly prepared: PreparedConnection;
+  readonly expiresAtNanos: bigint;
+}
+
 /**
  * The result of an unauthenticated reachability check. SSH routes have no
  * cheap check, so they are "unchecked".
@@ -45,6 +53,8 @@ export type RouteCheck = "answered" | "silent" | "unchecked";
 export const ROUTE_CHECK_TIMEOUT_MS = 2_500;
 /** How long a connection attempt keeps listening for a route that missed the first check. */
 export const LATE_ROUTE_CHECK_TIMEOUT_MS = 15_000;
+const ROUTE_PREFERENCE_WAIT_MS = 250;
+const PREFLIGHT_VALIDITY_NANOS = 10_000_000_000n;
 
 export class ConnectionDriver extends Context.Service<
   ConnectionDriver,
@@ -52,6 +62,7 @@ export class ConnectionDriver extends Context.Service<
     readonly connect: (
       entry: ConnectionCatalogEntry,
       reportProgress: (progress: ConnectionDriverProgress) => Effect.Effect<void>,
+      preflight?: PreparedRoute,
     ) => Effect.Effect<EnvironmentConnectionLease, ConnectionAttemptError, Scope.Scope>;
     /** Whether a direct route answers as the entry's environment, without credentials. */
     readonly checkRoute: (
@@ -66,7 +77,7 @@ export class ConnectionDriver extends Context.Service<
     readonly preflight: (
       entry: ConnectionCatalogEntry,
       route: ConnectionRoute,
-    ) => Effect.Effect<boolean>;
+    ) => Effect.Effect<Option.Option<PreparedRoute>>;
   }
 >()("@supacode/client-runtime/connection/driver/ConnectionDriver") {}
 
@@ -103,6 +114,21 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
   const firstChecks = yield* Effect.forEach(checks, (check) =>
     Effect.forkChild(Fiber.join(check).pipe(Effect.timeoutOption(ROUTE_CHECK_TIMEOUT_MS))),
   );
+  const preferenceWindow = yield* Effect.forkChild(
+    (checks.length === 0
+      ? Effect.never
+      : Effect.raceAll(
+          checks.map((check) =>
+            Fiber.join(check).pipe(
+              Effect.flatMap((result) => (result === "answered" ? Effect.void : Effect.never)),
+            ),
+          ),
+        )
+    ).pipe(
+      Effect.andThen(Effect.sleep(ROUTE_PREFERENCE_WAIT_MS)),
+      Effect.as(Option.none<RouteCheck>()),
+    ),
+  );
   const attemptScope = yield* Scope.Scope;
   let transient: ConnectionAttemptError | undefined;
   let blocked: ConnectionAttemptError | undefined;
@@ -137,7 +163,7 @@ export const connectOverRoutes = Effect.fn("ConnectionDriver.connectOverRoutes")
     const check =
       firstChecks.length === 0
         ? Option.some<RouteCheck>("unchecked")
-        : yield* Fiber.join(firstChecks[index]!);
+        : yield* Effect.raceFirst(Fiber.join(firstChecks[index]!), Fiber.join(preferenceWindow));
     if (Option.isNone(check)) {
       slow.push(index);
       continue;
@@ -218,6 +244,7 @@ export const make = Effect.gen(function* () {
   const connect = Effect.fn("ConnectionDriver.connect")(function* (
     entry: ConnectionCatalogEntry,
     reportProgress: (progress: ConnectionDriverProgress) => Effect.Effect<void>,
+    preflight?: PreparedRoute,
   ) {
     const target = entry.target;
     yield* Effect.annotateCurrentSpan({
@@ -226,11 +253,26 @@ export const make = Effect.gen(function* () {
       "connection.route.count": connectionRoutes(entry).length,
     });
     yield* reportProgress({ stage: "preparing" });
+    const freshPreflight =
+      preflight !== undefined && preflight.expiresAtNanos > (yield* Clock.monotonicTimeNanos)
+        ? preflight
+        : undefined;
+    const preparationFor = (route: ConnectionRoute) =>
+      freshPreflight !== undefined && Equal.equals(freshPreflight.route, route)
+        ? freshPreflight
+        : undefined;
     return yield* connectOverRoutes(
       entry,
-      (route) => checkRoute(entry, route, LATE_ROUTE_CHECK_TIMEOUT_MS),
+      (route) =>
+        preparationFor(route) !== undefined
+          ? Effect.succeed<RouteCheck>("answered")
+          : checkRoute(entry, route, LATE_ROUTE_CHECK_TIMEOUT_MS),
       Effect.fnUntraced(function* (route) {
-        const prepared = yield* resolver.prepare(routeEntry(entry, route));
+        const cached = preparationFor(route);
+        const prepared =
+          cached !== undefined && cached.expiresAtNanos > (yield* Clock.monotonicTimeNanos)
+            ? cached.prepared
+            : yield* resolver.prepare(routeEntry(entry, route));
         yield* reportProgress({ stage: "opening", prepared });
         const session = yield* sessions.connect(prepared);
         yield* reportProgress({ stage: "synchronizing", prepared });
@@ -244,11 +286,12 @@ export const make = Effect.gen(function* () {
     checkRoute(entry, route, ROUTE_CHECK_TIMEOUT_MS).pipe(
       Effect.flatMap((check) =>
         check === "answered"
-          ? resolver.prepare(routeEntry(entry, route)).pipe(
-              Effect.as(true),
-              Effect.orElseSucceed(() => false),
-            )
-          : Effect.succeed(false),
+          ? Effect.gen(function* () {
+              const expiresAtNanos = (yield* Clock.monotonicTimeNanos) + PREFLIGHT_VALIDITY_NANOS;
+              const prepared = yield* resolver.prepare(routeEntry(entry, route));
+              return Option.some({ route, prepared, expiresAtNanos });
+            }).pipe(Effect.orElseSucceed(() => Option.none<PreparedRoute>()))
+          : Effect.succeedNone,
       ),
       Effect.withSpan("ConnectionDriver.preflight"),
     );

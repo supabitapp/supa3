@@ -1,6 +1,7 @@
 import { EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -238,7 +239,21 @@ const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (options?:
         preflight: (_entry, route) =>
           (
             options?.checkRoute?.(route) ?? Effect.succeed<ConnectionDriver.RouteCheck>("unchecked")
-          ).pipe(Effect.map((check) => check === "answered")),
+          ).pipe(
+            Effect.flatMap((check) =>
+              check === "answered"
+                ? Clock.monotonicTimeNanos.pipe(
+                    Effect.map((now) =>
+                      Option.some({
+                        route,
+                        prepared: { ...PREPARED_CONNECTION, target: route.target },
+                        expiresAtNanos: now + 10_000_000_000n,
+                      }),
+                    ),
+                  )
+                : Effect.succeedNone,
+            ),
+          ),
       }),
     ),
   );

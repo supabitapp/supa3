@@ -44,6 +44,42 @@ const transient = () =>
   new ConnectionTransientError({ reason: "transport", detail: "Network lost" });
 
 describe("direct route connection attempts", () => {
+  it.effect("opens an answered fallback before a preferred route check times out", () =>
+    Effect.gen(function* () {
+      const checked = yield* Deferred.make<void>();
+      const fiber = yield* connectOverRoutes(
+        entry,
+        (route) =>
+          route.target === lan.target
+            ? Effect.never
+            : Deferred.succeed(checked, undefined).pipe(Effect.as("answered" as const)),
+        (route) => Effect.succeed(lease(route)),
+      ).pipe(Effect.forkChild);
+      yield* Deferred.await(checked);
+      yield* TestClock.adjust(300);
+      expect((yield* Fiber.join(fiber)).prepared.target).toEqual(tailnet.target);
+    }),
+  );
+
+  it.effect(
+    "keeps preference order when the preferred route answers shortly after a fallback",
+    () =>
+      Effect.gen(function* () {
+        const checked = yield* Deferred.make<void>();
+        const fiber = yield* connectOverRoutes(
+          entry,
+          (route) =>
+            route.target === lan.target
+              ? Effect.sleep(200).pipe(Effect.as("answered" as const))
+              : Deferred.succeed(checked, undefined).pipe(Effect.as("answered" as const)),
+          (route) => Effect.succeed(lease(route)),
+        ).pipe(Effect.forkChild);
+        yield* Deferred.await(checked);
+        yield* TestClock.adjust(200);
+        expect((yield* Fiber.join(fiber)).prepared.target).toEqual(lan.target);
+      }),
+  );
+
   it.effect("skips an unreachable LAN and opens the reachable Tailscale route", () =>
     Effect.gen(function* () {
       const attempted: ConnectionRoute[] = [];
