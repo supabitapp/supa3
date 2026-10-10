@@ -1188,7 +1188,7 @@ describe("EnvironmentSupervisor", () => {
     }),
   );
 
-  it.effect.each(["3 seconds", "12 seconds", "45 seconds"])(
+  it.effect.each(["3 seconds", "12 seconds", "45 seconds"] as const)(
     "reuses a healthy mobile session after %s in the background",
     (duration) =>
       Effect.gen(function* () {

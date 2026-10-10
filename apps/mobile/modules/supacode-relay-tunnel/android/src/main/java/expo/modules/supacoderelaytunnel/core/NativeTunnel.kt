@@ -28,9 +28,7 @@ class NativeTunnel(
   port: Int = 0,
   private val onStatus: (Map<String, Any>) -> Unit = {},
   private val log: (String) -> Unit = {},
-  private val keepaliveMillis: Long = 15_000,
-  private val backgroundGraceMillis: Long = NativeTunnel.BACKGROUND_GRACE_MILLIS,
-  private val probeTimeoutMillis: Long = 2_000
+  private val keepaliveMillis: Long = 15_000
 ) : AutoCloseable {
   companion object {
     const val BACKGROUND_GRACE_MILLIS = 15_000L
@@ -191,7 +189,10 @@ class NativeTunnel(
                 { record -> check(socket.send(record.toByteString())) { "Relay queue full" } },
                 ::schedulePump,
                 { sentBytes += it },
-                { probeDeadline?.cancel(false); probeDeadline = null },
+                {
+                  probeDeadline?.cancel(false)
+                  probeDeadline = null
+                },
               )
               mux = session
               keepalive = actor.scheduleWithFixedDelay(
@@ -274,12 +275,15 @@ class NativeTunnel(
   private fun <T> onActor(block: () -> T): CompletableFuture<T> {
     val future = CompletableFuture<T>()
     if (!post {
-      try {
-        future.complete(block())
-      } catch (error: Exception) {
-        future.completeExceptionally(error)
+        try {
+          future.complete(block())
+        } catch (error: Exception) {
+          future.completeExceptionally(error)
+        }
       }
-    }) future.completeExceptionally(IllegalStateException("Tunnel unavailable"))
+    ) {
+      future.completeExceptionally(IllegalStateException("Tunnel unavailable"))
+    }
     return future
   }
 
@@ -367,7 +371,7 @@ class NativeTunnel(
     attempt?.let { fail(it, IllegalStateException("Backgrounded")) }
   }
 
-  fun background(graceMillis: Long = backgroundGraceMillis) = post {
+  fun background(graceMillis: Long = BACKGROUND_GRACE_MILLIS) = post {
     backgroundClose?.cancel(false)
     backgroundClose = actor.schedule({
       backgroundClose = null
@@ -375,7 +379,7 @@ class NativeTunnel(
     }, graceMillis, TimeUnit.MILLISECONDS)
   }
 
-  fun resume() = post {
+  fun resume(probeTimeoutMillis: Long = 2_000) = post {
     backgroundClose?.cancel(false)
     backgroundClose = null
     suspended = false

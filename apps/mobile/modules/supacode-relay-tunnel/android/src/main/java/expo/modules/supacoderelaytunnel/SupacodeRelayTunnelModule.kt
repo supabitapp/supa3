@@ -35,7 +35,9 @@ class SupacodeRelayTunnelModule : Module() {
     AsyncFunction("start") { options: RelayTunnelOptions ->
       synchronized(tunnels) {
         val graceRemaining = backgroundDeadline?.minus(SystemClock.elapsedRealtime())
-        check(graceRemaining == null || graceRemaining > 0) { "Relay tunnel is suspended while the app is in the background" }
+        check(graceRemaining == null || graceRemaining > 0) {
+          "Relay tunnel is suspended while the app is in the background"
+        }
         val digest = sha256(parseRelayIdentity(options.hostAddress))
         val key = digest.hex()
         val existing = tunnels[key]

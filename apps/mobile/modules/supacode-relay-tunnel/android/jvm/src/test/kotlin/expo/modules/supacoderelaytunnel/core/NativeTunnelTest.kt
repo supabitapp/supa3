@@ -23,7 +23,10 @@ import org.junit.Test
 class NativeTunnelTest {
   private val vector = JSONObject(File("fixtures/vectors.json").readText())
 
-  private class SilentHost(private val identity: ByteArray, private val replyToPings: Boolean = false) : WebSocketListener() {
+  private class SilentHost(
+    private val identity: ByteArray,
+    private val replyToPings: Boolean = false
+  ) : WebSocketListener() {
     private val secret = ByteArray(32) { (it + 64).toByte() }
     private var cipher: RelayCipher? = null
     val records = LinkedBlockingQueue<ByteArray>()
@@ -72,15 +75,22 @@ class NativeTunnelTest {
       val connected = CompletableFuture<Map<String, Any>>()
       val down = CompletableFuture<Map<String, Any>>()
       NativeTunnel(
-        server.url("/").toString().replaceFirst("http", "ws"), vector.getString("address"),
-        onStatus = { if (it["state"] == "up") connected.complete(it); if (it["reason"] != null) down.complete(it) },
-        backgroundGraceMillis = 100, probeTimeoutMillis = 300,
+        server.url("/").toString().replaceFirst("http", "ws"),
+        vector.getString("address"),
+        onStatus = {
+          if (it["state"] == "up") {
+            connected.complete(it)
+          }
+          if (it["reason"] != null) down.complete(it)
+        },
       ).use { tunnel ->
         connected.get(10, TimeUnit.SECONDS)
-        tunnel.background()
-        tunnel.resume()
+        tunnel.background(100)
+        tunnel.resume(300)
         assertEquals(TunnelMux.frame(6, 0).hex(), host.records.poll(10, TimeUnit.SECONDS)?.hex())
-        assertFailsWith<java.util.concurrent.TimeoutException> { down.get(600, TimeUnit.MILLISECONDS) }
+        assertFailsWith<java.util.concurrent.TimeoutException> {
+          down.get(600, TimeUnit.MILLISECONDS)
+        }
         assertEquals(1, server.requestCount)
         assertEquals(1, connected.get()["sessionCount"])
       }
@@ -90,27 +100,31 @@ class NativeTunnelTest {
   @Test
   fun backgroundGraceClosesTheSessionAndForegroundReconnects() {
     MockWebServer().use { server ->
-      repeat(2) { server.enqueue(MockResponse().withWebSocketUpgrade(SilentHost(unhex(vector.getString("identity"))))) }
+      repeat(2) {
+        server.enqueue(
+          MockResponse().withWebSocketUpgrade(SilentHost(unhex(vector.getString("identity"))))
+        )
+      }
       val connected = CompletableFuture<Unit>()
       val down = CompletableFuture<Unit>()
       val reconnected = CompletableFuture<Unit>()
       NativeTunnel(
-        server.url("/").toString().replaceFirst("http", "ws"), vector.getString("address"),
+        server.url("/").toString().replaceFirst("http", "ws"),
+        vector.getString("address"),
         onStatus = {
-          if (it["state"] == "up") { connected.complete(Unit); if (it["sessionCount"] == 2) reconnected.complete(Unit) }
+          if (it["state"] == "up") {
+            connected.complete(Unit)
+            if (it["sessionCount"] == 2) {
+              reconnected.complete(Unit)
+            }
+          }
           if (it["reason"] == "Backgrounded") down.complete(Unit)
-        }, backgroundGraceMillis = 100,
+        },
       ).use { tunnel ->
         connected.get(10, TimeUnit.SECONDS)
-        tunnel.background()
+        tunnel.background(100)
         down.get(10, TimeUnit.SECONDS)
-        val origin = java.net.URI(tunnel.origin)
-        java.net.Socket(origin.host, origin.port).use { socket ->
-          socket.soTimeout = 5_000
-          socket.getOutputStream().write("GET / HTTP/1.1\r\nHost: ${origin.host}:${origin.port}\r\n\r\n".toByteArray())
-          val closed = try { socket.getInputStream().read() == -1 } catch (_: java.net.SocketException) { true }
-          assertTrue(closed)
-        }
+        assertLoopbackClosed(tunnel.origin)
         assertEquals(1, server.requestCount)
         tunnel.resume()
         reconnected.get(10, TimeUnit.SECONDS)
@@ -118,22 +132,48 @@ class NativeTunnelTest {
     }
   }
 
+  private fun assertLoopbackClosed(value: String) {
+    val origin = java.net.URI(value)
+    java.net.Socket(origin.host, origin.port).use { socket ->
+      socket.soTimeout = 5_000
+      socket.getOutputStream().write(
+        "GET / HTTP/1.1\r\nHost: ${origin.host}:${origin.port}\r\n\r\n".toByteArray()
+      )
+      val closed = try {
+        socket.getInputStream().read() == -1
+      } catch (_: java.net.SocketException) {
+        true
+      }
+      assertTrue(closed)
+    }
+  }
+
   @Test
   fun foregroundProbeReplacesASilentSessionBeforeKeepaliveExpiry() {
     MockWebServer().use { server ->
-      repeat(2) { server.enqueue(MockResponse().withWebSocketUpgrade(SilentHost(unhex(vector.getString("identity"))))) }
+      repeat(2) {
+        server.enqueue(
+          MockResponse().withWebSocketUpgrade(SilentHost(unhex(vector.getString("identity"))))
+        )
+      }
       val connected = CompletableFuture<Unit>()
       val failed = CompletableFuture<Unit>()
       val reconnected = CompletableFuture<Unit>()
       NativeTunnel(
-        server.url("/").toString().replaceFirst("http", "ws"), vector.getString("address"),
+        server.url("/").toString().replaceFirst("http", "ws"),
+        vector.getString("address"),
         onStatus = {
-          if (it["state"] == "up") { connected.complete(Unit); if (it["sessionCount"] == 2) reconnected.complete(Unit) }
+          if (it["state"] == "up") {
+            connected.complete(Unit)
+            if (it["sessionCount"] == 2) {
+              reconnected.complete(Unit)
+            }
+          }
           if (it["reason"] == "Relay resume probe timed out") failed.complete(Unit)
-        }, probeTimeoutMillis = 100,
+        },
       ).use { tunnel ->
         connected.get(10, TimeUnit.SECONDS)
-        tunnel.resume()
+        tunnel.resume(100)
         failed.get(10, TimeUnit.SECONDS)
         reconnected.get(10, TimeUnit.SECONDS)
         assertEquals(2, server.requestCount)
