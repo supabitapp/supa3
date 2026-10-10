@@ -1,6 +1,6 @@
 {
   "name": "@supacode/contracts",
-  "version": "26.1.1",
+  "version": "26.1.2",
   "private": true,
   "files": [
     "dist"

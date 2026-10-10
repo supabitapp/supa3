@@ -1,6 +1,6 @@
 {
   "name": "@supacode/desktop",
-  "version": "26.1.1",
+  "version": "26.1.2",
   "private": true,
   "type": "module",
   "main": "dist-electron/boot.cjs",
