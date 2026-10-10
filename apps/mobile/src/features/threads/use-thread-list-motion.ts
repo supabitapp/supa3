@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import {
   Easing,
   ReduceMotion,
@@ -19,6 +19,7 @@ import {
   type ThreadListMotionItem,
 } from "./thread-list-motion";
 import { isKeyboardMotionSuppressed } from "../../lib/motionInput";
+import { MOTION_ENTER_DURATION_MS, MOTION_EXIT_DURATION_MS } from "../../lib/motionTiming";
 
 /** Uses LegendList's recycling guards while animating only visible cells' transforms and opacity. */
 export function useThreadListMotion(input: {
@@ -39,6 +40,13 @@ export function useThreadListMotion(input: {
   const deadline = useSharedValue(0);
   const alignmentPadding = useSharedValue(0);
   const alignmentOffset = useSharedValue(0);
+  const prepare = useCallback(() => {
+    if (!ready || reducedMotion || scrolling || searching || isKeyboardMotionSuppressed()) return;
+    runOnUI(() => {
+      "worklet";
+      deadline.set(performance.now() + 300);
+    })();
+  }, [deadline, ready, reducedMotion, scrolling, searching]);
   const timing = useMemo(
     () => ({
       duration: THREAD_LIST_MOTION_DURATION,
@@ -96,7 +104,11 @@ export function useThreadListMotion(input: {
   );
 
   return useMemo(() => {
-    const entryTiming = { ...timing, easing: Easing.bezier(0.32, 0.72, 0, 1) };
+    const entryTiming = {
+      ...timing,
+      duration: MOTION_ENTER_DURATION_MS,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+    };
     const layout: LayoutAnimationFunction = (values) => {
       "worklet";
       const visible =
@@ -147,9 +159,13 @@ export function useThreadListMotion(input: {
         values.currentGlobalOriginY < values.windowHeight;
       return {
         initialValues: { opacity: 1 },
-        animations: { opacity: animateExit ? withTiming(0, { ...entryTiming, duration: 160 }) : 0 },
+        animations: {
+          opacity: animateExit
+            ? withTiming(0, { ...entryTiming, duration: MOTION_EXIT_DURATION_MS })
+            : 0,
+        },
       };
     };
-    return { layout, entering, exiting, alignmentStyle, sharedValues };
-  }, [alignmentStyle, deadline, sharedValues, timing]);
+    return { layout, entering, exiting, alignmentStyle, prepare, sharedValues };
+  }, [alignmentStyle, deadline, prepare, sharedValues, timing]);
 }

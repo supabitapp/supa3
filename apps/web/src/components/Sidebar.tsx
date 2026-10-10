@@ -3606,6 +3606,7 @@ export default function Sidebar() {
       draftCount: visibleDraftSessionCount,
       pendingCount: pendingThreads.length,
       undoNoticeShown,
+      shelfState: `${pinnedShelfExpanded}:${workingShelfExpanded}:${snoozedShelfExpanded}:${settledShelfExpanded}`,
       animate: !listMotionPaused && sidebarListHasRows,
     }),
     [
@@ -3616,13 +3617,20 @@ export default function Sidebar() {
       undoNoticeShown,
       visibleDraftSessionCount,
       pendingThreads.length,
+      pinnedShelfExpanded,
+      workingShelfExpanded,
+      snoozedShelfExpanded,
+      settledShelfExpanded,
     ],
   );
+  const previousShelfStateRef = useRef(sidebarListLayout.shelfState);
   useLayoutEffect(() => {
     // Drag release clears the baseline, so its commit cannot replay the
     // sortable preview; rows glide from their released positions instead.
     // Later thread actions can animate while writes settle.
-    listMotionRef.current?.update(sidebarListLayout.animate);
+    const shelfToggled = previousShelfStateRef.current !== sidebarListLayout.shelfState;
+    previousShelfStateRef.current = sidebarListLayout.shelfState;
+    listMotionRef.current?.update(sidebarListLayout.animate, shelfToggled);
   }, [sidebarListLayout]);
   const handleThreadDragOver = useCallback(
     (event: DragOverEvent) => {

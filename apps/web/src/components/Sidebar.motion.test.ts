@@ -65,10 +65,18 @@ class TestRow {
   });
 }
 
-function fixture(rows: TestRow[]) {
+function fixture(rows: TestRow[], viewportHeight?: number) {
   const media = { matches: false };
+  const events = new EventTarget();
   const parent = {
     children: rows,
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
+    closest: () =>
+      viewportHeight === undefined
+        ? null
+        : { getBoundingClientRect: () => ({ top: 0, bottom: viewportHeight }) },
     ownerDocument: { defaultView: { matchMedia: () => media } },
     getBoundingClientRect: () => ({ top: 0 }),
     append(node: TestRow) {
@@ -97,7 +105,7 @@ function fixture(rows: TestRow[]) {
 function expectMove(row: TestRow, offset: number) {
   expect(row.animate).toHaveBeenLastCalledWith(
     [{ transform: `translateY(${offset}px)` }, { transform: "translateY(0px)" }],
-    { duration: 150, easing: "ease-out" },
+    { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
   );
 }
 
@@ -105,6 +113,35 @@ beforeEach(() => vi.stubGlobal("HTMLElement", TestRow));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sidebar list motion", () => {
+  it("animates large shelf toggles without fading offscreen history", () => {
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout } = fixture([header], 240);
+    motion.update(false);
+
+    layout([header, ...rows]);
+    motion.update(true, true);
+    expect(rows.slice(0, 6).every((row) => row.animations.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.animations.length === 0)).toBe(true);
+
+    layout([header]);
+    motion.update(true, true);
+    expect(rows.slice(0, 6).every((row) => row.clones.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.clones.length === 0)).toBe(true);
+  });
+
+  it("keeps keyboard shelf toggles immediate", () => {
+    const header = new TestRow("Settled", 32);
+    const row = new TestRow("settled", 36);
+    const { motion, layout, parent } = fixture([header]);
+    motion.update(false);
+    parent.dispatchEvent(new Event("keydown"));
+    layout([header, row]);
+    motion.update(true, true);
+    expect(row.animate).not.toHaveBeenCalled();
+    motion.dispose();
+  });
+
   it("moves a retained Active row into Settled with its displaced peers", () => {
     const pinnedHeader = new TestRow("Pinned", 0);
     const pinned = new TestRow("pin");
@@ -287,8 +324,8 @@ describe("sidebar list motion", () => {
         { opacity: 1, transform: "translateY(0px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 180,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     const clone = a.clones[0]!;
@@ -311,8 +348,8 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(-83px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 140,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     expect(parent.children.includes(clone)).toBe(true);
@@ -344,14 +381,14 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
     expect(z.animate).toHaveBeenLastCalledWith(
       [
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
   });
 
@@ -371,7 +408,7 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(-30px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
   });
 
@@ -417,7 +454,7 @@ describe("sidebar list motion", () => {
         { opacity: 0.25, transform: "translateY(0px)" },
         { opacity: 0, transform: "translateY(9px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 140, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
     expectMove(header, -9);
     expectMove(x, -9);
@@ -447,8 +484,8 @@ describe("sidebar list motion", () => {
         { opacity: 1, transform: "translateY(0px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 180,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     motion.dispose();
@@ -473,8 +510,8 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(40px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 140,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     motion.update(false);
@@ -533,7 +570,7 @@ describe("sidebar list motion", () => {
     motion.update(true);
     media.matches = true;
     layout([b, a]);
-    motion.update(true);
+    motion.update(true, true);
     expect(a.animate).not.toHaveBeenCalled();
     media.matches = false;
     layout([a, b]);

@@ -1,4 +1,6 @@
-const motionTiming = { duration: 150, easing: "ease-out" };
+const entryTiming = { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+const exitTiming = { ...entryTiming, duration: 140 };
+const motionTiming = { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" };
 // Rows normally ride their displaced neighbour's travel. Absent a moving
 // neighbour, a row still travels on its own, clamped so a tall card does not
 // slide its full height.
@@ -6,8 +8,7 @@ const rowTravel = (height: number) => Math.min(height, 40);
 // A project filter change or a bulk snooze swaps a large part of the list at
 // once. Fades are the expensive part: every removed row gets a deep clone and
 // every clone and entering row gets its own animation, and the layout reads
-// in between force synchronous reflows. Translating displaced rows is cheap,
-// so only the fade count decides whether an update animates.
+// in between force synchronous reflows.
 const MAX_FADED_ROWS_PER_UPDATE = 40;
 
 type RowPosition = { top: number; left: number; width: number; height: number };
@@ -32,6 +33,11 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   // Visual tops at drag release, relative to the list, so the release
   // commit can glide every row from where dnd-kit left it into its slot.
   let released: Map<HTMLElement, number> | null = null;
+  let keyboardMotionSuppressedUntil = 0;
+  const suppressKeyboardMotion = () => {
+    keyboardMotionSuppressedUntil = Date.now() + 300;
+  };
+  parent.addEventListener("keydown", suppressKeyboardMotion);
 
   const remainingOffset = (node: HTMLElement) => {
     const current = running.get(node);
@@ -86,7 +92,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         { opacity: entryProgress, transform: "translateY(0px)" },
         { opacity: 0, transform: `translateY(${travel}px)` },
       ],
-      motionTiming,
+      exitTiming,
     );
     exiting.set(clone, animation);
     animation.addEventListener(
@@ -130,8 +136,16 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   };
 
   return {
-    update(animate: boolean) {
+    update(animate: boolean, shelfToggled = false) {
       if (disposed) return;
+      const bounds = shelfToggled
+        ? parent.closest('[data-slot="scroll-area-viewport"]')?.getBoundingClientRect()
+        : undefined;
+      const origin = bounds ? parent.getBoundingClientRect().top : 0;
+      const visible = (position: RowPosition, offset = 0) =>
+        !bounds ||
+        (origin + position.top + offset + position.height > bounds.top &&
+          origin + position.top + offset < bounds.bottom);
       const next = new Map(
         Array.from(parent.children)
           .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
@@ -158,7 +172,8 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         animate &&
         positions !== null &&
         !reducedMotion?.matches &&
-        fadeCount <= MAX_FADED_ROWS_PER_UPDATE;
+        Date.now() >= keyboardMotionSuppressedUntil &&
+        (shelfToggled || fadeCount <= MAX_FADED_ROWS_PER_UPDATE);
       const movedDelta = new Map<HTMLElement, number>();
       const nextOrder = [...next.keys()];
       const oldOrder = positions === null ? [] : [...positions.keys()];
@@ -188,6 +203,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         }
         for (const [node, position] of positions!) {
           if (next.has(node)) continue;
+          if (shelfToggled && !visible(position, remainingOffset(node))) continue;
           const delta = ridingDelta(oldOrder, oldOrder.indexOf(node), (n) => next.has(n));
           fadeOut(node, position, delta === undefined ? rowTravel(position.height) : -delta);
         }
@@ -206,7 +222,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
           const position = next.get(node)!;
           const previousTop = positions!.get(node)?.top;
           if (previousTop === undefined) {
-            if (position.height > 0) {
+            if (position.height > 0 && (!shelfToggled || visible(position))) {
               const delta = ridingDelta(nextOrder, index, (n) => positions!.has(n));
               const travel = delta === undefined ? -rowTravel(position.height) : delta;
               const animation = node.animate(
@@ -214,7 +230,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
                   { opacity: 0, transform: `translateY(${travel}px)` },
                   { opacity: 1, transform: "translateY(0px)" },
                 ],
-                motionTiming,
+                entryTiming,
               );
               entering.set(node, { animation, travel });
               animation.addEventListener(
@@ -260,6 +276,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
     suspend,
     dispose() {
       suspend();
+      parent.removeEventListener("keydown", suppressKeyboardMotion);
       disposed = true;
     },
   };
