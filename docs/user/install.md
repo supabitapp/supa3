@@ -68,12 +68,15 @@ Supacode's [GitHub Releases](https://github.com/supabitapp/supacode-next/release
 
 ### The `supacode` command
 
-The desktop app includes the `supacode` command-line tool. To run it from any
-terminal, open **Settings → General → About** and choose **Install** next to
-**supacode command**. On macOS and Linux it adds a `supacode` link to a folder on your
-`PATH`; on Windows it adds the app's command folder to your `PATH`. Open a new
-terminal afterwards. **Remove** takes it off again. If you already have `supacode`
-from npm, it stays as it is.
+The desktop app installs its bundled `supacode` command on startup when possible.
+It preserves an existing `supacode` command from a separate installation. On macOS
+and Linux it creates a link in a writable command folder; on Windows it adds the
+app's command folder to your `PATH`. Open a new terminal afterwards. If the command
+folder is not on your `PATH`, add it to run `supacode` by name.
+
+**Settings → General → About → supacode command** lets you retry installation or
+remove the command. **Remove** also disables automatic installation until you
+choose **Install** again. The bundled command follows desktop app updates.
 
 ### Windows Subsystem for Linux
 

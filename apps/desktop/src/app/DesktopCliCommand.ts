@@ -8,12 +8,16 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as DesktopCliShim from "./DesktopCliShim.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import { makeComponentLogger } from "./DesktopObservability.ts";
+
+const { logWarning } = makeComponentLogger("desktop-cli-command");
 
 export class DesktopCliCommandError extends Schema.TaggedError<DesktopCliCommandError>()(
   "DesktopCliCommandError",
@@ -55,6 +59,7 @@ export class DesktopCliCommand extends Context.Service<
   {
     readonly state: Effect.Effect<DesktopCliCommandState>;
     readonly install: Effect.Effect<DesktopCliCommandState, DesktopCliCommandError>;
+    readonly installAutomatically: Effect.Effect<void>;
     readonly uninstall: Effect.Effect<DesktopCliCommandState, DesktopCliCommandError>;
   }
 >()("@supacode/desktop/app/DesktopCliCommand") {}
@@ -69,6 +74,11 @@ export const make = Effect.gen(function* () {
   const binDirectory = path.dirname(launcher);
 
   const ownedPathMarker = path.join(environment.stateDir, "cli-command-path-entry");
+  const autoInstallDisabledMarker = path.join(
+    environment.stateDir,
+    "cli-command-auto-install-disabled",
+  );
+  const operations = yield* Semaphore.make(1);
 
   const fail = (message: string) => new DesktopCliCommandError({ message });
   const exists = (target: string) => fs.exists(target).pipe(Effect.orElseSucceed(() => false));
@@ -128,9 +138,10 @@ export const make = Effect.gen(function* () {
   );
 
   const foreignFirstOnPath = Effect.gen(function* () {
-    if (windows) return Option.none<string>();
     const first = yield* firstOnPath;
-    if (Option.isNone(first) || (yield* isOurLink(first.value))) return Option.none<string>();
+    if (Option.isNone(first)) return first;
+    const ours = windows ? sameWindowsPath(first.value, launcher) : yield* isOurLink(first.value);
+    if (ours) return Option.none<string>();
     return first;
   });
 
@@ -179,6 +190,12 @@ export const make = Effect.gen(function* () {
   const install: DesktopCliCommand["Service"]["install"] = Effect.gen(function* () {
     if (!environment.isPackaged) return yield* fail("The supacode command needs an installed app.");
     yield* ensureLauncher;
+    const shadowedBy = yield* foreignFirstOnPath;
+    if (Option.isSome(shadowedBy)) {
+      return yield* fail(
+        `Another supacode at ${shadowedBy.value} runs first in a new terminal. Remove it, or run the launcher directly at ${launcher}.`,
+      );
+    }
     if (windows) {
       const entries = pathEntries(yield* readUserPath, ";");
       if (!entries.some((entry) => sameWindowsPath(entry, binDirectory))) {
@@ -201,12 +218,6 @@ export const make = Effect.gen(function* () {
         .pipe(Effect.mapError(() => fail(`Could not replace ${existing.value}.`)));
     }
 
-    const shadowedBy = yield* foreignFirstOnPath;
-    if (Option.isSome(shadowedBy)) {
-      return yield* fail(
-        `Another supacode at ${shadowedBy.value} runs first in a new terminal. Remove it, or run the launcher directly at ${launcher}.`,
-      );
-    }
     const onPath = pathEntries(process.env.PATH, ":");
     const candidates = unixCandidates(environment.homeDirectory, environment.platform);
 
@@ -232,9 +243,40 @@ export const make = Effect.gen(function* () {
     return yield* fail(
       `Another supacode command is already installed, or no folder on your PATH is writable. Run the launcher directly at ${launcher}.`,
     );
-  }).pipe(Effect.withSpan("desktop.cliCommand.install"));
+  }).pipe(
+    Effect.tap(() =>
+      fs
+        .remove(autoInstallDisabledMarker, { force: true })
+        .pipe(
+          Effect.mapError(() =>
+            fail("Installed supacode but could not enable automatic installation."),
+          ),
+        ),
+    ),
+    Effect.withSpan("desktop.cliCommand.install"),
+  );
+
+  const installAutomatically = Effect.gen(function* () {
+    if (!environment.isPackaged || (yield* fs.exists(autoInstallDisabledMarker))) return;
+    if (Option.isSome(yield* foreignFirstOnPath)) return;
+    yield* install;
+  }).pipe(
+    operations.withPermit,
+    Effect.catch((error) =>
+      logWarning("automatic CLI installation failed", {
+        category: error._tag,
+        message: error.message,
+      }),
+    ),
+    Effect.withSpan("desktop.cliCommand.installAutomatically"),
+  );
 
   const uninstall: DesktopCliCommand["Service"]["uninstall"] = Effect.gen(function* () {
+    if (!environment.isPackaged) return yield* state;
+    yield* fs.makeDirectory(environment.stateDir, { recursive: true }).pipe(
+      Effect.andThen(fs.writeFileString(autoInstallDisabledMarker, "")),
+      Effect.mapError(() => fail("Could not disable automatic supacode installation.")),
+    );
     if (windows) {
       if (yield* exists(ownedPathMarker)) {
         const entries = pathEntries(yield* readUserPath, ";");
@@ -258,7 +300,12 @@ export const make = Effect.gen(function* () {
     return yield* state;
   }).pipe(Effect.withSpan("desktop.cliCommand.uninstall"));
 
-  return DesktopCliCommand.of({ state, install, uninstall });
+  return DesktopCliCommand.of({
+    state: state.pipe(operations.withPermit),
+    install: install.pipe(operations.withPermit),
+    installAutomatically,
+    uninstall: uninstall.pipe(operations.withPermit),
+  });
 });
 
 export const layer = Layer.effect(DesktopCliCommand, make);

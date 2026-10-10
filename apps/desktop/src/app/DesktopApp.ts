@@ -15,6 +15,7 @@ import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
 import * as DesktopDeepLinks from "./DesktopDeepLinks.ts";
+import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
@@ -261,6 +262,7 @@ const startup = Effect.gen(function* () {
   const applicationMenu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
   const electronApp = yield* ElectronApp.ElectronApp;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+  const cliCommand = yield* DesktopCliCommand.DesktopCliCommand;
   const linuxUrlHandler = yield* DesktopLinuxUrlHandler.DesktopLinuxUrlHandler;
   const deepLinks = yield* DesktopDeepLinks.DesktopDeepLinks;
   const shellEnvironment = yield* DesktopShellEnvironment.DesktopShellEnvironment;
@@ -323,6 +325,7 @@ const startup = Effect.gen(function* () {
   }
   yield* appIdentity.configure;
   yield* applicationMenu.configure;
+  yield* Effect.forkScoped(cliCommand.installAutomatically);
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
   yield* linuxUrlHandler.register;

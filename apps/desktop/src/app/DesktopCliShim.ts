@@ -145,13 +145,18 @@ export const install = Effect.gen(function* () {
     if (Option.getOrUndefined(existing) !== content) {
       yield* fs.makeDirectory(path.dirname(shimPath), { recursive: true });
 
-      const staging = `${shimPath}.${process.pid}.tmp`;
+      const stagingDirectory = yield* fs.makeTempDirectoryScoped({
+        directory: path.dirname(shimPath),
+        prefix: ".supacode-cli-",
+      });
+      const staging = path.join(stagingDirectory, path.basename(shimPath));
       yield* fs.writeFileString(staging, content, { mode: 0o755 });
       yield* fs.rename(staging, shimPath);
       yield* logInfo("installed supacode launcher", { shimPath });
     }
     return Option.some(shimPath);
   }).pipe(
+    Effect.scoped,
     Effect.catchCause((cause) =>
       logWarning("could not install supacode launcher", {
         shimPath,
