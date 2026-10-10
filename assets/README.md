@@ -16,29 +16,27 @@ Exporting requires Icon Composer 2 or newer on macOS. The script selects the new
 
 ## macOS exports
 
-The desktop app needs each macOS icon as a 1024×1024 PNG with the classic macOS safe area: the opaque icon body is 824×824, inset 100 pixels on every side, with only the native shadow extending into the surrounding transparent canvas.
+The desktop app's macOS icons are 1024×1024 PNGs with the classic macOS safe area: the opaque icon body is 824×824, inset 100 pixels on every side, with only the native shadow extending into the surrounding transparent canvas. macOS 26 and later re-mask this rendition to the system shape, but show a full-bleed icon inside a gray tile.
 
-Icon Composer does not produce that file. Its command-line `macOS` export is full bleed, and in Icon Composer 27 the app's `macOS pre-Tahoe` export preset is full bleed too. The export script therefore leaves the tracked macOS PNGs unchanged and prints a reminder after every run.
-
-Render them with Xcode's asset compiler instead, which builds the classic rendition that macOS shows before Tahoe. `actool` only accepts an icon named `AppIcon`, so it compiles a copy. For nightly:
+Since Icon Composer 27, both its command-line `macOS` export and the app's `macOS pre-Tahoe` preset are full bleed, so the export script leaves the tracked macOS PNGs unchanged and prints a reminder after every run. Render them with Xcode's asset compiler instead, which still builds the classic rendition. Run this from the repository root; `actool` needs an absolute input path, and `--standalone-icon-behavior all` is what adds the 1024px entry to the compiled `.icns`:
 
 ```bash
+variant=nightly png=nightly-macos-1024.png
 work=$(mktemp -d)
-cp -R assets/nightly/app-icon.icon "$work/AppIcon.icon"
-xcrun actool "$work/AppIcon.icon" --compile "$work" --platform macosx \
-  --minimum-deployment-target 11.0 --app-icon AppIcon --include-all-app-icons \
-  --standalone-icon-behavior all --output-partial-info-plist "$work/partial.plist"
-iconutil -c iconset "$work/AppIcon.icns" -o "$work/AppIcon.iconset"
-cp "$work/AppIcon.iconset/icon_512x512@2x.png" assets/nightly/nightly-macos-1024.png
+xcrun actool "$PWD/assets/$variant/app-icon.icon" --compile "$work" --platform macosx \
+  --minimum-deployment-target 11.0 --app-icon app-icon --standalone-icon-behavior all \
+  --output-partial-info-plist "$work/partial.plist"
+iconutil -c iconset "$work/app-icon.icns" -o "$work/app-icon.iconset"
+cp "$work/app-icon.iconset/icon_512x512@2x.png" "assets/$variant/$png"
 ```
 
-The destinations are:
+The variants and their PNGs are:
 
-- `dev/app-icon.icon` -> `dev/blueprint-macos-1024.png`
-- `nightly/app-icon.icon` -> `nightly/nightly-macos-1024.png`
-- `prod/app-icon.icon` -> `prod/black-macos-1024.png`
+- `dev` -> `blueprint-macos-1024.png`
+- `nightly` -> `nightly-macos-1024.png`
+- `prod` -> `black-macos-1024.png`
 
-Do not resize, composite, or otherwise post-process the rendered PNG, and do not edit the generated PNG or ICO files directly.
+The committed production PNG predates this command, so re-rendering it changes its outline and shadow slightly to match dev and nightly. Do not resize, composite, or otherwise post-process the rendered PNG, and do not edit the generated PNG or ICO files directly.
 
 ## Android launcher and splash artwork
 

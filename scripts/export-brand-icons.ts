@@ -603,8 +603,8 @@ const logManualMacOsExportInstructions = Effect.fn("iconExport.logManualMacOsExp
   function* () {
     yield* Console.warn(
       [
-        "macOS icons need Xcode's classic pre-Tahoe rendition and were not changed.",
-        "Render each changed source with actool as described in assets/README.md:",
+        "macOS icons are rendered separately with actool and were not checked or updated.",
+        "Render each changed source as described in assets/README.md:",
         ...ICON_VARIANTS.map((variant) => `- ${variant.source} -> ${variant.outputs.macos}`),
       ].join("\n"),
     );
