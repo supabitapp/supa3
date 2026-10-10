@@ -6,8 +6,8 @@ machine. That machine must stay running and reachable while you work.
 ## Pair through the public relay
 
 Connect across networks without opening a port on the host. On the machine
-running your agents, open **Settings → Connections** and create a pairing link.
-**Public relay** is enabled by default. If you turned it off, enable it first.
+running your agents, open **Settings → Connections**, enable **Public relay**,
+and create a pairing link. Public relay is disabled by default.
 The relay connects when you create the first link;
 the app waits until it is ready before making the link available. Paste that link into
 **Add environment** on another desktop or mobile client, or scan it with the

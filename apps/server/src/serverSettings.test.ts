@@ -101,13 +101,13 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
-  it.effect("enables public relay by default and persists opting out", () =>
+  it.effect("disables public relay by default and persists opting in and out", () =>
     Effect.gen(function* () {
       const service = yield* ServerSettingsModule.ServerSettingsService;
       const config = yield* ServerConfig.ServerConfig;
       const fs = yield* FileSystem.FileSystem;
       const secrets = yield* ServerSecretStore.ServerSecretStore;
-      assert.isTrue((yield* service.getSettings).publicRelayEnabled);
+      assert.isFalse((yield* service.getSettings).publicRelayEnabled);
 
       yield* service.updateSettings({ publicRelayEnabled: false });
       const disabled = yield* decodeServerSettingsJson(
@@ -145,7 +145,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(layerServerSettingsWithSecrets())),
   );
 
-  it.effect("persists the enabled relay default before an existing host's first activation", () =>
+  it.effect("persists the disabled relay default before an existing host's first activation", () =>
     Effect.gen(function* () {
       const service = yield* ServerSettingsModule.ServerSettingsService;
       const config = yield* ServerConfig.ServerConfig;
@@ -153,14 +153,14 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const secrets = yield* ServerSecretStore.ServerSecretStore;
       yield* fs.writeFileString(config.settingsPath, '{ "projectSettingsFolded": true }');
 
-      assert.isTrue((yield* service.getSettings).publicRelayEnabled);
-      assert.isTrue(JSON.parse(yield* fs.readFileString(config.settingsPath)).publicRelayEnabled);
+      assert.isFalse((yield* service.getSettings).publicRelayEnabled);
+      assert.isFalse(JSON.parse(yield* fs.readFileString(config.settingsPath)).publicRelayEnabled);
 
       yield* secrets.set("relay-identity", new Uint8Array(32).fill(1));
       const restarted = yield* ServerSettingsModule.ServerSettingsService.use(
         (fresh) => fresh.getSettings,
       ).pipe(Effect.provide(Layer.fresh(ServerSettingsModule.layer)));
-      assert.isTrue(restarted.publicRelayEnabled);
+      assert.isFalse(restarted.publicRelayEnabled);
     }).pipe(Effect.provide(layerServerSettingsWithSecrets())),
   );
 
@@ -1293,7 +1293,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
       assert.deepEqual(JSON.parse(raw), {
-        publicRelayEnabled: true,
+        publicRelayEnabled: false,
         addProjectBaseDirectory: "~/Development",
         observability: {
           otlpTracesUrl: "http://localhost:4318/v1/traces",
