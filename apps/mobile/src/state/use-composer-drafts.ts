@@ -23,6 +23,7 @@ import {
   type ScopedProjectRef,
 } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
+import type * as ExpoFileSystem from "expo-file-system";
 import { useEffect } from "react";
 import { Atom } from "effect/reactivity";
 
@@ -61,6 +62,11 @@ const COMPOSER_DRAFTS_SCHEMA_VERSION = 1;
 const COMPOSER_DRAFTS_DIRECTORY = "composer-drafts";
 const COMPOSER_DRAFTS_FILE = "drafts.json";
 const PERSIST_DEBOUNCE_MS = 200;
+
+const expoFileSystem = async (): Promise<typeof ExpoFileSystem> => {
+  if (process.env.NODE_ENV === "test") return import("expo-file-system");
+  return require("expo-file-system");
+};
 
 export const composerContextImportsAtom = Atom.make<Record<string, boolean>>({}).pipe(
   Atom.keepAlive,
@@ -650,7 +656,7 @@ export function decodePersistedComposerState(value: unknown): {
 }
 
 async function getComposerDraftsFile() {
-  const { Directory, File, Paths } = await import("expo-file-system");
+  const { Directory, File, Paths } = await expoFileSystem();
   const directory = new Directory(Paths.document, COMPOSER_DRAFTS_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
   return new File(directory, COMPOSER_DRAFTS_FILE);
