@@ -325,7 +325,7 @@ describe("sidebar list motion", () => {
       ],
       {
         duration: 180,
-        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
+        easing: "cubic-bezier(0.645, 0.045, 0.355, 1)",
       },
     );
     const clone = a.clones[0]!;
@@ -375,20 +375,22 @@ describe("sidebar list motion", () => {
     motion.update(true);
     expectMove(header, 72);
     expectMove(x, 72);
+    expect(y.animate.mock.calls[0]![1]).toEqual(header.animate.mock.calls[0]![1]);
+    expect(z.animate.mock.calls[0]![1]).toEqual(header.animate.mock.calls[0]![1]);
     expect(a.animate).not.toHaveBeenCalled();
     expect(y.animate).toHaveBeenLastCalledWith(
       [
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
     expect(z.animate).toHaveBeenLastCalledWith(
       [
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
   });
 
@@ -408,7 +410,7 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(-30px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
   });
 
@@ -485,7 +487,7 @@ describe("sidebar list motion", () => {
       ],
       {
         duration: 180,
-        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
+        easing: "cubic-bezier(0.645, 0.045, 0.355, 1)",
       },
     );
     motion.dispose();

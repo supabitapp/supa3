@@ -1,6 +1,5 @@
-const entryTiming = { duration: 180, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
-const exitTiming = { ...entryTiming, duration: 140 };
 const motionTiming = { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" };
+const exitTiming = { duration: 140, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
 // Rows normally ride their displaced neighbour's travel. Absent a moving
 // neighbour, a row still travels on its own, clamped so a tall card does not
 // slide its full height.
@@ -230,7 +229,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
                   { opacity: 0, transform: `translateY(${travel}px)` },
                   { opacity: 1, transform: "translateY(0px)" },
                 ],
-                entryTiming,
+                motionTiming,
               );
               entering.set(node, { animation, travel });
               animation.addEventListener(
