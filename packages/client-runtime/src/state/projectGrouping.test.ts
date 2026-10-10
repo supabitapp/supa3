@@ -31,36 +31,127 @@ describe("load balancing shared project machines", () => {
     expect(chooseLoadBalancedEnvironment(candidates.slice(0, 2), now)).toBe("idle");
   });
 
-  it("rejects stale, unknown, excluded and saturated machines", () => {
+  it("rejects excluded machines and invalid preferences", () => {
     expect(
       chooseLoadBalancedEnvironment(
         [
           {
-            environmentId: "stale",
-            resources: { ...resources, sampledAt: now - 15_001 },
-            weight: 1,
+            environmentId: "excluded",
+            resources,
+            weight: 0,
           },
-          { environmentId: "unknown", resources: null, weight: 1 },
           {
-            environmentId: "no-cpu-sample",
-            resources: { ...resources, cpuUtilization: null },
-            weight: 1,
+            environmentId: "negative",
+            resources,
+            weight: -1,
           },
-          { environmentId: "excluded", resources, weight: 0 },
+          { environmentId: "nan", resources, weight: Number.NaN },
+          { environmentId: "infinite", resources, weight: Number.POSITIVE_INFINITY },
+        ],
+        now,
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ["full CPU", { ...resources, cpuUtilization: 1 }],
+    ["low memory", { ...resources, availableMemoryBytes: 100 }],
+    ["no memory", { ...resources, availableMemoryBytes: 0 }],
+    ["full CPU and memory", { ...resources, cpuUtilization: 1, availableMemoryBytes: 0 }],
+  ])("selects the only eligible machine with %s", (_, snapshot) => {
+    expect(
+      chooseLoadBalancedEnvironment(
+        [{ environmentId: "only", resources: snapshot, weight: 1 }],
+        now,
+      ),
+    ).toBe("only");
+  });
+
+  it("prefers spare capacity over a busy machine's preference", () => {
+    expect(
+      chooseLoadBalancedEnvironment(
+        [
+          { environmentId: "idle", resources, weight: 1 },
           {
-            environmentId: "cpu-full",
+            environmentId: "preferred-busy",
             resources: { ...resources, cpuUtilization: 0.95 },
-            weight: 1,
+            weight: 100,
           },
+        ],
+        now,
+      ),
+    ).toBe("idle");
+  });
+
+  it("compares remaining capacity when every machine is busy", () => {
+    const candidates = [
+      { environmentId: "full", resources: { ...resources, cpuUtilization: 1 }, weight: 1 },
+      { environmentId: "busy", resources: { ...resources, cpuUtilization: 0.96 }, weight: 1 },
+      {
+        environmentId: "preferred-busy",
+        resources: { ...resources, cpuUtilization: 0.98 },
+        weight: 3,
+      },
+    ];
+    expect(chooseLoadBalancedEnvironment(candidates, now)).toBe("preferred-busy");
+    expect(chooseLoadBalancedEnvironment(candidates.slice(0, 2), now)).toBe("busy");
+  });
+
+  it("uses preferences when every machine has zero remaining capacity", () => {
+    const full = { ...resources, cpuUtilization: 1, availableMemoryBytes: 0 };
+    expect(
+      chooseLoadBalancedEnvironment(
+        [
+          { environmentId: "normal", resources: full, weight: 50 },
+          { environmentId: "preferred", resources: full, weight: 100 },
+          { environmentId: "manual-only", resources: full, weight: 0 },
+        ],
+        now,
+      ),
+    ).toBe("preferred");
+  });
+
+  it.each([
+    ["missing readings", null],
+    ["unknown CPU", { ...resources, cpuUtilization: null }],
+    ["stale readings", { ...resources, sampledAt: now - 15_001 }],
+    ["future readings", { ...resources, sampledAt: now + 5_001 }],
+    ["unknown memory", { ...resources, totalMemoryBytes: 0 }],
+    ["unknown CPU count", { ...resources, cpuCount: 0 }],
+  ])("selects the only eligible machine with %s", (_, snapshot) => {
+    expect(
+      chooseLoadBalancedEnvironment(
+        [{ environmentId: "only", resources: snapshot, weight: 1 }],
+        now,
+      ),
+    ).toBe("only");
+  });
+
+  it("prefers measured capacity over unavailable readings", () => {
+    expect(
+      chooseLoadBalancedEnvironment(
+        [
+          { environmentId: "unknown-preferred", resources: null, weight: 100 },
           {
-            environmentId: "memory-full",
-            resources: { ...resources, availableMemoryBytes: 100 },
+            environmentId: "busy",
+            resources: { ...resources, cpuUtilization: 1 },
             weight: 1,
           },
         ],
         now,
       ),
-    ).toBeNull();
+    ).toBe("busy");
+  });
+
+  it("uses preferences and stable candidate order when no readings are usable", () => {
+    const candidates = [
+      { environmentId: "normal", resources: null, weight: 50 },
+      { environmentId: "preferred-first", resources: null, weight: 100 },
+      { environmentId: "preferred-second", resources: null, weight: 100 },
+      { environmentId: "manual-only", resources, weight: 0 },
+    ];
+    expect(chooseLoadBalancedEnvironment(candidates, now)).toBe("preferred-first");
+    expect(chooseLoadBalancedEnvironment([], now)).toBeNull();
   });
 
   it("uses client receipt time when host clocks differ", () => {
@@ -71,7 +162,12 @@ describe("load balancing shared project machines", () => {
       weight: 1,
     };
     expect(chooseLoadBalancedEnvironment([candidate], now)).toBe("different-clock");
-    expect(chooseLoadBalancedEnvironment([candidate], now + 15_001)).toBeNull();
+    expect(
+      chooseLoadBalancedEnvironment(
+        [candidate, { environmentId: "fresh", resources, receivedAt: now + 15_001, weight: 0.5 }],
+        now + 15_001,
+      ),
+    ).toBe("fresh");
   });
 });
 const repositoryIdentity = {

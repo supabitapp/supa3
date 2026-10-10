@@ -12,29 +12,35 @@ export function chooseLoadBalancedEnvironment(
   now: number,
 ): string | null {
   let selected: string | null = null;
+  let bestRank = -1;
   let bestScore = 0;
+  let bestWeight = 0;
   for (const { environmentId, resources, receivedAt, weight } of candidates) {
+    if (!Number.isFinite(weight) || weight <= 0) continue;
+
     const sampledAt = receivedAt ?? resources?.sampledAt ?? 0;
+    let rank = 0;
+    let score = 0;
     if (
-      !resources ||
-      !Number.isFinite(weight) ||
-      weight <= 0 ||
-      now - sampledAt > 15_000 ||
-      sampledAt > now + 5_000 ||
-      resources.cpuUtilization === null ||
-      resources.cpuUtilization >= 0.95 ||
-      resources.totalMemoryBytes <= 0 ||
-      resources.cpuCount <= 0
+      resources &&
+      now - sampledAt <= 15_000 &&
+      sampledAt <= now + 5_000 &&
+      resources.cpuUtilization !== null &&
+      resources.totalMemoryBytes > 0 &&
+      resources.cpuCount > 0
     ) {
+      const memoryAvailable = resources.availableMemoryBytes / resources.totalMemoryBytes;
+      rank = resources.cpuUtilization < 0.95 && memoryAvailable > 0.05 ? 2 : 1;
+      score = weight * resources.cpuCount * (1 - resources.cpuUtilization) * memoryAvailable;
+    }
+    if (rank < bestRank) continue;
+    if (rank === bestRank && (score < bestScore || (score === bestScore && weight <= bestWeight)))
       continue;
-    }
-    const memoryAvailable = resources.availableMemoryBytes / resources.totalMemoryBytes;
-    if (memoryAvailable <= 0.05) continue;
-    const score = weight * resources.cpuCount * (1 - resources.cpuUtilization) * memoryAvailable;
-    if (score > bestScore) {
-      selected = environmentId;
-      bestScore = score;
-    }
+
+    selected = environmentId;
+    bestRank = rank;
+    bestScore = score;
+    bestWeight = weight;
   }
   return selected;
 }

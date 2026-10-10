@@ -146,9 +146,10 @@ Preferences are saved separately in each client.
 The composer checks eligible machines when choosing a draft's environment, then keeps
 that choice stable. Choose **Auto balance** again to check current resources, or choose
 a specific machine to override it. Choosing a branch or worktree also keeps the draft
-on that machine. Existing threads stay where they started. If resource checks are
-unavailable or all eligible machines are full, choose a machine manually to continue.
-Mobile keeps its manual environment selection.
+on that machine. Existing threads stay where they started. Auto balance selects an eligible
+machine even when all are busy and prefers machines with spare capacity. If no usable
+resource readings are available, machine preferences determine the selection. A machine
+set to **Manual only** remains excluded. Mobile keeps its manual environment selection.
 
 ### Tailscale HTTPS
 
