@@ -37,6 +37,11 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
     keyboardMotionSuppressedUntil = Date.now() + 300;
   };
   parent.addEventListener("keydown", suppressKeyboardMotion);
+  const readViewport = () => {
+    const bounds = parent.closest('[data-slot="scroll-area-viewport"]')?.getBoundingClientRect();
+    return bounds ? { bounds, origin: parent.getBoundingClientRect().top } : null;
+  };
+  let preparedViewport: ReturnType<typeof readViewport> = null;
 
   const remainingOffset = (node: HTMLElement) => {
     const current = running.get(node);
@@ -113,6 +118,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
     clearFades();
     positions = null;
     released = null;
+    preparedViewport = null;
   };
   const move = (node: HTMLElement, offset: number) => {
     cancel(node);
@@ -135,16 +141,20 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   };
 
   return {
+    prepare() {
+      preparedViewport = readViewport();
+    },
     update(animate: boolean, shelfToggled = false) {
       if (disposed) return;
-      const bounds = shelfToggled
-        ? parent.closest('[data-slot="scroll-area-viewport"]')?.getBoundingClientRect()
-        : undefined;
-      const origin = bounds ? parent.getBoundingClientRect().top : 0;
-      const visible = (position: RowPosition, offset = 0) =>
-        !bounds ||
-        (origin + position.top + offset + position.height > bounds.top &&
-          origin + position.top + offset < bounds.bottom);
+      const viewport = shelfToggled ? readViewport() : null;
+      const previousViewport = preparedViewport;
+      preparedViewport = null;
+      const originDelta =
+        viewport && previousViewport ? previousViewport.origin - viewport.origin : 0;
+      const visible = (position: RowPosition, offset = 0, frame = viewport) =>
+        !frame ||
+        (frame.origin + position.top + offset + position.height > frame.bounds.top &&
+          frame.origin + position.top + offset < frame.bounds.bottom);
       const next = new Map(
         Array.from(parent.children)
           .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
@@ -172,6 +182,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         positions !== null &&
         !reducedMotion?.matches &&
         Date.now() >= keyboardMotionSuppressedUntil &&
+        (!shelfToggled || previousViewport !== null) &&
         (shelfToggled || fadeCount <= MAX_FADED_ROWS_PER_UPDATE);
       const movedDelta = new Map<HTMLElement, number>();
       const nextOrder = [...next.keys()];
@@ -197,14 +208,20 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         // their final slots; exiting rows leave by it.
         for (const [node, position] of next) {
           const previousTop = positions!.get(node)?.top;
-          if (previousTop === undefined || previousTop === position.top) continue;
-          movedDelta.set(node, previousTop + remainingOffset(node) - position.top);
+          if (previousTop === undefined || (previousTop === position.top && originDelta === 0)) {
+            continue;
+          }
+          movedDelta.set(node, originDelta + previousTop + remainingOffset(node) - position.top);
         }
         for (const [node, position] of positions!) {
           if (next.has(node)) continue;
-          if (shelfToggled && !visible(position, remainingOffset(node))) continue;
+          if (shelfToggled && !visible(position, remainingOffset(node), previousViewport)) continue;
           const delta = ridingDelta(oldOrder, oldOrder.indexOf(node), (n) => next.has(n));
-          fadeOut(node, position, delta === undefined ? rowTravel(position.height) : -delta);
+          fadeOut(
+            node,
+            { ...position, top: position.top + originDelta },
+            delta === undefined ? rowTravel(position.height) : -delta,
+          );
         }
       }
       for (const [node, entry] of entering) {

@@ -812,7 +812,7 @@ function SidebarSectionHeader(props: {
   // accent while the lifted row is over it.
   dragging?: boolean;
   isDropTarget?: boolean;
-  toggle: { expanded: boolean; onToggle: () => void };
+  toggle: { expanded: boolean; onToggle: () => void; prepare: () => void };
 }) {
   const shelf = props.marker.replace("-header", "");
   return (
@@ -822,7 +822,10 @@ function SidebarSectionHeader(props: {
       className={cn("mx-0.5 h-8", props.className)}
     >
       <CollapsibleSectionHeader
-        onClick={props.toggle.onToggle}
+        onClick={() => {
+          props.toggle.prepare();
+          props.toggle.onToggle();
+        }}
         expanded={props.toggle.expanded}
         weight="normal"
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
@@ -3215,6 +3218,7 @@ export default function Sidebar() {
     listMotionRef.current = node === null ? null : createSidebarListMotion(node);
     listMotionRef.current?.update(false);
   }, []);
+  const prepareShelfMotion = useCallback(() => listMotionRef.current?.prepare(), []);
 
   const isContextDrag = dragState?.contextDrag === true;
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
@@ -5048,6 +5052,7 @@ export default function Sidebar() {
                                 toggle={{
                                   expanded: pinnedShelfVisible,
                                   onToggle: togglePinnedShelf,
+                                  prepare: prepareShelfMotion,
                                 }}
                               />
                             ) : (
@@ -5118,6 +5123,7 @@ export default function Sidebar() {
                               toggle={{
                                 expanded: workingShelfExpanded,
                                 onToggle: toggleWorkingShelf,
+                                prepare: prepareShelfMotion,
                               }}
                             />,
                           );
@@ -5136,6 +5142,7 @@ export default function Sidebar() {
                               toggle={{
                                 expanded: snoozedShelfExpanded,
                                 onToggle: toggleSnoozedShelf,
+                                prepare: prepareShelfMotion,
                               }}
                             />,
                           );
@@ -5162,6 +5169,7 @@ export default function Sidebar() {
                               toggle={{
                                 expanded: settledShelfExpanded,
                                 onToggle: toggleSettledShelf,
+                                prepare: prepareShelfMotion,
                               }}
                             />,
                           );

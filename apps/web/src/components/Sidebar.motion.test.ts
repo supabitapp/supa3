@@ -70,6 +70,7 @@ function fixture(rows: TestRow[], viewportHeight?: number) {
   const events = new EventTarget();
   const parent = {
     children: rows,
+    top: 0,
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
     dispatchEvent: events.dispatchEvent.bind(events),
@@ -78,7 +79,7 @@ function fixture(rows: TestRow[], viewportHeight?: number) {
         ? null
         : { getBoundingClientRect: () => ({ top: 0, bottom: viewportHeight }) },
     ownerDocument: { defaultView: { matchMedia: () => media } },
-    getBoundingClientRect: () => ({ top: 0 }),
+    getBoundingClientRect: () => ({ top: parent.top }),
     append(node: TestRow) {
       parent.children.push(node);
       node.remove.mockImplementation(() => {
@@ -113,17 +114,51 @@ beforeEach(() => vi.stubGlobal("HTMLElement", TestRow));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sidebar list motion", () => {
+  it("does not reuse unrelated clicks for synchronized shelf changes after scrolling", () => {
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout, parent } = fixture([header], 240);
+    motion.update(false);
+    parent.dispatchEvent(new Event("click"));
+    parent.top = -1000;
+    layout([header, ...rows]);
+    motion.update(true, true);
+    expect([header, ...rows].every((row) => row.animations.length === 0)).toBe(true);
+  });
+
+  it("keeps departing rows in their visual boxes when collapse clamps a scrolled list", () => {
+    const active = new TestRow("Active", 200);
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout, parent } = fixture([active, header, ...rows], 240);
+    motion.update(false);
+
+    parent.top = -200;
+    motion.prepare();
+    layout([active, header]);
+    parent.top = 0;
+    motion.update(true, true);
+
+    expect(rows.slice(0, 6).every((row) => row.clones.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.clones.length === 0)).toBe(true);
+    expect(rows[0]!.clones[0]!.style.top).toBe("42px");
+    expect(rows[5]!.clones[0]!.style.top).toBe("227px");
+    expectMove(header, -200);
+  });
+
   it("animates large shelf toggles without fading offscreen history", () => {
     const header = new TestRow("Settled", 32);
     const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
     const { motion, layout } = fixture([header], 240);
     motion.update(false);
 
+    motion.prepare();
     layout([header, ...rows]);
     motion.update(true, true);
     expect(rows.slice(0, 6).every((row) => row.animations.length === 1)).toBe(true);
     expect(rows.slice(6).every((row) => row.animations.length === 0)).toBe(true);
 
+    motion.prepare();
     layout([header]);
     motion.update(true, true);
     expect(rows.slice(0, 6).every((row) => row.clones.length === 1)).toBe(true);
@@ -133,8 +168,9 @@ describe("sidebar list motion", () => {
   it("keeps keyboard shelf toggles immediate", () => {
     const header = new TestRow("Settled", 32);
     const row = new TestRow("settled", 36);
-    const { motion, layout, parent } = fixture([header]);
+    const { motion, layout, parent } = fixture([header], 240);
     motion.update(false);
+    motion.prepare();
     parent.dispatchEvent(new Event("keydown"));
     layout([header, row]);
     motion.update(true, true);
@@ -211,9 +247,10 @@ describe("sidebar list motion", () => {
 
   it("does not glide on release when motion is reduced", () => {
     const [a, b] = [new TestRow("a"), new TestRow("b")];
-    const { motion, layout, media } = fixture([a, b]);
+    const { motion, layout, media } = fixture([a, b], 240);
     motion.update(true);
     media.matches = true;
+    motion.prepare();
     a.dragTranslate = 100;
     motion.release();
     layout([b, a]);
@@ -568,9 +605,10 @@ describe("sidebar list motion", () => {
   it("respects reduced motion while keeping the next baseline fresh", () => {
     const a = new TestRow("a");
     const b = new TestRow("b");
-    const { motion, layout, media } = fixture([a, b]);
+    const { motion, layout, media } = fixture([a, b], 240);
     motion.update(true);
     media.matches = true;
+    motion.prepare();
     layout([b, a]);
     motion.update(true, true);
     expect(a.animate).not.toHaveBeenCalled();
