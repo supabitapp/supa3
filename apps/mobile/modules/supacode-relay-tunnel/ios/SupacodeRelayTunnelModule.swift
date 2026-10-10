@@ -14,6 +14,9 @@ public final class SupacodeRelayTunnelModule: Module {
   private var backgrounded = false
   private var backgroundObserver: NSObjectProtocol?
   private var foregroundObserver: NSObjectProtocol?
+  private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+  private var suspendWork: DispatchWorkItem?
+  private var graceGeneration: UInt64 = 0
   private let logger = Logger(subsystem: "sh.supacode.mobile", category: "relay-tunnel")
 
   public func definition() -> ModuleDefinition {
@@ -24,12 +27,13 @@ public final class SupacodeRelayTunnelModule: Module {
         forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
       ) { [weak self] _ in
         guard let self else { return }
-        for tunnel in self.setBackgrounded(true) { tunnel.suspend() }
+        self.beginBackgroundGrace()
       }
       self.foregroundObserver = NotificationCenter.default.addObserver(
         forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
       ) { [weak self] _ in
         guard let self else { return }
+        self.cancelBackgroundGrace()
         let tunnels = self.setBackgrounded(false)
         Task { for tunnel in tunnels { _ = try? await tunnel.resume() } }
       }
@@ -53,11 +57,46 @@ public final class SupacodeRelayTunnelModule: Module {
       for tunnel in tunnels { await tunnel.stop() }
     }
     OnDestroy {
+      DispatchQueue.main.async { self.cancelBackgroundGrace() }
       if let observer = self.backgroundObserver { NotificationCenter.default.removeObserver(observer) }
       if let observer = self.foregroundObserver { NotificationCenter.default.removeObserver(observer) }
       let tunnels = self.removeAll()
       Task { for tunnel in tunnels { await tunnel.stop() } }
     }
+  }
+
+  private func beginBackgroundGrace() {
+    cancelBackgroundGrace()
+    lock.lock()
+    let hasTunnels = !tunnels.isEmpty
+    if !hasTunnels { backgrounded = true }
+    lock.unlock()
+    guard hasTunnels else { return }
+    let generation = graceGeneration
+    backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish relay requests") { [weak self] in
+      guard let self, self.graceGeneration == generation else { return }
+      self.suspendTunnels()
+    }
+    guard backgroundTask != .invalid else { suspendTunnels(); return }
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, self.graceGeneration == generation else { return }
+      self.suspendTunnels()
+    }
+    suspendWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: work)
+  }
+
+  private func suspendTunnels() {
+    for tunnel in setBackgrounded(true) { tunnel.suspend() }
+    cancelBackgroundGrace()
+  }
+
+  private func cancelBackgroundGrace() {
+    graceGeneration += 1
+    suspendWork?.cancel(); suspendWork = nil
+    guard backgroundTask != .invalid else { return }
+    let task = backgroundTask; backgroundTask = .invalid
+    UIApplication.shared.endBackgroundTask(task)
   }
 
   private func setBackgrounded(_ value: Bool) -> [RelayTunnel] {

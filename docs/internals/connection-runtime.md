@@ -18,12 +18,19 @@ failures wait for a wakeup instead of spending attempts on unchanged conditions.
 
 Foregrounding, an explicit retry, and an offline report probe the established
 session, and only a failed probe reconnects. Offline reports are often wrong, for
-example for a loopback server. A long mobile background suspension is the one
-exception: it replaces the session at once, because the OS can kill a socket
-without reporting closure, and a probe would hold a dead socket in "Resuming"
-until it times out. That fresh attempt runs even while the network reports
-offline. Foregrounding also wakes a pending retry immediately and
-leaves an ordinary in-flight attempt alone.
+example for a loopback server. Mobile resume uses a short probe and preserves a
+healthy session so its subscriptions can resume without downloading another
+shell snapshot. A failed resume probe permits one immediate connection attempt
+even while the network reports offline. Returning to mobile also restarts an
+in-flight connection attempt, whose routes may belong to the previous network.
+Desktop foregrounding leaves ordinary in-flight attempts alone.
+
+The native mobile relay owns the bounded background grace period and checks its
+tunnel on foreground before the RPC probe times out. An RPC session replacement
+alone cannot repair a dead native tunnel. While mobile is backgrounded, the
+supervisor retains established sessions but parks connection attempts and
+retries. Expected background disconnects do not become connection failures in the
+foreground UI.
 
 The [registry](../../packages/client-runtime/src/connection/registry.ts) scopes
 connections by environment. An involuntary disconnect retains the registration

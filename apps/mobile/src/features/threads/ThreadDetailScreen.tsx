@@ -126,6 +126,7 @@ import {
   FloatingWorkingControl,
 } from "./floating-working-control";
 import { connectionFloatingStatus, type FloatingWorkingStatus } from "./floating-working-status";
+import { useConnectionStatusVisibility } from "../../connection/useConnectionStatusVisibility";
 import {
   derivePendingUserInputMaxHeight,
   ESTIMATED_KEYBOARD_HEIGHT,
@@ -463,6 +464,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // Opening a running thread resyncs for a few frames. The pill shows the
   // sync label only when the sync lasts, so it does not flash before the timer.
   const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
+  const showConnectionStatus = useConnectionStatusVisibility(
+    selectedThreadKey,
+    props.connectionStateLabel !== "connected",
+    props.connectionStateLabel === "error" ||
+      props.connectionStateLabel === "unsupported" ||
+      props.connectionStateLabel === "available",
+  );
   // One floating pill above the composer: it reads the connection phase while
   // disconnected, the sync state while messages load, then the working timer
   // once the feed is settled.
@@ -477,7 +485,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       environmentLabel: props.environmentLabel,
       onReconnect: props.onReconnectEnvironment,
     });
-    if (connectionStatus !== null) {
+    if (connectionStatus !== null && showConnectionStatus) {
       return connectionStatus;
     }
     if (props.activePendingApproval !== null || props.activePendingUserInput !== null) {
@@ -535,7 +543,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     agentsSegment !== null ||
     devicePreviews.length > 0 ||
     browserTabs.tabs.length > 0 ||
-    props.connectionStateLabel !== "connected" ||
     props.queuedMessages.length > 0 ||
     props.selectedThreadFeed.some(
       (entry) => "acknowledged" in entry && entry.acknowledged === true,
