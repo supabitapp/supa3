@@ -23,7 +23,14 @@ import {
 } from "./catalog.ts";
 import { BearerConnectionTarget, type ConnectionTarget } from "./model.ts";
 
-export type ConnectionRouteKind = "loopback" | "lan" | "tailnet" | "vpn" | "public" | "ssh";
+export type ConnectionRouteKind =
+  | "loopback"
+  | "lan"
+  | "tailnet"
+  | "vpn"
+  | "public"
+  | "relay"
+  | "ssh";
 
 export function connectionRouteId(target: ConnectionTarget): string {
   switch (target._tag) {
@@ -147,8 +154,14 @@ export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind
       return "ssh";
     case "PrimaryConnectionTarget":
     case "BearerConnectionTarget": {
-      const hostname = routeHostname(route);
-      if (hostname === null) return "public";
+      const url = routeUrl(route);
+      if (url === null) return "public";
+      try {
+        if (canonicalRelayAddress(url.href) !== null) return "relay";
+      } catch {
+        return "public";
+      }
+      const hostname = url.hostname;
       if (isLocalLoopbackHost(hostname)) return "loopback";
       const profile = Option.getOrNull(route.profile);
       const tailscale =
@@ -166,6 +179,7 @@ const ROUTE_KIND_RANK: Record<ConnectionRouteKind, number> = {
   tailnet: 2,
   vpn: 2,
   public: 3,
+  relay: 3,
   ssh: 4,
 };
 
@@ -222,6 +236,8 @@ export function connectionRouteLabel(route: ConnectionRoute): string {
       return "Tailscale";
     case "vpn":
       return "VPN";
+    case "relay":
+      return "Encrypted Relay";
     case "ssh": {
       const profile = Option.getOrNull(route.profile);
       return profile?._tag === "SshConnectionProfile"
@@ -237,6 +253,11 @@ export function connectionRouteAddress(route: ConnectionRoute): string | null {
   if (route.target._tag === "SshConnectionTarget") {
     const profile = Option.getOrNull(route.profile);
     return profile?._tag === "SshConnectionProfile" ? profile.target.alias : null;
+  }
+  if (connectionRouteKind(route) === "relay") {
+    const profile = Option.getOrNull(route.profile);
+    const relayUrl = profile?._tag === "BearerConnectionProfile" ? profile.relayUrl : undefined;
+    return relayUrl ?? DEFAULT_PUBLIC_RELAY_URL;
   }
   return routeHttpBaseUrl(route);
 }

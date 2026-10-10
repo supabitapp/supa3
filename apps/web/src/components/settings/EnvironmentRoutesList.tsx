@@ -21,11 +21,12 @@ import {
   type ConnectionRoute,
   connectionRouteAddress,
   connectionRouteId,
+  connectionRouteKind,
   connectionRouteLabel,
   connectionRoutes,
   isLearned,
 } from "@supacode/client-runtime/connection";
-import { GripVerticalIcon, PlusIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import { GripVerticalIcon, LockIcon, PlusIcon, RefreshCwIcon, XIcon } from "lucide-react";
 import { useContext, useState } from "react";
 
 import { requestConfirmDialog } from "~/confirmDialog";
@@ -197,8 +198,11 @@ function SortableRouteRow({
       >
         <GripVerticalIcon aria-hidden className="size-3.5" />
       </button>
-      <div className="grid min-w-0 gap-y-0.5 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:items-baseline sm:gap-x-3">
+      <div className="grid min-w-0 gap-y-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline sm:gap-x-3">
         <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-foreground">
+          {connectionRouteKind(route) === "relay" ? (
+            <LockIcon aria-hidden className="size-3 shrink-0" />
+          ) : null}
           <Tooltip>
             <TooltipTrigger render={<span className="min-w-0 truncate" />}>{label}</TooltipTrigger>
             <TooltipPopup side="top">{label}</TooltipPopup>
