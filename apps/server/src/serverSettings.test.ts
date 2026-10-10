@@ -101,6 +101,28 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect("enables public relay by default and persists opting out", () =>
+    Effect.gen(function* () {
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      assert.isTrue((yield* service.getSettings).publicRelayEnabled);
+
+      yield* service.updateSettings({ publicRelayEnabled: false });
+      const disabled = yield* decodeServerSettingsJson(
+        yield* fs.readFileString(config.settingsPath),
+      );
+      assert.isFalse(disabled.publicRelayEnabled);
+      assert.isFalse((yield* service.getSettings).publicRelayEnabled);
+
+      yield* service.updateSettings({ publicRelayEnabled: true });
+      const enabled = yield* decodeServerSettingsJson(
+        yield* fs.readFileString(config.settingsPath),
+      );
+      assert.isTrue(enabled.publicRelayEnabled);
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("migrates saved token delivery to paragraph buffering without resetting settings", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;

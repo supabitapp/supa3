@@ -21,6 +21,18 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("ServerSettings public relay", () => {
+  it("enables relay by default for settings without a saved preference", () => {
+    expect(decodeServerSettings({}).publicRelayEnabled).toBe(true);
+  });
+
+  it.each([true, false])("preserves the saved %s preference and accepts updates", (enabled) => {
+    const input = { publicRelayEnabled: enabled };
+    expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
+    expect(decodeServerSettingsPatch(input)).toEqual(input);
+  });
+});
+
 describe("question automatic dismissal", () => {
   it("defaults to automatic dismissal and preserves explicit preferences", () => {
     expect(decodeServerSettings({}).autoDismissQuestions).toBe(true);

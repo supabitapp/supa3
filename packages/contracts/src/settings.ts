@@ -1025,7 +1025,7 @@ export const StorageCleanupSettings = Schema.Struct({
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
 export const ServerSettings = Schema.Struct({
-  publicRelayEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  publicRelayEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   publicRelayUrl: Schema.String.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PUBLIC_RELAY_URL)),
   ),
