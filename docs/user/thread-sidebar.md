@@ -34,12 +34,15 @@ directory itself sits inside a Git checkout.
 
 ### Send feedback
 
-Choose **Send feedback** from the sidebar or command palette to start a conversation
-under **No project**. On mobile, open **Settings > About Supacode**. The agent asks
-what happened and can investigate diagnostics on the selected environment.
+Choose **Help > Send feedback** at the bottom of the sidebar, or **Send feedback** in
+the command palette. On mobile, open **Settings > About Supacode**. Supacode opens a
+new thread under **No project** with a prepared message in the prompt, using your
+usual model and settings. Add anything you like and send it. The agent runs
+`supacode triage --print`, asks what happened, and investigates on that machine.
+Review the report before the agent posts it to GitHub.
 
-Review the final report before the agent posts it to GitHub. If the app cannot
-open, run `supacode triage` in a terminal on the affected machine instead.
+If the app cannot open, run `supacode triage` in a terminal on the affected machine
+instead.
 
 ### Start in the background
 

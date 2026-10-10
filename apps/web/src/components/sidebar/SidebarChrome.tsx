@@ -1,15 +1,23 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { settlePromise } from "@supacode/client-runtime/state/runtime";
+import {
+  ArrowLeftIcon,
+  ChartNoAxesColumnIcon,
+  CircleQuestionMarkIcon,
+  SettingsIcon,
+} from "lucide-react";
+import type { MouseEvent, ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { parseKeybindingShortcut } from "@supacode/shared/keybindings";
 
-import { APP_BASE_NAME } from "../../branding";
+import { APP_BASE_NAME, WEBSITE_URL } from "../../branding";
 import { isElectron } from "../../env";
+import { useSendFeedback } from "../../hooks/useSendFeedback";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useShortcutLabel } from "../../hooks/useShortcutLabel";
 import { formatShortcutLabel } from "../../keybindings";
 import { cn } from "../../lib/utils";
+import { readLocalApi } from "../../localApi";
 import { usePullRequestsSupported } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -26,6 +34,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "../ui/sidebar";
+import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
@@ -140,15 +149,17 @@ function SidebarUtilityItem({
   icon,
   label,
   shortcut = null,
+  className,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   shortcut?: string | null;
-  onClick: () => void;
+  className?: string;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <SidebarMenuItem className="shrink-0">
+    <SidebarMenuItem className={cn("shrink-0", className)}>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -162,6 +173,48 @@ function SidebarUtilityItem({
         </TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
+  );
+}
+
+function SidebarHelpItem({ closeMobileSidebar }: { closeMobileSidebar: () => void }) {
+  const sendFeedback = useSendFeedback();
+
+  const openHelpMenu = async (event: MouseEvent<HTMLButtonElement>) => {
+    const api = readLocalApi();
+    if (!api) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clicked = await settlePromise(() =>
+      api.contextMenu.show(
+        [
+          {
+            id: "send-feedback",
+            label: "Send feedback",
+            icon: "message-square-text",
+            disabled: sendFeedback === null,
+          },
+          { id: "visit-website", label: "Visit website", icon: "globe" },
+        ],
+        { x: rect.left, y: rect.top - 4 },
+      ),
+    );
+    if (clicked._tag === "Failure") return;
+    if (clicked.value === "send-feedback" && sendFeedback) {
+      closeMobileSidebar();
+      await sendFeedback();
+    } else if (clicked.value === "visit-website") {
+      await api.shell
+        .openExternal(WEBSITE_URL)
+        .catch(() => toastManager.add({ type: "error", title: "Unable to open the website" }));
+    }
+  };
+
+  return (
+    <SidebarUtilityItem
+      className="ml-auto"
+      icon={<CircleQuestionMarkIcon />}
+      label="Help"
+      onClick={(event) => void openHelpMenu(event)}
+    />
   );
 }
 
@@ -236,6 +289,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
+      <SidebarHelpItem closeMobileSidebar={closeMobileSidebar} />
       <SidebarUpdatePill />
     </SidebarMenu>
   );

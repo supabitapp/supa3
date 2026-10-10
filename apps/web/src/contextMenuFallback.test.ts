@@ -230,6 +230,18 @@ describe("showContextMenuFallback", () => {
     await expect(selectionPromise).resolves.toBeNull();
   });
 
+  it("opens upward when there is no room below its point", async () => {
+    const selectionPromise = showContextMenuFallback([{ id: "help", label: "Help" }], {
+      x: 10,
+      y: 760,
+    });
+    const menu = (document as unknown as FakeDocument).body.children[0];
+
+    expect(menu?.style.top).toBe("640px");
+    dismissContextMenu();
+    await expect(selectionPromise).resolves.toBeNull();
+  });
+
   it("resolves a clicked flat menu item", async () => {
     const selectionPromise = showContextMenuFallback([
       { id: "rename", label: "Rename" },

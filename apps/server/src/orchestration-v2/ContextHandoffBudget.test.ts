@@ -26,7 +26,6 @@ import {
 } from "@supacode/provider-core/server/handoffBudget";
 import { projectContextHandoffForWire } from "./WireProjection.ts";
 import { deliverContextHandoffs } from "./ContextHandoffDelivery.ts";
-import { buildTriageSeedPrompt } from "../feedback/triagePrompt.ts";
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeHandoff = Schema.decodeUnknownSync(OrchestrationV2ContextHandoff);
@@ -147,19 +146,6 @@ describe("handoff budget", () => {
       }),
     );
     assert.equal(historyResponseItems([command!], "Activity")[1]?.type, "message");
-  });
-
-  it("retains the full feedback guide within the provider handoff budget", () => {
-    const prompt = buildTriageSeedPrompt("/feedback/feedback-context.md", "Send feedback");
-    const candidates = [
-      message("item:feedback", "user", prompt),
-      message("item:question", "assistant", "What happened?"),
-    ];
-    const selected = selectHistory({ messages: candidates, coverage: "Feedback", budget: 16_000 });
-    const items = historyResponseItems(selected.messages, selected.context);
-    assert.deepEqual(selected.messages, candidates);
-    assert.include(items[1]!.content[0]!.text, prompt);
-    assert.equal(selected.omittedItems, 0);
   });
 
   it("retains short conversations verbatim in role and order", () => {

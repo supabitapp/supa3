@@ -1,8 +1,7 @@
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { availableScratchWorkspaceRoot } from "@supacode/client-runtime/operations/projects";
 import Constants from "expo-constants";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/reactivity";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,7 +19,6 @@ import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsActionRow } from "./components/SettingsActionRow";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { useSendFeedback } from "./use-send-feedback";
-import { serverEnvironment } from "../../state/server";
 import { ControlPillMenu } from "../../components/ControlPillMenu";
 
 export function SettingsAboutRouteScreen() {
@@ -153,32 +151,23 @@ function AppSettingsSection() {
 }
 
 function FeedbackSettingsAction() {
-  const { selectedTargets } = useSettingsEnvironmentFilter();
-  const eligibleTargets = useAtomValue(
-    useMemo(
-      () =>
-        Atom.make((get) =>
-          selectedTargets.filter(
-            (target) =>
-              target.serverConfig.feedbackThreads === true &&
-              target.serverConfig.scratchWorkspaceRoot !== undefined &&
-              get(serverEnvironment.startFeedback.permissionAtom(target.environmentId)),
-          ),
-        ),
-      [selectedTargets],
-    ),
+  const { availableTargets } = useSettingsEnvironmentFilter();
+  const { sendFeedback, isPending } = useSendFeedback();
+  const eligibleTargets = availableTargets.filter(
+    (target) =>
+      availableScratchWorkspaceRoot(target.connection.phase, target.serverConfig) !== null,
   );
-  const feedbackEnvironmentId =
-    eligibleTargets.length === 1 ? eligibleTargets[0]!.environmentId : null;
-  const feedback = useSendFeedback(feedbackEnvironmentId);
+  const sendTo = (target: (typeof eligibleTargets)[number]) => void sendFeedback(target);
   const row = (
     <SettingsActionRow
       icon="text.bubble"
       label="Send feedback"
-      loading={feedback.isPending}
-      disabled={eligibleTargets.length === 0 || feedback.isPending}
+      loading={isPending}
+      disabled={eligibleTargets.length === 0 || isPending}
       pointerEvents={eligibleTargets.length > 1 ? "none" : "auto"}
-      onPress={() => void feedback.sendFeedback()}
+      onPress={() => {
+        if (eligibleTargets[0]) sendTo(eligibleTargets[0]);
+      }}
     />
   );
   if (eligibleTargets.length < 2) return row;
@@ -191,11 +180,11 @@ function FeedbackSettingsAction() {
       actions={eligibleTargets.map((target) => ({
         id: target.environmentId,
         title: target.label,
-        attributes: { disabled: feedback.isPending },
+        attributes: { disabled: isPending },
       }))}
       onPressAction={({ nativeEvent }) => {
         const target = eligibleTargets.find((entry) => entry.environmentId === nativeEvent.event);
-        if (target) void feedback.sendFeedback(target.environmentId);
+        if (target) sendTo(target);
       }}
     >
       {row}

@@ -43,7 +43,6 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.scheduledTasksSetEnabled]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
-  [WS_METHODS.serverStartFeedback]: AuthOrchestrationOperateScope,
   [WS_METHODS.orchestrationSkillsInstall]: AuthProvidersManageScope,
   [WS_METHODS.orchestrationSkillsUninstall]: AuthProvidersManageScope,
   [WS_METHODS.mcpAppsCallTool]: AuthOrchestrationOperateScope,

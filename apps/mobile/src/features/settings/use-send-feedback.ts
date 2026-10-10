@@ -1,78 +1,77 @@
-import { useAtomValue } from "@effect/atom-react";
-import { useNavigation } from "@react-navigation/native";
-import { scopeThreadRef } from "@supacode/client-runtime/environment";
+import { StackActions, useNavigation } from "@react-navigation/native";
+import { buildFeedbackPrompt } from "@supacode/client-runtime/feedback-prompt";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
-import { CommandId, ThreadId, type EnvironmentId } from "@supacode/contracts";
+import type { EnvironmentId, ServerConfig } from "@supacode/contracts";
+import Constants from "expo-constants";
 import { useRef, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
-import { uuidv4 } from "../../lib/uuid";
-import { waitForThreadShellReady } from "../threads/threadForkNavigation";
-import { appAtomRegistry } from "../../state/atom-registry";
-import { environmentThreadShells } from "../../state/threads";
-import { serverEnvironment } from "../../state/server";
+import { projectEnvironment } from "../../state/projects";
 import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  createNewTaskDraft,
+  setComposerDraftText,
+  waitForComposerDraftsLoaded,
+} from "../../state/use-composer-drafts";
 
-export function useSendFeedback(environmentId: EnvironmentId | null) {
+export function useSendFeedback() {
   const navigation = useNavigation();
-  const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const permitted = useAtomValue(serverEnvironment.startFeedback.permissionAtom(environmentId));
-  const startFeedback = useAtomCommand(serverEnvironment.startFeedback, { reportFailure: false });
+  const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
   const inFlight = useRef(false);
   const [isPending, setIsPending] = useState(false);
-  const available =
-    config?.feedbackThreads === true && config.scratchWorkspaceRoot !== undefined && permitted;
 
-  async function sendFeedback(targetEnvironmentId = environmentId) {
-    if (
-      targetEnvironmentId === null ||
-      (targetEnvironmentId === environmentId && !available) ||
-      inFlight.current
-    )
-      return;
+  async function sendFeedback(target: {
+    readonly environmentId: EnvironmentId;
+    readonly serverConfig: Pick<ServerConfig, "environment">;
+  }) {
+    if (inFlight.current) return;
     inFlight.current = true;
     setIsPending(true);
     try {
-      const result = await startFeedback({
-        environmentId: targetEnvironmentId,
-        input: {
-          commandId: CommandId.make(`feedback:${uuidv4()}`),
-          threadId: ThreadId.make(uuidv4()),
-        },
-      });
-      if (result._tag === "Success") {
-        const threadRef = scopeThreadRef(targetEnvironmentId, result.value.threadId);
-        const visible = await waitForThreadShellReady({
-          read: () =>
-            appAtomRegistry.get(environmentThreadShells.threadShellAtom(threadRef)) !== null,
-          timeoutMs: 5_000,
-        });
-        if (!visible) {
+      const result = await openScratch({ environmentId: target.environmentId, input: {} });
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
           Alert.alert(
-            "Feedback thread created",
-            "The thread has not reached this device yet. Open it from Threads when it appears.",
+            "Could not start feedback",
+            error instanceof Error ? error.message : "Try again.",
           );
-          return;
         }
-        navigation.navigate("Thread", {
-          environmentId: targetEnvironmentId,
-          threadId: result.value.threadId,
-        });
-      } else if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        Alert.alert(
-          "Could not start feedback",
-          error instanceof Error ? error.message : "Try again.",
-        );
+        return;
       }
+      const project = result.value;
+      await waitForComposerDraftsLoaded();
+      if (!navigation.isFocused()) return;
+      const draftKey = createNewTaskDraft({
+        environmentId: project.environmentId,
+        projectId: project.id,
+      });
+      setComposerDraftText(
+        draftKey,
+        buildFeedbackPrompt({
+          serverVersion: target.serverConfig.environment.serverVersion,
+          client: `${Platform.OS === "ios" ? "iOS" : "Android"} app ${Constants.expoConfig?.version ?? "0.0.0"}`,
+        }),
+      );
+      navigation.dispatch(
+        StackActions.replace("NewTaskSheet", {
+          screen: "NewTaskDraft",
+          params: {
+            draftId: draftKey,
+            environmentId: String(project.environmentId),
+            projectId: String(project.id),
+            title: project.title,
+          },
+        }),
+      );
     } finally {
       inFlight.current = false;
       setIsPending(false);
     }
   }
 
-  return { sendFeedback, isPending, available };
+  return { sendFeedback, isPending };
 }

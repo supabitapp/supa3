@@ -87,7 +87,6 @@ describe("command permissions", () => {
     ),
   );
   it.effect.each([
-    { method: WS_METHODS.serverStartFeedback, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.mcpAppsCallTool, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.mcpAppsUpdateModelContext, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.previewReportProfiles, scope: AuthPreviewOperateScope },

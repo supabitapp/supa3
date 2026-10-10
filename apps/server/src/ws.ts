@@ -121,7 +121,6 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
-import * as FeedbackService from "./feedback/FeedbackService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
@@ -1254,7 +1253,6 @@ const layerWsRpc = (
         }
       };
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
-      const feedback = yield* FeedbackService.FeedbackService;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const pullRequests = yield* PullRequestService.PullRequestService;
@@ -1753,7 +1751,6 @@ const layerWsRpc = (
             threadResumeCompletionMarker: true,
             threadSnapshotPagination: true,
             threadFind: true,
-            feedbackThreads: true,
             threadFindProgressive: true,
             ...Option.match(scratchWorkspaceRoot, {
               onNone: () => ({}),
@@ -2418,7 +2415,6 @@ const layerWsRpc = (
             maxFiles: config.traceMaxFiles,
           }),
         [WS_METHODS.serverGetProcessDiagnostics]: (_input) => processDiagnostics.read,
-        [WS_METHODS.serverStartFeedback]: (input) => feedback.start(input, clientAnalyticsProps),
         [WS_METHODS.serverGetHostResources]: (_input) => hostResources.read,
         [WS_METHODS.serverGetProcessResourceHistory]: (input) =>
           processResourceMonitor.readHistory(input),

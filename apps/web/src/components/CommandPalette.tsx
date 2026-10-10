@@ -754,7 +754,7 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
   });
   const { scratchEnvironmentId, scratchWorkspaceRootFor, startScratchThread } = useScratchProject();
-  const { sendFeedback, unavailableReason: feedbackUnavailableReason } = useSendFeedback();
+  const sendFeedback = useSendFeedback();
   const lookupRepository = useAtomQueryRunner(sourceControlEnvironment.repository, {
     reportFailure: false,
   });
@@ -2048,11 +2048,11 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (feedbackUnavailableReason === null) {
+  if (sendFeedback) {
     actionItems.push({
       kind: "action",
       value: "action:send-feedback",
-      searchTerms: ["feedback", "report", "bug", "support", "triage"],
+      searchTerms: ["feedback", "report", "bug", "support", "triage", "help"],
       title: "Send feedback",
       icon: <MessageSquareTextIcon className={ITEM_ICON_CLASS} />,
       run: sendFeedback,
