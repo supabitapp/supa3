@@ -512,31 +512,27 @@ export function latestToolGroupImage(
   rows: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   workspaceRoot?: string,
 ): ToolGroupImage | null {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const row = rows[index]!;
-    const item = row.item;
-    if (item.type !== "dynamic_tool") continue;
-    const imageCount = item.outputImageCount ?? turnItemOutputImages(item).length;
-    if (imageCount > 0) {
-      return {
-        resource: {
-          _tag: "tool-output-image",
-          threadId: row.sourceThreadId,
-          itemId: row.sourceItemId,
-          index: imageCount - 1,
-        },
-        alt: item.title || "Tool output image",
-      };
-    }
-    if (item.viewedImagePath) {
-      const image = resolveViewedImageAsset(item.viewedImagePath, {
+  const row = rows.at(-1);
+  if (!row || row.item.type !== "dynamic_tool") return null;
+  const item = row.item;
+  const imageCount = item.outputImageCount ?? turnItemOutputImages(item).length;
+  if (imageCount > 0) {
+    return {
+      resource: {
+        _tag: "tool-output-image",
+        threadId: row.sourceThreadId,
+        itemId: row.sourceItemId,
+        index: imageCount - 1,
+      },
+      alt: item.title || "Tool output image",
+    };
+  }
+  return item.viewedImagePath
+    ? resolveViewedImageAsset(item.viewedImagePath, {
         threadId: row.sourceThreadId,
         workspaceRoot,
-      });
-      if (image) return image;
-    }
-  }
-  return null;
+      })
+    : null;
 }
 
 export function resolveViewedImageAsset(

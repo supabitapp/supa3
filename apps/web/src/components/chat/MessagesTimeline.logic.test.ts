@@ -669,7 +669,7 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
-  it("updates a collapsed group's preview when a later tool gains an image", () => {
+  it("updates and clears a collapsed group's image with the latest tool result", () => {
     const fixture = makeStreamingTimelineFixture();
     const source = fixture.visibleTurnItems.find((row) => row.item.type === "dynamic_tool")!;
     if (source.item.type !== "dynamic_tool") throw new Error("Expected tool fixture");
@@ -704,7 +704,7 @@ describe("deriveMessagesTimelineRows", () => {
     const first = rows(0);
     expect(first.find((row) => row.kind === "work-toggle")).toMatchObject({
       expanded: false,
-      latestImage: { resource: { itemId: "image-tool-0", index: 1 } },
+      latestImage: null,
     });
     const stable = computeStableMessagesTimelineRows(first, { byId: new Map(), result: [] });
     const next = computeStableMessagesTimelineRows(rows(1), stable);
@@ -713,6 +713,12 @@ describe("deriveMessagesTimelineRows", () => {
       latestImage: { resource: { itemId: "image-tool-1", index: 0 } },
     });
     expect(next).not.toBe(stable);
+    const cleared = computeStableMessagesTimelineRows(rows(0), next);
+    expect(cleared.result.find((row) => row.kind === "work-toggle")).toMatchObject({
+      expanded: false,
+      latestImage: null,
+    });
+    expect(cleared).not.toBe(next);
   });
 
   it("stops stranded thinking after a steer and follows the next thought or tool", () => {
