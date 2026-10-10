@@ -1,5 +1,25 @@
 import { buildHostedPairingUrl } from "../../hostedPairing";
 import { buildPairingUrl, type PairingRouteHints } from "@supacode/shared/remote";
+import { isLoopbackHostname } from "../../environments/primary/target";
+
+export function resolvePairingShareValue(
+  credential: string,
+  endpointUrl: string | null | undefined,
+  hints: PairingRouteHints = {},
+  hostedPairingAllowed = true,
+) {
+  if (!endpointUrl) return { value: credential, kind: "code" as const, qrShareable: false };
+  const endpoint = new URL(endpointUrl);
+  if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:")
+    return { value: credential, kind: "code" as const, qrShareable: false };
+  return {
+    value:
+      (hostedPairingAllowed ? resolveHostedPairingUrl(endpointUrl, credential, hints) : null) ??
+      resolveDesktopPairingUrl(endpointUrl, credential, hints),
+    kind: "link" as const,
+    qrShareable: !isLoopbackHostname(endpoint.hostname),
+  };
+}
 
 export function resolveDesktopPairingUrl(
   endpointUrl: string,

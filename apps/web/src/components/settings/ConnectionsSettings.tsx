@@ -13,6 +13,7 @@ import { Atom } from "effect/reactivity";
 import {
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
   memo,
   useCallback,
   useEffect,
@@ -71,7 +72,12 @@ import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { cn } from "../../lib/utils";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
-import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
+import {
+  resolveDesktopPairingUrl,
+  resolveHostedPairingUrl,
+  resolvePairingShareValue,
+} from "./pairingUrls";
+import { PairingLinkCreatedDialog } from "./PairingLinkCreatedDialog";
 import {
   applyWslEnableSelection,
   canRevokeOtherClients,
@@ -1126,6 +1132,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
 });
 
 type AuthorizedClientsHeaderActionProps = {
+  triggerRef: RefObject<HTMLButtonElement | null>;
   relayEnabled: boolean;
   onPairingLinkCreated: (result: AuthPairingCredentialResult, relay?: RelayConnectionInfo) => void;
   clientSessions: ReadonlyArray<ServerClientSessionRecord> | null;
@@ -1135,6 +1142,7 @@ type AuthorizedClientsHeaderActionProps = {
 };
 
 const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderAction({
+  triggerRef,
   relayEnabled,
   onPairingLinkCreated,
   clientSessions,
@@ -1243,7 +1251,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
       >
         <DialogTrigger
           render={
-            <Button size="xs" variant="default">
+            <Button ref={triggerRef} size="xs" variant="default">
               <PlusIcon className="size-3" />
               Create link
             </Button>
@@ -2001,11 +2009,14 @@ export function ConnectionsSettings() {
   const [createdPairingCredentials, setCreatedPairingCredentials] = useState<
     ReadonlyMap<string, CreatedPairingCredential>
   >(() => new Map());
+  const [createdPairingLinkId, setCreatedPairingLinkId] = useState<string | null>(null);
+  const pairingLinkTriggerRef = useRef<HTMLButtonElement | null>(null);
   const handlePairingLinkCreated = useCallback(
     (created: AuthPairingCredentialResult, relay?: RelayConnectionInfo) => {
       setCreatedPairingCredentials((current) =>
         new Map(current).set(created.id, { credential: created.credential, relay }),
       );
+      setCreatedPairingLinkId(created.id);
     },
     [],
   );
@@ -2722,6 +2733,41 @@ export function ConnectionsSettings() {
   const defaultDesktopAdvertisedEndpointKey = defaultDesktopAdvertisedEndpoint
     ? endpointDefaultPreferenceKey(defaultDesktopAdvertisedEndpoint)
     : null;
+  const createdPairingLinkShare = useMemo(() => {
+    const created =
+      createdPairingLinkId === null
+        ? undefined
+        : createdPairingCredentials.get(createdPairingLinkId);
+    if (!created) return null;
+    const routes = resolvePairingLinkRoutes(
+      visibleDesktopAdvertisedEndpoints,
+      pairingHints,
+      created.relay,
+      primaryServerConfig?.settings,
+    );
+    const endpoint = selectPairingEndpoint(routes.endpoints, defaultDesktopAdvertisedEndpointKey);
+    const endpointUrl =
+      endpoint?.httpBaseUrl ??
+      desktopServerExposureState?.endpointUrl ??
+      ((window.location.protocol === "http:" || window.location.protocol === "https:") &&
+      !isLoopbackHostname(window.location.hostname)
+        ? window.location.origin
+        : null);
+    return resolvePairingShareValue(
+      created.credential,
+      endpointUrl,
+      routes.pairingHints,
+      endpoint === null || endpoint.compatibility.hostedHttpsApp === "compatible",
+    );
+  }, [
+    createdPairingLinkId,
+    createdPairingCredentials,
+    visibleDesktopAdvertisedEndpoints,
+    pairingHints,
+    primaryServerConfig?.settings,
+    defaultDesktopAdvertisedEndpointKey,
+    desktopServerExposureState?.endpointUrl,
+  ]);
   const handleSetDefaultAdvertisedEndpoint = useCallback(
     (endpoint: AdvertisedEndpoint) => {
       setDefaultAdvertisedEndpointKey(endpointDefaultPreferenceKey(endpoint));
@@ -3539,6 +3585,7 @@ export function ConnectionsSettings() {
               control={
                 canWriteAccess ? (
                   <AuthorizedClientsHeaderAction
+                    triggerRef={pairingLinkTriggerRef}
                     relayEnabled={primaryServerConfig?.settings.publicRelayEnabled ?? false}
                     delegatableScopes={currentSessionScopes ?? []}
                     onPairingLinkCreated={handlePairingLinkCreated}
@@ -3571,6 +3618,12 @@ export function ConnectionsSettings() {
               </ScrollArea>
             </FoldedSettingsSection>
           ) : null}
+          <PairingLinkCreatedDialog
+            key={createdPairingLinkId}
+            finalFocus={pairingLinkTriggerRef}
+            result={createdPairingLinkShare}
+            onClose={() => setCreatedPairingLinkId(null)}
+          />
           <AlertDialog
             open={isDesktopServerExposureDialogOpen && canManageLocalBackend}
             onOpenChange={(open) => {
