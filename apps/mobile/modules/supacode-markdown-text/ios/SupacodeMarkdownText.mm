@@ -402,8 +402,8 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   if (!CGRectEqualToRect(_textView.frame, _view.frame)) {
     _textView.frame = _view.frame;
     _textLayoutNeedsUpdate = YES;
-    [self setNeedsDisplay];
   }
+  [self updateTextView];
 }
 
 // Updating the child text view is layout work. A drawRect override would give
@@ -421,7 +421,7 @@ SupacodeMarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
     }
   }
   if (_renderedState == _state && runTags == _renderedRunTags &&
-      CGRectEqualToRect(_textView.frame, _view.frame)) return;
+      !_textLayoutNeedsUpdate) return;
 
   const auto &attrString = _state->getData().attributedString;
   NSMutableAttributedString *convertedAttrString =
