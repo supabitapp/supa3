@@ -22,7 +22,8 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import sharp from "sharp";
 
-type IconVariant = "dev" | "nightly" | "prod";
+const ICON_VARIANTS = ["dev", "nightly", "prod"] as const;
+type IconVariant = (typeof ICON_VARIANTS)[number];
 
 // 108dp at xxxhdpi. Expo's prebuild derives every launcher density bucket from this.
 const ADAPTIVE_CANVAS = 432;
@@ -34,10 +35,33 @@ const TEXT = { x: 25.69, y: 37.17, width: 76.4, height: 52.95 };
 // guaranteed), so 0.48 leaves the letters at ~72% of the mask with room for the
 // launcher's own zoom effects.
 const WORDMARK_FRACTION = 0.48;
-// Icon Composer positions layers on a 1024pt canvas, with translation relative to center.
-const COMPOSER_CANVAS_PT = 1024;
+// Icon Composer places layers on a 1024pt canvas, so one unit of the 128pt sources is 8pt.
+const COMPOSER_POINTS_PER_UNIT = 8;
+// The background is the base the other layers are placed on. The wordmark and dev's annotations
+// follow the Android wordmark sizing rather than the artwork's iOS framing.
+const NON_OVERLAY_LAYERS = new Set(["background.svg", "text.svg", "annotations.svg"]);
 const SVG_DENSITY = 300;
 const OUTPUT_DIRECTORY = "apps/mobile/assets";
+
+const IconComposerDocument = Schema.Struct({
+  groups: Schema.Array(
+    Schema.Struct({
+      layers: Schema.Array(
+        Schema.Struct({
+          "image-name": Schema.String,
+          position: Schema.Struct({
+            scale: Schema.Number,
+            "translation-in-points": Schema.Tuple([Schema.Number, Schema.Number]),
+          }),
+        }),
+      ),
+    }),
+  ),
+});
+type IconComposerLayer = (typeof IconComposerDocument.Type)["groups"][number]["layers"][number];
+const decodeIconComposerDocument = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(IconComposerDocument),
+);
 
 export class AndroidIconRenderError extends Schema.TaggedError<AndroidIconRenderError>()(
   "AndroidIconRenderError",
@@ -59,10 +83,10 @@ const canvasSvg = (size: number, inner: string) =>
 const fullBleed = (svg: string) =>
   svg.replace(/<rect width="128" height="128" rx="10"\/>/, '<rect width="128" height="128"/>');
 
-const rasterize = (layer: string, svg: string, width: number, height = width) =>
+const rasterize = (layer: string, svg: string, size: number) =>
   Effect.tryPromise({
     try: () =>
-      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(width, height).png().toBuffer(),
+      sharp(Buffer.from(svg), { density: SVG_DENSITY }).resize(size, size).png().toBuffer(),
     catch: (cause) => new AndroidIconRenderError({ layer, cause }),
   });
 
@@ -80,7 +104,7 @@ const composite = (
     catch: (cause) => new AndroidIconRenderError({ layer, cause }),
   });
 
-const readLayerSource = Effect.fn("androidIcons.readLayerSource")(function* (
+const readIconSource = Effect.fn("androidIcons.readIconSource")(function* (
   repositoryRoot: string,
   variant: IconVariant,
   file: string,
@@ -88,8 +112,36 @@ const readLayerSource = Effect.fn("androidIcons.readLayerSource")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   return yield* fs.readFileString(
-    path.join(repositoryRoot, "assets", variant, "app-icon.icon", "Assets", file),
+    path.join(repositoryRoot, "assets", variant, "app-icon.icon", file),
   );
+});
+
+const readLayerSource = (repositoryRoot: string, variant: IconVariant, file: string) =>
+  readIconSource(repositoryRoot, variant, `Assets/${file}`);
+
+// Embeds a layer where icon.json places it on the 128pt artwork. A data URL keeps each layer's
+// SVG ids separate, and filters are dropped because Icon Composer ignores them.
+const placedLayerImage = Effect.fn("androidIcons.placedLayerImage")(function* (
+  repositoryRoot: string,
+  variant: IconVariant,
+  layer: IconComposerLayer,
+) {
+  const file = layer["image-name"];
+  const source = yield* readLayerSource(repositoryRoot, variant, file);
+  const viewBox = source.match(/viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"/);
+  if (!viewBox) {
+    return yield* new AndroidIconRenderError({ layer: file, cause: "missing viewBox" });
+  }
+  const {
+    scale,
+    "translation-in-points": [x, y],
+  } = layer.position;
+  const width = (Number(viewBox[1]) * scale) / COMPOSER_POINTS_PER_UNIT;
+  const height = (Number(viewBox[2]) * scale) / COMPOSER_POINTS_PER_UNIT;
+  const left = 64 + x / COMPOSER_POINTS_PER_UNIT - width / 2;
+  const top = 64 + y / COMPOSER_POINTS_PER_UNIT - height / 2;
+  const href = `data:image/svg+xml;base64,${Buffer.from(source.replace(/ filter="[^"]*"/g, "")).toString("base64")}`;
+  return `<image x="${left}" y="${top}" width="${width}" height="${height}" href="${href}"/>`;
 });
 
 const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
@@ -109,18 +161,31 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
 // to keep the iOS framing. A full-bleed copy underneath fills the parallax margin.
 const renderArtworkBackground = Effect.fn("androidIcons.renderArtworkBackground")(function* (
   repositoryRoot: string,
-  variant: Exclude<IconVariant, "nightly">,
+  variant: IconVariant,
   size: number,
 ) {
   const layer = `${variant}-background`;
   const source = yield* readLayerSource(repositoryRoot, variant, "background.svg");
-  const bled = fullBleed(source);
-  if (bled === source) {
+  const background = fullBleed(source);
+  if (background === source) {
     return yield* new AndroidIconRenderError({
       layer,
       cause: "background.svg has no 128pt rounded frame to bleed",
     });
   }
+  const document = yield* readIconSource(repositoryRoot, variant, "icon.json").pipe(
+    Effect.flatMap(decodeIconComposerDocument),
+    Effect.mapError((cause) => new AndroidIconRenderError({ layer: "icon.json", cause })),
+  );
+  // icon.json lists layers front to back.
+  const overlays = document.groups
+    .flatMap((group) => group.layers)
+    .filter((overlay) => !NON_OVERLAY_LAYERS.has(overlay["image-name"]))
+    .toReversed();
+  const images = yield* Effect.forEach(overlays, (overlay) =>
+    placedLayerImage(repositoryRoot, variant, overlay),
+  );
+  const bled = background.replace(/<\/svg>\s*$/, `${images.join("")}</svg>`);
   const visible = Math.round((size * 2) / 3);
   const inset = Math.round((size - visible) / 2);
   const margin = yield* rasterize(layer, bled, size);
@@ -144,54 +209,6 @@ const renderDevelopmentBackground = Effect.fn("androidIcons.renderDevelopmentBac
   },
 );
 
-const renderNightlyBackground = Effect.fn("androidIcons.renderNightlyBackground")(function* (
-  repositoryRoot: string,
-  size: number,
-) {
-  // Positions mirror assets/nightly/app-icon.icon/icon.json. The SVG blur filter is
-  // dropped because Icon Composer ignores it and it smears at this raster size.
-  const clouds = [
-    { file: "cloud-lower-left.svg", scale: 25, translation: [-309.6375, 268.66077693836917] },
-    {
-      file: "cloud-upper-right.svg",
-      scale: 15,
-      translation: [387.9605131881942, -134.30064713259117],
-    },
-  ] as const;
-  const k = size / COMPOSER_CANVAS_PT;
-  const overlays = yield* Effect.forEach(clouds, (cloud) =>
-    Effect.gen(function* () {
-      const width = Math.round(64 * cloud.scale * k);
-      const height = Math.round(32 * cloud.scale * k);
-      const left = Math.round((COMPOSER_CANVAS_PT / 2 + cloud.translation[0]) * k - width / 2);
-      const top = Math.round((COMPOSER_CANVAS_PT / 2 + cloud.translation[1]) * k - height / 2);
-      const source = yield* readLayerSource(repositoryRoot, "nightly", cloud.file);
-      const png = yield* rasterize(
-        cloud.file,
-        source.replace(/ filter="url\(#soft\)"/, ""),
-        width,
-        height,
-      );
-      const x0 = Math.max(0, left);
-      const y0 = Math.max(0, top);
-      const x1 = Math.min(size, left + width);
-      const y1 = Math.min(size, top + height);
-      const clipped = yield* Effect.tryPromise({
-        try: () =>
-          sharp(png)
-            .extract({ left: x0 - left, top: y0 - top, width: x1 - x0, height: y1 - y0 })
-            .png()
-            .toBuffer(),
-        catch: (cause) => new AndroidIconRenderError({ layer: cloud.file, cause }),
-      });
-      return { input: clipped, left: x0, top: y0 };
-    }),
-  );
-  const sky = yield* readLayerSource(repositoryRoot, "nightly", "background.svg");
-  const background = yield* rasterize("nightly-background", fullBleed(sky), size);
-  return yield* composite("nightly-background", background, overlays);
-});
-
 const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
   repositoryRoot: string,
   variant: IconVariant,
@@ -201,46 +218,34 @@ const renderBackground = Effect.fn("androidIcons.renderBackground")(function* (
     case "dev":
       return yield* renderDevelopmentBackground(repositoryRoot, size);
     case "nightly":
-      return yield* renderNightlyBackground(repositoryRoot, size);
     case "prod":
       return yield* renderArtworkBackground(repositoryRoot, variant, size);
   }
-});
-
-const renderSplashIcon = Effect.fn("androidIcons.renderSplashIcon")(function* (
-  repositoryRoot: string,
-  variant: IconVariant,
-) {
-  const background = yield* renderBackground(repositoryRoot, variant, SPLASH_CANVAS);
-  const foreground = yield* renderForeground(repositoryRoot, SPLASH_CANVAS);
-  return yield* composite(`${variant}-splash`, background, [{ input: foreground }]);
 });
 
 const exportAndroidIcons = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const repositoryRoot = path.resolve(import.meta.dirname, "..");
-  const outputs = [
-    ["android-icon-foreground.png", yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS)],
-    [
-      "android-icon-background-dev.png",
-      yield* renderBackground(repositoryRoot, "dev", ADAPTIVE_CANVAS),
-    ],
-    [
-      "android-icon-background-nightly.png",
-      yield* renderBackground(repositoryRoot, "nightly", ADAPTIVE_CANVAS),
-    ],
-    [
-      "android-icon-background-prod.png",
-      yield* renderBackground(repositoryRoot, "prod", ADAPTIVE_CANVAS),
-    ],
-    ["android-splash-icon-dev.png", yield* renderSplashIcon(repositoryRoot, "dev")],
-    ["android-splash-icon-nightly.png", yield* renderSplashIcon(repositoryRoot, "nightly")],
-    ["android-splash-icon-prod.png", yield* renderSplashIcon(repositoryRoot, "prod")],
-  ] as const;
-  for (const [name, contents] of outputs) {
+  const write = Effect.fn("androidIcons.write")(function* (name: string, contents: Uint8Array) {
     yield* fs.writeFile(path.join(repositoryRoot, OUTPUT_DIRECTORY, name), contents);
     yield* Console.log(`wrote ${OUTPUT_DIRECTORY}/${name}`);
+  });
+  yield* write(
+    "android-icon-foreground.png",
+    yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS),
+  );
+  const splashForeground = yield* renderForeground(repositoryRoot, SPLASH_CANVAS);
+  for (const variant of ICON_VARIANTS) {
+    yield* write(
+      `android-icon-background-${variant}.png`,
+      yield* renderBackground(repositoryRoot, variant, ADAPTIVE_CANVAS),
+    );
+    const splashBackground = yield* renderBackground(repositoryRoot, variant, SPLASH_CANVAS);
+    yield* write(
+      `android-splash-icon-${variant}.png`,
+      yield* composite(`${variant}-splash`, splashBackground, [{ input: splashForeground }]),
+    );
   }
 });
 
