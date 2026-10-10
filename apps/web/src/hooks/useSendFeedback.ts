@@ -22,15 +22,14 @@ export function useSendFeedback() {
     (target?.kind === "server" ? target.threadRef.environmentId : draftEnvironmentId) ??
       primaryEnvironmentId,
   );
-  const serverConfig = environments.find(
-    (entry) => entry.environmentId === environmentId,
-  )?.serverConfig;
-  if (environmentId === null || !serverConfig) return null;
+  const serverVersion = environments.find((entry) => entry.environmentId === environmentId)
+    ?.serverConfig?.environment.serverVersion;
+  if (environmentId === null || serverVersion === undefined) return null;
   return () =>
     startScratchThread(
       environmentId,
       buildFeedbackPrompt({
-        serverConfig,
+        serverVersion,
         client: `${isElectron ? "desktop" : "web"} app ${APP_VERSION}`,
       }),
     );

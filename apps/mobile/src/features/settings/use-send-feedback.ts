@@ -25,7 +25,7 @@ export function useSendFeedback() {
 
   async function sendFeedback(target: {
     readonly environmentId: EnvironmentId;
-    readonly serverConfig: Pick<ServerConfig, "environment" | "observability">;
+    readonly serverConfig: Pick<ServerConfig, "environment">;
   }) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -52,7 +52,7 @@ export function useSendFeedback() {
       setComposerDraftText(
         draftKey,
         buildFeedbackPrompt({
-          serverConfig: target.serverConfig,
+          serverVersion: target.serverConfig.environment.serverVersion,
           client: `${Platform.OS === "ios" ? "iOS" : "Android"} app ${Constants.expoConfig?.version ?? "0.0.0"}`,
         }),
       );
