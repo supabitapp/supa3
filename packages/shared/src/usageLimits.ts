@@ -65,12 +65,15 @@ function cursorUsageWindowRank(id: string): number {
 export function providersWithLimits(
   providers: readonly ServerProvider[],
 ): readonly ServerProvider[] {
-  return providers.filter(
-    (provider) =>
-      provider.enabled &&
-      provider.installed &&
-      isProviderAvailable(provider) &&
-      provider.usageLimits !== undefined,
+  return providers.filter(hasUsageLimits);
+}
+
+function hasUsageLimits(provider: ServerProvider): boolean {
+  return (
+    provider.enabled &&
+    provider.installed &&
+    isProviderAvailable(provider) &&
+    provider.usageLimits !== undefined
   );
 }
 
@@ -485,7 +488,7 @@ export function limitsNotice(limits: ServerProviderUsageLimits): string | null {
   return limits.windows.length === 0 ? "No limits reported." : null;
 }
 
-/** Quota left in the window, 0..100. Bars and labels show what remains, as Codex does. */
+/** Quota left in the window, 0..100. The Limits views show what remains, as Codex does. */
 export function remainingPercent(window: ServerProviderUsageWindow): number {
   return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
 }
@@ -540,6 +543,29 @@ export function formatResetsIn(window: ServerProviderUsageWindow, now: number): 
   const resetsAt = resetMillis(window);
   if (resetsAt === null) return null;
   return resetsAt <= now ? "resets now" : `resets in ${formatDuration(resetsAt - now)}`;
+}
+
+const HEADLINE_WINDOW_KINDS = ["session", "weekly", "monthly"] as const;
+
+function headlineWindowLabel(window: ServerProviderUsageWindow): string {
+  if (window.kind === "weekly") return "Week";
+  if (window.kind === "monthly") return "Month";
+  const mins = window.windowDurationMins;
+  return mins !== undefined && mins > 0 && mins % 60 === 0 ? `${mins / 60}h` : "Session";
+}
+
+/**
+ * The window nearest its limit for each length, session then weekly then monthly: the busier
+ * of Cursor's two pools, or a Claude model's weekly once it outruns the account's.
+ */
+export function headlineUsageWindows(provider: ServerProvider | null) {
+  const windows = provider && hasUsageLimits(provider) ? (provider.usageLimits?.windows ?? []) : [];
+  return HEADLINE_WINDOW_KINDS.flatMap((kind) => {
+    const busiest = windows
+      .filter((window) => window.kind === kind)
+      .sort((left, right) => right.usedPercent - left.usedPercent)[0];
+    return busiest ? [{ label: headlineWindowLabel(busiest), window: busiest }] : [];
+  });
 }
 
 /** Limit commands are served by Supacode from the same snapshots as Usage → Limits. */

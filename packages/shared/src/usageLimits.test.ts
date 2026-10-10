@@ -3,6 +3,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerProviderUsageWindow,
   UsageLimitSourceId,
 } from "@supacode/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -20,6 +21,7 @@ import {
   displayLimitWindows,
   elapsedShare,
   formatResetsIn,
+  headlineUsageWindows,
   limitsNotice,
   paceOf,
   providersWithLimits,
@@ -802,6 +804,70 @@ describe("Cursor limit presentation", () => {
     );
     const display = displayLimitWindows(pool!);
     expect(display.map((window) => window.id)).toEqual(["totalPercentUsed", "autoPercentUsed"]);
+  });
+});
+
+describe("headlineUsageWindows", () => {
+  const weekly = {
+    id: "seven_day",
+    kind: "weekly",
+    label: "Weekly",
+    usedPercent: 62,
+    windowDurationMins: 10_080,
+  } as const;
+  const claude = (windows: ServerProviderUsageWindow[]) =>
+    provider({
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      usageLimits: { checkedAt: "2026-09-03T11:00:00.000Z", windows },
+    });
+  const headline = (target: ServerProvider | null) =>
+    headlineUsageWindows(target).map(({ label, window }) => [label, window.id]);
+
+  it("shows the busiest window of each length, session first, whatever order they arrive in", () => {
+    const fable = { ...weekly, id: "seven_day_fable", label: "Weekly · Fable", usedPercent: 30 };
+    expect(headline(claude([fable, weekly, window]))).toEqual([
+      ["5h", "five_hour"],
+      ["Week", "seven_day"],
+    ]);
+    expect(headline(claude([weekly, { ...fable, usedPercent: 90 }]))).toEqual([
+      ["Week", "seven_day_fable"],
+    ]);
+  });
+
+  it("shows Cursor's busier pool rather than the combined percentage", () => {
+    const cursor = provider({
+      instanceId: ProviderInstanceId.make("cursor"),
+      driver: ProviderDriverKind.make("cursor"),
+      usageLimits: {
+        checkedAt: "2026-09-03T11:00:00.000Z",
+        windows: [
+          { id: "apiPercentUsed", kind: "monthly", label: "Other Models", usedPercent: 49 },
+          { id: "autoPercentUsed", kind: "monthly", label: "Cursor Models", usedPercent: 9 },
+          { id: "totalPercentUsed", kind: "monthly", label: "Overall", usedPercent: 15 },
+        ],
+      },
+    });
+    expect(headline(cursor)).toEqual([["Month", "apiPercentUsed"]]);
+  });
+
+  it("names session windows by their length and leaves out other periods", () => {
+    const labels = (session: Partial<ServerProviderUsageWindow>) =>
+      headline(
+        claude([
+          { ...window, ...session },
+          { ...weekly, id: "grok", kind: "other", label: "Billing period" },
+        ]),
+      ).map(([label]) => label);
+    expect(labels({ windowDurationMins: 300 })).toEqual(["5h"]);
+    expect(labels({ windowDurationMins: 90 })).toEqual(["Session"]);
+    expect(labels({ windowDurationMins: undefined })).toEqual(["Session"]);
+  });
+
+  it("shows nothing for a provider that cannot report limits right now", () => {
+    expect(headline(null)).toEqual([]);
+    expect(headline({ ...claude([window]), enabled: false })).toEqual([]);
+    expect(headline(provider({}))).toEqual([]);
   });
 });
 

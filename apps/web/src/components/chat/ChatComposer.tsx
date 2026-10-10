@@ -965,6 +965,9 @@ function useComposerRestingTransition(
     });
     observer.observe(element);
     if (body) observer.observe(body);
+    // Rows beside the composer in the overlay, such as the usage row, move it without resizing it.
+    const overlay = element.closest<HTMLElement>('[data-chat-composer-overlay="true"]');
+    if (overlay) observer.observe(overlay);
     return () => observer.disconnect();
   }, [restingControlsRef, transitionToCurrentGeometry]);
 
@@ -6810,6 +6813,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }}
       className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width)"
       data-chat-composer-form="true"
+      data-chat-composer-resting={isComposerResting ? "true" : undefined}
       {...threadContextDropTargetProps()}
     >
       {composerControlsCollapsed && restingControlsHost
