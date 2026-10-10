@@ -89,6 +89,27 @@ To retry after fixing a store-side issue, dispatch the review workflow again wit
 The workflow selects the newest build attempt per platform from that source and skips a
 build that has already reached the review or production stage. It does not withdraw an active review.
 
+### Mobile review environment
+
+Apple reviewers can connect to the dedicated example environment through
+[review access](https://supacode-app-review.exe.xyz/review). Reviewer credentials and the instructions
+for TestFlight review notes stay outside the repository. The environment contains Tidepool and Lattice
+example projects with completed agent conversations and checkpoints. Agents use the VM's model
+integration. Public TestFlight distribution requires a separate external testing group and beta review;
+see [Apple's external testing guide](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/).
+
+The [access service](../../scripts/mobile-review-access/server.ts) creates a fresh five-minute pairing
+link and QR code after validating reviewer credentials. Nginx forwards `/review` to that service and
+the remaining routes to Supacode, so mobile clients use the same HTTPS origin. The server runs as
+`review`; the access service runs as `review-access`, which owns the private issuer token. Review grants
+allow agent tasks, terminals, and file changes while keeping access administration with the issuer.
+The issuer session lasts 365 days.
+
+On the VM, `supacode-review.service`, `supacode-review-access.service`, and `nginx.service` start at boot.
+The root-owned `/opt/supacode-review/baseline/environment.tar.gz` contains the initial projects,
+conversation state, and provider history for resetting the example environment. Stop the Supacode
+service before replacing its state and workspaces. Keep this host available throughout review.
+
 ## Pull request macOS previews
 
 PRs from trusted authors automatically publish a signed, notarized Apple Silicon DMG to the
