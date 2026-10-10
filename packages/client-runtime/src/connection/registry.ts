@@ -187,7 +187,7 @@ export class EnvironmentRegistry extends Context.Service<
 >()("@supacode/client-runtime/connection/registry/EnvironmentRegistry") {}
 
 interface EnvironmentServiceScope {
-  readonly entry: ConnectionCatalogEntry;
+  readonly entry: Ref.Ref<ConnectionCatalogEntry>;
   readonly supervisor: EnvironmentSupervisor.EnvironmentSupervisor["Service"];
   readonly scope: Scope.Closeable;
 }
@@ -389,8 +389,10 @@ export const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const environmentId = entry.target.environmentId;
           const scope = yield* Scope.fork(registryScope);
+          const entryRef = yield* Ref.make(entry);
           const supervisor = yield* EnvironmentSupervisor.make(entry, {
             initiallyDesired: false,
+            entryRef,
             learnRoutes: (input) => learnRoutes({ environmentId, ...input }),
           }).pipe(
             Effect.provideService(Connectivity.Connectivity, connectivity),
@@ -404,7 +406,7 @@ export const make = Effect.gen(function* () {
           }
           yield* SubscriptionRef.update(serviceScopes, (current) => {
             const next = new Map(current);
-            next.set(environmentId, { entry, supervisor, scope });
+            next.set(environmentId, { entry: entryRef, supervisor, scope });
             return next;
           });
           yield* SubscriptionRef.changes(supervisor.state).pipe(
@@ -436,7 +438,7 @@ export const make = Effect.gen(function* () {
         const entry = yield* getEntry(environmentId);
         const existing = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
         if (existing !== undefined) {
-          if (Equal.equals(existing.entry, entry)) {
+          if (Equal.equals(yield* Ref.get(existing.entry), entry)) {
             return existing.supervisor;
           }
           yield* closeServiceScope(environmentId);
@@ -478,27 +480,24 @@ export const make = Effect.gen(function* () {
       SubscriptionRef.changes(entries),
     ).pipe(
       Stream.map((current) => Option.fromUndefinedOr(current.get(environmentId))),
-      // Re-pairing can replace the supervisor while its catalog details stay unchanged.
+      Stream.changesWith(
+        (previous, current) => Option.getOrNull(previous) === Option.getOrNull(current),
+      ),
+      Stream.mapEffect(
+        Option.match({
+          onNone: () =>
+            Effect.succeed(Option.none<EnvironmentSupervisor.EnvironmentSupervisor["Service"]>()),
+          onSome: () => acquireSupervisor(environmentId).pipe(Effect.option),
+        }),
+      ),
       Stream.changesWith(
         (previous, current) => Option.getOrNull(previous) === Option.getOrNull(current),
       ),
       Stream.switchMap(
         Option.match({
           onNone: () => Stream.empty,
-          onSome: () =>
-            Stream.unwrap(
-              acquireSupervisor(environmentId).pipe(
-                Effect.match({
-                  onFailure: () => Stream.empty,
-                  onSuccess: (supervisor) =>
-                    Stream.provideService(
-                      stream,
-                      EnvironmentSupervisor.EnvironmentSupervisor,
-                      supervisor,
-                    ),
-                }),
-              ),
-            ),
+          onSome: (supervisor) =>
+            Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
         }),
       ),
     );
@@ -532,7 +531,7 @@ export const make = Effect.gen(function* () {
       previous !== undefined &&
       Equal.equals(previous, entry) &&
       existingScope !== undefined &&
-      Equal.equals(existingScope.entry, entry)
+      Equal.equals(yield* Ref.get(existingScope.entry), entry)
     ) {
       return;
     }
@@ -618,7 +617,28 @@ export const make = Effect.gen(function* () {
       );
     }
     yield* registrations.setRoutes(previous.target.environmentId, persistedRoutes(next.entry));
-    yield* installEntryLocked(next.entry);
+    const environmentId = previous.target.environmentId;
+    const lease = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
+    if (lease === undefined) {
+      yield* installEntryLocked(next.entry);
+      return;
+    }
+    yield* Ref.set(lease.entry, next.entry);
+    const session = yield* SubscriptionRef.get(lease.supervisor.session);
+    const prepared = yield* SubscriptionRef.get(lease.supervisor.prepared);
+    const activeRoute =
+      Option.isSome(session) && Option.isSome(prepared)
+        ? connectionRoutes(previous).find(
+            (route) => connectionRouteId(route.target) === connectionRouteId(prepared.value.target),
+          )
+        : undefined;
+    if (activeRoute === undefined || !routes.some((route) => Equal.equals(route, activeRoute))) {
+      yield* installEntryLocked(next.entry);
+      return;
+    }
+    yield* SubscriptionRef.update(entries, (current) =>
+      new Map(current).set(environmentId, next.entry),
+    );
   });
 
   const installPlatformRegistration = Effect.fn("EnvironmentRegistry.installPlatformRegistration")(
@@ -923,12 +943,8 @@ export const make = Effect.gen(function* () {
             : [];
         });
         yield* registrations.setRoutes(input.environmentId, persistedRoutes(next), changedProfiles);
-        yield* SubscriptionRef.update(serviceScopes, (current) => {
-          const lease = current.get(input.environmentId);
-          return lease === undefined
-            ? current
-            : new Map(current).set(input.environmentId, { ...lease, entry: next });
-        });
+        const lease = (yield* SubscriptionRef.get(serviceScopes)).get(input.environmentId);
+        if (lease !== undefined) yield* Ref.set(lease.entry, next);
         yield* SubscriptionRef.update(entries, (current) =>
           new Map(current).set(input.environmentId, next),
         );
@@ -1026,11 +1042,7 @@ export const make = Effect.gen(function* () {
         // durable streams; `installEntryLocked` would tear it down instead.
         const lease = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
         if (lease !== undefined) {
-          yield* SubscriptionRef.update(serviceScopes, (current) => {
-            const nextScopes = new Map(current);
-            nextScopes.set(environmentId, { ...lease, entry: next });
-            return nextScopes;
-          });
+          yield* Ref.set(lease.entry, next);
         }
         yield* SubscriptionRef.update(entries, (current) => {
           const nextEntries = new Map(current);
@@ -1117,9 +1129,7 @@ export const make = Effect.gen(function* () {
         }
         const lease = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
         if (lease !== undefined) {
-          yield* SubscriptionRef.update(serviceScopes, (current) =>
-            new Map(current).set(environmentId, { ...lease, entry: next }),
-          );
+          yield* Ref.set(lease.entry, next);
           if (error !== null) yield* lease.supervisor.disconnect;
         }
         yield* SubscriptionRef.update(entries, (current) =>
