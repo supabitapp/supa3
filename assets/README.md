@@ -16,40 +16,29 @@ Exporting requires Icon Composer 2 or newer on macOS. The script selects the new
 
 ## macOS exports
 
-Icon Composer's command-line exporter does not expose the `macOS pre-Tahoe` preset. A plain command-line `macOS` export is full bleed and is not suitable for the desktop app, so the export script intentionally leaves the tracked macOS PNGs unchanged and prints a reminder after every run.
+The desktop app needs each macOS icon as a 1024×1024 PNG with the classic macOS safe area: the opaque icon body is 824×824, inset 100 pixels on every side, with only the native shadow extending into the surrounding transparent canvas.
 
-After changing an Icon Composer project, open it in Icon Composer and export the macOS PNG with exactly these settings:
+Icon Composer does not produce that file. Its command-line `macOS` export is full bleed, and in Icon Composer 27 the app's `macOS pre-Tahoe` export preset is full bleed too. The export script therefore leaves the tracked macOS PNGs unchanged and prints a reminder after every run.
 
-- Platform: `macOS pre-Tahoe`
-- Appearance: `Default`
-- Size: `1024pt`
-- Scale: `1×`
+Render them with Xcode's asset compiler instead, which builds the classic rendition that macOS shows before Tahoe. `actool` only accepts an icon named `AppIcon`, so it compiles a copy. For nightly:
 
-Save the three exports to:
+```bash
+work=$(mktemp -d)
+cp -R assets/nightly/app-icon.icon "$work/AppIcon.icon"
+xcrun actool "$work/AppIcon.icon" --compile "$work" --platform macosx \
+  --minimum-deployment-target 11.0 --app-icon AppIcon --include-all-app-icons \
+  --standalone-icon-behavior all --output-partial-info-plist "$work/partial.plist"
+iconutil -c iconset "$work/AppIcon.icns" -o "$work/AppIcon.iconset"
+cp "$work/AppIcon.iconset/icon_512x512@2x.png" assets/nightly/nightly-macos-1024.png
+```
+
+The destinations are:
 
 - `dev/app-icon.icon` -> `dev/blueprint-macos-1024.png`
 - `nightly/app-icon.icon` -> `nightly/nightly-macos-1024.png`
 - `prod/app-icon.icon` -> `prod/black-macos-1024.png`
 
-The result must be a 1024×1024 PNG with the classic macOS safe area: the opaque icon body is 824×824, inset 100 pixels on every side, with only the native Icon Composer shadow extending into the surrounding transparent canvas.
-
-To have Codex perform the native exports, paste this prompt into a task opened at the repository root:
-
-```text
-Use [@Computer](plugin://computer-use@openai-bundled) and the Icon Composer app to export the three macOS app icons in this repository.
-
-For each project below, use Platform: macOS pre-Tahoe, Appearance: Default, Size: 1024pt, and Scale: 1×, then save the PNG to the exact destination:
-
-- assets/dev/app-icon.icon -> assets/dev/blueprint-macos-1024.png
-- assets/nightly/app-icon.icon -> assets/nightly/nightly-macos-1024.png
-- assets/prod/app-icon.icon -> assets/prod/black-macos-1024.png
-
-Do not resize, composite, or otherwise post-process the exported PNGs.
-
-Verify every result is 1024×1024 and has the classic macOS safe area: an 824×824 opaque body inset 100px on every side, with only Icon Composer's native shadow extending beyond it.
-```
-
-Do not edit the generated PNG or ICO files directly.
+Do not resize, composite, or otherwise post-process the rendered PNG, and do not edit the generated PNG or ICO files directly.
 
 ## Android launcher and splash artwork
 
