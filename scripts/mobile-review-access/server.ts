@@ -21,7 +21,7 @@ interface ReviewAccessConfig {
   publicUrl: string;
   backendUrl: string;
   adminToken: string;
-  credentialSha256: string;
+  invitationSha256: string;
 }
 
 function qrImage(value: string) {
@@ -39,10 +39,10 @@ function qrImage(value: string) {
 
 export async function createReviewAccessServer(config: ReviewAccessConfig) {
   const origin = new URL(config.publicUrl).origin;
-  if (!/^[a-f0-9]{64}$/.test(config.credentialSha256) || !config.adminToken.trim()) {
-    throw new Error("Review access requires a credential digest and an administrative token.");
+  if (!/^[a-f0-9]{64}$/.test(config.invitationSha256) || !config.adminToken.trim()) {
+    throw new Error("Review access requires an invitation digest and an administrative token.");
   }
-  const digest = Buffer.from(config.credentialSha256, "hex");
+  const digest = Buffer.from(config.invitationSha256, "hex");
   const assets = import.meta.dirname;
   const [page, script] = await Promise.all([
     NodeFSP.readFile(NodePath.join(assets, "page.html"), "utf8"),
@@ -88,39 +88,21 @@ export async function createReviewAccessServer(config: ReviewAccessConfig) {
       respond(403, { error: "Create the connection link from the review access page." });
       return;
     }
+    const authorization = request.headers.authorization ?? "";
+    const invitation = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const submitted = NodeCrypto.createHash("sha256").update(invitation).digest();
+    if (!invitation || !NodeCrypto.timingSafeEqual(submitted, digest)) {
+      respond(401, { error: "Open the full review link from your invitation." });
+      return;
+    }
     try {
-      let body = "";
+      let bodyBytes = 0;
       for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 4096) {
+        bodyBytes += Buffer.byteLength(chunk);
+        if (bodyBytes > 4096) {
           respond(413, { error: "Request is too large." });
           return;
         }
-      }
-      let credentials: unknown;
-      try {
-        credentials = JSON.parse(body);
-      } catch {
-        respond(400, { error: "Enter the review username and password." });
-        return;
-      }
-      if (
-        !credentials ||
-        typeof credentials !== "object" ||
-        !("username" in credentials) ||
-        !("password" in credentials) ||
-        typeof credentials.username !== "string" ||
-        typeof credentials.password !== "string"
-      ) {
-        respond(400, { error: "Enter the review username and password." });
-        return;
-      }
-      const submitted = NodeCrypto.createHash("sha256")
-        .update(`${credentials.username}:${credentials.password}`)
-        .digest();
-      if (!NodeCrypto.timingSafeEqual(submitted, digest)) {
-        respond(401, { error: "The review username or password is incorrect." });
-        return;
       }
       const grantResponse = await fetch(new URL("/api/auth/pairing-token", config.backendUrl), {
         method: "POST",
@@ -167,13 +149,13 @@ export async function createReviewAccessServer(config: ReviewAccessConfig) {
 if (import.meta.main) {
   const tokenFile = process.env.SUPACODE_REVIEW_ADMIN_TOKEN_FILE;
   const publicUrl = process.env.SUPACODE_REVIEW_PUBLIC_URL;
-  const credentialSha256 = process.env.SUPACODE_REVIEW_CREDENTIAL_SHA256;
-  if (!tokenFile || !publicUrl || !credentialSha256) {
+  const invitationSha256 = process.env.SUPACODE_REVIEW_INVITATION_SHA256;
+  if (!tokenFile || !publicUrl || !invitationSha256) {
     throw new Error("Review access configuration is incomplete.");
   }
   const server = await createReviewAccessServer({
     publicUrl,
-    credentialSha256,
+    invitationSha256,
     backendUrl: process.env.SUPACODE_REVIEW_BACKEND_URL ?? "http://127.0.0.1:3773",
     adminToken: (await NodeFSP.readFile(tokenFile, "utf8")).trim(),
   });

@@ -52,15 +52,14 @@
         font-weight: 600;
         margin: 16px 0 8px;
       }
-      input,
       textarea,
-      button {
+      button,
+      .button {
         font: inherit;
         box-sizing: border-box;
         width: 100%;
         border-radius: 8px;
       }
-      input,
       textarea {
         border: 1px solid #bdc6d3;
         padding: 12px;
@@ -70,7 +69,8 @@
         resize: vertical;
         min-height: 80px;
       }
-      button {
+      button,
+      .button {
         cursor: pointer;
         background: #18202b;
         color: white;
@@ -78,6 +78,11 @@
         padding: 13px;
         font-weight: 600;
         margin-top: 18px;
+      }
+      .button {
+        display: block;
+        text-align: center;
+        text-decoration: none;
       }
       button:disabled {
         opacity: 0.6;
@@ -114,26 +119,10 @@
   <body>
     <main>
       <div class="eyebrow">Supacode</div>
-      <h1>App review access</h1>
-      <p>
-        Connect the mobile app to an example environment using the credentials supplied in the
-        review notes.
-      </p>
-      <form id="access" class="card" method="post" action="/review/pairing">
-        <h2>Create a connection link</h2>
-        <label for="username">Review username</label>
-        <input id="username" name="username" autocomplete="username" required />
-        <label for="password">Review password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-        <button id="create" type="submit">Create connection link</button>
-        <p id="status" role="status" aria-live="polite"></p>
-      </form>
+      <h1>Your example environment</h1>
+      <p>Explore Supacode with working projects and real agent conversations.</p>
+      <p id="status" role="status" aria-live="polite">Preparing your connection…</p>
+      <noscript>Enable JavaScript to prepare your connection link.</noscript>
       <section id="connection" class="card" hidden>
         <h2>Connect Supacode</h2>
         <ol>
@@ -144,13 +133,17 @@
         <label for="pairing">Connection link</label>
         <textarea id="pairing" readonly></textarea>
         <button id="copy" type="button">Copy connection link</button>
+        <a id="open" class="button secondary">Open in browser</a>
         <img id="qr" alt="Scan this QR code using Supacode's in-app scanner" />
         <p id="expiry" class="muted"></p>
         <p class="muted">
-          Each link connects one device. Create another link for another device or a reinstall. Your
-          connected device can reconnect without the original link.
+          Each connection link works once. Open this page again for another device or a reinstall.
+          Your connected device will reconnect automatically.
         </p>
       </section>
+      <button id="create" type="button" class="secondary" disabled>
+        Get a new connection link
+      </button>
       <section id="examples" class="card" hidden>
         <h2>Try an example project</h2>
         <p>Open <strong>Tidepool</strong>, create a thread, and send:</p>

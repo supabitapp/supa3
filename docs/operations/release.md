@@ -92,14 +92,16 @@ build that has already reached the review or production stage. It does not withd
 ### Mobile review environment
 
 Apple reviewers can connect to the dedicated example environment through
-[review access](https://supacode-app-review.exe.xyz/review). Reviewer credentials and the instructions
-for TestFlight review notes stay outside the repository. The environment contains Tidepool and Lattice
+[review access](https://supacode-app-review.exe.xyz/review). The full invitation link and the instructions
+for TestFlight review notes stay outside the repository. Opening the invitation automatically prepares
+a connection link and QR code. The environment contains Tidepool and Lattice
 example projects with completed agent conversations and checkpoints. Agents use the VM's model
 integration. Public TestFlight distribution requires a separate external testing group and beta review;
 see [Apple's external testing guide](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/).
 
 The [access service](../../scripts/mobile-review-access/server.ts) creates a fresh five-minute pairing
-link and QR code after validating reviewer credentials. Nginx forwards `/review` to that service and
+link and QR code using the invitation carried in the link's fragment. The page remembers the invitation
+for reloads in the same browser tab and removes it from the address bar. Nginx forwards `/review` to that service and
 the remaining routes to Supacode, so mobile clients use the same HTTPS origin. The server runs as
 `review`; the access service runs as `review-access`, which owns the private issuer token. Review grants
 allow agent tasks, terminals, and file changes while keeping access administration with the issuer.
