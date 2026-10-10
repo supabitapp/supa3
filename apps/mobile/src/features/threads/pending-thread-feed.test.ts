@@ -5,8 +5,9 @@ import {
   EnvironmentId,
   MessageId,
   ThreadId,
+  TurnItemId,
 } from "@supacode/contracts";
-import { deriveThreadFeedPresentation } from "../../lib/threadActivity";
+import { deriveThreadFeedPresentation, type ThreadFeedEntry } from "../../lib/threadActivity";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import {
   appendPendingThreadMessages,
@@ -24,6 +25,43 @@ const pending = (id: string): QueuedThreadMessage => ({
 });
 
 describe("pending timeline messages", () => {
+  it.each([false, true])("hides a trailing tool image behind pending messages, live=%s", (live) => {
+    const imageGroup = {
+      type: "work-toggle",
+      id: "image-group",
+      groupId: "image-group",
+      createdAt: "2026-09-06T10:00:00.000Z",
+      runId: null,
+      hiddenCount: 1,
+      expanded: false,
+      summary: "Screenshot",
+      summaryKind: "dynamic-tool",
+      hasFailure: false,
+      live,
+      shimmer: live,
+      latestImage: {
+        alt: "Screenshot",
+        resource: {
+          _tag: "tool-output-image",
+          threadId: ThreadId.make("thread"),
+          itemId: TurnItemId.make("screenshot"),
+          index: 0,
+        },
+      },
+    } satisfies ThreadFeedEntry;
+    const queued = pending("queued");
+    const entries = appendPendingThreadMessages([imageGroup], [], [queued]);
+    expect(entries).toMatchObject([
+      { type: "work-toggle", latestImage: null },
+      { type: "message", pendingMessage: queued },
+    ]);
+    expect(appendPendingThreadMessages([imageGroup], [], [queued])[0]).toBe(entries[0]);
+    expect(appendPendingThreadMessages([imageGroup], [], [])[0]).toBe(imageGroup);
+    const delivered = entries[1]!;
+    expect(appendPendingThreadMessages([imageGroup], [delivered], [queued])[0]).toBe(imageGroup);
+    expect(imageGroup.latestImage).not.toBeNull();
+  });
+
   it("retains context records while a message is waiting for delivery", () => {
     const record = {
       version: 1 as const,

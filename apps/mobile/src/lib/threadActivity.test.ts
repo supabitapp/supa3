@@ -103,6 +103,49 @@ it("clears the collapsed mobile image when a command follows a screenshot", () =
   });
 });
 
+it.each([false, true])(
+  "hides earlier mobile group previews when chat advances, working=%s",
+  (working) => {
+    const screenshot: OrchestrationV2TurnItem = {
+      ...base("screenshot", "2026-06-20T00:00:02.000Z", 1),
+      type: "dynamic_tool",
+      toolName: "mcp__supacode__device_screenshot",
+      input: {},
+      outputImageCount: 1,
+    };
+    const present = (items: OrchestrationV2TurnItem[], expanded = new Set<string>()) =>
+      deriveThreadFeedPresentation(
+        buildThreadFeed(items.map((item, index) => projected(item, index))),
+        working
+          ? { runId, status: "running", startedAt: "2026-06-20T00:00:00.000Z", completedAt: null }
+          : null,
+        new Set([runId]),
+        expanded,
+        working ? "2026-06-20T00:00:00.000Z" : null,
+      );
+    const initial = present([screenshot]).find((row) => row.type === "work-toggle");
+    expect(initial?.latestImage?.resource).toMatchObject({ itemId: screenshot.id });
+    for (const following of [assistantMessage(), userMessage("2026-06-20T00:00:03.000Z")]) {
+      expect(
+        present([screenshot, following]).find((row) => row.type === "work-toggle")?.latestImage,
+      ).toBeNull();
+    }
+    const newer = { ...screenshot, id: TurnItemId.make("newer-screenshot"), ordinal: 3 };
+    const groups = present([screenshot, assistantMessage(), newer]).filter(
+      (row) => row.type === "work-toggle",
+    );
+    expect(groups.map((row) => row.latestImage?.resource)).toEqual([
+      undefined,
+      expect.objectContaining({ itemId: newer.id }),
+    ]);
+    if (!initial) throw new Error("Expected tool group");
+    const expanded = present([screenshot, assistantMessage()], new Set([initial.groupId]));
+    expect(
+      expanded.find((row) => row.type === "activity-group")?.activities[0]?.projectedItem.item,
+    ).toMatchObject({ id: screenshot.id, outputImageCount: 1 });
+  },
+);
+
 it("keeps historical plan detail accessible from its paged turn item", () => {
   const item = {
     ...base("historical-plan", "2026-08-29T00:00:00.000Z", 1),

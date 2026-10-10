@@ -1935,11 +1935,16 @@ export function deriveMessagesTimelineRows(input: {
   const result = attachTrailingToolGroupsToAssistant(
     attachCreatedThreadSummaries(nextRows, timelineEntries),
   );
-  return result.map((row, index) =>
-    timelineRowIsWorkLog(row) && timelineRowIsWorkLog(result[index + 1])
-      ? { ...row, continuesWorkLog: true }
-      : row,
-  );
+  const tailRow = result.findLast((row) => row.kind !== "assistant-meta");
+  return result.map((row, index) => {
+    const currentRow =
+      "latestImage" in row && row.latestImage && row !== tailRow
+        ? { ...row, latestImage: null }
+        : row;
+    return timelineRowIsWorkLog(row) && timelineRowIsWorkLog(result[index + 1])
+      ? { ...currentRow, continuesWorkLog: true }
+      : currentRow;
+  });
 }
 
 /** Adjacent work stays one visual list even when virtualization splits its groups. */
