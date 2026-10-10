@@ -785,18 +785,7 @@ const make = Effect.gen(function* () {
         }
       } else {
         settings = decoded.value;
-        if (metadata.value.publicRelayEnabled === undefined) {
-          const relayIdentity = yield* secretStore
-            .get("relay-identity")
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ServerSettingsError({ settingsPath, operation: "read-secret", cause }),
-              ),
-            );
-          settings = { ...settings, publicRelayEnabled: Option.isNone(relayIdentity) };
-          relayPreferenceMigrated = true;
-        }
+        relayPreferenceMigrated = metadata.value.publicRelayEnabled === undefined;
       }
     }
 
