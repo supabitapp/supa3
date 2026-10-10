@@ -3,11 +3,11 @@ import {
   AuthAccessWriteScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
+  AuthGrantScope,
   AuthOrchestrationReadScope,
   AuthStandardClientScopes,
   AuthTerminalReadScope,
   type AuthEnvironmentScope,
-  type AuthGrantScope,
   type AuthPairingCredentialResult,
   type RelayConnectionInfo,
 } from "@supacode/contracts";
@@ -39,12 +39,16 @@ import { Spinner } from "../ui/spinner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { togglePairingScopeSelection } from "./ConnectionsSettings.logic";
 
-const READ_ONLY_SCOPES = [
-  AuthOrchestrationReadScope,
-  AuthFilesystemReadScope,
-  AuthDiagnosticsReadScope,
-  AuthTerminalReadScope,
-];
+const PERMISSION_SCOPES = {
+  standard: AuthStandardClientScopes,
+  "full-access": AuthGrantScope.literals,
+  "read-only": [
+    AuthOrchestrationReadScope,
+    AuthFilesystemReadScope,
+    AuthDiagnosticsReadScope,
+    AuthTerminalReadScope,
+  ],
+};
 
 const PERMISSION_PRESETS = [
   {
@@ -52,6 +56,11 @@ const PERMISSION_PRESETS = [
     label: "Standard",
     description:
       "Run agents, work with files, and use terminals with the permissions you can share.",
+  },
+  {
+    value: "full-access",
+    label: "Full access",
+    description: "Share every permission you can grant, including device access management.",
   },
   {
     value: "read-only",
@@ -63,7 +72,7 @@ const PERMISSION_PRESETS = [
     label: "Custom",
     description: "Choose which of your permissions to share with this device.",
   },
-];
+] as const;
 
 export function CreatePairingLinkDialog({
   triggerRef,
@@ -88,13 +97,12 @@ export function CreatePairingLinkDialog({
   const createButtonRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
-  const [preset, setPreset] = useState("standard");
+  const [preset, setPreset] = useState<(typeof PERMISSION_PRESETS)[number]["value"]>("standard");
   const [customScopes, setCustomScopes] = useState<ReadonlyArray<AuthGrantScope>>([]);
   const [stage, setStage] = useState<"idle" | "relay" | "creating">("idle");
   const pending = stage !== "idle";
-  const presetScopes = preset === "read-only" ? READ_ONLY_SCOPES : AuthStandardClientScopes;
-  const selectedScopes = (preset === "custom" ? customScopes : presetScopes).filter((scope) =>
-    delegatableScopes.includes(scope),
+  const selectedScopes = (preset === "custom" ? customScopes : PERMISSION_SCOPES[preset]).filter(
+    (scope) => delegatableScopes.includes(scope),
   );
   const canCreate = selectedScopes.length > 0 && (!relayEnabled || canPrepareRelay);
   const buttonLabel = {
