@@ -7,7 +7,9 @@
  * asks the user what went wrong, investigates, and files the issue; the
  * harness's own permission prompts gate anything it wants to run. With no
  * agent CLI installed, the prompt and context are written to disk for the user
- * to paste into whatever agent they do have.
+ * to paste into whatever agent they do have. `--print` writes nothing and starts
+ * nothing: it prints the prompt with the context inline, for an agent that is
+ * already running on this machine.
  */
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
@@ -36,6 +38,7 @@ import { resolveCliCommand } from "./invocation.ts";
 import {
   buildTriageContext,
   buildTriageLaunchPrompt,
+  buildTriagePrintedPrompt,
   buildTriageSeedPrompt,
 } from "./triagePrompt.ts";
 
@@ -153,10 +156,18 @@ const modelFlag = Flag.String("model").pipe(
   Flag.optional,
 );
 
+const printFlag = Flag.Boolean("print").pipe(
+  Flag.withDescription(
+    "Print the triage prompt with machine facts and exit, without starting an agent.",
+  ),
+  Flag.withDefault(false),
+);
+
 export const triageCommand = Command.make("triage", {
   baseDir: baseDirFlag,
   agent: agentFlag,
   model: modelFlag,
+  print: printFlag,
 }).pipe(
   Command.withDescription(
     "Investigate a Supacode problem on this machine with claude or codex, and help file a good issue.",
@@ -175,6 +186,41 @@ export const triageCommand = Command.make("triage", {
       const paths = yield* ServerConfig.deriveServerPaths(baseDir, undefined, {});
 
       const now = yield* DateTime.now;
+      const version = packageJson.version;
+      const context = buildTriageContext({
+        generatedAt: DateTime.formatIso(now),
+        version,
+        releaseTag: /^[^-+]+-(?:nightly|preview)\./.test(version)
+          ? `v${version} (prerelease build; if this tag does not exist, clone main)`
+          : `v${version}`,
+        os: `${yield* HostProcessPlatform} ${yield* HostProcessArchitecture} (${NodeOS.release()})`,
+        nodeVersion: process.version,
+        launchedAs: yield* resolveCliCommand("triage"),
+        server: yield* describeServerProcess(paths.serverRuntimeStatePath),
+        paths: {
+          stateDir: paths.stateDir,
+          dbPath: paths.dbPath,
+          settingsPath: paths.settingsPath,
+          logsDir: paths.logsDir,
+          // The server writes no log file of its own. Service installs and the
+          // desktop app capture its output. The glob covers every desktop backend
+          // (such as WSL) and rotated copies; names come from DesktopObservability.ts.
+          serviceLogPath: path.join(paths.logsDir, BootService.BOOT_SERVICE_LOG_FILE),
+          desktopBackendLogGlob: path.join(paths.logsDir, "server-child*.log*"),
+          serverTracePath: paths.serverTracePath,
+          providerEventLogPath: paths.providerEventLogPath,
+          terminalLogsDir: paths.terminalLogsDir,
+          providerStatusCacheDir: paths.providerStatusCacheDir,
+          secretsDir: paths.secretsDir,
+          sourceCacheDir: path.join(baseDir, "source"),
+        },
+      });
+
+      if (flags.print) {
+        yield* Console.log(buildTriagePrintedPrompt(context));
+        return;
+      }
+
       const scratchDir = path.join(
         paths.stateDir,
         "triage",
@@ -182,40 +228,8 @@ export const triageCommand = Command.make("triage", {
         DateTime.formatIso(now).replaceAll(":", "-").replace(".", "-"),
       );
       yield* fs.makeDirectory(scratchDir, { recursive: true });
-
-      const version = packageJson.version;
       const contextFilePath = path.join(scratchDir, "context.md");
-      yield* fs.writeFileString(
-        contextFilePath,
-        buildTriageContext({
-          generatedAt: DateTime.formatIso(now),
-          version,
-          releaseTag: /^[^-+]+-(?:nightly|preview)\./.test(version)
-            ? `v${version} (prerelease build; if this tag does not exist, clone main)`
-            : `v${version}`,
-          os: `${yield* HostProcessPlatform} ${yield* HostProcessArchitecture} (${NodeOS.release()})`,
-          nodeVersion: process.version,
-          launchedAs: yield* resolveCliCommand("triage"),
-          server: yield* describeServerProcess(paths.serverRuntimeStatePath),
-          paths: {
-            stateDir: paths.stateDir,
-            dbPath: paths.dbPath,
-            settingsPath: paths.settingsPath,
-            logsDir: paths.logsDir,
-            // The server writes no log file of its own. Service installs and the
-            // desktop app capture its output. The glob covers every desktop backend
-            // (such as WSL) and rotated copies; names come from DesktopObservability.ts.
-            serviceLogPath: path.join(paths.logsDir, BootService.BOOT_SERVICE_LOG_FILE),
-            desktopBackendLogGlob: path.join(paths.logsDir, "server-child*.log*"),
-            serverTracePath: paths.serverTracePath,
-            providerEventLogPath: paths.providerEventLogPath,
-            terminalLogsDir: paths.terminalLogsDir,
-            providerStatusCacheDir: paths.providerStatusCacheDir,
-            secretsDir: paths.secretsDir,
-            sourceCacheDir: path.join(baseDir, "source"),
-          },
-        }),
-      );
+      yield* fs.writeFileString(contextFilePath, context);
 
       const installed: Array<TriageAgent> = [];
       for (const agent of TRIAGE_AGENTS) {

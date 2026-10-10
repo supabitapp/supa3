@@ -79,6 +79,7 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
       label: sourceItem.label,
       destructive: sourceItem.destructive === true,
       disabled: sourceItem.disabled === true,
+      ...(typeof sourceItem.icon === "string" ? { icon: sourceItem.icon } : {}),
       ...(sourceItem.separatorBefore === true ? { separatorBefore: true } : {}),
       ...(typeof sourceItem.checked === "boolean" ? { checked: sourceItem.checked } : {}),
     };
@@ -112,31 +113,36 @@ const normalizePosition = (
     Option.map(({ x, y }) => ({ x: Math.floor(x * zoomFactor), y: Math.floor(y * zoomFactor) })),
   );
 
+const MENU_ICON_SYMBOLS: Readonly<Record<string, string>> = {
+  globe: "globe",
+  "message-square-text": "text.bubble",
+};
+
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
-  let destructiveMenuIconCache: Option.Option<Electron.NativeImage> | undefined;
+  const menuIconCache = new Map<string, Option.Option<Electron.NativeImage>>();
 
-  const getDestructiveMenuIcon = (): Option.Option<Electron.NativeImage> => {
+  const loadMenuIcon = (symbol: string): Option.Option<Electron.NativeImage> => {
+    try {
+      const image = Electron.nativeImage.createFromNamedImage(symbol).resize({ height: 12 });
+      image.setTemplateImage(true);
+      return image.isEmpty() ? Option.none() : Option.some(image);
+    } catch {
+      return Option.none();
+    }
+  };
+
+  const getMenuIcon = (symbol: string): Option.Option<Electron.NativeImage> => {
     if (platform !== "darwin") {
       return Option.none();
     }
-    if (destructiveMenuIconCache !== undefined) {
-      return destructiveMenuIconCache;
+    let icon = menuIconCache.get(symbol);
+    if (icon === undefined) {
+      icon = loadMenuIcon(symbol);
+      menuIconCache.set(symbol, icon);
     }
-
-    try {
-      const icon = Electron.nativeImage.createFromNamedImage("trash").resize({
-        width: 12,
-        height: 12,
-      });
-      icon.setTemplateImage(true);
-      destructiveMenuIconCache = icon.isEmpty() ? Option.none() : Option.some(icon);
-    } catch {
-      destructiveMenuIconCache = Option.none();
-    }
-
-    return destructiveMenuIconCache;
+    return icon;
   };
 
   const buildTemplate = (
@@ -176,10 +182,14 @@ export const make = Effect.gen(function* () {
       } else {
         itemOption.click = () => complete(Option.some(item.id));
       }
-      if (item.destructive && (!item.children || item.children.length === 0)) {
-        const destructiveIcon = getDestructiveMenuIcon();
-        if (Option.isSome(destructiveIcon)) {
-          itemOption.icon = destructiveIcon.value;
+      const symbol =
+        item.destructive && itemOption.submenu === undefined
+          ? "trash"
+          : MENU_ICON_SYMBOLS[item.icon ?? ""];
+      if (symbol !== undefined) {
+        const icon = getMenuIcon(symbol);
+        if (Option.isSome(icon)) {
+          itemOption.icon = icon.value;
         }
       }
 

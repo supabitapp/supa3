@@ -15,6 +15,10 @@ import {
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { SettingsActionRow } from "./components/SettingsActionRow";
+import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import { useSendFeedback } from "./use-send-feedback";
+import { ControlPillMenu } from "../../components/ControlPillMenu";
 
 export function SettingsAboutRouteScreen() {
   const insets = useSafeAreaInsets();
@@ -120,6 +124,7 @@ function AppSettingsSection() {
 
   return (
     <SettingsSection title="App">
+      <FeedbackSettingsAction />
       <SettingsRow icon="internaldrive" label="Client Storage" target="SettingsClientStorage" />
       <SettingsRow icon="stethoscope" label="Diagnostics" target="SettingsDiagnostics" />
       <SettingsRow
@@ -141,6 +146,51 @@ function AppSettingsSection() {
         versionRow
       )}
     </SettingsSection>
+  );
+}
+
+function FeedbackSettingsAction() {
+  const { selectedTargets } = useSettingsEnvironmentFilter();
+  const { sendFeedback, isPending } = useSendFeedback();
+  const eligibleTargets = selectedTargets.filter(
+    (target) => target.serverConfig.scratchWorkspaceRoot !== undefined,
+  );
+  const sendTo = (target: (typeof eligibleTargets)[number]) =>
+    void sendFeedback({
+      environmentId: target.environmentId,
+      serverVersion: target.serverConfig.environment.serverVersion,
+    });
+  const row = (
+    <SettingsActionRow
+      icon="text.bubble"
+      label="Send feedback"
+      loading={isPending}
+      disabled={eligibleTargets.length === 0 || isPending}
+      pointerEvents={eligibleTargets.length > 1 ? "none" : "auto"}
+      onPress={() => {
+        if (eligibleTargets[0]) sendTo(eligibleTargets[0]);
+      }}
+    />
+  );
+  if (eligibleTargets.length < 2) return row;
+  return (
+    <ControlPillMenu
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Send feedback"
+      title="Choose an environment"
+      actions={eligibleTargets.map((target) => ({
+        id: target.environmentId,
+        title: target.label,
+        attributes: { disabled: isPending },
+      }))}
+      onPressAction={({ nativeEvent }) => {
+        const target = eligibleTargets.find((entry) => entry.environmentId === nativeEvent.event);
+        if (target) sendTo(target);
+      }}
+    >
+      {row}
+    </ControlPillMenu>
   );
 }
 

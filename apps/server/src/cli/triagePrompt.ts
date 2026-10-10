@@ -149,19 +149,32 @@ duplicate with fresh evidence is more useful than a second thread.
 export const buildTriageLaunchPrompt = (promptFilePath: string) =>
   `Read the file "${promptFilePath}" and follow its instructions exactly: it is your Supacode triage playbook, and it starts with asking the user what went wrong.`;
 
-/** The full seed prompt, written to `prompt.md` in the triage scratch dir. */
-export const buildTriageSeedPrompt = (contextFilePath: string) => `A Supacode user is \
-having a problem with their install and started this session with \`supacode triage\`.
+const buildSeedPrompt = (opening: string, machineFacts: string) => `${opening}
 
-Machine facts (version, OS, paths, server liveness) are in the triage context file:
-
-    ${contextFilePath}
+${machineFacts}
 
 Follow the playbook below, starting by asking the user what went wrong.
 
 ---
 
 ${TRIAGE_PLAYBOOK}`;
+
+/** The full seed prompt, written to `prompt.md` in the triage scratch dir. */
+export const buildTriageSeedPrompt = (contextFilePath: string) =>
+  buildSeedPrompt(
+    "A Supacode user is having a problem with their install and started this session with `supacode triage`.",
+    `Machine facts (version, OS, paths, server liveness) are in the triage context file:
+
+    ${contextFilePath}`,
+  );
+
+export const buildTriagePrintedPrompt = (context: string) =>
+  buildSeedPrompt(
+    "A Supacode user wants to report a problem or share feedback, and you ran `supacode triage --print` for them.",
+    `Machine facts (version, OS, paths, server liveness) are in the triage context below.
+
+${context}`,
+  );
 
 /** Machine facts for one triage run, pre-formatted so the template stays plain. */
 export interface TriageContextInput {

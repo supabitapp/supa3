@@ -66,6 +66,11 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     },
     { tag: "path", attrs: { d: "m22 10-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 10" } },
   ],
+  globe: [
+    { tag: "circle", attrs: { cx: "12", cy: "12", r: "10" } },
+    { tag: "path", attrs: { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" } },
+    { tag: "path", attrs: { d: "M2 12h20" } },
+  ],
   "message-square-plus": [
     {
       tag: "path",
@@ -75,6 +80,17 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     },
     { tag: "path", attrs: { d: "M12 8v6" } },
     { tag: "path", attrs: { d: "M9 11h6" } },
+  ],
+  "message-square-text": [
+    {
+      tag: "path",
+      attrs: {
+        d: "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z",
+      },
+    },
+    { tag: "path", attrs: { d: "M7 11h10" } },
+    { tag: "path", attrs: { d: "M7 15h6" } },
+    { tag: "path", attrs: { d: "M7 7h8" } },
   ],
   pin: [
     { tag: "path", attrs: { d: "M12 17v5" } },
@@ -484,7 +500,12 @@ export function showContextMenuFallback<T extends string>(
       submenuTriggerStack[level] = parentTrigger;
 
       requestAnimationFrame(() => {
-        clampMenuPosition(menu, preferredLeft, preferredTop);
+        const height = menu.getBoundingClientRect().height;
+        const top =
+          level === 0 && preferredTop + height > window.innerHeight - 4
+            ? preferredTop - height
+            : preferredTop;
+        clampMenuPosition(menu, preferredLeft, top);
       });
     };
 

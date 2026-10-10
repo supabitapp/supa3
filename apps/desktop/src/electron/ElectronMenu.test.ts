@@ -122,6 +122,45 @@ describe("ElectronMenu", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
+  it.effect("shows SF Symbols for mapped icon keywords on macOS", () =>
+    Effect.gen(function* () {
+      const symbol = (name: string) => ({
+        name,
+        isEmpty: () => false,
+        setTemplateImage: () => {},
+      });
+      createFromNamedImageMock.mockImplementation((name: string) => ({
+        resize: () => symbol(name),
+      }));
+      buildFromTemplateMock.mockImplementation(() => ({
+        popup: (options: Electron.PopupOptions) => options.callback?.(),
+      }));
+
+      const electronMenu = yield* ElectronMenu.ElectronMenu;
+      yield* electronMenu.showContextMenu({
+        window: makeWindow(),
+        items: [
+          { id: "feedback", label: "Send feedback", icon: "message-square-text" },
+          { id: "rename", label: "Rename", icon: "pencil" },
+          { id: "delete", label: "Delete", icon: "trash", destructive: true },
+        ],
+        position: Option.none(),
+      });
+
+      assert.deepEqual(
+        buildFromTemplateMock.mock.calls[0]?.[0].map(
+          (item: Electron.MenuItemConstructorOptions & { icon?: { name: string } }) =>
+            item.icon?.name ?? null,
+        ),
+        ["text.bubble", null, null, "trash"],
+      );
+    }).pipe(
+      Effect.provide(
+        ElectronMenu.layer.pipe(Layer.provide(Layer.succeed(HostProcessPlatform, "darwin"))),
+      ),
+    ),
+  );
+
   it.effect("keeps a preceding non-destructive action in the destructive section", () =>
     Effect.gen(function* () {
       buildFromTemplateMock.mockImplementation(() => ({

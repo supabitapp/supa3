@@ -9,6 +9,7 @@ import type { EnvironmentId } from "@supacode/contracts";
 import { useCallback } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { useComposerDraftStore } from "~/composerDraftStore";
 import { useEnvironments } from "~/state/environments";
 import { projectEnvironment } from "~/state/projects";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -78,12 +79,17 @@ export function useScratchProject() {
   );
 
   const startScratchThread = useCallback(
-    async (environmentId: EnvironmentId) => {
+    async (environmentId: EnvironmentId, prompt?: string) => {
       const project = await openScratchProject(environmentId);
-      if (project) {
-        await handleNewThread(scopeProjectRef(project.environmentId, project.id)).catch(
-          (error: unknown) => reportScratchFailure("Could not start without a project", error),
-        );
+      if (!project) return;
+      const opened = await handleNewThread(
+        scopeProjectRef(project.environmentId, project.id),
+      ).catch((error: unknown) => {
+        reportScratchFailure("Could not start without a project", error);
+        return null;
+      });
+      if (opened && prompt !== undefined) {
+        useComposerDraftStore.getState().setPrompt(opened.draftId, prompt);
       }
     },
     [handleNewThread, openScratchProject],

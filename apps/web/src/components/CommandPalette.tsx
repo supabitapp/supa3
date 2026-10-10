@@ -66,6 +66,7 @@ import {
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
+  MessageSquareTextIcon,
   MonitorIcon,
   MoonIcon,
   PaletteIcon,
@@ -121,6 +122,7 @@ import { sourceControlEnvironment } from "../state/sourceControl";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useScratchProject } from "../hooks/useScratchProject";
+import { useSendFeedback } from "../hooks/useSendFeedback";
 import { useNewProject } from "../hooks/useNewProject";
 import { isScratchProject } from "@supacode/client-runtime/state/projects";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -752,6 +754,7 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
   });
   const { scratchEnvironmentId, scratchWorkspaceRootFor, startScratchThread } = useScratchProject();
+  const sendFeedback = useSendFeedback();
   const lookupRepository = useAtomQueryRunner(sourceControlEnvironment.repository, {
     reportFailure: false,
   });
@@ -2042,6 +2045,17 @@ function OpenCommandPaletteDialog(props: {
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "chat.newWithoutProject",
       run: () => startScratchThread(scratchTargetEnvironmentId),
+    });
+  }
+
+  if (sendFeedback) {
+    actionItems.push({
+      kind: "action",
+      value: "action:send-feedback",
+      searchTerms: ["feedback", "report", "bug", "support", "triage", "help"],
+      title: "Send feedback",
+      icon: <MessageSquareTextIcon className={ITEM_ICON_CLASS} />,
+      run: sendFeedback,
     });
   }
 

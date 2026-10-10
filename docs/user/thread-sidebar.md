@@ -32,6 +32,18 @@ folder, so the files the agent wrote stay until you delete them. Branch, worktre
 these folders are not Git repositories. This is unavailable when the data
 directory itself sits inside a Git checkout.
 
+### Send feedback
+
+Choose **Help > Send feedback** at the bottom of the sidebar, or **Send feedback** in
+the command palette. On mobile, open **Settings > About Supacode**. Supacode opens a
+new thread under **No project** with a prepared message in the prompt, using your
+usual model and settings. Add anything you like and send it. The agent runs
+`supacode triage --print`, asks what happened, and investigates on that machine.
+Review the report before the agent posts it to GitHub.
+
+If the app cannot open, run `supacode triage` in a terminal on the affected machine
+instead.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
