@@ -1101,7 +1101,7 @@ export function AppearanceSettingsPanel() {
     resolveEnvironmentIdentificationModes(environmentStageLabel);
   const environmentIdentificationDescription = environmentIdentificationModes.includes("pill")
     ? "Choose how Dev and Nightly environments are identified."
-    : "Choose whether environment artwork is shown.";
+    : "Choose whether artwork appears in the sidebar under dark themes.";
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
   const glassOpacitySliderStyle = {
