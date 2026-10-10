@@ -31,6 +31,7 @@ import {
 } from "@supacode/contracts";
 import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@supacode/shared/git";
 import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import { compactTraceAttributes } from "@supacode/shared/observability";
 import { decodeJsonResult } from "@supacode/shared/schemaJson";
 import { parseSupacodeProjectFile } from "@supacode/shared/supacodeProjectFile";
@@ -47,7 +48,7 @@ import * as ServerConfig from "../config.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const gitProcesses = Semaphore.makeUnsafe(8);
-const fetchLocks = new Map<string, { gate: Semaphore.Semaphore; users: number }>();
+const fetchLocks = KeyedLock.makeUnsafe<string>();
 // `git worktree add` checks out the full tree, so on large repositories it can
 // take well beyond the default 30s (e.g. a 375k-file repo takes ~40s on an idle
 // machine). Give it generous headroom while still bounding a genuinely hung git.
@@ -1131,19 +1132,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       );
       if (!fetch) return yield* execution;
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
-      return yield* Effect.acquireUseRelease(
-        Effect.sync(() => {
-          const lock = fetchLocks.get(gitCommonDir) ?? { gate: Semaphore.makeUnsafe(1), users: 0 };
-          lock.users++;
-          fetchLocks.set(gitCommonDir, lock);
-          return lock;
-        }),
-        (lock) => lock.gate.withPermit(execution),
-        (lock) =>
-          Effect.sync(() => {
-            if (--lock.users === 0) fetchLocks.delete(gitCommonDir);
-          }),
-      );
+      return yield* fetchLocks.withLock(gitCommonDir, execution);
     },
   );
 

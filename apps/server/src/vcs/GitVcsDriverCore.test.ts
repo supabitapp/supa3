@@ -3500,6 +3500,30 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       return { cwd, initialBranch };
     });
 
+    const makeFetchGate = Effect.fnUntraced(function* () {
+      const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const gate = yield* Deferred.make<void>();
+      const starts = yield* Queue.unbounded<void>();
+      const activity = { active: 0, peak: 0 };
+      const spawner = ChildProcessSpawner.make((command) => {
+        if (!ChildProcess.isStandardCommand(command))
+          return Effect.die("expected a standard Git command");
+        if (!command.args.includes("fetch")) return delegate.spawn(command);
+        return Effect.acquireRelease(
+          Effect.gen(function* () {
+            activity.peak = Math.max(activity.peak, ++activity.active);
+            yield* Queue.offer(starts, undefined);
+            return ChildProcessSpawner.makeHandle({
+              ...makeSuccessfulHandle(""),
+              exitCode: Deferred.await(gate).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
+            });
+          }),
+          () => Effect.sync(() => activity.active--),
+        );
+      });
+      return { spawner, gate, starts, activity };
+    });
+
     it.effect.each([
       "fetchRemote",
       "fetchRemoteTrackingBranch",
@@ -3513,27 +3537,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           const linked = yield* makeTmpDir("git-fetch-linked-");
           yield* git(cwd, ["worktree", "add", "-b", "linked", linked]);
           yield* git(linked, ["branch", "--set-upstream-to", `origin/${initialBranch}`, "linked"]);
-          const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
-          const gate = yield* Deferred.make<void>();
-          const starts = yield* Queue.unbounded<void>();
-          let active = 0;
-          let peak = 0;
-          const spawner = ChildProcessSpawner.make((command) => {
-            if (!ChildProcess.isStandardCommand(command))
-              return Effect.die("expected a standard Git command");
-            if (!command.args.includes("fetch")) return delegate.spawn(command);
-            return Effect.acquireRelease(
-              Effect.gen(function* () {
-                peak = Math.max(peak, ++active);
-                yield* Queue.offer(starts, undefined);
-                return ChildProcessSpawner.makeHandle({
-                  ...makeSuccessfulHandle(""),
-                  exitCode: Deferred.await(gate).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
-                });
-              }),
-              () => Effect.sync(() => active--),
-            );
-          });
+          const { spawner, gate, starts, activity } = yield* makeFetchGate();
           const driver = yield* makeGitVcsDriverCore().pipe(
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
             Effect.provide(layerServerConfig),
@@ -3565,13 +3569,13 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
             Effect.forkChild({ startImmediately: true }),
           );
           assert.equal(yield* Queue.size(starts), 0);
-          assert.equal(active, 1);
+          assert.equal(activity.active, 1);
           yield* TestClock.adjust("2 seconds");
           yield* Deferred.succeed(gate, undefined);
           yield* Fiber.join(background);
           yield* Fiber.join(foreground);
-          assert.equal(peak, 1);
-          assert.equal(active, 0);
+          assert.equal(activity.peak, 1);
+          assert.equal(activity.active, 0);
         }),
     );
 
@@ -3579,26 +3583,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       Effect.gen(function* () {
         const first = yield* makeFetchRepository();
         const second = yield* makeFetchRepository();
-        const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
-        const gate = yield* Deferred.make<void>();
-        const starts = yield* Queue.unbounded<void>();
-        let active = 0;
-        const spawner = ChildProcessSpawner.make((command) => {
-          if (!ChildProcess.isStandardCommand(command))
-            return Effect.die("expected a standard Git command");
-          if (command.args[0] !== "fetch") return delegate.spawn(command);
-          return Effect.acquireRelease(
-            Effect.gen(function* () {
-              active++;
-              yield* Queue.offer(starts, undefined);
-              return ChildProcessSpawner.makeHandle({
-                ...makeSuccessfulHandle(""),
-                exitCode: Deferred.await(gate).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
-              });
-            }),
-            () => Effect.sync(() => active--),
-          );
-        });
+        const { spawner, gate, starts, activity } = yield* makeFetchGate();
         const driver = yield* makeGitVcsDriverCore().pipe(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
           Effect.provide(layerServerConfig),
@@ -3611,11 +3596,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           .fetchRemote({ cwd: second.cwd, remoteName: "origin" })
           .pipe(Effect.forkChild);
         yield* Queue.take(starts);
-        assert.equal(active, 2);
+        assert.equal(activity.active, 2);
         yield* Deferred.succeed(gate, undefined);
         yield* Fiber.join(firstFetch);
         yield* Fiber.join(secondFetch);
-        assert.equal(active, 0);
+        assert.equal(activity.active, 0);
       }),
     );
 
