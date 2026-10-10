@@ -35,7 +35,7 @@ import { ThreadQueueMessage, type QueueMessageAction } from "./ThreadQueueMessag
 import { threadDragGapOffset } from "./threadDragGap";
 import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
 
-const REMOVE_ACTION_WIDTH = 76;
+const QUEUE_ACTION_WIDTH = 76;
 
 type QueueTarget = { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
 type QueueRowLayout = { readonly id: RunId; readonly y?: number; readonly height?: number };
@@ -135,6 +135,10 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
       return;
     }
     if (action === "edit") {
+      if (editing?.runId === runId) {
+        navigation.goBack();
+        return;
+      }
       const entry = queuedRuns[index]!;
       void Haptics.selectionAsync();
       beginQueuedRunEdit(threadKey, {
@@ -198,19 +202,15 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
           <View className="flex-row items-center gap-2">
             <Text
               accessibilityRole="header"
-              className="shrink text-xl font-supacode-bold text-foreground"
+              className="shrink text-lg font-supacode-bold text-foreground"
             >
-              Message queue
+              Queued
             </Text>
-            <View className="min-w-6 shrink-0 items-center rounded-full bg-subtle px-2 py-0.5">
-              <Text className="text-xs font-supacode-medium tabular-nums text-foreground-muted">
-                {queuedRuns.length}
-              </Text>
-            </View>
+            <Text className="text-base tabular-nums text-foreground-muted">
+              {queuedRuns.length}
+            </Text>
           </View>
-          <Text className="text-sm text-foreground-muted">
-            {workflow?.isHeld ? "Paused after restart" : "Messages send in order"}
-          </Text>
+          <Text className="text-sm text-foreground-muted">Tap to edit · Swipe for actions</Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -261,7 +261,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
             onLayout={({ nativeEvent }) => rowLayouts.current.set(run.id, nativeEvent.layout)}
           >
             <Animated.View
-              className="flex-row items-center overflow-hidden rounded-2xl bg-subtle"
+              className="flex-row items-center border-b border-border bg-sheet-solid"
               style={
                 draggedRunId === run.id
                   ? { transform: [{ translateY: translation }], zIndex: 1, opacity: 0.85 }
@@ -347,12 +347,14 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
               ) : null}
               <QueueRowSwipeable
                 enabled={draggedRunId === null && busyRunId === null && controls.canDismiss}
-                background={theme["--color-subtle"]}
+                background={theme["--color-sheet-solid"]}
+                showSteer={workflow?.canPromoteToSteer ?? false}
+                canSteer={controls.canSteer}
+                onSteer={() => void act(run.id, "steer")}
                 onRemove={() => void act(run.id, "remove")}
               >
                 <ThreadQueueMessage
                   environmentId={target.environmentId}
-                  index={index}
                   title={title}
                   attachments={attachments}
                   controls={controls}
@@ -379,9 +381,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
             className="gap-3 bg-sheet-solid px-5 pt-3"
             style={{ paddingBottom: Math.max(insets.bottom, 16) + 12 }}
           >
-            <Text className="text-center text-sm text-foreground-muted">
-              Resume when you're ready to send these messages.
-            </Text>
+            <Text className="text-center text-sm text-foreground-muted">Paused after restart</Text>
             <MaterialButton
               label={resuming ? "Resuming…" : "Resume queue"}
               tone="primary"
@@ -427,7 +427,6 @@ function QueueShiftedRow(props: {
   return (
     <Reanimated.View
       exiting={FadeOut.duration(120)}
-      className="pb-2"
       onLayout={props.onLayout}
       style={[style, { zIndex: props.lifted ? 1 : 0 }]}
     >
@@ -436,14 +435,20 @@ function QueueShiftedRow(props: {
   );
 }
 
-/** Swipe left to remove, the one destructive action that needs no menu. */
 function QueueRowSwipeable(props: {
   readonly enabled: boolean;
   readonly background: string;
+  readonly showSteer: boolean;
+  readonly canSteer: boolean;
+  readonly onSteer: () => void;
   readonly onRemove: () => void;
   readonly children: React.ReactNode;
 }) {
   const swipeableRef = useRef<SwipeableMethods | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  useEffect(() => {
+    if (!props.enabled) swipeableRef.current?.close();
+  }, [props.enabled]);
   return (
     <ReanimatedSwipeable
       ref={swipeableRef}
@@ -456,26 +461,62 @@ function QueueRowSwipeable(props: {
       failOffsetY={[-12, 12]}
       containerStyle={{ backgroundColor: props.background, flex: 1 }}
       childrenContainerStyle={{ backgroundColor: props.background }}
-      onSwipeableOpen={(direction) => {
-        if (direction !== "right") return;
-        swipeableRef.current?.close();
-        props.onRemove();
-      }}
+      onSwipeableOpen={() => setIsOpen(true)}
+      onSwipeableClose={() => setIsOpen(false)}
       renderRightActions={() => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL}
-          disabled={!props.enabled}
-          onPress={() => {
-            swipeableRef.current?.close();
-            props.onRemove();
-          }}
-          className="items-center justify-center bg-danger active:opacity-70 disabled:opacity-40"
-          style={{ width: REMOVE_ACTION_WIDTH }}
+        <View
+          className="flex-row"
+          accessibilityElementsHidden={!isOpen}
+          importantForAccessibility={isOpen ? "auto" : "no-hide-descendants"}
         >
-          <SymbolView name="trash" size={16} tintColorClassName="accent-danger-foreground" />
-          <Text className="pt-1 text-2xs font-supacode-medium text-danger-foreground">Remove</Text>
-        </Pressable>
+          {props.showSteer ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Steer with queued message"
+              accessibilityState={{ disabled: !props.canSteer }}
+              disabled={!props.canSteer}
+              onPress={() => {
+                swipeableRef.current?.close();
+                props.onSteer();
+              }}
+              className="min-h-11 items-center justify-center bg-subtle active:opacity-70"
+              style={{ width: QUEUE_ACTION_WIDTH }}
+            >
+              <SymbolView
+                name="arrow.turn.left.up"
+                size={16}
+                tintColorClassName={
+                  props.canSteer ? "accent-primary-text" : "accent-foreground-muted"
+                }
+              />
+              <Text
+                className={
+                  props.canSteer
+                    ? "pt-1 text-2xs font-supacode-medium text-primary-text"
+                    : "pt-1 text-2xs font-supacode-medium text-foreground-muted"
+                }
+              >
+                Steer
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL}
+            disabled={!props.enabled}
+            onPress={() => {
+              swipeableRef.current?.close();
+              props.onRemove();
+            }}
+            className="min-h-11 items-center justify-center bg-danger active:opacity-70"
+            style={{ width: QUEUE_ACTION_WIDTH }}
+          >
+            <SymbolView name="trash" size={16} tintColorClassName="accent-danger-foreground" />
+            <Text className="pt-1 text-2xs font-supacode-medium text-danger-foreground">
+              Remove
+            </Text>
+          </Pressable>
+        </View>
       )}
     >
       {props.children}
