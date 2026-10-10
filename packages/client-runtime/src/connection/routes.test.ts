@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@supacode/contracts";
+import { DEFAULT_PUBLIC_RELAY_URL, EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 
@@ -11,14 +11,17 @@ import {
 import {
   advertisedConnectionRoutes,
   credentialConnectionId,
+  connectionRouteAddress,
   connectionRouteId,
   connectionRouteKind,
+  connectionRouteLabel,
   entryWithRoutes,
   insertRoute,
   isLearned,
   mergeLearnedRoutes,
   pairingFallbackRoutes,
   routesAfterRemoving,
+  routeHttpBaseUrl,
 } from "./routes.ts";
 
 const environmentId = EnvironmentId.make("environment-routes");
@@ -221,11 +224,60 @@ const learnRelay = (overrides: Partial<Parameters<typeof mergeLearnedRoutes>[0]>
   });
 
 describe("relay route advertisements", () => {
+  it.each([undefined, "wss://custom-relay.example.test/relay"])(
+    "displays the encrypted relay server while retaining the host identity: %s",
+    (relayUrl) => {
+      const relay = route(relayEndpoint);
+      const profile = Option.getOrThrow(relay.profile);
+      if (profile._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+      const saved = {
+        ...relay,
+        profile: Option.some(
+          new BearerConnectionProfile({
+            ...profile,
+            ...(relayUrl === undefined ? {} : { relayUrl }),
+          }),
+        ),
+      };
+
+      expect(connectionRouteKind(saved)).toBe("relay");
+      expect(connectionRouteLabel(saved)).toBe("Encrypted Relay");
+      expect(connectionRouteAddress(saved)).toBe(relayUrl ?? DEFAULT_PUBLIC_RELAY_URL);
+      expect(routeHttpBaseUrl(saved)).toBe(relayEndpoint);
+    },
+  );
+
+  it("keeps relay at public route priority, after direct routes and before SSH", () => {
+    const relay = route(relayEndpoint);
+    const direct = route("http://192.168.1.20:4389/", "lan");
+    const publicRoute = route("https://remote.example.test", "public");
+    const ssh = {
+      target: new SshConnectionTarget({ environmentId, label: "SSH", connectionId: "ssh" }),
+      profile: Option.none(),
+    };
+
+    expect(insertRoute([direct, publicRoute, ssh], relay)).toEqual([
+      direct,
+      publicRoute,
+      relay,
+      ssh,
+    ]);
+  });
+
+  it("does not identify ordinary or malformed public addresses as encrypted relay", () => {
+    const ordinary = route("https://remote.example.test");
+    const malformed = route("https://bad.relay.supacode.invalid");
+
+    expect(connectionRouteKind(ordinary)).toBe("public");
+    expect(connectionRouteAddress(ordinary)).toBe("https://remote.example.test");
+    expect(connectionRouteKind(malformed)).toBe("public");
+  });
+
   it("learns relay after direct routes with the existing credential and custom server", () => {
     const routes = learnRelay({
       reported: [{ httpBaseUrl: "http://100.100.10.2:4389/", kind: "tailnet" }],
     })!;
-    expect(routes.map(connectionRouteKind)).toEqual(["lan", "tailnet", "public"]);
+    expect(routes.map(connectionRouteKind)).toEqual(["lan", "tailnet", "relay"]);
     expect(credentialConnectionId(connectionRouteId(routes[2]!.target))).toBe(credential);
     expect(Option.getOrThrow(routes[2]!.profile)).toMatchObject({
       httpBaseUrl: relayEndpoint,

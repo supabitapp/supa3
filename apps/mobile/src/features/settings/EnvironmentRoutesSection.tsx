@@ -38,6 +38,7 @@ const ROUTE_ICONS: Record<ConnectionRouteKind, AppSymbolName> = {
   tailnet: "point.3.connected.trianglepath.dotted",
   vpn: { ios: "lock.shield", android: "lock" },
   public: "globe",
+  relay: { ios: "lock", android: "lock" },
   ssh: "terminal",
 };
 
