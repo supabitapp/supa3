@@ -73,7 +73,9 @@ jobs:
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
-        run: mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
+        run: |
+          mise exec -- pnpm config set virtualStoreType project --location project
+          mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
       - name: Expose pnpm
         run: mise exec -- pnpm --version
 
@@ -121,7 +123,9 @@ jobs:
       - name: Setup Mise
         uses: ./.github/actions/setup-mise
       - name: Install workspace dependencies
-        run: mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
+        run: |
+          mise exec -- pnpm config set virtualStoreType project --location project
+          mise exec -- vp install --filter=@supacode/mobile... --filter=@supacode/scripts... --filter=supacode...
       - name: Expose pnpm
         run: mise exec -- pnpm --version
 
