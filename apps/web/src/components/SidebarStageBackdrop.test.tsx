@@ -23,7 +23,7 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveVisibleSidebarStageBackdropVariant("Dev", appearance)).toBe("dev");
   });
 
-  it("shows the release sleigh only under dark themes", () => {
+  it("shows the release artwork only under dark themes", () => {
     expect(resolveVisibleSidebarStageBackdropVariant(null, "dark")).toBe("release");
     expect(resolveVisibleSidebarStageBackdropVariant("Latest", "dark")).toBe("release");
     expect(resolveVisibleSidebarStageBackdropVariant(null, "light")).toBeNull();

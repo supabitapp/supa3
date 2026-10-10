@@ -29,7 +29,7 @@ export function resolveSidebarStageBackdropVariant(
   return null;
 }
 
-/** Dev and nightly keep their artwork in every theme; release only shows the sleigh when dark. */
+/** Dev and nightly keep their artwork in every theme; release only shows its artwork when dark. */
 export function resolveVisibleSidebarStageBackdropVariant(
   stageLabel: string | null,
   appearance: ThemeAppearance,
@@ -95,9 +95,9 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 const STAGE_BACKDROP_ART = {
-  nightly: MeteorShowerArt,
+  nightly: SleighRideArt,
   dev: WireframeArt,
-  release: SleighRideArt,
+  release: MeteorShowerArt,
 } satisfies Record<SidebarStageBackdropVariant, ComponentType<{ compact?: boolean }>>;
 
 export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {

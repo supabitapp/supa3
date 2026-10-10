@@ -58,11 +58,11 @@ const PREVIEW_ASSETS = {
 
 const RELEASE_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  iosIcon: "./assets/AppIcon.icon",
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIconComposerProject),
   splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
   androidAdaptiveForeground,
-  androidAdaptiveBackgroundColor: "#000000",
-  androidAdaptiveBackgroundImage: undefined,
+  androidAdaptiveBackgroundColor: "#0E0F34",
+  androidAdaptiveBackgroundImage: "./assets/android-icon-background-prod.png",
   androidSplashIcon: "./assets/android-splash-icon-prod.png",
   androidMonochromeIcon: "./assets/android-icon-mark.png",
 } as const;
@@ -281,9 +281,7 @@ const config: ExpoConfig = {
     package: variant.androidPackage,
     adaptiveIcon: {
       backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-      ...(variant.assets.androidAdaptiveBackgroundImage
-        ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
-        : {}),
+      backgroundImage: variant.assets.androidAdaptiveBackgroundImage,
       foregroundImage: variant.assets.androidAdaptiveForeground,
       monochromeImage: variant.assets.androidMonochromeIcon,
     },
@@ -337,9 +335,7 @@ const config: ExpoConfig = {
           shortcut_icon: {
             foregroundImage: variant.assets.androidAdaptiveForeground,
             backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-            ...(variant.assets.androidAdaptiveBackgroundImage
-              ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
-              : {}),
+            backgroundImage: variant.assets.androidAdaptiveBackgroundImage,
           },
         },
       },

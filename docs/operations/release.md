@@ -72,7 +72,7 @@ Artifacts last 14 days. Each platform needs its own dispatch, so an iOS failure 
 
 The review workflow captures the [native screenshot matrix](mobile-app-store-screenshots.md) at the
 same source commit and validates every image before preparing Fastlane folders. The Android assets
-also include a 512-pixel icon from the native SVG and the checked-in feature graphic.
+also include a 512-pixel icon cropped from the production launcher artwork and the checked-in feature graphic.
 Fastlane waits up to 45 minutes for the exact iOS build to finish processing, uploads the screenshots,
 and submits it for App Store review. Apple publishing remains manual after approval. The Android lane
 promotes the exact internal version code to production with a full rollout and commits the edit for
