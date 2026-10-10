@@ -100,6 +100,53 @@ private final class FakeRelay: @unchecked Sendable {
 }
 
 final class RelaySessionTests: XCTestCase {
+  func testResumeProbesAndRetainsAResponsiveSession() async throws {
+    let relay = try FakeRelay()
+    defer { relay.stop() }
+    let url = try await relay.start()
+    let connected = expectation(description: "relay connected")
+    let ping = expectation(description: "resume ping")
+    let failed = expectation(description: "healthy probe should not fail")
+    failed.isInverted = true
+    let tunnel = try RelayTunnel(relayURL: url, hostAddress: relay.address, probeTimeout: 0.3) { status in
+      if status.state == "up" { connected.fulfill() }
+      if status.reason == "Relay resume probe timed out" { failed.fulfill() }
+    }
+    _ = try await tunnel.start(port: 0)
+    _ = try await tunnel.resume()
+    await fulfillment(of: [connected], timeout: 5)
+    let responses = Task {
+      for await frame in relay.frames where frame.type == .ping {
+        relay.send(TunnelMux.frame(.pong, 0))
+        ping.fulfill()
+        break
+      }
+    }
+    _ = try await tunnel.resume()
+    await fulfillment(of: [ping], timeout: 5)
+    await fulfillment(of: [failed], timeout: 0.6)
+    responses.cancel()
+    await tunnel.stop()
+  }
+
+  func testResumeDropsAnUnresponsiveSessionBeforeKeepaliveExpiry() async throws {
+    let relay = try FakeRelay()
+    defer { relay.stop() }
+    let url = try await relay.start()
+    let connected = expectation(description: "relay connected")
+    let failed = expectation(description: "resume probe failed")
+    let tunnel = try RelayTunnel(relayURL: url, hostAddress: relay.address, probeTimeout: 0.1) { status in
+      if status.state == "up" && status.sessionCount == 1 { connected.fulfill() }
+      if status.reason == "Relay resume probe timed out" { failed.fulfill() }
+    }
+    _ = try await tunnel.start(port: 0)
+    _ = try await tunnel.resume()
+    await fulfillment(of: [connected], timeout: 5)
+    _ = try await tunnel.resume()
+    await fulfillment(of: [failed], timeout: 5)
+    await tunnel.stop()
+  }
+
   func testSessionAnswersPingsAndClosesAfterThreeIdleTicks() async throws {
     let relay = try FakeRelay()
     let watchdog = Task { try await Task.sleep(nanoseconds: 10_000_000_000); relay.stop() }

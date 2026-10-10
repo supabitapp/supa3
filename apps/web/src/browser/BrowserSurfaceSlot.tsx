@@ -68,6 +68,10 @@ export function BrowserSurfaceSlot(props: {
     // full width. The slot moves without resizing, so measure on shell resizes too.
     const panel = element.closest('[data-preview-panel-mode="inline"]');
     if (panel) observer.observe(panel);
+
+    for (const gap of document.querySelectorAll('[data-slot="sidebar-gap"]')) {
+      observer.observe(gap);
+    }
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {

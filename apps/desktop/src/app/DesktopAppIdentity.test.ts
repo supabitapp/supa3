@@ -239,6 +239,46 @@ describe("DesktopAppIdentity", () => {
     );
   });
 
+  it.effect.each([
+    { stage: "Stable", runtimeName: "Supacode", aboutName: "Supacode", environment: {} },
+    {
+      stage: "Nightly",
+      runtimeName: "Supacode Nightly",
+      aboutName: "Supacode (Nightly)",
+      environment: { appVersion: "0.0.43-nightly.20260929.2428" },
+    },
+    {
+      stage: "Dev",
+      runtimeName: "Supacode Dev",
+      aboutName: "Supacode (Dev)",
+      environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+    },
+  ])(
+    "uses a valid native User-Agent product name for $stage",
+    ({ runtimeName: expectedName, aboutName, environment }) => {
+      const calls: ElectronAppCalls = {
+        setAboutPanelOptions: [],
+        setDockIcon: [],
+        setName: [],
+      };
+
+      return withIdentity(
+        Effect.gen(function* () {
+          const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+          yield* identity.configure;
+
+          const runtimeName = calls.setName[0];
+          assert.isDefined(runtimeName);
+          assert.equal(runtimeName, expectedName);
+
+          assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+          assert.equal(calls.setAboutPanelOptions[0]?.applicationName, aboutName);
+        }),
+        { calls, environment },
+      );
+    },
+  );
+
   it.effect("sets the dock icon only when running unpackaged", () => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],

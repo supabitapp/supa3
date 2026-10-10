@@ -269,7 +269,6 @@ it("shows the matching child agent details and refreshes them when the agent set
   expect(text()).toContain("Checker");
   expect(text()).toContain("2m 15s");
   expect(text()).not.toContain("(1)");
-  expect(text()).toContain("Done");
   expect(text()).not.toContain("running");
   expect(text()).not.toContain("Worker");
   await act(async () =>
@@ -607,6 +606,39 @@ it("shows readable models and only differing workspace details in agent tooltips
   expect(text(true)).toContain("My GPT · Work account · high");
   expect(text()).toContain("My GPT · Work account · Fast mode onhigh");
   expect(text()).not.toContain("Personal account");
+  state.shells = [];
+  for (const status of ["running", "completed", "failed"] as const) {
+    state.projection = {
+      ...projection,
+      subagents: [
+        {
+          ...projection.subagents[0],
+          origin: "provider_native",
+          status,
+          modelSelection: {
+            instanceId: "codex",
+            model: "gpt-5.4",
+            options: [
+              { id: "reasoningEffort", value: "low" },
+              { id: "serviceTier", value: "ultrafast" },
+            ],
+          },
+        },
+      ],
+    };
+    await act(async () => renderer.update(cloneElement(panel)));
+    if (status === "completed") {
+      await act(async () =>
+        renderer.root.findByProps({ type: "button", "aria-expanded": false }).props.onClick(),
+      );
+    }
+    expect(text()).toContain("My GPT · Work account · Ultrafast mode onlow");
+    expect(text()).not.toContain(" · high");
+  }
+  await act(async () =>
+    renderer.root.findByProps({ type: "button", "aria-expanded": true }).props.onClick(),
+  );
+  state.projection = projection;
   state.configs.set("test", speedConfig);
   child.modelSelection.options = [{ id: "reasoningEffort", value: "high" }];
   state.shells = [

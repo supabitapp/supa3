@@ -1,12 +1,11 @@
-import { isWindowsAbsolutePath } from "@supacode/shared/path";
+import { isWindowsAbsolutePath, stripSlashPrefixedWindowsDrive } from "@supacode/shared/path";
 
 import {
   normalizeMarkdownLinkDestination,
-  parseFileUrlHref,
   safeDecodeURIComponent,
   splitMarkdownLinkSearchAndHash,
-  stripSlashPrefixedWindowsDrive,
-} from "./markdownLinks.ts";
+} from "@supacode/shared/markdownLinks";
+import { parseFileUrlHref } from "@supacode/shared/fileLinks";
 
 const DIRECT_IMAGE_SOURCE_PATTERN = /^(?:https?:|data:|blob:|\/\/)/i;
 const URI_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/;

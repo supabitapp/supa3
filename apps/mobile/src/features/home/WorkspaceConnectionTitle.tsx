@@ -11,35 +11,22 @@ import {
 } from "../../components/CompactBrandTitle";
 import { useWorkspaceState } from "../../state/workspace";
 import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
+import { useConnectionStatusVisibility } from "../../connection/useConnectionStatusVisibility";
 import {
   workspaceConnectionStatusPresentation,
   type WorkspaceConnectionStatusPresentation,
 } from "./workspace-connection-status";
 
-/**
- * Delay before a connection interruption surfaces in the title slot. Sub-second
- * blips (the common reconnect case) resolve without any UI at all.
- */
-const STATUS_SHOW_DELAY_MS = 800;
 const FADE_IN_MS = 250;
 
-/**
- * Connection status presentation, debounced for display: null until the
- * workspace has been in a non-connected state for STATUS_SHOW_DELAY_MS,
- * then live-updating until the workspace reconnects (null again immediately).
- */
 function useDelayedConnectionStatus(): WorkspaceConnectionStatusPresentation | null {
   const { state } = useWorkspaceState();
   const presentation = workspaceConnectionStatusPresentation(state);
-  const hasStatus = presentation !== null;
-  const [visible, setVisible] = useState(false);
-  if (!hasStatus && visible) setVisible(false);
-
-  useEffect(() => {
-    if (!hasStatus) return;
-    const timer = setTimeout(() => setVisible(true), STATUS_SHOW_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [hasStatus]);
+  const visible = useConnectionStatusVisibility(
+    "workspace",
+    presentation !== null,
+    state.connectionState === "error" || state.connectionState === "unsupported",
+  );
 
   return visible ? presentation : null;
 }

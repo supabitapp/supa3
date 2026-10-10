@@ -1,5 +1,5 @@
+import { formatProviderSkillDisplayName } from "@supacode/shared/inlineSkills";
 import {
-  formatProviderSkillDisplayName,
   resolveProviderSkillSourceKind,
   type ProviderSkillSourceKind,
 } from "@supacode/client-runtime/providerSkills";

@@ -5,6 +5,8 @@ export function useThreadHeaderOptions(
 ): ReturnType<typeof useIosThreadHeaderOptions> {
   return {
     options: { contentStyle: { backgroundColor: props.headerColor } },
+
+    optionsVersion: [],
     sidebar: true,
     fallback: null,
   };

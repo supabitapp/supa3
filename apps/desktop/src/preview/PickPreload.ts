@@ -1410,6 +1410,8 @@ function startAnnotation(sendEnabled: boolean): void {
           annotation,
           screenshotRect,
           submission === "send" && !sendEnabled ? "attach" : submission,
+
+          window.devicePixelRatio,
         );
       })
       .catch(() => {

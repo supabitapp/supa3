@@ -1,13 +1,96 @@
 import { EnvironmentId } from "@supacode/contracts";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("~/env", () => ({ isElectron: true }));
+const state = vi.hoisted(() => ({
+  desktop: false,
+  primary: null as string | null,
+  serverBrowser: new Set<string>(),
+  relay: new Set<string>(),
+}));
 
-import { rendersServerTabNatively } from "./previewRuntime";
+vi.mock("~/state/session", () => ({
+  readPreparedConnection: (id: string) => ({
+    connectionMethod: state.relay.has(id) ? "relay" : "direct",
+  }),
+}));
+
+vi.mock("~/env", () => ({
+  get isElectron() {
+    return state.desktop;
+  },
+}));
+vi.mock("~/previewStateStore", () => ({ isPreviewSupportedInRuntime: () => state.desktop }));
+vi.mock("~/rpc/atomRegistry", () => ({ appAtomRegistry: { get: () => state.primary } }));
+vi.mock("~/state/primaryEnvironment", () => ({ primaryEnvironmentIdAtom: {} }));
+vi.mock("~/state/entities", () => ({
+  readEnvironmentSupportsServerBrowser: (id: string) => state.serverBrowser.has(id),
+  useEnvironmentSupportsServerBrowser: () => false,
+}));
+
+import {
+  alternatePreviewRuntime,
+  previewRuntimeFor,
+  rendersServerTabNatively,
+} from "./previewRuntime";
+
+const local = "local" as EnvironmentId;
+const remote = "remote" as EnvironmentId;
+
+afterEach(() => {
+  state.desktop = false;
+  state.primary = null;
+  state.serverBrowser = new Set();
+  state.relay = new Set();
+});
+
+describe("previewRuntimeFor", () => {
+  it("opens a remote environment's tabs on this computer in the desktop app", () => {
+    state.desktop = true;
+    state.primary = local;
+    state.serverBrowser = new Set([local, remote]);
+
+    expect(previewRuntimeFor(remote)).toBeUndefined();
+    expect(previewRuntimeFor(local)).toBe("server");
+  });
+
+  it("keeps relay-host previews on the host browser in the desktop app", () => {
+    state.desktop = true;
+    state.primary = local;
+    state.serverBrowser = new Set([remote]);
+    state.relay = new Set([remote]);
+    expect(previewRuntimeFor(remote)).toBe("server");
+    expect(alternatePreviewRuntime(remote, local, true, { runtime: "server" })).toBeNull();
+    expect(alternatePreviewRuntime(remote, local, true, {})).toBeNull();
+  });
+
+  it("uses the environment's browser where the client has none of its own", () => {
+    state.serverBrowser = new Set([remote]);
+
+    expect(previewRuntimeFor(remote)).toBe("server");
+  });
+});
+
+describe("alternatePreviewRuntime", () => {
+  it("moves a remote environment's tab between this computer and the environment", () => {
+    state.desktop = true;
+
+    expect(alternatePreviewRuntime(remote, local, true, {})).toBe("server");
+    expect(alternatePreviewRuntime(remote, local, true, { runtime: "server" })).toBe("desktop");
+    expect(alternatePreviewRuntime(local, local, true, {})).toBeNull();
+    expect(alternatePreviewRuntime(remote, local, false, {})).toBeNull();
+  });
+
+  it("offers no move outside the desktop app", () => {
+    expect(alternatePreviewRuntime(remote, null, true, { runtime: "server" })).toBeNull();
+  });
+});
 
 const primary = EnvironmentId.make("primary-environment");
 
 describe("rendersServerTabNatively", () => {
+  beforeEach(() => {
+    state.desktop = true;
+  });
   it("streams a headless-backed server tab even in the primary desktop environment", () => {
     expect(
       rendersServerTabNatively(primary, primary, {

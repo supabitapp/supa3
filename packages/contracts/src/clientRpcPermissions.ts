@@ -4,6 +4,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
   AuthProvidersManageScope,
+  AuthPreviewOperateScope,
   type AuthEnvironmentScope,
 } from "./auth.ts";
 import { WS_METHODS } from "./rpc.ts";
@@ -42,6 +43,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
   [WS_METHODS.orchestrationSkillsInstall]: AuthProvidersManageScope,
   [WS_METHODS.orchestrationSkillsUninstall]: AuthProvidersManageScope,
+  [WS_METHODS.mcpAppsCallTool]: AuthOrchestrationOperateScope,
+  [WS_METHODS.mcpAppsUpdateModelContext]: AuthOrchestrationOperateScope,
+  [WS_METHODS.previewReportProfiles]: AuthPreviewOperateScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 

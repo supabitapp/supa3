@@ -1,6 +1,7 @@
 import {
   isLocalLoopbackHost,
   isPrivateNetworkHost,
+  isSharedAddressSpaceHost,
   isTailnetHost,
 } from "@supacode/shared/hostClassification";
 import {
@@ -22,8 +23,7 @@ import {
 } from "./catalog.ts";
 import { BearerConnectionTarget, type ConnectionTarget } from "./model.ts";
 
-/** Routes are ordered from the most direct address to the least specific fallback. */
-export type ConnectionRouteKind = "loopback" | "lan" | "tailnet" | "public" | "ssh";
+export type ConnectionRouteKind = "loopback" | "lan" | "tailnet" | "vpn" | "public" | "ssh";
 
 export function connectionRouteId(target: ConnectionTarget): string {
   switch (target._tag) {
@@ -92,7 +92,7 @@ export function routesAt(
 
 export interface PairingFallback {
   readonly environmentId: EnvironmentId;
-  readonly httpBaseUrls: ReadonlyArray<string>;
+  readonly routes: ReadonlyArray<{ readonly httpBaseUrl: string; readonly relayUrl?: string }>;
 }
 
 /**
@@ -114,15 +114,21 @@ export function pairingFallbackRoutes(
       : entries.get(expectedEnvironmentId);
   if (owner === undefined) return null;
   const linkOrigin = new URL(httpBaseUrl).origin;
-  const fallbacks = new Map<string, string>();
+  const fallbacks = new Map<string, PairingFallback["routes"][number]>();
   for (const route of connectionRoutes(owner)) {
     const url = routeUrl(route);
     if (url === null || url.origin === linkOrigin || fallbacks.has(url.origin)) continue;
-    fallbacks.set(url.origin, url.href);
+    const profile = Option.getOrNull(route.profile);
+    fallbacks.set(url.origin, {
+      httpBaseUrl: url.href,
+      ...(profile?._tag === "BearerConnectionProfile" && profile.relayUrl !== undefined
+        ? { relayUrl: profile.relayUrl }
+        : {}),
+    });
   }
   return fallbacks.size === 0
     ? null
-    : { environmentId: owner.target.environmentId, httpBaseUrls: [...fallbacks.values()] };
+    : { environmentId: owner.target.environmentId, routes: [...fallbacks.values()] };
 }
 
 function onlyEnvironmentAt(
@@ -144,7 +150,11 @@ export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind
       const hostname = routeHostname(route);
       if (hostname === null) return "public";
       if (isLocalLoopbackHost(hostname)) return "loopback";
-      if (isTailnetHost(hostname)) return "tailnet";
+      const profile = Option.getOrNull(route.profile);
+      const tailscale =
+        profile?._tag === "BearerConnectionProfile" && profile.network === "tailscale";
+      if (tailscale || isTailnetHost(hostname)) return "tailnet";
+      if (isSharedAddressSpaceHost(hostname)) return "vpn";
       return isPrivateNetworkHost(hostname) ? "lan" : "public";
     }
   }
@@ -154,6 +164,7 @@ const ROUTE_KIND_RANK: Record<ConnectionRouteKind, number> = {
   loopback: 0,
   lan: 1,
   tailnet: 2,
+  vpn: 2,
   public: 3,
   ssh: 4,
 };
@@ -209,6 +220,8 @@ export function connectionRouteLabel(route: ConnectionRoute): string {
       return "LAN";
     case "tailnet":
       return "Tailscale";
+    case "vpn":
+      return "VPN";
     case "ssh": {
       const profile = Option.getOrNull(route.profile);
       return profile?._tag === "SshConnectionProfile"
@@ -263,7 +276,7 @@ const advertisedRouteKey = (url: string) => canonicalRelayAddress(url) ?? url.re
 export function mergeLearnedRoutes(input: {
   readonly entry: ConnectionCatalogEntry;
   readonly activeRoute: ConnectionRoute;
-  readonly reported?: ReadonlyArray<{ readonly httpBaseUrl: string }> | undefined;
+  readonly reported?: ReadonlyArray<ReportedEndpoint> | undefined;
   readonly relayAdvertisement?: RelayAdvertisement | null | undefined;
   readonly allowRelay?: boolean;
   readonly allowInsecure: boolean;
@@ -278,6 +291,7 @@ export function mergeLearnedRoutes(input: {
     ? validatedRelayAdvertisement(input.relayAdvertisement)
     : undefined;
   const reported = new Map<string, { readonly url: URL; readonly relayUrl?: string }>();
+  const tailscaleOrigins = new Set<string>();
   for (const endpoint of input.reported ?? []) {
     let url: URL;
     try {
@@ -290,6 +304,7 @@ export function mergeLearnedRoutes(input: {
     if (url.protocol === "http:" && !input.allowInsecure) continue;
     if (isLocalLoopbackHost(url.hostname)) continue;
     reported.set(url.origin, { url });
+    if (endpoint.kind === "tailnet") tailscaleOrigins.add(url.origin);
   }
   if (relay !== undefined && relay !== null) {
     reported.set(relay.relayEndpoint, {
@@ -304,8 +319,14 @@ export function mergeLearnedRoutes(input: {
     }),
   );
   const kept = saved.flatMap((route) => {
-    if (!isLearned(route)) return [route];
     const url = routeHttpBaseUrl(route);
+    if (!isLearned(route)) {
+      return [
+        url === null || !reported.has(advertisedRouteKey(url))
+          ? route
+          : withNetwork(route, tailscaleOrigins.has(advertisedRouteKey(url))),
+      ];
+    }
     if (url === null) return [];
     const key = advertisedRouteKey(url);
     const isRelay = canonicalRelayAddress(url) !== null;
@@ -331,7 +352,7 @@ export function mergeLearnedRoutes(input: {
         },
       ];
     }
-    return [route];
+    return [withNetwork(route, tailscaleOrigins.has(key))];
   });
   let next: ReadonlyArray<ConnectionRoute> = kept;
   for (const { url, relayUrl } of reported.values()) {
@@ -357,11 +378,33 @@ export function mergeLearnedRoutes(input: {
           wsBaseUrl: `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/`,
           learned: true,
           ...(relayUrl === undefined ? {} : { relayUrl }),
+          ...(tailscaleOrigins.has(url.origin) ? { network: "tailscale" as const } : {}),
         }),
       ),
     });
   }
   return Equal.equals(saved, next) ? null : next;
+}
+
+export interface ReportedEndpoint {
+  readonly httpBaseUrl: string;
+  readonly kind?: string;
+}
+
+function withNetwork(route: ConnectionRoute, tailscale: boolean): ConnectionRoute {
+  const profile = Option.getOrNull(route.profile);
+  if (profile?._tag !== "BearerConnectionProfile") return route;
+  if ((profile.network === "tailscale") === tailscale) return route;
+  const { network: _network, ...fields } = profile;
+  return {
+    target: route.target,
+    profile: Option.some(
+      new BearerConnectionProfile({
+        ...fields,
+        ...(tailscale ? { network: "tailscale" as const } : {}),
+      }),
+    ),
+  };
 }
 
 function learnedConnectionId(

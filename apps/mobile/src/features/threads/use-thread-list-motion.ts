@@ -13,20 +13,28 @@ import {
 } from "react-native-reanimated";
 
 import { useReducedMotionPreference } from "../../lib/useReducedMotionPreference";
-import { shouldAnimateThreadList, THREAD_LIST_MOTION_DURATION } from "./thread-list-motion";
+import {
+  shouldAnimateThreadList,
+  THREAD_LIST_MOTION_DURATION,
+  type ThreadListMotionItem,
+} from "./thread-list-motion";
 import { isKeyboardMotionSuppressed } from "../../lib/motionInput";
 
 /** Uses LegendList's recycling guards while animating only visible cells' transforms and opacity. */
 export function useThreadListMotion(input: {
-  readonly items: ReadonlyArray<{ readonly key: string }>;
+  readonly items: ReadonlyArray<ThreadListMotionItem>;
   readonly scope: string;
   readonly searching: boolean;
   readonly scrolling: boolean;
   readonly ready: boolean;
+  readonly settledLimit?: number;
 }) {
-  const { items, scope, searching, scrolling, ready } = input;
+  const { items, scope, searching, scrolling, ready, settledLimit = 0 } = input;
   const reducedMotion = useReducedMotionPreference();
-  const frame = useMemo(() => ({ keys: items.map((item) => item.key), scope }), [items, scope]);
+  const frame = useMemo(
+    () => ({ items: items.map(({ key, expanded }) => ({ key, expanded })), scope, settledLimit }),
+    [items, scope, settledLimit],
+  );
   const previous = useRef<typeof frame | null>(null);
   const deadline = useSharedValue(0);
   const alignmentPadding = useSharedValue(0);
@@ -45,11 +53,13 @@ export function useThreadListMotion(input: {
       previous.current !== null &&
       !isKeyboardMotionSuppressed() &&
       shouldAnimateThreadList({
-        keys: frame.keys,
+        items: frame.items,
         scope: frame.scope,
-        previousKeys: previous.current.keys,
+        previousItems: previous.current.items,
         previousScope: previous.current.scope,
         searching,
+        previousSettledLimit: previous.current.settledLimit,
+        settledLimit: frame.settledLimit,
       });
     previous.current = ready ? frame : null;
     // Bound eligibility without scheduling an animation just to expire a flag.

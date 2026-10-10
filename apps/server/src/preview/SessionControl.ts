@@ -73,8 +73,12 @@ export class SessionControl {
     });
   }
 
+  agentMayAct(agentId: string) {
+    return this.agentId === null || this.agentId === agentId;
+  }
+
   agent<A>(agentId: string, run: () => Promise<A>) {
-    if (this.agentId !== agentId)
+    if (!this.agentMayAct(agentId))
       return Promise.reject(
         new BrowserControlInterrupted("This tab belongs to another agent.", "agentMismatch"),
       );
@@ -82,7 +86,16 @@ export class SessionControl {
       return Promise.reject(
         new BrowserControlInterrupted("A human controls this tab.", "humanControl"),
       );
-    return this.action(() => this.agentId === agentId && this.owner === null, run);
+    return this.action(() => this.agentMayAct(agentId) && this.owner === null, run);
+  }
+
+  agentCanActNow(agentId: string) {
+    return this.agentMayAct(agentId) && this.owner === null;
+  }
+
+  observe<A>(run: () => Promise<A>) {
+    this.assertOpen();
+    return run();
   }
 
   /**

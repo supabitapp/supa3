@@ -29,6 +29,7 @@ import {
   BearerConnectionProfile,
   BearerConnectionRegistration,
   type ConnectionRegistration,
+  type ConnectionRoute,
   PrimaryConnectionRegistration,
   SshConnectionProfile,
   type ConnectionCredential,
@@ -37,6 +38,7 @@ import {
 import * as Connectivity from "./connectivity.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
 import * as ConnectionDriver from "./driver.ts";
+import type { RouteCheck } from "./driver.ts";
 import {
   ConnectionTransientError,
   ConnectionBlockedError,
@@ -157,6 +159,8 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     readonly prepareError?: ConnectionBlockedError;
     readonly configChanges?: Stream.Stream<ServerConfig>;
     readonly setRoutes?: Persistence.ConnectionRegistrationStore["Service"]["setRoutes"];
+    readonly checkRoute?: (route: ConnectionRoute) => RouteCheck;
+    readonly prepareRoute?: (target: ConnectionTarget) => ConnectionBlockedError | undefined;
     /** Runs before preparing a connection; may suspend to hold an attempt in flight. */
     readonly beforePrepareRoute?: (
       target: ConnectionTarget,
@@ -169,6 +173,8 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
       target: ConnectionTarget,
     ) => Effect.Effect<void, Persistence.ConnectionPersistenceError>;
     readonly initialDisabled?: ReadonlyArray<EnvironmentId>;
+
+    readonly directEndpoints?: ServerConfig["directEndpoints"];
   },
 ) {
   const storedTargets = yield* Ref.make(

@@ -21,7 +21,7 @@ import {
 } from "@supacode/contracts";
 
 import * as ServerConfig from "../config.ts";
-import { expandHomePathWith } from "../pathExpansion.ts";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
 import {
   parseGitCloneProgressLine,
   type GitCloneProgressLine,
@@ -213,7 +213,7 @@ export const make = Effect.gen(function* () {
         });
       }
 
-      return path.resolve(expandHomePathWith(trimmed, path));
+      return path.resolve(expandHomePath(trimmed));
     },
   );
 

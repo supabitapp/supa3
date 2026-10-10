@@ -12,6 +12,23 @@
 
 export type RichTextMark = "bold" | "italic" | "strike" | "code";
 
+/** Outermost mark first, so closers mirror openers when nested. */
+export const MARK_NESTING_ORDER: RichTextMark[] = ["strike", "bold", "italic", "code"];
+
+export const MARK_TO_TIPTAP: Record<RichTextMark, string> = {
+  bold: "bold",
+  italic: "italic",
+  strike: "strike",
+  code: "code",
+};
+
+export const TIPTAP_TO_MARK: Record<string, RichTextMark> = {
+  bold: "bold",
+  italic: "italic",
+  strike: "strike",
+  code: "code",
+};
+
 interface RichTextSpan {
   text: string;
   marks: RichTextMark[];

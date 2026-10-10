@@ -8,6 +8,7 @@ import {
   replaceTextSelection,
 } from "@supacode/client-runtime/text-paste";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
+import { useHeaderHeight } from "@react-navigation/elements";
 import {
   CommonActions,
   StackActions,
@@ -16,7 +17,15 @@ import {
   usePreventRemove,
   type NavigationAction,
 } from "@react-navigation/native";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+} from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
@@ -25,6 +34,7 @@ import {
 } from "react-native-keyboard-controller";
 import Animated, { FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useFontFamily } from "../../lib/useFontFamily";
 import {
@@ -210,8 +220,22 @@ export function NewTaskDraftScreen(props: {
   } = useIncomingShare();
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
+  const keyboardHeight = useKeyboardState((state) => state.height);
+  const headerHeight = useHeaderHeight();
+  const [viewportHeight, setViewportHeight] = useState(0);
   const controlsBottomPadding = Math.max(insets.bottom, 10);
   const keyboardOpenedOffset = Math.max(0, controlsBottomPadding - 8);
+  const headerOverlap = Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? headerHeight : 0;
+  const availableDockHeight =
+    viewportHeight > 0
+      ? Math.max(
+          0,
+          viewportHeight -
+            keyboardHeight -
+            headerOverlap +
+            (isKeyboardVisible ? keyboardOpenedOffset : 0),
+        )
+      : undefined;
   const { projectScopes, selectedProject, selectedProjectKey, setProject } = flow;
   const { connectedEnvironments } = useRemoteConnectionStatus();
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
@@ -316,8 +340,15 @@ export function NewTaskDraftScreen(props: {
     });
   const queuesInsteadOfStarting = !environmentConnected || attachmentsUploading;
   const promptInputRef = useRef<ComposerEditorHandle>(null);
+  const composerDockRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const keepFocusedComposerVisible = useCallback(() => {
+    if (isComposerFocused) {
+      composerDockRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [isComposerFocused]);
+  useEffect(keepFocusedComposerVisible, [keepFocusedComposerVisible]);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const wasFocusedBeforePreviewRef = useRef(false);
@@ -1510,6 +1541,16 @@ export function NewTaskDraftScreen(props: {
     void KeyboardController.dismiss({ animated: true });
     navigation.dispatch(StackActions.push(routeName));
   };
+  const keyboardDismissArea = (
+    <Pressable
+      accessible={false}
+      className="flex-1"
+      onPress={() => {
+        promptInputRef.current?.blur();
+        void KeyboardController.dismiss({ animated: true });
+      }}
+    />
+  );
 
   const environmentControl = (
     <ComposerInlineControl
@@ -1583,24 +1624,6 @@ export function NewTaskDraftScreen(props: {
       {environmentControl}
     </View>
   );
-  const heroViewport = (
-    <View className="flex-1" collapsable={false}>
-      <ScrollView
-        alwaysBounceVertical={isKeyboardVisible}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="never"
-        contentContainerClassName="grow items-center pb-[236px] pt-12 ios:pt-[72px]"
-        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        testID="new-task-hero-scroll"
-      >
-        {hero}
-      </ScrollView>
-    </View>
-  );
-
   const workspaceControls = (
     <View className="flex-row items-center gap-1 px-2">
       <ComposerInlineControl
@@ -1633,12 +1656,21 @@ export function NewTaskDraftScreen(props: {
   );
 
   const composerDock = (
-    <View
-      className={
-        Platform.OS === "android" ? "bg-sheet-solid px-[12px] pt-1" : "bg-sheet px-[12px] pt-1"
-      }
-      style={{ paddingBottom: controlsBottomPadding }}
+    <ScrollView
+      ref={composerDockRef}
+      bounces={false}
+      className={Platform.OS === "android" ? "bg-sheet-solid" : "bg-sheet"}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerClassName="px-[12px] pt-1"
+      contentContainerStyle={{ paddingBottom: controlsBottomPadding }}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+      onContentSizeChange={keepFocusedComposerVisible}
+      onLayout={keepFocusedComposerVisible}
+      showsVerticalScrollIndicator={false}
+      style={{ flexGrow: 0, maxHeight: availableDockHeight }}
     >
+      <View className="pb-3">{hero}</View>
       {!voiceInput.isBusy &&
       composerMenu.trigger &&
       (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request") ? (
@@ -1850,7 +1882,7 @@ export function NewTaskDraftScreen(props: {
       </ComposerSurface>
       <VideoPreviewModal source={previewVideo} onRequestClose={closeMediaPreview} />
       <FilePreviewModal source={previewFile} onRequestClose={closeMediaPreview} />
-    </View>
+    </ScrollView>
   );
 
   if (isAndroid) {
@@ -1859,21 +1891,30 @@ export function NewTaskDraftScreen(props: {
         <NativeStackScreenOptions options={{ headerShown: false }} />
         <AndroidScreenHeader title="New thread" hideBottomBorder onBack={closeNewTask} />
         <MaterialScreenContent>
-          {heroViewport}
-
-          <KeyboardStickyView
-            style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
-            offset={{ closed: 0, opened: keyboardOpenedOffset }}
+          <View
+            className="flex-1"
+            onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
           >
-            {composerDock}
-          </KeyboardStickyView>
+            {keyboardDismissArea}
+
+            <KeyboardStickyView
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
+              offset={{ closed: 0, opened: keyboardOpenedOffset }}
+            >
+              {composerDock}
+            </KeyboardStickyView>
+          </View>
         </MaterialScreenContent>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-sheet" collapsable={false}>
+    <View
+      className="flex-1 bg-sheet"
+      collapsable={false}
+      onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+    >
       <NativeStackScreenOptions
         options={{
           headerBackVisible: false,
@@ -1889,7 +1930,7 @@ export function NewTaskDraftScreen(props: {
         />
       </NativeHeaderToolbar>
 
-      {heroViewport}
+      {keyboardDismissArea}
       <KeyboardStickyView
         pointerEvents="box-none"
         style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}

@@ -15,7 +15,7 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
 import { buildPairingUrl } from "@supacode/shared/remote";
 
-import { RelayGateway } from "../relay/gateway.ts";
+import { RelayGateway, layer as layerRelayGateway } from "../relay/gateway.ts";
 import * as RpcHttp from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import { fetchRemoteSessionState } from "../authorization/remote.ts";
@@ -175,7 +175,7 @@ const ROUTED_PAIRING_LINK = buildPairingUrl(LAN, "pairing-token", {
   routes: [TAILNET],
 });
 
-function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true): ConnectionRoute {
+function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true) {
   return {
     target: new BearerConnectionTarget({
       environmentId: SAVED_ENVIRONMENT_ID,
@@ -289,7 +289,8 @@ describe("connection onboarding", () => {
           ),
           Effect.provideService(RelayGateway, {
             available: true,
-            resolve: async () => {
+            resolve: async (address) => {
+              if (address !== relayEndpoint) return address;
               entered.resolve();
               if (mode === "failed") throw new Error("Relay unavailable");
               return new Promise<string>(() => {});
@@ -339,6 +340,60 @@ describe("connection onboarding", () => {
       });
       expect(calls).toEqual([]);
     }),
+  );
+
+  it.effect(
+    "pairs an unreachable LAN link through a learned custom relay with a cold gateway",
+    () =>
+      Effect.gen(function* () {
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const customRelay = "wss://private-relay.example.test";
+        const loopback = "http://127.0.0.1:44000";
+        const calls: Call[] = [];
+        const opened: Array<{ address: string; relayUrl: string }> = [];
+        const server = pairingServer();
+        const layerGateway = layerRelayGateway({
+          open: async (address, relayUrl) => {
+            opened.push({ address, relayUrl });
+            if (relayUrl !== customRelay) throw new Error("Wrong relay server");
+            return { prepare: async () => loopback, close: async () => {} };
+          },
+          fetch: async (request, init = {}) => {
+            const url = new URL(String(request));
+            calls.push({ url: url.href, init });
+            if (url.origin !== loopback) throw new Error("LAN is unreachable");
+            return server(url.pathname, init);
+          },
+        });
+        const lan = savedRoute(LAN, TAILNET_CONNECTION);
+        const saved = savedRoute(
+          relayEndpoint,
+          `learned:${SAVED_ENVIRONMENT_ID}:${relayEndpoint}@${TAILNET_CONNECTION}`,
+          true,
+        );
+        const profile = Option.getOrThrow(saved.profile);
+        const relay = {
+          ...saved,
+          profile: Option.some(new BearerConnectionProfile({ ...profile, relayUrl: customRelay })),
+        };
+        const registration = yield* Effect.gen(function* () {
+          const gateway = yield* RelayGateway;
+          return yield* preparePairingRegistration(
+            { pairingUrl: PAIRING_LINK },
+            savedEnvironment(lan, relay),
+          ).pipe(
+            Effect.provide(layerClientPresentation),
+            Effect.provide(RpcHttp.layerRemoteHttpClient(gateway.fetch)),
+          );
+        }).pipe(Effect.provide(layerGateway));
+        expect(registration.registration.target.environmentId).toBe(SAVED_ENVIRONMENT_ID);
+        expect(opened).toEqual([
+          { address: relayEndpoint.replace(/\/$/, ""), relayUrl: customRelay },
+        ]);
+        expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+          `${loopback}/oauth/token`,
+        ]);
+      }).pipe(Effect.scoped),
   );
 
   it.effect("pairs a new device through a link route and saves the reachable address", () =>

@@ -1,0 +1,21 @@
+import { isProviderDriverKind } from "@supacode/contracts";
+import { acpRegistryClient } from "@supacode/provider-acp-registry/client";
+import { makeProviderClientRegistry } from "@supacode/provider-core/client";
+import { cursorClient } from "@supacode/provider-cursor/client";
+import { grokClient } from "@supacode/provider-grok/client";
+import { museClient } from "@supacode/provider-muse/client";
+import { openCodeClient } from "@supacode/provider-opencode/client";
+import { piClient } from "@supacode/provider-pi/client";
+
+const providerClients = makeProviderClientRegistry([
+  cursorClient,
+  grokClient,
+  museClient,
+  openCodeClient,
+  piClient,
+  acpRegistryClient,
+]);
+
+export function getProviderClient(driver: string | null | undefined) {
+  return isProviderDriverKind(driver) ? providerClients.get(driver) : undefined;
+}

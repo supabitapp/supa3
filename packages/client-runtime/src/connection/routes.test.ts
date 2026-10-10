@@ -49,17 +49,17 @@ function route(
 }
 
 describe("connection routes", () => {
-  it("orders LAN ahead of Tailscale and public routes", () => {
+  it("orders LAN ahead of VPN and public routes", () => {
     const publicRoute = route("https://remote.example.test", "public");
-    const tailnetRoute = route("http://100.100.10.2:4389", "tailnet");
+    const vpnRoute = route("http://100.100.10.2:4389", "vpn");
     const lanRoute = route("http://192.168.1.20:4389", "lan");
     expect(connectionRouteKind(lanRoute)).toBe("lan");
-    expect(connectionRouteKind(tailnetRoute)).toBe("tailnet");
+    expect(connectionRouteKind(vpnRoute)).toBe("vpn");
     expect(
-      insertRoute(insertRoute([publicRoute], tailnetRoute), lanRoute).map((item) =>
+      insertRoute(insertRoute([publicRoute], vpnRoute), lanRoute).map((item) =>
         connectionRouteKind(item),
       ),
-    ).toEqual(["lan", "tailnet", "public"]);
+    ).toEqual(["lan", "vpn", "public"]);
   });
 
   it("learns both direct endpoint kinds while reusing the paired credential", () => {
@@ -90,6 +90,39 @@ describe("connection routes", () => {
       "learned:environment-routes:http://100.100.10.2:4389@bearer:environment-routes",
     ]);
   });
+
+  it.each([true, false])(
+    "preserves custom relay configuration when tailnet provenance becomes %s",
+    (tailscale) => {
+      const paired = route("http://100.100.10.2:4389");
+      const profile = Option.getOrThrow(paired.profile);
+      if (profile._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+      const active: ConnectionRoute = {
+        target: paired.target,
+        profile: Option.some(
+          new BearerConnectionProfile({
+            ...profile,
+            relayUrl: "https://custom-relay.example.test",
+            ...(tailscale ? {} : { network: "tailscale" as const }),
+          }),
+        ),
+      };
+      const updated = mergeLearnedRoutes({
+        entry: { target: active.target, profile: active.profile, enabled: true },
+        activeRoute: active,
+        reported: [
+          { httpBaseUrl: "http://100.100.10.2:4389", kind: tailscale ? "tailnet" : "vpn" },
+        ],
+        allowInsecure: true,
+      });
+      expect(updated).not.toBeNull();
+      const next = Option.getOrThrow(updated![0]!.profile);
+      expect(next._tag).toBe("BearerConnectionProfile");
+      if (next._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+      expect(next.relayUrl).toBe("https://custom-relay.example.test");
+      expect(next.network).toBe(tailscale ? "tailscale" : undefined);
+    },
+  );
 
   it("drops learned routes when the paired route is removed", () => {
     const active = route("https://remote.example.test");
@@ -126,7 +159,7 @@ describe("connection routes", () => {
 
     expect(pairingFallbackRoutes(entries, "http://192.168.1.20:4389/", undefined)).toEqual({
       environmentId,
-      httpBaseUrls: ["https://minim5.tail.ts.net/"],
+      routes: [{ httpBaseUrl: "https://minim5.tail.ts.net/" }],
     });
     expect(pairingFallbackRoutes(entries, "http://192.168.1.30:4389/", undefined)).toBeNull();
   });
@@ -168,7 +201,7 @@ describe("connection routes", () => {
     expect(pairingFallbackRoutes(entries, "http://192.168.1.99:4389/", undefined)).toBeNull();
     expect(pairingFallbackRoutes(entries, "http://192.168.1.99:4389/", environmentId)).toEqual({
       environmentId,
-      httpBaseUrls: ["https://minim5.tail.ts.net/"],
+      routes: [{ httpBaseUrl: "https://minim5.tail.ts.net/" }],
     });
   });
 });
@@ -189,7 +222,9 @@ const learnRelay = (overrides: Partial<Parameters<typeof mergeLearnedRoutes>[0]>
 
 describe("relay route advertisements", () => {
   it("learns relay after direct routes with the existing credential and custom server", () => {
-    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    const routes = learnRelay({
+      reported: [{ httpBaseUrl: "http://100.100.10.2:4389/", kind: "tailnet" }],
+    })!;
     expect(routes.map(connectionRouteKind)).toEqual(["lan", "tailnet", "public"]);
     expect(credentialConnectionId(connectionRouteId(routes[2]!.target))).toBe(credential);
     expect(Option.getOrThrow(routes[2]!.profile)).toMatchObject({
@@ -200,7 +235,7 @@ describe("relay route advertisements", () => {
     expect(
       learnRelay({
         entry: entryWithRoutes(baseEntry, routes),
-        reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }],
+        reported: [{ httpBaseUrl: "http://100.100.10.2:4389/", kind: "tailnet" }],
       }),
     ).toBeNull();
   });
@@ -231,7 +266,9 @@ describe("relay route advertisements", () => {
   });
 
   it("withdraws only learned relay while retaining direct routes and explicit relay routes", () => {
-    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    const routes = learnRelay({
+      reported: [{ httpBaseUrl: "http://100.100.10.2:4389/", kind: "tailnet" }],
+    })!;
     const explicit = route(relayEndpoint, "explicit-relay");
     const next = learnRelay({
       entry: entryWithRoutes(baseEntry, [...routes, explicit]),
@@ -258,7 +295,9 @@ describe("relay route advertisements", () => {
   });
 
   it("keeps direct and relay advertisements independent", () => {
-    const routes = learnRelay({ reported: [{ httpBaseUrl: "http://100.100.10.2:4389/" }] })!;
+    const routes = learnRelay({
+      reported: [{ httpBaseUrl: "http://100.100.10.2:4389/", kind: "tailnet" }],
+    })!;
     expect(
       learnRelay({
         entry: entryWithRoutes(baseEntry, routes),

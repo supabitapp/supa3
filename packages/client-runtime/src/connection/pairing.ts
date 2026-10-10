@@ -23,8 +23,7 @@ const reachDescriptor = Effect.fnUntraced(
     expectedEnvironmentId: EnvironmentId | undefined,
     relayUrl?: string,
   ) {
-    const origin =
-      source === "linked" ? yield* resolveRelayOrigin(httpBaseUrl, relayUrl) : httpBaseUrl;
+    const origin = yield* resolveRelayOrigin(httpBaseUrl, relayUrl);
     const descriptor = yield* fetchRemoteEnvironmentDescriptor({ httpBaseUrl: origin }).pipe(
       Effect.mapError(mapRemoteEnvironmentError),
     );
@@ -53,14 +52,17 @@ export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.re
     readonly fallback: PairingFallback | null;
     readonly routes: ReadonlyArray<string>;
   }) {
-    const candidates = new Map<string, { httpBaseUrl: string; source: "saved" | "hint" }>();
+    const candidates = new Map<
+      string,
+      { httpBaseUrl: string; relayUrl?: string; source: "saved" | "hint" }
+    >();
     const linkedOrigin = new URL(input.httpBaseUrl).origin;
     for (const [source, urls] of [
-      ["saved", input.fallback?.httpBaseUrls ?? []],
-      ["hint", input.routes],
+      ["saved", input.fallback?.routes ?? []],
+      ["hint", input.routes.map((httpBaseUrl) => ({ httpBaseUrl }))],
     ] as const) {
-      for (const httpBaseUrl of urls) {
-        const url = new URL(httpBaseUrl);
+      for (const route of urls) {
+        const url = new URL(route.httpBaseUrl);
         if (url.origin === linkedOrigin || candidates.has(url.origin)) continue;
         if (
           url.protocol === "http:" &&
@@ -68,7 +70,7 @@ export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.re
           globalThis.location.protocol === "https:"
         )
           continue;
-        candidates.set(url.origin, { httpBaseUrl, source });
+        candidates.set(url.origin, { ...route, source });
       }
     }
     const linkedAddress = reachDescriptor(
@@ -86,11 +88,12 @@ export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.re
     if (Option.isSome(answered)) return answered.value;
     return yield* Effect.raceAll([
       Fiber.join(linked),
-      ...[...candidates.values()].map(({ httpBaseUrl, source }) =>
+      ...[...candidates.values()].map(({ httpBaseUrl, source, relayUrl }) =>
         reachDescriptor(
           httpBaseUrl,
           source,
           input.expectedEnvironmentId ?? input.fallback?.environmentId,
+          relayUrl,
         ),
       ),
     ]).pipe(Effect.catch(() => Fiber.join(linked)));

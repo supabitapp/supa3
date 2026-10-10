@@ -322,6 +322,11 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
     }
   }
 
+  const searchMatchBackground =
+    solidOver(canvas, "editor.findMatchHighlightBackground") ?? derived.searchMatchBackground;
+  const searchMatchActiveBackground =
+    solidOver(canvas, "editor.findMatchBackground") ?? derived.searchMatchActiveBackground;
+
   const overrides: Partial<Record<ThemeColorRole, string>> = {
     canvas: canvasHex,
     text: readableOn(canvasHex, derived.text, "editor.foreground", "foreground"),
@@ -346,6 +351,22 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
       solidOver(canvas, "list.activeSelectionBackground", "list.hoverBackground") ??
       derived.accentSurface,
     codeBackground: solidOver(canvas, "textCodeBlock.background") ?? derived.codeBackground,
+    searchMatchBackground,
+    searchMatchForeground: readableOn(
+      searchMatchBackground,
+      derived.searchMatchForeground,
+      "editor.findMatchHighlightForeground",
+      "editor.foreground",
+      "foreground",
+    ),
+    searchMatchActiveBackground,
+    searchMatchActiveForeground: readableOn(
+      searchMatchActiveBackground,
+      derived.searchMatchActiveForeground,
+      "editor.findMatchForeground",
+      "editor.foreground",
+      "foreground",
+    ),
     sidebar: sidebarHex,
     sidebarForeground: readableOn(sidebarHex, derived.sidebarForeground, "sideBar.foreground"),
     sidebarBorder: solidOver(sidebar, "sideBar.border") ?? derived.sidebarBorder,

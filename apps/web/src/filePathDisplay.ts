@@ -1,10 +1,9 @@
 import {
   fileBasename,
-  formatFilePathPosition,
-  splitFilePathPosition,
   stripSlashPrefixedWindowsDrive,
-} from "@supacode/client-runtime/markdown-links";
-import { isWindowsAbsolutePath } from "@supacode/shared/path";
+  isWindowsAbsolutePath,
+} from "@supacode/shared/path";
+import { formatFilePathPosition, splitFilePathPosition } from "@supacode/shared/fileLinks";
 
 function normalizePathSeparators(path: string): string {
   return path.replaceAll("\\", "/");

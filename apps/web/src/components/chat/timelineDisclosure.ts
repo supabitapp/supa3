@@ -21,7 +21,7 @@ export function useTimelineDisclosure(initialOpen = false) {
     report(event.target, open);
     setOpen(!open);
   };
-  return [open, toggle] as const;
+  return [open, toggle, setOpen] as const;
 }
 
 // Base UI starts a panel's height transition a frame after the toggle commits.

@@ -46,10 +46,21 @@ const resolveClientFilePath = Effect.fn("AntigravityClientFiles.resolveClientFil
             Effect.orElseSucceed(() => true),
           );
           if (entryExists) return yield* outside;
-          const parent = yield* input.fileSystem
-            .realPath(path.dirname(resolved))
-            .pipe(Effect.orElseSucceed(() => path.dirname(resolved)));
-          return path.join(parent, path.basename(resolved));
+          let parent = path.dirname(resolved);
+          while (true) {
+            const canonical = yield* input.fileSystem.realPath(parent).pipe(Effect.result);
+            if (canonical._tag === "Success") {
+              return path.join(canonical.success, path.relative(parent, resolved));
+            }
+            const existing = yield* input.fileSystem.readLink(parent).pipe(
+              Effect.as(true),
+              Effect.catch(() => input.fileSystem.exists(parent)),
+              Effect.orElseSucceed(() => true),
+            );
+            const next = path.dirname(parent);
+            if (existing || next === parent) return yield* outside;
+            parent = next;
+          }
         }),
       ),
     );
