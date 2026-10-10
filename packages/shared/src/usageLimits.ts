@@ -542,6 +542,57 @@ export function formatResetsIn(window: ServerProviderUsageWindow, now: number): 
   return resetsAt <= now ? "resets now" : `resets in ${formatDuration(resetsAt - now)}`;
 }
 
+export interface ComposerUsageMeter {
+  readonly id: string;
+  readonly label: string;
+  readonly title: string;
+  readonly usedPercent: number;
+  readonly resetsAt: string | null;
+  readonly resetsIn: string | null;
+}
+
+const COMPOSER_METER_KINDS = ["session", "weekly", "monthly"] as const;
+
+function composerMeterLabel(window: ServerProviderUsageWindow): string {
+  if (window.kind === "weekly") return "Week";
+  if (window.kind === "monthly") return "Month";
+  const mins = window.windowDurationMins;
+  return mins !== undefined && mins > 0 && mins % 60 === 0 ? `${mins / 60}h` : "Session";
+}
+
+/**
+ * The selected provider's usage under the composer: one meter per window
+ * length, session then weekly then monthly. Windows arrive sorted by id, so
+ * Claude's account-wide weekly leads its model-scoped ones, and Cursor's
+ * combined Overall stands in for its two pools. A window whose reset has
+ * passed has rolled over, so it reads as unused until the next read lands.
+ */
+export function composerUsageMeters(
+  provider: ServerProvider | null,
+  now: number,
+): readonly ComposerUsageMeter[] {
+  const limits = provider ? providersWithLimits([provider])[0]?.usageLimits : undefined;
+  if (!limits) return [];
+  return COMPOSER_METER_KINDS.flatMap((kind) => {
+    const window = limits.windows
+      .filter((candidate) => candidate.kind === kind)
+      .sort((left, right) => cursorUsageWindowRank(left.id) - cursorUsageWindowRank(right.id))[0];
+    if (!window) return [];
+    const resetsAt = resetMillis(window);
+    const rolledOver = resetsAt !== null && resetsAt <= now;
+    return [
+      {
+        id: window.id,
+        label: composerMeterLabel(window),
+        title: window.label,
+        usedPercent: rolledOver ? 0 : Math.round(window.usedPercent),
+        resetsAt: rolledOver ? null : (window.resetsAt ?? null),
+        resetsIn: resetsAt === null || rolledOver ? null : formatDuration(resetsAt - now),
+      },
+    ];
+  });
+}
+
 /** Limit commands are served by Supacode from the same snapshots as Usage → Limits. */
 export const USAGE_LIMITS_COMMAND = {
   name: "usage-limits",

@@ -17,6 +17,7 @@ import {
   collectExternalUsageLinks,
   collectLimitNotices,
   collectLimitPools,
+  composerUsageMeters,
   displayLimitWindows,
   elapsedShare,
   formatResetsIn,
@@ -802,6 +803,89 @@ describe("Cursor limit presentation", () => {
     );
     const display = displayLimitWindows(pool!);
     expect(display.map((window) => window.id)).toEqual(["totalPercentUsed", "autoPercentUsed"]);
+  });
+});
+
+describe("composerUsageMeters", () => {
+  const claude = provider({
+    instanceId: ProviderInstanceId.make("claudeAgent"),
+    driver: ProviderDriverKind.make("claudeAgent"),
+    usageLimits: {
+      checkedAt: "2026-09-03T11:00:00.000Z",
+      windows: [
+        window,
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          usedPercent: 61.6,
+          windowDurationMins: 10_080,
+          resetsAt: "2026-09-06T15:30:00.000Z",
+        },
+        {
+          id: "seven_day_fable",
+          kind: "weekly",
+          label: "Weekly · Fable",
+          usedPercent: 90,
+          windowDurationMins: 10_080,
+        },
+      ],
+    },
+  });
+
+  it("shows one meter per window length, account-wide before model-scoped", () => {
+    expect(composerUsageMeters(claude, now)).toEqual([
+      {
+        id: "five_hour",
+        label: "5h",
+        title: "Session",
+        usedPercent: 40,
+        resetsAt: "2026-09-03T14:00:00.000Z",
+        resetsIn: "2h 0m",
+      },
+      {
+        id: "seven_day",
+        label: "Week",
+        title: "Weekly",
+        usedPercent: 62,
+        resetsAt: "2026-09-06T15:30:00.000Z",
+        resetsIn: "3d 3h",
+      },
+    ]);
+  });
+
+  it("reads a window whose reset has passed as unused", () => {
+    const later = Date.parse("2026-09-03T14:30:00.000Z");
+    expect(composerUsageMeters(claude, later)[0]).toMatchObject({
+      label: "5h",
+      usedPercent: 0,
+      resetsAt: null,
+      resetsIn: null,
+    });
+  });
+
+  it("uses Cursor's overall percentage as its monthly total", () => {
+    const cursor = provider({
+      instanceId: ProviderInstanceId.make("cursor"),
+      driver: ProviderDriverKind.make("cursor"),
+      usageLimits: {
+        checkedAt: "2026-09-03T11:00:00.000Z",
+        windows: [
+          { id: "apiPercentUsed", kind: "monthly", label: "Other Models", usedPercent: 49 },
+          { id: "autoPercentUsed", kind: "monthly", label: "Cursor Models", usedPercent: 9 },
+          { id: "totalPercentUsed", kind: "monthly", label: "Overall", usedPercent: 15 },
+        ],
+      },
+    });
+    expect(composerUsageMeters(cursor, now)).toEqual([
+      expect.objectContaining({ label: "Month", title: "Overall", usedPercent: 15 }),
+    ]);
+  });
+
+  it("shows nothing for a provider that cannot report limits right now", () => {
+    expect(composerUsageMeters(null, now)).toEqual([]);
+    expect(composerUsageMeters({ ...claude, enabled: false }, now)).toEqual([]);
+    expect(composerUsageMeters(provider({}), now)).toEqual([]);
   });
 });
 

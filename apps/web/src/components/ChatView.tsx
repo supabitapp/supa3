@@ -47,6 +47,7 @@ import {
 } from "@supacode/shared/usageLimits";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { usageLimitsBannerItem } from "./chat/ComposerUsageLimits";
+import { ComposerUsageMeter } from "./chat/ComposerUsageMeter";
 import { getTerminalLabel } from "@supacode/shared/terminalLabels";
 import * as Schema from "effect/Schema";
 import {
@@ -11122,7 +11123,7 @@ export default function ChatView(props: ChatViewProps) {
                 >
                   <div
                     ref={draftHeroComposerAnchorRef}
-                    className="relative z-10"
+                    className="group/composer-anchor relative z-10"
                     style={
                       forceExpandedMobileComposer
                         ? { viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME }
@@ -11409,6 +11410,10 @@ export default function ChatView(props: ChatViewProps) {
                         </div>
                       </div>
                     </ComposerSurface.Shell>
+                    <ComposerUsageMeter
+                      provider={activeProviderStatus}
+                      className="hidden pt-2 transition-[opacity,visibility] duration-150 ease-out group-has-[[data-chat-composer-resting-controls]]/composer-anchor:invisible group-has-[[data-chat-composer-resting-controls]]/composer-anchor:opacity-0 motion-reduce:transition-none sm:flex"
+                    />
                     <div
                       aria-hidden
                       className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
