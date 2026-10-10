@@ -23,6 +23,7 @@ export const RelayServerUrl = Schema.String.check(
 
 export const RelayHostState = Schema.Literals([
   "off",
+  "idle",
   "connecting",
   "registered",
   "superseded",
@@ -36,6 +37,36 @@ export const RelayHostStatus = Schema.Struct({
   relayUrl: Schema.optionalKey(Schema.String),
 });
 export type RelayHostStatus = typeof RelayHostStatus.Type;
+
+export const RelayConnectionInfo = Schema.Struct({
+  relayEndpoint: Schema.String,
+  relayUrl: Schema.String,
+});
+export type RelayConnectionInfo = typeof RelayConnectionInfo.Type;
+
+export class RelayPreparationError extends Schema.TaggedError<RelayPreparationError>()(
+  "RelayPreparationError",
+  {
+    reason: Schema.Literals(["off", "invalid-url", "superseded", "timeout", "unavailable"]),
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+  { httpApiStatus: 503 },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "off":
+        return "Enable Public relay before creating a relay pairing link.";
+      case "invalid-url":
+        return "The relay server URL is invalid.";
+      case "superseded":
+        return "Another host is using this relay identity. Turn Public relay off and on to reconnect here.";
+      case "timeout":
+        return "The relay did not connect in time. Try creating the link again.";
+      case "unavailable":
+        return "The relay could not be prepared. Try creating the link again.";
+    }
+  }
+}
 
 export const RelayCompanionRequest = Schema.Struct({
   id: Schema.String.check(Schema.isMaxLength(64)),

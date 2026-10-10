@@ -986,6 +986,11 @@ export function createServerEnvironmentAtoms<R, E>(
     updateStateAtom,
     settingsValueAtom,
     providersValueAtom,
+    prepareRelay: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:prepare-relay",
+      tag: WS_METHODS.prepareRelay,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
     relayStatus: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:relay-status",
       tag: WS_METHODS.subscribeRelayStatus,

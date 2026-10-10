@@ -3057,6 +3057,7 @@ const layerWsRpc = (
             ),
           ),
         [WS_METHODS.subscribeRelayStatus]: (_input) => relayAccess.status,
+        [WS_METHODS.prepareRelay]: (_input) => relayAccess.prepare,
         [WS_METHODS.subscribeResourceTelemetry]: (_input) =>
           Stream.unwrap(
             Effect.map(resourceTelemetry.subscribe, ({ latest, changes }) =>
