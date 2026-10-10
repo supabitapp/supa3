@@ -1322,18 +1322,29 @@ export function deriveThreadFeedPresentation(
   ) {
     result.push(thinkingRow(activeWorkStartedAt, activeRunId));
   }
-  return result.map((row, index) => {
-    if (!isWorkLogFeedRow(row) || !isWorkLogFeedRow(result[index + 1])) return row;
-    let continued = continuedWorkLogRows.get(row);
-    if (!continued) {
-      continued = { ...row, continuesWorkLog: true };
-      continuedWorkLogRows.set(row, continued);
+  return finalizeThreadFeedPresentation(result);
+}
+
+export function finalizeThreadFeedPresentation(feed: ReadonlyArray<ThreadFeedEntry>) {
+  return feed.map((row, index) => {
+    const hideImage =
+      row.type === "work-toggle" && row.latestImage != null && index < feed.length - 1;
+    const continuesWorkLog = isWorkLogFeedRow(row) && isWorkLogFeedRow(feed[index + 1]);
+    if (!hideImage && !continuesWorkLog) return row;
+    let presented = presentedWorkLogRows.get(row);
+    if (!presented || presented.continuesWorkLog !== continuesWorkLog) {
+      presented = {
+        ...row,
+        continuesWorkLog,
+        ...(hideImage ? { latestImage: null } : {}),
+      };
+      presentedWorkLogRows.set(row, presented);
     }
-    return continued;
+    return presented;
   });
 }
 
-const continuedWorkLogRows = new WeakMap<ThreadFeedEntry, ThreadFeedEntry>();
+const presentedWorkLogRows = new WeakMap<ThreadFeedEntry, ThreadFeedEntry>();
 
 function isWorkLogFeedRow(row: ThreadFeedEntry | undefined): boolean {
   return (

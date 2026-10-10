@@ -669,6 +669,71 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it.each([false, true])(
+    "hides earlier group previews when chat advances, working=%s",
+    (isWorking) => {
+      const fixture = makeStreamingTimelineFixture("Continuing after the screenshot.");
+      const source = fixture.visibleTurnItems.find((row) => row.item.type === "dynamic_tool")!;
+      if (source.item.type !== "dynamic_tool") throw new Error("Expected tool fixture");
+      const screenshot = (position: number) => {
+        const id = TurnItemId.make(`screenshot-${position}`);
+        return {
+          ...source,
+          position,
+          sourceItemId: id,
+          item: {
+            ...source.item,
+            id,
+            output: undefined,
+            outputOmitted: true,
+            outputImageCount: 1,
+          },
+        };
+      };
+      const initial = [screenshot(0), screenshot(1)];
+      const rows = (items: OrchestrationV2ProjectedTurnItem[]) =>
+        deriveMessagesTimelineRows({
+          timelineEntries: deriveTimelineEntriesFromVisibleTurnItems({
+            visibleTurnItems: items,
+            optimisticMessages: [],
+          }),
+          isWorking,
+          runningRunId: fixture.runId,
+          expandedRunIds: new Set([fixture.runId]),
+          activeTurnStartedAt: fixture.time(5),
+          turnDiffSummaries: [],
+          supportsConversationRollback: false,
+        });
+      expect(
+        rows(initial).find((row) => row.kind === "work-toggle" || row.kind === "work-live")
+          ?.latestImage,
+      ).toMatchObject({
+        resource: { itemId: initial[1]!.sourceItemId },
+      });
+      for (const type of ["assistant_message", "user_message"] as const) {
+        const following = fixture.visibleTurnItems.find(
+          (row) => row.item.type === type && row.item.runId === fixture.runId,
+        )!;
+        const advanced = rows([...initial, { ...following, position: 2 }]);
+        expect(
+          advanced.find((row) => row.kind === "work-toggle" || row.kind === "work-live")
+            ?.latestImage,
+        ).toBeNull();
+      }
+      const assistant = fixture.visibleTurnItems.find(
+        (row) => row.item.type === "assistant_message" && row.item.runId === fixture.runId,
+      )!;
+      const newer = screenshot(4);
+      const groups = rows([...initial, { ...assistant, position: 2 }, screenshot(3), newer]).filter(
+        (row) => row.kind === "work-toggle" || row.kind === "work-live",
+      );
+      expect(groups.map((row) => row.latestImage?.resource)).toEqual([
+        undefined,
+        expect.objectContaining({ itemId: newer.sourceItemId }),
+      ]);
+    },
+  );
+
   it("updates and clears a collapsed group's image with the latest tool result", () => {
     const fixture = makeStreamingTimelineFixture();
     const source = fixture.visibleTurnItems.find((row) => row.item.type === "dynamic_tool")!;

@@ -2087,9 +2087,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
           {row.kind === "work-live" ? <LiveWorkEntryTimelineRow row={row} /> : null}
           {row.kind === "work-toggle" ? <WorkGroupToggleTimelineRow row={row} /> : null}
           {row.kind === "thinking" ? <ThinkingTimelineRow row={row} /> : null}
-          {(row.kind === "work-toggle" || row.kind === "work-live" || row.kind === "thinking") &&
-          !row.expanded ? (
-            <CollapsedToolGroupImage image={row.latestImage ?? null} />
+          {row.kind === "work-toggle" || row.kind === "work-live" || row.kind === "thinking" ? (
+            <CollapsedToolGroupImage image={row.expanded ? null : (row.latestImage ?? null)} />
           ) : null}
         </WorkLogBlock>
       ) : null}
@@ -4149,19 +4148,27 @@ function toolGroupSummaryIconName(
 
 function CollapsedToolGroupImage({ image }: { image: ToolGroupImage | null }) {
   const ctx = use(TimelineRowCtx);
-  if (!image) return null;
+  const presence = usePresence(image);
+  const retainedImage = presence.value;
+  if (!retainedImage) return null;
   return (
-    <WorkLogDetails kind="media">
-      <ChatMarkdownAssetImage
-        environmentId={ctx.activeThreadEnvironmentId}
-        resource={image.resource}
-        alt={image.alt}
-        srcFragment={image.srcFragment ?? ""}
-        workspaceRoot={ctx.workspaceRoot}
-        maxHeightRem={16}
-        onImageExpand={ctx.onImageExpand}
-      />
-    </WorkLogDetails>
+    <div
+      {...presence.props}
+      inert={presence.exiting}
+      className="transition-[opacity,translate] duration-180 ease-drawer data-enter:starting:-translate-y-1 data-enter:starting:opacity-0 data-ending-style:-translate-y-1 data-ending-style:opacity-0 data-ending-style:duration-140 motion-reduce:transition-none"
+    >
+      <WorkLogDetails kind="media">
+        <ChatMarkdownAssetImage
+          environmentId={ctx.activeThreadEnvironmentId}
+          resource={retainedImage.resource}
+          alt={retainedImage.alt}
+          srcFragment={retainedImage.srcFragment ?? ""}
+          workspaceRoot={ctx.workspaceRoot}
+          maxHeightRem={16}
+          onImageExpand={ctx.onImageExpand}
+        />
+      </WorkLogDetails>
+    </div>
   );
 }
 

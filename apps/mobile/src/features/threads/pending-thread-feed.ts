@@ -1,5 +1,5 @@
 import type { DraftComposerAttachment } from "../../lib/composerImages";
-import type { ThreadFeedEntry } from "../../lib/threadActivity";
+import { finalizeThreadFeedPresentation, type ThreadFeedEntry } from "../../lib/threadActivity";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 
 export type PendingThreadFeedEntry = ThreadFeedEntry & {
@@ -35,7 +35,7 @@ export function appendPendingThreadMessages(
   const deliveredIds = new Set(
     feed.flatMap((entry) => (entry.type === "message" ? [entry.message.id] : [])),
   );
-  return [
+  return finalizeThreadFeedPresentation([
     ...presentedFeed,
     ...queuedMessages.flatMap((pendingMessage): PendingThreadFeedEntry[] => {
       if (deliveredIds.has(pendingMessage.messageId)) return [];
@@ -61,5 +61,5 @@ export function appendPendingThreadMessages(
         },
       ];
     }),
-  ];
+  ]);
 }

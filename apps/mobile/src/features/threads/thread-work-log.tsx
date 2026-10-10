@@ -1052,6 +1052,9 @@ export function ThreadWorkGroupToggle(props: {
   readonly onToggle: () => void;
 }) {
   const statusLabel = props.hasFailure ? `${props.summary}, tool call failed` : props.summary;
+  const image = props.expanded ? null : (props.latestImage ?? null);
+  const [retainedImage, setRetainedImage] = useState(image);
+  if (image && image !== retainedImage) setRetainedImage(image);
   const accessibilityLabel = props.thought ? `${props.thought} ${statusLabel}` : statusLabel;
   const icon =
     props.summaryToolIcon ??
@@ -1124,18 +1127,22 @@ export function ThreadWorkGroupToggle(props: {
           tintColor={props.iconSubtleColor}
         />
       </WorkLogPressable>
-      {!props.expanded && props.latestImage ? (
-        <View className="ml-7 mt-1">
+      <MotionPresence
+        visible={image !== null}
+        onHidden={() => setRetainedImage(null)}
+        className="ml-7 mt-1"
+      >
+        {retainedImage ? (
           <ThreadMarkdownImage
             environmentId={props.environmentId}
-            resource={props.latestImage.resource}
-            alt={props.latestImage.alt}
+            resource={retainedImage.resource}
+            alt={retainedImage.alt}
             showCaption={false}
-            srcFragment={props.latestImage.srcFragment}
+            srcFragment={retainedImage.srcFragment}
             onPressPreview={props.onPressPreview}
           />
-        </View>
-      ) : null}
+        ) : null}
+      </MotionPresence>
     </WorkLogBlock>
   );
 }

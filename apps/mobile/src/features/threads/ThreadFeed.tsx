@@ -3104,7 +3104,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const renderItem = useCallback(
     (info: { item: PendingThreadFeedEntry; index: number }) => (
       <Animated.View
-        key={info.item.id}
+        key={info.item.type === "work-toggle" ? info.item.groupId : info.item.id}
         entering={
           disclosureToggleSettling && !reduceMotion && !isKeyboardMotionSuppressed()
             ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION
