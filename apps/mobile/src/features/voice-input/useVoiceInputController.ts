@@ -1,4 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   voiceInputBlocksSubmission,
@@ -48,6 +49,8 @@ export function useVoiceInputController(input: {
   const start = useCallback(() => {
     const captured = latestInput.current;
     if (!captured.ownerKey || captured.disabled) return;
+    // Played before the microphone opens; iOS mutes haptics while recording.
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     void session.start({
       ...createVoiceInputTarget(
         captured.ownerKey,

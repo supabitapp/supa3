@@ -13,6 +13,7 @@ import { type EnvironmentId, sessionGrantsScope } from "@supacode/contracts";
 import { AUTH_SCOPE_OPTIONS } from "@supacode/shared/authScopeOptions";
 import { AsyncResult } from "effect/reactivity";
 import * as Option from "effect/Option";
+import * as Haptics from "expo-haptics";
 import { type RefObject, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -101,6 +102,7 @@ export function EnvironmentRoutesSection({
     const next = [...order];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved!);
+    void Haptics.selectionAsync();
     commit(next);
   };
   // A lifted row takes a neighbour's slot once it has moved past half of that row.
@@ -224,7 +226,10 @@ export function EnvironmentRoutesSection({
                 current.get(id) === height ? current : new Map(current).set(id, height),
               )
             }
-            onDragStart={() => setDrag({ id, translation: 0 })}
+            onDragStart={() => {
+              void Haptics.selectionAsync();
+              setDrag({ id, translation: 0 });
+            }}
             onDragMove={(translation) => setDrag({ id, translation })}
             onDragEnd={(translation, cancelled) => {
               setDrag(null);

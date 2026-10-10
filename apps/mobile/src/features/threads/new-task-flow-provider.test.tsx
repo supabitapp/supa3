@@ -41,6 +41,10 @@ const transport = vi.hoisted(() => ({
   removePendingTask: vi.fn(),
 }));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
+vi.mock("expo-haptics", () => ({
+  impactAsync: async () => {},
+  ImpactFeedbackStyle: { Light: "light" },
+}));
 vi.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
     navigate: transport.navigate,

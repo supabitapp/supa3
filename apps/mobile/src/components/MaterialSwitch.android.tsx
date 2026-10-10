@@ -1,4 +1,5 @@
 import { Host, Switch as ComposeSwitch } from "@expo/ui/jetpack-compose";
+import * as Haptics from "expo-haptics";
 import { View } from "react-native";
 import type { ThemedSwitchProps } from "./MaterialSwitch.types";
 
@@ -7,8 +8,14 @@ import { useAppearancePreferences } from "../features/settings/appearance/Appear
 /** Material's native switch, with the same palette and accessibility contract as our RN controls. */
 export function MaterialSwitch(props: ThemedSwitchProps) {
   const { themeAppearance, themeVariables: colors } = useAppearancePreferences();
+  const change = (value: boolean) => {
+    void Haptics.performAndroidHapticsAsync(
+      value ? Haptics.AndroidHaptics.Toggle_On : Haptics.AndroidHaptics.Toggle_Off,
+    );
+    props.onValueChange?.(value);
+  };
   const toggle = () => {
-    if (!props.disabled) props.onValueChange?.(!props.value);
+    if (!props.disabled) change(!props.value);
   };
 
   return (
@@ -32,7 +39,7 @@ export function MaterialSwitch(props: ThemedSwitchProps) {
           <ComposeSwitch
             value={Boolean(props.value)}
             enabled={!props.disabled}
-            onCheckedChange={props.onValueChange ?? undefined}
+            onCheckedChange={props.onValueChange ? change : undefined}
             colors={{
               checkedTrackColor: colors["--color-switch-active-track"],
               checkedThumbColor: colors["--color-switch-active-thumb"],

@@ -107,12 +107,13 @@ import {
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
-import type {
-  PendingApproval,
-  PendingUserInput,
-  PendingUserInputDraftAnswer,
-  ThreadFeedEntry,
-  ThreadFeedLatestRun,
+import {
+  threadFeedRunIsUnsettled,
+  type PendingApproval,
+  type PendingUserInput,
+  type PendingUserInputDraftAnswer,
+  type ThreadFeedEntry,
+  type ThreadFeedLatestRun,
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
 import { ComposerErrorNotice } from "./ComposerErrorNotice";
@@ -309,6 +310,51 @@ function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedE
     lastStreamHapticAtRef.current = now;
     void Haptics.selectionAsync();
   }, [threadId, feed]);
+}
+
+/** Signals what changes while the thread is on screen: a send failing, the
+ * agent asking for input, and the turn finishing or failing. A user stop
+ * stays silent, and so does state that only arrives while the thread loads. */
+function useThreadOutcomeHaptics(state: {
+  readonly threadKey: string;
+  readonly live: boolean;
+  readonly run: ThreadFeedLatestRun | null;
+  readonly pendingRequestId: string | null;
+  readonly composerError: string | null;
+}) {
+  const { threadKey, live, run, pendingRequestId, composerError } = state;
+  const previousRef = useRef({ threadKey, hydrated: live, run, pendingRequestId, composerError });
+
+  useEffect(() => {
+    const previous = previousRef.current;
+    const sameThread = previous.threadKey === threadKey;
+    const hydrated = live || (sameThread && previous.hydrated);
+    previousRef.current = { threadKey, hydrated, run, pendingRequestId, composerError };
+    if (!sameThread || !previous.hydrated) return;
+
+    if (previous.composerError === null && composerError !== null) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    if (previous.pendingRequestId === null && pendingRequestId !== null) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
+    if (
+      run === null ||
+      run.completedAt === null ||
+      previous.run?.runId !== run.runId ||
+      !threadFeedRunIsUnsettled(previous.run)
+    ) {
+      return;
+    }
+    if (run.status === "completed") {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (run.status === "failed") {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [threadKey, live, run, pendingRequestId, composerError]);
 }
 
 const USER_INPUT_TOGGLE_TIMING = {
@@ -843,6 +889,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   );
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
+  useThreadOutcomeHaptics({
+    threadKey: selectedThreadKey,
+    live: props.threadSyncStatus === "live",
+    run: props.activityRun,
+    pendingRequestId:
+      props.activePendingApproval?.requestId ?? props.activePendingUserInput?.requestId ?? null,
+    composerError,
+  });
   const selectedProviderSkills = useMemo(() => {
     const provider = props.serverConfig?.providers.find(
       (candidate) => candidate.instanceId === selectedInstanceId,

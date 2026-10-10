@@ -1,5 +1,6 @@
 import { NavigationContext } from "@react-navigation/native";
 import { createInlineConfirm } from "@supacode/client-runtime/inline-confirm";
+import * as Haptics from "expo-haptics";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, AppState, type GestureResponderEvent } from "react-native";
 
@@ -28,6 +29,7 @@ export function useInlineConfirm<Key extends string>() {
   useEffect(() => {
     if (armed === null) return;
     AccessibilityInfo.announceForAccessibility(ARMED_HINT);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const disarm = () => confirm.disarm();
     const onTouch = (touch: Touch) => {
       if (touched.current?.touch !== touch || touched.current.key !== armed) disarm();

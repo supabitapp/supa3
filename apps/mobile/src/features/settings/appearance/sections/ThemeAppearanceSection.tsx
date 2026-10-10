@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { memo, useId } from "react";
 import { Pressable, View } from "react-native";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
@@ -296,6 +297,10 @@ export function ThemeAppearanceSection() {
     themeMode,
     systemColorsAvailable,
   } = useAppearancePreferences();
+  const select = (changed: boolean, apply: () => void) => {
+    if (changed) void Haptics.selectionAsync();
+    apply();
+  };
 
   return (
     <View className="gap-6">
@@ -308,7 +313,7 @@ export function ThemeAppearanceSection() {
               key={mode.id}
               label={mode.label}
               mode={mode.id}
-              onPress={() => setThemeMode(mode.id)}
+              onPress={() => select(mode.id !== themeMode, () => setThemeMode(mode.id))}
               selected={mode.id === themeMode}
               themeIds={themeIds}
             />
@@ -328,8 +333,16 @@ export function ThemeAppearanceSection() {
               label={theme.label}
               darkSelected={theme.id === themeIds.dark}
               lightSelected={theme.id === themeIds.light}
-              onSelect={(appearance) => setThemeIdForAppearance(appearance, theme.id)}
-              onSelectBoth={() => setThemeIdForBothAppearances(theme.id)}
+              onSelect={(appearance) =>
+                select(theme.id !== themeIds[appearance], () =>
+                  setThemeIdForAppearance(appearance, theme.id),
+                )
+              }
+              onSelectBoth={() =>
+                select(theme.id !== themeIds.light || theme.id !== themeIds.dark, () =>
+                  setThemeIdForBothAppearances(theme.id),
+                )
+              }
               themeId={theme.id}
             />
           ))}

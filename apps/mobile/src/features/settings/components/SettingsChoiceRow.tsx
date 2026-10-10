@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../../components/AppText";
@@ -21,7 +22,10 @@ export function SettingsChoiceRow(props: {
           : "flex-row items-center gap-4 p-4 active:opacity-70"
       }
       disabled={props.disabled}
-      onPress={props.onPress}
+      onPress={() => {
+        if (!props.selected) void Haptics.selectionAsync();
+        props.onPress();
+      }}
     >
       <View className="min-w-0 flex-1 gap-1">
         <Text className="text-lg text-foreground android:text-base">{props.label}</Text>

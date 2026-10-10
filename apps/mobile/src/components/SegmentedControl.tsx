@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { Platform, Pressable, View } from "react-native";
 import Animated, { Easing, LinearTransition, ReduceMotion } from "react-native-reanimated";
 import { AppText as Text } from "./AppText";
@@ -11,8 +12,12 @@ export function SegmentedControl<Value extends number | string>(
   props: SegmentedControlProps<Value>,
 ) {
   const compact = props.size === "compact";
+  const select = (value: Value) => {
+    if (value !== props.selected) void Haptics.selectionAsync();
+    props.onSelect(value);
+  };
   if (Platform.OS === "android") {
-    return <MaterialSegmentedControl {...props} />;
+    return <MaterialSegmentedControl {...props} onSelect={select} />;
   }
   return (
     <View
@@ -49,7 +54,7 @@ export function SegmentedControl<Value extends number | string>(
             accessibilityRole={Platform.OS === "ios" ? "button" : (props.role ?? "button")}
             accessibilityLabel={option.accessibilityLabel ?? option.label}
             accessibilityState={{ selected: active }}
-            onPress={() => props.onSelect(option.value)}
+            onPress={() => select(option.value)}
             className={cn(
               "flex-1 items-center justify-center rounded-full",
               compact ? "h-9" : "h-11",

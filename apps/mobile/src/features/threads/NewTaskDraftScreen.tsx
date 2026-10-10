@@ -27,6 +27,7 @@ import {
   useState,
   type ComponentRef,
 } from "react";
+import * as Haptics from "expo-haptics";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
@@ -1864,7 +1865,10 @@ export function NewTaskDraftScreen(props: {
                   }
                   disabled={!canStart}
                   icon={queuesInsteadOfStarting ? "tray.and.arrow.up" : "arrow.up"}
-                  onPress={() => void handleStart()}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    void handleStart();
+                  }}
                   variant="primary"
                 />
               ) : (

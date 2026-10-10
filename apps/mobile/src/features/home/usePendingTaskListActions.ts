@@ -1,4 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
 import { Alert } from "react-native";
 
@@ -49,6 +50,7 @@ export function usePendingTaskListActions(): {
             text: "Discard",
             style: "destructive",
             onPress: () => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               void withThreadDismissal(
                 pendingTask.key,
                 async () => {
@@ -82,6 +84,7 @@ export function usePendingTaskListActions(): {
                 );
                 return;
               }
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               void withThreadDismissal(
                 pendingTask.key,
                 async () => {

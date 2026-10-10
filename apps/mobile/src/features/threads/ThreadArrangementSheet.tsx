@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import * as Haptics from "expo-haptics";
 import { Animated, FlatList, Modal, Pressable, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Reanimated, { ReduceMotion, useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -341,6 +342,7 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
       destination: null,
     };
     setPreview({ ...drag.current });
+    void Haptics.selectionAsync();
     update(0);
     let last = performance.now();
     const tick = () => {

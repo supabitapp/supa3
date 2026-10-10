@@ -152,6 +152,7 @@ export function ConnectionsNewRouteScreen({
         setHostInput(host);
         setCodeInput(code);
         onChangeConnectionPairingUrl(pairingUrl);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setScanComplete(true);
         setScannerLocked(false);
       } catch (error) {

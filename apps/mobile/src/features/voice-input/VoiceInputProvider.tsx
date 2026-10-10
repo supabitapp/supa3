@@ -7,6 +7,7 @@ import {
   type RecordingStatus,
 } from "expo-audio";
 import { File } from "expo-file-system";
+import * as Haptics from "expo-haptics";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import {
   createContext,
@@ -124,6 +125,7 @@ function useVoiceInputRuntime() {
         });
       },
     });
+    let phase = INITIAL_STATE.phase;
     const session = new VoiceInputSession({
       recorder,
       getTranscriber: getLocalVoiceTranscriber,
@@ -134,8 +136,14 @@ function useVoiceInputRuntime() {
       configureRecording: configureVoiceRecordingAudio,
       releaseRecording: releaseVoiceRecordingAudio,
       deleteRecording: (uri) => new File(uri).delete(),
-      onStateChange: (nextState) =>
-        setState({ state: nextState, ownerKey: session.ownerKey, label: session.label }),
+      onStateChange: (nextState) => {
+        // The audio session is released before transcription, so iOS plays this.
+        if (phase === "transcribing" && nextState.phase === "idle") {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        phase = nextState.phase;
+        setState({ state: nextState, ownerKey: session.ownerKey, label: session.label });
+      },
     });
     return { session, recorder };
   });

@@ -33,6 +33,7 @@ import {
   useState,
   type RefObject,
 } from "react";
+import * as Haptics from "expo-haptics";
 import { Alert, Keyboard, Platform, Pressable, View, type ViewStyle } from "react-native";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import {
@@ -280,7 +281,10 @@ function SendActionButton(props: {
       icon={presentation.icon}
       variant="primary"
       disabled={props.disabled}
-      onPress={() => props.onSend()}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        props.onSend();
+      }}
     />
   );
   if (!presentation.offersFollowUpChoice || presentation.action === null || props.disabled) {
@@ -300,9 +304,10 @@ function SendActionButton(props: {
         subtitle: FOLLOW_UP_ACTION_SUBTITLE[action],
         state: action === presentation.action ? ("on" as const) : ("off" as const),
       }))}
-      onPressAction={({ nativeEvent }) =>
-        props.onSend(nativeEvent.event as ActiveTurnComposerAction)
-      }
+      onPressAction={({ nativeEvent }) => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        props.onSend(nativeEvent.event as ActiveTurnComposerAction);
+      }}
     >
       {button}
     </ControlPillMenu>
@@ -761,7 +766,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       disabled={!props.canOperateThread}
       icon="stop.fill"
       variant="danger"
-      onPress={props.onStopThread}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        props.onStopThread();
+      }}
     />
   ) : hasContent || !voiceInput.isAvailable ? (
     <SendActionButton

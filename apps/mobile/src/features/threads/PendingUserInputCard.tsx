@@ -1,5 +1,6 @@
 import { RequestActionButton } from "./RequestActionButton";
 import { QuestionAttachments } from "./QuestionAttachments";
+import * as Haptics from "expo-haptics";
 import type { RuntimeRequestId } from "@supacode/contracts";
 import type { ThreadUserInputQuestion } from "@supacode/client-runtime/state/thread-requests";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -37,6 +38,7 @@ import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPill } from "../../components/ControlPill";
 import { cn } from "../../lib/cn";
+import { playDecisionHaptic } from "../../lib/decisionHaptic";
 import {
   isPendingUserInputOptionSelected,
   isPendingUserInputQuestionAnswered,
@@ -377,7 +379,10 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           variant="danger"
           className="h-9 w-9"
           disabled={!props.canOperateThread}
-          onPress={props.onStopThread}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            props.onStopThread?.();
+          }}
         />
       ) : null}
     </View>
@@ -558,6 +563,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               disabled={!canSubmit}
               onPress={() => {
                 cancelAutoAdvance();
+                playDecisionHaptic(true);
                 void props.onSubmit();
               }}
             />
@@ -579,6 +585,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           disabled={isResponding}
           onPress={() => {
             cancelAutoAdvance();
+            playDecisionHaptic(false);
             void props.onDismiss();
           }}
         >

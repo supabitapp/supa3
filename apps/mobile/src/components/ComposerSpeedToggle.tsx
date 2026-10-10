@@ -4,6 +4,7 @@ import {
   SPEED_TOGGLE_LABELS,
 } from "@supacode/client-runtime/provider-speed-toggle";
 import type { ProviderOptionDescriptor, ProviderOptionSelection } from "@supacode/contracts";
+import * as Haptics from "expo-haptics";
 import { Pressable } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { withUniwind } from "uniwind";
@@ -36,6 +37,7 @@ export function ComposerSpeedToggle(props: {
       value: getSpeedToggleNextValue(speedToggle),
     });
     if (options) {
+      void Haptics.selectionAsync();
       props.onChange(options);
     }
   };

@@ -7,6 +7,7 @@ import type {
 import { View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
+import { playDecisionHaptic } from "../../lib/decisionHaptic";
 import type { PendingApproval } from "../../lib/threadActivity";
 
 export interface PendingApprovalCardProps {
@@ -68,7 +69,10 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
                   : "secondary"
             }
             disabled={disabled || !props.canOperateThread}
-            onPress={() => void props.onRespond(props.approval.requestId, option.decision)}
+            onPress={() => {
+              playDecisionHaptic(option.decision !== "decline" && option.decision !== "cancel");
+              void props.onRespond(props.approval.requestId, option.decision);
+            }}
           />
         ))}
       </View>
