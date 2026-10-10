@@ -3,6 +3,7 @@ import type {
   EnvironmentId,
   ProjectScript,
   ResolvedKeybindingsConfig,
+  ServerProvider,
   ThreadId,
 } from "@supacode/contracts";
 
@@ -68,6 +69,7 @@ export interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   contextWindow?: ComponentProps<typeof ThreadDetailsUsage>["contextWindow"];
+  providerUsage?: ServerProvider | null;
   forkSource?: ComponentProps<typeof ThreadDetailsForkControl>["source"] | null;
   forkDisabled?: boolean;
   onForkFromRun?: ComponentProps<typeof ThreadDetailsForkControl>["onForkFromRun"];
@@ -194,7 +196,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
           ) : null}
 
           {!props.draftId ? (
-            <ThreadDetailsUsage contextWindow={props.contextWindow ?? null}>
+            <ThreadDetailsUsage
+              contextWindow={props.contextWindow ?? null}
+              provider={props.providerUsage ?? null}
+            >
               {props.forkSource && props.onForkFromRun ? (
                 <ThreadDetailsForkControl
                   key={props.threadId}

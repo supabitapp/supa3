@@ -10742,6 +10742,7 @@ export default function ChatView(props: ChatViewProps) {
           compactDisabledReason,
         }
       : null,
+    providerUsage: isElectron ? activeProviderStatus : null,
     forkSource,
     forkDisabled,
     onForkFromRun,
@@ -11418,7 +11419,9 @@ export default function ChatView(props: ChatViewProps) {
                         </div>
                       </div>
                     </ComposerSurface.Shell>
-                    <ComposerUsageMeter provider={activeProviderStatus} />
+                    <ComposerUsageMeter
+                      provider={isElectron && !draftId ? null : activeProviderStatus}
+                    />
                     <div
                       aria-hidden
                       className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
