@@ -136,28 +136,27 @@ export const install = Effect.gen(function* () {
       });
   const content = renderCliShim({ target, shimPath, supacodeHome: environment.baseDir });
 
-  return yield* Effect.scoped(
-    Effect.gen(function* () {
-      const existing = yield* fs.readFileString(shimPath).pipe(Effect.option);
-      if (Option.isSome(existing) && !existing.value.includes(MARKER)) {
-        yield* logWarning("leaving a supacode launcher the app did not write", { shimPath });
-        return Option.none<string>();
-      }
-      if (Option.getOrUndefined(existing) !== content) {
-        yield* fs.makeDirectory(path.dirname(shimPath), { recursive: true });
+  return yield* Effect.gen(function* () {
+    const existing = yield* fs.readFileString(shimPath).pipe(Effect.option);
+    if (Option.isSome(existing) && !existing.value.includes(MARKER)) {
+      yield* logWarning("leaving a supacode launcher the app did not write", { shimPath });
+      return Option.none<string>();
+    }
+    if (Option.getOrUndefined(existing) !== content) {
+      yield* fs.makeDirectory(path.dirname(shimPath), { recursive: true });
 
-        const stagingDirectory = yield* fs.makeTempDirectoryScoped({
-          directory: path.dirname(shimPath),
-          prefix: ".supacode-cli-",
-        });
-        const staging = path.join(stagingDirectory, path.basename(shimPath));
-        yield* fs.writeFileString(staging, content, { mode: 0o755 });
-        yield* fs.rename(staging, shimPath);
-        yield* logInfo("installed supacode launcher", { shimPath });
-      }
-      return Option.some(shimPath);
-    }),
-  ).pipe(
+      const stagingDirectory = yield* fs.makeTempDirectoryScoped({
+        directory: path.dirname(shimPath),
+        prefix: ".supacode-cli-",
+      });
+      const staging = path.join(stagingDirectory, path.basename(shimPath));
+      yield* fs.writeFileString(staging, content, { mode: 0o755 });
+      yield* fs.rename(staging, shimPath);
+      yield* logInfo("installed supacode launcher", { shimPath });
+    }
+    return Option.some(shimPath);
+  }).pipe(
+    Effect.scoped,
     Effect.catchCause((cause) =>
       logWarning("could not install supacode launcher", {
         shimPath,

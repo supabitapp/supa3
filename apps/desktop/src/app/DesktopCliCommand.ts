@@ -263,7 +263,10 @@ export const make = Effect.gen(function* () {
   }).pipe(
     operations.withPermit,
     Effect.catch((error) =>
-      logWarning("automatic CLI installation failed", { category: error._tag }),
+      logWarning("automatic CLI installation failed", {
+        category: error._tag,
+        message: error.message,
+      }),
     ),
     Effect.withSpan("desktop.cliCommand.installAutomatically"),
   );
