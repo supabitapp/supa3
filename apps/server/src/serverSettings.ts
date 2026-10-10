@@ -387,12 +387,15 @@ const ServerSettingsJson = fromLenientJson(
 );
 const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
 
-const LegacyProviderSettingsJson = fromLenientJson(
+const PersistedServerSettingsMetadataJson = fromLenientJson(
   Schema.Struct({
     providers: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+    publicRelayEnabled: Schema.optionalKey(Schema.Boolean),
   }),
 );
-const decodeLegacyProviderSettingsJsonExit = Schema.decodeUnknownExit(LegacyProviderSettingsJson);
+const decodePersistedServerSettingsMetadataJsonExit = Schema.decodeUnknownExit(
+  PersistedServerSettingsMetadataJson,
+);
 
 const HISTORY_RESTORED_DRIVERS: ReadonlySet<ProviderDriverKind> = new Set(
   ["cursor", "grok", "opencode"].map((driver) => ProviderDriverKind.make(driver)),
@@ -534,7 +537,9 @@ function stripDefaultServerSettings(current: unknown, defaults: unknown): unknow
     const next: Record<string, unknown> = {};
 
     for (const key of Object.keys(currentRecord)) {
-      if (ATOMIC_SETTINGS_KEYS.has(key)) {
+      if (key === "publicRelayEnabled") {
+        next[key] = currentRecord[key];
+      } else if (ATOMIC_SETTINGS_KEYS.has(key)) {
         if (!Equal.equals(currentRecord[key], defaultsRecord[key])) {
           next[key] = currentRecord[key];
         }
@@ -751,6 +756,7 @@ const make = Effect.gen(function* () {
   const loadSettingsFromDisk = Effect.gen(function* () {
     let settings = DEFAULT_SERVER_SETTINGS;
     let legacyProviders: Readonly<Record<string, unknown>> | undefined;
+    let relayPreferenceMigrated = false;
     // A file that failed to decode must stay on disk for the user to repair;
     // the fold below only writes when it started from the file's real contents.
     let settingsFileTrusted = true;
@@ -758,13 +764,18 @@ const make = Effect.gen(function* () {
     if (yield* readConfigExists) {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
-      const legacySettings = decodeLegacyProviderSettingsJsonExit(raw);
-      if (legacySettings._tag === "Success") {
-        legacyProviders = legacySettings.value.providers;
+      const metadata = decodePersistedServerSettingsMetadataJsonExit(raw);
+      if (metadata._tag === "Success") {
+        legacyProviders = metadata.value.providers;
       }
-      if (decoded._tag === "Failure" || legacySettings._tag === "Failure") {
-        const failure = decoded._tag === "Failure" ? decoded : legacySettings;
+      if (decoded._tag === "Failure" || metadata._tag === "Failure") {
+        const failure = decoded._tag === "Failure" ? decoded : metadata;
         settingsFileTrusted = false;
+        settings = {
+          ...settings,
+          publicRelayEnabled:
+            metadata._tag === "Success" && metadata.value.publicRelayEnabled === true,
+        };
         if (failure._tag === "Failure") {
           yield* Effect.logWarning("failed to parse settings.json, using defaults", {
             path: settingsPath,
@@ -774,6 +785,18 @@ const make = Effect.gen(function* () {
         }
       } else {
         settings = decoded.value;
+        if (metadata.value.publicRelayEnabled === undefined) {
+          const relayIdentity = yield* secretStore
+            .get("relay-identity")
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ServerSettingsError({ settingsPath, operation: "read-secret", cause }),
+              ),
+            );
+          settings = { ...settings, publicRelayEnabled: Option.isNone(relayIdentity) };
+          relayPreferenceMigrated = true;
+        }
       }
     }
 
@@ -837,7 +860,11 @@ const make = Effect.gen(function* () {
     // Only rewrite a file that decoded cleanly; an untrusted one stays for the user to repair.
     const migrated = settingsFileTrusted ? yield* moveInlineBitbucketTokens(folded) : folded;
 
-    if (migrated !== loaded || (settingsFileTrusted && legacyProviders !== undefined)) {
+    if (
+      relayPreferenceMigrated ||
+      migrated !== loaded ||
+      (settingsFileTrusted && legacyProviders !== undefined)
+    ) {
       yield* writeSettingsAtomically(migrated);
     }
     return migrated;

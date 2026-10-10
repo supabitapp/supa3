@@ -30,10 +30,7 @@ beforeEach(() => {
 });
 
 const fixture = Effect.gen(function* () {
-  const settings = yield* SubscriptionRef.make<ServerSettings>({
-    ...DEFAULT_SERVER_SETTINGS,
-    publicRelayEnabled: true,
-  });
+  const settings = yield* SubscriptionRef.make(DEFAULT_SERVER_SETTINGS);
   const changes = yield* PubSub.unbounded<ServerSettings>();
   const secrets = new Map<string, Uint8Array>();
   const layerSecrets = Layer.succeed(ServerSecretStore.ServerSecretStore, {
@@ -93,7 +90,7 @@ const openTransport = Effect.sync(() => {
   return { opened: Effect.promise(() => opened.promise), stopped };
 });
 
-it.effect("stays idle without creating an identity when enabled or toggled", () =>
+it.effect("stays idle by default without creating an identity when started or toggled", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const test = yield* fixture;
