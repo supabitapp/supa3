@@ -137,6 +137,11 @@ vi.mock("../ui/sidebar", () => ({
   SidebarInset: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
 }));
 vi.mock("../ui/switch", () => ({ Switch: "button" }));
+vi.mock("../ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  TooltipPopup: () => null,
+}));
 vi.mock("../ui/toast", () => ({
   stackedThreadToast: (value: unknown) => value,
   toastManager: { add: vi.fn() },
@@ -301,6 +306,28 @@ describe("automation permissions", () => {
     expect(createButton?.props.disabled).not.toBe(true);
     await act(async () => createButton?.props.onClick());
 
+    const environmentSelect = renderer!.root.findByProps({ id: "scheduled-task-environment" });
+    expect(nodeText(environmentSelect)).toContain("Remote");
+  });
+
+  it("creates from an empty environment and rechecks its grant before opening", async () => {
+    state.permissions = new Set([remoteId]);
+    await act(async () => {
+      renderer = create(<AutomationsPage />);
+    });
+
+    expect(
+      renderer!.root.findAllByProps({ "aria-label": "Create automation on Local" }),
+    ).toHaveLength(0);
+    const createButton = renderer!.root.findByProps({
+      "aria-label": "Create automation on Remote",
+    });
+    state.permissions.delete(remoteId);
+    await act(async () => createButton.props.onClick());
+    expect(renderer!.root.findAllByProps({ id: "scheduled-task-environment" })).toHaveLength(0);
+
+    state.permissions.add(remoteId);
+    await act(async () => createButton.props.onClick());
     const environmentSelect = renderer!.root.findByProps({ id: "scheduled-task-environment" });
     expect(nodeText(environmentSelect)).toContain("Remote");
   });
