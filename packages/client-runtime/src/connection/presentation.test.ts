@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@supacode/contracts";
+import { DEFAULT_PUBLIC_RELAY_URL, EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 
@@ -15,6 +15,7 @@ import {
 } from "./model.ts";
 import {
   connectionCatalogDisplayUrl,
+  environmentConnectionAddress,
   environmentMcpUrl,
   connectionStatusText,
   connectionStatusTitle,
@@ -57,6 +58,112 @@ function supervisorState(overrides: Partial<SupervisorConnectionState>): Supervi
 }
 
 describe("connection presentation", () => {
+  const lan: ConnectionRoute = {
+    target: TARGET,
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: TARGET.connectionId,
+        environmentId: TARGET.environmentId,
+        label: TARGET.label,
+        httpBaseUrl: "http://192.168.4.53:7373/",
+        wsBaseUrl: "ws://192.168.4.53:7373/",
+      }),
+    ),
+  };
+  const relayTarget = new BearerConnectionTarget({ ...TARGET, connectionId: "relay" });
+  const relay: ConnectionRoute = {
+    target: relayTarget,
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: relayTarget.connectionId,
+        environmentId: TARGET.environmentId,
+        label: TARGET.label,
+        httpBaseUrl: `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+        wsBaseUrl: `wss://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+      }),
+    ),
+  };
+  const routedEntry: ConnectionCatalogEntry = { ...lan, enabled: true, alternateRoutes: [relay] };
+
+  it("shows the active fallback route without changing the saved address", () => {
+    expect(
+      environmentConnectionAddress({
+        entry: routedEntry,
+        connectionState: "connected",
+        connectedTarget: relayTarget,
+      }),
+    ).toBe(`Encrypted Relay · ${DEFAULT_PUBLIC_RELAY_URL}`);
+    expect(
+      environmentConnectionAddress({
+        entry: routedEntry,
+        connectionState: "connected",
+        connectedTarget: TARGET,
+      }),
+    ).toBe("LAN · http://192.168.4.53:7373/");
+    expect(connectionCatalogDisplayUrl(routedEntry)).toBe("http://192.168.4.53:7373/");
+  });
+
+  it("uses the custom relay server address instead of the host identity", () => {
+    const profile = Option.getOrThrow(relay.profile);
+    if (profile._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+    expect(
+      environmentConnectionAddress({
+        entry: {
+          ...routedEntry,
+          alternateRoutes: [
+            {
+              ...relay,
+              profile: Option.some(
+                new BearerConnectionProfile({
+                  ...profile,
+                  relayUrl: "wss://custom-relay.example.test/relay",
+                }),
+              ),
+            },
+          ],
+        },
+        connectionState: "connected",
+        connectedTarget: relayTarget,
+      }),
+    ).toBe("Encrypted Relay · wss://custom-relay.example.test/relay");
+  });
+
+  it.each(["available", "offline", "connecting", "reconnecting", "error", "unsupported"] as const)(
+    "keeps the saved address while %s instead of claiming a route is active",
+    (connectionState) => {
+      expect(
+        environmentConnectionAddress({
+          entry: routedEntry,
+          connectionState,
+          connectedTarget: relayTarget,
+        }),
+      ).toBe("http://192.168.4.53:7373/");
+    },
+  );
+
+  it("keeps the saved address when disabled or the active route is unavailable", () => {
+    expect(
+      environmentConnectionAddress({
+        entry: { ...routedEntry, enabled: false },
+        connectionState: "connected",
+        connectedTarget: relayTarget,
+      }),
+    ).toBe("http://192.168.4.53:7373/");
+    expect(
+      environmentConnectionAddress({
+        entry: routedEntry,
+        connectionState: "connected",
+      }),
+    ).toBe("http://192.168.4.53:7373/");
+    expect(
+      environmentConnectionAddress({
+        entry: routedEntry,
+        connectionState: "connected",
+        connectedTarget: new BearerConnectionTarget({ ...TARGET, connectionId: "removed" }),
+      }),
+    ).toBe("http://192.168.4.53:7373/");
+  });
+
   it("labels a blocked protocol as unsupported", () => {
     const connection = presentConnectionState(
       supervisorState({

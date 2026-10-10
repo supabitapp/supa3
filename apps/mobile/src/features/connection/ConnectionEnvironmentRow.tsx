@@ -19,6 +19,7 @@ import { ThemedSwitch } from "../../components/ThemedSwitch";
 import { cn } from "../../lib/cn";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 import { serverEnvironment } from "../../state/server";
+import { environmentConnectionAddressAtom } from "../../state/presentation";
 import { ConnectionFormField } from "./ConnectionFormField";
 import { ConnectionStatusDot } from "./ConnectionStatusDot";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
@@ -53,6 +54,9 @@ export function ConnectionEnvironmentRow(props: {
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(props.environment.environmentId),
   );
+  const connectionAddress =
+    useAtomValue(environmentConnectionAddressAtom(props.environment.environmentId)) ??
+    connectionAddressLabel(props.environment.displayUrl);
   const unsupported = props.environment.connectionState === "unsupported";
   const enabled = props.environment.isEnabled && !unsupported;
   const statusLabel = connectionStatusLabel(props.environment);
@@ -108,9 +112,9 @@ export function ConnectionEnvironmentRow(props: {
               {props.environment.environmentLabel}
             </Text>
           </View>
-          {props.environment.displayUrl.trim() ? (
+          {connectionAddress.trim() ? (
             <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-              {connectionAddressLabel(props.environment.displayUrl)}
+              {connectionAddress}
             </Text>
           ) : null}
           {statusLabel ? (
