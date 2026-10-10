@@ -870,6 +870,12 @@ it.effect.each([
     expected: "could not update a local reference",
   },
   {
+    name: "reference namespace conflict",
+    stderr:
+      "error: cannot lock ref 'refs/remotes/origin/topic/nested': 'refs/remotes/origin/topic' exists; cannot create 'refs/remotes/origin/topic/nested'",
+    expected: "could not update a local reference",
+  },
+  {
     name: "unrelated remote chatter",
     stderr:
       "remote: Help: authentication failed, connection refused, cannot lock ref\nremote: unrelated service error",
@@ -891,15 +897,17 @@ it.effect.each([
     const secret = "secret-fetch-token";
     const stderr = `${scenario.stderr}\nhttps://user:${secret}@example.com/private?token=${secret}`;
     const attempts = yield* Ref.make(0);
+    const started = yield* Deferred.make<void>();
     const spawner = ChildProcessSpawner.make((command) =>
       Effect.gen(function* () {
         if (!ChildProcess.isStandardCommand(command))
           return yield* Effect.die("expected Git command");
-        if (command.args[0] !== "fetch") return makeNonRepositoryHandle();
+        if (command.args[0] !== "fetch") return makeSuccessfulHandle(".git");
         assert.deepEqual(command.args, ["fetch", "--quiet", "origin"]);
         assert.equal(command.options.env?.LC_ALL, "C");
         assert.equal(command.options.env?.GIT_TERMINAL_PROMPT, "0");
         yield* Ref.update(attempts, (count) => count + 1);
+        yield* Deferred.succeed(started, undefined);
         return ChildProcessSpawner.makeHandle({
           pid: ChildProcessSpawner.ProcessId(1),
           exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(128)),
@@ -919,7 +927,12 @@ it.effect.each([
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
     );
     const cwd = yield* makeTmpDir();
-    const error = yield* driver.fetchRemote({ cwd, remoteName: "origin" }).pipe(Effect.flip);
+    const fetching = yield* driver
+      .fetchRemote({ cwd, remoteName: "origin" })
+      .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+    yield* Deferred.await(started);
+    yield* TestClock.adjust("300 millis");
+    const error = yield* Fiber.join(fetching);
     assert.include(error.detail, scenario.expected);
     assert.equal(error.exitCode, 128);
     assert.equal(error.stderrLength, stderr.length);
@@ -928,7 +941,10 @@ it.effect.each([
     assert.notInclude(yield* encodeGitCommandError(error), secret);
     assert.notProperty(error, "stderr");
     assert.notProperty(error, "args");
-    assert.equal(yield* Ref.get(attempts), 1);
+    assert.equal(
+      yield* Ref.get(attempts),
+      scenario.name === "reference lock" || scenario.name === "lock file" ? 3 : 1,
+    );
   }).pipe(Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer)))),
 );
 
@@ -3474,6 +3490,203 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
   });
 
   describe("remote operations", () => {
+    const makeFetchRepository = Effect.fnUntraced(function* () {
+      const cwd = yield* makeTmpDir();
+      const remote = yield* makeTmpDir("git-fetch-remote-");
+      const { initialBranch } = yield* initRepoWithCommit(cwd);
+      yield* git(remote, ["init", "--bare"]);
+      yield* git(cwd, ["remote", "add", "origin", remote]);
+      yield* git(cwd, ["push", "-u", "origin", initialBranch]);
+      return { cwd, initialBranch };
+    });
+
+    const makeFetchGate = Effect.fnUntraced(function* () {
+      const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const gate = yield* Deferred.make<void>();
+      const starts = yield* Queue.unbounded<void>();
+      const activity = { active: 0, peak: 0 };
+      const spawner = ChildProcessSpawner.make((command) => {
+        if (!ChildProcess.isStandardCommand(command))
+          return Effect.die("expected a standard Git command");
+        if (!command.args.includes("fetch")) return delegate.spawn(command);
+        return Effect.acquireRelease(
+          Effect.gen(function* () {
+            activity.peak = Math.max(activity.peak, ++activity.active);
+            yield* Queue.offer(starts, undefined);
+            return ChildProcessSpawner.makeHandle({
+              ...makeSuccessfulHandle(""),
+              exitCode: Deferred.await(gate).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
+            });
+          }),
+          () => Effect.sync(() => activity.active--),
+        );
+      });
+      return { spawner, gate, starts, activity };
+    });
+
+    it.effect.each([
+      "fetchRemote",
+      "fetchRemoteTrackingBranch",
+      "fetchRemoteBranch",
+      "execute",
+    ] as const)(
+      "serializes %s with background fetches across drivers and linked worktrees",
+      (method) =>
+        Effect.gen(function* () {
+          const { cwd, initialBranch } = yield* makeFetchRepository();
+          const linked = yield* makeTmpDir("git-fetch-linked-");
+          yield* git(cwd, ["worktree", "add", "-b", "linked", linked]);
+          yield* git(linked, ["branch", "--set-upstream-to", `origin/${initialBranch}`, "linked"]);
+          const { spawner, gate, starts, activity } = yield* makeFetchGate();
+          const driver = yield* makeGitVcsDriverCore().pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.provide(layerServerConfig),
+          );
+          const foregroundDriver = yield* makeGitVcsDriverCore().pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.provide(layerServerConfig),
+          );
+          yield* foregroundDriver.statusDetailsLocal(cwd);
+          yield* driver.statusDetailsLocal(linked);
+          const background = yield* driver.statusDetailsRemote(linked).pipe(Effect.forkChild);
+          yield* Queue.take(starts);
+          const input = { cwd, remoteName: "origin", remoteBranch: initialBranch };
+          const fetches = {
+            fetchRemote: foregroundDriver.fetchRemote({ ...input, refName: initialBranch }),
+            fetchRemoteTrackingBranch: foregroundDriver.fetchRemoteTrackingBranch(input),
+            fetchRemoteBranch: foregroundDriver.fetchRemoteBranch({
+              ...input,
+              localBranch: "fetched",
+            }),
+            execute: foregroundDriver.execute({
+              operation: "test.fetch",
+              cwd,
+              args: ["fetch", "origin"],
+              timeoutMs: 1_000,
+            }),
+          };
+          const foreground = yield* fetches[method].pipe(
+            Effect.forkChild({ startImmediately: true }),
+          );
+          assert.equal(yield* Queue.size(starts), 0);
+          assert.equal(activity.active, 1);
+          yield* TestClock.adjust("2 seconds");
+          yield* Deferred.succeed(gate, undefined);
+          yield* Fiber.join(background);
+          yield* Fiber.join(foreground);
+          assert.equal(activity.peak, 1);
+          assert.equal(activity.active, 0);
+        }),
+    );
+
+    it.effect("fetches independent repositories concurrently", () =>
+      Effect.gen(function* () {
+        const first = yield* makeFetchRepository();
+        const second = yield* makeFetchRepository();
+        const { spawner, gate, starts, activity } = yield* makeFetchGate();
+        const driver = yield* makeGitVcsDriverCore().pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provide(layerServerConfig),
+        );
+        const firstFetch = yield* driver
+          .fetchRemote({ cwd: first.cwd, remoteName: "origin" })
+          .pipe(Effect.forkChild);
+        yield* Queue.take(starts);
+        const secondFetch = yield* driver
+          .fetchRemote({ cwd: second.cwd, remoteName: "origin" })
+          .pipe(Effect.forkChild);
+        yield* Queue.take(starts);
+        assert.equal(activity.active, 2);
+        yield* Deferred.succeed(gate, undefined);
+        yield* Fiber.join(firstFetch);
+        yield* Fiber.join(secondFetch);
+        assert.equal(activity.active, 0);
+      }),
+    );
+
+    it.effect("releases the fetch lock when active and queued fetches are interrupted", () =>
+      Effect.gen(function* () {
+        const { cwd } = yield* makeFetchRepository();
+        const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const started = yield* Deferred.make<void>();
+        let attempts = 0;
+        const spawner = ChildProcessSpawner.make((command) =>
+          Effect.gen(function* () {
+            if (!ChildProcess.isStandardCommand(command))
+              return yield* Effect.die("expected a standard Git command");
+            if (command.args[0] !== "fetch") return yield* delegate.spawn(command);
+            attempts++;
+            yield* Deferred.succeed(started, undefined);
+            return ChildProcessSpawner.makeHandle({
+              ...makeSuccessfulHandle(""),
+              exitCode:
+                attempts === 1 ? Effect.never : Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+            });
+          }),
+        );
+        const driver = yield* makeGitVcsDriverCore().pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provide(layerServerConfig),
+        );
+        yield* driver.statusDetailsLocal(cwd);
+        const fetch = driver.execute({ operation: "test.fetch", cwd, args: ["fetch", "origin"] });
+        const active = yield* fetch.pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        const queued = yield* fetch.pipe(Effect.forkChild({ startImmediately: true }));
+        assert.equal(attempts, 1);
+        yield* Fiber.interrupt(queued);
+        yield* Fiber.interrupt(active);
+        yield* fetch;
+        assert.equal(attempts, 2);
+      }),
+    );
+
+    it.effect.each(
+      [
+        "error: cannot lock ref 'refs/remotes/origin/main': is at abc but expected def",
+        "error: cannot lock ref 'refs/remotes/origin/main': reference already exists",
+        "error: cannot lock ref 'refs/remotes/origin/main': reference is missing but expected def",
+        "error: cannot lock ref 'refs/remotes/origin/main': Unable to create '/repo/.git/refs/remotes/origin/main.lock': File exists.",
+        "fatal: Unable to create '/repo/.git/FETCH_HEAD.lock': File exists.",
+      ].flatMap((stderr) => ["setup", "background"].map((method) => ({ method, stderr }))),
+    )("recovers from a temporary conflict during $method fetch: $stderr", ({ method, stderr }) =>
+      Effect.gen(function* () {
+        const { cwd, initialBranch } = yield* makeFetchRepository();
+        const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const started = yield* Deferred.make<void>();
+        let attempts = 0;
+        const spawner = ChildProcessSpawner.make((command) =>
+          Effect.gen(function* () {
+            if (!ChildProcess.isStandardCommand(command))
+              return yield* Effect.die("expected a standard Git command");
+            if (!command.args.includes("fetch")) return yield* delegate.spawn(command);
+            attempts++;
+            yield* Deferred.succeed(started, undefined);
+            return attempts > 2
+              ? makeSuccessfulHandle("")
+              : ChildProcessSpawner.makeHandle({
+                  ...makeNonRepositoryHandle(),
+                  exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(1)),
+                  stderr: Stream.encodeText(Stream.make(stderr)),
+                });
+          }),
+        );
+        const driver = yield* makeGitVcsDriverCore().pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provide(layerServerConfig),
+        );
+        const fetch =
+          method === "background"
+            ? driver.statusDetailsRemote(cwd)
+            : driver.fetchRemote({ cwd, remoteName: "origin", refName: initialBranch });
+        const fetching = yield* fetch.pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        yield* TestClock.adjust("300 millis");
+        yield* Fiber.join(fetching);
+        assert.equal(attempts, 3);
+      }),
+    );
+
     it.effect("explains a real fetch failure for a missing local remote", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();
@@ -3553,6 +3766,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       (failure) =>
         Effect.gen(function* () {
           const cwd = yield* makeTmpDir();
+          yield* initRepoWithCommit(cwd);
           const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
           const started = yield* Deferred.make<void>();
           const attempts: Array<ReadonlyArray<string>> = [];

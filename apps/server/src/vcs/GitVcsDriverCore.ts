@@ -13,6 +13,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -30,6 +31,7 @@ import {
 } from "@supacode/contracts";
 import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@supacode/shared/git";
 import { HostProcessPlatform } from "@supacode/shared/hostProcess";
+import * as KeyedLock from "@supacode/shared/KeyedLock";
 import { compactTraceAttributes } from "@supacode/shared/observability";
 import { decodeJsonResult } from "@supacode/shared/schemaJson";
 import { parseSupacodeProjectFile } from "@supacode/shared/supacodeProjectFile";
@@ -46,6 +48,7 @@ import * as ServerConfig from "../config.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const gitProcesses = Semaphore.makeUnsafe(8);
+const fetchLocks = KeyedLock.makeUnsafe<string>();
 // `git worktree add` checks out the full tree, so on large repositories it can
 // take well beyond the default 30s (e.g. a 375k-file repo takes ~40s on an idle
 // machine). Give it generous headroom while still bounding a genuinely hung git.
@@ -590,6 +593,24 @@ function fetchFailureDetail(stderr: string): string | undefined {
   return undefined;
 }
 
+function isGitFetchCommand(args: readonly string[]): boolean {
+  return args[0] === "fetch" || (args[0] === "--git-dir" && args[2] === "fetch");
+}
+
+function isTransientGitFetchFailure(stderr: string): boolean {
+  return stderr.split(/\r?\n/).some((line) => {
+    const message = line.trim();
+    return (
+      /^(?:error|fatal): cannot lock ref ['"].+['"]: (?:is at [\da-f]+ but expected [\da-f]+|reference already exists|reference is missing but expected [\da-f]+)$/i.test(
+        message,
+      ) ||
+      /^(?:(?:error|fatal): cannot lock ref ['"].+['"]: |fatal: )Unable to create ['"].+\.lock['"]: File exists\.$/i.test(
+        message,
+      )
+    );
+  });
+}
+
 interface Trace2Monitor {
   readonly env: NodeJS.ProcessEnv;
   readonly flush: Effect.Effect<void, never>;
@@ -1026,18 +1047,6 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         ).pipe(Effect.map(([stdout, stderr, exitCode]) => [stdout, stderr, exitCode] as const));
         yield* trace2Monitor.flush;
 
-        if (!input.allowNonZeroExit && exitCode !== 0) {
-          const reason = classifyGitFailure(stderr.text);
-          return yield* new GitCommandError({
-            ...gitCommandContext(commandInput),
-            ...(reason === null ? {} : { reason }),
-            detail: "Git command exited with a non-zero status.",
-            exitCode,
-            stdoutLength: stdout.text.length,
-            stderrLength: stderr.text.length,
-          });
-        }
-
         return {
           exitCode,
           stdout: stdout.text,
@@ -1047,7 +1056,34 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         } satisfies GitVcsDriver.ExecuteGitResult;
       });
 
-      const execution = runGitCommand().pipe(Effect.scoped);
+      const attempt = runGitCommand().pipe(Effect.scoped);
+      const execution = (
+        isGitFetchCommand(input.args)
+          ? attempt.pipe(
+              Effect.repeat({
+                times: 2,
+                schedule: Schedule.exponential(Duration.millis(100)),
+                while: (result) =>
+                  result.exitCode !== 0 && isTransientGitFetchFailure(result.stderr),
+              }),
+            )
+          : attempt
+      ).pipe(
+        Effect.flatMap((result) => {
+          if (input.allowNonZeroExit || result.exitCode === 0) return Effect.succeed(result);
+          const reason = classifyGitFailure(result.stderr);
+          return Effect.fail(
+            new GitCommandError({
+              ...gitCommandContext(commandInput),
+              ...(reason === null ? {} : { reason }),
+              detail: "Git command exited with a non-zero status.",
+              exitCode: result.exitCode,
+              stdoutLength: result.stdout.length,
+              stderrLength: result.stderr.length,
+            }),
+          );
+        }),
+      );
       if (timeoutMs === null) {
         return yield* execution;
       }
@@ -1068,28 +1104,37 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     },
   );
 
-  const execute: GitVcsDriver.GitVcsDriver["Service"]["execute"] = (input) =>
-    executeRaw(input).pipe(
-      withMetrics({
-        counter: gitCommandsTotal,
-        timer: gitCommandDuration,
-        attributes: {
-          operation: input.operation,
-        },
-      }),
-      (execution) =>
-        input.timeoutMs === null || (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) > DEFAULT_TIMEOUT_MS
-          ? execution
-          : gitProcesses.withPermits(1)(execution),
-      Effect.withSpan(input.operation, {
-        kind: "client",
-        attributes: {
-          "git.operation": input.operation,
-          "git.cwd": input.cwd,
-          "git.args_count": input.args.length,
-        },
-      }),
-    );
+  const execute: GitVcsDriver.GitVcsDriver["Service"]["execute"] = Effect.fnUntraced(
+    function* (input) {
+      const fetch = isGitFetchCommand(input.args);
+      const execution = executeRaw(
+        fetch ? { ...input, env: { ...input.env, LC_ALL: "C" } } : input,
+      ).pipe(
+        withMetrics({
+          counter: gitCommandsTotal,
+          timer: gitCommandDuration,
+          attributes: {
+            operation: input.operation,
+          },
+        }),
+        (execution) =>
+          input.timeoutMs === null || (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) > DEFAULT_TIMEOUT_MS
+            ? execution
+            : gitProcesses.withPermits(1)(execution),
+        Effect.withSpan(input.operation, {
+          kind: "client",
+          attributes: {
+            "git.operation": input.operation,
+            "git.cwd": input.cwd,
+            "git.args_count": input.args.length,
+          },
+        }),
+      );
+      if (!fetch) return yield* execution;
+      const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
+      return yield* fetchLocks.withLock(gitCommonDir, execution);
+    },
+  );
 
   const executeGit = (
     operation: string,
