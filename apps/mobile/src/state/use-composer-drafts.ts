@@ -23,6 +23,7 @@ import {
   type ScopedProjectRef,
 } from "@supacode/contracts";
 import * as Schema from "effect/Schema";
+import { Directory, File, Paths } from "expo-file-system";
 import { useEffect } from "react";
 import { Atom } from "effect/reactivity";
 
@@ -650,7 +651,6 @@ export function decodePersistedComposerState(value: unknown): {
 }
 
 async function getComposerDraftsFile() {
-  const { Directory, File, Paths } = await import("expo-file-system");
   const directory = new Directory(Paths.document, COMPOSER_DRAFTS_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
   return new File(directory, COMPOSER_DRAFTS_FILE);
