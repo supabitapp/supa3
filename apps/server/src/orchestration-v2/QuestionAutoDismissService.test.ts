@@ -2,7 +2,6 @@ import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   CommandId,
-  DEFAULT_SERVER_SETTINGS,
   EventId,
   NodeId,
   ProjectId,
@@ -19,7 +18,6 @@ import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import { CLAUDE_PROVIDER } from "./Adapters/ClaudeAdapterV2.ts";
 import * as Orchestrator from "./Orchestrator.ts";
@@ -116,9 +114,8 @@ const seedRequest = Effect.fnUntraced(function* (
   return { threadId, requestId };
 });
 
-it.effect.each([undefined, false, true])("expires questions unless disabled: %s", (enabled) =>
+it.effect("expires unanswered questions without a settings dependency", () =>
   Effect.gen(function* () {
-    const shouldDismiss = enabled !== false;
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const now = yield* DateTime.now;
@@ -160,12 +157,6 @@ it.effect.each([undefined, false, true])("expires questions unless disabled: %s"
           Layer.provide(
             Layer.mergeAll(
               NodeCrypto.layer,
-              Layer.mock(ServerSettings.ServerSettingsService)({
-                getSettings: Effect.succeed({
-                  ...DEFAULT_SERVER_SETTINGS,
-                  ...(enabled === undefined ? {} : { autoDismissQuestions: enabled }),
-                }),
-              }),
               Layer.mock(ThreadManagement.ThreadManagementService)({
                 dispatch: orchestrator.dispatch,
               }),
@@ -177,12 +168,9 @@ it.effect.each([undefined, false, true])("expires questions unless disabled: %s"
 
     for (const target of [codex, claude, asyncQuestion]) {
       const request = yield* projections.getRuntimeRequest(target.threadId, target.requestId);
-      assert.equal(request?.status, shouldDismiss ? "resolved" : "pending");
-      assert.equal(request?.decision, shouldDismiss ? "cancel" : undefined);
-      assert.deepEqual(
-        request?.answers,
-        shouldDismiss && target !== asyncQuestion ? {} : undefined,
-      );
+      assert.equal(request?.status, "resolved");
+      assert.equal(request?.decision, "cancel");
+      assert.deepEqual(request?.answers, target !== asyncQuestion ? {} : undefined);
       assert.lengthOf((yield* orchestrator.getThreadProjection(target.threadId)).messages, 0);
     }
     for (const target of waiting) {
@@ -297,12 +285,6 @@ it.effect("expires an async question after unarchive even if its previous expiry
               Layer.succeed(ProjectionStore.ProjectionStoreV2, {
                 ...projections,
                 getQuestionAutoDismissCandidates: () => Effect.succeed([candidate]),
-              }),
-              Layer.mock(ServerSettings.ServerSettingsService)({
-                getSettings: Effect.succeed({
-                  ...DEFAULT_SERVER_SETTINGS,
-                  autoDismissQuestions: true,
-                }),
               }),
               Layer.mock(ThreadManagement.ThreadManagementService)({
                 dispatch: orchestrator.dispatch,

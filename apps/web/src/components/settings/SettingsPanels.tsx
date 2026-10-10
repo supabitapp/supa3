@@ -562,9 +562,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
         ? ["Snooze limited threads"]
         : []),
-      ...(settings.autoDismissQuestions !== DEFAULT_UNIFIED_SETTINGS.autoDismissQuestions
-        ? ["Auto-dismiss unanswered questions"]
-        : []),
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
       ...(settings.persistComposerContextStrip !==
       DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
@@ -735,7 +732,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
-      autoDismissQuestions: DEFAULT_UNIFIED_SETTINGS.autoDismissQuestions,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
       continueThreadsAfterServerUpdate: DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate,
@@ -2068,11 +2064,6 @@ export function GeneralSettingsPanel() {
     connectedEnvironments.every(
       (target) => target.serverConfig?.environment.capabilities.threadAutoSettlement === true,
     );
-  const supportsQuestionAutoDismiss =
-    connectedEnvironments.length > 0 &&
-    connectedEnvironments.every(
-      (target) => target.serverConfig?.environment.capabilities.questionAutoDismiss === true,
-    );
   const supportsRestartContinuation =
     connectedEnvironments.length > 0 &&
     connectedEnvironments.every(
@@ -2243,30 +2234,6 @@ export function GeneralSettingsPanel() {
             />
           }
         />
-
-        {hasServerTargets ? (
-          <SettingsRow
-            serverScoped
-            {...searchableSetting("auto-dismiss-questions")}
-            description={
-              supportsQuestionAutoDismiss
-                ? "Dismiss unanswered Codex and Claude questions after two minutes without selecting an answer. Permission approvals keep waiting."
-                : "Update the selected environments to enable automatic question dismissal."
-            }
-            settingKeys={["autoDismissQuestions"]}
-            control={
-              <ScopedSwitch
-                settingKeys={["autoDismissQuestions"]}
-                checked={settings.autoDismissQuestions}
-                disabled={!supportsQuestionAutoDismiss}
-                onCheckedChange={(checked) =>
-                  updateSettings({ autoDismissQuestions: Boolean(checked) })
-                }
-                aria-label="Auto-dismiss unanswered questions"
-              />
-            }
-          />
-        ) : null}
 
         {supportsAutoSettlement ? (
           <>

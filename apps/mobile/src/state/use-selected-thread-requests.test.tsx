@@ -36,6 +36,7 @@ vi.mock("./entities", () => ({
       [
         "environment-1",
         {
+          settings: {},
           environment: {
             capabilities: {
               questionAttachments: true,

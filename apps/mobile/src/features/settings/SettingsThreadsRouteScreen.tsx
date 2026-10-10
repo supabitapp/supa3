@@ -97,7 +97,6 @@ function ThreadBehaviorSettingsRows() {
     patch: Partial<AutoSettleSettings> & {
       autoResumeLimitedThreads?: boolean;
       snoozeLimitedThreads?: boolean;
-      autoDismissQuestions?: boolean;
     },
   ) => {
     if (
@@ -206,22 +205,6 @@ function ThreadBehaviorSettingsRows() {
             value={uniformMobileSetting(displayTargets, "snoozeLimitedThreads")}
             disabled={disabled}
             onValueChange={(value) => writeToAll({ snoozeLimitedThreads: value })}
-          />
-        </SettingsSection>
-      ) : null}
-      {!projectSelected &&
-      syncTargets.every(
-        (target) =>
-          target.environment.serverConfig.environment.capabilities.questionAutoDismiss === true,
-      ) ? (
-        <SettingsSection title="Questions">
-          <SettingsSwitchRow
-            icon="clock"
-            label="Auto-dismiss unanswered questions"
-            subtitle="Dismiss unanswered Codex and Claude questions after two minutes without selecting an answer. Permission approvals keep waiting."
-            value={uniformMobileSetting(displayTargets, "autoDismissQuestions")}
-            disabled={disabled}
-            onValueChange={(value) => writeToAll({ autoDismissQuestions: value })}
           />
         </SettingsSection>
       ) : null}

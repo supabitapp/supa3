@@ -637,6 +637,11 @@ export const ServerDirectEndpoint = Schema.Struct({
 });
 export type ServerDirectEndpoint = typeof ServerDirectEndpoint.Type;
 
+const ServerConfigSettings = Schema.Struct({
+  ...ServerSettings.fields,
+  autoDismissQuestions: Schema.optionalKey(Schema.Boolean),
+});
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
@@ -662,7 +667,7 @@ export const ServerConfig = Schema.Struct({
    */
   directEndpoints: Schema.optionalKey(ForwardCompatibleArray(ServerDirectEndpoint)),
   observability: ServerObservability,
-  settings: ServerSettings,
+  settings: ServerConfigSettings,
   /** Whether shell subscriptions can emit an opt-in catch-up completion marker. */
   shellResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Whether shell.openInEditor honors `LaunchEditorInput.reveal` for the
@@ -757,7 +762,7 @@ export type ServerRemoveKeybindingResult = typeof ServerRemoveKeybindingResult.T
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   providers: ServerProviders,
-  settings: Schema.optional(ServerSettings),
+  settings: Schema.optional(ServerConfigSettings),
 });
 export type ServerConfigUpdatedPayload = typeof ServerConfigUpdatedPayload.Type;
 
@@ -774,7 +779,7 @@ export const ServerConfigProviderStatusesPayload = Schema.Struct({
 export type ServerConfigProviderStatusesPayload = typeof ServerConfigProviderStatusesPayload.Type;
 
 export const ServerConfigSettingsUpdatedPayload = Schema.Struct({
-  settings: ServerSettings,
+  settings: ServerConfigSettings,
 });
 export type ServerConfigSettingsUpdatedPayload = typeof ServerConfigSettingsUpdatedPayload.Type;
 

@@ -90,7 +90,7 @@ export interface PendingUserInputCardProps {
   readonly onSubmit: () => Promise<unknown>;
   /** Closes an async question without a reply. Hidden for native callback questions. */
   readonly onDismiss: () => Promise<unknown>;
-  readonly autoDismissQuestions?: boolean;
+  readonly supportsQuestionAutoDismiss?: boolean;
 }
 
 /**
@@ -325,7 +325,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // mount + layout before anything moves.
   const renderCard = EXPANDED_CARD_IS_OVERLAY || !props.collapsed;
   const showBar = props.collapsed || EXPANDED_CARD_IS_OVERLAY;
-  const autoDismissAt = props.autoDismissQuestions
+  const autoDismissAt = props.supportsQuestionAutoDismiss
     ? (props.pendingUserInput.autoDismissAt ?? null)
     : null;
   // The bar renders UNDER the card (earlier in JSX), always opaque: while

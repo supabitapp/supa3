@@ -23,7 +23,7 @@ interface PendingUserInputPanelProps {
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
-  autoDismissQuestions?: boolean | undefined;
+  supportsQuestionAutoDismiss?: boolean | undefined;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -35,7 +35,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   onToggleOption,
   onAdvance,
   onDismiss,
-  autoDismissQuestions = false,
+  supportsQuestionAutoDismiss = false,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
@@ -52,7 +52,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       onToggleOption={onToggleOption}
       onAdvance={onAdvance}
       onDismiss={onDismiss}
-      timerDeadline={autoDismissQuestions ? (activePrompt.autoDismissAt ?? null) : null}
+      timerDeadline={supportsQuestionAutoDismiss ? (activePrompt.autoDismissAt ?? null) : null}
     />
   );
 });

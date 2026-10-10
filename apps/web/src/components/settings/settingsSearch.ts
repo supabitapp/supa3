@@ -291,13 +291,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset wake recover continue"],
   },
   {
-    id: "auto-dismiss-questions",
-    title: "Auto-dismiss unanswered questions",
-    to: "/settings/general",
-    searchTerms: ["question timeout wait answer codex claude automatically two minutes"],
-    scope: "environment-defaults",
-  },
-  {
     id: "auto-resume-limited-threads",
     title: "Auto-resume limited threads",
     to: "/settings/general",
