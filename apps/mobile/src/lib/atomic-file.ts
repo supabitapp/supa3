@@ -1,4 +1,9 @@
-import { File as FileConstructor, type File } from "expo-file-system";
+import type { File } from "expo-file-system";
+
+const expoFileSystem = async (): Promise<typeof import("expo-file-system")> => {
+  if (process.env.NODE_ENV === "test") return import("expo-file-system");
+  return require("expo-file-system");
+};
 
 let tempFileSequence = 0;
 
@@ -10,6 +15,7 @@ let tempFileSequence = 0;
  * clobber each other's staging file mid-flight.
  */
 export async function writeFileAtomically(file: File, contents: string): Promise<void> {
+  const { File: FileConstructor } = await expoFileSystem();
   tempFileSequence += 1;
   const temp = new FileConstructor(file.parentDirectory, `${file.name}.${tempFileSequence}.tmp`);
   temp.create({ intermediates: true, overwrite: true });
