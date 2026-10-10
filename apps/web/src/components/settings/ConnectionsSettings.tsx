@@ -1,6 +1,5 @@
 import { usePreparedConnection } from "../../state/session";
 import { SessionPermissions } from "./SessionPermissions";
-import { AUTH_SCOPE_OPTIONS as PAIRING_SCOPE_OPTIONS } from "@supacode/shared/authScopeOptions";
 import { relayName } from "@supacode/shared/relay/name";
 
 import {
@@ -31,14 +30,8 @@ import {
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
-  AuthDiagnosticsReadScope,
-  AuthOrchestrationReadScope,
-  AuthFilesystemReadScope,
-  AuthStandardClientScopes,
-  AuthTerminalReadScope,
   type AuthClientSession,
   type AuthEnvironmentScope,
-  type AuthGrantScope,
   type AuthPairingLink,
   type AuthPairingCredentialResult,
   type AdvertisedEndpoint,
@@ -76,13 +69,13 @@ import {
   resolvePairingShareValue,
 } from "./pairingUrls";
 import { PairingLinkCreatedDialog } from "./PairingLinkCreatedDialog";
+import { CreatePairingLinkDialog } from "./CreatePairingLinkDialog";
 import {
   applyWslEnableSelection,
   canRevokeOtherClients,
   isQrShareableEndpoint,
   isWslSettingsRowVisible,
   selectQrEndpointOption,
-  togglePairingScopeSelection,
   createRelayPairingEndpoint,
   resolvePairingLinkRoutes,
 } from "./ConnectionsSettings.logic";
@@ -114,7 +107,6 @@ import {
   AutocompleteList,
   AutocompletePopup,
 } from "../ui/autocomplete";
-import { Checkbox } from "../ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -160,7 +152,6 @@ import {
   resolveRemotePairingForm,
 } from "./remotePairingForm";
 import {
-  createServerPairingCredential,
   revokeOtherServerClientSessions,
   revokeServerClientSession,
   revokeServerPairingLink,
@@ -195,7 +186,6 @@ import {
   type EnvironmentPresentation,
   useEnvironments,
   usePrimaryEnvironment,
-  usePrimaryEnvironmentId,
 } from "~/state/environments";
 import { APP_VERSION } from "~/branding";
 import { requestConfirmDialog } from "~/confirmDialog";
@@ -1072,78 +1062,6 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
   delegatableScopes,
 }: AuthorizedClientsHeaderActionProps) {
   const hasOtherClients = clientSessions?.some((clientSession) => !clientSession.current) ?? false;
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const prepareRelay = useAtomCommand(serverEnvironment.prepareRelay, { reportFailure: false });
-  const canPrepareRelay = useAtomValue(
-    serverEnvironment.prepareRelay.permissionAtom(primaryEnvironmentId),
-  );
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [pairingLabel, setPairingLabel] = useState("");
-  const [pairingScopes, setPairingScopes] = useState<ReadonlyArray<AuthGrantScope>>([
-    ...AuthStandardClientScopes,
-  ]);
-  const selectedScopes = pairingScopes.filter((scope) => delegatableScopes.includes(scope));
-  const [pairingStage, setPairingStage] = useState<"idle" | "relay" | "creating">("idle");
-  const isCreatingPairingLink = pairingStage !== "idle";
-  const pairingButtonLabel = {
-    idle: "Create link",
-    relay: "Preparing relay…",
-    creating: "Creating…",
-  }[pairingStage];
-
-  const handleCreatePairingLink = useCallback(async () => {
-    if (
-      primaryEnvironmentId === null ||
-      selectedScopes.length === 0 ||
-      !readEnvironmentScope(primaryEnvironmentId, AuthAccessWriteScope) ||
-      !selectedScopes.every((scope) => readEnvironmentScope(primaryEnvironmentId, scope))
-    )
-      return;
-    setPairingStage(relayEnabled ? "relay" : "creating");
-    try {
-      let relay: RelayConnectionInfo | undefined;
-      if (relayEnabled) {
-        const prepared = await prepareRelay({ environmentId: primaryEnvironmentId, input: {} });
-        if (prepared._tag === "Failure") throw squashAtomCommandFailure(prepared);
-        relay = prepared.value;
-      }
-      setPairingStage("creating");
-      const created = await createServerPairingCredential({
-        label: pairingLabel,
-        scopes: selectedScopes,
-      });
-      onPairingLinkCreated(created, relay);
-      setPairingLabel("");
-      setPairingScopes(
-        AuthStandardClientScopes.filter((scope) => delegatableScopes.includes(scope)),
-      );
-      setDialogOpen(false);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create pairing URL.";
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not create pairing URL",
-          description: message,
-        }),
-      );
-    } finally {
-      setPairingStage("idle");
-    }
-  }, [
-    delegatableScopes,
-    onPairingLinkCreated,
-    pairingLabel,
-    primaryEnvironmentId,
-    selectedScopes,
-    relayEnabled,
-    prepareRelay,
-  ]);
-
-  const togglePairingScope = useCallback((scope: AuthGrantScope, checked: boolean) => {
-    setPairingScopes((current) => togglePairingScopeSelection(current, scope, checked));
-  }, []);
-
   return (
     <div className="flex items-center gap-2">
       <RevokeButton
@@ -1158,148 +1076,12 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
         armedTooltip="Click again to revoke every other client. Each will need a new pairing link to reconnect."
         onRevoke={onRevokeOtherClients}
       />
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            setPairingLabel("");
-            setPairingScopes(
-              AuthStandardClientScopes.filter((scope) => delegatableScopes.includes(scope)),
-            );
-          }
-        }}
-      >
-        <DialogTrigger
-          render={
-            <Button ref={triggerRef} size="xs" variant="default">
-              <PlusIcon className="size-3" />
-              Create link
-            </Button>
-          }
-        />
-        <DialogPopup className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create pairing link</DialogTitle>
-            <DialogDescription>
-              Generate a one-time link that another device can use to pair with this backend as an
-              authorized client.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-foreground">
-                Client label (optional)
-              </span>
-              <Input
-                value={pairingLabel}
-                onChange={(event) => setPairingLabel(event.target.value)}
-                placeholder="e.g. Living room iPad"
-                disabled={isCreatingPairingLink}
-                autoFocus
-              />
-            </label>
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xs font-medium text-foreground">Permissions</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Limit what the paired client can do.
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={isCreatingPairingLink}
-                    onClick={() =>
-                      setPairingScopes(
-                        [
-                          AuthOrchestrationReadScope,
-                          AuthFilesystemReadScope,
-                          AuthDiagnosticsReadScope,
-                          AuthTerminalReadScope,
-                        ].filter((scope) => delegatableScopes.includes(scope)),
-                      )
-                    }
-                  >
-                    Read only
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={isCreatingPairingLink}
-                    onClick={() =>
-                      setPairingScopes(
-                        AuthStandardClientScopes.filter((scope) =>
-                          delegatableScopes.includes(scope),
-                        ),
-                      )
-                    }
-                  >
-                    Standard
-                  </Button>
-                </div>
-              </div>
-              <div className="divide-y divide-border/60 rounded-lg border border-input bg-muted/25">
-                {PAIRING_SCOPE_OPTIONS.flatMap(({ scope, title, description }) =>
-                  delegatableScopes.includes(scope)
-                    ? [
-                        <label
-                          key={scope}
-                          className="flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40"
-                        >
-                          <Checkbox
-                            className="mt-0.5"
-                            checked={pairingScopes.includes(scope)}
-                            disabled={isCreatingPairingLink}
-                            onCheckedChange={(checked) =>
-                              togglePairingScope(scope, checked === true)
-                            }
-                          />
-                          <span className="min-w-0">
-                            <span className="block text-xs font-medium text-foreground">
-                              {title}
-                            </span>
-                            <span className="block text-xs leading-snug text-muted-foreground">
-                              {description}
-                            </span>
-                          </span>
-                        </label>,
-                      ]
-                    : [],
-                )}
-              </div>
-              {selectedScopes.length === 0 ? (
-                <p className="text-xs text-destructive">Select at least one permission.</p>
-              ) : selectedScopes.includes(AuthAccessWriteScope) ? (
-                <p className="text-xs text-warning">
-                  This client can create or revoke access for other devices.
-                </p>
-              ) : null}
-            </section>
-          </DialogPanel>
-          <DialogFooter variant="bare">
-            <Button
-              variant="outline"
-              disabled={isCreatingPairingLink}
-              onClick={() => setDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                isCreatingPairingLink ||
-                selectedScopes.length === 0 ||
-                (relayEnabled && !canPrepareRelay)
-              }
-              onClick={() => void handleCreatePairingLink()}
-            >
-              {pairingButtonLabel}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+      <CreatePairingLinkDialog
+        triggerRef={triggerRef}
+        relayEnabled={relayEnabled}
+        delegatableScopes={delegatableScopes}
+        onPairingLinkCreated={onPairingLinkCreated}
+      />
     </div>
   );
 });

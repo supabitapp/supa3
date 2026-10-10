@@ -1,4 +1,5 @@
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { CheckIcon, CopyIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -13,7 +14,7 @@ import { QRCodeSvg } from "../ui/qr-code";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import type { resolvePairingShareValue } from "./pairingUrls";
-import type { RefObject } from "react";
+import { type RefObject, useRef } from "react";
 
 export function PairingLinkCreatedDialog({
   result,
@@ -24,6 +25,7 @@ export function PairingLinkCreatedDialog({
   readonly onClose: () => void;
   readonly finalFocus: RefObject<HTMLButtonElement | null>;
 }) {
+  const copyButtonRef = useRef<HTMLButtonElement | null>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: "pairing link or code",
     onError: () =>
@@ -35,6 +37,7 @@ export function PairingLinkCreatedDialog({
   });
   const isLink = result?.kind === "link";
   const copyLabel = isLink ? "Copy link" : "Copy code";
+  const valueLabel = isLink ? "Pairing link" : "Pairing code";
 
   return (
     <Dialog
@@ -43,27 +46,21 @@ export function PairingLinkCreatedDialog({
         if (!open) onClose();
       }}
     >
-      <DialogPopup className="max-w-md" finalFocus={finalFocus}>
+      <DialogPopup className="max-w-md" finalFocus={finalFocus} initialFocus={copyButtonRef}>
         <DialogHeader>
-          <DialogTitle>{isLink ? "Pairing link created" : "Pairing code created"}</DialogTitle>
+          <DialogTitle>
+            {isLink ? "Your pairing link is ready" : "Your pairing code is ready"}
+          </DialogTitle>
           <DialogDescription>
             {result?.qrShareable
-              ? "Open this one-time link on your other device or scan the QR code."
-              : "Use this one-time link or code to pair a client that can reach this host."}
+              ? "Scan the QR code or open the link on your other device to connect."
+              : "Use this one-time link or code on a device that can reach this environment."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <Textarea
-            aria-label={isLink ? "Pairing link" : "Pairing code"}
-            readOnly
-            value={result?.value ?? ""}
-            rows={isLink ? 4 : 2}
-            onFocus={(event) => event.currentTarget.select()}
-            onClick={(event) => event.currentTarget.select()}
-          />
           {result?.qrShareable ? (
-            <div className="flex justify-center">
-              <div className="w-fit rounded-xl bg-white p-3">
+            <figure className="flex flex-col items-center gap-3 py-2">
+              <div className="pointer-events-none size-56 shrink-0 select-none rounded-xl bg-white p-4">
                 <QRCodeSvg
                   value={result.value}
                   size={192}
@@ -72,19 +69,45 @@ export function PairingLinkCreatedDialog({
                   title="Pairing link QR code"
                 />
               </div>
-            </div>
+              <figcaption className="text-center text-xs text-muted-foreground">
+                Scan with the camera on your other device.
+              </figcaption>
+            </figure>
           ) : null}
+          <label className="block space-y-2">
+            <span className="block text-xs font-medium">
+              {result?.qrShareable ? "Or copy the pairing link" : valueLabel}
+            </span>
+            <Textarea
+              aria-label={valueLabel}
+              readOnly
+              value={result?.value ?? ""}
+              rows={3}
+              font="mono"
+              autoGrow={false}
+              spellCheck={false}
+              onFocus={(event) => event.currentTarget.select()}
+              onClick={(event) => event.currentTarget.select()}
+            />
+          </label>
+          <p className="text-xs leading-5 text-muted-foreground">
+            This link or code works once. Create a new one for each device.
+          </p>
         </DialogPanel>
         <DialogFooter variant="bare">
-          <Button variant="outline" onClick={onClose}>
+          <Button size="comfortable" variant="outline" onClick={onClose}>
             Done
           </Button>
           <Button
+            ref={copyButtonRef}
+            size="comfortable"
+            className="w-full sm:w-36"
             onClick={() => {
               if (result) copyToClipboard(result.value, undefined);
             }}
           >
-            {isCopied ? "Copied" : copyLabel}
+            {isCopied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
+            <span aria-live="polite">{isCopied ? "Copied" : copyLabel}</span>
           </Button>
         </DialogFooter>
       </DialogPopup>

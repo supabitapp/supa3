@@ -22,9 +22,9 @@ function statusDescription(status: RelayHostStatus): string | null {
     case "off":
       return null;
     case "idle":
-      return "Enabled. Create a pairing link below to connect the relay.";
+      return "Ready to link a device. Use Add device below to create a pairing link.";
     case "connecting":
-      return "Connecting to the relay server.";
+      return "Preparing your connection…";
     case "registered":
       return name === null
         ? "Connected. Paired clients can reach this host from anywhere."
@@ -64,7 +64,7 @@ export function PublicRelaySettings({
         title={searchableSetting("public-relay").title}
         description={
           (enabled && status ? statusDescription(status) : null) ??
-          "Connect from anywhere with end-to-end encryption. Enable it, then create a pairing link below."
+          "Connect your other devices from anywhere with end-to-end encryption. Turn it on, then use Add device below."
         }
         control={
           <Switch
