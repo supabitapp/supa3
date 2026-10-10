@@ -7,7 +7,6 @@ import { assert, it } from "@effect/vitest";
 import {
   buildTriageContext,
   buildTriageLaunchPrompt,
-  buildTriagePrintedPrompt,
   buildTriageSeedPrompt,
   TRIAGE_PLAYBOOK,
 } from "./triagePrompt.ts";
@@ -27,14 +26,6 @@ it("stays byte-identical to .github/triage/PLAYBOOK.md", () => {
 it("seed prompt names the context file and embeds the playbook", () => {
   const prompt = buildTriageSeedPrompt("/tmp/triage-run/context.md");
   assert.include(prompt, "/tmp/triage-run/context.md");
-  assert.include(prompt, TRIAGE_PLAYBOOK);
-});
-
-it("printed prompt carries the context inline and embeds the playbook", () => {
-  const prompt = buildTriagePrintedPrompt(
-    "# Supacode triage context\n\n- Installed version: 0.0.33",
-  );
-  assert.include(prompt, "- Installed version: 0.0.33");
   assert.include(prompt, TRIAGE_PLAYBOOK);
 });
 

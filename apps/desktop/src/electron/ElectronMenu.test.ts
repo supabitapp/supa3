@@ -122,7 +122,7 @@ describe("ElectronMenu", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
-  it.effect("shows SF Symbols for mapped icon keywords on macOS", () =>
+  it.effect("keeps mapped icon keywords as native icons on macOS", () =>
     Effect.gen(function* () {
       const symbol = (name: string) => ({
         name,

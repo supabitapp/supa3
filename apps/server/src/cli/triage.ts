@@ -187,6 +187,7 @@ export const triageCommand = Command.make("triage", {
 
       const now = yield* DateTime.now;
       const version = packageJson.version;
+      const cliCommand = yield* resolveCliCommand("triage");
       const context = buildTriageContext({
         generatedAt: DateTime.formatIso(now),
         version,
@@ -195,7 +196,9 @@ export const triageCommand = Command.make("triage", {
           : `v${version}`,
         os: `${yield* HostProcessPlatform} ${yield* HostProcessArchitecture} (${NodeOS.release()})`,
         nodeVersion: process.version,
-        launchedAs: yield* resolveCliCommand("triage"),
+        launchedAs: flags.print
+          ? `${cliCommand} --print, run by an agent; ask the user how they installed Supacode`
+          : cliCommand,
         server: yield* describeServerProcess(paths.serverRuntimeStatePath),
         paths: {
           stateDir: paths.stateDir,

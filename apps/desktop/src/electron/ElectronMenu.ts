@@ -116,6 +116,7 @@ const normalizePosition = (
 const MENU_ICON_SYMBOLS: Readonly<Record<string, string>> = {
   globe: "globe",
   "message-square-text": "text.bubble",
+  trash: "trash",
 };
 
 /** @public Service construction is part of the canonical Effect module API. */
@@ -182,10 +183,8 @@ export const make = Effect.gen(function* () {
       } else {
         itemOption.click = () => complete(Option.some(item.id));
       }
-      const symbol =
-        item.destructive && itemOption.submenu === undefined
-          ? "trash"
-          : MENU_ICON_SYMBOLS[item.icon ?? ""];
+      const keyword = item.destructive && itemOption.submenu === undefined ? "trash" : item.icon;
+      const symbol = keyword === undefined ? undefined : MENU_ICON_SYMBOLS[keyword];
       if (symbol !== undefined) {
         const icon = getMenuIcon(symbol);
         if (Option.isSome(icon)) {

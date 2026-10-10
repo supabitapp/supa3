@@ -27,7 +27,7 @@ export interface ContextMenuItem<T extends string = string> {
   disabled?: boolean;
   /** Renders as a non-interactive section header label. Web fallback only — stripped on desktop native menus. */
   header?: boolean;
-  /** Icon keyword resolved by the web fallback. Stripped on desktop native menus. */
+  /** Icon keyword resolved by the web fallback. macOS native menus show the keywords they map. */
   icon?: string;
   /** Inserts a visual section divider immediately before this item. */
   separatorBefore?: boolean;

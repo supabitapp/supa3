@@ -176,9 +176,8 @@ function SidebarUtilityItem({
   );
 }
 
-function SidebarHelpItem() {
+function SidebarHelpItem({ closeMobileSidebar }: { closeMobileSidebar: () => void }) {
   const sendFeedback = useSendFeedback();
-  const { isMobile, setOpenMobile } = useSidebar();
 
   const openHelpMenu = async (event: MouseEvent<HTMLButtonElement>) => {
     const api = readLocalApi();
@@ -200,7 +199,7 @@ function SidebarHelpItem() {
     );
     if (clicked._tag === "Failure") return;
     if (clicked.value === "send-feedback" && sendFeedback) {
-      if (isMobile) setOpenMobile(false);
+      closeMobileSidebar();
       await sendFeedback();
     } else if (clicked.value === "visit-website") {
       await api.shell
@@ -290,7 +289,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
-      <SidebarHelpItem />
+      <SidebarHelpItem closeMobileSidebar={closeMobileSidebar} />
       <SidebarUpdatePill />
     </SidebarMenu>
   );

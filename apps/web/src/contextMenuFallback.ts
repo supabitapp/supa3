@@ -181,8 +181,16 @@ function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSV
   return svg;
 }
 
-function clampMenuPosition(menu: HTMLDivElement, preferredLeft: number, preferredTop: number) {
+function clampMenuPosition(
+  menu: HTMLDivElement,
+  preferredLeft: number,
+  preferredTop: number,
+  openUpwardWhenCramped = false,
+) {
   const rect = menu.getBoundingClientRect();
+  if (openUpwardWhenCramped && preferredTop + rect.height > window.innerHeight - 4) {
+    preferredTop -= rect.height;
+  }
   const left = Math.min(
     Math.max(4, preferredLeft),
     Math.max(4, window.innerWidth - rect.width - 4),
@@ -500,12 +508,7 @@ export function showContextMenuFallback<T extends string>(
       submenuTriggerStack[level] = parentTrigger;
 
       requestAnimationFrame(() => {
-        const height = menu.getBoundingClientRect().height;
-        const top =
-          level === 0 && preferredTop + height > window.innerHeight - 4
-            ? preferredTop - height
-            : preferredTop;
-        clampMenuPosition(menu, preferredLeft, top);
+        clampMenuPosition(menu, preferredLeft, preferredTop, level === 0);
       });
     };
 

@@ -1,4 +1,5 @@
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { availableScratchWorkspaceRoot } from "@supacode/client-runtime/operations/projects";
 import Constants from "expo-constants";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
@@ -150,16 +151,13 @@ function AppSettingsSection() {
 }
 
 function FeedbackSettingsAction() {
-  const { selectedTargets } = useSettingsEnvironmentFilter();
+  const { availableTargets } = useSettingsEnvironmentFilter();
   const { sendFeedback, isPending } = useSendFeedback();
-  const eligibleTargets = selectedTargets.filter(
-    (target) => target.serverConfig.scratchWorkspaceRoot !== undefined,
+  const eligibleTargets = availableTargets.filter(
+    (target) =>
+      availableScratchWorkspaceRoot(target.connection.phase, target.serverConfig) !== null,
   );
-  const sendTo = (target: (typeof eligibleTargets)[number]) =>
-    void sendFeedback({
-      environmentId: target.environmentId,
-      serverVersion: target.serverConfig.environment.serverVersion,
-    });
+  const sendTo = (target: (typeof eligibleTargets)[number]) => void sendFeedback(target);
   const row = (
     <SettingsActionRow
       icon="text.bubble"

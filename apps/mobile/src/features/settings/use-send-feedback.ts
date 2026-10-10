@@ -4,7 +4,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@supacode/client-runtime/state/runtime";
-import type { EnvironmentId } from "@supacode/contracts";
+import type { EnvironmentId, ServerConfig } from "@supacode/contracts";
 import Constants from "expo-constants";
 import { useRef, useState } from "react";
 import { Alert, Platform } from "react-native";
@@ -25,7 +25,7 @@ export function useSendFeedback() {
 
   async function sendFeedback(target: {
     readonly environmentId: EnvironmentId;
-    readonly serverVersion: string;
+    readonly serverConfig: Pick<ServerConfig, "environment" | "observability">;
   }) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -44,6 +44,7 @@ export function useSendFeedback() {
       }
       const project = result.value;
       await waitForComposerDraftsLoaded();
+      if (!navigation.isFocused()) return;
       const draftKey = createNewTaskDraft({
         environmentId: project.environmentId,
         projectId: project.id,
@@ -51,15 +52,11 @@ export function useSendFeedback() {
       setComposerDraftText(
         draftKey,
         buildFeedbackPrompt({
-          serverVersion: target.serverVersion,
+          serverConfig: target.serverConfig,
           client: `${Platform.OS === "ios" ? "iOS" : "Android"} app ${Constants.expoConfig?.version ?? "0.0.0"}`,
         }),
       );
-      let root = navigation;
-      for (let parent = root.getParent(); parent; parent = parent.getParent()) {
-        root = parent;
-      }
-      root.dispatch(
+      navigation.dispatch(
         StackActions.replace("NewTaskSheet", {
           screen: "NewTaskDraft",
           params: {
