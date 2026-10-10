@@ -25,6 +25,7 @@ describe("threadQueueControlPresentation", () => {
     expect(controls.canMoveDown).toBe(true);
     expect(controls.canSteer).toBe(true);
     expect(controls.canDismiss).toBe(true);
+    expect(controls.canOpen).toBe(true);
     expect(controls.dismissAccessibilityLabel).toBe(REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL);
   });
 
@@ -50,11 +51,12 @@ describe("threadQueueControlPresentation", () => {
     expect(first.canMoveDown).toBe(true);
     expect(first.canSteer).toBe(false);
     expect(busy.canDismiss).toBe(false);
+    expect(busy.canOpen).toBe(false);
     expect(busy.canMoveUp).toBe(false);
     expect(busy.canSteer).toBe(false);
   });
 
-  it("keeps the row already open in the composer from being reopened or steered", () => {
+  it("lets an edited row return to the composer without reloading or steering", () => {
     const editing = resolveThreadQueueRowControls({
       busy: false,
       canPromoteToSteer: true,
@@ -66,6 +68,7 @@ describe("threadQueueControlPresentation", () => {
     });
 
     expect(editing.isEditing).toBe(true);
+    expect(editing.canOpen).toBe(true);
     expect(editing.canEdit).toBe(false);
     expect(editing.canSteer).toBe(false);
     // Reordering and removing a message stay available while it is edited.

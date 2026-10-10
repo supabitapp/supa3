@@ -7,6 +7,7 @@ export interface ThreadQueueRowControls {
   readonly canEdit: boolean;
   readonly canMoveDown: boolean;
   readonly canMoveUp: boolean;
+  readonly canOpen: boolean;
   readonly canSteer: boolean;
   readonly dismissAccessibilityLabel: string;
   readonly displayText: string;
@@ -28,11 +29,10 @@ export function resolveThreadQueueRowControls(input: {
 
   return {
     canDismiss: !input.busy,
-    // Re-opening the row already in the composer would reload it and throw
-    // away whatever has been typed since.
     canEdit: mutationEnabled && !isEditing,
     canMoveDown: mutationEnabled && input.canReorder && input.index < input.queuedCount - 1,
     canMoveUp: mutationEnabled && input.canReorder && input.index > 0,
+    canOpen: mutationEnabled,
     canSteer: mutationEnabled && input.canPromoteToSteer && !isEditing,
     dismissAccessibilityLabel: REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL,
     displayText: input.text,

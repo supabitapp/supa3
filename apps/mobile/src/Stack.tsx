@@ -782,7 +782,8 @@ const RootStackConfig = createWorkspaceStackNavigator({
       options: {
         ...FORM_SHEET_PRESENTATION_OPTIONS,
         headerShown: false,
-        sheetAllowedDetents: [0.65, 0.95],
+        sheetAllowedDetents: Platform.OS === "android" ? "fitToContents" : [0.4],
+        sheetExpandsWhenScrolledToEdge: false,
         sheetGrabberVisible: true,
       },
     }),
