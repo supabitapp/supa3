@@ -376,17 +376,18 @@ describe("connection onboarding", () => {
           ...saved,
           profile: Option.some(new BearerConnectionProfile({ ...profile, relayUrl: customRelay })),
         };
-        const registration = yield* Effect.gen(function* () {
+        const { registration } = yield* Effect.gen(function* () {
           const gateway = yield* RelayGateway;
           return yield* preparePairingRegistration(
             { pairingUrl: PAIRING_LINK },
             savedEnvironment(lan, relay),
           ).pipe(
-            Effect.provide(layerClientPresentation),
-            Effect.provide(RpcHttp.layerRemoteHttpClient(gateway.fetch)),
+            Effect.provide(
+              Layer.mergeAll(layerClientPresentation, RpcHttp.layerRemoteHttpClient(gateway.fetch)),
+            ),
           );
         }).pipe(Effect.provide(layerGateway));
-        expect(registration.registration.target.environmentId).toBe(SAVED_ENVIRONMENT_ID);
+        expect(registration.target.environmentId).toBe(SAVED_ENVIRONMENT_ID);
         expect(opened).toEqual([
           { address: relayEndpoint.replace(/\/$/, ""), relayUrl: customRelay },
         ]);
