@@ -286,6 +286,59 @@ const publishConfigEvents = Effect.fn("TestRpcSessionFactory.publishConfigEvents
 });
 
 describe("RpcSessionFactory", () => {
+  it.effect(
+    "projects live relay changes and replays withdrawal on the shared config subscription",
+    () =>
+      Effect.gen(function* () {
+        const { factory, sockets } = yield* makeFactory();
+        const session = yield* factory.connect(PREPARED);
+        const socket = yield* awaitSocket(sockets);
+        socket.open();
+        const config = {
+          ...SERVER_CONFIG,
+          environment: {
+            ...SERVER_CONFIG.environment,
+            capabilities: { ...SERVER_CONFIG.environment.capabilities, relayAdvertisement: true },
+          },
+        };
+        yield* completeInitialConfig(socket, encodeServerConfig(config), {
+          relayAdvertisement: true,
+        });
+        yield* session.ready;
+        const updates = yield* Queue.unbounded<ServerConfigType>();
+        yield* session.configChanges.pipe(
+          Stream.runForEach((value) => Queue.offer(updates, value)),
+          Effect.forkChild,
+        );
+        expect(yield* Queue.take(updates)).toEqual(config);
+        const advertisement = {
+          relayEndpoint: `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+          relayUrl: "wss://custom.example.test",
+        };
+        yield* publishConfigEvents(socket, [
+          { version: 1, type: "relayAdvertisementUpdated", payload: advertisement },
+        ]);
+        expect((yield* Queue.take(updates)).environment).toMatchObject(advertisement);
+        expect(yield* session.configChanges.pipe(Stream.runHead)).toMatchObject({
+          _tag: "Some",
+          value: { environment: advertisement },
+        });
+        yield* publishConfigEvents(socket, [
+          { version: 1, type: "relayAdvertisementUpdated", payload: null },
+        ]);
+        const withdrawn = yield* Queue.take(updates);
+        expect(withdrawn.environment).not.toHaveProperty("relayEndpoint");
+        expect(withdrawn.environment).not.toHaveProperty("relayUrl");
+        expect(yield* session.subscribeServerConfig({}).pipe(Stream.runHead)).toMatchObject({
+          _tag: "Some",
+          value: { type: "snapshot", config: withdrawn },
+        });
+        expect(socket.sent.map((message) => decodeJson(message)).filter(isRpcRequest)).toHaveLength(
+          1,
+        );
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("owns one scoped websocket attempt and exposes readiness and closure", () =>
     Effect.gen(function* () {
       const { factory, sockets } = yield* makeFactory();

@@ -4,7 +4,16 @@ import {
   isSharedAddressSpaceHost,
   isTailnetHost,
 } from "@supacode/shared/hostClassification";
-import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@supacode/contracts";
+import {
+  DEFAULT_PUBLIC_RELAY_URL,
+  normalizeRelayServerUrl,
+  type DesktopSshEnvironmentTarget,
+  type EnvironmentId,
+  type RelayConnectionInfo,
+  type ServerConfig,
+} from "@supacode/contracts";
+import { canonicalRelayAddress } from "@supacode/shared/relay/protocol";
+import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
 
 import {
@@ -83,7 +92,7 @@ export function routesAt(
 
 export interface PairingFallback {
   readonly environmentId: EnvironmentId;
-  readonly httpBaseUrls: ReadonlyArray<string>;
+  readonly routes: ReadonlyArray<{ readonly httpBaseUrl: string; readonly relayUrl?: string }>;
 }
 
 /**
@@ -105,15 +114,21 @@ export function pairingFallbackRoutes(
       : entries.get(expectedEnvironmentId);
   if (owner === undefined) return null;
   const linkOrigin = new URL(httpBaseUrl).origin;
-  const fallbacks = new Map<string, string>();
+  const fallbacks = new Map<string, PairingFallback["routes"][number]>();
   for (const route of connectionRoutes(owner)) {
     const url = routeUrl(route);
     if (url === null || url.origin === linkOrigin || fallbacks.has(url.origin)) continue;
-    fallbacks.set(url.origin, url.href);
+    const profile = Option.getOrNull(route.profile);
+    fallbacks.set(url.origin, {
+      httpBaseUrl: url.href,
+      ...(profile?._tag === "BearerConnectionProfile" && profile.relayUrl !== undefined
+        ? { relayUrl: profile.relayUrl }
+        : {}),
+    });
   }
   return fallbacks.size === 0
     ? null
-    : { environmentId: owner.target.environmentId, httpBaseUrls: [...fallbacks.values()] };
+    : { environmentId: owner.target.environmentId, routes: [...fallbacks.values()] };
 }
 
 function onlyEnvironmentAt(
@@ -226,11 +241,44 @@ export function connectionRouteAddress(route: ConnectionRoute): string | null {
   return routeHttpBaseUrl(route);
 }
 
+export function advertisedConnectionRoutes(
+  config: Pick<ServerConfig, "environment" | "directEndpoints">,
+) {
+  const { relayEndpoint, relayUrl, capabilities } = config.environment;
+  let relayAdvertisement: RelayConnectionInfo | null | undefined;
+  if (relayEndpoint !== undefined && relayUrl !== undefined) {
+    relayAdvertisement = { relayEndpoint, relayUrl };
+  } else if (
+    relayEndpoint === undefined &&
+    relayUrl === undefined &&
+    capabilities.relayAdvertisement === true
+  ) {
+    relayAdvertisement = null;
+  }
+  return { reported: config.directEndpoints, relayAdvertisement };
+}
+
+export type ConnectionRouteAdvertisements = ReturnType<typeof advertisedConnectionRoutes>;
+
+function validatedRelayAdvertisement(value: RelayConnectionInfo | null | undefined) {
+  if (value === undefined || value === null) return value;
+  try {
+    const relayEndpoint = canonicalRelayAddress(value.relayEndpoint);
+    const relayUrl = normalizeRelayServerUrl(value.relayUrl);
+    return relayEndpoint === null || relayUrl === null ? undefined : { relayEndpoint, relayUrl };
+  } catch {
+    return undefined;
+  }
+}
+
+const advertisedRouteKey = (url: string) => canonicalRelayAddress(url) ?? url.replace(/\/+$/, "");
+
 export function mergeLearnedRoutes(input: {
   readonly entry: ConnectionCatalogEntry;
   readonly activeRoute: ConnectionRoute;
-  readonly reported: ReadonlyArray<ReportedEndpoint>;
-
+  readonly reported?: ReadonlyArray<ReportedEndpoint> | undefined;
+  readonly relayAdvertisement?: RelayConnectionInfo | null | undefined;
+  readonly allowRelay?: boolean;
   readonly allowInsecure: boolean;
 }): ReadonlyArray<ConnectionRoute> | null {
   const { entry } = input;
@@ -239,43 +287,75 @@ export function mergeLearnedRoutes(input: {
   if (active._tag !== "BearerConnectionTarget") return null;
   const sharedCredential = credentialConnectionId(active.connectionId);
 
-  const reported = new Map<string, URL>();
+  const relay = input.allowRelay
+    ? validatedRelayAdvertisement(input.relayAdvertisement)
+    : undefined;
+  const reported = new Map<string, { readonly url: URL; readonly relayUrl?: string }>();
   const tailscaleOrigins = new Set<string>();
-  for (const endpoint of input.reported) {
+  for (const endpoint of input.reported ?? []) {
     let url: URL;
     try {
       url = new URL(endpoint.httpBaseUrl);
+      if (canonicalRelayAddress(url.href) !== null) continue;
     } catch {
       continue;
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") continue;
     if (url.protocol === "http:" && !input.allowInsecure) continue;
     if (isLocalLoopbackHost(url.hostname)) continue;
-    reported.set(url.origin, url);
+    reported.set(url.origin, { url });
     if (endpoint.kind === "tailnet") tailscaleOrigins.add(url.origin);
   }
-  const normalized = (url: string) => url.replace(/\/+$/, "");
+  if (relay !== undefined && relay !== null) {
+    reported.set(relay.relayEndpoint, {
+      url: new URL(relay.relayEndpoint),
+      relayUrl: relay.relayUrl,
+    });
+  }
   const known = new Set(
     saved.flatMap((route) => {
       const url = routeHttpBaseUrl(route);
-      return url === null || isLearned(route) ? [] : [normalized(url)];
+      return url === null || isLearned(route) ? [] : [advertisedRouteKey(url)];
     }),
   );
-  const kept = saved.flatMap((route): ReadonlyArray<ConnectionRoute> => {
+  const kept = saved.flatMap((route) => {
     const url = routeHttpBaseUrl(route);
     if (!isLearned(route)) {
       return [
-        url === null || !reported.has(normalized(url))
+        url === null || !reported.has(advertisedRouteKey(url))
           ? route
-          : withNetwork(route, tailscaleOrigins.has(normalized(url))),
+          : withNetwork(route, tailscaleOrigins.has(advertisedRouteKey(url))),
       ];
     }
-    if (url === null || !reported.has(normalized(url)) || known.has(normalized(url))) return [];
-    known.add(normalized(url));
-    return [withNetwork(route, tailscaleOrigins.has(normalized(url)))];
+    if (url === null) return [];
+    const key = advertisedRouteKey(url);
+    const isRelay = canonicalRelayAddress(url) !== null;
+    if (isRelay ? relay === undefined : input.reported === undefined) {
+      known.add(key);
+      return [route];
+    }
+    const advertised = reported.get(key);
+    if (advertised === undefined || known.has(key)) return [];
+    known.add(key);
+    const profile = Option.getOrNull(route.profile);
+    if (
+      advertised.relayUrl !== undefined &&
+      profile?._tag === "BearerConnectionProfile" &&
+      (profile.relayUrl ?? DEFAULT_PUBLIC_RELAY_URL) !== advertised.relayUrl
+    ) {
+      return [
+        {
+          ...route,
+          profile: Option.some(
+            new BearerConnectionProfile({ ...profile, relayUrl: advertised.relayUrl }),
+          ),
+        },
+      ];
+    }
+    return [withNetwork(route, tailscaleOrigins.has(key))];
   });
   let next: ReadonlyArray<ConnectionRoute> = kept;
-  for (const url of reported.values()) {
+  for (const { url, relayUrl } of reported.values()) {
     if (known.has(url.origin)) continue;
     const httpBaseUrl = `${url.origin}/`;
     const connectionId = learnedConnectionId(
@@ -297,19 +377,13 @@ export function mergeLearnedRoutes(input: {
           httpBaseUrl,
           wsBaseUrl: `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/`,
           learned: true,
+          ...(relayUrl === undefined ? {} : { relayUrl }),
           ...(tailscaleOrigins.has(url.origin) ? { network: "tailscale" as const } : {}),
         }),
       ),
     });
   }
-  const signature = (routes: ReadonlyArray<ConnectionRoute>) =>
-    routes
-      .map(
-        (route) =>
-          `${connectionRouteId(route.target)} ${routeHttpBaseUrl(route) ?? ""} ${connectionRouteKind(route)}`,
-      )
-      .join("\n");
-  return signature(saved) === signature(next) ? null : next;
+  return Equal.equals(saved, next) ? null : next;
 }
 
 export interface ReportedEndpoint {

@@ -15,6 +15,7 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
 import { buildPairingUrl } from "@supacode/shared/remote";
 
+import { RelayGateway, layer as layerRelayGateway } from "../relay/gateway.ts";
 import * as RpcHttp from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import { fetchRemoteSessionState } from "../authorization/remote.ts";
@@ -174,7 +175,7 @@ const ROUTED_PAIRING_LINK = buildPairingUrl(LAN, "pairing-token", {
   routes: [TAILNET],
 });
 
-function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true): ConnectionRoute {
+function savedRoute(httpBaseUrl: string, connectionId: string, learned?: true) {
   return {
     target: new BearerConnectionTarget({
       environmentId: SAVED_ENVIRONMENT_ID,
@@ -265,6 +266,205 @@ const registerPairing = Effect.fnUntraced(function* (options: {
 });
 
 describe("connection onboarding", () => {
+  it.effect.each(["failed", "stalled"] as const)(
+    "pairs through a direct hint when relay setup is %s",
+    (mode) =>
+      Effect.gen(function* () {
+        const calls: Array<Call> = [];
+        const entered = Promise.withResolvers<void>();
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const pairingUrl = buildPairingUrl(relayEndpoint, "pairing-token", {
+          environmentId: SAVED_ENVIRONMENT_ID,
+          routes: [TAILNET],
+        });
+        const pending = yield* preparePairingRegistration(
+          { pairingUrl },
+          NO_SAVED_ENVIRONMENTS,
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              layerClientPresentation,
+              layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+            ),
+          ),
+          Effect.provideService(RelayGateway, {
+            available: true,
+            resolve: async (address) => address,
+            lease: (address) => ({
+              prepare: async () => {
+                if (address !== relayEndpoint) return address;
+                entered.resolve();
+                if (mode === "failed") throw new Error("Relay unavailable");
+                return new Promise<string>(() => {});
+              },
+              retain: () => {},
+              close: async () => {},
+            }),
+            release: async () => {},
+            fetch: globalThis.fetch,
+          }),
+          Effect.forkChild,
+        );
+        yield* Effect.promise(() => entered.promise);
+        if (mode === "stalled") yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+        const { registration } = yield* Fiber.join(pending);
+        expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+        expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+          `${TAILNET}/oauth/token`,
+        ]);
+      }),
+  );
+
+  it.effect.each(["opening", "preparing"] as const)(
+    "releases abandoned relay %s when a direct pairing fallback wins",
+    (stage) =>
+      Effect.gen(function* () {
+        const entered = Promise.withResolvers<void>();
+        const finishOpen = Promise.withResolvers<void>();
+        const closed = Promise.withResolvers<void>();
+        let closes = 0;
+        const calls: Call[] = [];
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const gatewayLayer = layerRelayGateway({
+          fetch: globalThis.fetch,
+          open: async () => {
+            if (stage === "opening") {
+              entered.resolve();
+              await finishOpen.promise;
+            }
+            return {
+              prepare: () => {
+                entered.resolve();
+                return new Promise<string>(() => {});
+              },
+              close: async () => {
+                closes++;
+                closed.resolve();
+              },
+            };
+          },
+        });
+        yield* Effect.gen(function* () {
+          const pending = yield* preparePairingRegistration(
+            {
+              pairingUrl: buildPairingUrl(relayEndpoint, "pairing-token", {
+                environmentId: SAVED_ENVIRONMENT_ID,
+                routes: [TAILNET],
+              }),
+            },
+            NO_SAVED_ENVIRONMENTS,
+          ).pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                layerClientPresentation,
+                layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+              ),
+            ),
+            Effect.forkChild,
+          );
+          yield* Effect.promise(() => entered.promise);
+          yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+          const { registration } = yield* Fiber.join(pending);
+          expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+          finishOpen.resolve();
+          yield* Effect.promise(() => closed.promise);
+          expect(closes).toBe(1);
+        }).pipe(Effect.provide(gatewayLayer));
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("times out relay preparation when there is no usable fallback", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = [];
+      const entered = Promise.withResolvers<void>();
+      const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+      const pending = yield* preparePairingRegistration(
+        { pairingUrl: buildPairingUrl(relayEndpoint, "pairing-token") },
+        NO_SAVED_ENVIRONMENTS,
+      ).pipe(
+        Effect.provide(Layer.mergeAll(layerClientPresentation, layerRoutedHttp(calls, {}))),
+        Effect.provideService(RelayGateway, {
+          available: true,
+          resolve: async (address) => address,
+          lease: () => ({
+            prepare: () => {
+              entered.resolve();
+              return new Promise<string>(() => {});
+            },
+            retain: () => {},
+            close: async () => {},
+          }),
+          release: async () => {},
+          fetch: globalThis.fetch,
+        }),
+        Effect.result,
+        Effect.forkChild,
+      );
+      yield* Effect.promise(() => entered.promise);
+      yield* TestClock.adjust(10_000);
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: "Failure",
+        failure: { reason: "timeout" },
+      });
+      expect(calls).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "pairs an unreachable LAN link through a learned custom relay with a cold gateway",
+    () =>
+      Effect.gen(function* () {
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const customRelay = "wss://private-relay.example.test";
+        const loopback = "http://127.0.0.1:44000";
+        const calls: Call[] = [];
+        const opened: Array<{ address: string; relayUrl: string }> = [];
+        const server = pairingServer();
+        const layerGateway = layerRelayGateway({
+          open: async (address, relayUrl) => {
+            opened.push({ address, relayUrl });
+            if (relayUrl !== customRelay) throw new Error("Wrong relay server");
+            return { prepare: async () => loopback, close: async () => {} };
+          },
+          fetch: async (request, init = {}) => {
+            const url = new URL(String(request));
+            calls.push({ url: url.href, init });
+            if (url.origin !== loopback) throw new Error("LAN is unreachable");
+            return server(url.pathname, init);
+          },
+        });
+        const lan = savedRoute(LAN, TAILNET_CONNECTION);
+        const saved = savedRoute(
+          relayEndpoint,
+          `learned:${SAVED_ENVIRONMENT_ID}:${relayEndpoint}@${TAILNET_CONNECTION}`,
+          true,
+        );
+        const profile = Option.getOrThrow(saved.profile);
+        const relay = {
+          ...saved,
+          profile: Option.some(new BearerConnectionProfile({ ...profile, relayUrl: customRelay })),
+        };
+        const { registration } = yield* Effect.gen(function* () {
+          const gateway = yield* RelayGateway;
+          return yield* preparePairingRegistration(
+            { pairingUrl: PAIRING_LINK },
+            savedEnvironment(lan, relay),
+          ).pipe(
+            Effect.provide(
+              Layer.mergeAll(layerClientPresentation, RpcHttp.layerRemoteHttpClient(gateway.fetch)),
+            ),
+          );
+        }).pipe(Effect.provide(layerGateway));
+        expect(registration.target.environmentId).toBe(SAVED_ENVIRONMENT_ID);
+        expect(opened).toEqual([
+          { address: relayEndpoint.replace(/\/$/, ""), relayUrl: customRelay },
+        ]);
+        expect(urls(calls).filter((url) => url.endsWith("/oauth/token"))).toEqual([
+          `${loopback}/oauth/token`,
+        ]);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("pairs a new device through a link route and saves the reachable address", () =>
     Effect.gen(function* () {
       const calls: Array<Call> = [];

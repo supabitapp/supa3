@@ -7,10 +7,11 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const companion = createRelayCompanionControl();
     yield* Effect.addFinalizer(() => Effect.sync(() => companion.close()));
+    const desktop = typeof window === "undefined" ? undefined : window.desktopBridge;
     return RelayGateway.layer({
+      available: Boolean(desktop?.startRelay && desktop.stopRelay) || isRelayCompanion(),
       fetch: (input, init) => globalThis.fetch(input, init),
       open: async (address, relayUrl) => {
-        const desktop = typeof window === "undefined" ? undefined : window.desktopBridge;
         if (desktop?.startRelay && desktop.stopRelay) {
           const origin = await desktop.startRelay(address, relayUrl);
           return {

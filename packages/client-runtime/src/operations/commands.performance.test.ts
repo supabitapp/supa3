@@ -13,6 +13,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -183,6 +184,7 @@ const makeSupervisor = Effect.fn("CommandPerformance.makeSupervisor")(function* 
         },
       },
     } as never),
+    configChanges: Stream.empty,
     subscribeServerConfig: (requestInput) => client.subscribeServerConfig(requestInput),
     ready: Effect.void,
     probe: Effect.void,

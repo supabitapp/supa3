@@ -11,9 +11,15 @@ export interface RelayClientEndpoint {
   readonly close: () => Promise<void>;
 }
 
+export interface RelayOriginLease extends RelayClientEndpoint {
+  readonly retain: () => void;
+}
+
 export class RelayGateway extends Context.Service<
   RelayGateway,
   {
+    readonly available: boolean;
+    readonly lease: (address: string, relayUrl?: string) => RelayOriginLease;
     readonly resolve: (address: string, relayUrl?: string) => Promise<string>;
     readonly release: (address: string) => Promise<void>;
     readonly fetch: typeof globalThis.fetch;
@@ -21,6 +27,7 @@ export class RelayGateway extends Context.Service<
 >()("@supacode/client-runtime/relay/gateway/RelayGateway") {}
 
 export function layer(input: {
+  readonly available?: boolean;
   readonly open: (address: string, relayUrl: string) => Promise<RelayClientEndpoint>;
   readonly fetch: typeof globalThis.fetch;
 }) {
@@ -29,7 +36,12 @@ export function layer(input: {
     Effect.gen(function* () {
       const endpoints = new Map<
         string,
-        { readonly relayUrl: string; readonly endpoint: Promise<RelayClientEndpoint> }
+        {
+          readonly relayUrl: string;
+          readonly endpoint: Promise<RelayClientEndpoint>;
+          retained: boolean;
+          leases: number;
+        }
       >();
       const relayUrls = new Map<string, string>();
       const closing = new Map<string, Promise<void>>();
@@ -38,10 +50,8 @@ export function layer(input: {
       const release = async (address: string) => {
         const identity = key(address);
         if (!identity) return;
-        const activeClose = closing.get(identity);
-        if (activeClose) return activeClose;
         const owned = endpoints.get(identity);
-        if (!owned) return;
+        if (!owned) return closing.get(identity);
         endpoints.delete(identity);
         const stopped = owned.endpoint
           .then(
@@ -55,22 +65,58 @@ export function layer(input: {
         closing.set(identity, stopped);
         await stopped;
       };
-      const endpoint = async (identity: string): Promise<RelayClientEndpoint> => {
+      const endpoint = (identity: string) => {
         const relayUrl = relayUrls.get(identity) ?? DEFAULT_PUBLIC_RELAY_URL;
         const existing = endpoints.get(identity);
-        if (existing && existing.relayUrl !== relayUrl) await release(identity);
-        await closing.get(identity);
-        if (disposed) throw new Error("Relay gateway closed");
-        const current = endpoints.get(identity);
-        if (current) return current.endpoint;
-        const created = input.open(identity, relayUrl);
-        endpoints.set(identity, { relayUrl, endpoint: created });
-        void created.catch(() => {
-          if (endpoints.get(identity)?.endpoint === created) endpoints.delete(identity);
+        if (existing?.relayUrl === relayUrl) return existing;
+        if (existing) void release(identity);
+        const created = {
+          relayUrl,
+          retained: false,
+          leases: 0,
+          endpoint: Promise.resolve(closing.get(identity)).then(() => {
+            if (disposed || endpoints.get(identity) !== created)
+              throw new Error("Relay gateway closed");
+            return input.open(identity, relayUrl);
+          }),
+        };
+        endpoints.set(identity, created);
+        void created.endpoint.catch(() => {
+          if (endpoints.get(identity) === created) endpoints.delete(identity);
         });
         return created;
       };
-      const prepare = async (identity: string) => (await endpoint(identity)).prepare();
+      const prepare = async (identity: string) => {
+        const owned = endpoint(identity);
+        owned.retained = true;
+        return (await owned.endpoint).prepare();
+      };
+      const lease = (address: string, relayUrl = DEFAULT_PUBLIC_RELAY_URL): RelayOriginLease => {
+        const identity = key(address);
+        if (!identity)
+          return { prepare: async () => address, retain: () => {}, close: async () => {} };
+        relayUrls.set(identity, relayUrl);
+        const owned = endpoint(identity);
+        owned.leases++;
+        let closed = false;
+        return {
+          prepare: async () => {
+            const prepared = await owned.endpoint;
+            if (closed) throw new Error("Relay lease closed");
+            return prepared.prepare();
+          },
+          retain: () => {
+            if (!closed) owned.retained = true;
+          },
+          close: async () => {
+            if (closed) return;
+            closed = true;
+            owned.leases--;
+            if (!owned.retained && owned.leases === 0 && endpoints.get(identity) === owned)
+              await release(identity);
+          },
+        };
+      };
       yield* Effect.addFinalizer(() =>
         Effect.promise(async () => {
           disposed = true;
@@ -83,6 +129,8 @@ export function layer(input: {
         }),
       );
       return RelayGateway.of({
+        available: input.available ?? true,
+        lease,
         resolve: async (address, relayUrl) => {
           const identity = key(address);
           if (!identity) return address;
@@ -109,19 +157,41 @@ export function layer(input: {
   );
 }
 
+const relayConnectionError = (cause: unknown) =>
+  new ConnectionTransientError({
+    reason: "transport",
+    detail: cause instanceof Error ? cause.message : "The relay tunnel could not be opened.",
+  });
+
+export const leaseRelayOrigin = Effect.fn("RelayGateway.leaseOrigin")(function* (
+  address: string,
+  relayUrl = DEFAULT_PUBLIC_RELAY_URL,
+) {
+  const gateway = yield* Effect.serviceOption(RelayGateway);
+  if (Option.isNone(gateway)) return { origin: address, retain: () => {} };
+  const lease = yield* Effect.acquireRelease(
+    Effect.try({ try: () => gateway.value.lease(address, relayUrl), catch: relayConnectionError }),
+    (lease) =>
+      Effect.sync(() => {
+        void lease.close().catch(() => {});
+      }),
+  );
+  const origin = yield* Effect.tryPromise({
+    try: () => lease.prepare(),
+    catch: relayConnectionError,
+  });
+  return { origin, retain: lease.retain };
+});
+
 export const resolveRelayOrigin = Effect.fn("RelayGateway.resolveOrigin")(function* (
   address: string,
-  relayUrl?: string,
+  relayUrl = DEFAULT_PUBLIC_RELAY_URL,
 ) {
   const gateway = yield* Effect.serviceOption(RelayGateway);
   if (Option.isNone(gateway)) return address;
   return yield* Effect.tryPromise({
     try: () => gateway.value.resolve(address, relayUrl),
-    catch: (cause) =>
-      new ConnectionTransientError({
-        reason: "transport",
-        detail: cause instanceof Error ? cause.message : "The relay tunnel could not be opened.",
-      }),
+    catch: relayConnectionError,
   });
 });
 

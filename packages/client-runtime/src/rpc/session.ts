@@ -45,6 +45,7 @@ const SOCKET_OPEN_TIMEOUT = "15 seconds";
 export interface RpcSession {
   readonly client: WsRpcProtocolClient;
   readonly initialConfig: Effect.Effect<ServerConfig, ConnectionAttemptError>;
+  readonly configChanges: Stream.Stream<ServerConfig>;
   readonly subscribeServerConfig: (
     input: ServerConfigSubscriptionInput,
   ) => ServerConfigSubscription;
@@ -83,6 +84,11 @@ type ServerConfigSubscription = Stream.Stream<
 type ServerConfigSubscriptionInput = Parameters<
   WsRpcProtocolClient[typeof WS_METHODS.subscribeServerConfig]
 >[0];
+
+const normalizedConfigSubscription = (input: ServerConfigSubscriptionInput) => ({
+  ...input,
+  relayAdvertisement: input.relayAdvertisement ?? true,
+});
 type EnvironmentThemesUpdatedEvent = Extract<
   ServerConfigStreamEvent,
   { readonly type: "environmentThemesUpdated" }
@@ -148,11 +154,11 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
   options: RpcSessionOptions = {},
 ) {
   const webSocketConstructor = yield* Socket.WebSocketConstructor;
-  const serverConfigInput: ServerConfigSubscriptionInput = {
+  const serverConfigInput = normalizedConfigSubscription({
     ...(options.environmentThemes === true ? { environmentThemes: true } : {}),
     ...(options.usageLimitSources === true ? { usageLimitSources: true } : {}),
     ...(options.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
-  };
+  });
 
   const connect = Effect.fnUntraced(function* (connection: PreparedConnection) {
     yield* Effect.annotateCurrentSpan({
@@ -296,7 +302,7 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
       ),
       Effect.withSpan("environment.initialSync"),
     );
-    const serverConfigEvents = Stream.unwrap(
+    const serverConfigReplay = Stream.unwrap(
       Effect.gen(function* () {
         const subscription = yield* PubSub.subscribe(serverConfigUpdates);
         const snapshot = yield* Ref.get(serverConfigState);
@@ -305,23 +311,32 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
         }
         const updates = Stream.fromSubscription(subscription).pipe(
           Stream.filter((buffered) => buffered.revision > snapshot.value.revision),
-          Stream.mapAccum(
-            () => snapshot.value.revision,
-            (revision, buffered) => [
-              buffered.revision,
-              buffered.revision === revision + 1
-                ? [buffered.event]
-                : serverConfigReplayEvents(buffered.replay),
-            ],
-          ),
         );
         const terminal = Stream.fromEffect(Deferred.await(serverConfigExit)).pipe(Stream.drain);
         return Stream.concat(
-          Stream.fromIterable(serverConfigReplayEvents(snapshot.value)),
+          Stream.succeed({
+            event: {
+              version: 1,
+              type: "snapshot",
+              config: withoutEnvironmentThemes(snapshot.value.projection.config),
+            },
+            replay: snapshot.value,
+            revision: snapshot.value.revision,
+          } satisfies BufferedServerConfigEvent),
           Stream.merge(updates, terminal, { haltStrategy: "either" }),
         );
       }),
-    ).pipe(
+    );
+    const serverConfigEvents = serverConfigReplay.pipe(
+      Stream.mapAccum(
+        (): number | undefined => undefined,
+        (revision, buffered) => [
+          buffered.revision,
+          revision !== undefined && buffered.revision === revision + 1
+            ? [buffered.event]
+            : serverConfigReplayEvents(buffered.replay),
+        ],
+      ),
       Stream.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Stream.failCause(cause);
@@ -349,16 +364,23 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
           }),
       ),
     );
-    const subscribeServerConfig = (input: ServerConfigSubscriptionInput) =>
-      Stream.unwrap(
+    const subscribeServerConfig = (input: ServerConfigSubscriptionInput) => {
+      const subscription = normalizedConfigSubscription(input);
+      return Stream.unwrap(
         validatedInitialConfig.pipe(
           Effect.as(
-            Equal.equals(input, serverConfigInput)
+            Equal.equals(subscription, serverConfigInput)
               ? serverConfigEvents
-              : protocolClient[WS_METHODS.subscribeServerConfig](input),
+              : protocolClient[WS_METHODS.subscribeServerConfig](subscription),
           ),
         ),
       );
+    };
+    const configChanges = Stream.unwrap(initialConfig.pipe(Effect.as(serverConfigReplay))).pipe(
+      Stream.map((buffered) => buffered.replay.projection.config),
+      Stream.filter((config) => config.environment.environmentId === connection.environmentId),
+      Stream.catch(() => Stream.empty),
+    );
     const probe = initialConfig.pipe(
       Effect.flatMap((config) =>
         (config.environment.capabilities.connectionProbe === true
@@ -373,6 +395,7 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
     return {
       client: protocolClient,
       initialConfig,
+      configChanges,
       subscribeServerConfig,
       ready: Deferred.await(connected).pipe(
         Effect.andThen(initialConfig),

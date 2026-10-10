@@ -3,6 +3,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
@@ -28,10 +29,11 @@ import * as RpcSession from "../rpc/session.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
 import {
+  advertisedConnectionRoutes,
+  type ConnectionRouteAdvertisements,
   connectionRouteId,
   connectionRoutes,
   entryWithRoutes,
-  type ReportedEndpoint,
 } from "./routes.ts";
 
 const RETRY_BASE_DELAY_MS = 1_000;
@@ -93,10 +95,12 @@ function exitUnlessInterrupted<A, E, R>(
 
 export interface EnvironmentSupervisorOptions {
   readonly initiallyDesired?: boolean;
-  readonly learnRoutes?: (input: {
-    readonly activeRoute: ConnectionRoute;
-    readonly reported: ReadonlyArray<ReportedEndpoint>;
-  }) => Effect.Effect<Option.Option<ConnectionCatalogEntry>>;
+  readonly learnRoutes?: (
+    input: {
+      readonly activeRoute: ConnectionRoute;
+      readonly sourceSession: RpcSession.RpcSession;
+    } & ConnectionRouteAdvertisements,
+  ) => Effect.Effect<Option.Option<ConnectionCatalogEntry>>;
 }
 
 /**
@@ -522,21 +526,31 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     lease: ConnectionDriver.EnvironmentConnectionLease,
   ) {
     if (options?.learnRoutes === undefined) return;
-    const config = yield* lease.session.initialConfig.pipe(Effect.option);
-    if (Option.isNone(config) || config.value.directEndpoints === undefined) return;
-    const activeId = connectionRouteId(lease.prepared.target);
-    const activeRoute = connectionRoutes(yield* Ref.get(currentEntry)).find(
-      (route) => connectionRouteId(route.target) === activeId,
+    const learn = options.learnRoutes;
+    yield* lease.session.configChanges.pipe(
+      Stream.map(advertisedConnectionRoutes),
+      Stream.changesWith<ConnectionRouteAdvertisements>(Equal.equals),
+      Stream.runForEach((advertised) =>
+        Effect.gen(function* () {
+          if (advertised.reported === undefined && advertised.relayAdvertisement === undefined)
+            return;
+          const activeId = connectionRouteId(lease.prepared.target);
+          const activeRoute = connectionRoutes(yield* Ref.get(currentEntry)).find(
+            (route) => connectionRouteId(route.target) === activeId,
+          );
+          if (activeRoute === undefined) return;
+          const updated = yield* learn({
+            ...advertised,
+            activeRoute,
+            sourceSession: lease.session,
+          });
+          if (Option.isSome(updated)) {
+            yield* Ref.set(currentEntry, updated.value);
+            yield* requestBetterRouteCheck(lease);
+          }
+        }),
+      ),
     );
-    if (activeRoute === undefined) return;
-    const updated = yield* options.learnRoutes({
-      activeRoute,
-      reported: config.value.directEndpoints,
-    });
-    if (Option.isSome(updated)) {
-      yield* Ref.set(currentEntry, updated.value);
-      yield* requestBetterRouteCheck(lease);
-    }
   });
 
   const runAttempt = Effect.fnUntraced(function* (

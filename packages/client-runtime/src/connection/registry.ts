@@ -1,4 +1,5 @@
-import { releaseRelayOrigin } from "../relay/gateway.ts";
+import { RelayGateway, releaseRelayOrigin } from "../relay/gateway.ts";
+import { canonicalRelayAddress } from "@supacode/shared/relay/protocol";
 import { EnvironmentId } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -40,19 +41,22 @@ import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentSupervisor from "./supervisor.ts";
 import * as ConnectionDriver from "./driver.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
+import type * as RpcSession from "../rpc/session.ts";
 import {
   GitHubRoutingPermissions,
   gitHubRoutingConnectionKey,
 } from "./githubRoutingPermissions.ts";
 import {
   connectionRouteId,
+  credentialConnectionId,
   connectionRoutes,
+  type ConnectionRouteAdvertisements,
   entryWithRoutes,
   findRouteToSameAddress,
   mergeLearnedRoutes,
+  routeHttpBaseUrl,
   routesAfterRemoving,
   upsertRoute,
-  type ReportedEndpoint,
 } from "./routes.ts";
 
 const isSshConnectionProfile = Schema.is(SshConnectionProfile);
@@ -202,6 +206,8 @@ export const make = Effect.gen(function* () {
   const driver = yield* ConnectionDriver.ConnectionDriver;
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
   const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
+  const relay = yield* Effect.serviceOption(RelayGateway);
+  const allowRelay = Option.isSome(relay) && relay.value.available;
   const releaseRouteTransports = Effect.fn("EnvironmentRegistry.releaseRouteTransports")(function* (
     route: ConnectionRoute,
     environmentId: EnvironmentId,
@@ -218,6 +224,27 @@ export const make = Effect.gen(function* () {
         ),
         Effect.ignore,
       );
+  });
+  const releaseRemovedRouteTransports = Effect.fn(
+    "EnvironmentRegistry.releaseRemovedRouteTransports",
+  )(function* (
+    previous: ReadonlyArray<ConnectionRoute>,
+    next: ReadonlyArray<ConnectionRoute>,
+    environmentId: EnvironmentId,
+  ) {
+    const retainedIds = new Set(next.map((route) => connectionRouteId(route.target)));
+    const retainedRelayAddresses = new Set(
+      next.flatMap((route) => {
+        const address = canonicalRelayAddress(routeHttpBaseUrl(route) ?? "");
+        return address === null ? [] : [address];
+      }),
+    );
+    for (const route of previous) {
+      if (retainedIds.has(connectionRouteId(route.target))) continue;
+      const address = canonicalRelayAddress(routeHttpBaseUrl(route) ?? "");
+      if (address !== null && retainedRelayAddresses.has(address)) continue;
+      yield* releaseRouteTransports(route, environmentId);
+    }
   });
   const persistedTargets = yield* storage.list;
   const disabledEnvironmentIds = new Set(yield* storage.listDisabled);
@@ -842,44 +869,60 @@ export const make = Effect.gen(function* () {
     return yield* withLeaseLock(environmentId, removeLocked(environmentId));
   });
 
-  const learnRoutes = Effect.fn("EnvironmentRegistry.learnRoutes")(function* (input: {
-    readonly environmentId: EnvironmentId;
-    readonly activeRoute: ConnectionRoute;
-    readonly reported: ReadonlyArray<ReportedEndpoint>;
-  }) {
+  const learnRoutes = Effect.fn("EnvironmentRegistry.learnRoutes")(function* (
+    input: {
+      readonly environmentId: EnvironmentId;
+      readonly activeRoute: ConnectionRoute;
+      readonly sourceSession: RpcSession.RpcSession;
+    } & ConnectionRouteAdvertisements,
+  ) {
     return yield* withLeaseLock(
       input.environmentId,
       Effect.gen(function* () {
         if ((yield* Ref.get(platformEnvironmentIds)).has(input.environmentId)) return Option.none();
         const entry = (yield* SubscriptionRef.get(entries)).get(input.environmentId);
         if (entry === undefined) return Option.none();
+        const owner = (yield* SubscriptionRef.get(serviceScopes)).get(input.environmentId);
+        if (
+          owner === undefined ||
+          Option.getOrNull(yield* SubscriptionRef.get(owner.supervisor.session)) !==
+            input.sourceSession
+        )
+          return Option.none();
+        const previous = connectionRoutes(entry);
+        const activeId = connectionRouteId(input.activeRoute.target);
+        if (!previous.some((route) => connectionRouteId(route.target) === activeId))
+          return Option.none();
+        if (
+          !previous.some(
+            (route) =>
+              route.target._tag === "BearerConnectionTarget" &&
+              route.target.connectionId === credentialConnectionId(activeId),
+          )
+        )
+          return Option.none();
         const routes = mergeLearnedRoutes({
           entry,
           activeRoute: input.activeRoute,
           reported: input.reported,
+          relayAdvertisement: input.relayAdvertisement,
+          allowRelay,
           allowInsecure:
             typeof globalThis.location === "undefined" || globalThis.location.protocol !== "https:",
         });
-        if (routes === null) return Option.none();
+        if (routes === null) return Option.some(entry);
         const next = entryWithRoutes(entry, routes);
-
         const previousProfiles = new Map(
-          connectionRoutes(entry).map((route) => [
-            connectionRouteId(route.target),
-            Option.getOrNull(route.profile),
-          ]),
+          previous.map((route) => [connectionRouteId(route.target), route.profile]),
         );
-        for (const route of routes) {
+        const changedProfiles = routes.flatMap((route) => {
           const profile = Option.getOrNull(route.profile);
-          if (
-            profile === null ||
-            previousProfiles.get(connectionRouteId(route.target)) === profile
-          ) {
-            continue;
-          }
-          yield* profiles.put(profile);
-        }
-        yield* registrations.setRoutes(input.environmentId, persistedRoutes(next));
+          return profile !== null &&
+            !Equal.equals(previousProfiles.get(connectionRouteId(route.target)), route.profile)
+            ? [profile]
+            : [];
+        });
+        yield* registrations.setRoutes(input.environmentId, persistedRoutes(next), changedProfiles);
         yield* SubscriptionRef.update(serviceScopes, (current) => {
           const lease = current.get(input.environmentId);
           return lease === undefined
@@ -889,8 +932,9 @@ export const make = Effect.gen(function* () {
         yield* SubscriptionRef.update(entries, (current) =>
           new Map(current).set(input.environmentId, next),
         );
+        yield* releaseRemovedRouteTransports(previous, routes, input.environmentId);
         return Option.some(next);
-      }),
+      }).pipe(Effect.uninterruptible),
     ).pipe(
       Effect.catch((error) =>
         Effect.logWarning("Could not save routes learned from the environment.", {
@@ -918,7 +962,7 @@ export const make = Effect.gen(function* () {
         const remaining = routesAfterRemoving(routes, routeId);
         if (remaining.length === 0) return yield* removeLocked(environmentId);
         yield* replaceRoutesLocked(entry, remaining);
-        yield* releaseRouteTransports(route, environmentId);
+        yield* releaseRemovedRouteTransports(routes, remaining, environmentId);
       }),
     );
   });

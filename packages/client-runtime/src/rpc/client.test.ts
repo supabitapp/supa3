@@ -65,6 +65,7 @@ function session(client: WsRpcProtocolClient): RpcSession.RpcSession {
   return {
     client,
     initialConfig: Effect.never,
+    configChanges: Stream.empty,
     subscribeServerConfig: (input) => client.subscribeServerConfig(input),
     ready: Effect.void,
     probe: Effect.void,
@@ -115,6 +116,7 @@ describe("environment RPC", () => {
         activeSession,
         Option.some({
           ...session(client),
+          configChanges: Stream.empty,
           subscribeServerConfig: () => Stream.succeed(event),
         }),
       );

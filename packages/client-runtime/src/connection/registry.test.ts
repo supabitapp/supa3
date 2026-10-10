@@ -2,8 +2,9 @@ import { RelayGateway } from "../relay/gateway.ts";
 import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
-  type OrchestrationV2ShellSnapshot,
+  DEFAULT_SERVER_SETTINGS,
   type ServerConfig,
+  type OrchestrationV2ShellSnapshot,
 } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -14,6 +15,8 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Queue from "effect/Queue";
+import { connectionRoutes, isLearned } from "./routes.ts";
 import * as Result from "effect/Result";
 import * as Scheduler from "effect/Scheduler";
 import * as Scope from "effect/Scope";
@@ -154,6 +157,8 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
   initialCredentials: ReadonlyArray<readonly [string, ConnectionCredential]> = [],
   options?: {
     readonly prepareError?: ConnectionBlockedError;
+    readonly configChanges?: Stream.Stream<ServerConfig>;
+    readonly setRoutes?: Persistence.ConnectionRegistrationStore["Service"]["setRoutes"];
     readonly checkRoute?: (route: ConnectionRoute) => RouteCheck;
     readonly prepareRoute?: (target: ConnectionTarget) => ConnectionBlockedError | undefined;
     /** Runs before preparing a connection; may suspend to hold an attempt in flight. */
@@ -195,7 +200,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     listDisabled: Ref.get(storedDisabled).pipe(Effect.map((ids) => [...ids])),
   });
   const registrationStore = Persistence.ConnectionRegistrationStore.of({
-    setRoutes: () => Effect.void,
+    setRoutes: options?.setRoutes ?? (() => Effect.void),
     register: (registration) =>
       Effect.gen(function* () {
         yield* options?.beforeRegistrationRegister?.(registration) ?? Effect.void;
@@ -372,6 +377,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
           Effect.succeed({
             client: {} as RpcSession.RpcSession["client"],
             initialConfig: Effect.die(new Error("Config is not used by registry tests.")),
+            configChanges: options?.configChanges ?? Stream.empty,
             subscribeServerConfig: () =>
               Stream.die(new Error("Config is not used by registry tests.")),
             ready: Effect.void,
@@ -756,6 +762,10 @@ describe("EnvironmentRegistry", () => {
           Effect.provideService(
             RelayGateway,
             RelayGateway.of({
+              available: true,
+              lease: () => {
+                throw new Error("Unexpected pairing lease");
+              },
               resolve: async (address) => address,
               fetch,
               release: async (address) => {
@@ -1525,3 +1535,130 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 });
+
+it.effect(
+  "learns, updates, and withdraws relay on a live connection without replacing its session or credential",
+  () =>
+    Effect.gen(function* () {
+      const config: ServerConfig = {
+        environment: {
+          environmentId: BEARER_TARGET.environmentId,
+          label: "Test",
+          platform: { os: "linux", arch: "x64" },
+          serverVersion: "test",
+          capabilities: { repositoryIdentity: true, relayAdvertisement: true },
+        },
+        auth: {
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["bearer-access-token"],
+          sessionCookieName: "supacode_session",
+        },
+        cwd: "/tmp",
+        keybindingsConfigPath: "/tmp/keybindings.json",
+        keybindings: [],
+        issues: [],
+        providers: [],
+        availableEditors: [],
+        observability: {
+          logsDirectoryPath: "/tmp/logs",
+          localTracingEnabled: false,
+          otlpTracesEnabled: false,
+          otlpMetricsEnabled: false,
+          otlpLogsEnabled: false,
+        },
+        settings: DEFAULT_SERVER_SETTINGS,
+      };
+      const configs = yield* SubscriptionRef.make(config);
+      const writes = yield* Queue.unbounded<{
+        routes: ReadonlyArray<ConnectionTarget>;
+        profiles: ReadonlyArray<ConnectionProfile>;
+      }>();
+      const released = Promise.withResolvers<string>();
+      const harness = yield* makeHarness(
+        [BEARER_TARGET],
+        [BEARER_PROFILE],
+        [[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]],
+        {
+          configChanges: SubscriptionRef.changes(configs),
+          setRoutes: (_environmentId, routes, profiles = []) =>
+            Queue.offer(writes, { routes, profiles }).pipe(Effect.asVoid),
+        },
+      );
+      const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* awaitConnectionState(
+          registry,
+          BEARER_TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        const awaitRoutes = (predicate: (routes: ReturnType<typeof connectionRoutes>) => boolean) =>
+          SubscriptionRef.changes(registry.entries).pipe(
+            Stream.map((entries) => connectionRoutes(entries.get(BEARER_TARGET.environmentId)!)),
+            Stream.filter(predicate),
+            Stream.runHead,
+            Effect.map(Option.getOrThrow),
+          );
+        yield* SubscriptionRef.set(configs, {
+          ...config,
+          environment: {
+            ...config.environment,
+            relayEndpoint,
+            relayUrl: "wss://first.example.test",
+          },
+        });
+        const learned = yield* awaitRoutes((routes) => routes.length === 2);
+        const firstWrite = yield* Queue.take(writes);
+        expect(firstWrite.routes).toEqual(learned.map((route) => route.target));
+        expect(firstWrite.profiles).toEqual([Option.getOrThrow(learned.find(isLearned)!.profile)]);
+        yield* SubscriptionRef.update(configs, (value) => ({
+          ...value,
+          availableEditors: ["file-manager"] as const,
+        }));
+        yield* SubscriptionRef.update(configs, (value) => ({
+          ...value,
+          environment: { ...value.environment, relayUrl: "wss://second.example.test" },
+        }));
+        const changed = yield* awaitRoutes((routes) =>
+          routes.some((route) => {
+            const profile = Option.getOrNull(route.profile);
+            return (
+              profile?._tag === "BearerConnectionProfile" &&
+              profile.relayUrl === "wss://second.example.test"
+            );
+          }),
+        );
+        const secondWrite = yield* Queue.take(writes);
+        expect(secondWrite.profiles).toHaveLength(1);
+        expect(secondWrite.routes).toEqual(firstWrite.routes);
+        expect(changed.map((route) => route.target)).toEqual(learned.map((route) => route.target));
+        yield* SubscriptionRef.set(configs, config);
+        expect(yield* awaitRoutes((routes) => routes.length === 1)).toEqual([
+          { target: BEARER_TARGET, profile: Option.some(BEARER_PROFILE) },
+        ]);
+        expect((yield* Queue.take(writes)).profiles).toEqual([]);
+        expect(yield* Effect.promise(() => released.promise)).toBe(relayEndpoint);
+        expect(yield* Ref.get(harness.sessions)).toHaveLength(1);
+        expect(yield* Ref.get(harness.releasedSessions)).toBe(0);
+        expect(yield* Ref.get(harness.storedCredentials)).toEqual(
+          new Map([[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]]),
+        );
+      }).pipe(
+        Effect.provide(harness.layer),
+        Effect.provideService(RelayGateway, {
+          available: true,
+          lease: () => {
+            throw new Error("Unexpected pairing lease");
+          },
+          resolve: async (address) => address,
+          release: async (address) => {
+            released.resolve(address);
+          },
+          fetch: globalThis.fetch,
+        }),
+        Effect.scoped,
+      );
+    }),
+);

@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   type RelayHostStatus,
+  type RelayConnectionInfo,
   type ServerSettings,
 } from "@supacode/contracts";
 import { expect, it } from "@effect/vitest";
@@ -10,6 +11,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
@@ -23,7 +25,9 @@ const { startRelayTransport } = vi.hoisted(() => ({
   startRelayTransport: vi.fn<typeof import("./transport.ts").startRelayTransport>(),
 }));
 vi.mock("./transport.ts", () => ({ startRelayTransport }));
-beforeEach(() => startRelayTransport.mockReset());
+beforeEach(() => {
+  startRelayTransport.mockReset();
+});
 
 const fixture = Effect.gen(function* () {
   const settings = yield* SubscriptionRef.make<ServerSettings>({
@@ -68,7 +72,11 @@ const fixture = Effect.gen(function* () {
       ...value,
       publicRelayEnabled: enabled,
     })).pipe(Effect.flatMap((value) => PubSub.publish(changes, value)));
-  return { settings, secrets, layer, setEnabled };
+  const setRelayUrl = (publicRelayUrl: string) =>
+    SubscriptionRef.updateAndGet(settings, (value) => ({ ...value, publicRelayUrl })).pipe(
+      Effect.flatMap((value) => PubSub.publish(changes, value)),
+    );
+  return { settings, secrets, layer, setEnabled, setRelayUrl };
 });
 const awaitState = (service: RelayAccess.RelayAccess["Service"], state: RelayHostStatus["state"]) =>
   service.status.pipe(
@@ -248,4 +256,58 @@ it.effect("recovers a superseded host when disable and re-enable are queued toge
       }).pipe(Effect.provide(test.layer));
     }),
   ),
+);
+
+it.effect("advertises the first activation and later changes without activating an idle host", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture;
+    const lifecycle: string[] = [];
+    startRelayTransport.mockImplementation(({ relayUrl }) => {
+      lifecycle.push(`start:${relayUrl}`);
+      return () => {
+        lifecycle.push(`stop:${relayUrl}`);
+      };
+    });
+    yield* Effect.gen(function* () {
+      const service = yield* RelayAccess.RelayAccess;
+      const advertisements = yield* Queue.unbounded<RelayConnectionInfo | null>();
+      yield* service.advertisements.pipe(
+        Stream.runForEach((value) =>
+          Effect.sync(() => {
+            lifecycle.push(`advertise:${value?.relayUrl ?? "off"}`);
+          }).pipe(Effect.andThen(Queue.offer(advertisements, value))),
+        ),
+        Effect.forkChild,
+      );
+      expect(yield* Queue.take(advertisements)).toBeNull();
+      yield* service.start;
+      expect((yield* awaitState(service, "idle"))._tag).toBe("Some");
+      expect(startRelayTransport).not.toHaveBeenCalled();
+      const preparing = yield* service.prepare.pipe(Effect.forkChild);
+      const first = yield* Queue.take(advertisements);
+      expect(first?.relayUrl).toBe(DEFAULT_SERVER_SETTINGS.publicRelayUrl);
+      const report = startRelayTransport.mock.calls[0]![0].onStatus;
+      report?.("registered");
+      expect(yield* Fiber.join(preparing)).toEqual(first);
+      report?.("superseded");
+      yield* awaitState(service, "superseded");
+      yield* test.setRelayUrl("wss://second.example.test");
+      expect(yield* Queue.take(advertisements)).toEqual({
+        ...first,
+        relayUrl: "wss://second.example.test",
+      });
+      yield* test.setEnabled(false);
+      expect(yield* Queue.take(advertisements)).toBeNull();
+      expect(lifecycle).toEqual([
+        "advertise:off",
+        `start:${DEFAULT_SERVER_SETTINGS.publicRelayUrl}`,
+        `advertise:${DEFAULT_SERVER_SETTINGS.publicRelayUrl}`,
+        `stop:${DEFAULT_SERVER_SETTINGS.publicRelayUrl}`,
+        "start:wss://second.example.test",
+        "advertise:wss://second.example.test",
+        "stop:wss://second.example.test",
+        "advertise:off",
+      ]);
+    }).pipe(Effect.provide(test.layer));
+  }).pipe(Effect.scoped),
 );

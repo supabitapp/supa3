@@ -9,6 +9,7 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Base64 from "effect/encoding/Base64";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -78,6 +79,9 @@ import {
   type ServerSelfUpdateProgressEvent,
   type ServerConfig as ClientServerConfig,
   type ServerConfigStreamEvent,
+  type RelayConnectionInfo,
+  relayAdvertisementFrom,
+  withRelayAdvertisement,
   type ServerLifecycleStreamEvent,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
@@ -289,6 +293,26 @@ const resolveEditorConfig = <E, R>(
     };
   });
 
+export const relayAdvertisementUpdates = (
+  config: ClientServerConfig,
+  advertisements: Stream.Stream<RelayConnectionInfo | null>,
+  enabled: boolean | undefined,
+) =>
+  enabled === true
+    ? Stream.concat(
+        Stream.succeed(relayAdvertisementFrom(config.environment)),
+        advertisements,
+      ).pipe(
+        Stream.changesWith<RelayConnectionInfo | null>(Equal.equals),
+        Stream.drop(1),
+        Stream.map((payload) => ({
+          version: 1 as const,
+          type: "relayAdvertisementUpdated" as const,
+          payload,
+        })),
+      )
+    : Stream.empty;
+
 /**
  * Live config updates that follow a snapshot of `config`. A busy host can
  * outlast the snapshot's discovery timeouts, which send no editors, or no
@@ -342,6 +366,14 @@ export const withLateEditorConfig = <E, R>(
             return [{ ...current, providers: event.payload.providers }, [event]];
           case "settingsUpdated":
             return [{ ...current, settings: event.payload.settings }, [event]];
+          case "relayAdvertisementUpdated":
+            return [
+              {
+                ...current,
+                environment: withRelayAdvertisement(current.environment, event.payload),
+              },
+              [event],
+            ];
           // Themes and usage-limit sources never ride in a snapshot; clients
           // carry their projected values across one.
           default:
@@ -2981,15 +3013,22 @@ const layerWsRpc = (
                 })),
               );
 
-              const liveUpdates = Stream.merge(
-                keybindingsUpdates,
-                Stream.merge(
+              const relayAdvertisements = relayAdvertisementUpdates(
+                config,
+                relayAccess.advertisements,
+                input.relayAdvertisement,
+              );
+
+              const liveUpdates = Stream.mergeAll<ServerConfigStreamEvent, never, never>(
+                [
+                  keybindingsUpdates,
                   providerStatuses,
-                  Stream.merge(
-                    settingsUpdates,
-                    Stream.merge(environmentThemeUpdates, usageLimitSourceUpdates),
-                  ),
-                ),
+                  settingsUpdates,
+                  environmentThemeUpdates,
+                  usageLimitSourceUpdates,
+                  relayAdvertisements,
+                ],
+                { concurrency: "unbounded" },
               );
 
               return Stream.concat(

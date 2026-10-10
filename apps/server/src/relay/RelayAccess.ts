@@ -1,5 +1,6 @@
 import {
   normalizeRelayServerUrl,
+  relayAdvertisementFrom,
   RelayPreparationError,
   type RelayConnectionInfo,
   type RelayHostStatus,
@@ -7,6 +8,7 @@ import {
 } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
@@ -27,6 +29,7 @@ export class RelayAccess extends Context.Service<
     readonly start: Effect.Effect<void, never, Scope.Scope>;
     readonly prepare: Effect.Effect<RelayConnectionInfo, RelayPreparationError>;
     readonly status: Stream.Stream<RelayHostStatus>;
+    readonly advertisements: Stream.Stream<RelayConnectionInfo | null>;
     readonly advertisement: Effect.Effect<Pick<RelayHostStatus, "relayEndpoint" | "relayUrl">>;
   }
 >()("supacode/relay/RelayAccess") {}
@@ -160,10 +163,12 @@ const make = Effect.gen(function* () {
     start,
     prepare,
     status: SubscriptionRef.changes(status),
+    advertisements: SubscriptionRef.changes(status).pipe(
+      Stream.map(relayAdvertisementFrom),
+      Stream.changesWith<RelayConnectionInfo | null>(Equal.equals),
+    ),
     advertisement: SubscriptionRef.get(status).pipe(
-      Effect.map(({ relayEndpoint, relayUrl }) =>
-        relayEndpoint === undefined || relayUrl === undefined ? {} : { relayEndpoint, relayUrl },
-      ),
+      Effect.map((value) => relayAdvertisementFrom(value) ?? {}),
     ),
   });
 });

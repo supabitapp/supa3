@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import type { ConnectionRegistration } from "../connection/catalog.ts";
+import type { ConnectionProfile, ConnectionRegistration } from "../connection/catalog.ts";
 import type { DeferredShellSnapshot } from "../state/shellPullRequests.ts";
 import type { ConnectionTarget, PersistedConnectionTarget } from "../connection/model.ts";
 
@@ -61,6 +61,7 @@ export class ConnectionRegistrationStore extends Context.Service<
     readonly setRoutes: (
       environmentId: EnvironmentId,
       routes: ReadonlyArray<PersistedConnectionTarget>,
+      profiles?: ReadonlyArray<ConnectionProfile>,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly remove: (target: ConnectionTarget) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly setEnabled: (

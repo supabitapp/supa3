@@ -142,6 +142,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       client reconnecting to one must drop published themes rather than keep
       showing a set nothing will ever update. */
   environmentThemes: Schema.optionalKey(Schema.Boolean),
+  relayAdvertisement: Schema.optionalKey(Schema.Boolean),
   /** Server streams quota from configured usage-limit sources. Same
       version-skew contract as environmentThemes. */
   usageLimitSources: Schema.optionalKey(Schema.Boolean),

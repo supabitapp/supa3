@@ -44,6 +44,22 @@ export const RelayConnectionInfo = Schema.Struct({
 });
 export type RelayConnectionInfo = typeof RelayConnectionInfo.Type;
 
+export function relayAdvertisementFrom(value: {
+  readonly relayEndpoint?: string;
+  readonly relayUrl?: string;
+}): RelayConnectionInfo | null {
+  return value.relayEndpoint === undefined || value.relayUrl === undefined
+    ? null
+    : { relayEndpoint: value.relayEndpoint, relayUrl: value.relayUrl };
+}
+
+export function withRelayAdvertisement<
+  T extends { readonly relayEndpoint?: string; readonly relayUrl?: string },
+>(value: T, advertisement: RelayConnectionInfo | null) {
+  const { relayEndpoint: _endpoint, relayUrl: _url, ...rest } = value;
+  return { ...rest, ...advertisement };
+}
+
 export class RelayPreparationError extends Schema.TaggedError<RelayPreparationError>()(
   "RelayPreparationError",
   {

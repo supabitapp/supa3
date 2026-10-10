@@ -149,3 +149,119 @@ it.effect("dials each host through its saved relay and moves when the relay chan
     expect(closed).toEqual(["wss://supacode-relay.exe.xyz", "wss://relay.example"]);
   }),
 );
+
+it.effect("closes an abandoned lease even when its endpoint opens late", () =>
+  Effect.gen(function* () {
+    const opened = Promise.withResolvers<void>();
+    const endpoint = Promise.withResolvers<import("./gateway.ts").RelayClientEndpoint>();
+    let closes = 0;
+    yield* Effect.gen(function* () {
+      const gateway = yield* RelayGateway;
+      const lease = gateway.lease(address);
+      const pending = lease.prepare().catch(() => "abandoned");
+      yield* Effect.promise(() => opened.promise);
+      const closing = lease.close();
+      endpoint.resolve({
+        prepare: async () => "http://127.0.0.1:3000",
+        close: async () => {
+          closes++;
+        },
+      });
+      expect(yield* Effect.promise(() => pending)).toBe("abandoned");
+      yield* Effect.promise(() => closing);
+      expect(closes).toBe(1);
+    }).pipe(
+      Effect.provide(
+        layer({
+          fetch,
+          open: () => {
+            opened.resolve();
+            return endpoint.promise;
+          },
+        }),
+      ),
+      Effect.scoped,
+    );
+    expect(closes).toBe(1);
+  }),
+);
+
+it.effect("preserves a tunnel shared with another lease or an existing connection", () =>
+  Effect.gen(function* () {
+    let opens = 0;
+    let closes = 0;
+    yield* Effect.gen(function* () {
+      const gateway = yield* RelayGateway;
+      const first = gateway.lease(address);
+      const second = gateway.lease(address);
+      yield* Effect.promise(() => first.prepare());
+      yield* Effect.promise(() => first.close());
+      expect(closes).toBe(0);
+      expect(yield* Effect.promise(() => second.prepare())).toBe("http://127.0.0.1:3000");
+      second.retain();
+      yield* Effect.promise(() => second.close());
+      const abandoned = gateway.lease(address);
+      yield* Effect.promise(() => abandoned.close());
+      expect(closes).toBe(0);
+      yield* Effect.promise(() => gateway.resolve(address));
+      expect(opens).toBe(1);
+    }).pipe(
+      Effect.provide(
+        layer({
+          fetch,
+          open: async () => {
+            opens++;
+            return {
+              prepare: async () => "http://127.0.0.1:3000",
+              close: async () => {
+                closes++;
+              },
+            };
+          },
+        }),
+      ),
+      Effect.scoped,
+    );
+    expect(closes).toBe(1);
+  }),
+);
+
+it.effect("does not open an abandoned lease waiting behind an old endpoint closing", () =>
+  Effect.gen(function* () {
+    const finishClose = Promise.withResolvers<void>();
+    const startedClose = Promise.withResolvers<void>();
+    let opens = 0;
+    yield* Effect.gen(function* () {
+      const gateway = yield* RelayGateway;
+      yield* Effect.promise(() => gateway.resolve(address));
+      const releasing = gateway.release(address);
+      yield* Effect.promise(() => startedClose.promise);
+      const lease = gateway.lease(address);
+      const preparing = lease.prepare().catch(() => "abandoned");
+      const closing = lease.close();
+      finishClose.resolve();
+      yield* Effect.promise(() => Promise.all([releasing, closing]));
+      expect(yield* Effect.promise(() => preparing)).toBe("abandoned");
+      expect(opens).toBe(1);
+      expect(yield* Effect.promise(() => gateway.resolve(address))).toBe("http://127.0.0.1:3000");
+      expect(opens).toBe(2);
+    }).pipe(
+      Effect.provide(
+        layer({
+          fetch,
+          open: async () => {
+            opens++;
+            return {
+              prepare: async () => "http://127.0.0.1:3000",
+              close: async () => {
+                startedClose.resolve();
+                await finishClose.promise;
+              },
+            };
+          },
+        }),
+      ),
+      Effect.scoped,
+    );
+  }),
+);

@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@supacode/contracts";
+import { DEFAULT_PUBLIC_RELAY_URL, EnvironmentId } from "@supacode/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -16,6 +16,10 @@ import {
   SshConnectionTarget,
 } from "./model.ts";
 import { measureConnectionRouteLatency } from "./routeLatency.ts";
+import { RelayGateway } from "../relay/gateway.ts";
+import * as Driver from "./driver.ts";
+import * as Resolver from "./resolver.ts";
+import * as RpcSession from "../rpc/session.ts";
 import { layerRemoteHttpClient } from "../rpc/http.ts";
 
 const environmentId = EnvironmentId.make("latency-test");
@@ -189,3 +193,113 @@ describe("route latency", () => {
     ),
   );
 });
+
+const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+function relayRoute(relayUrl?: string): ConnectionRoute {
+  return {
+    ...directRoute,
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: "lan",
+        environmentId,
+        label: "Test",
+        httpBaseUrl: relayEndpoint,
+        wsBaseUrl: relayEndpoint.replace(/^https:/, "wss:"),
+        ...(relayUrl === undefined ? {} : { relayUrl }),
+      }),
+    ),
+  };
+}
+const checkRoute = (route: ConnectionRoute) =>
+  Effect.gen(function* () {
+    const driver = yield* Driver.make;
+    return yield* driver.checkRoute({ ...route, enabled: true }, route);
+  }).pipe(
+    Effect.provideService(Resolver.ConnectionResolver, {
+      prepare: () => Effect.die("Unexpected authenticated preparation"),
+      prepareForUpdate: () => Effect.die("Unexpected update preparation"),
+    }),
+    Effect.provideService(RpcSession.RpcSessionFactory, {
+      connect: () => Effect.die("Unexpected socket"),
+    }),
+  );
+
+it.effect.each([undefined, "wss://custom.example.test/relay"])(
+  "uses the saved relay URL %j for latency and route selection without credentials",
+  (relayUrl) =>
+    Effect.gen(function* () {
+      const origins: string[] = [];
+      const relayUrls: Array<string | undefined> = [];
+      const route = relayRoute(relayUrl);
+      const gateway = RelayGateway.of({
+        available: true,
+        lease: () => {
+          throw new Error("Unexpected pairing lease");
+        },
+        resolve: async (address, url) => {
+          expect(address).toBe(relayEndpoint);
+          relayUrls.push(url);
+          return "http://127.0.0.1:49000/";
+        },
+        release: async () => {},
+        fetch: globalThis.fetch,
+      });
+      yield* Effect.gen(function* () {
+        expect((yield* measureConnectionRouteLatency({ route })).status).toBe("reachable");
+        expect(yield* checkRoute(route)).toBe("answered");
+      }).pipe(
+        Effect.provideService(RelayGateway, gateway),
+        Effect.provide(
+          layerRemoteHttpClient(async (request, init) => {
+            origins.push(String(request));
+            expect(new Headers(init?.headers).has("authorization")).toBe(false);
+            return Response.json(descriptor);
+          }),
+        ),
+      );
+      expect(relayUrls).toEqual([
+        relayUrl ?? DEFAULT_PUBLIC_RELAY_URL,
+        relayUrl ?? DEFAULT_PUBLIC_RELAY_URL,
+      ]);
+      expect(origins).toEqual(
+        Array(2).fill("http://127.0.0.1:49000/.well-known/supacode/environment"),
+      );
+    }),
+);
+
+it.effect.each(["latency", "route"] as const)(
+  "bounds stalled relay preparation during %s checks",
+  (kind) =>
+    Effect.gen(function* () {
+      const started = Promise.withResolvers<void>();
+      const resolve = () => {
+        started.resolve();
+        return new Promise<string>(() => {});
+      };
+      const route = relayRoute();
+      const probe =
+        kind === "latency"
+          ? measureConnectionRouteLatency({ route }).pipe(Effect.map((result) => result.status))
+          : checkRoute(route);
+      const fiber = yield* probe.pipe(
+        Effect.provideService(RelayGateway, {
+          available: true,
+          lease: () => {
+            throw new Error("Unexpected pairing lease");
+          },
+          resolve,
+          release: async () => {},
+          fetch: globalThis.fetch,
+        }),
+        Effect.provide(
+          layerRemoteHttpClient(async () => {
+            throw new Error("Unexpected HTTP request");
+          }),
+        ),
+        Effect.forkChild,
+      );
+      yield* Effect.promise(() => started.promise);
+      yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+      expect(yield* Fiber.join(fiber)).toEqual(kind === "latency" ? "unreachable" : "silent");
+    }),
+);

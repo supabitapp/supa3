@@ -18,15 +18,19 @@ const decodeSubscribeServerConfigPayload = Schema.decodeSync(
 describe("subscribeServerConfig payload compatibility", () => {
   it("is accepted by a server whose schema predates the field", () => {
     const oldServerPayload = Schema.Struct({});
-    const decoded = Schema.decodeExit(oldServerPayload)({ environmentThemes: true });
+    const decoded = Schema.decodeExit(oldServerPayload)({
+      environmentThemes: true,
+      relayAdvertisement: true,
+    });
     expect(Exit.isSuccess(decoded)).toBe(true);
   });
 
   it("is carried by a server that declares it", () => {
     const decoded = decodeSubscribeServerConfigPayload({
       environmentThemes: true,
+      relayAdvertisement: true,
     });
-    expect(decoded).toEqual({ environmentThemes: true });
+    expect(decoded).toEqual({ environmentThemes: true, relayAdvertisement: true });
   });
 
   it("stays optional, so a client that never sends it still subscribes", () => {
