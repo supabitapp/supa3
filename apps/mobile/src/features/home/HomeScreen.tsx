@@ -650,6 +650,7 @@ export function HomeScreen(props: HomeScreenProps) {
     scrolling: !swipeEnabled,
     ready: shelfPreferencesLoaded && !props.catalogState.isLoadingConnections,
   });
+  const prepareListMotion = listMotion.prepare;
   const renderV2ItemContent = useCallback(
     ({ item }: { readonly item: ThreadListV2ListItem }) => {
       if (item.type === "v2-pending") {
@@ -728,7 +729,10 @@ export function HomeScreen(props: HomeScreenProps) {
             count={item.count}
             disabled={item.disabled}
             expanded={item.expanded}
-            onToggle={toggleSettledShelf}
+            onToggle={() => {
+              prepareListMotion();
+              toggleSettledShelf();
+            }}
           />
         );
       }
@@ -829,6 +833,7 @@ export function HomeScreen(props: HomeScreenProps) {
       titleRegenerationEnvironmentIds,
       showMoreSettled,
       toggleSettledShelf,
+      prepareListMotion,
       toggleSnoozedShelf,
       togglePinnedShelf,
       toggleActiveShelf,

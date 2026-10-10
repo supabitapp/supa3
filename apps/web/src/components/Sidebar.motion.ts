@@ -1,4 +1,5 @@
-const motionTiming = { duration: 150, easing: "ease-out" };
+const motionTiming = { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" };
+const exitTiming = { duration: 140, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
 // Rows normally ride their displaced neighbour's travel. Absent a moving
 // neighbour, a row still travels on its own, clamped so a tall card does not
 // slide its full height.
@@ -6,8 +7,7 @@ const rowTravel = (height: number) => Math.min(height, 40);
 // A project filter change or a bulk snooze swaps a large part of the list at
 // once. Fades are the expensive part: every removed row gets a deep clone and
 // every clone and entering row gets its own animation, and the layout reads
-// in between force synchronous reflows. Translating displaced rows is cheap,
-// so only the fade count decides whether an update animates.
+// in between force synchronous reflows.
 const MAX_FADED_ROWS_PER_UPDATE = 40;
 
 type RowPosition = { top: number; left: number; width: number; height: number };
@@ -32,6 +32,16 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   // Visual tops at drag release, relative to the list, so the release
   // commit can glide every row from where dnd-kit left it into its slot.
   let released: Map<HTMLElement, number> | null = null;
+  let keyboardMotionSuppressedUntil = 0;
+  const suppressKeyboardMotion = () => {
+    keyboardMotionSuppressedUntil = Date.now() + 300;
+  };
+  parent.addEventListener("keydown", suppressKeyboardMotion);
+  const readViewport = () => {
+    const bounds = parent.closest('[data-slot="scroll-area-viewport"]')?.getBoundingClientRect();
+    return bounds ? { bounds, origin: parent.getBoundingClientRect().top } : null;
+  };
+  let preparedViewport: ReturnType<typeof readViewport> = null;
 
   const remainingOffset = (node: HTMLElement) => {
     const current = running.get(node);
@@ -86,7 +96,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         { opacity: entryProgress, transform: "translateY(0px)" },
         { opacity: 0, transform: `translateY(${travel}px)` },
       ],
-      motionTiming,
+      exitTiming,
     );
     exiting.set(clone, animation);
     animation.addEventListener(
@@ -108,6 +118,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
     clearFades();
     positions = null;
     released = null;
+    preparedViewport = null;
   };
   const move = (node: HTMLElement, offset: number) => {
     cancel(node);
@@ -130,8 +141,20 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   };
 
   return {
-    update(animate: boolean) {
+    prepare() {
+      preparedViewport = readViewport();
+    },
+    update(animate: boolean, shelfToggled = false) {
       if (disposed) return;
+      const viewport = shelfToggled ? readViewport() : null;
+      const previousViewport = preparedViewport;
+      preparedViewport = null;
+      const originDelta =
+        viewport && previousViewport ? previousViewport.origin - viewport.origin : 0;
+      const visible = (position: RowPosition, offset = 0, frame = viewport) =>
+        !frame ||
+        (frame.origin + position.top + offset + position.height > frame.bounds.top &&
+          frame.origin + position.top + offset < frame.bounds.bottom);
       const next = new Map(
         Array.from(parent.children)
           .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
@@ -158,7 +181,9 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         animate &&
         positions !== null &&
         !reducedMotion?.matches &&
-        fadeCount <= MAX_FADED_ROWS_PER_UPDATE;
+        Date.now() >= keyboardMotionSuppressedUntil &&
+        (!shelfToggled || previousViewport !== null) &&
+        (shelfToggled || fadeCount <= MAX_FADED_ROWS_PER_UPDATE);
       const movedDelta = new Map<HTMLElement, number>();
       const nextOrder = [...next.keys()];
       const oldOrder = positions === null ? [] : [...positions.keys()];
@@ -183,13 +208,20 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
         // their final slots; exiting rows leave by it.
         for (const [node, position] of next) {
           const previousTop = positions!.get(node)?.top;
-          if (previousTop === undefined || previousTop === position.top) continue;
-          movedDelta.set(node, previousTop + remainingOffset(node) - position.top);
+          if (previousTop === undefined || (previousTop === position.top && originDelta === 0)) {
+            continue;
+          }
+          movedDelta.set(node, originDelta + previousTop + remainingOffset(node) - position.top);
         }
         for (const [node, position] of positions!) {
           if (next.has(node)) continue;
+          if (shelfToggled && !visible(position, remainingOffset(node), previousViewport)) continue;
           const delta = ridingDelta(oldOrder, oldOrder.indexOf(node), (n) => next.has(n));
-          fadeOut(node, position, delta === undefined ? rowTravel(position.height) : -delta);
+          fadeOut(
+            node,
+            { ...position, top: position.top + originDelta },
+            delta === undefined ? rowTravel(position.height) : -delta,
+          );
         }
       }
       for (const [node, entry] of entering) {
@@ -206,7 +238,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
           const position = next.get(node)!;
           const previousTop = positions!.get(node)?.top;
           if (previousTop === undefined) {
-            if (position.height > 0) {
+            if (position.height > 0 && (!shelfToggled || visible(position))) {
               const delta = ridingDelta(nextOrder, index, (n) => positions!.has(n));
               const travel = delta === undefined ? -rowTravel(position.height) : delta;
               const animation = node.animate(
@@ -260,6 +292,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
     suspend,
     dispose() {
       suspend();
+      parent.removeEventListener("keydown", suppressKeyboardMotion);
       disposed = true;
     },
   };

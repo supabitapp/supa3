@@ -599,6 +599,7 @@ function ThreadNavigationSidebarPane(
     scrolling: !swipeEnabled,
     ready: shelfPreferencesLoaded,
   });
+  const prepareListMotion = listMotion.prepare;
   const renderListItemContent = useCallback(
     ({ item }: { readonly item: SidebarListItem }) => {
       switch (item.type) {
@@ -743,7 +744,10 @@ function ThreadNavigationSidebarPane(
               count={item.count}
               disabled={item.disabled}
               expanded={item.expanded}
-              onToggle={toggleSettledShelf}
+              onToggle={() => {
+                prepareListMotion();
+                toggleSettledShelf();
+              }}
               pane="sidebar"
             />
           );
@@ -792,6 +796,7 @@ function ThreadNavigationSidebarPane(
       snoozeEnvironmentIds,
       snoozeThread,
       toggleSettledShelf,
+      prepareListMotion,
       toggleSnoozedShelf,
       togglePinnedShelf,
       toggleActiveShelf,

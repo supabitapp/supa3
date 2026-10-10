@@ -65,12 +65,21 @@ class TestRow {
   });
 }
 
-function fixture(rows: TestRow[]) {
+function fixture(rows: TestRow[], viewportHeight?: number) {
   const media = { matches: false };
+  const events = new EventTarget();
   const parent = {
     children: rows,
+    top: 0,
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
+    closest: () =>
+      viewportHeight === undefined
+        ? null
+        : { getBoundingClientRect: () => ({ top: 0, bottom: viewportHeight }) },
     ownerDocument: { defaultView: { matchMedia: () => media } },
-    getBoundingClientRect: () => ({ top: 0 }),
+    getBoundingClientRect: () => ({ top: parent.top }),
     append(node: TestRow) {
       parent.children.push(node);
       node.remove.mockImplementation(() => {
@@ -97,7 +106,7 @@ function fixture(rows: TestRow[]) {
 function expectMove(row: TestRow, offset: number) {
   expect(row.animate).toHaveBeenLastCalledWith(
     [{ transform: `translateY(${offset}px)` }, { transform: "translateY(0px)" }],
-    { duration: 150, easing: "ease-out" },
+    { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
   );
 }
 
@@ -105,6 +114,70 @@ beforeEach(() => vi.stubGlobal("HTMLElement", TestRow));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sidebar list motion", () => {
+  it("does not reuse unrelated clicks for synchronized shelf changes after scrolling", () => {
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout, parent } = fixture([header], 240);
+    motion.update(false);
+    parent.dispatchEvent(new Event("click"));
+    parent.top = -1000;
+    layout([header, ...rows]);
+    motion.update(true, true);
+    expect([header, ...rows].every((row) => row.animations.length === 0)).toBe(true);
+  });
+
+  it("keeps departing rows in their visual boxes when collapse clamps a scrolled list", () => {
+    const active = new TestRow("Active", 200);
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout, parent } = fixture([active, header, ...rows], 240);
+    motion.update(false);
+
+    parent.top = -200;
+    motion.prepare();
+    layout([active, header]);
+    parent.top = 0;
+    motion.update(true, true);
+
+    expect(rows.slice(0, 6).every((row) => row.clones.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.clones.length === 0)).toBe(true);
+    expect(rows[0]!.clones[0]!.style.top).toBe("42px");
+    expect(rows[5]!.clones[0]!.style.top).toBe("227px");
+    expectMove(header, -200);
+  });
+
+  it("animates large shelf toggles without fading offscreen history", () => {
+    const header = new TestRow("Settled", 32);
+    const rows = Array.from({ length: 100 }, (_, index) => new TestRow(`settled-${index}`, 36));
+    const { motion, layout } = fixture([header], 240);
+    motion.update(false);
+
+    motion.prepare();
+    layout([header, ...rows]);
+    motion.update(true, true);
+    expect(rows.slice(0, 6).every((row) => row.animations.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.animations.length === 0)).toBe(true);
+
+    motion.prepare();
+    layout([header]);
+    motion.update(true, true);
+    expect(rows.slice(0, 6).every((row) => row.clones.length === 1)).toBe(true);
+    expect(rows.slice(6).every((row) => row.clones.length === 0)).toBe(true);
+  });
+
+  it("keeps keyboard shelf toggles immediate", () => {
+    const header = new TestRow("Settled", 32);
+    const row = new TestRow("settled", 36);
+    const { motion, layout, parent } = fixture([header], 240);
+    motion.update(false);
+    motion.prepare();
+    parent.dispatchEvent(new Event("keydown"));
+    layout([header, row]);
+    motion.update(true, true);
+    expect(row.animate).not.toHaveBeenCalled();
+    motion.dispose();
+  });
+
   it("moves a retained Active row into Settled with its displaced peers", () => {
     const pinnedHeader = new TestRow("Pinned", 0);
     const pinned = new TestRow("pin");
@@ -174,9 +247,10 @@ describe("sidebar list motion", () => {
 
   it("does not glide on release when motion is reduced", () => {
     const [a, b] = [new TestRow("a"), new TestRow("b")];
-    const { motion, layout, media } = fixture([a, b]);
+    const { motion, layout, media } = fixture([a, b], 240);
     motion.update(true);
     media.matches = true;
+    motion.prepare();
     a.dragTranslate = 100;
     motion.release();
     layout([b, a]);
@@ -287,8 +361,8 @@ describe("sidebar list motion", () => {
         { opacity: 1, transform: "translateY(0px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 180,
+        easing: "cubic-bezier(0.645, 0.045, 0.355, 1)",
       },
     );
     const clone = a.clones[0]!;
@@ -311,8 +385,8 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(-83px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 140,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     expect(parent.children.includes(clone)).toBe(true);
@@ -338,20 +412,22 @@ describe("sidebar list motion", () => {
     motion.update(true);
     expectMove(header, 72);
     expectMove(x, 72);
+    expect(y.animate.mock.calls[0]![1]).toEqual(header.animate.mock.calls[0]![1]);
+    expect(z.animate.mock.calls[0]![1]).toEqual(header.animate.mock.calls[0]![1]);
     expect(a.animate).not.toHaveBeenCalled();
     expect(y.animate).toHaveBeenLastCalledWith(
       [
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
     expect(z.animate).toHaveBeenLastCalledWith(
       [
         { opacity: 0, transform: "translateY(72px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
   });
 
@@ -371,7 +447,7 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(-30px)" },
         { opacity: 1, transform: "translateY(0px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 180, easing: "cubic-bezier(0.645, 0.045, 0.355, 1)" },
     );
   });
 
@@ -417,7 +493,7 @@ describe("sidebar list motion", () => {
         { opacity: 0.25, transform: "translateY(0px)" },
         { opacity: 0, transform: "translateY(9px)" },
       ],
-      { duration: 150, easing: "ease-out" },
+      { duration: 140, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
     expectMove(header, -9);
     expectMove(x, -9);
@@ -447,8 +523,8 @@ describe("sidebar list motion", () => {
         { opacity: 1, transform: "translateY(0px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 180,
+        easing: "cubic-bezier(0.645, 0.045, 0.355, 1)",
       },
     );
     motion.dispose();
@@ -473,8 +549,8 @@ describe("sidebar list motion", () => {
         { opacity: 0, transform: "translateY(40px)" },
       ],
       {
-        duration: 150,
-        easing: "ease-out",
+        duration: 140,
+        easing: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
     );
     motion.update(false);
@@ -529,11 +605,12 @@ describe("sidebar list motion", () => {
   it("respects reduced motion while keeping the next baseline fresh", () => {
     const a = new TestRow("a");
     const b = new TestRow("b");
-    const { motion, layout, media } = fixture([a, b]);
+    const { motion, layout, media } = fixture([a, b], 240);
     motion.update(true);
     media.matches = true;
+    motion.prepare();
     layout([b, a]);
-    motion.update(true);
+    motion.update(true, true);
     expect(a.animate).not.toHaveBeenCalled();
     media.matches = false;
     layout([a, b]);
