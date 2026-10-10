@@ -1,6 +1,7 @@
 import Darwin
 import XCTest
 import CryptoKit
+import Network
 @testable import RelayTunnelCore
 
 final class ProtocolTests: XCTestCase {
@@ -71,7 +72,7 @@ final class ProtocolTests: XCTestCase {
     XCTAssertEqual(started, origin)
     await tunnel.stop()
   }
-  func testSuspensionKeepsExclusiveOwnershipOfThePublishedPort() async throws {
+  func testSuspensionKeepsThePublishedPortUntilResumeRebindsIt() async throws {
     let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)
     let origin = try await tunnel.start(port: 0)
     let listener = try XCTUnwrap(tunnel.listener)
@@ -99,7 +100,7 @@ final class ProtocolTests: XCTestCase {
     XCTAssertEqual(errno, EADDRINUSE)
     let resumed = try await tunnel.resume()
     XCTAssertEqual(resumed, origin)
-    XCTAssertTrue(tunnel.listener === listener)
+    XCTAssertFalse(tunnel.listener === listener)
     await tunnel.stop()
     XCTAssertEqual(bindPort(), 0)
   }
@@ -111,6 +112,43 @@ final class ProtocolTests: XCTestCase {
     let rebound = try await tunnel.start()
     XCTAssertEqual(rebound, origin)
     XCTAssertFalse(tunnel.listener === failed)
+    await tunnel.stop()
+  }
+  func testResumeRebindsAListenerReclaimedWithoutAStateUpdate() async throws {
+    let tunnel = try RelayTunnel(relayURL: "ws://127.0.0.1:9", hostAddress: vectors().address)
+    let origin = try await tunnel.start(port: 0)
+    let reclaimed = try XCTUnwrap(tunnel.listener)
+    let reportState = reclaimed.stateUpdateHandler
+    let cancelled = expectation(description: "listening socket reclaimed")
+    tunnel.queue.sync {
+      reclaimed.stateUpdateHandler = { state in
+        if case .cancelled = state { cancelled.fulfill() }
+      }
+      reclaimed.cancel()
+    }
+    await fulfillment(of: [cancelled], timeout: 5)
+    tunnel.suspend()
+    let resumed = try await tunnel.resume()
+    XCTAssertEqual(resumed, origin)
+
+    let connected = expectation(description: "published relay port accepts connections")
+    let port = try XCTUnwrap(NWEndpoint.Port(rawValue: UInt16(URL(string: origin)!.port!)))
+    let client = NWConnection(host: "127.0.0.1", port: port, using: .tcp)
+    defer { client.cancel() }
+    client.stateUpdateHandler = { state in
+      switch state {
+      case .ready: connected.fulfill()
+      case .failed(let error), .waiting(let error):
+        XCTFail("Relay port is unreachable: \(error)")
+        client.stateUpdateHandler = nil
+        connected.fulfill()
+      default: break
+      }
+    }
+    client.start(queue: .global())
+    await fulfillment(of: [connected], timeout: 5)
+    client.stateUpdateHandler = nil
+    tunnel.queue.sync { reportState?(.cancelled) }
     await tunnel.stop()
   }
   func testStableIdentityAndInvalidAddresses() throws {
