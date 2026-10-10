@@ -47,7 +47,6 @@ import * as RuntimePolicy from "./RuntimePolicy.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
-import * as FeedbackService from "../feedback/FeedbackService.ts";
 import * as ThreadLifecycleService from "./ThreadLifecycleService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
@@ -338,16 +337,6 @@ export const layerProduction = Layer.mergeAll(
   layerProjectService,
   layerManagedProjectFoldersProvided,
   layerThreadLaunchProvided,
-  FeedbackService.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        layerThreadLaunchProvided,
-        layerManagedProjectFoldersProvided,
-        layerThreadManagementProvided,
-        layerCommandReceiptStoreProvided,
-      ),
-    ),
-  ),
   layerThreadLifecycleProvided,
   layerScheduledTaskProvided,
   UsageLimitRecoveryWorker.layer.pipe(

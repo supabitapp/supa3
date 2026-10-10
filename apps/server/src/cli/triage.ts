@@ -37,7 +37,7 @@ import {
   buildTriageContext,
   buildTriageLaunchPrompt,
   buildTriageSeedPrompt,
-} from "../feedback/triagePrompt.ts";
+} from "./triagePrompt.ts";
 
 interface TriageAgent {
   readonly id: "claude" | "codex";
