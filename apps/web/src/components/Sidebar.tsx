@@ -2177,20 +2177,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <span className="flex min-w-0 flex-1 text-muted-foreground/60">
                   <MiddleTruncate value={thread.branch} showTitle={false} />
                 </span>
-              ) : showsScratchMachine ? (
-                <>
-                  <EnvironmentMachineIcon
-                    aria-hidden
-                    kind={props.environmentMachine}
-                    className="size-3 shrink-0 text-muted-foreground/60"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground/60">
-                    {props.scratchMachineLabel}
-                  </span>
-                </>
               ) : (
                 <span className="min-w-0 flex-1 truncate text-muted-foreground/60">
-                  {props.projectDisplayName}
+                  {showsScratchMachine ? props.scratchMachineLabel : props.projectDisplayName}
                 </span>
               )}
               {hasUnsentDraft ? (
@@ -2205,7 +2194,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   aria-hidden
                   className="pointer-events-none inline-flex shrink-0 items-center gap-1"
                 >
-                  {isRemote && !showsScratchMachine ? (
+                  {isRemote || showsScratchMachine ? (
                     <EnvironmentMachineIcon
                       kind={props.environmentMachine}
                       className="size-3.5 text-sidebar-muted-foreground/70"
