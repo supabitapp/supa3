@@ -8,7 +8,7 @@ import {
   replaceTextSelection,
 } from "@supacode/client-runtime/text-paste";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { HeaderHeightContext } from "@react-navigation/elements";
 import {
   CommonActions,
   StackActions,
@@ -19,6 +19,7 @@ import {
 } from "@react-navigation/native";
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -146,6 +147,7 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { serverEnvironment } from "../../state/server";
 import { fileRoutePathSegments } from "../files/filePath";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
+import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 
 function NewTaskWorkspaceIcon(props: {
   readonly workspaceMode: "local" | "worktree";
@@ -221,7 +223,7 @@ export function NewTaskDraftScreen(props: {
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const keyboardHeight = useKeyboardState((state) => state.height);
-  const headerHeight = useHeaderHeight();
+  const headerHeight = useContext(HeaderHeightContext) ?? insets.top + IOS_NAV_BAR_HEIGHT;
   const [viewportHeight, setViewportHeight] = useState(0);
   const controlsBottomPadding = Math.max(insets.bottom, 10);
   const keyboardOpenedOffset = Math.max(0, controlsBottomPadding - 8);
