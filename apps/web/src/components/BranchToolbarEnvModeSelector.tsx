@@ -61,7 +61,10 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   previousWorktreeBranch = null,
   onUsePreviousWorktree,
 }: BranchToolbarEnvModeSelectorProps) {
-  const workspacePath = displayMode === "panel" ? (activeWorktreePath ?? workspaceRoot) : null;
+  const workspacePath =
+    displayMode === "panel" && (effectiveEnvMode === "local" || activeWorktreePath !== null)
+      ? (activeWorktreePath ?? workspaceRoot)
+      : null;
   const workspaceDisplayName = resolveWorkspaceDisplayName(workspacePath);
   // The panel names the workspace kind only when it is not the project folder.
   const workspaceKind = activeWorktreePath ? "Worktree" : null;

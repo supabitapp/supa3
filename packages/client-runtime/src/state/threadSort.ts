@@ -66,11 +66,11 @@ export function sortSettledThreads<T extends SettledThreadTimestampInput & { rea
 export function pageRecentThreads<T>(
   threads: readonly T[],
   limit: number,
-  isSelected: (thread: T) => boolean,
+  isSelected: ((thread: T) => boolean) | null,
 ): T[] {
   const start = Math.max(0, threads.length - limit);
   const page = threads.slice(start);
-  const selected = threads.slice(0, start).find(isSelected);
+  const selected = isSelected === null ? undefined : threads.slice(0, start).find(isSelected);
   if (selected !== undefined) page.unshift(selected);
   return page;
 }

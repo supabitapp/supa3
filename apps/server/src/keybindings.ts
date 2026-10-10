@@ -41,7 +41,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "./config.ts";
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@supacode/shared/atomicWrite";
 import { fromJsonStringPretty, fromLenientJson } from "@supacode/shared/schemaJson";
 import {
   DEFAULT_KEYBINDINGS,
@@ -592,8 +592,6 @@ const make = Effect.gen(function* () {
         }
       }
 
-      // Startup backfill must never evict persisted user rules: append only
-      // the defaults that fit and skip the rest.
       const availableSlots = Math.max(0, MAX_KEYBINDINGS_COUNT - customConfig.length);
       const defaultsToAppend = missingDefaults.slice(0, availableSlots);
       const skippedDefaults = missingDefaults.slice(availableSlots);
@@ -605,7 +603,7 @@ const make = Effect.gen(function* () {
         });
       }
       if (defaultsToAppend.length > 0) {
-        yield* writeConfigAtomically([...customConfig, ...defaultsToAppend]);
+        yield* writeConfigAtomically([...defaultsToAppend, ...customConfig]);
       }
       // A late default skipped at max entries stays pending for a later start.
       const settledLateDefaults = pendingLateDefaults.filter(

@@ -65,6 +65,24 @@ export function buildHomeProjectScopes(input: {
   });
 }
 
+export function findHomeProjectScope(
+  scopes: ReadonlyArray<HomeProjectScope>,
+  key: string | null,
+): HomeProjectScope | null {
+  if (key === null) {
+    return null;
+  }
+  return (
+    scopes.find((scope) => scope.key === key) ??
+    scopes.find((scope) =>
+      scope.projectRefs.some(
+        (projectRef) => scopedProjectKey(projectRef.environmentId, projectRef.projectId) === key,
+      ),
+    ) ??
+    null
+  );
+}
+
 export function sortHomeProjectScopes(input: {
   readonly scopes: ReadonlyArray<HomeProjectScope>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;

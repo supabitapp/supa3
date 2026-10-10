@@ -1,4 +1,6 @@
-import { memo, useState, useId } from "react";
+import { proposedPlanTitle, stripDisplayedPlanMarkdown } from "@supacode/shared/proposedPlanText";
+import { memo, useCallback, useState, useId } from "react";
+import { useFindRevealRef } from "./markdownFindContext";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -13,11 +15,8 @@ import {
   buildProposedPlanMarkdownFilename,
   downloadPlanAsTextFile,
   normalizePlanMarkdownForExport,
-  proposedPlanTitle,
-  stripDisplayedPlanMarkdown,
 } from "../../proposedPlan";
 import ChatMarkdown from "../ChatMarkdown";
-import { AnimatedHeight } from "../AnimatedHeight";
 import { useTimelineDisclosure } from "./timelineDisclosure";
 import { EllipsisIcon } from "lucide-react";
 import { Button } from "../ui/button";
@@ -46,14 +45,16 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   threadRef,
   cwd,
   workspaceRoot,
+  findActive = false,
 }: {
   planMarkdown: string;
   environmentId: EnvironmentId;
   threadRef?: ScopedThreadRef | undefined;
   cwd: string | undefined;
   workspaceRoot: string | undefined;
+  findActive?: boolean;
 }) {
-  const [expanded, toggleExpanded] = useTimelineDisclosure();
+  const [expanded, toggleExpanded, setExpanded] = useTimelineDisclosure();
   const canWriteFiles = useEnvironmentScope(environmentId, AuthFilesystemWriteScope);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [savePath, setSavePath] = useState("");
@@ -81,22 +82,11 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   const collapsedPreview = canCollapse
     ? buildCollapsedProposedPlanPreviewMarkdown(planMarkdown, { maxLines: 10 })
     : null;
-  const collapsed = canCollapse && !expanded;
-  const planBody = (
-    <div className={cn("relative", collapsed && "max-h-104 overflow-hidden")}>
-      <ChatMarkdown
-        text={collapsed ? (collapsedPreview ?? "") : displayedPlanMarkdown}
-        cwd={cwd}
-        environmentId={environmentId}
-        threadRef={threadRef}
-        isStreaming={false}
-        headingLevelOffset={3}
-      />
-      {collapsed ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
-      ) : null}
-    </div>
-  );
+  const isCollapsed = canCollapse && !expanded;
+
+  const showPreview = isCollapsed && !findActive;
+  const revealForFind = useCallback(() => setExpanded(true), [setExpanded]);
+  const findRevealRef = useFindRevealRef(revealForFind);
   const downloadFilename = buildProposedPlanMarkdownFilename(planMarkdown);
   const saveContents = normalizePlanMarkdownForExport(planMarkdown);
 
@@ -177,7 +167,9 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
           <Badge variant="secondary">Plan</Badge>
           {/* Same heading level as the message author headings in the timeline,
               so a plan's own headings nest beneath it in the outline. */}
-          <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+          <h3 data-thread-find-text="true" className="truncate text-sm font-medium text-foreground">
+            {title}
+          </h3>
         </div>
         <Menu>
           <MenuTrigger
@@ -200,7 +192,35 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         </Menu>
       </div>
       <div className="mt-4">
-        {canCollapse ? <AnimatedHeight animateKey={expanded}>{planBody}</AnimatedHeight> : planBody}
+        <div
+          ref={findRevealRef}
+          className={cn("relative", isCollapsed && "max-h-104 overflow-hidden")}
+          data-thread-find-text="true"
+          data-thread-find-fold={isCollapsed ? "" : undefined}
+        >
+          {showPreview ? (
+            <ChatMarkdown
+              text={collapsedPreview ?? ""}
+              cwd={cwd}
+              environmentId={environmentId}
+              threadRef={threadRef}
+              isStreaming={false}
+              headingLevelOffset={3}
+            />
+          ) : (
+            <ChatMarkdown
+              text={displayedPlanMarkdown}
+              cwd={cwd}
+              environmentId={environmentId}
+              threadRef={threadRef}
+              isStreaming={false}
+              headingLevelOffset={3}
+            />
+          )}
+          {isCollapsed ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card/95 via-card/80 to-transparent" />
+          ) : null}
+        </div>
         {canCollapse ? (
           <div className="mt-4 flex justify-center">
             <Button size="sm" variant="outline" aria-expanded={expanded} onClick={toggleExpanded}>

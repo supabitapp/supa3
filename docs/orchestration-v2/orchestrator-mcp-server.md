@@ -145,8 +145,13 @@ provider-specific extensions; those remain in flavors such as Grok.
 
 ### Pi V2
 
-Pi core has no MCP client. When a provider session credential exists, the
-adapter writes a Supacode-owned extension into the server cache and spawns
+Supacode keeps a provider-session HTTP bridge even when Pi supports native MCP.
+`mcp.json` entries override native registrations, and native MCP's default
+60-second request timeout can interrupt long-running Supacode tools. The bridge owns
+the injected endpoint and credential and forwards Pi's cancellation signal.
+
+When a provider session credential exists, the adapter writes a Supacode-owned
+extension into the server cache and spawns
 `pi --mode rpc --extension <cache>/pi-supacode-mcp-extension.ts` with:
 
 ```text
@@ -154,9 +159,13 @@ SUPACODE_MCP_URL=http://127.0.0.1:<port>/mcp
 SUPACODE_MCP_BEARER_TOKEN=<provider-session-token>
 ```
 
-The extension connects to that HTTP endpoint, lists tools, and registers each
-one with `pi.registerTool` under a `mcp__supacode__` namespace
-(`mcp__supacode__delegate_task`, `mcp__supacode__supacode_thread_launch`, and the rest).
+The extension preserves public names under `mcp__supacode__` for saved loadouts
+and tool selectors. Modern Pi also receives hidden `mcp__supacode__` aliases,
+which reserve the normalized namespace against configured MCP servers without
+adding declarations or search results. On Pi 0.99+,
+`orchestrator_capabilities`, `delegate_task`, and `task_status` remain directly
+available; optional tools are discovered through Pi's builtin `tool_search`.
+On older Pi or without builtin search, all tools remain directly available.
 The bridge calls the original MCP tool name over HTTP. Follow-up requests send
 `mcp-protocol-version: 2025-06-18`; Effect's MCP transport returns 400
 without it. The first turn of a session also receives the shared Supacode
@@ -351,6 +360,16 @@ provenance. MCP-created threads and user-role messages use `createdBy: "agent"`
 and `creationSource: "mcp"`; provider output uses `creationSource: "provider"`.
 Actor and ingress are separate so agent-authored user-role messages remain
 distinguishable from human-authored messages.
+
+Agents mention another thread as `[title](supacode-thread://v1/<threadId>)`. The
+link carries only the id, which resolves in the environment of the message that
+holds it. Clients show the thread's current title rather than the label, so a
+rename never leaves a stale link.
+
+List and read results report `snoozed` and `snoozedUntil`, and
+`supacode_thread_list` filters on `snoozed`. The server's `isSnoozed` follows the
+client's `effectiveSnoozed`, so agents and the sidebar agree: a snoozed thread
+wakes early when it has a pending request, fails, or completes after the snooze.
 
 ### `supacode_thread_update`
 

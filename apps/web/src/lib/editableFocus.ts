@@ -8,10 +8,8 @@ const EDITABLE_SELECTOR = [
   '[role="textbox"]',
 ].join(",");
 
-/**
- * Whether a text-editing element owns the keyboard. Shortcuts that share
- * their chord with native editing (mod+z) must yield when this is true.
- */
 export function isEditableFocused(target: EventTarget | null = document.activeElement): boolean {
-  return target instanceof Element && target.closest(EDITABLE_SELECTOR) !== null;
+  let element = target instanceof Element ? target : null;
+  while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+  return element !== null && element.closest(EDITABLE_SELECTOR) !== null;
 }

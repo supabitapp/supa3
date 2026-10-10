@@ -1,32 +1,3 @@
-/**
- * ProviderRegistry - Provider snapshot service.
- *
- * Owns provider install/auth/version/model snapshots and exposes the latest
- * provider state to transport layers.
- *
- * The live layer aggregates per-instance snapshot streams into a
- * single materialized list.
- *
- * Historically this Layer composed four per-kind Live Layers
- * (`CodexProviderLive`, `ClaudeProviderLive`, …) that each exposed a
- * `ServerProviderShape`. Those Lives were deleted during the driver /
- * instance refactor — every driver now carries its `snapshot: ServerProviderShape`
- * bundled onto the `ProviderInstance` the registry produces.
- *
- * Each configured instance (including multi-instance setups like
- * `codex_personal` + `codex_work`) contributes one `ProviderSnapshotSource`,
- * keyed by `instanceId`. Instances whose driver is unavailable or whose
- * config failed to decode are merged from `instanceRegistry.listUnavailable`
- * as shadow snapshots so the UI can render their exact unavailable reason.
- *
- * Cache paths on disk are now keyed by `instanceId`. Because
- * `defaultInstanceIdForDriver(kind) === kind` for built-in kinds, existing
- * `<kind>.json` files remain the on-disk location for that driver's default
- * instance. Identity-less legacy cache contents are ignored and replaced by
- * the first live refresh.
- *
- * @module ProviderRegistry
- */
 import {
   defaultInstanceIdForDriver,
   isProviderWorkspaceSnapshotCurrent,
@@ -62,11 +33,14 @@ import {
   resolveProviderStatusCachePath,
   writeProviderStatusCache,
 } from "./providerStatusCache.ts";
-import type { ProviderInstance, ProviderWorkspaceSnapshot } from "./ProviderDriver.ts";
+import type {
+  ProviderInstance,
+  ProviderWorkspaceSnapshot,
+} from "@supacode/provider-core/server/driver";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
   type ProviderMaintenanceCapabilities,
-} from "./providerMaintenance.ts";
+} from "@supacode/provider-core/server/maintenanceResolver";
 import type { ProviderSnapshotSource } from "./builtInProviderCatalog.ts";
 
 export type ProviderMaintenanceActionKind = "update";
@@ -257,7 +231,11 @@ const mergeProviderModels = (
   // Custom rows are derived from settings and every snapshot carries the full
   // current list, so a custom model missing from `nextModels` was removed by
   // the user and must not be resurrected from the previous snapshot.
-  const retainablePreviousModels = previousModels.filter((model) => !model.isCustom);
+
+  const updateRequiredSlugs = new Set(provider.updateRequiredModels?.map((model) => model.slug));
+  const retainablePreviousModels = previousModels.filter(
+    (model) => !model.isCustom && !updateRequiredSlugs.has(model.slug),
+  );
 
   if (shouldRetainMissingModels && nextModels.length === 0 && retainablePreviousModels.length > 0) {
     return retainablePreviousModels;

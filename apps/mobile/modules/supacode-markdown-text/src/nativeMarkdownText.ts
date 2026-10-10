@@ -1,5 +1,5 @@
 import type { MarkdownNode } from "react-native-nitro-markdown/headless";
-import { isMarkdownFileLinkLabel } from "@supacode/client-runtime/markdown-links";
+import { isMarkdownFileLinkLabel } from "@supacode/shared/markdownLinks";
 import { collectComposerInlineTokens } from "@supacode/shared/composerInlineTokens";
 import { parseComposerContextHref } from "@supacode/shared/composerContextReferences";
 import { isWindowsAbsolutePath } from "@supacode/shared/path";

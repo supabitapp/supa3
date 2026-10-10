@@ -158,9 +158,11 @@ export function createCdpRelayConnection(
   };
 
   const pageCommand = (command: CdpCommand): Promise<unknown> => {
-    // The page is already running; nothing waits for a debugger.
-    if (command.method === "Runtime.runIfWaitingForDebugger") return Promise.resolve({});
     const child = sessions.get(command.sessionId!) === "page" ? undefined : command.sessionId;
+
+    if (command.method === "Runtime.runIfWaitingForDebugger" && child === undefined) {
+      return Promise.resolve({});
+    }
     return target.send(command.method, command.params ?? {}, child);
   };
 

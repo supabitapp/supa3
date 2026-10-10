@@ -11,6 +11,17 @@ public final class SupacodeNativeControlsModule: Module {
   private var filePresentation: SupacodeNativeFilePresentation?
 
   public func definition() -> ModuleDefinition {
+    Constants {
+      if #available(iOS 26.0, *) {
+        return ["supportsWorkspaceColumns": NSClassFromString("RNSSplitHostComponentView") != nil]
+      }
+      return ["supportsWorkspaceColumns": false]
+    }
+    View(SupacodeLayoutMetricsView.self) {
+      ViewName("LayoutMetrics")
+      Events("onMetricsChange")
+    }
+
     AsyncFunction("presentVideo") { (url: URL, title: String, sourceIdentifier: String, identifier: String, promise: Promise) in
       try self.presentVideo(
         url: url,
@@ -41,6 +52,15 @@ public final class SupacodeNativeControlsModule: Module {
         view.sources = self.presentationSources
         view.identifier = identifier
       }
+    }
+
+    View(SupacodeFrostedCutoutView.self) {
+      ViewName("FrostedCutout")
+      Prop("cutoutTop") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutTop = CGFloat(value) }
+      Prop("cutoutWidth") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutWidth = CGFloat(value) }
+      Prop("cutoutHeight") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutHeight = CGFloat(value) }
+      Prop("cutoutRadius") { (view: SupacodeFrostedCutoutView, value: Double) in view.cutoutRadius = CGFloat(value) }
+      Prop("appearance") { (view: SupacodeFrostedCutoutView, value: String) in view.appearance = value }
     }
 
     View(SupacodeContextSheetSizeView.self) {

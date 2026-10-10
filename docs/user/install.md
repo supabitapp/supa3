@@ -66,6 +66,15 @@ Run `supacode --help` for the full reference.
 Build the desktop client from this repository. Distribution artifacts belong to
 Supacode's [GitHub Releases](https://github.com/supabitapp/supacode-next/releases).
 
+### The `supacode` command
+
+The desktop app includes the `supacode` command-line tool. To run it from any
+terminal, open **Settings → General → About** and choose **Install** next to
+**supacode command**. On macOS and Linux it adds a `supacode` link to a folder on your
+`PATH`; on Windows it adds the app's command folder to your `PATH`. Open a new
+terminal afterwards. **Remove** takes it off again. If you already have `supacode`
+from npm, it stays as it is.
+
 ### Windows Subsystem for Linux
 
 Choose a WSL distro in **Settings → Connections** to run agents and projects
@@ -114,6 +123,7 @@ computer.
 | OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                                                                                  |
 | Antigravity | Install and sign in with Google from Supacode's provider settings.                                                                                        |
 | Pi          | Install [Pi](https://pi.dev), then run `pi` once to finish its login or API-key setup.                                                                    |
+| Muse Code   | Install [Muse Code](https://dev.meta.ai/docs/muse-code) on the server, run `muse login`, then enable it in Settings → Providers.                          |
 
 Provider CLIs must be on the server's `PATH`. If Supacode cannot find one, set its
 **Binary path** in provider settings, especially when using a version manager.
@@ -142,7 +152,8 @@ their original values.
 
 For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 [Claude](./providers-claude.md), [OpenCode](./providers-opencode.md),
-[Antigravity](./providers-antigravity.md), and [Pi](./providers-pi.md).
+[Antigravity](./providers-antigravity.md), [Pi](./providers-pi.md), and
+[Muse Code](./providers-muse.md).
 
 ## Next steps
 

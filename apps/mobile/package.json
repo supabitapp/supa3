@@ -69,6 +69,13 @@
     "@supacode/mobile-relay-tunnel": "file:./modules/supacode-relay-tunnel",
     "@supacode/mobile-review-diff-native": "file:./modules/supacode-review-diff",
     "@supacode/mobile-terminal-native": "file:./modules/supacode-terminal",
+    "@supacode/provider-acp-registry": "workspace:*",
+    "@supacode/provider-core": "workspace:*",
+    "@supacode/provider-cursor": "workspace:*",
+    "@supacode/provider-grok": "workspace:*",
+    "@supacode/provider-muse": "workspace:*",
+    "@supacode/provider-opencode": "workspace:*",
+    "@supacode/provider-pi": "workspace:*",
     "@supacode/shared": "workspace:*",
     "@tabler/icons-react-native": "^3.44.0",
     "clsx": "^2.1.1",
@@ -117,7 +124,7 @@
     "react-native-nitro-modules": "0.35.9",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.9.1",
-    "react-native-screens": "~4.28.0",
+    "react-native-screens": "file:deps/react-native-screens-5.0.0-supacode.7.tgz",
     "react-native-shiki-engine": "^0.3.12",
     "react-native-svg": "15.15.5",
     "react-native-webview": "14.0.1",
@@ -133,6 +140,7 @@
     "@types/react-dom": "~19.3.0",
     "@types/react-test-renderer": "19.3.0",
     "babel-preset-expo": "~58.0.8",
+    "jsdom": "^30.0.1",
     "react-test-renderer": "19.3.0",
     "tailwindcss": "^4.0.0",
     "typescript": "catalog:"
@@ -141,7 +149,8 @@
     "install": {
       "exclude": [
         "react-native-keyboard-controller",
-        "typescript"
+        "typescript",
+        "react-native-screens"
       ]
     },
     "autolinking": {

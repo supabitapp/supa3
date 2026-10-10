@@ -21,6 +21,7 @@ import { type ProviderApprovalDecision, type RuntimeRequestId } from "@supacode/
 import {
   type PendingThreadRequests,
   type ThreadUserInputQuestion,
+  seedUserInputDraftAnswers,
 } from "@supacode/client-runtime/state/thread-requests";
 import { AuthOrchestrationOperateScope } from "@supacode/contracts";
 import { Atom } from "effect/reactivity";
@@ -117,6 +118,19 @@ export function useSelectedThreadRequests() {
   const activePendingApproval = activePendingApprovals[0] ?? null;
   const activePendingUserInputs = pendingRequests?.userInputs ?? EMPTY_PENDING_REQUESTS.userInputs;
   const activePendingUserInput = activePendingUserInputs[0] ?? null;
+  useEffect(() => {
+    if (!activePendingUserInput || !selectedThreadShell) return;
+    const requestKey = scopedRequestKey(
+      selectedThreadShell.environmentId,
+      activePendingUserInput.requestId,
+    );
+    const existing = appAtomRegistry.get(userInputDraftsByRequestKeyAtom);
+    const drafts = existing[requestKey] ?? {};
+    const seeded = seedUserInputDraftAnswers(activePendingUserInput.questions, drafts);
+    if (seeded !== drafts) {
+      appAtomRegistry.set(userInputDraftsByRequestKeyAtom, { ...existing, [requestKey]: seeded });
+    }
+  }, [activePendingUserInput, selectedThreadShell]);
   const questionServerConfigs = useServerConfigs();
   const canPauseUserInputAutoDismiss =
     questionTimerPermission &&

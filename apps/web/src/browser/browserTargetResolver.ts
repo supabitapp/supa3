@@ -6,7 +6,12 @@ import type {
 import { isLoopbackHost, normalizePreviewUrl } from "@supacode/shared/preview";
 import { isLocalLoopbackHost, isPrivateNetworkHost } from "@supacode/shared/hostClassification";
 
+import type { ConnectionTarget } from "@supacode/client-runtime/connection";
+
+import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
+import { isElectron } from "~/env";
 import { readEnvironmentSupportsServerBrowser } from "~/state/entities";
+
 import { readPreparedConnection } from "~/state/session";
 
 export {
@@ -87,6 +92,10 @@ export function resolveBrowserNavigationTarget(
   return resolveEnvironmentPortTarget(environmentId, target, readEnvironmentUrl(environmentId));
 }
 
+const reachesEnvironmentLoopback = (target: ConnectionTarget): boolean =>
+  isElectron &&
+  (target._tag === "PrimaryConnectionTarget" || isDesktopLocalConnectionTarget(target));
+
 export function resolveDiscoveredServerUrl(
   environmentId: EnvironmentId,
   rawUrl: string,
@@ -96,6 +105,8 @@ export function resolveDiscoveredServerUrl(
     const normalizedUrl = normalizePreviewUrl(rawUrl);
     const parsed = new URL(normalizedUrl);
     if (!isLoopbackHost(parsed.hostname)) return normalizedUrl;
+    const target = readPreparedConnection(environmentId)?.target;
+    if (target && reachesEnvironmentLoopback(target)) return normalizedUrl;
     return resolveEnvironmentPortTarget(
       environmentId,
       {

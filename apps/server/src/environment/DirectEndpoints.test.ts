@@ -54,6 +54,7 @@ const INTERFACES: ReturnType<typeof NodeOS.networkInterfaces> = {
       cidr: "203.0.113.20/24",
     },
   ],
+
   utun4: [
     {
       address: "100.101.102.103",
@@ -63,8 +64,28 @@ const INTERFACES: ReturnType<typeof NodeOS.networkInterfaces> = {
       internal: false,
       cidr: "100.101.102.103/32",
     },
+    {
+      address: "fd7a:115c:a1e0::1",
+      netmask: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+      family: "IPv6",
+      mac: "00:00:00:00:00:00",
+      internal: false,
+      cidr: "fd7a:115c:a1e0::1/128",
+      scopeid: 0,
+    },
   ],
 };
+
+const vpnInterface = (address: string) => [
+  {
+    address,
+    netmask: "255.255.255.255",
+    family: "IPv4" as const,
+    mac: "00:00:00:00:00:00",
+    internal: false,
+    cidr: `${address}/32`,
+  },
+];
 
 const virtualInterface = (address: string) => [
   {
@@ -108,6 +129,21 @@ describe("resolveBoundEndpoints", () => {
       { kind: "lan", httpBaseUrl: "http://192.168.1.10:3773/" },
       { kind: "tailnet", httpBaseUrl: "http://100.101.102.103:3773/" },
       { kind: "lan", httpBaseUrl: "http://192.168.1.20:3773/" },
+    ]);
+  });
+
+  it("tags only addresses on Tailscale's interface as tailnet, not other VPNs in its range", () => {
+    const interfaces = {
+      en0: INTERFACES.en0,
+      tailscale0: vpnInterface("100.70.1.2"),
+      CloudflareWARP: vpnInterface("100.96.0.1"),
+      utun7: vpnInterface("100.85.0.1"),
+    };
+    expect(resolveBoundEndpoints({ host: "0.0.0.0", port: 3773, interfaces })).toEqual([
+      { kind: "lan", httpBaseUrl: "http://192.168.1.10:3773/" },
+      { kind: "tailnet", httpBaseUrl: "http://100.70.1.2:3773/" },
+      { kind: "lan", httpBaseUrl: "http://100.96.0.1:3773/" },
+      { kind: "lan", httpBaseUrl: "http://100.85.0.1:3773/" },
     ]);
   });
 

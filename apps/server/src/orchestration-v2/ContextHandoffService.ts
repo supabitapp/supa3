@@ -20,8 +20,8 @@ import {
   historicalMessage,
   renderHistory,
   selectHistory,
-} from "./ContextHandoffBudget.ts";
-import * as IdAllocator from "./IdAllocator.ts";
+} from "@supacode/provider-core/server/handoffBudget";
+import * as IdAllocator from "@supacode/provider-core/server/IdAllocator";
 
 export class ContextHandoffPrepareError extends Schema.TaggedError<ContextHandoffPrepareError>()(
   "ContextHandoffPrepareError",

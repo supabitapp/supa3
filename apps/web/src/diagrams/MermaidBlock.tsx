@@ -1,10 +1,11 @@
 import { CheckIcon, CopyIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { renderMermaidDiagram } from "./mermaidRenderer";
+import { MarkdownFindContext, useFindRevealRef } from "../components/chat/markdownFindContext";
 
 export function MermaidBlock({
   source,
@@ -19,6 +20,9 @@ export function MermaidBlock({
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
   const [rendered, setRendered] = useState<{ source: string; output: string | null } | null>(null);
   const [showSource, setShowSource] = useState(false);
+  const searching = use(MarkdownFindContext);
+  const revealSource = useCallback(() => setShowSource(true), []);
+  const sourceRevealRef = useFindRevealRef(revealSource);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard<string>({
     timeout: 1200,
@@ -60,7 +64,10 @@ export function MermaidBlock({
       data-language="mermaid"
       data-wrap="false"
     >
-      <div className="chat-markdown-codeblock-header flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none">
+      <div
+        data-thread-find-ignore="true"
+        className="chat-markdown-codeblock-header flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none"
+      >
         <span className="min-w-0 truncate font-mono text-2xs">{title ?? "mermaid"}</span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Diagram actions">
           {output !== null ? (
@@ -100,9 +107,18 @@ export function MermaidBlock({
           </Tooltip>
         </span>
       </div>
-      <pre className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]">
+      <pre
+        ref={searching && !showingDiagram ? sourceRevealRef : undefined}
+        data-thread-find-ignore={showingDiagram ? "true" : undefined}
+        className="overflow-x-auto whitespace-pre font-mono [overflow-wrap:normal] [word-break:normal]"
+      >
         <code>{content}</code>
       </pre>
+      {searching && showingDiagram ? (
+        <pre ref={sourceRevealRef} hidden>
+          {source}
+        </pre>
+      ) : null}
     </div>
   );
 }
