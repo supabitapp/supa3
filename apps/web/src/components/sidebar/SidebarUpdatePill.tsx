@@ -3,7 +3,6 @@ import { TriangleAlertIcon } from "lucide-react";
 import { type ComponentProps, useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { isElectron } from "../../env";
-import { cn } from "../../lib/utils";
 import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { desktopUpdateRestart } from "../../state/desktopUpdateRestart";
@@ -25,6 +24,8 @@ import { SidebarMenuItem } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DesktopUpdateStatusIcon } from "./DesktopUpdateStatusIcon";
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
+import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarFeedbackButton } from "./SidebarFeedbackButton";
 
 type SidebarUpdatePopoverChangeDetails = Parameters<
   NonNullable<ComponentProps<typeof Popover>["onOpenChange"]>
@@ -74,14 +75,17 @@ function SidebarUpdateArchitectureWarningContent() {
 }
 
 export function SidebarUpdatePill() {
-  return isElectron ? <SidebarUpdateControl /> : null;
+  return isElectron ? <SidebarUpdateControl /> : <SidebarFeedbackButton />;
 }
 
-// Hidden while idle or up to date; manual checks live in Settings and the app menu.
 function SidebarUpdateControl() {
   const state = useDesktopUpdateState();
   const indicator = resolveDesktopUpdateIndicator(state);
-  return state && indicator ? <SidebarUpdateButton indicator={indicator} state={state} /> : null;
+  return state && indicator ? (
+    <SidebarUpdateButton indicator={indicator} state={state} />
+  ) : (
+    <SidebarFeedbackButton />
+  );
 }
 
 function SidebarUpdateButton({
@@ -186,15 +190,9 @@ function SidebarUpdateButton({
   }, [indicator, isInteractionDisabled, state]);
 
   const updateButton = (
-    <button
-      type="button"
+    <SidebarActionButton
       aria-label={tooltip}
       aria-disabled={isInteractionDisabled || undefined}
-      className={cn(
-        "inline-flex size-8 items-center justify-center rounded-full outline-hidden ring-ring transition-colors focus-visible:ring-2",
-        "bg-sidebar-control-surface text-sidebar-foreground",
-        isInteractionDisabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-sidebar-row-hover",
-      )}
       onClick={handleAction}
       onBlur={() => {
         suppressReleaseNotesFocusOpen.current = false;
@@ -217,7 +215,7 @@ function SidebarUpdateButton({
       }}
     >
       <DesktopUpdateStatusIcon downloadPercent={state.downloadPercent} status={indicator} />
-    </button>
+    </SidebarActionButton>
   );
 
   return (

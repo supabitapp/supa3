@@ -54,12 +54,13 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import {
-  canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
+  resolveDesktopUpdateIndicator,
 } from "../../components/desktopUpdate.logic";
+import { useSendFeedback } from "../../hooks/useSendFeedback";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import {
@@ -277,6 +278,8 @@ function AboutVersionTitle() {
 
 function AboutVersionSection() {
   const updateState = useDesktopUpdateState();
+  const { sendFeedback, isPending: isFeedbackPending, unavailableReason } = useSendFeedback();
+  const hasPendingUpdate = resolveDesktopUpdateIndicator(updateState) !== null;
   const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
 
@@ -315,6 +318,10 @@ function AboutVersionSection() {
   );
 
   const handleButtonClick = useCallback(async () => {
+    if (!hasPendingUpdate) {
+      await sendFeedback();
+      return;
+    }
     const bridge = window.desktopBridge;
     if (!bridge) return;
 
@@ -372,48 +379,27 @@ function AboutVersionSection() {
         .finally(() => setIsUpdateActionPending(false));
       return;
     }
-
-    if (typeof bridge.checkForUpdate !== "function") return;
-    void bridge
-      .checkForUpdate()
-      .then((result) => {
-        if (!result.checked) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not check for updates",
-              description:
-                result.state.message ?? "Automatic updates are not available in this build.",
-            }),
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not check for updates",
-            description: error instanceof Error ? error.message : "Update check failed.",
-          }),
-        );
-      });
-  }, [isUpdateActionPending, updateState]);
+  }, [hasPendingUpdate, isUpdateActionPending, sendFeedback, updateState]);
 
   const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
-  const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
-  const buttonDisabled =
-    action === "none"
-      ? !canCheckForUpdate(updateState)
-      : isDesktopUpdateButtonDisabled(updateState);
+  const buttonTooltip =
+    hasPendingUpdate && updateState
+      ? getDesktopUpdateButtonTooltip(updateState)
+      : unavailableReason;
+  const buttonDisabled = hasPendingUpdate
+    ? isDesktopUpdateButtonDisabled(updateState) || updateState?.status === "checking"
+    : unavailableReason !== null || isFeedbackPending;
 
   const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
     downloading: "Downloading…",
-    "up-to-date": "Up to Date",
   };
-  const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+  const buttonLabel = hasPendingUpdate
+    ? (actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Update")
+    : isFeedbackPending
+      ? "Starting feedback…"
+      : "Send feedback";
   const description =
     action === "download" || action === "install"
       ? "Update available."
@@ -3223,16 +3209,7 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="about" title="About">
-        {isElectron || HOSTED_APP_CHANNEL ? (
-          <AboutVersionSection />
-        ) : (
-          <>
-            <SettingsRow
-              title={<AboutVersionTitle />}
-              description="Current version of the application."
-            />
-          </>
-        )}
+        <AboutVersionSection />
         <SettingsRow
           {...searchableSetting("privacy-policy")}
           description="How we handle your data, including the anonymous usage data Supacode collects."

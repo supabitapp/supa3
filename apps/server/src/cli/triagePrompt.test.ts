@@ -9,7 +9,7 @@ import {
   buildTriageLaunchPrompt,
   buildTriageSeedPrompt,
   TRIAGE_PLAYBOOK,
-} from "./triagePrompt.ts";
+} from "../feedback/triagePrompt.ts";
 
 it("stays byte-identical to .github/triage/PLAYBOOK.md", () => {
   // Old releases fetch the repo copy from `main` and follow it when it differs

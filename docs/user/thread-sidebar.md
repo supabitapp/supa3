@@ -32,6 +32,15 @@ folder, so the files the agent wrote stay until you delete them. Branch, worktre
 these folders are not Git repositories. This is unavailable when the data
 directory itself sits inside a Git checkout.
 
+### Send feedback
+
+Choose **Send feedback** from the sidebar or command palette to start a conversation
+under **No project**. On mobile, open **Settings > About Supacode**. The agent asks
+what happened and can investigate diagnostics on the selected environment.
+
+Review the final report before the agent posts it to GitHub. If the app cannot
+open, run `supacode triage` in a terminal on the affected machine instead.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
