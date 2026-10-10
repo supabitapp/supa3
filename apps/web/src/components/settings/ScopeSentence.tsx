@@ -1,12 +1,12 @@
 import { resolveEnvironmentMachineKind } from "@supacode/contracts";
-import { ChevronDownIcon, LayersIcon } from "lucide-react";
+import { ChevronDownIcon, FolderIcon, LayersIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import type { EnvironmentPresentation } from "../../state/environments";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { InlineButton } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import {
   Menu,
   MenuPopup,
@@ -29,6 +29,7 @@ import {
 
 interface ScopeSentenceProps {
   readonly lead: string;
+  readonly presentation?: "sentence" | "filters";
   readonly value: SettingsScopeSearch;
   /** `value` resolved against `groups` and `environments`. */
   readonly scope: ResolvedSettingsScope;
@@ -43,6 +44,14 @@ type ScopeMenuProps = Omit<ScopeSentenceProps, "lead">;
 
 /** "<lead> <project> across <environment>", with a picker for each axis. */
 export function ScopeSentence({ lead, ...props }: ScopeSentenceProps) {
+  if (props.presentation === "filters") {
+    return (
+      <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label={lead}>
+        <ProjectScopeMenu {...props} />
+        <EnvironmentScopeMenu {...props} />
+      </div>
+    );
+  }
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 px-3 text-base text-muted-foreground sm:px-4">
       {/* Each connective stays with its picker so a wrap never strands "on". */}
@@ -66,17 +75,25 @@ function ScopeMenu({
   icon,
   label,
   children,
+  presentation,
 }: {
   ariaLabel: string;
   icon: ReactNode;
   label: string;
   children: ReactNode;
+  presentation?: ScopeSentenceProps["presentation"];
 }) {
   return (
     <Menu>
       <MenuTrigger
         aria-label={`${ariaLabel}: ${label}`}
-        render={<InlineButton tone="picker" />}
+        render={
+          presentation === "filters" ? (
+            <Button variant="outline" size="comfortable" />
+          ) : (
+            <InlineButton tone="picker" />
+          )
+        }
         className="min-w-0 max-w-72"
       >
         {icon}
@@ -94,6 +111,7 @@ function EnvironmentScopeMenu({
   environments,
   onChange,
   singleEnvironment = false,
+  presentation,
 }: ScopeMenuProps) {
   const environmentValue = environmentAxisValue(
     value,
@@ -105,6 +123,7 @@ function EnvironmentScopeMenu({
   return (
     <ScopeMenu
       ariaLabel="Environment scope"
+      presentation={presentation}
       icon={
         selected ? (
           <EnvironmentMachineIcon
@@ -112,6 +131,8 @@ function EnvironmentScopeMenu({
             kind={resolveEnvironmentMachineKind(selected.serverConfig)}
             className="size-3.5 shrink-0"
           />
+        ) : presentation === "filters" ? (
+          <LayersIcon aria-hidden className="size-3.5 shrink-0" />
         ) : null
       }
       label={
@@ -165,12 +186,19 @@ function EnvironmentScopeMenu({
   );
 }
 
-function ProjectScopeMenu({ value, groups, onChange }: ScopeMenuProps) {
+function ProjectScopeMenu({ value, groups, onChange, presentation }: ScopeMenuProps) {
   const selected = groups.find((group) => group.projectKey === value.project);
   return (
     <ScopeMenu
       ariaLabel="Project scope"
-      icon={selected ? <ProjectFavicon project={selected} className="size-3.5 shrink-0" /> : null}
+      presentation={presentation}
+      icon={
+        selected ? (
+          <ProjectFavicon project={selected} className="size-3.5 shrink-0" />
+        ) : presentation === "filters" ? (
+          <FolderIcon aria-hidden className="size-3.5 shrink-0" />
+        ) : null
+      }
       label={selected?.displayName ?? (value.project ? "Unavailable project" : "All projects")}
     >
       <MenuRadioGroup

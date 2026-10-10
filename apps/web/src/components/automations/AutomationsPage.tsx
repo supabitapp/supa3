@@ -1,24 +1,10 @@
-import {
-  Clock3Icon,
-  MessageSquareIcon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlayIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { CircleAlertIcon, Clock3Icon, PlusIcon } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getRouteApi } from "@tanstack/react-router";
 import type { EnvironmentId, ScheduledTask, ScheduledTaskId } from "@supacode/contracts";
 import { AuthOrchestrationOperateScope, resolveEnvironmentMachineKind } from "@supacode/contracts";
-import { scopeThreadRef } from "@supacode/client-runtime/environment";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@supacode/client-runtime/state/runtime";
 
 import { isElectron } from "../../env";
-import { useInlineConfirm } from "../../hooks/useInlineConfirm";
 import { useNowMinuteMs } from "../../hooks/useNowMinute";
 import { projectGroupMemberKeys } from "../../sidebarProjectGrouping";
 import {
@@ -26,16 +12,9 @@ import {
   usePrimaryEnvironmentId,
   type EnvironmentPresentation,
 } from "../../state/environments";
-import {
-  readEnvironmentScope,
-  useEnvironmentScope,
-  useEnvironmentsWithScope,
-} from "../../state/session";
-import { useThreadShell } from "../../state/entities";
+import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { buildThreadRouteParams } from "../../threadRoutes";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
@@ -43,32 +22,16 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { ScopeSentence } from "../settings/ScopeSentence";
 import { selectScopedSettingsEnvironments } from "../settings/scopedSettings";
 import { resolveSettingsScope, type ResolvedSettingsScope } from "../settings/settingsScope";
-import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
+import { SettingsGroup } from "../settings/SettingsGroup";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarInset } from "../ui/sidebar";
-import { Switch } from "../ui/switch";
-import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AutomationEditorDialog } from "./AutomationEditorDialog";
-import {
-  automationsScopeSearch,
-  lastRunLabel,
-  matchesAutomationScope,
-  nextRunLabel,
-  scheduleLabel,
-} from "./automations.logic";
+import { AutomationRow } from "./AutomationRow";
+import { automationsScopeSearch, matchesAutomationScope } from "./automations.logic";
 
 const route = getRouteApi("/_chat/automations");
-
-function statusVariant(status: ScheduledTask["lastRunStatus"]) {
-  if (status === "failed") return "error";
-  if (status === "succeeded") return "success";
-  if (status === "running") return "info";
-  return "outline";
-}
 
 /**
  * Every environment's scheduled tasks in one list. The project and environment
@@ -116,6 +79,11 @@ export function AutomationsPage() {
   const openForEdit = useCallback((environmentId: EnvironmentId, task: ScheduledTask) => {
     setEditor({ environmentId, task });
   }, []);
+  const openForCreate = useCallback((environmentId: EnvironmentId) => {
+    if (readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) {
+      setEditor({ environmentId, task: null });
+    }
+  }, []);
   const hasTaskLink = search.environmentId !== undefined || search.taskId !== undefined;
   const closeEditor = () => {
     setEditor(null);
@@ -134,17 +102,10 @@ export function AutomationsPage() {
             </WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
           <Button
-            size="xs"
-            variant="outline"
+            size="comfortable"
+            variant="default"
             disabled={!creationEnvironment}
-            onClick={() =>
-              creationEnvironment &&
-              readEnvironmentScope(
-                creationEnvironment.environmentId,
-                AuthOrchestrationOperateScope,
-              ) &&
-              setEditor({ environmentId: creationEnvironment.environmentId, task: null })
-            }
+            onClick={() => creationEnvironment && openForCreate(creationEnvironment.environmentId)}
           >
             <PlusIcon />
             New automation
@@ -152,9 +113,10 @@ export function AutomationsPage() {
         </WorkspacePageHeader>
 
         <div className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto">
-          <WorkspacePageContainer className="gap-8">
+          <WorkspacePageContainer>
             <ScopeSentence
               lead="Showing automations for"
+              presentation="filters"
               value={search}
               scope={scope}
               groups={groups}
@@ -182,6 +144,8 @@ export function AutomationsPage() {
                   showEnvironmentHeading={environments.length > 1}
                   projectNameByKey={projectNameByKey}
                   taskId={linkEnvironmentId === entry.environmentId ? search.taskId : undefined}
+                  canCreate={writableEnvironmentIds.has(entry.environmentId)}
+                  onCreate={openForCreate}
                   onEdit={openForEdit}
                 />
               ))
@@ -209,6 +173,8 @@ function AutomationEnvironmentSection({
   showEnvironmentHeading,
   projectNameByKey,
   taskId,
+  canCreate,
+  onCreate,
   onEdit,
 }: {
   readonly environment: EnvironmentPresentation;
@@ -216,6 +182,8 @@ function AutomationEnvironmentSection({
   readonly showEnvironmentHeading: boolean;
   readonly projectNameByKey: ReadonlyMap<string, string>;
   readonly taskId?: ScheduledTaskId | undefined;
+  readonly canCreate: boolean;
+  readonly onCreate: (environmentId: EnvironmentId) => void;
   readonly onEdit: (environmentId: EnvironmentId, task: ScheduledTask) => void;
 }) {
   const connected =
@@ -241,194 +209,128 @@ function AutomationEnvironmentSection({
   }, [environment.environmentId, linkedTask, onEdit]);
   const now = useNowMinuteMs();
   return (
-    <SettingsSection
-      title={environment.label}
-      hideTitle={!showEnvironmentHeading}
-      icon={
-        <EnvironmentMachineIcon
-          kind={resolveEnvironmentMachineKind(environment.serverConfig)}
-          className="size-3.5"
-        />
-      }
-    >
-      {!connected ? (
-        <SettingsRow
-          title="Environment disconnected"
-          description={`Reconnect ${environment.label} to view its automations.`}
-        />
-      ) : tasksQuery.error ? (
-        <SettingsRow title="Could not load automations" description={tasksQuery.error} />
-      ) : !tasks ? (
-        <SettingsRow title="Loading automations…" role="status" />
-      ) : (
-        <>
-          {taskId && !linkedTask ? (
-            <SettingsRow
-              title="Automation unavailable"
-              description="This automation no longer exists or is outside the selected project."
-              role="status"
+    <section className="flex min-w-0 flex-col gap-3" aria-label={environment.label}>
+      {showEnvironmentHeading ? (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 className="flex min-w-0 items-center gap-2 text-sm font-medium">
+            <EnvironmentMachineIcon
+              aria-hidden
+              kind={resolveEnvironmentMachineKind(environment.serverConfig)}
+              className="size-3.5 shrink-0 text-muted-foreground"
             />
+            <span className="truncate">{environment.label}</span>
+          </h2>
+          {connected && !tasksQuery.error && tasks ? (
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {tasks.length} {tasks.length === 1 ? "automation" : "automations"}
+            </span>
           ) : null}
-          {tasks.length === 0 ? (
-            <SettingsRow
-              title="No automations"
-              description="Create one to run a prompt on a schedule."
-            />
-          ) : (
-            tasks.map((task) => (
-              <AutomationRow
-                key={task.id}
-                environmentId={environment.environmentId}
-                task={task}
-                projectName={
-                  projectNameByKey.get(`${environment.environmentId}:${task.projectId}`) ?? null
-                }
-                now={now}
-                onEdit={() => onEdit(environment.environmentId, task)}
-              />
-            ))
-          )}
-        </>
+        </div>
+      ) : (
+        <h2 className="sr-only">{environment.label}</h2>
       )}
-    </SettingsSection>
+      <SettingsGroup>
+        {!connected ? (
+          <AutomationNotice
+            title="Environment disconnected"
+            description={`Reconnect ${environment.label} to view its automations.`}
+          />
+        ) : tasksQuery.error ? (
+          <AutomationNotice
+            title="Could not load automations"
+            description={tasksQuery.error}
+            error
+          />
+        ) : !tasks ? (
+          <div role="status" aria-label="Loading automations">
+            <span className="sr-only">Loading automations…</span>
+            {[0, 1].map((index) => (
+              <div
+                key={index}
+                aria-hidden
+                className="flex min-h-40 flex-col gap-3 px-4 py-5 sm:px-5"
+              >
+                <div className="h-5 w-1/3 rounded bg-muted" />
+                <div className="h-10 w-4/5 rounded bg-muted/60" />
+                <div className="h-4 w-1/2 rounded bg-muted/60" />
+                <div className="h-4 w-2/3 rounded bg-muted/60" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {taskId && !linkedTask ? (
+              <AutomationNotice
+                title="Automation unavailable"
+                description="This automation no longer exists or is outside the selected project."
+              />
+            ) : null}
+            {tasks.length === 0 ? (
+              <AutomationNotice
+                title="No automations yet"
+                description="Schedule a prompt to keep work moving in this environment."
+                action={
+                  canCreate ? (
+                    <Button
+                      size="comfortable"
+                      variant="outline"
+                      aria-label={`Create automation on ${environment.label}`}
+                      onClick={() => onCreate(environment.environmentId)}
+                    >
+                      <PlusIcon />
+                      Create automation
+                    </Button>
+                  ) : null
+                }
+              />
+            ) : (
+              tasks.map((task) => (
+                <AutomationRow
+                  key={task.id}
+                  environmentId={environment.environmentId}
+                  task={task}
+                  projectName={
+                    projectNameByKey.get(`${environment.environmentId}:${task.projectId}`) ?? null
+                  }
+                  now={now}
+                  onEdit={() => onEdit(environment.environmentId, task)}
+                />
+              ))
+            )}
+          </>
+        )}
+      </SettingsGroup>
+    </section>
   );
 }
 
-function AutomationRow({
-  environmentId,
-  task,
-  projectName,
-  now,
-  onEdit,
+function AutomationNotice({
+  title,
+  description,
+  action,
+  error = false,
 }: {
-  readonly environmentId: EnvironmentId;
-  readonly task: ScheduledTask;
-  readonly projectName: string | null;
-  readonly now: number;
-  readonly onEdit: () => void;
+  readonly title: string;
+  readonly description: string;
+  readonly action?: ReactNode;
+  readonly error?: boolean;
 }) {
-  const navigate = useNavigate();
-  const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const threadRef = useMemo(
-    () => (task.threadId ? scopeThreadRef(environmentId, task.threadId) : null),
-    [environmentId, task.threadId],
-  );
-  const thread = useThreadShell(threadRef);
-  const [busy, setBusy] = useState(false);
-  const confirm = useInlineConfirm<"delete">();
-  const toggle = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
-    label: "scheduled task enabled",
-  });
-  const run = useAtomCommand(serverEnvironment.runScheduledTaskNow, {
-    label: "scheduled task run now",
-  });
-  const remove = useAtomCommand(serverEnvironment.deleteScheduledTask, {
-    label: "scheduled task delete",
-  });
-  const edit = () => {
-    if (readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) onEdit();
-  };
-  const act = async (action: "toggle" | "run" | "delete") => {
-    if (busy || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
-    setBusy(true);
-    const result =
-      action === "toggle"
-        ? await toggle({ environmentId, input: { id: task.id, enabled: !task.enabled } })
-        : action === "run"
-          ? await run({ environmentId, input: { id: task.id } })
-          : await remove({ environmentId, input: { id: task.id } });
-    setBusy(false);
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not update automation",
-          description: String(squashAtomCommandFailure(result)),
-        }),
-      );
-    }
-  };
-  const lastRun = lastRunLabel(task, now);
-  const target = threadRef
-    ? `In ${thread?.title ? `"${thread.title}"` : "its thread"}`
-    : "New thread each run";
+  const Icon = error ? CircleAlertIcon : Clock3Icon;
   return (
-    <SettingsRow
-      title={task.title}
-      description={<span className="line-clamp-2">{task.prompt}</span>}
-      status={
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>
-            {[
-              projectName ?? "Project removed",
-              target,
-              scheduleLabel(task.schedule),
-              nextRunLabel(task, now),
-            ].join(" · ")}
-          </span>
-          {lastRun ? <Badge variant={statusVariant(task.lastRunStatus)}>{lastRun}</Badge> : null}
-          {task.lastRunError ? <span className="text-destructive">{task.lastRunError}</span> : null}
+    <div className="flex min-h-36 flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-5">
+      <div className="flex min-w-0 items-start gap-3" role="status">
+        <Icon
+          aria-hidden
+          className={`mt-0.5 size-5 shrink-0 ${error ? "text-destructive" : "text-muted-foreground"}`}
+        />
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="text-sm font-medium">{title}</h3>
+          <p className="max-w-[65ch] text-xs leading-5 text-muted-foreground wrap-anywhere">
+            {description}
+          </p>
         </div>
-      }
-      control={
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={task.enabled}
-            disabled={busy || !canOperate}
-            aria-label={task.enabled ? `Pause ${task.title}` : `Resume ${task.title}`}
-            onCheckedChange={() => void act("toggle")}
-          />
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  disabled={busy}
-                  aria-label={`Actions for ${task.title}`}
-                />
-              }
-            >
-              <MoreHorizontalIcon className="size-4" />
-            </MenuTrigger>
-            <MenuPopup align="end">
-              <MenuItem disabled={!canOperate} onClick={edit}>
-                <PencilIcon />
-                Edit
-              </MenuItem>
-              <MenuItem
-                disabled={!canOperate || task.lastRunStatus === "running"}
-                onClick={() => void act("run")}
-              >
-                <PlayIcon />
-                Run now
-              </MenuItem>
-              {threadRef ? (
-                <MenuItem
-                  onClick={() =>
-                    void navigate({
-                      to: "/$environmentId/$threadId",
-                      params: buildThreadRouteParams(threadRef),
-                    })
-                  }
-                >
-                  <MessageSquareIcon />
-                  Open thread
-                </MenuItem>
-              ) : null}
-              <MenuSeparator />
-              <MenuItem
-                disabled={!canOperate}
-                {...confirm.bind("delete", () => void act("delete"))}
-                variant="destructive"
-              >
-                <Trash2Icon />
-                {confirm.armed === "delete" ? "Confirm delete" : "Delete"}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        </div>
-      }
-    />
+      </div>
+      {action}
+    </div>
   );
 }

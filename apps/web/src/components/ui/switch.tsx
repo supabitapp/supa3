@@ -13,8 +13,13 @@ function Switch({
   className,
   size = "default",
   mixed = false,
+  hitArea = "default",
   ...props
-}: SwitchPrimitive.Root.Props & { size?: "default" | "sm"; mixed?: boolean }) {
+}: SwitchPrimitive.Root.Props & {
+  size?: "default" | "sm";
+  mixed?: boolean;
+  hitArea?: "default" | "comfortable";
+}) {
   return (
     <SwitchPrimitive.Root
       className={cn(
@@ -22,6 +27,8 @@ function Switch({
         size === "sm"
           ? "[--thumb-size:--spacing(4)] sm:[--thumb-size:--spacing(3.5)]"
           : "[--thumb-size:--spacing(5)] sm:[--thumb-size:--spacing(4)]",
+        hitArea === "comfortable" &&
+          "relative before:absolute before:top-1/2 before:left-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 sm:before:size-10",
         className,
       )}
       data-size={size}
