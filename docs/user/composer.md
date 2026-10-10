@@ -208,8 +208,10 @@ composer when it is empty, and is discarded otherwise.
 Type `/` at the start of a message for commands, or `$` anywhere to add a skill
 from the selected environment and provider. Later in the message, `/` suggests
 skills too, just like `$`. Enter still sends the message unless
-you arrow to a suggestion first, so paths like `/tmp` stay as typed. On mobile,
-both are also available before starting a thread on **New task**.
+you arrow to a suggestion first, so paths like `/tmp` stay as typed. On web and
+desktop, Tab adds the highlighted suggestion, or the top one if none is
+highlighted. On mobile,
+`/` and `$` are also available before starting a thread on **New task**.
 
 The slash menu also includes skills unless you turn off **Show skills in slash
 menu**, which also stops `/` from suggesting skills later in a message. It is in
