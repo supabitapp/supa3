@@ -65,7 +65,7 @@ describe("remote", () => {
     });
     expect(stripPairingTokenFromUrl(new URL(pairingUrl)).hash).toBe("");
     expect(
-      buildPairingUrl(relayAddress, "code", { relayUrl: "wss://supacode-relay.exe.xyz" }),
+      buildPairingUrl(relayAddress, "code", { relayUrl: "wss://relay.supacode.sh" }),
     ).not.toContain("relay=");
     expect(buildPairingUrl("https://host.test", "code", { relayUrl })).not.toContain("relay=");
     expect(() =>
