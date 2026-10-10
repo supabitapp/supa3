@@ -1,5 +1,6 @@
 import type { AdvertisedEndpoint, DesktopWslState } from "@supacode/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { buildPairingUrl } from "@supacode/shared/remote";
 import {
   applyWslEnableSelection,
   canRevokeOtherClients,
@@ -7,7 +8,25 @@ import {
   isWslSettingsRowVisible,
   selectQrEndpointOption,
   togglePairingScopeSelection,
+  resolvePairingLinkRoutes,
+  createRelayPairingEndpoint,
 } from "./ConnectionsSettings.logic";
+
+it("shares the confirmed relay route before its status subscription arrives", () => {
+  const relay = {
+    relayEndpoint: `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`,
+    relayUrl: "wss://custom-relay.invalid",
+  };
+  const settings = { publicRelayEnabled: true, publicRelayUrl: relay.relayUrl };
+  const { endpoints, pairingHints } = resolvePairingLinkRoutes([], {}, relay, settings);
+  const endpoint = endpoints[0];
+  if (!endpoint) throw new Error("The prepared relay must be shareable.");
+  const url = new URL(buildPairingUrl(endpoint.httpBaseUrl, "test-credential", pairingHints));
+  expect(url.origin).toBe(new URL(relay.relayEndpoint).origin);
+  expect(new URLSearchParams(url.hash.slice(1)).get("relay")).toBe(relay.relayUrl);
+  expect(resolvePairingLinkRoutes(endpoints, {}, relay, settings).endpoints).toHaveLength(1);
+  expect(resolvePairingLinkRoutes([], {}, undefined, settings).endpoints).toEqual([]);
+});
 
 describe("togglePairingScopeSelection", () => {
   it.each([
@@ -231,4 +250,22 @@ describe("canRevokeOtherClients", () => {
     expect(canRevokeOtherClients([{ current: true }])).toBe(false);
     expect(canRevokeOtherClients([{ current: true }, { current: false }])).toBe(true);
   });
+});
+
+it("uses current routing when the relay server changes after link creation", () => {
+  const prepared = {
+    relayEndpoint: "https://relay.supacode.invalid/",
+    relayUrl: "wss://old-relay.invalid",
+  };
+  const settings = { publicRelayEnabled: true, publicRelayUrl: "wss://new-relay.invalid" };
+  const currentHints = { relayUrl: settings.publicRelayUrl };
+  const live = [createRelayPairingEndpoint(prepared.relayEndpoint)];
+  expect(
+    resolvePairingLinkRoutes(live, currentHints, prepared, settings).pairingHints.relayUrl,
+  ).toBe(settings.publicRelayUrl);
+  expect(resolvePairingLinkRoutes([], currentHints, prepared, settings).endpoints).toEqual([]);
+  expect(
+    resolvePairingLinkRoutes([], {}, prepared, { ...settings, publicRelayEnabled: false })
+      .endpoints,
+  ).toEqual([]);
 });

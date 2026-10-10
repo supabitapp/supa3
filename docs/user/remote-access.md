@@ -7,7 +7,8 @@ machine. That machine must stay running and reachable while you work.
 
 Connect across networks without opening a port on the host. On the machine
 running your agents, open **Settings → Connections**, enable **Public relay**,
-then create a pairing link using the public relay address. Paste that link into
+then create a pairing link. The relay connects when you create the first link;
+the app waits until it is ready before making the link available. Paste that link into
 **Add environment** on another desktop or mobile client, or scan it with the
 mobile app. The host can keep **Network access** off. Clients show a relay
 connection by a three-word name, such as `amber-falcon-river`, and the host's
@@ -39,6 +40,8 @@ encrypted bytes, including HTTP requests. Pairing permissions and authorized
 client revocation work as they do for direct connections. Turning off **Public
 relay** closes relay connections; turning it back on lets already authorized
 clients reconnect. The host must stay running and have internet access.
+After the first activation, the host reconnects automatically when Supacode starts
+while **Public relay** is enabled.
 
 To use your own relay server, set **Relay server** under **Public relay** before
 you create pairing links. New links carry that server to the clients that pair
@@ -97,7 +100,9 @@ route list. Both addresses belong to the same machine in your client.
 
 Supacode also learns the LAN and Tailscale addresses reported by a paired
 machine. Desktop, mobile, and browser clients using the local companion also
-learn its relay address when you enable **Public relay**, without rescanning.
+learn its relay address once relay is activated, without rescanning. On a fresh
+host, enable **Public relay** and create the first pairing link to activate it;
+clients already connected directly do not need to scan that link.
 Enable **Network access** on the host to make its LAN address available.
 Learned routes use the existing pairing and disappear when the host withdraws
 them or you remove the pairing they came from.

@@ -23,6 +23,7 @@ export const RelayServerUrl = Schema.String.check(
 
 export const RelayHostState = Schema.Literals([
   "off",
+  "idle",
   "connecting",
   "registered",
   "superseded",
@@ -37,16 +38,16 @@ export const RelayHostStatus = Schema.Struct({
 });
 export type RelayHostStatus = typeof RelayHostStatus.Type;
 
-export const RelayAdvertisement = Schema.Struct({
+export const RelayConnectionInfo = Schema.Struct({
   relayEndpoint: Schema.String,
   relayUrl: Schema.String,
 });
-export type RelayAdvertisement = typeof RelayAdvertisement.Type;
+export type RelayConnectionInfo = typeof RelayConnectionInfo.Type;
 
 export function relayAdvertisementFrom(value: {
   readonly relayEndpoint?: string;
   readonly relayUrl?: string;
-}): RelayAdvertisement | null {
+}): RelayConnectionInfo | null {
   return value.relayEndpoint === undefined || value.relayUrl === undefined
     ? null
     : { relayEndpoint: value.relayEndpoint, relayUrl: value.relayUrl };
@@ -54,9 +55,33 @@ export function relayAdvertisementFrom(value: {
 
 export function withRelayAdvertisement<
   T extends { readonly relayEndpoint?: string; readonly relayUrl?: string },
->(value: T, advertisement: RelayAdvertisement | null) {
+>(value: T, advertisement: RelayConnectionInfo | null) {
   const { relayEndpoint: _endpoint, relayUrl: _url, ...rest } = value;
   return { ...rest, ...advertisement };
+}
+
+export class RelayPreparationError extends Schema.TaggedError<RelayPreparationError>()(
+  "RelayPreparationError",
+  {
+    reason: Schema.Literals(["off", "invalid-url", "superseded", "timeout", "unavailable"]),
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+  { httpApiStatus: 503 },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "off":
+        return "Enable Public relay before creating a relay pairing link.";
+      case "invalid-url":
+        return "The relay server URL is invalid.";
+      case "superseded":
+        return "Another host is using this relay identity. Turn Public relay off and on to reconnect here.";
+      case "timeout":
+        return "The relay did not connect in time. Try creating the link again.";
+      case "unavailable":
+        return "The relay could not be prepared. Try creating the link again.";
+    }
+  }
 }
 
 export const RelayCompanionRequest = Schema.Struct({

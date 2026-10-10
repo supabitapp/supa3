@@ -9,7 +9,7 @@ import {
   normalizeRelayServerUrl,
   type DesktopSshEnvironmentTarget,
   type EnvironmentId,
-  type RelayAdvertisement,
+  type RelayConnectionInfo,
   type ServerConfig,
 } from "@supacode/contracts";
 import { canonicalRelayAddress } from "@supacode/shared/relay/protocol";
@@ -245,7 +245,7 @@ export function advertisedConnectionRoutes(
   config: Pick<ServerConfig, "environment" | "directEndpoints">,
 ) {
   const { relayEndpoint, relayUrl, capabilities } = config.environment;
-  let relayAdvertisement: RelayAdvertisement | null | undefined;
+  let relayAdvertisement: RelayConnectionInfo | null | undefined;
   if (relayEndpoint !== undefined && relayUrl !== undefined) {
     relayAdvertisement = { relayEndpoint, relayUrl };
   } else if (
@@ -260,7 +260,7 @@ export function advertisedConnectionRoutes(
 
 export type ConnectionRouteAdvertisements = ReturnType<typeof advertisedConnectionRoutes>;
 
-function validatedRelayAdvertisement(value: RelayAdvertisement | null | undefined) {
+function validatedRelayAdvertisement(value: RelayConnectionInfo | null | undefined) {
   if (value === undefined || value === null) return value;
   try {
     const relayEndpoint = canonicalRelayAddress(value.relayEndpoint);
@@ -277,7 +277,7 @@ export function mergeLearnedRoutes(input: {
   readonly entry: ConnectionCatalogEntry;
   readonly activeRoute: ConnectionRoute;
   readonly reported?: ReadonlyArray<ReportedEndpoint> | undefined;
-  readonly relayAdvertisement?: RelayAdvertisement | null | undefined;
+  readonly relayAdvertisement?: RelayConnectionInfo | null | undefined;
   readonly allowRelay?: boolean;
   readonly allowInsecure: boolean;
 }): ReadonlyArray<ConnectionRoute> | null {

@@ -28,7 +28,7 @@ import { RuntimeMode } from "./providerPolicy.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
 import { ServerSettings } from "./settings.ts";
-import { RelayAdvertisement } from "./relay.ts";
+import { RelayConnectionInfo } from "./relay.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
   kind: Schema.Literal("keybindings.malformed-config"),
@@ -841,7 +841,7 @@ export type ServerConfigStreamUsageLimitSourcesUpdatedEvent =
 export const ServerConfigStreamRelayAdvertisementUpdatedEvent = Schema.Struct({
   version: Schema.Literal(1),
   type: Schema.Literal("relayAdvertisementUpdated"),
-  payload: Schema.NullOr(RelayAdvertisement),
+  payload: Schema.NullOr(RelayConnectionInfo),
 });
 
 export const ServerConfigStreamEvent = Schema.Union([

@@ -5,7 +5,44 @@ import {
   AuthTerminalReadScope,
   type DesktopBridge,
   type DesktopWslState,
+  type RelayConnectionInfo,
+  type ServerSettings,
+  normalizeRelayServerUrl,
 } from "@supacode/contracts";
+import { createAdvertisedEndpoint } from "@supacode/shared/advertisedEndpoint";
+import type { PairingRouteHints } from "@supacode/shared/remote";
+
+export function createRelayPairingEndpoint(relayEndpoint: string) {
+  return createAdvertisedEndpoint({
+    id: "public-relay",
+    label: "Public relay",
+    provider: { id: "public-relay", label: "Public relay", kind: "tunnel", isAddon: false },
+    httpBaseUrl: relayEndpoint,
+    reachability: "public",
+    hostedHttpsCompatibility: "compatible",
+    source: "server",
+    description: "End-to-end encrypted access through the public relay.",
+  });
+}
+
+export function resolvePairingLinkRoutes(
+  endpoints: ReadonlyArray<AdvertisedEndpoint>,
+  pairingHints: PairingRouteHints,
+  relay: RelayConnectionInfo | undefined,
+  settings: Pick<ServerSettings, "publicRelayEnabled" | "publicRelayUrl"> | undefined,
+) {
+  if (
+    relay === undefined ||
+    endpoints.some((endpoint) => endpoint.id === "public-relay") ||
+    !settings?.publicRelayEnabled ||
+    normalizeRelayServerUrl(settings.publicRelayUrl) !== relay.relayUrl
+  )
+    return { endpoints, pairingHints };
+  return {
+    endpoints: [...endpoints, createRelayPairingEndpoint(relay.relayEndpoint)],
+    pairingHints: { ...pairingHints, relayUrl: relay.relayUrl },
+  };
+}
 
 /**
  * Operating terminals without being able to list them leaves a client

@@ -2,9 +2,62 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId } from "@supacode/contracts";
 import { resolveRemotePairingTarget } from "@supacode/shared/remote";
 
-import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
+import {
+  resolveDesktopPairingUrl,
+  resolveHostedPairingUrl,
+  resolvePairingShareValue,
+} from "./pairingUrls";
 
 describe("settings pairing URL helpers", () => {
+  it.each(["supacode://app", "file:///Applications/Supacode/index.html"])(
+    "shows the code instead of creating a remote link from %s",
+    (origin) => {
+      expect(resolvePairingShareValue("PAIRCODE", origin)).toEqual({
+        value: "PAIRCODE",
+        kind: "code",
+        qrShareable: false,
+      });
+    },
+  );
+  it("keeps incompatible HTTPS endpoints on the direct pairing route", () => {
+    const result = resolvePairingShareValue("PAIRCODE", "https://private-host.invalid", {}, false);
+    expect(result.value).toBe("https://private-host.invalid/pair#token=PAIRCODE");
+    expect(result.qrShareable).toBe(true);
+  });
+  it("shows a relay link and a scannable QR before access-list updates arrive", () => {
+    const relayUrl = "wss://custom-relay.invalid";
+    const host = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+    const result = resolvePairingShareValue("PAIRCODE", host, {
+      environmentId: EnvironmentId.make("machine"),
+      relayUrl,
+    });
+    expect(result.kind).toBe("link");
+    expect(result.qrShareable).toBe(true);
+    expect(resolveRemotePairingTarget({ pairingUrl: result.value })).toMatchObject({
+      credential: "PAIRCODE",
+      httpBaseUrl: host,
+      relayUrl,
+      environmentId: "machine",
+    });
+  });
+
+  it("shows the creation credential when no reachable URL is available", () => {
+    expect(resolvePairingShareValue("PAIRCODE", null)).toEqual({
+      value: "PAIRCODE",
+      kind: "code",
+      qrShareable: false,
+    });
+  });
+
+  it.each(["http://localhost:3773", "http://127.0.0.1:3773", "http://[::1]:3773"])(
+    "keeps %s copyable without offering a QR that would dial the scanning device",
+    (origin) => {
+      const result = resolvePairingShareValue("PAIRCODE", origin);
+      expect(result.kind).toBe("link");
+      expect(result.qrShareable).toBe(false);
+      expect(result.value).toContain("#token=PAIRCODE");
+    },
+  );
   it("carries the same identity and routes through direct and hosted links", () => {
     const hints = {
       environmentId: EnvironmentId.make("machine"),

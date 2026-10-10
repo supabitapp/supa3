@@ -79,7 +79,7 @@ import {
   type ServerSelfUpdateProgressEvent,
   type ServerConfig as ClientServerConfig,
   type ServerConfigStreamEvent,
-  type RelayAdvertisement,
+  type RelayConnectionInfo,
   relayAdvertisementFrom,
   withRelayAdvertisement,
   type ServerLifecycleStreamEvent,
@@ -295,7 +295,7 @@ const resolveEditorConfig = <E, R>(
 
 export const relayAdvertisementUpdates = (
   config: ClientServerConfig,
-  advertisements: Stream.Stream<RelayAdvertisement | null>,
+  advertisements: Stream.Stream<RelayConnectionInfo | null>,
   enabled: boolean | undefined,
 ) =>
   enabled === true
@@ -303,7 +303,7 @@ export const relayAdvertisementUpdates = (
         Stream.succeed(relayAdvertisementFrom(config.environment)),
         advertisements,
       ).pipe(
-        Stream.changesWith<RelayAdvertisement | null>(Equal.equals),
+        Stream.changesWith<RelayConnectionInfo | null>(Equal.equals),
         Stream.drop(1),
         Stream.map((payload) => ({
           version: 1 as const,
@@ -3096,6 +3096,7 @@ const layerWsRpc = (
             ),
           ),
         [WS_METHODS.subscribeRelayStatus]: (_input) => relayAccess.status,
+        [WS_METHODS.prepareRelay]: (_input) => relayAccess.prepare,
         [WS_METHODS.subscribeResourceTelemetry]: (_input) =>
           Stream.unwrap(
             Effect.map(resourceTelemetry.subscribe, ({ latest, changes }) =>
