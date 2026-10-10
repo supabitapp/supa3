@@ -75,6 +75,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   const [translation] = useState(() => new Animated.Value(0));
   const reducedMotion = useReducedMotionPreference();
   const queuedRuns = workflow?.queuedRuns ?? [];
+  const canSteerQueuedMessages = workflow?.canPromoteToSteer === true;
   const showResume = workflow?.isHeld === true && queuedRuns.length > 0;
   const sheetHeight = contentHeight + (showResume ? footerHeight : 0);
   const order = queuedRuns.map(({ run }) => run.id).join(",");
@@ -210,7 +211,11 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
               {queuedRuns.length}
             </Text>
           </View>
-          <Text className="text-sm text-foreground-muted">Tap to edit · Swipe for actions</Text>
+          <Text className="text-sm text-foreground-muted">
+            {canSteerQueuedMessages
+              ? "Tap to edit · Steer or swipe for more"
+              : "Tap to edit · Swipe for actions"}
+          </Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -348,19 +353,26 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
               <QueueRowSwipeable
                 enabled={draggedRunId === null && busyRunId === null && controls.canDismiss}
                 background={theme["--color-sheet-solid"]}
-                showSteer={workflow?.canPromoteToSteer ?? false}
-                canSteer={controls.canSteer}
-                onSteer={() => void act(run.id, "steer")}
                 onRemove={() => void act(run.id, "remove")}
               >
-                <ThreadQueueMessage
-                  environmentId={target.environmentId}
-                  title={title}
-                  attachments={attachments}
-                  controls={controls}
-                  canPromoteToSteer={workflow?.canPromoteToSteer ?? false}
-                  onAction={(action) => void act(run.id, action)}
-                />
+                <View className="flex-1 flex-row items-stretch">
+                  <View className="min-w-0 flex-1">
+                    <ThreadQueueMessage
+                      environmentId={target.environmentId}
+                      title={title}
+                      attachments={attachments}
+                      controls={controls}
+                      canPromoteToSteer={canSteerQueuedMessages}
+                      onAction={(action) => void act(run.id, action)}
+                    />
+                  </View>
+                  {canSteerQueuedMessages ? (
+                    <QueueSteerButton
+                      canSteer={controls.canSteer}
+                      onPress={() => void act(run.id, "steer")}
+                    />
+                  ) : null}
+                </View>
               </QueueRowSwipeable>
             </Animated.View>
           </QueueShiftedRow>
@@ -438,9 +450,6 @@ function QueueShiftedRow(props: {
 function QueueRowSwipeable(props: {
   readonly enabled: boolean;
   readonly background: string;
-  readonly showSteer: boolean;
-  readonly canSteer: boolean;
-  readonly onSteer: () => void;
   readonly onRemove: () => void;
   readonly children: React.ReactNode;
 }) {
@@ -469,37 +478,6 @@ function QueueRowSwipeable(props: {
           accessibilityElementsHidden={!isOpen}
           importantForAccessibility={isOpen ? "auto" : "no-hide-descendants"}
         >
-          {props.showSteer ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Steer with queued message"
-              accessibilityState={{ disabled: !props.canSteer }}
-              disabled={!props.canSteer}
-              onPress={() => {
-                swipeableRef.current?.close();
-                props.onSteer();
-              }}
-              className="min-h-11 items-center justify-center bg-subtle active:opacity-70"
-              style={{ width: QUEUE_ACTION_WIDTH }}
-            >
-              <SymbolView
-                name="arrow.turn.left.up"
-                size={16}
-                tintColorClassName={
-                  props.canSteer ? "accent-primary-text" : "accent-foreground-muted"
-                }
-              />
-              <Text
-                className={
-                  props.canSteer
-                    ? "pt-1 text-2xs font-supacode-medium text-primary-text"
-                    : "pt-1 text-2xs font-supacode-medium text-foreground-muted"
-                }
-              >
-                Steer
-              </Text>
-            </Pressable>
-          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL}
@@ -521,6 +499,36 @@ function QueueRowSwipeable(props: {
     >
       {props.children}
     </ReanimatedSwipeable>
+  );
+}
+
+function QueueSteerButton(props: { readonly canSteer: boolean; readonly onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Steer with queued message"
+      accessibilityHint="Send this queued message to the active turn"
+      accessibilityState={{ disabled: !props.canSteer }}
+      disabled={!props.canSteer}
+      onPress={props.onPress}
+      className="min-h-16 items-center justify-center border-l border-border bg-subtle px-2 active:opacity-70"
+      style={{ width: QUEUE_ACTION_WIDTH }}
+    >
+      <SymbolView
+        name="arrow.turn.left.up"
+        size={16}
+        tintColorClassName={props.canSteer ? "accent-primary-text" : "accent-foreground-muted"}
+      />
+      <Text
+        className={
+          props.canSteer
+            ? "pt-1 text-2xs font-supacode-medium text-primary-text"
+            : "pt-1 text-2xs font-supacode-medium text-foreground-muted"
+        }
+      >
+        Steer
+      </Text>
+    </Pressable>
   );
 }
 
