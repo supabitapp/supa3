@@ -287,14 +287,12 @@ export function HomeScreen(props: HomeScreenProps) {
     (state) => state.isVisible && navigation.isFocused(),
   );
   const { fabClearance } = useAndroidControlSizing();
-  const iosBottomToolbarClearance =
-    Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
-      ? PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT
-      : 0;
   const listTopInset =
     Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED ? navigationHeaderHeight : 0;
   const listBottomInset =
-    Platform.OS === "ios" ? Math.max(insets.bottom, 24) + 60 + iosBottomToolbarClearance : 0;
+    Platform.OS === "ios" && !NATIVE_LIQUID_GLASS_SUPPORTED
+      ? Math.max(insets.bottom, 24) + 60 + PRE_LIQUID_GLASS_BOTTOM_TOOLBAR_HEIGHT
+      : 0;
 
   const iosBottomClearance = Math.max(columnMetrics?.safeArea.bottom ?? insets.bottom, 24);
   const searchEnvironmentIds = useMemo(
