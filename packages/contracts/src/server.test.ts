@@ -5,6 +5,8 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
   resolveEnvironmentMachineKind,
   ServerConfig,
+  ServerConfigStreamSettingsUpdatedEvent,
+  ServerConfigUpdatedPayload,
   ServerObservability,
   ServerProvider,
   ServerProviders,
@@ -17,6 +19,9 @@ const decodeServerProviders = Schema.decodeUnknownSync(ServerProviders);
 const decodeServerObservability = Schema.decodeUnknownSync(ServerObservability);
 const decodeUpsertKeybindingResult = Schema.decodeUnknownSync(ServerUpsertKeybindingResult);
 const decodeAvailableEditors = Schema.decodeUnknownSync(ServerConfig.fields.availableEditors);
+const decodeServerConfigSettings = Schema.decodeUnknownSync(ServerConfig.fields.settings);
+const decodeConfigUpdate = Schema.decodeUnknownSync(ServerConfigUpdatedPayload);
+const decodeSettingsUpdate = Schema.decodeUnknownSync(ServerConfigStreamSettingsUpdatedEvent);
 
 const baseProviderSnapshot = {
   instanceId: "codex",
@@ -140,6 +145,28 @@ describe("ServerProvider", () => {
 });
 
 describe("server config forward compatibility", () => {
+  it.each([undefined, true, false])(
+    "preserves older servers' question dismissal state: %s",
+    (autoDismissQuestions) => {
+      const settings = autoDismissQuestions === undefined ? {} : { autoDismissQuestions };
+      const snapshotSettings = decodeServerConfigSettings(settings);
+      const configUpdate = decodeConfigUpdate({
+        issues: [],
+        providers: [],
+        settings,
+      });
+      const settingsUpdate = decodeSettingsUpdate({
+        version: 1,
+        type: "settingsUpdated",
+        payload: { settings },
+      });
+
+      expect(snapshotSettings.autoDismissQuestions).toBe(autoDismissQuestions);
+      expect(configUpdate.settings?.autoDismissQuestions).toBe(autoDismissQuestions);
+      expect(settingsUpdate.payload.settings.autoDismissQuestions).toBe(autoDismissQuestions);
+    },
+  );
+
   it("drops config issues with kinds this build does not know", () => {
     const parsed = decodeUpsertKeybindingResult({
       keybindings: [],

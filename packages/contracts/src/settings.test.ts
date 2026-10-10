@@ -34,13 +34,12 @@ describe("ServerSettings public relay", () => {
 });
 
 describe("question automatic dismissal", () => {
-  it("defaults to automatic dismissal and preserves explicit preferences", () => {
-    expect(decodeServerSettings({}).autoDismissQuestions).toBe(true);
+  it("discards retired preferences from saved settings and updates", () => {
     for (const autoDismissQuestions of [true, false]) {
-      expect(encodeServerSettings(decodeServerSettings({ autoDismissQuestions }))).toMatchObject({
-        autoDismissQuestions,
-      });
-      expect(decodeServerSettingsPatch({ autoDismissQuestions })).toEqual({ autoDismissQuestions });
+      const settings = decodeServerSettings({ autoDismissQuestions });
+      expect(settings).not.toHaveProperty("autoDismissQuestions");
+      expect(encodeServerSettings(settings)).not.toHaveProperty("autoDismissQuestions");
+      expect(decodeServerSettingsPatch({ autoDismissQuestions })).toEqual({});
     }
   });
 });

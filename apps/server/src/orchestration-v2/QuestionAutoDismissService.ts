@@ -1,8 +1,4 @@
-import {
-  CommandId,
-  ServerSettingsError,
-  USER_INPUT_AUTO_DISMISS_TIMEOUT_MS,
-} from "@supacode/contracts";
+import { CommandId, USER_INPUT_AUTO_DISMISS_TIMEOUT_MS } from "@supacode/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -10,28 +6,22 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as Scheduler from "../scheduling/Scheduler.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
 export class QuestionAutoDismissService extends Context.Service<
   QuestionAutoDismissService,
   {
-    readonly sweep: Effect.Effect<
-      void,
-      ServerSettingsError | ProjectionStore.ProjectionStoreV2Error
-    >;
+    readonly sweep: Effect.Effect<void, ProjectionStore.ProjectionStoreV2Error>;
   }
 >()("supacode/orchestration-v2/QuestionAutoDismissService") {}
 
 const make = Effect.gen(function* () {
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const crypto = yield* Crypto.Crypto;
-  const settings = yield* ServerSettings.ServerSettingsService;
   const threads = yield* ThreadManagement.ThreadManagementService;
 
   const sweep = Effect.gen(function* () {
-    if (!(yield* settings.getSettings).autoDismissQuestions) return;
     const now = yield* DateTime.now;
     const requests = yield* projections.getQuestionAutoDismissCandidates(
       DateTime.subtract(now, { milliseconds: USER_INPUT_AUTO_DISMISS_TIMEOUT_MS }),

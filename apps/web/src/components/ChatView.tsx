@@ -1736,6 +1736,7 @@ export default function ChatView(props: ChatViewProps) {
   const questionTimerConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const canPauseUserInputAutoDismiss =
     questionTimerPermission &&
+    questionTimerConfig?.settings.autoDismissQuestions !== false &&
     questionTimerConfig?.environment.capabilities.questionAutoDismissPause === true;
   const revertThreadCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
@@ -9791,7 +9792,6 @@ export default function ChatView(props: ChatViewProps) {
   const pauseActiveQuestionTimer = useCallback(() => {
     const deadline = activePendingUserInput?.autoDismissAt;
     if (
-      !settings.autoDismissQuestions ||
       !activePendingUserInput ||
       !activeThreadId ||
       deadline == null ||
@@ -9832,7 +9832,6 @@ export default function ChatView(props: ChatViewProps) {
     pauseUserInputAutoDismiss,
     setThreadError,
     pauseOnInteraction,
-    settings.autoDismissQuestions,
   ]);
 
   const setActivePendingUserInputQuestionIndex = useCallback(
@@ -11278,8 +11277,8 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               pendingApprovals={outboxEditor.editing ? [] : pendingApprovals}
                               pendingUserInputs={outboxEditor.editing ? [] : pendingUserInputs}
-                              autoDismissQuestions={
-                                settings.autoDismissQuestions &&
+                              supportsQuestionAutoDismiss={
+                                questionTimerConfig?.settings.autoDismissQuestions !== false &&
                                 questionTimerConfig?.environment.capabilities
                                   .questionAutoDismiss === true
                               }

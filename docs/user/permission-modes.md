@@ -18,12 +18,9 @@ and modes you choose in a draft keep their permissions.
 Approve or reject requests in the conversation to let the agent continue. Permission modes do
 not prevent the agent from asking questions about the task.
 
-Unanswered Codex and Claude questions close after two minutes by default. To keep questions
-waiting until you answer them, turn off **Auto-dismiss unanswered questions** in
-**Settings > General** on web and desktop, or **Settings > Thread behavior** on mobile. The
-setting applies to the selected environments across devices. The question shows its remaining time, with a warning
-in the final 20 seconds. Start typing or select an option to pause automatic dismissal
-for that question; its countdown disappears.
+Unanswered Codex and Claude questions close automatically after two minutes. The question
+shows its remaining time, with a warning in the final 20 seconds. Start typing or select an
+option to pause automatic dismissal for that question; its countdown disappears.
 Dismissal provides no answer and never selects an option. Permission approvals keep waiting.
 
 ## Provider differences
