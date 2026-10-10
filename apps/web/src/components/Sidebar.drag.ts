@@ -176,7 +176,7 @@ export function createSidebarSortingStrategy(input: {
     const visible = pageRecentThreads(
       settledOrder,
       input.settledExpanded ? (input.settledVisibleCount ?? settledOrder.length) : 0,
-      (key) => key === routeKey,
+      routeKey === null ? null : (key) => key === routeKey,
     );
     groups.settled = visible.map((key) => ({ kind: "thread", key, section: "settled" }));
     const projected: SidebarListItem[] = [];

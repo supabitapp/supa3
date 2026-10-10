@@ -23,7 +23,7 @@ import {
   type OrchestrationV2ProjectedTurnItem,
   type WorktreeSetupSnapshot,
 } from "@supacode/contracts";
-import type { CodexArtifactTemplate } from "@supacode/client-runtime/codex-artifact-templates";
+import type { CodexArtifactTemplate } from "@supacode/shared/codexArtifactTemplates";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";

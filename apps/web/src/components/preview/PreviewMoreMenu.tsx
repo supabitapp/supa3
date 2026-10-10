@@ -106,6 +106,8 @@ interface Props {
   nativePictureInPicture: boolean;
   /** Profile display name, shown so the menu says which data is being cleared. */
   profileName: string | undefined;
+
+  move?: { readonly label: string; readonly onMove: () => void };
 }
 
 const MenuTriggerButton = () => (
@@ -133,6 +135,7 @@ export function PreviewMoreMenu({
   onToggleDeviceToolbar,
   nativePictureInPicture,
   profileName,
+  move,
 }: Props) {
   const confirm = useInlineConfirm<"cookies" | "cache">();
   const cookiesHintId = useId();
@@ -157,6 +160,7 @@ export function PreviewMoreMenu({
               : "Open separate preview window"}
           </MenuItem>
         ) : null}
+        {move ? <MenuItem onClick={move.onMove}>{move.label}</MenuItem> : null}
         <MenuItem onClick={onToggleDeviceToolbar} disabled={disabled}>
           {deviceToolbarVisible ? "Hide device toolbar" : "Show device toolbar"}
         </MenuItem>

@@ -17,8 +17,11 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { type ClaudeSettings, TextGenerationError } from "@supacode/contracts";
 import { resolveSpawnCommand } from "@supacode/shared/shell";
 
-import * as TextGenerationOperations from "./TextGenerationOperations.ts";
-import { normalizeCliError, toJsonSchemaObject } from "./TextGenerationUtils.ts";
+import * as TextGenerationOperations from "@supacode/provider-core/server/textGenerationOperations";
+import {
+  normalizeCliError,
+  toJsonSchemaObject,
+} from "@supacode/provider-core/server/textGenerationUtils";
 import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,

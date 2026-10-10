@@ -10,6 +10,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthAccessWriteScope,
   AuthSourceControlWriteScope,
+  AuthPreviewOperateScope,
   ThreadId,
   EnvironmentId,
   ScheduledTaskId,
@@ -82,6 +83,29 @@ describe("command permissions", () => {
         yield* relay.authorize(registry, env);
         registry.set(sessions(other), AsyncResult.success(grant(false)));
         expect(registry.get(relay.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
+  it.effect.each([
+    { method: WS_METHODS.mcpAppsCallTool, scope: AuthOrchestrationOperateScope },
+    { method: WS_METHODS.mcpAppsUpdateModelContext, scope: AuthOrchestrationOperateScope },
+    { method: WS_METHODS.previewReportProfiles, scope: AuthPreviewOperateScope },
+  ])("checks the destination grant for $method", ({ method, scope }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const operation = createCommandPermissions(runtime, method);
+        registry.set(sessions(env), AsyncResult.success(grant(false)));
+        expect(registry.get(operation.permissionAtom(env))).toBe(false);
+        expect(
+          (yield* operation.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+        ).toBe(scope);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({ ...grant(false), scopes: [scope], permissions: [scope] }),
+        );
+        expect(registry.get(operation.permissionAtom(env))).toBe(true);
+        yield* operation.authorize(registry, env);
       }),
     ),
   );

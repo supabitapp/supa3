@@ -98,6 +98,7 @@ import {
   type ComposerSendPresentation,
 } from "./composerSendPresentation";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
+import { ComposerPopoverAnchor } from "./ComposerPopoverAnchor";
 import { ComposerQueuedEditAttachments } from "./ComposerQueuedEdit";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
@@ -804,7 +805,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         style={{ maxWidth: props.contentMaxWidth }}
       >
         {commandMenuTrigger ? (
-          <View className="absolute inset-x-0 bottom-full z-10 mb-2">
+          <ComposerPopoverAnchor>
             <ComposerCommandPopover
               items={composerMenu.items}
               triggerKind={commandMenuTrigger.kind}
@@ -812,7 +813,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               error={composerMenu.error}
               onSelect={composerMenu.onSelect}
             />
-          </View>
+          </ComposerPopoverAnchor>
         ) : null}
 
         {selectedProviderStatus?.compatibilityAdvisory?.message &&

@@ -191,6 +191,7 @@ export default defineConfig({
       "supacode/no-unscoped-has": "error",
       "supacode/namespace-node-imports": "error",
       "supacode/prefer-catch-tags": "error",
+      "supacode/require-centered-scroll-gutter": "error",
       "supacode/require-suppression-reason": "error",
     },
     overrides: [

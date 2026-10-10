@@ -46,17 +46,17 @@ function route(
 }
 
 describe("connection routes", () => {
-  it("orders LAN ahead of Tailscale and public routes", () => {
+  it("orders LAN ahead of VPN and public routes", () => {
     const publicRoute = route("https://remote.example.test", "public");
-    const tailnetRoute = route("http://100.100.10.2:4389", "tailnet");
+    const vpnRoute = route("http://100.100.10.2:4389", "vpn");
     const lanRoute = route("http://192.168.1.20:4389", "lan");
     expect(connectionRouteKind(lanRoute)).toBe("lan");
-    expect(connectionRouteKind(tailnetRoute)).toBe("tailnet");
+    expect(connectionRouteKind(vpnRoute)).toBe("vpn");
     expect(
-      insertRoute(insertRoute([publicRoute], tailnetRoute), lanRoute).map((item) =>
+      insertRoute(insertRoute([publicRoute], vpnRoute), lanRoute).map((item) =>
         connectionRouteKind(item),
       ),
-    ).toEqual(["lan", "tailnet", "public"]);
+    ).toEqual(["lan", "vpn", "public"]);
   });
 
   it("learns both direct endpoint kinds while reusing the paired credential", () => {
@@ -87,6 +87,39 @@ describe("connection routes", () => {
       "learned:environment-routes:http://100.100.10.2:4389@bearer:environment-routes",
     ]);
   });
+
+  it.each([true, false])(
+    "preserves custom relay configuration when tailnet provenance becomes %s",
+    (tailscale) => {
+      const paired = route("http://100.100.10.2:4389");
+      const profile = Option.getOrThrow(paired.profile);
+      if (profile._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+      const active: ConnectionRoute = {
+        target: paired.target,
+        profile: Option.some(
+          new BearerConnectionProfile({
+            ...profile,
+            relayUrl: "https://custom-relay.example.test",
+            ...(tailscale ? {} : { network: "tailscale" as const }),
+          }),
+        ),
+      };
+      const updated = mergeLearnedRoutes({
+        entry: { target: active.target, profile: active.profile, enabled: true },
+        activeRoute: active,
+        reported: [
+          { httpBaseUrl: "http://100.100.10.2:4389", kind: tailscale ? "tailnet" : "vpn" },
+        ],
+        allowInsecure: true,
+      });
+      expect(updated).not.toBeNull();
+      const next = Option.getOrThrow(updated![0]!.profile);
+      expect(next._tag).toBe("BearerConnectionProfile");
+      if (next._tag !== "BearerConnectionProfile") throw new Error("Expected bearer profile");
+      expect(next.relayUrl).toBe("https://custom-relay.example.test");
+      expect(next.network).toBe(tailscale ? "tailscale" : undefined);
+    },
+  );
 
   it("drops learned routes when the paired route is removed", () => {
     const active = route("https://remote.example.test");

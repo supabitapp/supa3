@@ -57,6 +57,59 @@ function previewUrlProtocol(rawUrl: string): string | undefined {
   return /^([A-Za-z][A-Za-z\d+.-]*):/.exec(rawUrl)?.[1]?.toLowerCase().concat(":");
 }
 
+const SEARCH_URL = "https://duckduckgo.com/?q=";
+
+const ADDRESS_HOST_PATTERN = /^(?:localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[\da-f:.]+\])$/i;
+const BARE_HOST_PORT_PATTERN = /^[^/?#:@]+:\d+(?:[/?#]|$)/;
+
+const KNOWN_NON_WEB_SCHEMES: ReadonlySet<string> = new Set([
+  "about:",
+  "blob:",
+  "chrome:",
+  "data:",
+  "file:",
+  "ftp:",
+  "javascript:",
+  "mailto:",
+  "sms:",
+  "ssh:",
+  "tel:",
+  "view-source:",
+  "ws:",
+  "wss:",
+]);
+
+export function resolveAddressBarInput(rawInput: string): string {
+  const trimmed = rawInput.trim();
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) || trimmed.length === 0)
+    return normalizePreviewUrl(trimmed);
+  if (!/\s/.test(trimmed)) {
+    const protocol = previewUrlProtocol(trimmed);
+    if (
+      protocol !== undefined &&
+      (KNOWN_NON_WEB_SCHEMES.has(protocol) || !BARE_HOST_PORT_PATTERN.test(trimmed))
+    ) {
+      if (protocol !== "http:" && protocol !== "https:") {
+        throw new PreviewUrlNormalizationError({
+          inputLength: rawInput.length,
+          reason: "unsupported-protocol",
+          protocol,
+        });
+      }
+      return normalizePreviewUrl(trimmed);
+    }
+    const authority = trimmed.split(/[/?#]/, 1)[0] ?? "";
+    const host = authority.replace(/^[^@]*@/, "").replace(/:\d+$/, "");
+    const hasPort = host.length < authority.replace(/^[^@]*@/, "").length;
+    if (hasPort || ADDRESS_HOST_PATTERN.test(host) || /^[^.]+(?:\.[^.]+)+\.?$/.test(host)) {
+      try {
+        return normalizePreviewUrl(trimmed);
+      } catch {}
+    }
+  }
+  return `${SEARCH_URL}${encodeURIComponent(trimmed)}`;
+}
+
 /**
  * Normalise a free-form URL string into a fully-qualified `http(s)://` URL.
  *

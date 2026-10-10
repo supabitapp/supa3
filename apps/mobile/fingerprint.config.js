@@ -33,6 +33,7 @@ const nativePatchSources = appliedPatches.flatMap((patch) => {
 });
 
 module.exports = {
+  nativeModuleSourceType: "files",
   extraSources: [
     { type: "contents", id: "appMajorVersion", contents: majorVersion },
     ...nativePatchSources,

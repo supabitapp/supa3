@@ -38,7 +38,7 @@ import {
   appendCodexArtifactTemplateUsePrompt,
   codexArtifactTemplateUsePrompt,
   type CodexArtifactTemplate,
-} from "@supacode/client-runtime/codex-artifact-templates";
+} from "@supacode/shared/codexArtifactTemplates";
 import { presentThreadShell } from "@supacode/client-runtime/state/shell";
 import {
   type ChatMessage,

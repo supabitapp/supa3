@@ -400,6 +400,7 @@ describe("pageRecentThreads", () => {
 
   it("keeps recent rows at the bottom and prepends older rows as the page grows", () => {
     expect(pageRecentThreads(threads, 2, () => false)).toEqual(["recent", "newest"]);
+    expect(pageRecentThreads(threads, 2, null)).toEqual(["recent", "newest"]);
     expect(pageRecentThreads(threads, 3, () => false)).toEqual(["older", "recent", "newest"]);
     expect(pageRecentThreads(threads, Infinity, () => false)).toEqual(threads);
     expect(pageRecentThreads(threads, 0, () => false)).toEqual([]);

@@ -29,6 +29,7 @@ final class MuxStream {
 }
 
 final class TunnelMux {
+  var onPong: () -> Void = {}
   private(set) var streams: [UInt32: MuxStream] = [:]
   private var controls: [Data] = []
   private var sendCredit = sessionWindow
@@ -74,6 +75,8 @@ final class TunnelMux {
     guard idleTicks < 3 else { throw RelayError.invalid("Relay session timed out") }
     controls.append(Self.frame(.ping, 0))
   }
+
+  func ping() { controls.append(Self.frame(.ping, 0)) }
 
   func receive(_ plain: Data) throws -> [MuxEvent] {
     receivedSinceTick = true
@@ -136,6 +139,7 @@ final class TunnelMux {
         controls.append(Self.frame(.pong, 0))
       case .pong:
         guard payload.isEmpty, id == 0 else { throw RelayError.invalid("Invalid mux PONG") }
+        onPong()
       case .open:
         throw RelayError.invalid("Unknown mux frame")
       }

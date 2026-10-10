@@ -447,8 +447,14 @@ const EnvironmentOrchestrationThreadSnapshotParams = Schema.Struct({
   threadId: ThreadId,
 });
 
+const EnvironmentOrchestrationThreadBoundedSnapshotQuery = Schema.Struct({
+  compactTurnItems: Schema.optionalKey(Schema.String),
+});
+
 const EnvironmentOrchestrationThreadHistoryQuery = Schema.Struct({
   cursor: TrimmedNonEmptyString,
+  throughEntryId: Schema.optional(TrimmedNonEmptyString),
+  view: Schema.optional(Schema.Literals(["conversation", "activity"])),
 });
 
 const EnvironmentOrchestrationThreadHistoryErrors = [
@@ -478,6 +484,7 @@ class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
     HttpApiEndpoint.get("threadBoundedSnapshot", "/api/orchestration/threads/:threadId/bounded", {
       headers: OrchestrationProtocolHeaders,
       params: EnvironmentOrchestrationThreadSnapshotParams,
+      query: EnvironmentOrchestrationThreadBoundedSnapshotQuery,
       success: OrchestrationV2ThreadBoundedSnapshot,
       error: EnvironmentOrchestrationThreadSnapshotErrors,
     }).middleware(EnvironmentAuthenticatedAuth),

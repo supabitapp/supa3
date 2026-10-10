@@ -16,6 +16,8 @@ export const fetchEnvironmentThreadHistoryPage = Effect.fn(
   readonly prepared: PreparedConnection;
   readonly threadId: ThreadId;
   readonly cursor: string;
+  readonly throughEntryId?: string | undefined;
+  readonly view?: "conversation" | "activity" | undefined;
   readonly timeoutMs?: number;
 }) {
   return yield* executeAuthenticatedEnvironmentHttpRequest({
@@ -27,7 +29,11 @@ export const fetchEnvironmentThreadHistoryPage = Effect.fn(
     request: ({ client, headers }) =>
       client.threadHistoryPage({
         params: { threadId: input.threadId },
-        query: { cursor: input.cursor },
+        query: {
+          cursor: input.cursor,
+          ...(input.view === undefined ? {} : { view: input.view }),
+          ...(input.throughEntryId === undefined ? {} : { throughEntryId: input.throughEntryId }),
+        },
         headers: withOrchestrationProtocolHeader(headers),
       }),
   });

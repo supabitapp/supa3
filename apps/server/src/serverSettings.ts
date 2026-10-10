@@ -23,6 +23,8 @@ import {
   type ProviderInstanceEnvironmentVariable,
   type UsageLimitSourceConfig,
   type ProviderInstanceMutation,
+  defaultInstanceIdForDriver,
+  isProviderDriverKind,
   ProviderDriverKind,
   ProviderInstanceId,
   resolveProviderInstanceEnabled,
@@ -51,7 +53,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@supacode/shared/atomicWrite";
 import { resolveSymlinkTarget } from "@supacode/shared/symlink";
 import * as ServerConfig from "./config.ts";
 import { type DeepPartial, deepMerge } from "@supacode/shared/Struct";
@@ -384,68 +386,90 @@ const ServerSettingsJson = fromLenientJson(
   }),
 );
 const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
-const PersistedOptionalProviderSettings = Schema.Struct({
-  providers: Schema.optionalKey(
-    Schema.Struct({
-      cursor: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
-      grok: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
-      opencode: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
-    }),
-  ),
-});
-const decodePersistedOptionalProviderSettingsJsonExit = Schema.decodeUnknownExit(
-  fromLenientJson(PersistedOptionalProviderSettings),
+
+const LegacyProviderSettingsJson = fromLenientJson(
+  Schema.Struct({
+    providers: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+  }),
+);
+const decodeLegacyProviderSettingsJsonExit = Schema.decodeUnknownExit(LegacyProviderSettingsJson);
+
+const HISTORY_RESTORED_DRIVERS: ReadonlySet<ProviderDriverKind> = new Set(
+  ["cursor", "grok", "opencode"].map((driver) => ProviderDriverKind.make(driver)),
 );
 
-function restoreUsedProviders(
+function migrateLegacyProviderSettings(
   settings: ServerSettings,
-  persisted: typeof PersistedOptionalProviderSettings.Type,
+  legacyProviders: Readonly<Record<string, unknown>>,
   providerHistory: ReadonlyArray<{
     readonly providerName: string;
     readonly providerInstanceId: string | null;
   }>,
 ): ServerSettings {
-  const usedProviders = new Set(providerHistory.map(({ providerName }) => providerName));
-  const usedProviderInstances = new Set(
+  const usedProviders = new Set<string>(providerHistory.map(({ providerName }) => providerName));
+  const usedProviderInstances = new Set<string>(
     providerHistory.map(
       ({ providerName, providerInstanceId }) => providerInstanceId ?? providerName,
     ),
   );
-  const providerInstances = Object.fromEntries(
-    Object.entries(settings.providerInstances).map(([instanceId, instance]) => [
-      instanceId,
+
+  const providerInstances: Record<ProviderInstanceId, ProviderInstanceConfig> = {};
+  for (const [instanceId, instance] of Object.entries(settings.providerInstances) as Array<
+    [ProviderInstanceId, ProviderInstanceConfig]
+  >) {
+    providerInstances[instanceId] =
       instance.enabled === undefined &&
-      (instance.driver === "cursor" ||
-        instance.driver === "grok" ||
-        instance.driver === "opencode") &&
+      HISTORY_RESTORED_DRIVERS.has(instance.driver) &&
       usedProviderInstances.has(instanceId)
         ? { ...instance, enabled: true }
-        : instance,
-    ]),
-  );
+        : instance;
+  }
+
+  const legacyEntries = new Map(Object.entries(legacyProviders));
+  for (const driver of HISTORY_RESTORED_DRIVERS) {
+    if (!legacyEntries.has(driver)) legacyEntries.set(driver, {});
+  }
+  for (const [kind, blob] of legacyEntries) {
+    if (!isProviderDriverKind(kind) || blob === null || typeof blob !== "object") continue;
+    if (Array.isArray(blob)) continue;
+    const driver = kind;
+    const instanceId = defaultInstanceIdForDriver(driver);
+    if (Object.hasOwn(providerInstances, instanceId)) continue;
+
+    const { enabled: rawEnabled, ...config } = blob as Record<string, unknown>;
+    const explicitEnabled = typeof rawEnabled === "boolean" ? rawEnabled : undefined;
+    const enabled =
+      explicitEnabled ??
+      (HISTORY_RESTORED_DRIVERS.has(driver) && usedProviders.has(driver) ? true : undefined);
+    const driverDefault = resolveProviderInstanceEnabled({ driver, config: {} });
+    if (Object.keys(config).length === 0 && (enabled === undefined || enabled === driverDefault)) {
+      continue;
+    }
+    providerInstances[instanceId] = {
+      driver,
+      ...(enabled === undefined ? {} : { enabled }),
+      config,
+    } satisfies ProviderInstanceConfig;
+  }
 
   return {
     ...settings,
-    providers: {
-      ...settings.providers,
-      cursor: {
-        ...settings.providers.cursor,
-        enabled: persisted.providers?.cursor?.enabled ?? usedProviders.has("cursor"),
-      },
-      grok: {
-        ...settings.providers.grok,
-        enabled: persisted.providers?.grok?.enabled ?? usedProviders.has("grok"),
-      },
-      opencode: {
-        ...settings.providers.opencode,
-        enabled: persisted.providers?.opencode?.enabled ?? usedProviders.has("opencode"),
-      },
-    },
     providerInstances,
   };
 }
 
 const ACP_REGISTRY_DRIVER = ProviderDriverKind.make("acpRegistry");
+
+const TEXT_GENERATION_FALLBACK_DRIVERS = [
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "muse",
+  "pi",
+  "opencode",
+  "antigravity",
+].map((driver) => ProviderDriverKind.make(driver));
 
 /** ACP Registry instances reject every application text-generation operation. */
 function selectionSupportsTextGeneration(
@@ -463,14 +487,11 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
 }
 
 function fallbackTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  // Same precedence as isModelSelectionProviderEnabled: an explicit provider
-  // instance wins over the legacy providers map, which decodes to defaults
-  // (codex enabled) when the Providers UI has only written providerInstances.
-  const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
-    const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
-    return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
-  });
-  const fallback = fallbackEntry ? ProviderDriverKind.make(fallbackEntry[0]) : undefined;
+  const fallback = TEXT_GENERATION_FALLBACK_DRIVERS.find((driver) =>
+    resolveProviderInstanceEnabled(
+      settings.providerInstances[defaultInstanceIdForDriver(driver)] ?? { driver, config: {} },
+    ),
+  );
   if (!fallback) {
     return settings;
   }
@@ -496,17 +517,6 @@ const ATOMIC_SETTINGS_KEYS: ReadonlySet<string> = new Set([
   "textGenerationModelSelection",
   "pullRequestMergeMethod",
 ]);
-
-// Preserve both enabled states because provider history cannot recover a new opt-in.
-const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
-  ...DEFAULT_SERVER_SETTINGS,
-  providers: {
-    ...DEFAULT_SERVER_SETTINGS.providers,
-    cursor: { ...DEFAULT_SERVER_SETTINGS.providers.cursor, enabled: undefined },
-    grok: { ...DEFAULT_SERVER_SETTINGS.providers.grok, enabled: undefined },
-    opencode: { ...DEFAULT_SERVER_SETTINGS.providers.opencode, enabled: undefined },
-  },
-};
 
 function stripDefaultServerSettings(current: unknown, defaults: unknown): unknown | undefined {
   if (Array.isArray(current) || Array.isArray(defaults)) {
@@ -671,7 +681,7 @@ const make = Effect.gen(function* () {
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
       const sparseSettingsJson = yield* encodeServerSettingsJson(
-        stripDefaultServerSettings(settings, PERSISTED_SERVER_SETTINGS_DEFAULTS) ?? {},
+        stripDefaultServerSettings(settings, DEFAULT_SERVER_SETTINGS) ?? {},
       );
 
       return yield* writeFileStringAtomically({
@@ -740,7 +750,7 @@ const make = Effect.gen(function* () {
 
   const loadSettingsFromDisk = Effect.gen(function* () {
     let settings = DEFAULT_SERVER_SETTINGS;
-    let persisted: typeof PersistedOptionalProviderSettings.Type = {};
+    let legacyProviders: Readonly<Record<string, unknown>> | undefined;
     // A file that failed to decode must stay on disk for the user to repair;
     // the fold below only writes when it started from the file's real contents.
     let settingsFileTrusted = true;
@@ -748,12 +758,12 @@ const make = Effect.gen(function* () {
     if (yield* readConfigExists) {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
-      const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
-      if (persistedSettings._tag === "Success") {
-        persisted = persistedSettings.value;
+      const legacySettings = decodeLegacyProviderSettingsJsonExit(raw);
+      if (legacySettings._tag === "Success") {
+        legacyProviders = legacySettings.value.providers;
       }
-      if (decoded._tag === "Failure" || persistedSettings._tag === "Failure") {
-        const failure = decoded._tag === "Failure" ? decoded : persistedSettings;
+      if (decoded._tag === "Failure" || legacySettings._tag === "Failure") {
+        const failure = decoded._tag === "Failure" ? decoded : legacySettings;
         settingsFileTrusted = false;
         if (failure._tag === "Failure") {
           yield* Effect.logWarning("failed to parse settings.json, using defaults", {
@@ -817,14 +827,17 @@ const make = Effect.gen(function* () {
           );
 
     const loaded = foldProviderInstanceEnabledFlags(
-      restoreUsedProviders(settings, persisted, providerHistory),
+      legacyProviders === undefined
+        ? settings
+        : migrateLegacyProviderSettings(settings, legacyProviders, providerHistory),
     );
     const folded = settingsFileTrusted
       ? foldLegacyProjectSettings(loaded, legacyProjectRows)
       : loaded;
     // Only rewrite a file that decoded cleanly; an untrusted one stays for the user to repair.
     const migrated = settingsFileTrusted ? yield* moveInlineBitbucketTokens(folded) : folded;
-    if (migrated !== loaded) {
+
+    if (migrated !== loaded || (settingsFileTrusted && legacyProviders !== undefined)) {
       yield* writeSettingsAtomically(migrated);
     }
     return migrated;

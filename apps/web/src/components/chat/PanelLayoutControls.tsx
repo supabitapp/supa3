@@ -19,7 +19,7 @@ export interface PanelLayoutControlsProps {
   threadPanelPresentation: ThreadPanelPresentation;
   threadPanelPopoverHandle?: ReturnType<typeof PopoverCreateHandle>;
   threadPanelShortcutLabel: string | null;
-  threadPanelHasAttention: boolean;
+  threadPanelHasAttention?: boolean;
   rightPanelAvailable: boolean;
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
@@ -40,7 +40,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   threadPanelPresentation,
   threadPanelPopoverHandle,
   threadPanelShortcutLabel,
-  threadPanelHasAttention,
+  threadPanelHasAttention = false,
   rightPanelAvailable,
   rightPanelOpen,
   rightPanelShortcutLabel,

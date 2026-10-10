@@ -24,7 +24,7 @@ import { HostProcessPlatform } from "@supacode/shared/hostProcess";
 import { fromLenientJson } from "@supacode/shared/schemaJson";
 import { parse as parseYamlDocument } from "yaml";
 
-import { expandHomePath } from "../../pathExpansion.ts";
+import { expandHomePath } from "@supacode/provider-core/server/pathExpansion";
 
 type ClaudeSkillScope = "user" | "project";
 

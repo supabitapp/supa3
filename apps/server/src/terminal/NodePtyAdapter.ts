@@ -9,7 +9,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { HostProcessArchitecture, HostProcessPlatform } from "@supacode/shared/hostProcess";
 
-import * as PtyAdapter from "./PtyAdapter.ts";
+import * as PtyAdapter from "@supacode/shared/PtyAdapter";
 
 export class NodePtyModuleLoadError extends Schema.TaggedError<NodePtyModuleLoadError>()(
   "NodePtyModuleLoadError",

@@ -215,6 +215,7 @@ export function applyPreviewServerEvent(ref: ScopedThreadRef, event: PreviewEven
               title: event.title,
               code: event.code,
               description: event.description,
+              ...(event.download === undefined ? {} : { download: event.download }),
             },
             updatedAt: event.createdAt,
           };
@@ -458,6 +459,30 @@ export function setActivePreviewTab(ref: ScopedThreadRef, tabId: string): void {
   });
 }
 
+export function whenPreviewTabKnown(
+  ref: ScopedThreadRef,
+  tabId: string,
+  action: () => void,
+  timeoutMs = 5_000,
+): () => void {
+  const atom = previewStateAtom(scopedThreadKey(ref));
+  if (appAtomRegistry.get(atom).sessions[tabId]) {
+    action();
+    return () => {};
+  }
+  const stop = () => {
+    clearTimeout(timer);
+    unsubscribe();
+  };
+  const unsubscribe = appAtomRegistry.subscribe(atom, (state) => {
+    if (!state.sessions[tabId]) return;
+    stop();
+    action();
+  });
+  const timer = setTimeout(stop, timeoutMs);
+  return stop;
+}
+
 export function rememberPreviewUrl(ref: ScopedThreadRef, url: string): void {
   if (url.trim().length === 0) return;
   updateThreadPreviewState(ref, (current) => ({
@@ -469,6 +494,12 @@ export function rememberPreviewUrl(ref: ScopedThreadRef, url: string): void {
 export function isPreviewSupportedInRuntime(): boolean {
   if (typeof window === "undefined") return false;
   return Boolean(window.desktopBridge?.preview);
+}
+
+export function clearThreadPreviewState(ref: ScopedThreadRef): void {
+  updateThreadPreviewState(ref, (current) =>
+    Object.keys(current.sessions).length === 0 ? current : EMPTY_THREAD_PREVIEW_STATE,
+  );
 }
 
 export function resetPreviewStateForTests(): void {

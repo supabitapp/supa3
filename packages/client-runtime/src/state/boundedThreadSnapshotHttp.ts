@@ -1,4 +1,5 @@
 import type { ThreadId } from "@supacode/contracts";
+import { boundedSnapshotProjection } from "@supacode/shared/orchestrationV2BoundedSnapshot";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,7 +16,6 @@ import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
 // Same cold-open budget as the full snapshot path; bounded payloads should fit.
 const DEFAULT_BOUNDED_THREAD_SNAPSHOT_TIMEOUT_MS = 6_000;
 
-/** Load a bounded recent-window thread snapshot over HTTP. */
 export const fetchEnvironmentBoundedThreadSnapshot = Effect.fn(
   "clientRuntime.state.fetchEnvironmentBoundedThreadSnapshot",
 )(function* (input: {
@@ -32,9 +32,15 @@ export const fetchEnvironmentBoundedThreadSnapshot = Effect.fn(
     request: ({ client, headers }) =>
       client.threadBoundedSnapshot({
         params: { threadId: input.threadId },
+        query: { compactTurnItems: "1" },
         headers: withOrchestrationProtocolHeader(headers),
       }),
-  });
+  }).pipe(
+    Effect.map(({ turnItemsOmitLocalVisible, ...snapshot }) => ({
+      ...snapshot,
+      projection: boundedSnapshotProjection({ ...snapshot, turnItemsOmitLocalVisible }),
+    })),
+  );
 });
 
 /**

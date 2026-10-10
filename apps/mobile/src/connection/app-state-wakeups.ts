@@ -1,18 +1,11 @@
 import type { Wakeups } from "@supacode/client-runtime/connection";
 
-export const MOBILE_BACKGROUND_RECONNECT_AFTER_MS = 10_000;
-
-export type MobileApplicationActiveWakeup = Extract<
-  Wakeups.ConnectionWakeup,
-  "application-active-probe" | "application-active-reconnect"
->;
-
-export function mobileApplicationActiveWakeup(
-  backgroundedAtMs: number | null,
-  activeAtMs: number,
-): MobileApplicationActiveWakeup {
-  return backgroundedAtMs !== null &&
-    activeAtMs - backgroundedAtMs >= MOBILE_BACKGROUND_RECONNECT_AFTER_MS
-    ? "application-active-reconnect"
-    : "application-active-probe";
+export function mobileApplicationStateWakeup(
+  previous: string | null | undefined,
+  current: string,
+): Extract<Wakeups.ConnectionWakeup, "application-resumed" | "application-background"> | null {
+  if (previous === current) return null;
+  if (current === "background") return "application-background";
+  if (current === "active") return "application-resumed";
+  return null;
 }

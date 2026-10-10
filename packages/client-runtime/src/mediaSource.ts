@@ -6,11 +6,9 @@ import {
   markdownImageSourceFragment,
   type MarkdownImageSource,
 } from "./markdownImages.ts";
-import {
-  fileBasename,
-  splitFilePathPosition,
-  splitMarkdownLinkSearchAndHash,
-} from "./markdownLinks.ts";
+import { fileBasename } from "@supacode/shared/path";
+import { splitFilePathPosition } from "@supacode/shared/fileLinks";
+import { splitMarkdownLinkSearchAndHash } from "@supacode/shared/markdownLinks";
 import {
   mediaFileReference,
   mediaReferenceFileName,
