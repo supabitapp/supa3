@@ -1,6 +1,13 @@
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import { assert, it } from "@effect/vitest";
 
-import { applyPreferredCodexDefaultModel, mapCodexModelCapabilities } from "./CodexProvider.ts";
+import {
+  applyPreferredCodexDefaultModel,
+  mapCodexModelCapabilities,
+  requestAllCodexModels,
+} from "./CodexProvider.ts";
 
 it("maps current Codex model capability fields", () => {
   const capabilities = mapCodexModelCapabilities({
@@ -162,6 +169,20 @@ it("keeps Codex's own default when no preferred model is available", () => {
 
   assert.deepStrictEqual(models.find((model) => model.isDefault)?.slug, "gpt-5.4");
 });
+
+it.effect("does not block on a slow native model catalog", () =>
+  Effect.gen(function* () {
+    const client = {
+      request: () => Effect.never,
+    } as unknown as Parameters<typeof requestAllCodexModels>[0];
+    const fiber = yield* requestAllCodexModels(client).pipe(Effect.forkChild);
+
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust("5 seconds");
+
+    assert.deepStrictEqual(yield* Fiber.join(fiber), []);
+  }),
+);
 
 it("ignores custom models that shadow a preferred slug", () => {
   const models = applyPreferredCodexDefaultModel([

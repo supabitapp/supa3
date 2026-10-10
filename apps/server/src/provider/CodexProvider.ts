@@ -50,6 +50,7 @@ import {
 import packageJson from "../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
 const RATE_LIMITS_PROBE_TIMEOUT_MS = 3_000;
+const CODEX_MODEL_LIST_PROBE_TIMEOUT_MS = 5_000;
 
 type CodexRateLimitsProbe =
   | {
@@ -326,20 +327,33 @@ function parseCodexSkillsListResponse(
   });
 }
 
-const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
+export const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClient["Service"],
 ) {
   const models: ServerProviderModel[] = [];
-  let cursor: string | null | undefined = undefined;
+  const requestPages = Effect.gen(function* () {
+    let cursor: string | null | undefined = undefined;
 
-  do {
-    const response: CodexSchema.V2ModelListResponse = yield* client.request(
-      "model/list",
-      cursor ? { cursor } : {},
-    );
-    models.push(...parseCodexModelListResponse(response));
-    cursor = response.nextCursor;
-  } while (cursor);
+    do {
+      const response: Option.Option<CodexSchema.V2ModelListResponse> = yield* client
+        .request("model/list", cursor ? { cursor } : {})
+        .pipe(
+          Effect.asSome,
+          Effect.catch((error) =>
+            Effect.logDebug("Codex model list request failed.", { cause: error }).pipe(
+              Effect.as(Option.none<CodexSchema.V2ModelListResponse>()),
+            ),
+          ),
+        );
+      if (Option.isNone(response)) return;
+      models.push(...parseCodexModelListResponse(response.value));
+      cursor = response.value.nextCursor;
+    } while (cursor);
+  });
+  yield* requestPages.pipe(
+    Effect.timeoutOption(Duration.millis(CODEX_MODEL_LIST_PROBE_TIMEOUT_MS)),
+    Effect.asVoid,
+  );
 
   return models;
 });
