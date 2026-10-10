@@ -213,7 +213,7 @@ it.effect("a closed session releases every lease even when one listener fails to
     expect(close).toHaveBeenCalledTimes(1);
     expect(openLoopbackRelay.mock.calls.map(([, options]) => options.relayUrl)).toEqual([
       "wss://relay.example",
-      "wss://supacode-relay.exe.xyz",
+      "wss://relay.supacode.sh",
     ]);
   }).pipe(Effect.provide(RelayCompanion.layer()), Effect.scoped),
 );

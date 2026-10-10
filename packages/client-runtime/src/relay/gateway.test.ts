@@ -127,8 +127,8 @@ it.effect("dials each host through its saved relay and moves when the relay chan
         yield* Effect.promise(() => gateway.fetch(address + "api/one"));
         yield* Effect.promise(() => gateway.resolve(address, "wss://relay.example"));
         yield* Effect.promise(() => gateway.fetch(address + "api/two"));
-        expect(opened).toEqual(["wss://supacode-relay.exe.xyz", "wss://relay.example"]);
-        expect(closed).toEqual(["wss://supacode-relay.exe.xyz"]);
+        expect(opened).toEqual(["wss://relay.supacode.sh", "wss://relay.example"]);
+        expect(closed).toEqual(["wss://relay.supacode.sh"]);
       }).pipe(
         Effect.provide(
           layer({
@@ -146,7 +146,7 @@ it.effect("dials each host through its saved relay and moves when the relay chan
         ),
       ),
     );
-    expect(closed).toEqual(["wss://supacode-relay.exe.xyz", "wss://relay.example"]);
+    expect(closed).toEqual(["wss://relay.supacode.sh", "wss://relay.example"]);
   }),
 );
 
