@@ -1,9 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, beforeEach, expect, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
@@ -92,6 +94,121 @@ afterEach(() => {
 });
 
 it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
+  it.effect("refreshes the launcher concurrently without losing an installation", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
+      const environment = environmentFor(path, { home, baseDir: path.join(home, ".supacode") });
+      const launcher = DesktopCliShim.launcherPath(environment);
+      const writes = yield* Ref.make(0);
+      const written = yield* Deferred.make<void>();
+      const installations = yield* Effect.all([DesktopCliShim.install, DesktopCliShim.install], {
+        concurrency: 2,
+      }).pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fs,
+          writeFileString: (target, content, options) =>
+            fs.writeFileString(target, content, options).pipe(
+              Effect.andThen(
+                Effect.gen(function* () {
+                  if ((yield* Ref.updateAndGet(writes, (count) => count + 1)) === 2) {
+                    yield* Deferred.succeed(written, undefined);
+                  }
+                  yield* Deferred.await(written);
+                }),
+              ),
+            ),
+        }),
+      );
+
+      expect(installations.map(Option.getOrNull)).toEqual([launcher, launcher]);
+      expect(yield* fs.readFileString(launcher)).toContain(DesktopCliShim.MARKER);
+      expect((yield* fs.stat(launcher)).mode & 0o777).toBe(0o755);
+      expect(yield* fs.readDirectory(path.dirname(launcher))).toEqual(["supacode"]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect.each(["linux", "win32"] as const)(
+    "automatically installs on %s and remembers removal across restarts",
+    (platform) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const home = yield* fs.makeTempDirectoryScoped();
+        const { registry, spawner } = fakePowerShell("C:\\Tools");
+        if (platform === "linux") process.env.PATH = path.join(home, ".local", "bin");
+        const command = yield* commandIn({ home, platform }, spawner);
+
+        yield* command.installAutomatically;
+        const installed = yield* command.state;
+        expect(installed.installedPath).not.toBeNull();
+        expect(installed.onPath).toBe(true);
+        if (platform === "linux") {
+          expect(yield* fs.readLink(installed.installedPath!)).toBe(
+            path.join(home, ".supacode", "bin", "supacode"),
+          );
+        } else {
+          expect(registry.path).toBe(`C:\\Tools;${path.dirname(installed.installedPath!)}`);
+        }
+        yield* command.installAutomatically;
+        expect(yield* command.state).toEqual(installed);
+        if (platform === "win32") expect(registry.writes).toBe(1);
+
+        yield* command.uninstall;
+        const restarted = yield* commandIn({ home, platform }, spawner);
+        yield* restarted.installAutomatically;
+        expect((yield* restarted.state).installedPath).toBeNull();
+        if (platform === "win32") expect(registry.path).toBe("C:\\Tools");
+
+        yield* restarted.install;
+        const enabledAgain = yield* commandIn({ home, platform }, spawner);
+        yield* enabledAgain.installAutomatically;
+        expect(yield* enabledAgain.state).toEqual(installed);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect.each(["linux", "win32"] as const)(
+    "preserves an existing command on %s during automatic installation",
+    (platform) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const home = yield* fs.makeTempDirectoryScoped();
+        const directory = path.join(home, "other-cli");
+        const theirs = path.join(directory, platform === "win32" ? "supacode.cmd" : "supacode");
+        yield* fs.makeDirectory(directory);
+        yield* fs.writeFileString(theirs, "existing supacode\n", { mode: 0o755 });
+        process.env.PATH = directory;
+        const { registry, spawner } = fakePowerShell(directory);
+        const command = yield* commandIn({ home, platform }, spawner);
+
+        yield* command.installAutomatically;
+        expect((yield* command.state).installedPath).toBeNull();
+        expect((yield* command.state).shadowedBy?.toLowerCase()).toBe(theirs.toLowerCase());
+        expect(yield* fs.readFileString(theirs)).toBe("existing supacode\n");
+        expect(yield* fs.exists(path.join(home, ".supacode", "bin"))).toBe(false);
+        expect(registry).toMatchObject({ path: directory, writes: 0 });
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("continues startup when its launcher cannot be installed", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
+      const launcher = path.join(home, ".supacode", "bin", "supacode");
+      yield* fs.makeDirectory(path.dirname(launcher), { recursive: true });
+      yield* fs.writeFileString(launcher, "user-owned launcher\n");
+      const command = yield* commandIn({ home });
+
+      yield* command.installAutomatically;
+      expect((yield* command.state).installedPath).toBeNull();
+      expect(yield* fs.readFileString(launcher)).toBe("user-owned launcher\n");
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("links the launcher onto PATH and removes only that link", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -229,6 +346,7 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       const command = yield* commandIn({ home, platform: "win32" }, spawner);
 
       registry.failReads = true;
+      yield* command.installAutomatically;
       const error = yield* Effect.flip(command.install);
       expect(error.message).toContain("left unchanged");
       expect(registry).toMatchObject({ path: userPath, writes: 0 });
@@ -285,11 +403,15 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
   it.effect("offers nothing for a development build", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
       const command = yield* commandIn({
-        home: yield* fs.makeTempDirectoryScoped(),
+        home,
         isPackaged: false,
       });
+      yield* command.installAutomatically;
       expect((yield* command.state).supported).toBe(false);
+      expect(yield* fs.exists(path.join(home, ".supacode", "bin"))).toBe(false);
     }).pipe(Effect.scoped),
   );
 });
