@@ -133,9 +133,8 @@ const make = Effect.gen(function* () {
           : new FeedbackStartError({ stage: "launch-thread", cause }),
       ),
     );
-    const instructions = yield* Effect.gen(function* () {
+    const prompt = yield* Effect.gen(function* () {
       const contextPath = path.join(directory, "feedback-context.md");
-      const promptPath = path.join(directory, "feedback-guide.md");
       const version = packageJson.version;
       const context = buildTriageContext({
         generatedAt: DateTime.formatIso(yield* DateTime.now),
@@ -157,9 +156,7 @@ const make = Effect.gen(function* () {
         .map(([key, value]) => `- ${key}: ${String(value)}`)
         .join("\n");
       yield* fs.writeFileString(contextPath, `${context}\n## Client\n\n${clientContext}\n`);
-      const prompt = buildTriageSeedPrompt(contextPath, "Send feedback");
-      yield* fs.writeFileString(promptPath, prompt);
-      return prompt;
+      return buildTriageSeedPrompt(contextPath, "Send feedback");
     }).pipe(
       Effect.mapError((cause) => new FeedbackStartError({ stage: "prepare-context", cause })),
     );
@@ -174,9 +171,8 @@ const make = Effect.gen(function* () {
         interactionMode: "default",
         workspaceStrategy: { type: "existing_worktree", worktreePath: directory },
         initialMessage: {
-          text: "I'd like to send feedback about Supacode. Start by asking me what happened.",
+          text: prompt,
           attachments: [],
-          context: { version: 1, records: [], instructions },
         },
         createdBy: "user",
         creationSource,

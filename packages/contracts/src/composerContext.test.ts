@@ -243,18 +243,6 @@ describe("OrchestrationMessageContext", () => {
     expect(context.records[0]).toMatchObject({ contextId: "ctx_1", name: "review" });
   });
 
-  it("round-trips instructions without requiring a context record", () => {
-    const instructions = "Ask what went wrong before investigating diagnostics.";
-    const context = decodeContext({ version: 1, records: [], instructions });
-    expect(decodeContext(encodeContextWire(context)).instructions).toBe(instructions);
-  });
-
-  it("rejects oversized instructions", () => {
-    expect(() =>
-      decodeContext({ version: 1, records: [], instructions: "x".repeat(32_001) }),
-    ).toThrow();
-  });
-
   it("rejects oversized arrays before dropping malformed records", () => {
     expect(() =>
       decodeContext({ version: 1, records: Array.from({ length: 201 }, () => ({})) }),

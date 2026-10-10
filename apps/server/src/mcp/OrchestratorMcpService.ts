@@ -54,7 +54,6 @@ import {
   type ServerProvider,
   ThreadId,
 } from "@supacode/contracts";
-import { projectComposerContextForProvider } from "@supacode/shared/composerContextReferences";
 import { runRanAfter } from "@supacode/shared/orchestrationV2ThreadError";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -707,11 +706,6 @@ function turnItemText(item: OrchestrationV2TurnItem): string | null {
     case "notification":
       return [item.summary, item.detail].filter((part) => part !== undefined).join("\n");
     case "user_message":
-      return projectComposerContextForProvider({
-        text: item.text,
-        records: item.context?.records ?? [],
-        instructions: item.context?.instructions,
-      });
     case "assistant_message":
     case "reasoning":
       return item.text;

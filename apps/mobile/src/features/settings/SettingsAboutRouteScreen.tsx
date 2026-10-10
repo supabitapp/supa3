@@ -19,7 +19,7 @@ import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsActionRow } from "./components/SettingsActionRow";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
-import { useSendFeedback } from "../../state/use-send-feedback";
+import { useSendFeedback } from "./use-send-feedback";
 import { serverEnvironment } from "../../state/server";
 import { ControlPillMenu } from "../../components/ControlPillMenu";
 

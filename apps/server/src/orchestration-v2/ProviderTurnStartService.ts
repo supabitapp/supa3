@@ -405,7 +405,6 @@ export const layer: Layer.Layer<
                 text: projectComposerContextForProvider({
                   text: message.text,
                   records: message.context?.records ?? [],
-                  instructions: message.context?.instructions,
                 }),
                 hasAttachments: false,
               }),
@@ -948,7 +947,6 @@ export const layer: Layer.Layer<
       const userText = projectComposerContextForProvider({
         text: message.text,
         records: message.context?.records ?? [],
-        instructions: message.context?.instructions,
       });
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.

@@ -2,7 +2,6 @@ import type * as ProviderAdapter from "@supacode/provider-core/server/ProviderAd
 import { assert, describe, it } from "@effect/vitest";
 import {
   ContextHandoffId,
-  MessageId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -27,6 +26,7 @@ import {
 } from "@supacode/provider-core/server/handoffBudget";
 import { projectContextHandoffForWire } from "./WireProjection.ts";
 import { deliverContextHandoffs } from "./ContextHandoffDelivery.ts";
+import { buildTriageSeedPrompt } from "../feedback/triagePrompt.ts";
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeHandoff = Schema.decodeUnknownSync(OrchestrationV2ContextHandoff);
@@ -149,41 +149,16 @@ describe("handoff budget", () => {
     assert.equal(historyResponseItems([command!], "Activity")[1]?.type, "message");
   });
 
-  it("delivers feedback instructions with the original user message during handoff", () => {
-    const instructions = "Read /feedback/feedback-context.md. Review the report before submitting.";
-    const historical = historicalMessage({
-      id: TurnItemId.make("item:feedback"),
-      threadId,
-      runId: RunId.make("run:source"),
-      nodeId: null,
-      providerThreadId: providerThread.id,
-      providerTurnId: null,
-      nativeItemRef: null,
-      parentItemId: null,
-      ordinal: 1,
-      status: "completed",
-      title: null,
-      startedAt: now,
-      completedAt: now,
-      updatedAt: now,
-      type: "user_message",
-      text: "I'd like to send feedback about Supacode.",
-      context: { version: 1, records: [], instructions },
-      attachments: [],
-      createdBy: "user",
-      creationSource: "web",
-      messageId: MessageId.make("message:feedback"),
-      inputIntent: "turn_start",
-    });
-    assert.isNotNull(historical);
-    const selected = selectHistory({
-      messages: [historical!, message("item:question", "assistant", "What happened?")],
-      coverage: "Feedback thread",
-      budget: 16_000,
-    });
+  it("retains the full feedback guide within the provider handoff budget", () => {
+    const prompt = buildTriageSeedPrompt("/feedback/feedback-context.md", "Send feedback");
+    const candidates = [
+      message("item:feedback", "user", prompt),
+      message("item:question", "assistant", "What happened?"),
+    ];
+    const selected = selectHistory({ messages: candidates, coverage: "Feedback", budget: 16_000 });
     const items = historyResponseItems(selected.messages, selected.context);
-    assert.equal(items[1]?.role, "user");
-    assert.include(items[1]!.content[0]!.text, instructions);
+    assert.deepEqual(selected.messages, candidates);
+    assert.include(items[1]!.content[0]!.text, prompt);
     assert.equal(selected.omittedItems, 0);
   });
 

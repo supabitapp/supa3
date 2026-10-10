@@ -8,7 +8,6 @@ import type {
   OrchestrationV2ProviderThread,
   OrchestrationV2TurnItem,
 } from "@supacode/contracts";
-import { projectComposerContextForProvider } from "@supacode/shared/composerContextReferences";
 
 import * as Config from "effect/Config";
 
@@ -144,12 +143,6 @@ export function historicalMessage(
   let text: string;
   switch (item.type) {
     case "user_message":
-      text = projectComposerContextForProvider({
-        text: item.text,
-        records: item.context?.records ?? [],
-        instructions: item.context?.instructions,
-      });
-      break;
     case "assistant_message":
       text = item.text;
       break;

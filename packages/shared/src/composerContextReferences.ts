@@ -265,11 +265,9 @@ function formatEnvelopeEntry(
 export function projectComposerContextForProvider(input: {
   text: string;
   records: ReadonlyArray<ComposerContextRecord>;
-  instructions?: string | undefined;
 }): string {
-  const instructions = input.instructions?.trim() ? `\n\n${input.instructions}` : "";
   const occurrences = collectComposerContextReferences(input.text);
-  if (occurrences.length === 0) return input.text + instructions;
+  if (occurrences.length === 0) return input.text;
   const recordsById = new Map<ComposerContextId, ComposerContextRecord | undefined>();
   for (const record of input.records) {
     // Even callers that bypass the wire schema must not silently select an ambiguous payload.
@@ -295,8 +293,8 @@ export function projectComposerContextForProvider(input: {
     );
     entries.push(entry);
   }
-  if (entries.length === 0) return body + instructions;
-  return `${body}\n\n<${CONTEXT_ENVELOPE_TAG} version="1">\n${entries.join("\n")}\n</${CONTEXT_ENVELOPE_TAG}>${instructions}`;
+  if (entries.length === 0) return body;
+  return `${body}\n\n<${CONTEXT_ENVELOPE_TAG} version="1">\n${entries.join("\n")}\n</${CONTEXT_ENVELOPE_TAG}>`;
 }
 
 /** Preserve context bindings when uploads become thread-owned attachments. */

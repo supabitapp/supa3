@@ -9,12 +9,12 @@ import { CommandId, ThreadId, type EnvironmentId } from "@supacode/contracts";
 import { useRef, useState } from "react";
 import { Alert } from "react-native";
 
-import { uuidv4 } from "../lib/uuid";
-import { waitForThreadShellReady } from "../features/threads/threadForkNavigation";
-import { appAtomRegistry } from "./atom-registry";
-import { environmentThreadShells } from "./threads";
-import { serverEnvironment } from "./server";
-import { useAtomCommand } from "./use-atom-command";
+import { uuidv4 } from "../../lib/uuid";
+import { waitForThreadShellReady } from "../threads/threadForkNavigation";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { environmentThreadShells } from "../../state/threads";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 
 export function useSendFeedback(environmentId: EnvironmentId | null) {
   const navigation = useNavigation();

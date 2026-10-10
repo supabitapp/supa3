@@ -133,7 +133,7 @@ const withFeedback = <A, E>(
   );
 
 it.effect(
-  "starts a supervised scratch thread with the existing guide and this environment's paths",
+  "starts a supervised scratch thread with the full visible guide and this environment's paths",
   () =>
     withFeedback({}, ({ launches, directory }) =>
       Effect.gen(function* () {
@@ -152,11 +152,11 @@ it.effect(
         assert.equal(launch.workspaceStrategy.type, "existing_worktree");
         assert.equal(launch.runtimeMode, "approval-required");
         assert.equal(launch.creationSource, "mobile");
-        const prompt = yield* fs.readFileString(path.join(directory, "feedback-guide.md"));
-        assert.equal(launch.initialMessage!.context!.instructions, prompt);
-        assert.lengthOf(launch.initialMessage!.context!.records, 0);
+        const prompt = launch.initialMessage!.text;
+        assert.isUndefined(launch.initialMessage!.context);
         assert.include(prompt, TRIAGE_PLAYBOOK);
         assert.include(prompt, "Send feedback");
+        assert.include(prompt, path.join(directory, "feedback-context.md"));
         const context = yield* fs.readFileString(path.join(directory, "feedback-context.md"));
         assert.deepEqual(launch.workspaceStrategy, {
           type: "existing_worktree",
@@ -166,7 +166,6 @@ it.effect(
         assert.include(context, config.serverTracePath);
         assert.include(context, "NEVER read this");
         assert.include(context, "clientAppVersion: 1.2.3");
-        assert.notInclude(launch.initialMessage!.text, config.stateDir);
       }),
     ),
 );
@@ -244,7 +243,7 @@ it.effect("keeps retry messages stable and uses the server-owned scratch folder"
       const path = yield* Path.Path;
       assert.isTrue(directory.startsWith(path.join(config.baseDir, "scratch")));
       assert.include(
-        launches[0]!.initialMessage!.context!.instructions!,
+        launches[0]!.initialMessage!.text,
         path.join(directory, "feedback-context.md"),
       );
     }),
