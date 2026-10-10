@@ -11123,7 +11123,7 @@ export default function ChatView(props: ChatViewProps) {
                 >
                   <div
                     ref={draftHeroComposerAnchorRef}
-                    className="group/composer-anchor relative z-10"
+                    className="relative z-10"
                     style={
                       forceExpandedMobileComposer
                         ? { viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME }
@@ -11410,10 +11410,7 @@ export default function ChatView(props: ChatViewProps) {
                         </div>
                       </div>
                     </ComposerSurface.Shell>
-                    <ComposerUsageMeter
-                      provider={activeProviderStatus}
-                      className="hidden pt-2 transition-[opacity,visibility] duration-150 ease-out group-has-[[data-chat-composer-resting-controls]]/composer-anchor:invisible group-has-[[data-chat-composer-resting-controls]]/composer-anchor:opacity-0 motion-reduce:transition-none sm:flex"
-                    />
+                    <ComposerUsageMeter provider={activeProviderStatus} />
                     <div
                       aria-hidden
                       className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"

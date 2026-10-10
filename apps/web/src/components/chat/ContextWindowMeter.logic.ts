@@ -12,6 +12,12 @@ import { getTriggerDisplayModelName, type ModelEsque } from "./providerIconUtils
 const CLAUDE_RESUME_COMPACTION_MINUTES = 70;
 const CLAUDE_RESUME_COMPACTION_TOKENS = 100_000;
 
+export function usageFillColor(usedPercent: number): string {
+  return usedPercent > 90
+    ? "var(--color-error)"
+    : "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)";
+}
+
 export function providerSupportsManualCompaction(
   provider: ProviderInstanceEntry | null | undefined,
 ): boolean {

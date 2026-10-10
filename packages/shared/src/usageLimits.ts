@@ -65,12 +65,15 @@ function cursorUsageWindowRank(id: string): number {
 export function providersWithLimits(
   providers: readonly ServerProvider[],
 ): readonly ServerProvider[] {
-  return providers.filter(
-    (provider) =>
-      provider.enabled &&
-      provider.installed &&
-      isProviderAvailable(provider) &&
-      provider.usageLimits !== undefined,
+  return providers.filter(hasUsageLimits);
+}
+
+function hasUsageLimits(provider: ServerProvider): boolean {
+  return (
+    provider.enabled &&
+    provider.installed &&
+    isProviderAvailable(provider) &&
+    provider.usageLimits !== undefined
   );
 }
 
@@ -485,7 +488,7 @@ export function limitsNotice(limits: ServerProviderUsageLimits): string | null {
   return limits.windows.length === 0 ? "No limits reported." : null;
 }
 
-/** Quota left in the window, 0..100. Bars and labels show what remains, as Codex does. */
+/** Quota left in the window, 0..100. The Limits views show what remains, as Codex does. */
 export function remainingPercent(window: ServerProviderUsageWindow): number {
   return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
 }
@@ -542,18 +545,9 @@ export function formatResetsIn(window: ServerProviderUsageWindow, now: number): 
   return resetsAt <= now ? "resets now" : `resets in ${formatDuration(resetsAt - now)}`;
 }
 
-export interface ComposerUsageMeter {
-  readonly id: string;
-  readonly label: string;
-  readonly title: string;
-  readonly usedPercent: number;
-  readonly resetsAt: string | null;
-  readonly resetsIn: string | null;
-}
+const HEADLINE_WINDOW_KINDS = ["session", "weekly", "monthly"] as const;
 
-const COMPOSER_METER_KINDS = ["session", "weekly", "monthly"] as const;
-
-function composerMeterLabel(window: ServerProviderUsageWindow): string {
+function headlineWindowLabel(window: ServerProviderUsageWindow): string {
   if (window.kind === "weekly") return "Week";
   if (window.kind === "monthly") return "Month";
   const mins = window.windowDurationMins;
@@ -561,35 +555,16 @@ function composerMeterLabel(window: ServerProviderUsageWindow): string {
 }
 
 /**
- * The selected provider's usage under the composer: one meter per window
- * length, session then weekly then monthly. Windows arrive sorted by id, so
- * Claude's account-wide weekly leads its model-scoped ones, and Cursor's
- * combined Overall stands in for its two pools. A window whose reset has
- * passed has rolled over, so it reads as unused until the next read lands.
+ * The window nearest its limit for each length, session then weekly then monthly: the busier
+ * of Cursor's two pools, or a Claude model's weekly once it outruns the account's.
  */
-export function composerUsageMeters(
-  provider: ServerProvider | null,
-  now: number,
-): readonly ComposerUsageMeter[] {
-  const limits = provider ? providersWithLimits([provider])[0]?.usageLimits : undefined;
-  if (!limits) return [];
-  return COMPOSER_METER_KINDS.flatMap((kind) => {
-    const window = limits.windows
-      .filter((candidate) => candidate.kind === kind)
-      .sort((left, right) => cursorUsageWindowRank(left.id) - cursorUsageWindowRank(right.id))[0];
-    if (!window) return [];
-    const resetsAt = resetMillis(window);
-    const rolledOver = resetsAt !== null && resetsAt <= now;
-    return [
-      {
-        id: window.id,
-        label: composerMeterLabel(window),
-        title: window.label,
-        usedPercent: rolledOver ? 0 : Math.round(window.usedPercent),
-        resetsAt: rolledOver ? null : (window.resetsAt ?? null),
-        resetsIn: resetsAt === null || rolledOver ? null : formatDuration(resetsAt - now),
-      },
-    ];
+export function headlineUsageWindows(provider: ServerProvider | null) {
+  const windows = provider && hasUsageLimits(provider) ? (provider.usageLimits?.windows ?? []) : [];
+  return HEADLINE_WINDOW_KINDS.flatMap((kind) => {
+    const busiest = windows
+      .filter((window) => window.kind === kind)
+      .sort((left, right) => right.usedPercent - left.usedPercent)[0];
+    return busiest ? [{ label: headlineWindowLabel(busiest), window: busiest }] : [];
   });
 }
 
