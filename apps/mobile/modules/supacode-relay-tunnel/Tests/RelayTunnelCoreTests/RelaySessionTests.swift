@@ -115,6 +115,7 @@ final class RelaySessionTests: XCTestCase {
     _ = try await tunnel.start(port: 0)
     _ = try await tunnel.resume()
     await fulfillment(of: [connected], timeout: 5)
+    let listener = try XCTUnwrap(tunnel.listener)
     let responses = Task {
       for await frame in relay.frames where frame.type == .ping {
         relay.send(TunnelMux.frame(.pong, 0))
@@ -123,6 +124,7 @@ final class RelaySessionTests: XCTestCase {
       }
     }
     _ = try await tunnel.resume()
+    XCTAssertTrue(tunnel.listener === listener)
     await fulfillment(of: [ping], timeout: 5)
     await fulfillment(of: [failed], timeout: 0.6)
     responses.cancel()

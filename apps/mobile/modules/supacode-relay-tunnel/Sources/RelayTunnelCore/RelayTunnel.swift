@@ -83,6 +83,7 @@ public final class RelayTunnel: @unchecked Sendable {
       queue.async {
         guard !self.stopped else { continuation.resume(throwing: RelayError.invalid("Tunnel stopped")); return }
         if resuming {
+          if self.suspended { self.closeListener() }
           self.suspended = false
           self.checkSession()
         }
@@ -154,6 +155,7 @@ public final class RelayTunnel: @unchecked Sendable {
   }
 
   private func retire(_ old: NWListener) {
+    if case .cancelled = old.state { return }
     closingListener = old
     old.stateUpdateHandler = { [weak self, weak old] state in
       guard let self, let old, case .cancelled = state, self.closingListener === old else { return }
