@@ -37,6 +37,7 @@ export function ThreadMarkdownImageView(props: {
   readonly sourceKey: string;
   readonly unavailable: boolean;
   readonly alt: string | null;
+  readonly showCaption?: boolean;
   /** Pixel size from the server, when it could read the header; the frame is final from the first render. */
   readonly knownSize?: { readonly width: number; readonly height: number } | undefined;
   readonly actionsSource?: MediaActionsSource;
@@ -139,7 +140,7 @@ export function ThreadMarkdownImageView(props: {
           </MediaActionsMenu>
         </PresentationSource>
       )}
-      {props.alt ? (
+      {props.showCaption !== false && props.alt ? (
         <Text selectable className="text-xs text-foreground-muted">
           {props.alt}
         </Text>
@@ -188,6 +189,7 @@ export function ThreadMarkdownImage(props: {
     { readonly _tag: "attachment" | "media-file" | "tool-output-image" }
   >;
   readonly alt: string | null;
+  readonly showCaption?: boolean;
   readonly srcFragment?: string;
   readonly actionsSource?: MediaActionsSource;
   readonly onPressPreview: (source: FilePreviewSource) => void;
@@ -207,6 +209,7 @@ export function ThreadMarkdownImage(props: {
       unavailable={assetUrl._tag === "Failure"}
       knownSize={assetUrl._tag === "Success" ? assetUrl.imageDimensions : undefined}
       alt={props.alt}
+      showCaption={props.showCaption}
       actionsSource={props.actionsSource}
       onPressPreview={props.onPressPreview}
     />
