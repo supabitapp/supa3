@@ -8754,7 +8754,7 @@ export default function ChatView(props: ChatViewProps) {
   );
 
   const onCompactContext = () => {
-    if (compactDisabled) return;
+    if (compactDisabled || isSendBusy || isConnecting) return;
     void sendStandaloneCommand("/compact", "Failed to compact context.");
   };
 
@@ -10733,7 +10733,15 @@ export default function ChatView(props: ChatViewProps) {
     onAddProjectScript: saveProjectScript,
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
-    contextWindow: activeContextWindow,
+    contextWindow: activeContextWindow
+      ? {
+          usage: activeContextWindow,
+          modelDisplayName: providerSubagentModelLabel,
+          ...(manualCompactionProviderAvailable ? { onCompact: onCompactContext } : {}),
+          compactDisabled: compactDisabled || isSendBusy || isConnecting,
+          compactDisabledReason,
+        }
+      : null,
     forkSource,
     forkDisabled,
     onForkFromRun,

@@ -1,5 +1,6 @@
 import { formatProviderSkillDisplayName } from "@supacode/shared/inlineSkills";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
+import { isElectron } from "../../env";
 import { runtimeModeConfig, runtimeModeOptions as runtimeModes } from "./runtimeModeConfig";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -7757,9 +7758,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
                     activeContextWindow={
-                      settings.contextWindowMeterEnabled ? activeContextWindow : null
+                      !isElectron && settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
-                    reserveContextWindowMeter={reserveContextWindowMeter}
+                    reserveContextWindowMeter={!isElectron && reserveContextWindowMeter}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
