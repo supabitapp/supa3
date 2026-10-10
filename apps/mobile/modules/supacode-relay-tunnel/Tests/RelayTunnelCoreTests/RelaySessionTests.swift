@@ -100,6 +100,30 @@ private final class FakeRelay: @unchecked Sendable {
 }
 
 final class RelaySessionTests: XCTestCase {
+  func testResumeRebindPreservesTheRelaySessionStatus() async throws {
+    let relay = try FakeRelay()
+    defer { relay.stop() }
+    let url = try await relay.start()
+    let connected = expectation(description: "relay connected")
+    var states: [String] = []
+    let tunnel = try RelayTunnel(relayURL: url, hostAddress: relay.address) { status in
+      states.append(status.state)
+      if status.state == "up" && status.sessionCount == 1 { connected.fulfill() }
+    }
+    let origin = try await tunnel.start(port: 0)
+    _ = try await tunnel.resume()
+    await fulfillment(of: [connected], timeout: 5)
+    tunnel.suspend()
+    tunnel.queue.sync { states.removeAll() }
+
+    let resumed = try await tunnel.resume()
+    XCTAssertEqual(resumed, origin)
+    let resumedStates = tunnel.queue.sync { states }
+    XCTAssertEqual(resumedStates.first, "connecting")
+    XCTAssertFalse(resumedStates.contains("down"))
+    await tunnel.stop()
+  }
+
   func testResumeProbesAndRetainsAResponsiveSession() async throws {
     let relay = try FakeRelay()
     defer { relay.stop() }

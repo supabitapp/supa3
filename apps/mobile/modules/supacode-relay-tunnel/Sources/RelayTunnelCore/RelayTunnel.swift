@@ -197,7 +197,7 @@ public final class RelayTunnel: @unchecked Sendable {
           self.startingListener = nil
           self.listener = candidate
           self.port = candidate.port!.rawValue
-          self.emit("down")
+          self.emit(self.state)
           self.finishStart(.success(self.origin))
         case .failed(let error):
           self.startingListener = nil; candidate.cancel()
