@@ -1,16 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentIdentificationMode } from "@supacode/contracts";
-import { type ComponentType, useId, useSyncExternalStore } from "react";
+import { type ComponentType, useId } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
-import { useTheme } from "../hooks/useTheme";
 import { primaryServerConfigAtom } from "../state/server";
-import {
-  getThemePreviewAppearance,
-  subscribeToThemePreview,
-  type ThemeAppearance,
-} from "../themePalette";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "release";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
@@ -27,16 +21,6 @@ export function resolveSidebarStageBackdropVariant(
   if (normalized === "dev") return "dev";
   if (normalized === undefined || normalized === "latest") return "release";
   return null;
-}
-
-/** Dev and nightly keep their artwork in every theme; release only shows the sleigh when dark. */
-export function resolveVisibleSidebarStageBackdropVariant(
-  stageLabel: string | null,
-  appearance: ThemeAppearance,
-): SidebarStageBackdropVariant | null {
-  const variant = resolveSidebarStageBackdropVariant(stageLabel);
-  if (variant === "release" && appearance !== "dark") return null;
-  return variant;
 }
 
 const ENVIRONMENT_IDENTIFICATION_MODES = ["artwork", "pill", "none"] as const;
@@ -71,15 +55,7 @@ export function useEnvironmentStageLabel(): string | null {
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
-  const { resolvedTheme } = useTheme();
-  const previewAppearance = useSyncExternalStore(
-    subscribeToThemePreview,
-    getThemePreviewAppearance,
-    () => null,
-  );
-  return enabled
-    ? resolveVisibleSidebarStageBackdropVariant(stageLabel, previewAppearance ?? resolvedTheme)
-    : null;
+  return enabled ? resolveSidebarStageBackdropVariant(stageLabel) : null;
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */
@@ -95,9 +71,9 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 const STAGE_BACKDROP_ART = {
-  nightly: MeteorShowerArt,
+  nightly: SleighRideArt,
   dev: WireframeArt,
-  release: SleighRideArt,
+  release: MeteorShowerArt,
 } satisfies Record<SidebarStageBackdropVariant, ComponentType<{ compact?: boolean }>>;
 
 export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {

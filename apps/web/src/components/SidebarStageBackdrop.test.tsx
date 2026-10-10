@@ -5,7 +5,6 @@ import {
   resolveEnvironmentIdentificationModes,
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveVisibleSidebarStageBackdropVariant,
   StageBackdropArt,
 } from "./SidebarStageBackdrop";
 
@@ -17,25 +16,6 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveSidebarStageBackdropVariant(null)).toBe("release");
     expect(resolveSidebarStageBackdropVariant("Preview")).toBeNull();
   });
-
-  it.each(["light", "dark"] as const)("keeps channel artwork under %s themes", (appearance) => {
-    expect(resolveVisibleSidebarStageBackdropVariant("Nightly", appearance)).toBe("nightly");
-    expect(resolveVisibleSidebarStageBackdropVariant("Dev", appearance)).toBe("dev");
-  });
-
-  it("shows the release sleigh only under dark themes", () => {
-    expect(resolveVisibleSidebarStageBackdropVariant(null, "dark")).toBe("release");
-    expect(resolveVisibleSidebarStageBackdropVariant("Latest", "dark")).toBe("release");
-    expect(resolveVisibleSidebarStageBackdropVariant(null, "light")).toBeNull();
-    expect(resolveVisibleSidebarStageBackdropVariant("Latest", "light")).toBeNull();
-  });
-
-  it.each(["light", "dark"] as const)(
-    "keeps unsupported stage labels hidden under %s themes",
-    (appearance) => {
-      expect(resolveVisibleSidebarStageBackdropVariant("Preview", appearance)).toBeNull();
-    },
-  );
 
   it("offers only the identification modes that change something", () => {
     expect(resolveEnvironmentIdentificationModes("Dev")).toEqual(["artwork", "pill", "none"]);

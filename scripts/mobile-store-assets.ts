@@ -48,9 +48,10 @@ export async function prepareMobileStoreAssets(
   }
   if (input.platform === "android") {
     const images = NodePath.join(output, "en-US", "images");
-    await sharp(NodePath.join(REPO_ROOT, "apps/mobile/assets/AppIcon.icon/Assets/SC.svg"))
+    // The 288dp splash composes the launcher layers; its central 192dp is what the launcher shows.
+    await sharp(NodePath.join(REPO_ROOT, "apps/mobile/assets/android-splash-icon-prod.png"))
+      .extract({ left: 192, top: 192, width: 768, height: 768 })
       .resize(512, 512)
-      .flatten({ background: "#000000" })
       .removeAlpha()
       .png()
       .toFile(NodePath.join(images, "icon.png"));

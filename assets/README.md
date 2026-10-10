@@ -6,8 +6,6 @@ The three shared Icon Composer projects are the source of truth for exported app
 - `nightly/app-icon.icon`
 - `prod/app-icon.icon`
 
-Production iOS uses the native icon bundle at [`apps/mobile/assets/AppIcon.icon`](../apps/mobile/assets/AppIcon.icon). The shared production PNG remains the source for its splash screen and fallback exports. The export and check scripts below cover the shared projects.
-
 Each project uses `text.svg` for the Supacode mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
 
 Run `vp run icons:export` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon and splash screen. Run `vp run icons:check` to verify that the generated assets and public copies match their sources without changing files.
@@ -36,7 +34,7 @@ The variants and their PNGs are:
 - `nightly` -> `nightly-macos-1024.png`
 - `prod` -> `black-macos-1024.png`
 
-The committed production PNG predates this command, so re-rendering it changes its outline and shadow slightly to match dev and nightly. Do not resize, composite, or otherwise post-process the rendered PNG, and do not edit the generated PNG or ICO files directly.
+Do not resize, composite, or otherwise post-process the rendered PNG, and do not edit the generated PNG or ICO files directly.
 
 ## Android launcher and splash artwork
 
@@ -47,10 +45,11 @@ is instead rendered from the same Icon Composer SVG sources by `vp run icons:exp
 
 - `apps/mobile/assets/android-icon-foreground.png`: the shared transparent wordmark, sized to stay
   inside the safe zone
-- `apps/mobile/assets/android-icon-background-dev.png` and `-nightly.png`: the variant's
-  `background.svg` fitted into the masked central two thirds, over a full-bleed copy that fills
-  the parallax margin. Dev also draws `annotations.svg` in the wordmark's coordinate space so the
-  wireframe boxes stay around the letters. Production uses a solid color.
+- `apps/mobile/assets/android-icon-background-*.png`: dev and production fit the variant's
+  `background.svg` into the masked central two thirds, over a full-bleed copy that fills the
+  parallax margin. Dev also draws `annotations.svg` in the wordmark's coordinate space so the
+  wireframe boxes stay around the letters. Nightly draws its full-bleed sky with the cloud layers
+  placed as in its `icon.json`.
 - `apps/mobile/assets/android-splash-icon-*.png`: the two layers composed into one 288dp image, so
   the splash mask reproduces the launcher icon's framing.
 
