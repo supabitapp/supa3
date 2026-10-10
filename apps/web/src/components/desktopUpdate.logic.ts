@@ -133,10 +133,3 @@ export function getDesktopUpdateActionError(result: DesktopUpdateActionResult): 
 export function shouldToastDesktopUpdateActionResult(result: DesktopUpdateActionResult): boolean {
   return getDesktopUpdateActionError(result) !== null;
 }
-
-export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
-  if (!state || !state.enabled) return false;
-  return (
-    state.status !== "checking" && state.status !== "downloading" && state.status !== "disabled"
-  );
-}

@@ -286,6 +286,7 @@ const COMPOSER_CONTEXT_MAX_SERIALIZED_CHARS = 16_000_000;
 /** Structured context riding on a user message. Undecodable records are dropped, not fatal. */
 export const OrchestrationMessageContext = Schema.Struct({
   version: Schema.Literal(1),
+  instructions: Schema.optionalKey(BoundedString(32_000)),
   records: Schema.Array(Schema.Unknown)
     .check(
       Schema.isMaxLength(COMPOSER_CONTEXT_MAX_RECORDS),

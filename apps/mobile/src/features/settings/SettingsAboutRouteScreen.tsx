@@ -1,6 +1,8 @@
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import Constants from "expo-constants";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/reactivity";
 import { Alert, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,6 +17,11 @@ import {
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { SettingsActionRow } from "./components/SettingsActionRow";
+import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import { useSendFeedback } from "../../state/use-send-feedback";
+import { serverEnvironment } from "../../state/server";
+import { ControlPillMenu } from "../../components/ControlPillMenu";
 
 export function SettingsAboutRouteScreen() {
   const insets = useSafeAreaInsets();
@@ -120,6 +127,7 @@ function AppSettingsSection() {
 
   return (
     <SettingsSection title="App">
+      <FeedbackSettingsAction />
       <SettingsRow icon="internaldrive" label="Client Storage" target="SettingsClientStorage" />
       <SettingsRow icon="stethoscope" label="Diagnostics" target="SettingsDiagnostics" />
       <SettingsRow
@@ -141,6 +149,57 @@ function AppSettingsSection() {
         versionRow
       )}
     </SettingsSection>
+  );
+}
+
+function FeedbackSettingsAction() {
+  const { selectedTargets } = useSettingsEnvironmentFilter();
+  const eligibleTargets = useAtomValue(
+    useMemo(
+      () =>
+        Atom.make((get) =>
+          selectedTargets.filter(
+            (target) =>
+              target.serverConfig.feedbackThreads === true &&
+              target.serverConfig.scratchWorkspaceRoot !== undefined &&
+              get(serverEnvironment.startFeedback.permissionAtom(target.environmentId)),
+          ),
+        ),
+      [selectedTargets],
+    ),
+  );
+  const feedbackEnvironmentId =
+    eligibleTargets.length === 1 ? eligibleTargets[0]!.environmentId : null;
+  const feedback = useSendFeedback(feedbackEnvironmentId);
+  const row = (
+    <SettingsActionRow
+      icon="text.bubble"
+      label="Send feedback"
+      loading={feedback.isPending}
+      disabled={eligibleTargets.length === 0 || feedback.isPending}
+      pointerEvents={eligibleTargets.length > 1 ? "none" : "auto"}
+      onPress={() => void feedback.sendFeedback()}
+    />
+  );
+  if (eligibleTargets.length < 2) return row;
+  return (
+    <ControlPillMenu
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Send feedback"
+      title="Choose an environment"
+      actions={eligibleTargets.map((target) => ({
+        id: target.environmentId,
+        title: target.label,
+        attributes: { disabled: feedback.isPending },
+      }))}
+      onPressAction={({ nativeEvent }) => {
+        const target = eligibleTargets.find((entry) => entry.environmentId === nativeEvent.event);
+        if (target) void feedback.sendFeedback(target.environmentId);
+      }}
+    >
+      {row}
+    </ControlPillMenu>
   );
 }
 

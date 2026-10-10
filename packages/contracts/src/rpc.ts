@@ -1,4 +1,5 @@
 import { OrchestrationSkillsStatus, OrchestrationSkillsError } from "./orchestrationSkills.ts";
+import { FeedbackStartInput, FeedbackStartResult, FeedbackStartError } from "./feedback.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -475,6 +476,7 @@ export const WS_METHODS = {
   serverDisableAcpRegistryProvider: "server.disableAcpRegistryProvider",
   serverLogoutAcpRegistry: "server.logoutAcpRegistry",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
+  serverStartFeedback: "server.startFeedback",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetHostResources: "server.getHostResources",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
@@ -831,6 +833,12 @@ const WsServerGetTraceDiagnosticsRpc = Rpc.make(WS_METHODS.serverGetTraceDiagnos
   payload: Schema.Struct({}),
   success: ServerTraceDiagnosticsResult,
   error: EnvironmentAuthorizationError,
+});
+
+const WsServerStartFeedbackRpc = Rpc.make(WS_METHODS.serverStartFeedback, {
+  payload: FeedbackStartInput,
+  success: FeedbackStartResult,
+  error: Schema.Union([FeedbackStartError, EnvironmentAuthorizationError]),
 });
 
 const WsServerGetProcessDiagnosticsRpc = Rpc.make(WS_METHODS.serverGetProcessDiagnostics, {
@@ -1824,6 +1832,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerDisableAcpRegistryProviderRpc,
   WsServerLogoutAcpRegistryRpc,
   WsServerGetTraceDiagnosticsRpc,
+  WsServerStartFeedbackRpc,
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetHostResourcesRpc,
   WsServerGetProcessResourceHistoryRpc,

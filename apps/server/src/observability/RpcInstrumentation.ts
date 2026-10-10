@@ -72,6 +72,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverLogoutAcpRegistry]: "server",
   [WS_METHODS.serverDiscoverSourceControl]: "server",
   [WS_METHODS.serverGetTraceDiagnostics]: "server",
+  [WS_METHODS.serverStartFeedback]: "server",
   [WS_METHODS.serverGetProcessDiagnostics]: "server",
   [WS_METHODS.serverGetHostResources]: "server",
   [WS_METHODS.serverGetProcessResourceHistory]: "server",

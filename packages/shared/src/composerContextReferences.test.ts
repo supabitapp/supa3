@@ -173,6 +173,29 @@ describe("provider projection", () => {
     expect(projectComposerContextForProvider({ text: "plain", records: [terminal] })).toBe("plain");
   });
 
+  it("delivers instructions to the provider without a referenced file", () => {
+    const visible = "I'd like to send feedback.";
+    const instructions = "Start by asking what went wrong, then investigate the diagnostics.";
+    const projected = projectComposerContextForProvider({
+      text: visible,
+      records: [],
+      instructions,
+    });
+    expect(projected).toContain(visible);
+    expect(projected).toContain(instructions);
+    expect(projected).not.toContain("unavailable");
+  });
+
+  it("preserves referenced context alongside instructions", () => {
+    const projected = projectComposerContextForProvider({
+      text: "[log](supacode-context://v1/terminal/ctx_t)",
+      records: [terminal],
+      instructions: "Ask the user before changing files.",
+    });
+    expect(projected).toContain('<context kind="terminal" id="ctx_t">');
+    expect(projected).toContain("Ask the user before changing files.");
+  });
+
   it("uses the payload kind when a reference disagrees with its record", () => {
     const projected = projectComposerContextForProvider({
       text: "[log](supacode-context://v1/image/ctx_t)",
