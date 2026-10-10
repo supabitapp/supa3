@@ -763,6 +763,9 @@ describe("EnvironmentRegistry", () => {
             RelayGateway,
             RelayGateway.of({
               available: true,
+              lease: () => {
+                throw new Error("Unexpected pairing lease");
+              },
               resolve: async (address) => address,
               fetch,
               release: async (address) => {
@@ -1646,6 +1649,9 @@ it.effect(
         Effect.provide(harness.layer),
         Effect.provideService(RelayGateway, {
           available: true,
+          lease: () => {
+            throw new Error("Unexpected pairing lease");
+          },
           resolve: async (address) => address,
           release: async (address) => {
             released.resolve(address);

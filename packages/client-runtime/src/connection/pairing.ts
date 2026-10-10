@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
-import { resolveRelayOrigin } from "../relay/gateway.ts";
+import { leaseRelayOrigin } from "../relay/gateway.ts";
 import { ROUTE_CHECK_TIMEOUT_MS } from "./driver.ts";
 import { mapRemoteEnvironmentError } from "./errors.ts";
 import { ConnectionBlockedError, ConnectionTransientError } from "./model.ts";
@@ -23,14 +23,14 @@ const reachDescriptor = Effect.fnUntraced(
     expectedEnvironmentId: EnvironmentId | undefined,
     relayUrl?: string,
   ) {
-    const origin = yield* resolveRelayOrigin(httpBaseUrl, relayUrl);
+    const { origin, retain } = yield* leaseRelayOrigin(httpBaseUrl, relayUrl);
     const descriptor = yield* fetchRemoteEnvironmentDescriptor({ httpBaseUrl: origin }).pipe(
       Effect.mapError(mapRemoteEnvironmentError),
     );
     if (expectedEnvironmentId !== undefined && descriptor.environmentId !== expectedEnvironmentId) {
       return yield* differentMachineError(descriptor.label);
     }
-    return { httpBaseUrl, descriptor, source };
+    return { httpBaseUrl, descriptor, source, retain };
   },
   Effect.timeoutOrElse({
     duration: 10_000,
@@ -98,5 +98,7 @@ export const reachPairingServer = Effect.fn("clientRuntime.connection.pairing.re
       ),
     ]).pipe(Effect.catch(() => Fiber.join(linked)));
   },
+  Effect.tap((reached) => Effect.sync(reached.retain)),
+  Effect.map(({ retain: _retain, ...reached }) => reached),
   Effect.scoped,
 );

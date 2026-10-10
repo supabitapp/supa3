@@ -233,6 +233,9 @@ it.effect.each([undefined, "wss://custom.example.test/relay"])(
       const route = relayRoute(relayUrl);
       const gateway = RelayGateway.of({
         available: true,
+        lease: () => {
+          throw new Error("Unexpected pairing lease");
+        },
         resolve: async (address, url) => {
           expect(address).toBe(relayEndpoint);
           relayUrls.push(url);
@@ -281,6 +284,9 @@ it.effect.each(["latency", "route"] as const)(
       const fiber = yield* probe.pipe(
         Effect.provideService(RelayGateway, {
           available: true,
+          lease: () => {
+            throw new Error("Unexpected pairing lease");
+          },
           resolve,
           release: async () => {},
           fetch: globalThis.fetch,

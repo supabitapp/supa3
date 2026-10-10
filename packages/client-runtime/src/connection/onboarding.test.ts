@@ -289,12 +289,17 @@ describe("connection onboarding", () => {
           ),
           Effect.provideService(RelayGateway, {
             available: true,
-            resolve: async (address) => {
-              if (address !== relayEndpoint) return address;
-              entered.resolve();
-              if (mode === "failed") throw new Error("Relay unavailable");
-              return new Promise<string>(() => {});
-            },
+            resolve: async (address) => address,
+            lease: (address) => ({
+              prepare: async () => {
+                if (address !== relayEndpoint) return address;
+                entered.resolve();
+                if (mode === "failed") throw new Error("Relay unavailable");
+                return new Promise<string>(() => {});
+              },
+              retain: () => {},
+              close: async () => {},
+            }),
             release: async () => {},
             fetch: globalThis.fetch,
           }),
@@ -310,6 +315,64 @@ describe("connection onboarding", () => {
       }),
   );
 
+  it.effect.each(["opening", "preparing"] as const)(
+    "releases abandoned relay %s when a direct pairing fallback wins",
+    (stage) =>
+      Effect.gen(function* () {
+        const entered = Promise.withResolvers<void>();
+        const finishOpen = Promise.withResolvers<void>();
+        const closed = Promise.withResolvers<void>();
+        let closes = 0;
+        const calls: Call[] = [];
+        const relayEndpoint = `https://${"11".repeat(16)}.${"22".repeat(16)}.relay.supacode.invalid/`;
+        const gatewayLayer = layerRelayGateway({
+          fetch: globalThis.fetch,
+          open: async () => {
+            if (stage === "opening") {
+              entered.resolve();
+              await finishOpen.promise;
+            }
+            return {
+              prepare: () => {
+                entered.resolve();
+                return new Promise<string>(() => {});
+              },
+              close: async () => {
+                closes++;
+                closed.resolve();
+              },
+            };
+          },
+        });
+        yield* Effect.gen(function* () {
+          const pending = yield* preparePairingRegistration(
+            {
+              pairingUrl: buildPairingUrl(relayEndpoint, "pairing-token", {
+                environmentId: SAVED_ENVIRONMENT_ID,
+                routes: [TAILNET],
+              }),
+            },
+            NO_SAVED_ENVIRONMENTS,
+          ).pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                layerClientPresentation,
+                layerRoutedHttp(calls, { [TAILNET]: pairingServer() }),
+              ),
+            ),
+            Effect.forkChild,
+          );
+          yield* Effect.promise(() => entered.promise);
+          yield* TestClock.adjust(ROUTE_CHECK_TIMEOUT_MS);
+          const { registration } = yield* Fiber.join(pending);
+          expect(registration.profile.httpBaseUrl).toBe(`${TAILNET}/`);
+          finishOpen.resolve();
+          yield* Effect.promise(() => closed.promise);
+          expect(closes).toBe(1);
+        }).pipe(Effect.provide(gatewayLayer));
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("times out relay preparation when there is no usable fallback", () =>
     Effect.gen(function* () {
       const calls: Array<Call> = [];
@@ -322,10 +385,15 @@ describe("connection onboarding", () => {
         Effect.provide(Layer.mergeAll(layerClientPresentation, layerRoutedHttp(calls, {}))),
         Effect.provideService(RelayGateway, {
           available: true,
-          resolve: () => {
-            entered.resolve();
-            return new Promise<string>(() => {});
-          },
+          resolve: async (address) => address,
+          lease: () => ({
+            prepare: () => {
+              entered.resolve();
+              return new Promise<string>(() => {});
+            },
+            retain: () => {},
+            close: async () => {},
+          }),
           release: async () => {},
           fetch: globalThis.fetch,
         }),
