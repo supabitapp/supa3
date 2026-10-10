@@ -4562,7 +4562,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (menuIsActive && (submissionIntent === null || submissionIntent === "foreground")) {
       const currentItems = composerMenuItemsRef.current;
-      const selectedItem = activeComposerMenuItemRef.current;
+      const selectedItem =
+        activeComposerMenuItemRef.current ?? (key === "Tab" ? currentItems[0] : null);
       if (key === "ArrowDown" && currentItems.length > 0) {
         nudgeComposerMenuHighlight("ArrowDown");
         return true;
