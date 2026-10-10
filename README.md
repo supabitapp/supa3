@@ -1,28 +1,46 @@
 # Supacode
 
-A command center for your coding agents.
+The next version of supacode, a command center for ur coding agents
 
-```mermaid
-flowchart LR
-  subgraph host["Your computer or a server"]
-    server["Supacode server"] --> agents["Coding agents"]
-  end
-  desktop["Desktop app"] --> server
-  web["Browser"] --> server
-  phone["iOS app"] --> server
+## Desktop app
+
+Download at https://next.supacode.sh
+
+## iOS app
+
+[Join the Supacode beta on TestFlight](https://testflight.apple.com/join/ga2vGT3h).
+
+## Command line
+
+```
+curl -fsSL https://next.supacode.sh/install.sh | sh
 ```
 
-## Get started
+on Windows
 
-1. Install the [desktop app](https://next.supacode.sh) or the command line:
+```
+irm https://next.supacode.sh/install.ps1 | iex
+```
 
-   ```sh
-   curl -fsSL https://next.supacode.sh/install.sh | sh
-   ```
+Then run `supacode` to start the server and open the local web app. `supacode service install` keeps it running in the background, `supacode update` moves to a newer release
 
-   On Windows: `irm https://next.supacode.sh/install.ps1 | iex`
+To try it once without installing, run npx supacode@latest instead.
 
-2. Open the app or run `supacode`, then enable a provider in **Settings → Providers**.
-3. To connect from the [iOS app](https://testflight.apple.com/join/ga2vGT3h) or another computer, follow [remote access](./docs/user/remote-access.md). On a Linux or macOS server, `supacode service install` keeps it running.
+## Documentation
 
-[Documentation](./docs/README.md) · Fork of [t3code](https://github.com/pingdotgg/t3code)
+The [documentation index](./docs/README.md) for all pages.
+
+- [Install and first run](./docs/user/install.md)
+- [Permission modes](./docs/user/permission-modes.md)
+- [Keyboard shortcuts](./docs/user/keybindings.md)
+- [Project settings](./docs/user/project-settings.md)
+- [Appearance preferences](./docs/user/appearance.md)
+- [Remote access](./docs/user/remote-access.md)
+- [Connect Claude Code, Codex, ChatGPT and other agents over MCP](./docs/user/outside-agents.md)
+- [Keeping app and server in sync](./docs/user/updating.md)
+- [Source control integrations](./docs/user/source-control.md)
+- [Background service](./docs/user/background-service.md)
+
+## Attribution
+
+Supacode is a fork of https://github.com/pingdotgg/t3code
