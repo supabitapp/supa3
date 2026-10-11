@@ -58,7 +58,7 @@ import {
 } from "../../lib/providerOptions";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { rememberModelOptions } from "../../state/use-model-option-memory";
+import { rememberedModelOptions, rememberModelOptions } from "../../state/use-model-option-memory";
 import {
   NativeHeaderToolbar,
   NativeStackScreenOptions,
@@ -467,6 +467,10 @@ function ThreadSettingsSessionProvider(
           current,
           pressed: option,
           pressedIsApplied: isApplied(option),
+          rememberedOptions: rememberedModelOptions(
+            option.selection.instanceId,
+            option.selection.model,
+          ),
         }),
       );
     },

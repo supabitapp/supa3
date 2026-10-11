@@ -4,6 +4,10 @@ import { ProviderInstanceId, type ProviderOptionSelection } from "@supacode/cont
 
 import type { ModelOption } from "../../lib/modelOptions";
 import {
+  applyProviderOptionSelection,
+  resolveProviderOptionDescriptors,
+} from "../../lib/providerOptions";
+import {
   canCommitPendingModel,
   favoritesFirst,
   modelFavoriteKey,
@@ -116,6 +120,7 @@ describe("thread settings sheet state", () => {
         current: modelOption("gpt-next"),
         pressed: modelOption("gpt-current"),
         pressedIsApplied: true,
+        rememberedOptions: [{ id: "effort", value: "medium" }],
       }),
     ).toBeNull();
   });
@@ -128,6 +133,7 @@ describe("thread settings sheet state", () => {
         current: pending,
         pressed: modelOption("gpt-next"),
         pressedIsApplied: false,
+        rememberedOptions: [{ id: "effort", value: "medium" }],
       }),
     ).toBe(pending);
   });
@@ -142,6 +148,45 @@ describe("thread settings sheet state", () => {
         pressedIsApplied: false,
       }),
     ).toBe(pressed);
+  });
+
+  it("restores a model's saved reasoning before another option is changed", () => {
+    const pressed = {
+      ...modelOption("gpt-next"),
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "reasoningEffort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "medium", label: "Medium", isDefault: true },
+              { id: "high", label: "High" },
+            ],
+            currentValue: "medium",
+          },
+          { id: "fastMode", label: "Fast", type: "boolean" as const, currentValue: false },
+        ],
+      },
+    };
+    const rememberedOptions = [{ id: "reasoningEffort", value: "high" }];
+    const pending = pendingModelAfterPress({
+      current: modelOption("gpt-other"),
+      pressed,
+      pressedIsApplied: false,
+      rememberedOptions,
+    });
+    const descriptors = resolveProviderOptionDescriptors({
+      capabilities: pending?.capabilities,
+      selections: pending?.selection.options,
+    });
+
+    expect(descriptors[0]?.currentValue).toBe("high");
+    expect(applyProviderOptionSelection(descriptors, { id: "fastMode", value: true })).toEqual([
+      { id: "reasoningEffort", value: "high" },
+      { id: "fastMode", value: true },
+    ]);
+    expect(pressed.selection.options).toEqual([]);
   });
 
   it("cannot save a staged model after sign-out removes it from the catalog", () => {
