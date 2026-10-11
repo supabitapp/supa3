@@ -10,6 +10,7 @@ import {
   ThreadId,
 } from "@supacode/contracts";
 import { onTestFinished, vi } from "vite-plus/test";
+import { rememberedModelOptions, rememberModelOptions } from "./use-model-option-memory";
 
 const composerDraftFileMocks = vi.hoisted(() => {
   let document = JSON.stringify({ schemaVersion: 1, drafts: {} });
@@ -1837,6 +1838,23 @@ describe("mobile composer drafts", () => {
         },
       }).modelOptionMemory,
     ).toEqual({ pi: { "xai/grok-4.6": [{ id: "thinking", value: "xhigh" }] } });
+  });
+
+  it("restores each model's last chosen options after a restart", async () => {
+    vi.useFakeTimers();
+    await waitForComposerDraftsLoaded();
+    const high = [{ id: "reasoningEffort", value: "high" }];
+    const low = [{ id: "reasoningEffort", value: "low" }];
+    rememberModelOptions("codex", "gpt-first", high);
+    rememberModelOptions("codex", "gpt-second", low);
+    await vi.advanceTimersByTimeAsync(200);
+
+    resetComposerDraftsLoadState();
+    appAtomRegistry.set(modelOptionMemoryAtom, {});
+    await waitForComposerDraftsLoaded();
+
+    expect(rememberedModelOptions("codex", "gpt-first")).toEqual(high);
+    expect(rememberedModelOptions("codex", "gpt-second")).toEqual(low);
   });
 
   it("merges persisted option memory without replacing newer choices", async () => {

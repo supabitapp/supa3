@@ -1,5 +1,5 @@
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
-import type { ProviderInstanceId } from "@supacode/contracts";
+import type { ProviderInstanceId, ProviderOptionSelection } from "@supacode/contracts";
 
 export type ModelFavorite = {
   readonly provider: ProviderInstanceId;
@@ -58,11 +58,21 @@ export function pendingModelAfterPress(input: {
   readonly current: ModelOption | null;
   readonly pressed: ModelOption;
   readonly pressedIsApplied: boolean;
+  readonly rememberedOptions?: ReadonlyArray<ProviderOptionSelection>;
 }): ModelOption | null {
   if (input.pressedIsApplied) {
     return null;
   }
-  return input.current?.key === input.pressed.key ? input.current : input.pressed;
+  if (input.current?.key === input.pressed.key) {
+    return input.current;
+  }
+  if (input.rememberedOptions === undefined) {
+    return input.pressed;
+  }
+  return {
+    ...input.pressed,
+    selection: { ...input.pressed.selection, options: input.rememberedOptions },
+  };
 }
 
 /** A model can disappear while the picker is open. */
