@@ -1,8 +1,9 @@
-import { settlePromise } from "@supacode/client-runtime/state/runtime";
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
   CircleQuestionMarkIcon,
+  GlobeIcon,
+  MessageSquareTextIcon,
   SettingsIcon,
 } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
@@ -26,6 +27,7 @@ import {
   useSidebarStageBackdropVariant,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import {
   SidebarFooter,
   SidebarMenu,
@@ -179,42 +181,44 @@ function SidebarUtilityItem({
 function SidebarHelpItem({ closeMobileSidebar }: { closeMobileSidebar: () => void }) {
   const sendFeedback = useSendFeedback();
 
-  const openHelpMenu = async (event: MouseEvent<HTMLButtonElement>) => {
-    const api = readLocalApi();
-    if (!api) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const clicked = await settlePromise(() =>
-      api.contextMenu.show(
-        [
-          {
-            id: "send-feedback",
-            label: "Send feedback",
-            icon: "message-square-text",
-            disabled: sendFeedback === null,
-          },
-          { id: "visit-website", label: "Visit website", icon: "globe" },
-        ],
-        { x: rect.left, y: rect.top - 4 },
-      ),
-    );
-    if (clicked._tag === "Failure") return;
-    if (clicked.value === "send-feedback" && sendFeedback) {
-      closeMobileSidebar();
-      await sendFeedback();
-    } else if (clicked.value === "visit-website") {
-      await api.shell
-        .openExternal(WEBSITE_URL)
-        .catch(() => toastManager.add({ type: "error", title: "Unable to open the website" }));
-    }
-  };
-
   return (
-    <SidebarUtilityItem
-      className="ml-auto"
-      icon={<CircleQuestionMarkIcon />}
-      label="Help"
-      onClick={(event) => void openHelpMenu(event)}
-    />
+    <SidebarMenuItem className="ml-auto shrink-0">
+      <Menu>
+        <Tooltip>
+          <TooltipTrigger
+            render={<MenuTrigger render={<SidebarMenuButton aria-label="Help" size="icon" />} />}
+          >
+            <CircleQuestionMarkIcon />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Help</TooltipPopup>
+        </Tooltip>
+        <MenuPopup side="top" align="end">
+          <MenuItem
+            disabled={sendFeedback === null}
+            onClick={() => {
+              if (!sendFeedback) return;
+              closeMobileSidebar();
+              void sendFeedback();
+            }}
+          >
+            <MessageSquareTextIcon />
+            Send feedback
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              void readLocalApi()
+                ?.shell.openExternal(WEBSITE_URL)
+                .catch(() =>
+                  toastManager.add({ type: "error", title: "Unable to open the website" }),
+                );
+            }}
+          >
+            <GlobeIcon />
+            Visit website
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </SidebarMenuItem>
   );
 }
 
