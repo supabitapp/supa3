@@ -715,6 +715,11 @@ const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
+// PROTO new-thread-hero: dev-only variant picker, revert after the decision
+const NewThreadHeroProto = import.meta.env.DEV
+  ? lazy(() => import("../proto/new-thread").catch(() => ({ default: () => null })))
+  : null;
+// /PROTO new-thread-hero
 const selectAutoShowFloatingPreview = (settings: { browserAutoShowFloatingPreview: boolean }) =>
   settings.browserAutoShowFloatingPreview;
 const DevicePanel = lazy(() =>
@@ -11111,6 +11116,13 @@ export default function ChatView(props: ChatViewProps) {
                   scrollToEnd(true);
                 }}
               />
+              {/* PROTO new-thread-hero */}
+              {NewThreadHeroProto && isDraftHeroState ? (
+                <Suspense fallback={null}>
+                  <NewThreadHeroProto project={activeProject ?? null} composerRef={composerRef} />
+                </Suspense>
+              ) : null}
+              {/* /PROTO new-thread-hero */}
             </div>
 
             {/* Input bar — centered for an empty draft, docked after sending. */}

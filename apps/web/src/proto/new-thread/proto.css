@@ -1,0 +1,178 @@
+[data-proto-picker] {
+  -webkit-app-region: no-drag;
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.82);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 8px 24px rgba(0, 0, 0, 0.24),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+[data-proto-picker-highlight] {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  will-change: transform;
+}
+
+[data-proto-picker][data-ready] [data-proto-picker-highlight] {
+  transition:
+    transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
+    width 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-proto-picker][data-ready] [data-proto-picker-highlight] {
+    transition: none;
+  }
+}
+
+[data-proto-picker-item] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  cursor: pointer;
+  transition: color 150ms ease-out;
+}
+
+[data-proto-picker-item]:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-proto-picker-item]:active {
+  transform: scale(0.97);
+}
+
+[data-proto-picker-item]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+[data-proto-picker-item][data-active] {
+  color: #fff;
+}
+
+[data-proto-picker-divider] {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-proto-picker-replay] {
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+[data-proto-picker][data-position="top"] {
+  bottom: auto;
+  top: 24px;
+}
+
+[data-proto-panel] {
+  -webkit-app-region: no-drag;
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.82);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 8px 24px rgba(0, 0, 0, 0.24),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.45);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (min-width: 1100px) {
+  [data-proto-panel] {
+    top: 24px;
+    right: auto;
+    left: calc(50% + 268px);
+  }
+}
+
+[data-proto-panel-label] {
+  margin-right: 6px;
+}
+
+[data-proto-panel] [data-proto-picker-item] {
+  height: 24px;
+  padding: 0 10px;
+}
+
+[data-proto-panel] [data-proto-picker-item][data-active] {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@keyframes proto-harbor-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+[data-proto-harbor-reveal] {
+  animation: proto-harbor-reveal 700ms steps(48, end) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-proto-harbor-reveal] {
+    animation: none;
+  }
+}
+
+:root {
+  --proto-card-shadow: 0 1px 3px rgb(0 0 0 / 0.05), 0 4px 12px -4px rgb(0 0 0 / 0.07);
+  --proto-card-shadow-lifted: 0 2px 6px rgb(0 0 0 / 0.07), 0 12px 24px -8px rgb(0 0 0 / 0.12);
+}
+
+.dark {
+  --proto-card-shadow: 0 0 #0000;
+  --proto-card-shadow-lifted: 0 12px 28px -10px rgb(0 0 0 / 0.6);
+}
+
+[data-proto-fade-bottom] {
+  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
+}

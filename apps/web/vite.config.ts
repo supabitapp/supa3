@@ -17,6 +17,9 @@ import {
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
+// PROTO new-thread-hero: dev-only agent tile endpoint, revert after the decision
+import { protoTilePlugin } from "./src/proto/new-thread/tiles/devServer";
+// /PROTO new-thread-hero
 
 Object.assign(process.env, loadRepoEnv());
 
@@ -141,6 +144,9 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      // PROTO new-thread-hero
+      protoTilePlugin(devProxyTarget),
+      // /PROTO new-thread-hero
       thirdPartyLicensesPlugin({
         bundleName: "web",
         configFile: new URL("../../third-party-licenses.config.json", import.meta.url),
